@@ -465,7 +465,23 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("intensity"))
         effect_intensity = settings["intensity"].get<unsigned int>();
     if(settings.contains("sharpness"))
+    {
         effect_sharpness = settings["sharpness"].get<unsigned int>();
+        // Migrate legacy scale: 100 was neutral, <100 darkened (bad), >100 was contrast.
+        if(effect_sharpness == 100)
+        {
+            effect_sharpness = 0;
+        }
+        else if(effect_sharpness > 100)
+        {
+            effect_sharpness = effect_sharpness - 100;
+        }
+        else
+        {
+            // Former soft/dark branch — treat as neutral.
+            effect_sharpness = 0;
+        }
+    }
     if(settings.contains("smoothing"))
         effect_smoothing = std::clamp(settings["smoothing"].get<unsigned int>(), 0u, 100u);
     if(settings.contains("sampling_resolution"))

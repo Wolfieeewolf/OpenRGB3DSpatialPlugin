@@ -9,6 +9,7 @@ import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -120,8 +121,11 @@ final class BlockUvTexelSampler
             {
                 return false;
             }
-            // Neighborhood pick improves flowers/fire/cutouts without a large search.
-            final int argb = pixels.sampleBestOfNeighborhood(uNorm, vNorm, 28);
+            // Leaves: wider opaque search so canopy holes resolve to leaf colour, not washed averages.
+            // Flowers/fire: neighborhood pick without a large search.
+            final int argb = state.is(BlockTags.LEAVES)
+                    ? pixels.sampleOpaqueNearLeaves(uNorm, vNorm, 64)
+                    : pixels.sampleBestOfNeighborhood(uNorm, vNorm, 28);
             out[0] = (argb >> 16) & 0xFF;
             out[1] = (argb >> 8) & 0xFF;
             out[2] = argb & 0xFF;

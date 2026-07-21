@@ -15,6 +15,7 @@ final class RoomSampleConfigReader
     static final int HEADER_BYTES = 128;
     static final int FLAG_ENABLED = 1 << 1;
     static final int FLAG_IMPORTANT_CELLS = 1 << 2;
+    static final int FLAG_SKY_ENABLED = 1 << 3;
     static final int MAX_IMPORTANT_CELLS = 16384;
     /** Offset of reserved[0] where important_cell_count is stored when FLAG_IMPORTANT_CELLS is set. */
     static final int IMPORTANT_COUNT_OFFSET = 92;
@@ -52,6 +53,11 @@ final class RoomSampleConfigReader
         {
             return (flags & FLAG_IMPORTANT_CELLS) != 0 && importantFlatIndices != null
                     && importantFlatIndices.length > 0;
+        }
+
+        boolean isSkyEnabled()
+        {
+            return (flags & FLAG_SKY_ENABLED) != 0;
         }
     }
 

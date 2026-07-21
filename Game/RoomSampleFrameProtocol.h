@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
 // Room-directed sampling: plugin publishes room grid config; MC mod raycasts only those cells.
+//
+// Product path: voxel / LED-corner volume on the existing room grid (360° spatial).
+// Future branch only (do not revive equirect panorama): optional OpenGL cubemap / env-map
+// capture from the eye, sampled per LED by world direction onto the same room grid.
+// OpenRGB stays OpenGL — no Vulkan dependency. Ship only if it beats voxels on quality and lag.
 
 #ifndef ROOMSAMPLEFRAMEPROTOCOL_H
 #define ROOMSAMPLEFRAMEPROTOCOL_H
@@ -23,6 +28,8 @@ constexpr std::uint32_t kFlagLz4 = 1u << 0;
 constexpr std::uint32_t kFlagEnabled = 1u << 1;
 /** Config file has important_cell_count in reserved[0..3] and that many uint32 flat indices after the header. */
 constexpr std::uint32_t kFlagImportantCells = 1u << 2;
+/** Mod may fill open-air important cells with outdoor sky/weather atmosphere. */
+constexpr std::uint32_t kFlagSkyEnabled = 1u << 3;
 constexpr std::size_t kDefaultTargetCells = 800u * 600u;
 constexpr std::size_t kMaxCells = 512000u;
 constexpr std::uint32_t kMaxImportantCells = 16384u;

@@ -21,25 +21,38 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Steam-style disk pre-cache for block texture average colours, plus in-memory full sprite pixel
- * buffers for UV point sampling. Averages load from disk; pixels fill on demand / during build.
+ * Disk-backed average colours for all block textures, plus a small LRU of downscaled
+ * sprite pixels for UV sampling. Never retains full HD pack textures permanently —
+ * that previously pinned multi‑GiB heaps and froze the machine at ~99% RAM.
  */
 final class BlockTexturePrecache
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final byte[] MAGIC = {'O', 'R', 'G', 'B', 'T', 'P', 'C', '1'};
     private static final int FORMAT_VERSION = 1;
-    private static final int BUILD_BATCH_PER_TICK = 96;
+    private static final long BUILD_BUDGET_NS = 1_250_000L;
+    private static final int BUILD_MAX_SPRITES_PER_TICK = 16;
     private static final String CACHE_FILE = "block_texture_precache.bin";
+    /** UV pixel cache: downscale side length (keeps memory bounded with HD packs). */
+    private static final int UV_CACHE_MAX_DIM = 64;
+    private static final int MAX_PIXEL_ENTRIES = 160;
+    private static final long MAX_PIXEL_BYTES = 16L << 20; // 16 MiB hard cap
 
     private static final ConcurrentHashMap<Identifier, BlockDisplayColorSampler.TextureSample> ENTRIES =
             new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<Identifier, SpritePixels> PIXEL_ENTRIES = new ConcurrentHashMap<>();
+    private static final Object PIXEL_LOCK = new Object();
+    private static final LinkedHashMap<Identifier, SpritePixels> PIXEL_LRU =
+            new LinkedHashMap<>(256, 0.75f, true);
+    private static long pixelBytes = 0L;
     private static final ArrayDeque<Identifier> BUILD_QUEUE = new ArrayDeque<>();
     private static volatile int contentHash = 0;
     private static volatile boolean diskLoaded = false;
@@ -58,9 +71,13 @@ final class BlockTexturePrecache
 
     static SpritePixels getPixels(Identifier spriteId)
     {
-        return PIXEL_ENTRIES.get(spriteId);
+        synchronized(PIXEL_LOCK)
+        {
+            return PIXEL_LRU.get(spriteId);
+        }
     }
 
+    /** Average only — never retains full pixel buffers. */
     static BlockDisplayColorSampler.TextureSample getOrLoad(Minecraft client, Identifier spriteId)
     {
         final BlockDisplayColorSampler.TextureSample cached = get(spriteId);
@@ -68,14 +85,12 @@ final class BlockTexturePrecache
         {
             return cached;
         }
-        final SpritePixels pixels = readSpritePixels(client, spriteId);
-        if(pixels != null)
+        final BlockDisplayColorSampler.TextureSample avg = readAverageOnly(client, spriteId);
+        if(avg != null)
         {
-            PIXEL_ENTRIES.putIfAbsent(spriteId, pixels);
-            ENTRIES.putIfAbsent(spriteId, pixels.average());
-            return pixels.average();
+            ENTRIES.putIfAbsent(spriteId, avg);
         }
-        return null;
+        return avg;
     }
 
     static SpritePixels getOrLoadPixels(Minecraft client, Identifier spriteId)
@@ -85,10 +100,10 @@ final class BlockTexturePrecache
         {
             return cached;
         }
-        final SpritePixels pixels = readSpritePixels(client, spriteId);
+        final SpritePixels pixels = readSpritePixelsDownscaled(client, spriteId);
         if(pixels != null)
         {
-            PIXEL_ENTRIES.putIfAbsent(spriteId, pixels);
+            putPixels(spriteId, pixels);
             ENTRIES.putIfAbsent(spriteId, pixels.average());
         }
         return pixels;
@@ -108,15 +123,20 @@ final class BlockTexturePrecache
         if(!diskLoaded || hash != contentHash)
         {
             ENTRIES.clear();
-            PIXEL_ENTRIES.clear();
+            clearPixels();
             contentHash = hash;
             if(loadFromDisk(hash))
             {
-                LOGGER.info("Block texture pre-cache loaded ({} textures)", ENTRIES.size());
+                LOGGER.info("Block texture pre-cache loaded ({} textures, pixel LRU empty)", ENTRIES.size());
                 return;
             }
         }
         scheduleBuild(client, hash);
+    }
+
+    static boolean isBuilding()
+    {
+        return building;
     }
 
     static void tick(Minecraft client)
@@ -125,26 +145,77 @@ final class BlockTexturePrecache
         {
             return;
         }
-        int batch = BUILD_BATCH_PER_TICK;
-        while(batch-- > 0 && !BUILD_QUEUE.isEmpty())
+        final long budgetStart = System.nanoTime();
+        int remaining = BUILD_MAX_SPRITES_PER_TICK;
+        while(remaining-- > 0 && !BUILD_QUEUE.isEmpty())
         {
+            if((System.nanoTime() - budgetStart) > BUILD_BUDGET_NS)
+            {
+                break;
+            }
             final Identifier spriteId = BUILD_QUEUE.pollFirst();
-            if(spriteId == null || (ENTRIES.containsKey(spriteId) && PIXEL_ENTRIES.containsKey(spriteId)))
+            if(spriteId == null || ENTRIES.containsKey(spriteId))
             {
                 continue;
             }
-            final SpritePixels pixels = readSpritePixels(client, spriteId);
-            if(pixels != null)
+            // Averages only during warm-up — do not retain ARGB for every atlas sprite.
+            final BlockDisplayColorSampler.TextureSample avg = readAverageOnly(client, spriteId);
+            if(avg != null)
             {
-                PIXEL_ENTRIES.put(spriteId, pixels);
-                ENTRIES.put(spriteId, pixels.average());
+                ENTRIES.put(spriteId, avg);
             }
         }
         if(BUILD_QUEUE.isEmpty())
         {
             building = false;
-            saveToDisk(contentHash);
-            LOGGER.info("Block texture pre-cache built ({} textures)", ENTRIES.size());
+            clearPixels();
+            scheduleSaveToDisk(contentHash);
+            LOGGER.info("Block texture pre-cache built ({} averages, pixel cache cleared)", ENTRIES.size());
+        }
+    }
+
+    private static void putPixels(Identifier spriteId, SpritePixels pixels)
+    {
+        if(spriteId == null || pixels == null || pixels.argb() == null)
+        {
+            return;
+        }
+        final long add = (long)pixels.argb().length * 4L;
+        synchronized(PIXEL_LOCK)
+        {
+            final SpritePixels prev = PIXEL_LRU.remove(spriteId);
+            if(prev != null && prev.argb() != null)
+            {
+                pixelBytes -= (long)prev.argb().length * 4L;
+            }
+            while((PIXEL_LRU.size() >= MAX_PIXEL_ENTRIES || pixelBytes + add > MAX_PIXEL_BYTES)
+                    && !PIXEL_LRU.isEmpty())
+            {
+                final Map.Entry<Identifier, SpritePixels> eldest = PIXEL_LRU.entrySet().iterator().next();
+                PIXEL_LRU.remove(eldest.getKey());
+                if(eldest.getValue() != null && eldest.getValue().argb() != null)
+                {
+                    pixelBytes -= (long)eldest.getValue().argb().length * 4L;
+                }
+            }
+            if(pixelBytes < 0L)
+            {
+                pixelBytes = 0L;
+            }
+            if(add <= MAX_PIXEL_BYTES)
+            {
+                PIXEL_LRU.put(spriteId, pixels);
+                pixelBytes += add;
+            }
+        }
+    }
+
+    private static void clearPixels()
+    {
+        synchronized(PIXEL_LOCK)
+        {
+            PIXEL_LRU.clear();
+            pixelBytes = 0L;
         }
     }
 
@@ -158,12 +229,13 @@ final class BlockTexturePrecache
         contentHash = hash;
         BUILD_QUEUE.clear();
         building = true;
+        clearPixels();
 
         final Set<Identifier> unique = collectSpriteIds(client);
         buildTotal = unique.size();
         BUILD_QUEUE.addAll(unique);
-        LOGGER.info("Building block texture pre-cache ({} unique textures, {} per tick)...",
-                buildTotal, BUILD_BATCH_PER_TICK);
+        LOGGER.info("Building block texture pre-cache ({} unique textures, averages only, ~{} ms/tick)...",
+                buildTotal, BUILD_BUDGET_NS / 1_000_000L);
     }
 
     private static Set<Identifier> collectSpriteIds(Minecraft client)
@@ -185,9 +257,9 @@ final class BlockTexturePrecache
                         }
                     }
                     catch(Throwable t)
-        {
-            QuietCatch.debug(LOGGER, "block texture precache helper failed", t);
-        }
+                    {
+                        QuietCatch.debug(LOGGER, "block texture precache helper failed", t);
+                    }
                 }
             }
         }
@@ -273,6 +345,7 @@ final class BlockTexturePrecache
             buildScheduled = false;
             building = false;
             BUILD_QUEUE.clear();
+            clearPixels();
             return true;
         }
         catch(Throwable t)
@@ -283,7 +356,18 @@ final class BlockTexturePrecache
         }
     }
 
-    private static void saveToDisk(int hash)
+    private static void scheduleSaveToDisk(int hash)
+    {
+        final List<Map.Entry<Identifier, BlockDisplayColorSampler.TextureSample>> snapshot =
+                new ArrayList<>(ENTRIES.entrySet());
+        final Thread saver = new Thread(() -> saveSnapshotToDisk(hash, snapshot), "openrgb-texture-precache-save");
+        saver.setDaemon(true);
+        saver.setPriority(Thread.NORM_PRIORITY - 1);
+        saver.start();
+    }
+
+    private static void saveSnapshotToDisk(int hash,
+            List<Map.Entry<Identifier, BlockDisplayColorSampler.TextureSample>> snapshot)
     {
         try
         {
@@ -294,8 +378,8 @@ final class BlockTexturePrecache
                 out.write(MAGIC);
                 out.writeInt(FORMAT_VERSION);
                 out.writeInt(hash);
-                out.writeInt(ENTRIES.size());
-                for(var entry : ENTRIES.entrySet())
+                out.writeInt(snapshot.size());
+                for(var entry : snapshot)
                 {
                     out.writeUTF(entry.getKey().toString());
                     final int rgb = entry.getValue().rgb();
@@ -316,11 +400,15 @@ final class BlockTexturePrecache
 
     static BlockDisplayColorSampler.TextureSample readTextureAverage(Minecraft client, Identifier spriteId)
     {
-        final SpritePixels pixels = readSpritePixels(client, spriteId);
-        return pixels != null ? pixels.average() : null;
+        return readAverageOnly(client, spriteId);
     }
 
     static SpritePixels readSpritePixels(Minecraft client, Identifier spriteId)
+    {
+        return readSpritePixelsDownscaled(client, spriteId);
+    }
+
+    private static BlockDisplayColorSampler.TextureSample readAverageOnly(Minecraft client, Identifier spriteId)
     {
         if(client == null || spriteId == null)
         {
@@ -344,13 +432,11 @@ final class BlockTexturePrecache
                 {
                     return null;
                 }
-                final int[] argb = new int[w * h];
                 for(int y = 0; y < h; y++)
                 {
                     for(int x = 0; x < w; x++)
                     {
                         final int px = image.getPixel(x, y);
-                        argb[y * w + x] = px;
                         final int a = (px >>> 24) & 0xFF;
                         if(a < 24)
                         {
@@ -371,7 +457,73 @@ final class BlockTexturePrecache
                 final int g = (int)(sumG / count);
                 final int b = (int)(sumB / count);
                 final int avgA = (int)(sumA / count);
-                return new SpritePixels(w, h, argb, (r << 16) | (g << 8) | b, avgA);
+                return new BlockDisplayColorSampler.TextureSample((r << 16) | (g << 8) | b, avgA);
+            }
+        }
+        catch(Throwable t)
+        {
+            QuietCatch.debug(LOGGER, "block texture precache helper failed", t);
+            return null;
+        }
+    }
+
+    /** Downscaled UV buffer — never keeps raw HD atlas sprites in RAM. */
+    private static SpritePixels readSpritePixelsDownscaled(Minecraft client, Identifier spriteId)
+    {
+        if(client == null || spriteId == null)
+        {
+            return null;
+        }
+        final Identifier resourceId = spriteId.withPrefix("textures/").withSuffix(".png");
+        try
+        {
+            final Resource resource = client.getResourceManager().getResourceOrThrow(resourceId);
+            try(InputStream in = resource.open();
+                NativeImage image = NativeImage.read(in))
+            {
+                final int srcW = image.getWidth();
+                final int srcH = image.getHeight();
+                if(srcW <= 0 || srcH <= 0 || srcW > 4096 || srcH > 4096)
+                {
+                    return null;
+                }
+                final int dstW = Math.min(srcW, UV_CACHE_MAX_DIM);
+                final int dstH = Math.min(srcH, UV_CACHE_MAX_DIM);
+                final int[] argb = new int[dstW * dstH];
+                long sumR = 0;
+                long sumG = 0;
+                long sumB = 0;
+                long sumA = 0;
+                int count = 0;
+                for(int y = 0; y < dstH; y++)
+                {
+                    final int sy = Math.min(srcH - 1, (y * srcH) / dstH);
+                    for(int x = 0; x < dstW; x++)
+                    {
+                        final int sx = Math.min(srcW - 1, (x * srcW) / dstW);
+                        final int px = image.getPixel(sx, sy);
+                        argb[y * dstW + x] = px;
+                        final int a = (px >>> 24) & 0xFF;
+                        if(a < 24)
+                        {
+                            continue;
+                        }
+                        sumR += (px >> 16) & 0xFF;
+                        sumG += (px >> 8) & 0xFF;
+                        sumB += px & 0xFF;
+                        sumA += a;
+                        count++;
+                    }
+                }
+                if(count <= 0)
+                {
+                    return null;
+                }
+                final int r = (int)(sumR / count);
+                final int g = (int)(sumG / count);
+                final int b = (int)(sumB / count);
+                final int avgA = (int)(sumA / count);
+                return new SpritePixels(dstW, dstH, argb, (r << 16) | (g << 8) | b, avgA);
             }
         }
         catch(Throwable t)

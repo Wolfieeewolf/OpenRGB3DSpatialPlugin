@@ -31,9 +31,11 @@ struct Settings
     float room_vr_pos_offset_right_blocks = 0.0f;
     float room_vr_pos_offset_up_blocks = 0.0f;
     float room_vr_scale_tune = 1.0f;
-    float room_vr_saturation = 1.35f;
+    float room_vr_saturation = 1.25f;
     float room_vr_contrast = 1.08f;
     bool room_vr_sharp_sampling = false;
+    /** Fill open-air LED cells with sky/weather when the column can see sky (outdoor only). */
+    bool room_vr_sky_enabled = true;
     /** Maximum sample cells the mod may compute per frame. The actual grid is auto-sized to match
      *  Minecraft block resolution at the current scale (one cell per MC block per axis), so most
      *  configurations use far fewer cells than this ceiling and update at full 20 Hz.

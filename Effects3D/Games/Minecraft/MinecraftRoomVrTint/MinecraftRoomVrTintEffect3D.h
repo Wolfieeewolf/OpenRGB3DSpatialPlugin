@@ -6,6 +6,8 @@
 #include "../MinecraftSubEffect3D.h"
 #include "EffectRegisterer3D.h"
 
+#include <vector>
+
 class MinecraftRoomVrTintEffect3D : public MinecraftSubEffect3D
 {
     Q_OBJECT
@@ -18,6 +20,11 @@ public:
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
+    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+
+private:
+    /** Per-LED EMA state for Output shaping → Smoothing. */
+    std::vector<RGBColor> led_smooth_;
 };
 
 #endif

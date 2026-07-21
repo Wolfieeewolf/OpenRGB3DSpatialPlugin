@@ -23,6 +23,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,6 +35,8 @@ final class BlockFaceColorCache
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final byte[] MAGIC = {'O', 'R', 'G', 'B', 'F', 'C', 'E', '1'};
     private static final int FORMAT_VERSION = 1;
+    /** Soft per-tick budget so face-cache warm-up cannot hitch the client. */
+    private static final long BUILD_BUDGET_NS = 1_750_000L;
     private static final int BUILD_BATCH_PER_TICK = 24;
     private static final int FACE_COUNT = 6;
     private static final String CACHE_FILE = "block_face_precache.bin";
@@ -74,6 +77,11 @@ final class BlockFaceColorCache
         return ENTRIES.get(blockStateId);
     }
 
+    static boolean isBuilding()
+    {
+        return building;
+    }
+
     static void onModelsReady(Minecraft client)
     {
         if(client == null)
@@ -101,9 +109,14 @@ final class BlockFaceColorCache
         {
             return;
         }
+        final long budgetStart = System.nanoTime();
         int batch = BUILD_BATCH_PER_TICK;
         while(batch-- > 0 && !BUILD_QUEUE.isEmpty())
         {
+            if((System.nanoTime() - budgetStart) > BUILD_BUDGET_NS)
+            {
+                break;
+            }
             final Integer stateId = BUILD_QUEUE.pollFirst();
             if(stateId == null || ENTRIES.containsKey(stateId))
             {
@@ -122,7 +135,7 @@ final class BlockFaceColorCache
         if(BUILD_QUEUE.isEmpty())
         {
             building = false;
-            saveToDisk(contentHash);
+            scheduleSaveToDisk(contentHash);
             LOGGER.info("Block face pre-cache built ({} block states)", ENTRIES.size());
         }
     }
@@ -139,8 +152,8 @@ final class BlockFaceColorCache
                 BUILD_QUEUE.addLast(Block.getId(state));
             }
         }
-        LOGGER.info("Building block face pre-cache ({} block states, {} per tick)...",
-                BUILD_QUEUE.size(), BUILD_BATCH_PER_TICK);
+        LOGGER.info("Building block face pre-cache ({} block states, ~{} ms/tick)...",
+                BUILD_QUEUE.size(), BUILD_BUDGET_NS / 1_000_000L);
     }
 
     private static FaceColors buildFaceColors(Minecraft client, BlockState state)
@@ -320,7 +333,16 @@ final class BlockFaceColorCache
         }
     }
 
-    private static void saveToDisk(int hash)
+    private static void scheduleSaveToDisk(int hash)
+    {
+        final List<Map.Entry<Integer, FaceColors>> snapshot = new ArrayList<>(ENTRIES.entrySet());
+        final Thread saver = new Thread(() -> saveSnapshotToDisk(hash, snapshot), "openrgb-face-precache-save");
+        saver.setDaemon(true);
+        saver.setPriority(Thread.NORM_PRIORITY - 1);
+        saver.start();
+    }
+
+    private static void saveSnapshotToDisk(int hash, List<Map.Entry<Integer, FaceColors>> snapshot)
     {
         try
         {
@@ -331,8 +353,8 @@ final class BlockFaceColorCache
                 out.write(MAGIC);
                 out.writeInt(FORMAT_VERSION);
                 out.writeInt(hash);
-                out.writeInt(ENTRIES.size());
-                for(var entry : ENTRIES.entrySet())
+                out.writeInt(snapshot.size());
+                for(var entry : snapshot)
                 {
                     out.writeInt(entry.getKey());
                     for(int rgb : entry.getValue().rgbByFace())
@@ -359,5 +381,10 @@ final class BlockFaceColorCache
         {
             LOGGER.warn("Failed to save block face pre-cache", t);
         }
+    }
+
+    private static void saveToDisk(int hash)
+    {
+        scheduleSaveToDisk(hash);
     }
 }

@@ -76,7 +76,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Edge contrast: lower = softer, higher = crisper (gamma-like)</string>
+        <string>Contrast: 0 = natural (recommended for Room VR), higher = crisper. Does not darken at low values.</string>
        </property>
       </widget>
      </item>

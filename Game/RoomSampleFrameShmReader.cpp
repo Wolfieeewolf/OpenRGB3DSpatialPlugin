@@ -35,7 +35,7 @@ static unsigned long long NowMs()
 }
 
 #ifdef _WIN32
-static bool ReadFileBytes(const std::wstring& path, std::vector<unsigned char>& out_bytes)
+static bool ReadMappedOrFileBytes(const std::wstring& path, std::vector<unsigned char>& out_bytes)
 {
     out_bytes.clear();
     HANDLE file = CreateFileW(path.c_str(),
@@ -60,6 +60,24 @@ static bool ReadFileBytes(const std::wstring& path, std::vector<unsigned char>& 
 
     const DWORD to_read =
         (DWORD)std::min<std::int64_t>(file_size.QuadPart, (std::int64_t)RoomSampleFrameProtocol::kShmTotalBytes);
+
+    // Prefer section mapping of the shared frame file (matches Java MappedByteBuffer writer).
+    HANDLE mapping = CreateFileMappingW(file, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    if(mapping != nullptr)
+    {
+        void* view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, to_read);
+        if(view != nullptr)
+        {
+            out_bytes.resize(to_read);
+            std::memcpy(out_bytes.data(), view, to_read);
+            UnmapViewOfFile(view);
+            CloseHandle(mapping);
+            CloseHandle(file);
+            return true;
+        }
+        CloseHandle(mapping);
+    }
+
     out_bytes.resize(to_read);
     DWORD read_total = 0;
     while(read_total < to_read)
@@ -240,7 +258,7 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
     const std::wstring path = RoomSampleShmPaths::FrameFilePathW();
     static thread_local std::vector<unsigned char> file_bytes;
     static thread_local std::vector<unsigned char> rgba;
-    if(!ReadFileBytes(path, file_bytes))
+    if(!ReadMappedOrFileBytes(path, file_bytes))
     {
         const unsigned long long now = NowMs();
         if(now - last_missing_log_ms > 15000ULL)

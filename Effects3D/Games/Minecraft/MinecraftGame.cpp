@@ -48,6 +48,16 @@ void ClearRenderSampleIndexContext()
     tls_led_count = 0;
 }
 
+int GetRenderSampleIndex()
+{
+    return tls_led_index;
+}
+
+int GetRenderSampleCount()
+{
+    return tls_led_count;
+}
+
 void WireChildWidgetsToParametersChanged(QWidget* root, const std::function<void()>& on_changed)
 {
     if(!root || !on_changed)
@@ -171,6 +181,18 @@ RGBColor LerpColor(RGBColor a, RGBColor b, float t)
     const int rg = (int)(ag + (bg - ag) * t);
     const int rb = (int)(ab + (bb - ab) * t);
     return (RGBColor)((rb << 16) | (rg << 8) | rr);
+}
+
+RGBColor BlendLedTemporal(RGBColor previous, RGBColor current, unsigned int smoothing_pct)
+{
+    const float retention = std::clamp(smoothing_pct / 100.0f, 0.0f, 1.0f);
+    if(retention <= 1.0e-4f)
+    {
+        return current;
+    }
+    // Global slider 0–100 → keep up to ~88% of the previous frame (soft, not sluggish).
+    const float keep = retention * 0.88f;
+    return LerpColor(current, previous, keep);
 }
 
 RGBColor MakeRgb(unsigned char r, unsigned char g, unsigned char b)
@@ -794,6 +816,13 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                      QStringLiteral("Contrast for Room VR texel samples. Lower preserves grass/dirt/flower detail."));
         AddCheckRow(room_layout, panel, QStringLiteral("Sharp block sampling (less blur)"), s.room_vr_sharp_sampling,
                     [&s](bool v) { s.room_vr_sharp_sampling = v; });
+        AddCheckRow(room_layout,
+                    panel,
+                    QStringLiteral("Room VR sky / weather"),
+                    s.room_vr_sky_enabled,
+                    [&s](bool v) { s.room_vr_sky_enabled = v; },
+                    QStringLiteral("Fill open-air LED samples with sunrise/sunset/night/weather sky. "
+                                   "Only when that world column can see the sky — caves and indoors stay dark."));
     }
 
     if(ch(channels, ChLightning))

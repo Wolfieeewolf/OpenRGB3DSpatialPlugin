@@ -16,6 +16,10 @@ namespace MinecraftGame
 {
 void SetRenderSampleIndexContext(int led_index, int led_count);
 void ClearRenderSampleIndexContext();
+int GetRenderSampleIndex();
+int GetRenderSampleCount();
+/** Frame-to-frame LED blend using Output shaping → Smoothing (0 = off). */
+RGBColor BlendLedTemporal(RGBColor previous, RGBColor current, unsigned int smoothing_pct);
 void WireChildWidgetsToParametersChanged(QWidget* root, const std::function<void()>& on_changed);
 QWidget* CreateSettingsWidget(QWidget* parent,
                               Settings& settings,

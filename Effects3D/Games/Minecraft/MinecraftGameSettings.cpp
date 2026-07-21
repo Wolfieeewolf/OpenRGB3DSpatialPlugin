@@ -45,6 +45,7 @@ void SettingsToJson(const Settings& s, nlohmann::json& j)
     put_f(j, "room_vr_saturation", s.room_vr_saturation);
     put_f(j, "room_vr_contrast", s.room_vr_contrast);
     put_bool(j, "room_vr_sharp_sampling", s.room_vr_sharp_sampling);
+    put_bool(j, "room_vr_sky_enabled", s.room_vr_sky_enabled);
     put_i(j, "room_vr_sample_target_cells", s.room_vr_sample_target_cells);
     put_f(j, "lightning_flash_strength", s.lightning_flash_strength);
     put_f(j, "lightning_flash_decay_s", s.lightning_flash_decay_s);
@@ -81,6 +82,7 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.room_vr_saturation = get_f(j, "room_vr_saturation", s.room_vr_saturation);
     s.room_vr_contrast = get_f(j, "room_vr_contrast", s.room_vr_contrast);
     s.room_vr_sharp_sampling = get_bool(j, "room_vr_sharp_sampling", s.room_vr_sharp_sampling);
+    s.room_vr_sky_enabled = get_bool(j, "room_vr_sky_enabled", s.room_vr_sky_enabled);
     s.room_vr_sample_target_cells = get_i(j, "room_vr_sample_target_cells", s.room_vr_sample_target_cells);
     s.lightning_flash_strength = get_f(j, "lightning_flash_strength", s.lightning_flash_strength);
     s.lightning_flash_decay_s = get_f(j, "lightning_flash_decay_s", s.lightning_flash_decay_s);

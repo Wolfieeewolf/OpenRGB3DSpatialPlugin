@@ -10,7 +10,8 @@ MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels, const char* e
       effect_title_(effect_title)
 {
     effect_intensity = 85;
-    effect_sharpness = 100;
+    effect_sharpness = 0;
+    effect_smoothing = 0;
 }
 
 EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const

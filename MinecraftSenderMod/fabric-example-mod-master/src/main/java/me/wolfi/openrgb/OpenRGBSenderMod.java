@@ -71,16 +71,22 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private long lastWaitingForConfigLogMs = 0L;
     /** Reused across frames to avoid per-tick allocation. Resized only when grid dimensions change. */
     private byte[] roomSampleRgbaBuffer = new byte[0];
-    /** Rotating slice index for large grids — spreads raycasts over several ticks. */
+    /** Rotating slice index for large full-grid fallback — spreads raycasts over several ticks. */
     private int roomSampleTemporalSlice = 0;
+    /** Round-robin cursor for LED-first important cells (budget-driven, not fixed 1/N skip). */
+    private int roomSampleImportantCursor = 0;
     /** Spread expensive UV/entity samples across ticks to avoid hitching. */
     private static final int ROOM_SAMPLE_TEMPORAL_SLICES = 8;
     private static final int ROOM_SAMPLE_TEMPORAL_THRESHOLD = 1024;
     /** Soft cap per tick so Room VR never stalls a client frame. */
-    private static final long ROOM_SAMPLE_BUDGET_NS = 6_500_000L;
+    private static final long ROOM_SAMPLE_BUDGET_NS = 3_500_000L;
+    /** While texture cache is warming, keep Room VR extremely light. */
+    private static final long ROOM_SAMPLE_BUDGET_WHILE_PRECACHE_NS = 800_000L;
     private static final ThreadLocal<int[]> ROOM_CELL_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_ACCUM_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_LAYER_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
+    /** Weighted RGB + weight sum for immersion veil (sunflower yellow, vines, snow, …). */
+    private static final ThreadLocal<int[]> ROOM_IMMERSION_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     /** When LED-first config changes, wipe the volume so unused cells cannot keep stale sky blue. */
     private int roomSampleClearedForConfigId = -1;
 
@@ -89,6 +95,25 @@ public class OpenRGBSenderMod implements ClientModInitializer
     {
         instance = this;
         OpenRGBSenderConfig.get();
+        // LZ4 + mmap publish runs off-tick; UDP notify uses the shared socket under lock.
+        roomSampleFrameShmWriter.setPublishListener((frameId, timestampMs, configId) ->
+        {
+            synchronized(sharedUdpLock)
+            {
+                if(sharedUdpSocket == null || sharedUdpSocket.isClosed() || sharedUdpAddress == null)
+                {
+                    return;
+                }
+                try
+                {
+                    sendRoomSampleShmNotify(sharedUdpSocket, sharedUdpAddress, frameId, timestampMs, configId);
+                }
+                catch(Exception e)
+                {
+                    QuietCatch.debug(LOGGER, "room sample shm notify failed", e);
+                }
+            }
+        });
         ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(
                 new SimpleSynchronousResourceReloadListener()
                 {
@@ -142,7 +167,12 @@ public class OpenRGBSenderMod implements ClientModInitializer
         BlockFaceColorCache.tick(client);
         // Room samples run every tick independently — not gated by telemetryTickDivisor —
         // so LED colours stay in sync with the game world at up to 20 Hz regardless of telemetry rate.
-        instance.tickRoomSamples(client);
+        // Skip most ticks while caches are warming so warm-up cannot stack with full raycasts.
+        final boolean cacheWarming = BlockTexturePrecache.isBuilding() || BlockFaceColorCache.isBuilding();
+        if(!cacheWarming || (instance.clientTickCounter & 3) == 0)
+        {
+            instance.tickRoomSamples(client);
+        }
         instance.tickSendTelemetry(client);
     }
 
@@ -677,8 +707,12 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
-    private static final int MAX_VIEWPORT_BLEND_LAYERS = 6;
+    private static final int MAX_VIEWPORT_BLEND_LAYERS = 8;
+    /** Extra marches allowed while skipping head-height cutouts (tall grass fields). */
+    private static final int MAX_VIEWPORT_RAY_MARCHES = 28;
     private static final double VIEWPORT_RAY_EPS = 0.05;
+    /** Inside this range, sparse plants are immersion only — do not trap every LED ray. */
+    private static final double SPARSE_NEAR_SKIP_DIST = 2.35;
     private static final int VIEWPORT_WATER_COARSE_SAMPLES = 4;
 
     private static void clearRoomSampleRgba(int[] out)
@@ -760,6 +794,109 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return hitLocation.add(marchDir.scale(VIEWPORT_RAY_EPS));
     }
 
+    /** Jump clear of a plant block so dense tall grass cannot re-trap the same cell. */
+    private static Vec3 advanceRayPastBlockPos(Vec3 hitLocation, Vec3 marchDir, BlockPos pos)
+    {
+        Vec3 p = hitLocation.add(marchDir.scale(VIEWPORT_RAY_EPS));
+        for(int i = 0; i < 28; i++)
+        {
+            if(!BlockPos.containing(p).equals(pos))
+            {
+                return p;
+            }
+            p = p.add(marchDir.scale(0.12));
+        }
+        return hitLocation.add(marchDir.scale(1.15));
+    }
+
+    private static void clearImmersion(int[] imm)
+    {
+        imm[0] = 0;
+        imm[1] = 0;
+        imm[2] = 0;
+        imm[3] = 0;
+    }
+
+    private static void addImmersionSample(int[] imm, int[] layer)
+    {
+        if(layer == null || layer[3] <= 0)
+        {
+            return;
+        }
+        final int w = Math.max(1, layer[3]);
+        imm[0] += layer[0] * w;
+        imm[1] += layer[1] * w;
+        imm[2] += layer[2] * w;
+        imm[3] += w;
+    }
+
+    /** Gather real nearby cutout colours when the ray did not already sample them. */
+    private static void sampleNearbyImmersionColors(Level world, Vec3 eye, int[] imm, int[] layer)
+    {
+        // Feet + 4 neighbours only — the old 3x3x3 (27) scan was a hitch source in tall grass.
+        final BlockPos center = BlockPos.containing(eye);
+        final int[][] offsets = {
+                {0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}
+        };
+        for(int[] o : offsets)
+        {
+            final BlockPos pos = center.offset(o[0], o[1], o[2]);
+            final BlockState state = world.getBlockState(pos);
+            if(!BlockDisplayColorSampler.isSparseSkyCutout(state)
+                    && !BlockDisplayColorSampler.isSoftWeatherVolume(state))
+            {
+                continue;
+            }
+            BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, null, eye, layer);
+            addImmersionSample(imm, layer);
+        }
+    }
+
+    /**
+     * Soft immersion veil from plants/snow the player is actually standing in.
+     * Clear days: plant colour only, very light. Weather wash only when raining/storming.
+     * Dimmed at night so tall grass doesn't glow neon after dark.
+     */
+    private static void applySparseImmersionVeil(Level world, Vec3 eye, int[] accum, int[] imm)
+    {
+        final int[] layer = ROOM_LAYER_SCRATCH.get();
+        if(imm[3] <= 0)
+        {
+            sampleNearbyImmersionColors(world, eye, imm, layer);
+        }
+        if(imm[3] <= 0)
+        {
+            return;
+        }
+        int pr = ColorMath.clamp255(imm[0] / imm[3]);
+        int pg = ColorMath.clamp255(imm[1] / imm[3]);
+        int pb = ColorMath.clamp255(imm[2] / imm[3]);
+        final float skyBright = AtmosphereSampler.skyBrightness(world);
+        final float weather = AtmosphereSampler.weatherMoodStrength(world);
+        if(weather > 0.12f)
+        {
+            final int fog = AtmosphereSampler.sampleFogColor(world, BlockPos.containing(eye),
+                    (pr << 16) | (pg << 8) | pb);
+            final float fw = Math.min(0.28f, weather * 0.28f);
+            pr = ColorMath.clamp255(Math.round(pr * (1.0f - fw) + ((fog >> 16) & 0xFF) * fw));
+            pg = ColorMath.clamp255(Math.round(pg * (1.0f - fw) + ((fog >> 8) & 0xFF) * fw));
+            pb = ColorMath.clamp255(Math.round(pb * (1.0f - fw) + (fog & 0xFF) * fw));
+        }
+        // Night: crush veil brightness so immersion matches the world.
+        final float nightK = 0.18f + 0.82f * skyBright;
+        layer[0] = ColorMath.clamp255(Math.round(pr * nightK));
+        layer[1] = ColorMath.clamp255(Math.round(pg * nightK));
+        layer[2] = ColorMath.clamp255(Math.round(pb * nightK));
+        layer[3] = ColorMath.clamp255(Math.round(10 + 6 * skyBright));
+        compositeViewportLayer(accum, layer);
+    }
+
+    private static boolean isRayPassthroughFoliage(BlockState state)
+    {
+        return BlockDisplayColorSampler.isSparseSkyCutout(state)
+                || BlockDisplayColorSampler.isSoftWeatherVolume(state);
+    }
+
     /**
      * Viewport ray with layered compositing: UV block texels, cutouts (plants/fire/glass),
      * entities (mobs/drops), water, and light blocks blend front-to-back.
@@ -769,7 +906,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final Vec3 eye = player.getEyePosition();
         final int[] accum = ROOM_ACCUM_SCRATCH.get();
         final int[] layer = ROOM_LAYER_SCRATCH.get();
+        final int[] immersion = ROOM_IMMERSION_SCRATCH.get();
         clearRoomSampleRgba(accum);
+        clearImmersion(immersion);
         if(eye.distanceToSqr(target) < 1.0e-4)
         {
             final BlockPos at = BlockPos.containing(target);
@@ -786,8 +925,18 @@ public class OpenRGBSenderMod implements ClientModInitializer
             }
             else if(!world.isEmptyBlock(at))
             {
-                BlockDisplayColorSampler.sampleViewportLayer(world, at, world.getBlockState(at), null, target, layer);
-                compositeViewportLayer(accum, layer);
+                final BlockState atState = world.getBlockState(at);
+                if(isRayPassthroughFoliage(atState))
+                {
+                    BlockDisplayColorSampler.sampleViewportLayer(world, at, atState, null, target, layer);
+                    addImmersionSample(immersion, layer);
+                    applySparseImmersionVeil(world, eye, accum, immersion);
+                }
+                else
+                {
+                    BlockDisplayColorSampler.sampleViewportLayer(world, at, atState, null, target, layer);
+                    compositeViewportLayer(accum, layer);
+                }
             }
             writeAccumToRoomSample(accum, out);
             return;
@@ -799,8 +948,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 EntityDisplayColorSampler.collectHits(world, player, eye, target);
         int entityIndex = 0;
         double lastDistSq = 0.0;
+        boolean immersedNearEye = false;
+        int solidLayers = 0;
 
-        for(int step = 0; step < MAX_VIEWPORT_BLEND_LAYERS; step++)
+        for(int march = 0; march < MAX_VIEWPORT_RAY_MARCHES && solidLayers < MAX_VIEWPORT_BLEND_LAYERS; march++)
         {
             final BlockHitResult hit = raycastViewport(world, player, rayStart, target);
             final double blockDistSq = hit.getType() == HitResult.Type.BLOCK
@@ -821,6 +972,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     writeAccumToRoomSample(accum, out);
                     return;
                 }
+                solidLayers++;
             }
 
             if(hit.getType() != HitResult.Type.BLOCK)
@@ -849,6 +1001,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     layer[3] = eh.a();
                     compositeViewportLayer(accum, layer);
                 }
+                if(immersedNearEye)
+                {
+                    applySparseImmersionVeil(world, eye, accum, immersion);
+                }
                 writeAccumToRoomSample(accum, out);
                 return;
             }
@@ -858,8 +1014,39 @@ public class OpenRGBSenderMod implements ClientModInitializer
             final var fluid = world.getFluidState(pos);
             if(state.isAir() && fluid.isEmpty())
             {
+                if(immersedNearEye)
+                {
+                    applySparseImmersionVeil(world, eye, accum, immersion);
+                }
                 writeAccumToRoomSample(accum, out);
                 return;
+            }
+
+            // Tall grass / sunflowers / snow layers / petals must not trap every LED ray.
+            // Near-eye: skip + optional immersion. Farther: pass through with NO soft composite —
+            // pale plant texels were washing dirt/cherry/grass into grey-white.
+            if(isRayPassthroughFoliage(state))
+            {
+                final double dist = Math.sqrt(blockDistSq);
+                if(dist <= SPARSE_NEAR_SKIP_DIST)
+                {
+                    immersedNearEye = true;
+                    BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, hit.getDirection(),
+                            hit.getLocation(), layer);
+                    addImmersionSample(immersion, layer);
+                }
+                lastDistSq = blockDistSq;
+                rayStart = advanceRayPastBlockPos(hit.getLocation(), marchDir, pos);
+                if(rayStart.distanceToSqr(target) >= eye.distanceToSqr(target) - 1.0e-6)
+                {
+                    if(immersedNearEye)
+                    {
+                        applySparseImmersionVeil(world, eye, accum, immersion);
+                    }
+                    writeAccumToRoomSample(accum, out);
+                    return;
+                }
+                continue;
             }
 
             BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, hit.getDirection(), hit.getLocation(),
@@ -874,20 +1061,74 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     : BlockDisplayColorSampler.viewportCoverAlpha(state, fluid);
             if(!BlockDisplayColorSampler.continuesViewportRay(state, fluid, coverAlpha))
             {
+                if(immersedNearEye)
+                {
+                    applySparseImmersionVeil(world, eye, accum, immersion);
+                }
                 writeAccumToRoomSample(accum, out);
                 return;
             }
 
+            solidLayers++;
             lastDistSq = blockDistSq;
             rayStart = advanceRayPastBlock(hit.getLocation(), marchDir);
             if(rayStart.distanceToSqr(target) >= eye.distanceToSqr(target))
             {
+                if(immersedNearEye)
+                {
+                    applySparseImmersionVeil(world, eye, accum, immersion);
+                }
                 writeAccumToRoomSample(accum, out);
                 return;
             }
         }
 
+        if(immersedNearEye)
+        {
+            applySparseImmersionVeil(world, eye, accum, immersion);
+        }
         writeAccumToRoomSample(accum, out);
+    }
+
+    /**
+     * Per-LED-direction sky: only for truly empty rays. Uses once-per-frame atmosphere
+     * (sunrise glow toward the sun, cooler anti-sun, night zenith).
+     */
+    private static void maybeFillOutdoorSky(RoomSampleConfigReader.Config cfg,
+                                            Level world,
+                                            Vec3 eye,
+                                            Vec3 target,
+                                            AtmosphereSampler.Frame atmosphere,
+                                            int[] cell)
+    {
+        if(cfg == null || !cfg.isSkyEnabled() || cell == null || cell.length < 4 || atmosphere == null)
+        {
+            return;
+        }
+        // Strict: only truly empty rays get sky. Immersion/plant α must not be overwritten —
+        // that was washing grass into bluish-white on LEDs.
+        if(cell[3] > 0)
+        {
+            return;
+        }
+        final BlockPos column = BlockPos.containing(target);
+        if(!world.canSeeSky(column))
+        {
+            return;
+        }
+        final int skyLight = world.getBrightness(LightLayer.SKY, column);
+        if(skyLight < 1)
+        {
+            return;
+        }
+        final int skyRgb = AtmosphereSampler.sampleDirectionalSky(atmosphere, eye, target);
+        cell[0] = (skyRgb >> 16) & 0xFF;
+        cell[1] = (skyRgb >> 8) & 0xFF;
+        cell[2] = skyRgb & 0xFF;
+        // Night sky stays translucent so it doesn't overpower dim foliage neighbours.
+        final float night = atmosphere.skyBrightness();
+        final int skyA = ColorMath.clamp255(Math.round((28 + skyLight * 3) * (0.45f + 0.55f * night)));
+        cell[3] = skyA;
     }
 
     private static int effectiveRoomSampleInterval(OpenRGBSenderConfig cfg, RoomSampleConfigReader.Config roomCfg)
@@ -947,9 +1188,14 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final int cellCount = sx * sy * sz;
         final boolean useImportant = cfg.hasImportantCells();
         final int workCount = useImportant ? cfg.importantFlatIndices.length : cellCount;
-        final boolean temporal = workCount > ROOM_SAMPLE_TEMPORAL_THRESHOLD;
+        final boolean temporal = !useImportant && workCount > ROOM_SAMPLE_TEMPORAL_THRESHOLD;
+        final long budgetNs = (BlockTexturePrecache.isBuilding() || BlockFaceColorCache.isBuilding())
+                ? ROOM_SAMPLE_BUDGET_WHILE_PRECACHE_NS
+                : ROOM_SAMPLE_BUDGET_NS;
         final long budgetStart = System.nanoTime();
         final double maxRange = 16.0 + Math.max(sx, Math.max(sy, sz)) * Math.max(0.5, cfg.roomToWorldScale);
+        final AtmosphereSampler.Frame atmosphere = AtmosphereSampler.captureFrame(world);
+        final Vec3 eye = player.getEyePosition();
         EntityDisplayColorSampler.beginFrame(world, player, Math.max(24.0, Math.min(80.0, maxRange)));
         try
         {
@@ -962,38 +1208,45 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 {
                     java.util.Arrays.fill(rgba, (byte)0);
                     roomSampleClearedForConfigId = cfg.configId;
+                    roomSampleImportantCursor = 0;
                 }
                 final int[] important = cfg.importantFlatIndices;
-                for(int i = 0; i < important.length; i++)
+                final int n = important.length;
+                if(n > 0)
                 {
-                    if(temporal && (i % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
+                    int start = roomSampleImportantCursor % n;
+                    int processed = 0;
+                    for(int step = 0; step < n; step++)
                     {
-                        continue;
+                        if((step & 7) == 0 && (System.nanoTime() - budgetStart) > budgetNs)
+                        {
+                            budgetHit = true;
+                            break;
+                        }
+                        final int i = (start + step) % n;
+                        final int flat = important[i];
+                        if(flat < 0 || flat >= cellCount)
+                        {
+                            continue;
+                        }
+                        final int iz = flat % sz;
+                        final int t = flat / sz;
+                        final int iy = t % sy;
+                        final int ix = t / sy;
+                        final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
+                        final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
+                        final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
+                        final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
+                        sampleRoomCellAtWorldTarget(world, player, target, cell);
+                        maybeFillOutdoorSky(cfg, world, eye, target, atmosphere, cell);
+                        final int rgbaIndex = flat * 4;
+                        rgba[rgbaIndex] = (byte)cell[0];
+                        rgba[rgbaIndex + 1] = (byte)cell[1];
+                        rgba[rgbaIndex + 2] = (byte)cell[2];
+                        rgba[rgbaIndex + 3] = (byte)cell[3];
+                        processed++;
                     }
-                    if((i & 31) == 0 && (System.nanoTime() - budgetStart) > ROOM_SAMPLE_BUDGET_NS)
-                    {
-                        budgetHit = true;
-                        break;
-                    }
-                    final int flat = important[i];
-                    if(flat < 0 || flat >= cellCount)
-                    {
-                        continue;
-                    }
-                    final int iz = flat % sz;
-                    final int t = flat / sz;
-                    final int iy = t % sy;
-                    final int ix = t / sy;
-                    final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
-                    final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
-                    final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
-                    final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
-                    sampleRoomCellAtWorldTarget(world, player, target, cell);
-                    final int rgbaIndex = flat * 4;
-                    rgba[rgbaIndex] = (byte)cell[0];
-                    rgba[rgbaIndex + 1] = (byte)cell[1];
-                    rgba[rgbaIndex + 2] = (byte)cell[2];
-                    rgba[rgbaIndex + 3] = (byte)cell[3];
+                    roomSampleImportantCursor = (start + Math.max(1, processed)) % n;
                 }
             }
             else
@@ -1013,7 +1266,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
                                 flatIndex++;
                                 continue;
                             }
-                            if((flatIndex & 31) == 0 && (System.nanoTime() - budgetStart) > ROOM_SAMPLE_BUDGET_NS)
+                            if((flatIndex & 15) == 0 && (System.nanoTime() - budgetStart) > budgetNs)
                             {
                                 budgetHit = true;
                                 break;
@@ -1023,6 +1276,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
                             final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
                             final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
                             sampleRoomCellAtWorldTarget(world, player, target, cell);
+                            maybeFillOutdoorSky(cfg, world, eye, target, atmosphere, cell);
                             rgba[rgbaIndex++] = (byte)cell[0];
                             rgba[rgbaIndex++] = (byte)cell[1];
                             rgba[rgbaIndex++] = (byte)cell[2];
@@ -1042,12 +1296,16 @@ public class OpenRGBSenderMod implements ClientModInitializer
             EntityDisplayColorSampler.endFrame();
         }
 
+        // Ensure UDP target exists before async publish notifies from the worker thread.
+        if(socket == null || address == null)
+        {
+            return;
+        }
         final long now = System.currentTimeMillis();
         final int frameId = (int)(now & 0x7FFFFFFFL);
-        if(roomSampleFrameShmWriter.writeFrame(frameId, now, cfg.configId, sx, sy, sz, rgba))
-        {
-            sendRoomSampleShmNotify(socket, address, frameId, now, cfg.configId);
-        }
+        // Zero-copy handoff — LZ4 and mmap write never run on the client tick.
+        roomSampleRgbaBuffer = roomSampleFrameShmWriter.offerSwap(
+                frameId, now, cfg.configId, sx, sy, sz, rgba);
     }
 
     private void logRoomConfigState(RoomSampleConfigReader.Config cfg)

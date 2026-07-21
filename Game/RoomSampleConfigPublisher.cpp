@@ -272,6 +272,10 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.sequence = 2;
     hdr.config_id = 0;
     hdr.flags = RoomSampleFrameProtocol::kFlagEnabled;
+    if(settings.room_vr_sky_enabled)
+    {
+        hdr.flags |= RoomSampleFrameProtocol::kFlagSkyEnabled;
+    }
     hdr.target_cells = (std::uint32_t)std::min(mc_cells, max_cells);
     hdr.size_x = nx;
     hdr.size_y = ny;

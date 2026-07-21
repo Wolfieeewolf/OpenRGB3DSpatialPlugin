@@ -449,6 +449,21 @@ win32:RCC_DIR     = _intermediate_$$DESTDIR/.qrc
 win32:UI_DIR      = _intermediate_$$DESTDIR/.ui
 win32:QMAKE_DEL_FILE = cmd /c del /f /q 2^>nul
 
+# Qt Creator warns "Discarding excessive amount of pending output" on Clean because
+# qmake emits one enormous per-file `del` of every moc/obj. After each qmake, rewrite
+# the Makefile `clean` target to scripts/qt-win-clean.cmd (short directory wipe).
+win32 {
+    REWRITE_CLEAN_CMD = $$shell_path($$PWD/scripts/rewrite-makefile-clean.cmd)
+    QUIET_CLEAN_CMD   = $$shell_path($$PWD/scripts/qt-win-clean.cmd)
+    rewrite_win_clean.target = rewrite_win_clean
+    rewrite_win_clean.commands = cmd /c $$shell_quote($$REWRITE_CLEAN_CMD) $$shell_quote($$shell_path($$OUT_PWD))
+    QMAKE_EXTRA_TARGETS += rewrite_win_clean
+    qmake_all.depends += rewrite_win_clean
+    quietclean.target = quietclean
+    quietclean.commands = cmd /c $$shell_quote($$QUIET_CLEAN_CMD) $$shell_quote($$shell_path($$OUT_PWD))
+    QMAKE_EXTRA_TARGETS += quietclean
+}
+
 win32:DEFINES += \
     _MBCS \
     WIN32 \

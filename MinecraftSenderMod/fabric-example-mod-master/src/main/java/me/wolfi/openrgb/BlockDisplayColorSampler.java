@@ -30,8 +30,8 @@ import org.slf4j.LoggerFactory;
 final class BlockDisplayColorSampler
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
-    private static final float BLOCK_COLOR_SATURATION = 1.48f;
-    private static final float EMISSIVE_SATURATION = 1.65f;
+    private static final float BLOCK_COLOR_SATURATION = 1.30f;
+    private static final float EMISSIVE_SATURATION = 1.40f;
     private static final int SNOW_BLEND_RGB = 0xFFFFFF;
     private static final float SNOWY_LEAVES_BLEND = 0.45f;
     private static final ThreadLocal<int[]> TEXEL_RGBA = ThreadLocal.withInitial(() -> new int[4]);
@@ -62,6 +62,15 @@ final class BlockDisplayColorSampler
             // Fire is a cutout — composite, then keep going so ground behind still contributes.
             return true;
         }
+        // Tall grass / sugarcane / sunflowers etc. must not kill open-sky rays for nearby LEDs.
+        if(isSparseSkyCutout(state))
+        {
+            return true;
+        }
+        if(isSoftWeatherVolume(state))
+        {
+            return true;
+        }
         if(BlockUvTexelSampler.shouldContinueThroughTexel(coverAlpha))
         {
             return true;
@@ -87,6 +96,53 @@ final class BlockDisplayColorSampler
             return true;
         }
         return false;
+    }
+
+    /**
+     * Head-height / weather cutouts that must not trap every LED ray when the player
+     * stands inside them (tall grass fields, snow layers, petal carpets, vines, etc.).
+     */
+    static boolean isSparseSkyCutout(BlockState state)
+    {
+        if(state == null)
+        {
+            return false;
+        }
+        if(state.is(BlockTags.FLOWERS) || state.is(BlockTags.CROPS))
+        {
+            return true;
+        }
+        // Thin snow / petal carpets — rain/fog are atmosphere; these are the block hazards.
+        if(state.is(Blocks.SNOW) || state.is(Blocks.PINK_PETALS) || state.is(Blocks.MOSS_CARPET)
+                || state.is(Blocks.PALE_MOSS_CARPET))
+        {
+            return true;
+        }
+        return state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
+                || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN)
+                || state.is(Blocks.SUGAR_CANE) || state.is(Blocks.BAMBOO) || state.is(Blocks.BAMBOO_SAPLING)
+                || state.is(Blocks.SUNFLOWER) || state.is(Blocks.LILAC) || state.is(Blocks.ROSE_BUSH)
+                || state.is(Blocks.PEONY) || state.is(Blocks.PITCHER_PLANT) || state.is(Blocks.TORCHFLOWER)
+                || state.is(Blocks.SWEET_BERRY_BUSH) || state.is(Blocks.CAVE_VINES)
+                || state.is(Blocks.CAVE_VINES_PLANT) || state.is(Blocks.VINE) || state.is(Blocks.GLOW_LICHEN)
+                || state.is(Blocks.DEAD_BUSH) || state.is(Blocks.SEAGRASS) || state.is(Blocks.TALL_SEAGRASS)
+                || state.is(Blocks.KELP) || state.is(Blocks.KELP_PLANT) || state.is(Blocks.COBWEB)
+                || state.is(Blocks.HANGING_ROOTS) || state.is(Blocks.SPORE_BLOSSOM)
+                || state.is(Blocks.NETHER_SPROUTS) || state.is(Blocks.WARPED_ROOTS)
+                || state.is(Blocks.CRIMSON_ROOTS) || state.is(Blocks.WEEPING_VINES)
+                || state.is(Blocks.WEEPING_VINES_PLANT) || state.is(Blocks.TWISTING_VINES)
+                || state.is(Blocks.TWISTING_VINES_PLANT)
+                || state.is(Blocks.OAK_SAPLING) || state.is(Blocks.BIRCH_SAPLING)
+                || state.is(Blocks.SPRUCE_SAPLING) || state.is(Blocks.JUNGLE_SAPLING)
+                || state.is(Blocks.ACACIA_SAPLING) || state.is(Blocks.DARK_OAK_SAPLING)
+                || state.is(Blocks.CHERRY_SAPLING) || state.is(Blocks.PALE_OAK_SAPLING)
+                || state.is(Blocks.MANGROVE_PROPAGULE);
+    }
+
+    /** Powder snow is denser than a carpet — soft continue, not a hard wall for Room VR. */
+    static boolean isSoftWeatherVolume(BlockState state)
+    {
+        return state != null && state.is(Blocks.POWDER_SNOW);
     }
 
     static int viewportCoverAlpha(BlockState state, FluidState fluid)
@@ -145,6 +201,16 @@ final class BlockDisplayColorSampler
         {
             // Keep canopy opaque even when the hit texel is a leaf hole.
             return 255;
+        }
+        if(isSparseSkyCutout(state))
+        {
+            // Soft plant veil — enough to tint LEDs, not enough to bury sky behind them.
+            final int tex = textureAlpha >= 0 ? textureAlpha : 90;
+            return ColorMath.clamp255(Math.min(72, Math.max(28, tex / 3)));
+        }
+        if(isSoftWeatherVolume(state))
+        {
+            return 70;
         }
         if(textureAlpha >= 0)
         {
@@ -315,32 +381,42 @@ final class BlockDisplayColorSampler
 
     private static int applyBlockTint(Level world, BlockPos pos, BlockState state, int baseRgb)
     {
+        // Multiply only by real client tint sources (or white). Never force green onto
+        // already-coloured leaves/flowers — that turns cherry pink into yellow/brown.
         final int tint = sampleBlockTintRgb(world, pos, state);
         int r = mulChannel((baseRgb >> 16) & 0xFF, (tint >> 16) & 0xFF);
         int g = mulChannel((baseRgb >> 8) & 0xFF, (tint >> 8) & 0xFF);
         int b = mulChannel(baseRgb & 0xFF, tint & 0xFF);
         int rgb = (r << 16) | (g << 8) | b;
-        // Leaf/grass textures are near-white grayscale; if tint failed, force biome foliage/grass colour.
-        if(state.is(BlockTags.LEAVES) && isNearGrayOrWhite(rgb))
+        // Grayscale plant bases still need biome colour when tint sources were missing.
+        if(isNearGrayOrWhite(rgb))
         {
-            final int foliage = AtmosphereSampler.sampleFoliageColor(world, pos, 0x48B518);
-            rgb = ColorMath.blendRgb(rgb, foliage & 0xFFFFFF, 0.88f);
-        }
-        else if((state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
-                || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN) || state.is(BlockTags.FLOWERS))
-                && isNearGrayOrWhite(rgb))
-        {
-            final int grass = AtmosphereSampler.sampleGrassColor(world, pos, 0x7CBD6B);
-            rgb = ColorMath.blendRgb(rgb, grass & 0xFFFFFF, 0.80f);
-        }
-        // Flowers and small plants need punchier chroma on LEDs.
-        if(state.is(BlockTags.FLOWERS) || state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
-                || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN) || state.is(Blocks.SWEET_BERRY_BUSH)
-                || state.is(Blocks.TORCHFLOWER) || state.is(Blocks.PITCHER_PLANT))
-        {
-            rgb = boostRgb(rgb, 1.55f);
+            if(state.is(BlockTags.LEAVES) && usesBiomeFoliageTint(state))
+            {
+                final int foliage = AtmosphereSampler.sampleFoliageColor(world, pos, 0x48B518);
+                rgb = ColorMath.blendRgb(rgb, foliage & 0xFFFFFF, 0.88f);
+            }
+            else if(state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
+                    || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN))
+            {
+                final int grass = AtmosphereSampler.sampleGrassColor(world, pos, 0x7CBD6B);
+                rgb = ColorMath.blendRgb(rgb, grass & 0xFFFFFF, 0.80f);
+            }
         }
         return rgb;
+    }
+
+    /** Classic green canopies — not cherry / azalea / other pre-coloured leaf blocks. */
+    private static boolean usesBiomeFoliageTint(BlockState state)
+    {
+        if(!state.is(BlockTags.LEAVES))
+        {
+            return false;
+        }
+        return !(state.is(Blocks.CHERRY_LEAVES)
+                || state.is(Blocks.AZALEA_LEAVES)
+                || state.is(Blocks.FLOWERING_AZALEA_LEAVES)
+                || state.is(Blocks.PALE_OAK_LEAVES));
     }
 
     private static boolean isNearGrayOrWhite(int rgb)
@@ -398,7 +474,8 @@ final class BlockDisplayColorSampler
 
     private static int biomeTintFallback(Level world, BlockPos pos, BlockState state)
     {
-        if(state.is(BlockTags.LEAVES))
+        // White = "no multiply". Coloured leaf textures must not be multiplied by green.
+        if(state.is(BlockTags.LEAVES) && usesBiomeFoliageTint(state))
         {
             return AtmosphereSampler.sampleFoliageColor(world, pos, 0x48B518) & 0xFFFFFF;
         }
@@ -423,14 +500,31 @@ final class BlockDisplayColorSampler
 
     private static void writeLitLayer(Level world, BlockPos pos, int rgb, int alpha, int[] out)
     {
-        int sky = world.getBrightness(LightLayer.SKY, pos);
-        int block = world.getBrightness(LightLayer.BLOCK, pos);
-        int light = Math.max(sky, block);
-        float k = 0.55f + 0.45f * (light / 15.0f);
+        final int sky = world.getBrightness(LightLayer.SKY, pos);
+        final int block = world.getBrightness(LightLayer.BLOCK, pos);
+        final float skyBright = AtmosphereSampler.skyBrightness(world);
+        // Restore the pre-day/night light-level curve (looked good on grass), then apply a
+        // gentler day↔night factor only to sky-dominated samples. Hard 0.14 floors + sat
+        // stacking was crushing greens toward cyan/blue on LEDs.
+        final float local = Math.max(sky, block) / 15.0f;
+        float k = 0.72f + 0.28f * local;
+        if(sky >= block)
+        {
+            // Night outdoor: dim, but keep enough headroom that chroma survives.
+            k *= (0.45f + 0.55f * skyBright);
+        }
         int r = ColorMath.clamp255((int)(((rgb >> 16) & 0xFF) * k));
         int g = ColorMath.clamp255((int)(((rgb >> 8) & 0xFF) * k));
         int b = ColorMath.clamp255((int)((rgb & 0xFF) * k));
+        // Same sat as before day/night work — do not scale sat with skyBright.
         boostSaturation(r, g, b, BLOCK_COLOR_SATURATION, alpha, out);
+        // Soft warm bias when outdoor night would otherwise read as cold cyan-green.
+        if(sky >= block && skyBright < 0.85f && out[1] > out[0] && out[2] > out[0])
+        {
+            final float cool = (1.0f - skyBright) * 0.22f;
+            out[2] = ColorMath.clamp255(Math.round(out[2] * (1.0f - cool)));
+            out[0] = ColorMath.clamp255(Math.round(out[0] + (out[1] - out[0]) * cool * 0.35f));
+        }
     }
 
     private static void boostSaturation(int r, int g, int b, float saturation, int alpha, int[] out)

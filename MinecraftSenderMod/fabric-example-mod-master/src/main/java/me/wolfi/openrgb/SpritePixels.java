@@ -51,9 +51,36 @@ record SpritePixels(int width, int height, int[] argb, int avgRgb, int avgAlpha)
         {
             return direct;
         }
+        return searchOpaqueNear(cx, cy, minAlpha, Math.min(3, Math.max(1, Math.min(width, height) / 8)));
+    }
+
+    /**
+     * Wider opaque search for leaf canopies — hole texels should resolve to nearby leaf colour
+     * instead of a washed average that tints poorly on LEDs.
+     */
+    int sampleOpaqueNearLeaves(float u, float v, int minAlpha)
+    {
+        if(width <= 0 || height <= 0 || argb == null || argb.length == 0)
+        {
+            return (avgAlpha << 24) | (avgRgb & 0xFFFFFF);
+        }
+        float uu = clamp01(u - (float)Math.floor(u));
+        float vv = clamp01(v - (float)Math.floor(v));
+        int cx = Math.min(width - 1, Math.max(0, (int)(uu * width)));
+        int cy = Math.min(height - 1, Math.max(0, (int)(vv * height)));
+        final int direct = argb[cy * width + cx];
+        if(((direct >>> 24) & 0xFF) >= minAlpha)
+        {
+            return direct;
+        }
+        final int radius = Math.min(6, Math.max(3, Math.min(width, height) / 4));
+        return searchOpaqueNear(cx, cy, minAlpha, radius);
+    }
+
+    private int searchOpaqueNear(int cx, int cy, int minAlpha, int radius)
+    {
         int best = -1;
         int bestDist = Integer.MAX_VALUE;
-        final int radius = Math.min(3, Math.max(1, Math.min(width, height) / 8));
         for(int dy = -radius; dy <= radius; dy++)
         {
             for(int dx = -radius; dx <= radius; dx++)

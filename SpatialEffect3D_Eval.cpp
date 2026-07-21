@@ -714,9 +714,11 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
     int gg = (int)(g * factor); if(gg > 255) gg = 255;
     int bb = (int)(b * factor); if(bb > 255) bb = 255;
 
-    if(effect_sharpness != 100)
+    if(effect_sharpness != 0)
     {
-        const float gamma = std::pow(2.0f, (effect_sharpness - 100) / 100.0f);
+        // 0 = passthrough (legacy neutral was 100). Higher = crisper / more contrast.
+        // Old values below 100 darkened everything — that side of the scale is removed.
+        const float gamma = std::pow(2.0f, effect_sharpness / 100.0f);
         float rf = (float)rr;
         float gf = (float)gg;
         float bf = (float)bb;

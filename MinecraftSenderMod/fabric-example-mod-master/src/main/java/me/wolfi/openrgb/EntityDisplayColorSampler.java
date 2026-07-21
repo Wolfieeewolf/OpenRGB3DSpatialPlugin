@@ -33,8 +33,6 @@ final class EntityDisplayColorSampler
     private static final double RAY_PAD = 0.35;
     private static final ConcurrentHashMap<Identifier, BlockDisplayColorSampler.TextureSample> TEXTURE_AVG =
             new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<Identifier, SpritePixels> TEXTURE_PIXELS =
-            new ConcurrentHashMap<>();
 
     private static List<Entity> frameEntities = List.of();
     private static final ThreadLocal<double[]> T_HIT = ThreadLocal.withInitial(() -> new double[1]);
@@ -206,9 +204,15 @@ final class EntityDisplayColorSampler
         rgb = boostRgb(rgb, 1.25f);
 
         final BlockPos pos = entity.blockPosition();
-        int sky = world.getBrightness(LightLayer.SKY, pos);
-        int block = world.getBrightness(LightLayer.BLOCK, pos);
-        float k = 0.60f + 0.40f * (Math.max(sky, block) / 15.0f);
+        final int sky = world.getBrightness(LightLayer.SKY, pos);
+        final int block = world.getBrightness(LightLayer.BLOCK, pos);
+        final float skyBright = AtmosphereSampler.skyBrightness(world);
+        final float local = Math.max(sky, block) / 15.0f;
+        float k = 0.72f + 0.28f * local;
+        if(sky >= block)
+        {
+            k *= (0.45f + 0.55f * skyBright);
+        }
         out[0] = ColorMath.clamp255((int)(((rgb >> 16) & 0xFF) * k));
         out[1] = ColorMath.clamp255((int)(((rgb >> 8) & 0xFF) * k));
         out[2] = ColorMath.clamp255((int)((rgb & 0xFF) * k));
@@ -222,16 +226,8 @@ final class EntityDisplayColorSampler
         {
             return 0;
         }
-        SpritePixels pixels = TEXTURE_PIXELS.get(spriteId);
-        if(pixels == null)
-        {
-            // Never decode PNGs on the hot room-sample path — only use already-cached pixels.
-            pixels = BlockTexturePrecache.getPixels(spriteId);
-            if(pixels != null)
-            {
-                TEXTURE_PIXELS.putIfAbsent(spriteId, pixels);
-            }
-        }
+        // Only use already-cached LRU pixels — never decode PNGs on the hot path.
+        final SpritePixels pixels = BlockTexturePrecache.getPixels(spriteId);
         if(pixels != null)
         {
             final float[] uv = mapHitToEntityUv(entity, hitPos);
@@ -242,7 +238,6 @@ final class EntityDisplayColorSampler
         {
             return (Math.max(180, avg.averageAlpha()) << 24) | (avg.rgb() & 0xFFFFFF);
         }
-        // Warm the average cache off the critical path if precache already has it.
         final BlockDisplayColorSampler.TextureSample cached = BlockTexturePrecache.get(spriteId);
         if(cached != null)
         {

@@ -122,7 +122,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     glow_level_slider = nullptr;
     glow_level_label = nullptr;
     effect_intensity = 100;
-    effect_sharpness = 100;
+    effect_sharpness = 0;
     effect_smoothing = 0;
     effect_sampling_resolution = 100;
     effect_edge_profile = 2;
