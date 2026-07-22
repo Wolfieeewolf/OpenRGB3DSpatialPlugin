@@ -38,6 +38,7 @@
 *.comp text eol=lf
 
 # Binary assets / build products
+*.jar binary
 *.png binary
 *.jpg binary
 *.jpeg binary
