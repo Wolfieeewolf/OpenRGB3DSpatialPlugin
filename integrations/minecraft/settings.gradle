@@ -8,4 +8,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'fabric-example-mod-master'
+rootProject.name = 'openrgb-minecraft-sender'

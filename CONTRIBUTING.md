@@ -139,7 +139,7 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 ## Game / Minecraft and similar effects
 
 - Telemetry (UDP on localhost for pose/vitals/damage) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
-- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room Ambilight**. Room Ambilight colours come from the Fabric mod over **room-sample SHM** (cubemap texels), not UDP colour streams.
+- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room Ambilight**. Room Ambilight colours come from the Fabric mod under **`integrations/minecraft/`** over **room-sample SHM** (cubemap texels), not UDP colour streams.
 - Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
 
 ## UI

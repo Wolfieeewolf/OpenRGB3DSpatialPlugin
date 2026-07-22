@@ -68,6 +68,7 @@ desktop.ini
 *.swo
 *~
 
-# Gradle (MinecraftSenderMod)
-MinecraftSenderMod/**/.gradle/
-MinecraftSenderMod/**/build/
+# Gradle (game integrations)
+integrations/**/.gradle/
+integrations/**/build/
+integrations/**/run/
