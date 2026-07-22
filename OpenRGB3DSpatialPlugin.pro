@@ -162,7 +162,7 @@ HEADERS += \
     Effects3D/Games/Minecraft/MinecraftAir/MinecraftAirEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftRoomVrTint/MinecraftRoomVrTintEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
@@ -321,7 +321,7 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftAir/MinecraftAirEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
-    Effects3D/Games/Minecraft/MinecraftRoomVrTint/MinecraftRoomVrTintEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/BlockerGridOccluder.cpp \

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "MinecraftRoomVrTintEffect3D.h"
+#include "MinecraftRoomAmbilightEffect3D.h"
 #include "../MinecraftGame.h"
 
-REGISTER_EFFECT_3D(MinecraftRoomVrTintEffect3D);
+REGISTER_EFFECT_3D(MinecraftRoomAmbilightEffect3D);
 
-MinecraftRoomVrTintEffect3D::MinecraftRoomVrTintEffect3D(QWidget* parent)
-    : MinecraftSubEffect3D(MinecraftGame::ChRoomVrTint, "Room Ambilight", parent)
+MinecraftRoomAmbilightEffect3D::MinecraftRoomAmbilightEffect3D(QWidget* parent)
+    : MinecraftSubEffect3D(MinecraftGame::ChRoomAmbilight, "Room Ambilight", parent)
 {
     // Temporal blend washes grass/sky into muddy teal — default off; user can raise if needed.
     effect_smoothing = 0;
@@ -14,7 +14,7 @@ MinecraftRoomVrTintEffect3D::MinecraftRoomVrTintEffect3D(QWidget* parent)
     effect_sharpness = 0;
 }
 
-EffectInfo3D MinecraftRoomVrTintEffect3D::GetEffectInfo() const
+EffectInfo3D MinecraftRoomAmbilightEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
     info.effect_description =
@@ -24,7 +24,7 @@ EffectInfo3D MinecraftRoomVrTintEffect3D::GetEffectInfo() const
     return info;
 }
 
-void MinecraftRoomVrTintEffect3D::SetupCustomUI(QWidget* parent)
+void MinecraftRoomAmbilightEffect3D::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = MinecraftGame::CreateEffectWidget(parent,
                                                    QString::fromUtf8("Room Ambilight"),
@@ -35,7 +35,7 @@ void MinecraftRoomVrTintEffect3D::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
-RGBColor MinecraftRoomVrTintEffect3D::CalculateColorGrid(float gx, float gy, float gz, float time,
+RGBColor MinecraftRoomAmbilightEffect3D::CalculateColorGrid(float gx, float gy, float gz, float time,
                                                          const GridContext3D& grid)
 {
     (void)time;

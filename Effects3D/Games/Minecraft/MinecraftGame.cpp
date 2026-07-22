@@ -246,11 +246,11 @@ const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridConte
 
     snapshot = GameTelemetryBridge::GetTelemetrySnapshot();
 
-    if(ch(channels, ChRoomVrTint) && !state.room_config_published)
+    if(ch(channels, ChRoomAmbilight) && !state.room_config_published)
     {
         const float blocks_per_m =
             snapshot.has_player_blocks_per_m ? snapshot.player_blocks_per_m : 1.0f;
-        const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m, settings.room_vr_scale_tune);
+        const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m, settings.room_ambilight_scale_tune);
         RoomSampleConfigPublisher::PublishIfNeeded(grid, settings, origin_x, origin_y, origin_z, room_scale);
         state.room_config_published = true;
     }
@@ -258,7 +258,7 @@ const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridConte
     return snapshot;
 }
 
-static RGBColor EnhanceRoomVrColor(RGBColor c, float saturation, float contrast)
+static RGBColor EnhanceRoomAmbilightColor(RGBColor c, float saturation, float contrast)
 {
     float r = (float)(c & 0xFF) / 255.0f;
     float g = (float)((c >> 8) & 0xFF) / 255.0f;
@@ -568,7 +568,7 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         AddPctSlider(damage_layout, panel, QStringLiteral("Damage flash strength"), &s.damage_flash_strength);
     }
 
-    if(ch(channels, ChRoomVrTint))
+    if(ch(channels, ChRoomAmbilight))
     {
         QVBoxLayout* room_layout = content_layout;
         if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Room Ambilight")))
@@ -587,23 +587,23 @@ QWidget* CreateSettingsWidget(QWidget* parent,
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);
-        AddSliderRow(room_layout, panel, QStringLiteral("Strength"), 0, 100, (int)std::lround(std::clamp(s.room_vr_mix, 0.0f, 1.0f) * 100.0f),
-                     [&s](int x) { s.room_vr_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
+        AddSliderRow(room_layout, panel, QStringLiteral("Strength"), 0, 100, (int)std::lround(std::clamp(s.room_ambilight_mix, 0.0f, 1.0f) * 100.0f),
+                     [&s](int x) { s.room_ambilight_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(room_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.room_vr_heading_offset_deg),
-                     [&s](int x) { s.room_vr_heading_offset_deg = (float)std::clamp(x, -180, 180); },
+        AddSliderRow(room_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.room_ambilight_heading_offset_deg),
+                     [&s](int x) { s.room_ambilight_heading_offset_deg = (float)std::clamp(x, -180, 180); },
                      [](int x) { return QString::number(x) + QStringLiteral("°"); });
         AddCheckRow(room_layout,
                     panel,
                     QStringLiteral("Flip left / right"),
-                    s.room_vr_flip_right,
-                    [&s](bool v) { s.room_vr_flip_right = v; },
+                    s.room_ambilight_flip_right,
+                    [&s](bool v) { s.room_ambilight_flip_right = v; },
                     QStringLiteral("Mirror the player-right axis. Use if the left wall shows what should be on the right."));
         AddCheckRow(room_layout,
                     panel,
                     QStringLiteral("Flip front / back"),
-                    s.room_vr_flip_forward,
-                    [&s](bool v) { s.room_vr_flip_forward = v; },
+                    s.room_ambilight_flip_forward,
+                    [&s](bool v) { s.room_ambilight_flip_forward = v; },
                     QStringLiteral("Mirror look-forward. Default treats smaller room Z than the origin as in front of you."));
         auto pos_offset_label = [](int tenths) {
             return QString::number(tenths / 10.0, 'f', 1) + QStringLiteral(" blk");
@@ -613,46 +613,46 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                      QStringLiteral("Player offset forward"),
                      -80,
                      80,
-                     (int)std::lround(std::clamp(s.room_vr_pos_offset_forward_blocks, -8.0f, 8.0f) * 10.0f),
-                     [&s](int x) { s.room_vr_pos_offset_forward_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
+                     (int)std::lround(std::clamp(s.room_ambilight_pos_offset_forward_blocks, -8.0f, 8.0f) * 10.0f),
+                     [&s](int x) { s.room_ambilight_pos_offset_forward_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
                      pos_offset_label);
         AddSliderRow(room_layout,
                      panel,
                      QStringLiteral("Player offset right"),
                      -80,
                      80,
-                     (int)std::lround(std::clamp(s.room_vr_pos_offset_right_blocks, -8.0f, 8.0f) * 10.0f),
-                     [&s](int x) { s.room_vr_pos_offset_right_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
+                     (int)std::lround(std::clamp(s.room_ambilight_pos_offset_right_blocks, -8.0f, 8.0f) * 10.0f),
+                     [&s](int x) { s.room_ambilight_pos_offset_right_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
                      pos_offset_label);
         AddSliderRow(room_layout,
                      panel,
                      QStringLiteral("Player offset up"),
                      -80,
                      80,
-                     (int)std::lround(std::clamp(s.room_vr_pos_offset_up_blocks, -8.0f, 8.0f) * 10.0f),
-                     [&s](int x) { s.room_vr_pos_offset_up_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
+                     (int)std::lround(std::clamp(s.room_ambilight_pos_offset_up_blocks, -8.0f, 8.0f) * 10.0f),
+                     [&s](int x) { s.room_ambilight_pos_offset_up_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
                      pos_offset_label);
-        AddSliderRow(room_layout, panel, QStringLiteral("MC world scale"), 10, 600, (int)std::lround(std::clamp(s.room_vr_scale_tune, 0.1f, 6.0f) * 100.0f),
-                     [&s](int x) { s.room_vr_scale_tune = std::clamp(x / 100.0f, 0.1f, 6.0f); },
+        AddSliderRow(room_layout, panel, QStringLiteral("MC world scale"), 10, 600, (int)std::lround(std::clamp(s.room_ambilight_scale_tune, 0.1f, 6.0f) * 100.0f),
+                     [&s](int x) { s.room_ambilight_scale_tune = std::clamp(x / 100.0f, 0.1f, 6.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); },
                      QStringLiteral("How many Minecraft blocks map to 1 metre of physical room (relative to blocks-per-metre). "
                                     "Higher = more MC blocks visible across the room = finer colour detail per LED. "
                                     "100% = 1:1 with blocks-per-metre setting. Try 200-400% for good block-level variety."));
-        AddSliderRow(room_layout, panel, QStringLiteral("Color saturation"), 80, 250, (int)std::lround(std::clamp(s.room_vr_saturation, 0.8f, 2.5f) * 100.0f),
-                     [&s](int x) { s.room_vr_saturation = std::clamp(x / 100.0f, 0.8f, 2.5f); },
+        AddSliderRow(room_layout, panel, QStringLiteral("Color saturation"), 80, 250, (int)std::lround(std::clamp(s.room_ambilight_saturation, 0.8f, 2.5f) * 100.0f),
+                     [&s](int x) { s.room_ambilight_saturation = std::clamp(x / 100.0f, 0.8f, 2.5f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); },
                      QStringLiteral("Boost for Room Ambilight colours. Samples are composited world texels "
                                     "(blocks, plants, fire, mobs, drops) along each ray — keep near 100-120% "
                                     "so detail stays readable."));
-        AddSliderRow(room_layout, panel, QStringLiteral("Color contrast"), 80, 200, (int)std::lround(std::clamp(s.room_vr_contrast, 0.8f, 2.0f) * 100.0f),
-                     [&s](int x) { s.room_vr_contrast = std::clamp(x / 100.0f, 0.8f, 2.0f); },
+        AddSliderRow(room_layout, panel, QStringLiteral("Color contrast"), 80, 200, (int)std::lround(std::clamp(s.room_ambilight_contrast, 0.8f, 2.0f) * 100.0f),
+                     [&s](int x) { s.room_ambilight_contrast = std::clamp(x / 100.0f, 0.8f, 2.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); },
                      QStringLiteral("Contrast for Room Ambilight texel samples. Lower preserves grass/dirt/flower detail."));
         AddCheckRow(room_layout,
                     panel,
                     QStringLiteral("Sky / weather"),
-                    s.room_vr_sky_enabled,
-                    [&s](bool v) { s.room_vr_sky_enabled = v; },
+                    s.room_ambilight_sky_enabled,
+                    [&s](bool v) { s.room_ambilight_sky_enabled = v; },
                     QStringLiteral("On empty cubemap rays (no block hit inside the room), fill with "
                                    "sunrise/sunset/night/weather sky. Caves and indoors stay dark."));
         AddSliderRow(room_layout,
@@ -660,8 +660,8 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                      QStringLiteral("Cubemap face size"),
                      32,
                      512,
-                     std::clamp(s.room_vr_cubemap_face_size, 32, 512),
-                     [&s](int x) { s.room_vr_cubemap_face_size = std::clamp(x, 32, 512); },
+                     std::clamp(s.room_ambilight_cubemap_face_size, 32, 512),
+                     [&s](int x) { s.room_ambilight_cubemap_face_size = std::clamp(x, 32, 512); },
                      [](int x) { return QString::number(x); },
                      QStringLiteral("Resolution per cubemap face (default 128). Only mapped LED directions "
                                     "are raycast. 256–512 sharpens aiming for small props; cost stays LED-count driven. "
@@ -681,7 +681,7 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                 QStringLiteral("Block texture sample resolution in Minecraft. Higher = less blocky / more "
                                "photo-like grain on LEDs. Uses more RAM and async decode time — 2K/4K can hitch "
                                "on slower machines. Animated textures (fire) use a capped fraction of this size."));
-            const int want = RoomSampleFrameProtocol::SnapUvTextureDim(s.room_vr_texture_uv_dim);
+            const int want = RoomSampleFrameProtocol::SnapUvTextureDim(s.room_ambilight_texture_uv_dim);
             for(int i = 0; i < tex_combo->count(); i++)
             {
                 if(tex_combo->itemData(i).toInt() == want)
@@ -696,7 +696,7 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                                  {
                                      return;
                                  }
-                                 s.room_vr_texture_uv_dim =
+                                 s.room_ambilight_texture_uv_dim =
                                      RoomSampleFrameProtocol::SnapUvTextureDim(tex_combo->itemData(idx).toInt());
                              });
         }
@@ -902,7 +902,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         }
     }
 
-    if(ch(channels, ChRoomVrTint))
+    if(ch(channels, ChRoomAmbilight))
     {
         bool got_room_sample = false;
         RGBColor room_rgb = (RGBColor)0;
@@ -916,8 +916,8 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         // No sky/ambient fill while room viewport is active — air and open LOS stay dark on LEDs.
         if(got_room_sample)
         {
-            room_rgb = EnhanceRoomVrColor(room_rgb, s.room_vr_saturation, s.room_vr_contrast);
-            const float mix = std::clamp(s.room_vr_mix, 0.0f, 1.0f);
+            room_rgb = EnhanceRoomAmbilightColor(room_rgb, s.room_ambilight_saturation, s.room_ambilight_contrast);
+            const float mix = std::clamp(s.room_ambilight_mix, 0.0f, 1.0f);
             out = LerpColor(out, room_rgb, mix);
         }
     }

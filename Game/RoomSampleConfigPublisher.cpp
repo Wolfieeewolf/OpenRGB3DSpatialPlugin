@@ -253,7 +253,7 @@ void PublishIfNeeded(const GridContext3D& grid,
     const float span_y = std::max(1e-3f, publish_grid.max_y - publish_grid.min_y);
     const float span_z = std::max(1e-3f, publish_grid.max_z - publish_grid.min_z);
 
-    const int face = std::clamp(settings.room_vr_cubemap_face_size,
+    const int face = std::clamp(settings.room_ambilight_cubemap_face_size,
                                 32,
                                 RoomSampleFrameProtocol::kCubemapFaceSizeMax);
     const int nx = face;
@@ -267,15 +267,15 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.sequence = 2;
     hdr.config_id = 0;
     hdr.flags = RoomSampleFrameProtocol::kFlagEnabled | RoomSampleFrameProtocol::kFlagCubemap;
-    if(settings.room_vr_sky_enabled)
+    if(settings.room_ambilight_sky_enabled)
     {
         hdr.flags |= RoomSampleFrameProtocol::kFlagSkyEnabled;
     }
-    if(settings.room_vr_flip_right)
+    if(settings.room_ambilight_flip_right)
     {
         hdr.flags |= RoomSampleFrameProtocol::kFlagFlipRight;
     }
-    if(settings.room_vr_flip_forward)
+    if(settings.room_ambilight_flip_forward)
     {
         hdr.flags |= RoomSampleFrameProtocol::kFlagFlipForward;
     }
@@ -293,13 +293,13 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.effect_origin_y = effect_origin_y;
     hdr.effect_origin_z = effect_origin_z;
     hdr.room_to_world_scale = std::clamp(room_to_world_scale, 0.005f, 0.80f);
-    hdr.heading_offset_deg = settings.room_vr_heading_offset_deg;
-    hdr.pos_offset_forward_blocks = settings.room_vr_pos_offset_forward_blocks;
-    hdr.pos_offset_right_blocks = settings.room_vr_pos_offset_right_blocks;
-    hdr.pos_offset_up_blocks = settings.room_vr_pos_offset_up_blocks;
+    hdr.heading_offset_deg = settings.room_ambilight_heading_offset_deg;
+    hdr.pos_offset_forward_blocks = settings.room_ambilight_pos_offset_forward_blocks;
+    hdr.pos_offset_right_blocks = settings.room_ambilight_pos_offset_right_blocks;
+    hdr.pos_offset_up_blocks = settings.room_ambilight_pos_offset_up_blocks;
 
     const std::uint32_t uv_dim =
-        (std::uint32_t)RoomSampleFrameProtocol::SnapUvTextureDim(settings.room_vr_texture_uv_dim);
+        (std::uint32_t)RoomSampleFrameProtocol::SnapUvTextureDim(settings.room_ambilight_texture_uv_dim);
     std::memcpy(hdr.reserved + RoomSampleFrameProtocol::kReservedUvMaxDimOffset, &uv_dim, sizeof(uv_dim));
 
     std::vector<std::uint32_t> important_cells;

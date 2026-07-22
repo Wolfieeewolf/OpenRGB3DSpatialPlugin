@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef MINECRAFTROOMVRTINTEFFECT3D_H
-#define MINECRAFTROOMVRTINTEFFECT3D_H
+#ifndef MINECRAFTROOMAMBILIGHTEFFECT3D_H
+#define MINECRAFTROOMAMBILIGHTEFFECT3D_H
 
 #include "../MinecraftSubEffect3D.h"
 #include "EffectRegisterer3D.h"
 
 #include <vector>
 
-class MinecraftRoomVrTintEffect3D : public MinecraftSubEffect3D
+class MinecraftRoomAmbilightEffect3D : public MinecraftSubEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit MinecraftRoomVrTintEffect3D(QWidget* parent = nullptr);
+    explicit MinecraftRoomAmbilightEffect3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D_GAME("MinecraftRoomVrTint", "Room Ambilight", "minecraft", "Minecraft",
-                              []() { return new MinecraftRoomVrTintEffect3D; })
+    EFFECT_REGISTERER_3D_GAME("MinecraftRoomAmbilight", "Room Ambilight", "minecraft", "Minecraft",
+                              []() { return new MinecraftRoomAmbilightEffect3D; })
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;

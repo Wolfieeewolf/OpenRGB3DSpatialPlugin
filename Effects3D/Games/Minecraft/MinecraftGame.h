@@ -30,7 +30,7 @@ QWidget* CreateEffectWidget(QWidget* parent,
                             std::uint32_t channels,
                             QWidget* telemetry_owner,
                             const std::function<void()>& on_changed);
-/** One telemetry copy per render frame (not per LED). Publishes room VR config once when active. */
+/** One telemetry copy per render frame (not per LED). Publishes room ambilight config once when active. */
 const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridContext3D& grid,
                                                                  const Settings& settings,
                                                                  std::uint32_t channels,
