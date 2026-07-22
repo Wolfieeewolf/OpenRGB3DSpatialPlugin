@@ -15,6 +15,17 @@ repositories {
     maven {
         name = "Terraformers"
         url = "https://maven.terraformersmc.com/"
+        content {
+            includeGroup "com.terraformersmc"
+        }
+    }
+    // Fallback when Terraformers is slow/unreachable from CI.
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+        content {
+            includeGroup "maven.modrinth"
+        }
     }
 }
 
@@ -22,7 +33,12 @@ dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+    // Mod Menu API (compile-only). Prefer Modrinth in CI — Terraformers maven often times out.
+    if (System.getenv("CI") != null || project.hasProperty("modMenuFromModrinth")) {
+        compileOnly "maven.modrinth:modmenu:${project.modmenu_version}"
+    } else {
+        compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+    }
     implementation include("at.yawk.lz4:lz4-java:1.11.0")
 }
 

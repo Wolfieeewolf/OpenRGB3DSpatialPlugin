@@ -177,9 +177,22 @@ jobs:
         working-directory: integrations/minecraft
         run: |
           set -euo pipefail
-          # No unix gradlew in tree — drive the wrapper JAR directly.
-          java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain \
-            --no-daemon build
+          chmod +x gradlew
+          # Terraformers maven sometimes times out from Actions — retry a few times.
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            echo "Fabric build attempt ${attempt}/5"
+            if ./gradlew --no-daemon build; then
+              ok=1
+              break
+            fi
+            echo "Build failed; waiting before retry..."
+            sleep $((attempt * 20))
+          done
+          if [[ "$ok" -ne 1 ]]; then
+            echo "Fabric mod build failed after retries"
+            exit 1
+          fi
           ls -la build/libs/
 
       - name: Upload artifacts
