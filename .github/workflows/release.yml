@@ -157,9 +157,43 @@ jobs:
             libOpenRGB3DSpatialPlugin.dylib
           if-no-files-found: error
 
+  build-minecraft:
+    name: Minecraft Fabric sender
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Build Fabric mod
+        working-directory: integrations/minecraft
+        run: |
+          set -euo pipefail
+          # No unix gradlew in tree — drive the wrapper JAR directly.
+          java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain \
+            --no-daemon build
+          ls -la build/libs/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minecraft_Fabric
+          path: |
+            integrations/minecraft/build/libs/openrgb-minecraft-sender-*.jar
+            !integrations/minecraft/build/libs/*-sources.jar
+          if-no-files-found: error
+
   release:
     name: Publish GitHub release
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-windows, build-linux, build-macos, build-minecraft]
     if: >-
       always() &&
       !cancelled() &&
@@ -182,10 +216,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          # Publish packaged downloads only (no bare .msi — installer ships inside a zip).
-          find artifacts -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.tar.gz' \) -print0 \
+          # Packaged plugin downloads + Minecraft companion JAR (exclude *-sources.jar).
+          find artifacts -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.tar.gz' -o -name 'openrgb-minecraft-sender-*.jar' \) -print0 \
             | while IFS= read -r -d '' f; do
-                cp -v "$f" "release-assets/$(basename "$f")"
+                base="$(basename "$f")"
+                case "$base" in
+                  *-sources.jar) continue ;;
+                esac
+                cp -v "$f" "release-assets/$base"
               done
           echo "files=$(find release-assets -type f | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
           ls -la release-assets
@@ -227,6 +265,7 @@ jobs:
           | **Linux** ARM64 (e.g. Pi) | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` |
           | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` |
           | **macOS** Intel | \`OpenRGB3DSpatialPlugin_macOS_intel.zip\` |
+          | **Minecraft** (Fabric) Room Ambilight + vitals | \`openrgb-minecraft-sender-*.jar\` — drop into the Minecraft \`mods\` folder (needs Fabric Loader + Fabric API) |
 
           **Name tips:** \`_msi\` = Windows installer zip · \`_plugin.tar.gz\` = Linux portable library · \`.deb\` = Debian/Ubuntu package.
 
