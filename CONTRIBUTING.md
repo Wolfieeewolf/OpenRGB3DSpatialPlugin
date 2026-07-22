@@ -75,6 +75,7 @@ When changing plugin behavior—especially anything that touches devices, colors
 | `OpenRGB/CONTRIBUTING.md` | Merge-request style, C++/Qt style guidelines, logging (`LogManager` not `QDebug`/`printf`), general contribution expectations. |
 | `OpenRGB/Documentation/RGBControllerAPI.md` | LEDs, zones, modes, `colors` layout, `SetCustomMode` / `UpdateLEDs` expectations—any path that reads or writes controller state. |
 | `OpenRGB/Documentation/OpenRGBSDK.md` | Network SDK packet layout and plugin-related IDs—only if you change or document SDK-facing behavior. |
+| `OpenRGB/Documentation/OpenRGB SDK Wireshark Dissector.lua` | Optional Wireshark helper for SDK traffic—only when debugging or documenting network SDK packets. |
 | `OpenRGB/Documentation/Common-Modes.md` | Naming and meaning of **firmware** modes on devices; plugin spatial effects are software-driven but avoid confusing users with conflicting terminology where it overlaps UI copy. |
 | `OpenRGB/Documentation/Compiling.md` | How OpenRGB itself is built; align user-facing build hints (Qt, qmake, deps) with this where relevant. |
 | `OpenRGB/Documentation/UdevRules.md` | Linux permissions for USB/HID access—reference when documenting Linux install or troubleshooting detection. |
@@ -137,7 +138,8 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 
 ## Game / Minecraft and similar effects
 
-- Telemetry (e.g. UDP on localhost) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
+- Telemetry (UDP on localhost for pose/vitals/damage) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
+- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room tint (VR)**. Room VR colours come from the Fabric mod over **room-sample SHM** (cubemap texels), not UDP colour streams.
 - Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
 
 ## UI
@@ -158,7 +160,7 @@ Default rule for every effect: **reuse existing panels and helpers before writin
 
 **Add new UI only when** the control is truly effect-specific or no shared helper exists yet—and if two or more effects need the same custom control, add or extend a shared helper (like `Effects3D/AudioReactiveUi.h`) instead of duplicating code.
 
-Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path. **Minecraft** game layers use dedicated settings under `Effects3D/Games/Minecraft/` (room VR tint samples room SHM only). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
+Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path. **Minecraft** game layers use dedicated settings under `Effects3D/Games/Minecraft/` (**Room tint (VR)** drives the SHM cubemap path). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
 
 ### Effect settings tab order (stack / library)
 

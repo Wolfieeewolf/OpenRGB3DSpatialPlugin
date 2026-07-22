@@ -9,10 +9,8 @@ import net.minecraft.server.packs.PackType;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -34,8 +32,6 @@ public class OpenRGBSenderMod implements ClientModInitializer
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final long DAMAGE_DIR_MAX_AGE_MS = 450L;
-    private static final long LIGHTNING_EVENT_COOLDOWN_MS = 250L;
-    private static final long LIGHTNING_EVENT_MAX_AGE_MS = 450L;
 
     private static OpenRGBSenderMod instance;
 
@@ -47,21 +43,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private static String cachedHost = null;
     private static int cachedPort = -1;
     private static final Object sharedUdpLock = new Object();
-    private boolean hasSmoothedWorld = false;
-    private int smoothSkyR = 140, smoothSkyG = 170, smoothSkyB = 220;
-    private int smoothMidR = 110, smoothMidG = 140, smoothMidB = 100;
-    private int smoothGroundR = 90, smoothGroundG = 100, smoothGroundB = 70;
-    private float smoothWorldIntensity = 0.6f;
-    private long lastLightningSentMs = 0L;
     /** Increments every client tick (not gated by telemetryTickDivisor) for maximum room sample rate. */
     private int roomTickCounter = 0;
-    /** Exponential smoothing for directional probe RGB (reduces twitchy room tint). */
-    private static final float PROBE_COLOR_SMOOTH = 0.11f;
-    private static final float AMBIENT_RGB_SMOOTH = 0.14f;
-    private final int[][] smoothLayeredProbeRgb = new int[4 * 9][3];
-    private boolean hasSmoothLayeredProbeRgb = false;
-    private int smoothAmbR = 0, smoothAmbG = 0, smoothAmbB = 0;
-    private boolean hasSmoothAmbientRgb = false;
     private final RoomSampleConfigReader roomSampleConfigReader = new RoomSampleConfigReader();
     private final RoomSampleFrameShmWriter roomSampleFrameShmWriter = new RoomSampleFrameShmWriter();
     private int lastLoggedRoomConfigId = -1;
@@ -71,24 +54,23 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private long lastWaitingForConfigLogMs = 0L;
     /** Reused across frames to avoid per-tick allocation. Resized only when grid dimensions change. */
     private byte[] roomSampleRgbaBuffer = new byte[0];
-    /** Rotating slice index for large full-grid fallback — spreads raycasts over several ticks. */
-    private int roomSampleTemporalSlice = 0;
-    /** Round-robin cursor for LED-first important cells (budget-driven, not fixed 1/N skip). */
-    private int roomSampleImportantCursor = 0;
-    /** Spread expensive UV/entity samples across ticks to avoid hitching. */
-    private static final int ROOM_SAMPLE_TEMPORAL_SLICES = 8;
-    private static final int ROOM_SAMPLE_TEMPORAL_THRESHOLD = 1024;
+    /** Round-robin cursor for mapped LED cubemap texels under the soft tick budget. */
+    private int roomSampleCubemapCursor = 0;
     /** Soft cap per tick so Room VR never stalls a client frame. */
     private static final long ROOM_SAMPLE_BUDGET_NS = 3_500_000L;
-    /** While texture cache is warming, keep Room VR extremely light. */
-    private static final long ROOM_SAMPLE_BUDGET_WHILE_PRECACHE_NS = 800_000L;
     private static final ThreadLocal<int[]> ROOM_CELL_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_ACCUM_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_LAYER_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     /** Weighted RGB + weight sum for immersion veil (sunflower yellow, vines, snow, …). */
     private static final ThreadLocal<int[]> ROOM_IMMERSION_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
-    /** When LED-first config changes, wipe the volume so unused cells cannot keep stale sky blue. */
+    private static final ThreadLocal<float[]> ROOM_CUBEMAP_DIR = ThreadLocal.withInitial(() -> new float[3]);
+    /** When LED-first config changes, wipe so unused texels cannot keep stale colours. */
     private int roomSampleClearedForConfigId = -1;
+    /**
+     * Do not publish SHM frames until every mapped LED texel has been written once —
+     * avoids the black→colour pop-in flash while the buffer warms.
+     */
+    private boolean roomSampleAwaitingFirstPass = true;
 
     @Override
     public void onInitializeClient()
@@ -165,14 +147,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         BlockTexturePrecache.tick(client);
         BlockFaceColorCache.tick(client);
-        // Room samples run every tick independently — not gated by telemetryTickDivisor —
-        // so LED colours stay in sync with the game world at up to 20 Hz regardless of telemetry rate.
-        // Skip most ticks while caches are warming so warm-up cannot stack with full raycasts.
-        final boolean cacheWarming = BlockTexturePrecache.isBuilding() || BlockFaceColorCache.isBuilding();
-        if(!cacheWarming || (instance.clientTickCounter & 3) == 0)
-        {
-            instance.tickRoomSamples(client);
-        }
+        // Room samples every tick — UV pixels load async; face-average warm-up must not starve LED fill
+        // (that caused the startup pop-in flash under the old every-4th-tick + tiny budget path).
+        instance.tickRoomSamples(client);
         instance.tickSendTelemetry(client);
     }
 
@@ -192,6 +169,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             // Read config once and share with both interval check and frame send.
             final RoomSampleConfigReader.Config roomCfg = roomSampleConfigReader.readLatest();
+            if(roomCfg != null)
+            {
+                BlockTexturePrecache.setUvMaxDim(roomCfg.uvTextureMaxDim);
+            }
             logRoomConfigState(roomCfg);
             final int roomInterval = effectiveRoomSampleInterval(cfg, roomCfg);
             if(roomTickCounter % roomInterval == 0)
@@ -229,8 +210,6 @@ public class OpenRGBSenderMod implements ClientModInitializer
             LocalPlayer player = client.player;
             sendPlayerPose(socket, address, player, cfg);
             sendHealthState(socket, address, player);
-            sendWorldLight(socket, address, player, client.level);
-            sendLightningEventIfNeeded(socket, address);
             sendDamageEventIfNeeded(socket, address, player);
         }
         catch(Exception e)
@@ -293,418 +272,6 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 hunger, maxHunger, air, maxAir,
                 hasDurability ? "true" : "false", durability, durabilityMax);
         sendJson(socket, address, json);
-    }
-
-    private void sendWorldLight(DatagramSocket socket, InetAddress address, LocalPlayer player, Level world) throws Exception
-    {
-        var pos = player.blockPosition();
-        int blockLight = world.getBrightness(LightLayer.BLOCK, pos);
-        int skyLight = world.getBrightness(LightLayer.SKY, pos);
-        // Block-only is ~0 in open daylight (sky lights the scene); plugin multiplies tint by intensity,
-        // so world tint never showed outdoors. Use max(sky, block) for blend weight.
-        int combined = Math.max(blockLight, skyLight);
-        float intensity = Math.max(0.0f, Math.min(1.0f, combined / 15.0f));
-
-        // Biome grass/foliage/water tints from the 26.2 client renderer.
-        int grass = AtmosphereSampler.sampleGrassColor(world, pos, 0x7FB238);
-        int bioR = ((grass >> 16) & 0xFF);
-        int bioG = ((grass >> 8) & 0xFF);
-        int bioB = (grass & 0xFF);
-        int water = AtmosphereSampler.sampleWaterColor(world, pos, 0x3F76E4);
-        int waterR = (water >> 16) & 0xFF;
-        int waterG = (water >> 8) & 0xFF;
-        int waterB = water & 0xFF;
-
-        int rawSky = AtmosphereSampler.sampleSkyColor(world, pos, ((bioR & 0xFF) << 16) | ((bioG & 0xFF) << 8) | (bioB & 0xFF));
-        int rawFog = AtmosphereSampler.sampleFogColor(world, pos, rawSky);
-        int rawSkyR = (rawSky >> 16) & 0xFF;
-        int rawSkyG = (rawSky >> 8) & 0xFF;
-        int rawSkyB = rawSky & 0xFF;
-        int rawFogR = (rawFog >> 16) & 0xFF;
-        int rawFogG = (rawFog >> 8) & 0xFF;
-        int rawFogB = rawFog & 0xFF;
-        int blockColor = sampleLocalBlockLightColor(world, pos, rawFog);
-        int blockR = (blockColor >> 16) & 0xFF;
-        int blockG = (blockColor >> 8) & 0xFF;
-        int blockB = blockColor & 0xFF;
-        int r;
-        int g;
-        int bl;
-        if(combined <= 0)
-        {
-            r = 0;
-            g = 0;
-            bl = 0;
-        }
-        else
-        {
-            float blockWeight = (float)blockLight / (float)combined;
-            float skyWeight = 1.0f - blockWeight;
-            // All components come from game-derived samples: sky/fog + emissive block map colors.
-            float skyAmbientR = rawFogR * 0.62f + rawSkyR * 0.38f;
-            float skyAmbientG = rawFogG * 0.62f + rawSkyG * 0.38f;
-            float skyAmbientB = rawFogB * 0.62f + rawSkyB * 0.38f;
-            r = ColorMath.clamp255(Math.round(skyAmbientR * skyWeight + blockR * blockWeight));
-            g = ColorMath.clamp255(Math.round(skyAmbientG * skyWeight + blockG * blockWeight));
-            bl = ColorMath.clamp255(Math.round(skyAmbientB * skyWeight + blockB * blockWeight));
-        }
-        int skyLightHere = world.getBrightness(LightLayer.SKY, pos);
-        int skyR;
-        int skyG;
-        int skyB;
-        if(skyLightHere <= 3)
-        {
-            // In caves/indoors, use overhead ceiling tint instead of open-sky model.
-            int ceiling = sampleCeilingColor(world, pos, ((bioR & 0xFF) << 16) | ((bioG & 0xFF) << 8) | (bioB & 0xFF));
-            int cr = (ceiling >> 16) & 0xFF;
-            int cg = (ceiling >> 8) & 0xFF;
-            int cb = ceiling & 0xFF;
-            // Scale by actual light only — no minimum floor (avoids gray/white glow in pitch black).
-            int caveCombined = Math.max(blockLight, skyLightHere);
-            float caveFactor = ColorMath.clamp01(caveCombined / 15.0f);
-            skyR = ColorMath.clamp255(Math.round(cr * caveFactor));
-            skyG = ColorMath.clamp255(Math.round(cg * caveFactor));
-            skyB = ColorMath.clamp255(Math.round(cb * caveFactor));
-        }
-        else
-        {
-            // Use the game's current sky color directly (already includes time/weather/dimension effects).
-            skyR = rawSkyR;
-            skyG = rawSkyG;
-            skyB = rawSkyB;
-        }
-
-        // World-tint layers are strictly position-based (not camera/crosshair based).
-        // Blend biome foliage/grass with nearby horizontal samples to avoid dull single-tone green.
-        int horizonColor = sampleHorizontalColor(world, pos, ((bioR & 0xFF) << 16) | ((bioG & 0xFF) << 8) | (bioB & 0xFF));
-        int midR0 = ((horizonColor >> 16) & 0xFF);
-        int midG0 = ((horizonColor >> 8) & 0xFF);
-        int midB0 = (horizonColor & 0xFF);
-        int midR = ColorMath.clamp255(Math.round(midR0 * 0.72f + waterR * 0.10f + bioR * 0.18f));
-        int midG = ColorMath.clamp255(Math.round(midG0 * 0.72f + waterG * 0.10f + bioG * 0.18f));
-        int midB = ColorMath.clamp255(Math.round(midB0 * 0.72f + waterB * 0.10f + bioB * 0.18f));
-        int midColor = ((midR & 0xFF) << 16) | ((midG & 0xFF) << 8) | (midB & 0xFF);
-
-        int groundColor = sampleGroundColor(world, pos, midColor);
-        int groundR = (groundColor >> 16) & 0xFF;
-        int groundG = (groundColor >> 8) & 0xFF;
-        int groundB = groundColor & 0xFF;
-        Vec3 look = player.getViewVector(1.0f);
-        double fx = look.x;
-        double fz = look.z;
-        double fl = Math.sqrt(fx * fx + fz * fz);
-        if(fl <= 1e-5)
-        {
-            fx = 0.0;
-            fz = 1.0;
-        }
-        else
-        {
-            fx /= fl;
-            fz /= fl;
-        }
-        double rx = -fz;
-        double rz = fx;
-        final float waterSubmerge = estimateWaterSubmerge(world, player);
-        if(waterSubmerge > 1e-4f)
-        {
-            final float gw = ColorMath.clamp01(0.20f + 0.75f * waterSubmerge);
-            final float mw = ColorMath.clamp01(0.14f + 0.62f * waterSubmerge);
-            final float sw = ColorMath.clamp01(0.10f + 0.48f * waterSubmerge);
-            groundR = ColorMath.clamp255(Math.round(groundR * (1.0f - gw) + waterR * gw));
-            groundG = ColorMath.clamp255(Math.round(groundG * (1.0f - gw) + waterG * gw));
-            groundB = ColorMath.clamp255(Math.round(groundB * (1.0f - gw) + waterB * gw));
-            midR = ColorMath.clamp255(Math.round(midR * (1.0f - mw) + waterR * mw));
-            midG = ColorMath.clamp255(Math.round(midG * (1.0f - mw) + waterG * mw));
-            midB = ColorMath.clamp255(Math.round(midB * (1.0f - mw) + waterB * mw));
-            skyR = ColorMath.clamp255(Math.round(skyR * (1.0f - sw) + waterR * sw));
-            skyG = ColorMath.clamp255(Math.round(skyG * (1.0f - sw) + waterG * sw));
-            skyB = ColorMath.clamp255(Math.round(skyB * (1.0f - sw) + waterB * sw));
-            midColor = ((midR & 0xFF) << 16) | ((midG & 0xFF) << 8) | (midB & 0xFF);
-        }
-
-        if(!hasSmoothedWorld)
-        {
-            smoothSkyR = skyR; smoothSkyG = skyG; smoothSkyB = skyB;
-            smoothMidR = midR; smoothMidG = midG; smoothMidB = midB;
-            smoothGroundR = groundR; smoothGroundG = groundG; smoothGroundB = groundB;
-            smoothWorldIntensity = intensity;
-            hasSmoothedWorld = true;
-        }
-        smoothSkyR = ColorMath.lerpInt(smoothSkyR, skyR, 0.16f);
-        smoothSkyG = ColorMath.lerpInt(smoothSkyG, skyG, 0.16f);
-        smoothSkyB = ColorMath.lerpInt(smoothSkyB, skyB, 0.16f);
-        smoothMidR = ColorMath.lerpInt(smoothMidR, midR, 0.20f);
-        smoothMidG = ColorMath.lerpInt(smoothMidG, midG, 0.20f);
-        smoothMidB = ColorMath.lerpInt(smoothMidB, midB, 0.20f);
-        smoothGroundR = ColorMath.lerpInt(smoothGroundR, groundR, 0.18f);
-        smoothGroundG = ColorMath.lerpInt(smoothGroundG, groundG, 0.18f);
-        smoothGroundB = ColorMath.lerpInt(smoothGroundB, groundB, 0.18f);
-        smoothWorldIntensity = ColorMath.lerpFloat(smoothWorldIntensity, intensity, 0.16f);
-
-        int upperColor = ColorMath.blendRgb(midColor, rawSky, 0.45f);
-        int[] layerFallbacks = {groundColor, midColor, upperColor, rawSky};
-        double[] dirX = {fx, (fx + rx), rx, (-fx + rx), -fx, (-fx - rx), -rx, (fx - rx)};
-        double[] dirZ = {fz, (fz + rz), rz, (-fz + rz), -fz, (-fz - rz), -rz, (fz - rz)};
-        for(int i = 0; i < 8; i++)
-        {
-            double dl = Math.sqrt(dirX[i] * dirX[i] + dirZ[i] * dirZ[i]);
-            if(dl > 1e-6)
-            {
-                dirX[i] /= dl;
-                dirZ[i] /= dl;
-            }
-        }
-        int[][] layeredRaw = new int[4 * 9][3];
-        for(int layer = 0; layer < 4; layer++)
-        {
-            int yOff = layer - 1;
-            int fallback = layerFallbacks[layer];
-            for(int sector = 0; sector < 8; sector++)
-            {
-                int c = sampleDirectionalColor(world, pos, dirX[sector], dirZ[sector], yOff, fallback);
-                int idx = layer * 9 + sector;
-                layeredRaw[idx][0] = (c >> 16) & 0xFF;
-                layeredRaw[idx][1] = (c >> 8) & 0xFF;
-                layeredRaw[idx][2] = c & 0xFF;
-            }
-            int centerIdx = layer * 9 + 8;
-            layeredRaw[centerIdx][0] = (fallback >> 16) & 0xFF;
-            layeredRaw[centerIdx][1] = (fallback >> 8) & 0xFF;
-            layeredRaw[centerIdx][2] = fallback & 0xFF;
-        }
-        if(!hasSmoothLayeredProbeRgb)
-        {
-            for(int i = 0; i < 4 * 9; i++)
-            {
-                smoothLayeredProbeRgb[i][0] = layeredRaw[i][0];
-                smoothLayeredProbeRgb[i][1] = layeredRaw[i][1];
-                smoothLayeredProbeRgb[i][2] = layeredRaw[i][2];
-            }
-            hasSmoothLayeredProbeRgb = true;
-        }
-        else
-        {
-            for(int i = 0; i < 4 * 9; i++)
-            {
-                smoothLayeredProbeRgb[i][0] = ColorMath.lerpInt(smoothLayeredProbeRgb[i][0], layeredRaw[i][0], PROBE_COLOR_SMOOTH);
-                smoothLayeredProbeRgb[i][1] = ColorMath.lerpInt(smoothLayeredProbeRgb[i][1], layeredRaw[i][1], PROBE_COLOR_SMOOTH);
-                smoothLayeredProbeRgb[i][2] = ColorMath.lerpInt(smoothLayeredProbeRgb[i][2], layeredRaw[i][2], PROBE_COLOR_SMOOTH);
-            }
-        }
-        StringBuilder layeredProbeRgbJson = new StringBuilder(4 * 9 * 12);
-        for(int i = 0; i < 4 * 9; i++)
-        {
-            if(i > 0)
-            {
-                layeredProbeRgbJson.append(',');
-            }
-            layeredProbeRgbJson.append(smoothLayeredProbeRgb[i][0]).append(',')
-                               .append(smoothLayeredProbeRgb[i][1]).append(',')
-                               .append(smoothLayeredProbeRgb[i][2]);
-        }
-
-        if(!hasSmoothAmbientRgb)
-        {
-            smoothAmbR = r;
-            smoothAmbG = g;
-            smoothAmbB = bl;
-            hasSmoothAmbientRgb = true;
-        }
-        else
-        {
-            smoothAmbR = ColorMath.lerpInt(smoothAmbR, r, AMBIENT_RGB_SMOOTH);
-            smoothAmbG = ColorMath.lerpInt(smoothAmbG, g, AMBIENT_RGB_SMOOTH);
-            smoothAmbB = ColorMath.lerpInt(smoothAmbB, bl, AMBIENT_RGB_SMOOTH);
-        }
-        r = smoothAmbR;
-        g = smoothAmbG;
-        bl = smoothAmbB;
-
-        String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"world_light\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"r\":%d,\"g\":%d,\"b\":%d,\"intensity\":%.4f,\"sky_r\":%d,\"sky_g\":%d,\"sky_b\":%d,\"mid_r\":%d,\"mid_g\":%d,\"mid_b\":%d,\"ground_r\":%d,\"ground_g\":%d,\"ground_b\":%d,\"probe_rgb\":[%s]}",
-                System.currentTimeMillis(),
-                r, g, bl, smoothWorldIntensity,
-                smoothSkyR, smoothSkyG, smoothSkyB,
-                smoothMidR, smoothMidG, smoothMidB,
-                smoothGroundR, smoothGroundG, smoothGroundB,
-                layeredProbeRgbJson.toString());
-        sendJson(socket, address, json);
-    }
-
-    private static int sampleDirectionalColor(net.minecraft.world.level.Level world,
-                                              net.minecraft.core.BlockPos center,
-                                              double dirX,
-                                              double dirZ,
-                                              int yOffset,
-                                              int fallback)
-    {
-        int[] distances = {2, 4, 6};
-        int sumR = 0;
-        int sumG = 0;
-        int sumB = 0;
-        int count = 0;
-        for(int d : distances)
-        {
-            int ox = (int)Math.round(dirX * d);
-            int oz = (int)Math.round(dirZ * d);
-            net.minecraft.core.BlockPos p = center.offset(ox, yOffset, oz);
-            int c = getMapColorRgb(world, p, fallback);
-            sumR += (c >> 16) & 0xFF;
-            sumG += (c >> 8) & 0xFF;
-            sumB += c & 0xFF;
-            count++;
-        }
-        if(count <= 0)
-        {
-            return fallback;
-        }
-        int r = ColorMath.clamp255(sumR / count);
-        int g = ColorMath.clamp255(sumG / count);
-        int b = ColorMath.clamp255(sumB / count);
-        return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
-    }
-
-    private static int sampleLocalBlockLightColor(net.minecraft.world.level.Level world, BlockPos center, int fallback)
-    {
-        double sr = 0.0;
-        double sg = 0.0;
-        double sb = 0.0;
-        double sw = 0.0;
-        for(int dx = -4; dx <= 4; dx++)
-        {
-            for(int dy = -2; dy <= 3; dy++)
-            {
-                for(int dz = -4; dz <= 4; dz++)
-                {
-                    BlockPos p = center.offset(dx, dy, dz);
-                    var state = world.getBlockState(p);
-                    int lum = state.getLightEmission();
-                    if(lum <= 0)
-                    {
-                        continue;
-                    }
-                    int mc = getMapColorRgb(world, p, 0);
-                    if(mc == 0)
-                    {
-                        continue;
-                    }
-                    double dist2 = (double)dx * dx + (double)dy * dy + (double)dz * dz;
-                    double w = (double)lum / (0.35 + dist2);
-                    sr += ((mc >> 16) & 0xFF) * w;
-                    sg += ((mc >> 8) & 0xFF) * w;
-                    sb += (mc & 0xFF) * w;
-                    sw += w;
-                }
-            }
-        }
-        if(sw <= 1e-5)
-        {
-            return fallback;
-        }
-        int r = ColorMath.clamp255((int)Math.round(sr / sw));
-        int g = ColorMath.clamp255((int)Math.round(sg / sw));
-        int b = ColorMath.clamp255((int)Math.round(sb / sw));
-        return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
-    }
-
-    private static float estimateWaterSubmerge(net.minecraft.world.level.Level world, LocalPlayer player)
-    {
-        final AABB bb = player.getBoundingBox();
-        final double cx = (bb.minX + bb.maxX) * 0.5;
-        final double cz = (bb.minZ + bb.maxZ) * 0.5;
-        final double[] ySamples = {0.06, 0.22, 0.38, 0.56, 0.74, 0.90};
-        final double[][] xzOffsets = {
-                {0.0, 0.0},
-                {0.22, 0.0},
-                {-0.22, 0.0},
-                {0.0, 0.22},
-                {0.0, -0.22}
-        };
-        int waterHits = 0;
-        int total = 0;
-        for(double yf : ySamples)
-        {
-            final double y = bb.minY + (bb.maxY - bb.minY) * yf;
-            for(double[] off : xzOffsets)
-            {
-                final double x = cx + off[0];
-                final double z = cz + off[1];
-                BlockPos p = BlockPos.containing(x, y, z);
-                var fs = world.getFluidState(p);
-                total++;
-                if(fs.is(Fluids.WATER))
-                {
-                    float fh = fs.getHeight(world, p);
-                    double levelY = p.getY() + fh;
-                    if(y <= levelY + 1e-4)
-                    {
-                        waterHits++;
-                    }
-                }
-            }
-        }
-        if(total <= 0)
-        {
-            return 0.0f;
-        }
-        return ColorMath.clamp01((float)waterHits / (float)total);
-    }
-
-    private static int sampleVerticalColor(net.minecraft.world.level.Level world,
-                                           net.minecraft.core.BlockPos pos,
-                                           int fallback,
-                                           boolean upward,
-                                           int maxSteps)
-    {
-        net.minecraft.core.BlockPos p = upward ? pos.above() : pos.below();
-        for(int i = 0; i < maxSteps; i++)
-        {
-            if(!world.getBlockState(p).isAir())
-            {
-                int c = getMapColorRgb(world, p, fallback);
-                if(c != 0)
-                {
-                    return c;
-                }
-            }
-            p = upward ? p.above() : p.below();
-        }
-        return fallback;
-    }
-
-    private static int sampleGroundColor(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos pos, int fallback)
-    {
-        return sampleVerticalColor(world, pos, fallback, false, 8);
-    }
-
-    private static int sampleCeilingColor(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos pos, int fallback)
-    {
-        return sampleVerticalColor(world, pos, fallback, true, 10);
-    }
-
-    private static int sampleHorizontalColor(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos center, int fallback)
-    {
-        int[] ox = {3, -3, 0, 0, 2, 2, -2, -2};
-        int[] oz = {0, 0, 3, -3, 2, -2, 2, -2};
-        int sumR = 0, sumG = 0, sumB = 0, count = 0;
-        for(int i = 0; i < ox.length; i++)
-        {
-            net.minecraft.core.BlockPos p = center.offset(ox[i], -1, oz[i]);
-            int c = getMapColorRgb(world, p, fallback);
-            sumR += (c >> 16) & 0xFF;
-            sumG += (c >> 8) & 0xFF;
-            sumB += c & 0xFF;
-            count++;
-        }
-        if(count <= 0)
-        {
-            return fallback;
-        }
-        int r = ColorMath.clamp255(sumR / count);
-        int g = ColorMath.clamp255(sumG / count);
-        int b = ColorMath.clamp255(sumB / count);
-        return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
     private static final int MAX_VIEWPORT_BLEND_LAYERS = 8;
@@ -893,6 +460,11 @@ public class OpenRGBSenderMod implements ClientModInitializer
 
     private static boolean isRayPassthroughFoliage(BlockState state)
     {
+        // Flowers/crops are real LED detail — do not divert them into the soft immersion veil.
+        if(BlockDisplayColorSampler.isFlowerOrCropDetail(state))
+        {
+            return false;
+        }
         return BlockDisplayColorSampler.isSparseSkyCutout(state)
                 || BlockDisplayColorSampler.isSoftWeatherVolume(state);
     }
@@ -903,6 +475,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
      */
     private static void sampleRoomCellAtWorldTarget(Level world, LocalPlayer player, Vec3 target, int[] out)
     {
+        BlockUvTexelSampler.beginRay();
         final Vec3 eye = player.getEyePosition();
         final int[] accum = ROOM_ACCUM_SCRATCH.get();
         final int[] layer = ROOM_LAYER_SCRATCH.get();
@@ -1136,7 +709,15 @@ public class OpenRGBSenderMod implements ClientModInitializer
         int interval = Math.max(1, cfg.roomSampleSendInterval);
         if(roomCfg != null && roomCfg.isEnabled())
         {
-            final long cells = (long)roomCfg.sizeX * (long)roomCfg.sizeY * (long)roomCfg.sizeZ;
+            final long cells;
+            if(roomCfg.hasImportantCells())
+            {
+                cells = roomCfg.importantFlatIndices.length;
+            }
+            else
+            {
+                cells = (long)roomCfg.sizeX * (long)roomCfg.sizeY * (long)roomCfg.sizeZ;
+            }
             if(cells > 300000L)
             {
                 interval = Math.max(interval, 20);
@@ -1164,15 +745,22 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private void sendRoomSampleFrame(DatagramSocket socket, InetAddress address, LocalPlayer player, Level world,
                                      RoomSampleConfigReader.Config cfg) throws Exception
     {
-        if(cfg == null || !cfg.isEnabled())
+        if(cfg == null || !cfg.isEnabled() || !cfg.isCubemap())
+        {
+            return;
+        }
+        // LED-mapped cubemap only — no voxel volume, no full-face fill.
+        if(!cfg.hasImportantCells())
         {
             return;
         }
 
-        final int sx = cfg.sizeX;
-        final int sy = cfg.sizeY;
-        final int sz = cfg.sizeZ;
-        final int rgbaCount = sx * sy * sz * 4;
+        final int faceSize = cfg.sizeX;
+        final int sx = faceSize;
+        final int sy = faceSize;
+        final int sz = RoomSampleCubemap.FACE_COUNT;
+        final int texelCount = sx * sy * sz;
+        final int rgbaCount = texelCount * 4;
         if(rgbaCount <= 0)
         {
             return;
@@ -1182,130 +770,114 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             roomSampleRgbaBuffer = new byte[rgbaCount];
             roomSampleClearedForConfigId = -1;
+            roomSampleCubemapCursor = 0;
+            roomSampleAwaitingFirstPass = true;
         }
         final byte[] rgba = roomSampleRgbaBuffer;
         final int[] cell = ROOM_CELL_SCRATCH.get();
-        final int cellCount = sx * sy * sz;
-        final boolean useImportant = cfg.hasImportantCells();
-        final int workCount = useImportant ? cfg.importantFlatIndices.length : cellCount;
-        final boolean temporal = !useImportant && workCount > ROOM_SAMPLE_TEMPORAL_THRESHOLD;
-        final long budgetNs = (BlockTexturePrecache.isBuilding() || BlockFaceColorCache.isBuilding())
-                ? ROOM_SAMPLE_BUDGET_WHILE_PRECACHE_NS
-                : ROOM_SAMPLE_BUDGET_NS;
+        final float[] localDir = ROOM_CUBEMAP_DIR.get();
+        // Full LED budget always — average precache is separate; starving rays caused startup flash.
+        final long budgetNs = ROOM_SAMPLE_BUDGET_NS;
         final long budgetStart = System.nanoTime();
-        final double maxRange = 16.0 + Math.max(sx, Math.max(sy, sz)) * Math.max(0.5, cfg.roomToWorldScale);
         final AtmosphereSampler.Frame atmosphere = AtmosphereSampler.captureFrame(world);
         final Vec3 eye = player.getEyePosition();
-        EntityDisplayColorSampler.beginFrame(world, player, Math.max(24.0, Math.min(80.0, maxRange)));
+        final double probeRadius = Math.max(16.0, Math.min(80.0, RoomSampleWorldMapper.roomHalfDiagonalBlocks(cfg) + 4.0));
+
+        if(roomSampleClearedForConfigId != cfg.configId)
+        {
+            // Soft start: keep prior LED colours until overwritten — kills the full-buffer flash
+            // when face size / LED set changes. Only wipe when the buffer was resized.
+            roomSampleClearedForConfigId = cfg.configId;
+            roomSampleCubemapCursor = 0;
+            roomSampleAwaitingFirstPass = true;
+        }
+
+        EntityDisplayColorSampler.beginFrame(world, player, probeRadius);
         try
         {
-            boolean budgetHit = false;
-            if(useImportant)
+            final int[] important = cfg.importantFlatIndices;
+            final int n = important.length;
+            int start = roomSampleCubemapCursor % n;
+            int processed = 0;
+            for(int step = 0; step < n; step++)
             {
-                // Empty volume must stay transparent — otherwise old sky/water samples bleed through
-                // trilinear onto LEDs that have no neighbours on that side of the room.
-                if(roomSampleClearedForConfigId != cfg.configId)
+                if((step & 7) == 0 && (System.nanoTime() - budgetStart) > budgetNs)
                 {
-                    java.util.Arrays.fill(rgba, (byte)0);
-                    roomSampleClearedForConfigId = cfg.configId;
-                    roomSampleImportantCursor = 0;
+                    break;
                 }
-                final int[] important = cfg.importantFlatIndices;
-                final int n = important.length;
-                if(n > 0)
+                final int flat = important[(start + step) % n];
+                if(flat < 0 || flat >= texelCount)
                 {
-                    int start = roomSampleImportantCursor % n;
-                    int processed = 0;
-                    for(int step = 0; step < n; step++)
-                    {
-                        if((step & 7) == 0 && (System.nanoTime() - budgetStart) > budgetNs)
-                        {
-                            budgetHit = true;
-                            break;
-                        }
-                        final int i = (start + step) % n;
-                        final int flat = important[i];
-                        if(flat < 0 || flat >= cellCount)
-                        {
-                            continue;
-                        }
-                        final int iz = flat % sz;
-                        final int t = flat / sz;
-                        final int iy = t % sy;
-                        final int ix = t / sy;
-                        final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
-                        final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
-                        final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
-                        final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
-                        sampleRoomCellAtWorldTarget(world, player, target, cell);
-                        maybeFillOutdoorSky(cfg, world, eye, target, atmosphere, cell);
-                        final int rgbaIndex = flat * 4;
-                        rgba[rgbaIndex] = (byte)cell[0];
-                        rgba[rgbaIndex + 1] = (byte)cell[1];
-                        rgba[rgbaIndex + 2] = (byte)cell[2];
-                        rgba[rgbaIndex + 3] = (byte)cell[3];
-                        processed++;
-                    }
-                    roomSampleImportantCursor = (start + Math.max(1, processed)) % n;
+                    continue;
                 }
+                writeCubemapTexel(world, player, cfg, eye, atmosphere, localDir, cell, rgba, flat, sx, sy, sz);
+                processed++;
             }
-            else
+            final int next = (start + Math.max(1, processed)) % n;
+            // Completed a full revolution of mapped LED texels.
+            if(roomSampleAwaitingFirstPass && processed > 0
+                    && (start + processed) >= n)
             {
-                roomSampleClearedForConfigId = -1;
-                int rgbaIndex = 0;
-                int flatIndex = 0;
-                for(int ix = 0; ix < sx && !budgetHit; ix++)
-                {
-                    for(int iy = 0; iy < sy && !budgetHit; iy++)
-                    {
-                        for(int iz = 0; iz < sz; iz++)
-                        {
-                            if(temporal && (flatIndex % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
-                            {
-                                rgbaIndex += 4;
-                                flatIndex++;
-                                continue;
-                            }
-                            if((flatIndex & 15) == 0 && (System.nanoTime() - budgetStart) > budgetNs)
-                            {
-                                budgetHit = true;
-                                break;
-                            }
-                            final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
-                            final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
-                            final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
-                            final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
-                            sampleRoomCellAtWorldTarget(world, player, target, cell);
-                            maybeFillOutdoorSky(cfg, world, eye, target, atmosphere, cell);
-                            rgba[rgbaIndex++] = (byte)cell[0];
-                            rgba[rgbaIndex++] = (byte)cell[1];
-                            rgba[rgbaIndex++] = (byte)cell[2];
-                            rgba[rgbaIndex++] = (byte)cell[3];
-                            flatIndex++;
-                        }
-                    }
-                }
+                roomSampleAwaitingFirstPass = false;
             }
-            if(temporal || budgetHit)
-            {
-                roomSampleTemporalSlice = (roomSampleTemporalSlice + 1) % ROOM_SAMPLE_TEMPORAL_SLICES;
-            }
+            roomSampleCubemapCursor = next;
         }
         finally
         {
             EntityDisplayColorSampler.endFrame();
         }
 
-        // Ensure UDP target exists before async publish notifies from the worker thread.
         if(socket == null || address == null)
+        {
+            return;
+        }
+        if(roomSampleAwaitingFirstPass)
         {
             return;
         }
         final long now = System.currentTimeMillis();
         final int frameId = (int)(now & 0x7FFFFFFFL);
-        // Zero-copy handoff — LZ4 and mmap write never run on the client tick.
         roomSampleRgbaBuffer = roomSampleFrameShmWriter.offerSwap(
                 frameId, now, cfg.configId, sx, sy, sz, rgba);
+    }
+
+    private static void writeCubemapTexel(Level world,
+                                          LocalPlayer player,
+                                          RoomSampleConfigReader.Config cfg,
+                                          Vec3 eye,
+                                          AtmosphereSampler.Frame atmosphere,
+                                          float[] localDir,
+                                          int[] cell,
+                                          byte[] rgba,
+                                          int flat,
+                                          int sx,
+                                          int sy,
+                                          int sz)
+    {
+        final int face = flat % sz;
+        final int t = flat / sz;
+        final int v = t % sy;
+        final int u = t / sy;
+        final float uf = (u + 0.5f) / (float)sx;
+        final float vf = (v + 0.5f) / (float)sy;
+        RoomSampleCubemap.uvToDirection(face, uf, vf, localDir);
+        final double range = RoomSampleWorldMapper.roomRayRangeBlocks(
+                cfg, localDir[0], localDir[1], localDir[2]);
+        final Vec3 target = RoomSampleWorldMapper.mapLocalDirToWorldTarget(
+                cfg, player, localDir[0], localDir[1], localDir[2], range);
+        sampleRoomCellAtWorldTarget(world, player, target, cell);
+        maybeFillOutdoorSky(cfg, world, eye, target, atmosphere, cell);
+        final int rgbaIndex = flat * 4;
+        // While HQ UV sprites are still decoding, keep the last good LED colour instead of
+        // thrashing face-average → UV (looks like a texture-load flash).
+        if(BlockUvTexelSampler.rayHadOnlyUvMisses() && (rgba[rgbaIndex + 3] & 0xFF) > 8)
+        {
+            return;
+        }
+        rgba[rgbaIndex] = (byte)cell[0];
+        rgba[rgbaIndex + 1] = (byte)cell[1];
+        rgba[rgbaIndex + 2] = (byte)cell[2];
+        rgba[rgbaIndex + 3] = (byte)cell[3];
     }
 
     private void logRoomConfigState(RoomSampleConfigReader.Config cfg)
@@ -1334,15 +906,17 @@ public class OpenRGBSenderMod implements ClientModInitializer
             return;
         }
 
+        final int ledTexels = cfg.hasImportantCells() ? cfg.importantFlatIndices.length : 0;
         if(first)
         {
-            LOGGER.info("Room VR samples via shared memory ({}x{}x{} cells, config id {})", sx, sy, sz, cfg.configId);
+            LOGGER.info("Room VR cubemap via shared memory ({}x{} x6, UV {}, {} mapped LED texels, config id {})",
+                    sx, sy, cfg.uvTextureMaxDim, ledTexels, cfg.configId);
         }
         else
         {
-            LOGGER.info("Room VR config updated: {}x{}x{} -> {}x{}x{} (config id {} -> {})",
+            LOGGER.info("Room VR cubemap updated: {}x{}x{} -> {}x{}x{} ({} LED texels, config id {} -> {})",
                     lastLoggedRoomSizeX, lastLoggedRoomSizeY, lastLoggedRoomSizeZ,
-                    sx, sy, sz,
+                    sx, sy, sz, ledTexels,
                     lastLoggedRoomConfigId, cfg.configId);
         }
 
@@ -1350,44 +924,6 @@ public class OpenRGBSenderMod implements ClientModInitializer
         lastLoggedRoomSizeX = sx;
         lastLoggedRoomSizeY = sy;
         lastLoggedRoomSizeZ = sz;
-    }
-
-    private static int getMapColorRgb(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos pos, int fallback)
-    {
-        try
-        {
-            MapColor mapColor = world.getBlockState(pos).getMapColor(world, pos);
-            if(mapColor != null)
-            {
-                return mapColor.col;
-            }
-        }
-        catch(Exception ignored)
-        {
-        }
-        return fallback;
-    }
-
-    private void sendLightningEventIfNeeded(DatagramSocket socket, InetAddress address) throws Exception
-    {
-        long now = System.currentTimeMillis();
-        long age = now - LightningTelemetryState.lastPacketMs;
-        if(age >= 0L &&
-           age <= LIGHTNING_EVENT_MAX_AGE_MS &&
-           (now - lastLightningSentMs) >= LIGHTNING_EVENT_COOLDOWN_MS)
-        {
-            float strength = ColorMath.clamp01(LightningTelemetryState.lastStrength);
-            String json = String.format(Locale.US,
-                    "{\"version\":1,\"type\":\"lightning_event\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"strength\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f,\"dir_focus\":%.4f}",
-                    now,
-                    strength,
-                    LightningTelemetryState.lastDirX,
-                    LightningTelemetryState.lastDirY,
-                    LightningTelemetryState.lastDirZ,
-                    ColorMath.clamp01(LightningTelemetryState.lastDirFocus));
-            sendJson(socket, address, json);
-            lastLightningSentMs = now;
-        }
     }
 
     private void sendDamageEventIfNeeded(DatagramSocket socket, InetAddress address, LocalPlayer player) throws Exception

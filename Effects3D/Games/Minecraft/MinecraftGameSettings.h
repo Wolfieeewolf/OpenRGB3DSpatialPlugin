@@ -15,15 +15,11 @@ constexpr std::uint32_t ChHunger = 1u << 1;
 constexpr std::uint32_t ChAir = 1u << 2;
 constexpr std::uint32_t ChDurability = 1u << 3;
 constexpr std::uint32_t ChDamage = 1u << 4;
-constexpr std::uint32_t ChWorldTint = 1u << 5;
-constexpr std::uint32_t ChLightning = 1u << 6;
 constexpr std::uint32_t ChRoomVrTint = 1u << 7;
 
 struct Settings
 {
     float damage_flash_decay_s = 0.35f;
-    float world_light_mix = 0.85f;
-    float world_heading_offset_deg = 0.0f;
     float room_vr_mix = 1.0f;
     float room_vr_heading_offset_deg = 0.0f;
     /** Player anchor shift in MC blocks (local forward/right/up), not room rotation. */
@@ -33,18 +29,25 @@ struct Settings
     float room_vr_scale_tune = 1.0f;
     float room_vr_saturation = 1.25f;
     float room_vr_contrast = 1.08f;
-    bool room_vr_sharp_sampling = false;
-    /** Fill open-air LED cells with sky/weather when the column can see sky (outdoor only). */
+    /** Fill open-air LED rays with sky/weather when the column can see sky (outdoor only). */
     bool room_vr_sky_enabled = true;
-    /** Maximum sample cells the mod may compute per frame. The actual grid is auto-sized to match
-     *  Minecraft block resolution at the current scale (one cell per MC block per axis), so most
-     *  configurations use far fewer cells than this ceiling and update at full 20 Hz.
-     *  Only increase if you want very fine zoom (high blocks-per-metre × high MC world scale). */
-    int room_vr_sample_target_cells = 65536;
-    float lightning_flash_strength = 0.72f;
-    float lightning_flash_decay_s = 0.28f;
-    float lightning_directional_mix = 0.65f;
-    float lightning_dir_sharpness = 1.35f;
+    /** Mirror player-local right (+X). Use if left/right walls feel swapped. */
+    bool room_vr_flip_right = false;
+    /**
+     * Mirror player-local forward (+Z). Default: room −Z from origin = look-forward
+     * (front wall / lower depth). Enable if front/back feel reversed.
+     */
+    bool room_vr_flip_forward = false;
+    /**
+     * Cubemap face resolution (size_x == size_y; size_z == 6). Cost is LED-count driven —
+     * higher values mainly improve direction→texel precision for WYSIWYG LED mapping.
+     */
+    int room_vr_cubemap_face_size = 128;
+    /**
+     * Block texture UV sample resolution in the Fabric mod (64…4096).
+     * Higher = less blocky / more photo-like grain; costs RAM + async decode budget.
+     */
+    int room_vr_texture_uv_dim = 512;
     float damage_flash_strength = 1.0f;
     float base_brightness = 1.0f;
     bool health_per_heart_strip = false;

@@ -8,9 +8,11 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -29,9 +31,26 @@ final class BlockUvTexelSampler
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final float CUTOUT_ALPHA_CONTINUE = 0.78f;
     private static final float QUAD_PLANE_EPS = 0.12f;
+    /** Per-ray UV cache stats — used to hold prior LED colours while sprites decode. */
+    private static final ThreadLocal<int[]> UV_STATS = ThreadLocal.withInitial(() -> new int[2]);
 
     private BlockUvTexelSampler()
     {
+    }
+
+    /** Call at the start of each Room VR ray. */
+    static void beginRay()
+    {
+        final int[] s = UV_STATS.get();
+        s[0] = 0;
+        s[1] = 0;
+    }
+
+    /** True when this ray wanted UV pixels but none were cached yet (face-average was used). */
+    static boolean rayHadOnlyUvMisses()
+    {
+        final int[] s = UV_STATS.get();
+        return s[0] == 0 && s[1] > 0;
     }
 
     /**
@@ -114,18 +133,32 @@ final class BlockUvTexelSampler
             uNorm = clamp01(uNorm);
             vNorm = clamp01(vNorm);
 
-            // Hot path: never decode PNGs here (that hitch causes Room VR stutters).
-            // Precache fills PIXEL_ENTRIES asynchronously; face-average fallback covers misses.
-            final SpritePixels pixels = BlockTexturePrecache.getPixels(sprite.contents().name());
+            // Never decode PNGs on the ray hot path — request async UV load, face-average this frame.
+            final Identifier spriteId = sprite.contents().name();
+            final SpritePixels pixels = BlockTexturePrecache.getPixels(spriteId);
             if(pixels == null)
             {
+                BlockTexturePrecache.requestPixels(spriteId);
+                UV_STATS.get()[1]++;
                 return false;
             }
+            UV_STATS.get()[0]++;
             // Leaves: wider opaque search so canopy holes resolve to leaf colour, not washed averages.
-            // Flowers/fire: neighborhood pick without a large search.
-            final int argb = state.is(BlockTags.LEAVES)
-                    ? pixels.sampleOpaqueNearLeaves(uNorm, vNorm, 64)
-                    : pixels.sampleBestOfNeighborhood(uNorm, vNorm, 28);
+            // Flowers/crops/fire: neighbourhood pick prefers distinctive (non-green) texels.
+            // Solid blocks: bilinear in the HQ UV buffer for smoother grain (photo-like, not face-average).
+            final int argb;
+            if(state.is(BlockTags.LEAVES))
+            {
+                argb = pixels.sampleOpaqueNearLeaves(uNorm, vNorm, 64);
+            }
+            else if(BlockDisplayColorSampler.isFlowerOrCropDetail(state) || isFireLikeState(state))
+            {
+                argb = pixels.sampleBestOfNeighborhood(uNorm, vNorm, 28);
+            }
+            else
+            {
+                argb = pixels.sampleBilinearNorm(uNorm, vNorm);
+            }
             out[0] = (argb >> 16) & 0xFF;
             out[1] = (argb >> 8) & 0xFF;
             out[2] = argb & 0xFF;
@@ -142,6 +175,12 @@ final class BlockUvTexelSampler
     static boolean shouldContinueThroughTexel(int textureAlpha)
     {
         return textureAlpha < (int)(CUTOUT_ALPHA_CONTINUE * 255.0f);
+    }
+
+    private static boolean isFireLikeState(BlockState state)
+    {
+        return state.is(Blocks.FIRE) || state.is(Blocks.SOUL_FIRE)
+                || state.is(Blocks.CAMPFIRE) || state.is(Blocks.SOUL_CAMPFIRE);
     }
 
     private static Object[] pickBestQuad(List<BakedQuad> quads, double lx, double ly, double lz)

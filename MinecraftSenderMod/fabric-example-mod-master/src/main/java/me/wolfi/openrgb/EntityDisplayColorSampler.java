@@ -233,6 +233,7 @@ final class EntityDisplayColorSampler
             final float[] uv = mapHitToEntityUv(entity, hitPos);
             return pixels.sampleOpaqueNear(uv[0], uv[1], 40);
         }
+        BlockTexturePrecache.requestPixels(spriteId);
         final BlockDisplayColorSampler.TextureSample avg = TEXTURE_AVG.get(spriteId);
         if(avg != null)
         {

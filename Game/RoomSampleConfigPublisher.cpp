@@ -41,69 +41,81 @@ static GridContext3D g_publish_room_grid(0, 1, 0, 1, 0, 1, 10.0f);
 static std::vector<float> g_frame_led_xyz;
 static std::vector<std::uint32_t> g_last_important_cells;
 
-static void BuildImportantCells(const RoomSampleFrameProtocol::ConfigHeader& hdr,
-                                const std::vector<float>& led_xyz,
-                                std::vector<std::uint32_t>& out)
+/** Cubemap texels covering each mapped LED direction (+ bilinear 2×2). */
+static void BuildImportantCubemapTexels(const RoomSampleFrameProtocol::ConfigHeader& hdr,
+                                        const std::vector<float>& led_xyz,
+                                        std::vector<std::uint32_t>& out)
 {
     out.clear();
-    if(led_xyz.size() < 3 || hdr.size_x <= 0 || hdr.size_y <= 0 || hdr.size_z <= 0)
+    if(led_xyz.size() < 3
+       || !RoomSampleFrameProtocol::IsCubemapLayout(hdr.size_x, hdr.size_y, hdr.size_z, hdr.flags))
     {
         return;
     }
 
-    const float span_x = std::max(1e-6f, hdr.room_max_x - hdr.room_min_x);
-    const float span_y = std::max(1e-6f, hdr.room_max_y - hdr.room_min_y);
-    const float span_z = std::max(1e-6f, hdr.room_max_z - hdr.room_min_z);
-    const int nx = hdr.size_x;
-    const int ny = hdr.size_y;
-    const int nz = hdr.size_z;
+    const int face_size = hdr.size_x;
+    const float scale = std::clamp(hdr.room_to_world_scale, 0.005f, 0.80f);
+    const float grid_units_per_block = 1.0f / scale;
+    const float eff_ox = hdr.effect_origin_x - hdr.pos_offset_right_blocks * grid_units_per_block;
+    const float eff_oy = hdr.effect_origin_y - hdr.pos_offset_up_blocks * grid_units_per_block;
+    const float eff_oz = hdr.effect_origin_z + hdr.pos_offset_forward_blocks * grid_units_per_block;
 
     std::unordered_set<std::uint32_t> unique;
-    unique.reserve(std::min<std::size_t>(led_xyz.size() / 3u * 8u, RoomSampleFrameProtocol::kMaxImportantCells));
+    unique.reserve(std::min<std::size_t>(led_xyz.size() / 3u * 4u, RoomSampleFrameProtocol::kMaxImportantCells));
 
-    auto mark = [&](int ix, int iy, int iz) {
-        if(ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz)
+    auto mark = [&](int face, int iu, int iv) {
+        if(face < 0 || face >= RoomSampleFrameProtocol::kCubemapFaceCount || iu < 0 || iv < 0
+           || iu >= face_size || iv >= face_size)
         {
             return;
         }
         const std::uint32_t flat =
-            (std::uint32_t)(((std::size_t)ix * (std::size_t)ny + (std::size_t)iy) * (std::size_t)nz + (std::size_t)iz);
+            (std::uint32_t)(((std::size_t)iu * (std::size_t)face_size + (std::size_t)iv)
+                                * (std::size_t)RoomSampleFrameProtocol::kCubemapFaceCount
+                            + (std::size_t)face);
         unique.insert(flat);
     };
 
-    // Same continuous mapping as RoomSampleMapping::TrilinearSample.
     for(std::size_t i = 0; i + 2 < led_xyz.size(); i += 3)
     {
-        const float gx =
-            std::clamp((led_xyz[i] - hdr.room_min_x) / span_x, 0.0f, 1.0f) * (float)nx - 0.5f;
-        const float gy =
-            std::clamp((led_xyz[i + 1] - hdr.room_min_y) / span_y, 0.0f, 1.0f) * (float)ny - 0.5f;
-        const float gz =
-            std::clamp((led_xyz[i + 2] - hdr.room_min_z) / span_z, 0.0f, 1.0f) * (float)nz - 0.5f;
+        float dx = (led_xyz[i] - eff_ox) * scale;
+        float dy = (led_xyz[i + 1] - eff_oy) * scale;
+        float dz = (eff_oz - led_xyz[i + 2]) * scale;
+        if((hdr.flags & RoomSampleFrameProtocol::kFlagFlipRight) != 0)
+        {
+            dx = -dx;
+        }
+        if((hdr.flags & RoomSampleFrameProtocol::kFlagFlipForward) != 0)
+        {
+            dz = -dz;
+        }
+        const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if(len <= 1e-5f)
+        {
+            continue;
+        }
+        dx /= len;
+        dy /= len;
+        dz /= len;
 
-        const int ix0 = std::clamp((int)std::floor(gx), 0, nx - 1);
-        const int iy0 = std::clamp((int)std::floor(gy), 0, ny - 1);
-        const int iz0 = std::clamp((int)std::floor(gz), 0, nz - 1);
-        const int ix1 = std::min(ix0 + 1, nx - 1);
-        const int iy1 = std::min(iy0 + 1, ny - 1);
-        const int iz1 = std::min(iz0 + 1, nz - 1);
+        int face = 0;
+        float u = 0.0f;
+        float v = 0.0f;
+        RoomSampleFrameProtocol::DirectionToCubemapUv(dx, dy, dz, face, u, v);
 
-        // Only the exact trilinear corner set — extra halo was filling empty room with sky
-        // that then bled onto neighbouring LEDs.
-        mark(ix0, iy0, iz0);
-        mark(ix1, iy0, iz0);
-        mark(ix0, iy1, iz0);
-        mark(ix1, iy1, iz0);
-        mark(ix0, iy0, iz1);
-        mark(ix1, iy0, iz1);
-        mark(ix0, iy1, iz1);
-        mark(ix1, iy1, iz1);
+        const float gu = u * (float)face_size - 0.5f;
+        const float gv = v * (float)face_size - 0.5f;
+        // One nearest texel per LED — bilinear neighbourhood caused high-res flashing.
+        const int iu = std::clamp((int)std::lround(gu), 0, face_size - 1);
+        const int iv = std::clamp((int)std::lround(gv), 0, face_size - 1);
+        mark(face, iu, iv);
+
         if(unique.size() >= RoomSampleFrameProtocol::kMaxImportantCells)
         {
-            goto done_mark;
+            break;
         }
     }
-done_mark:
+
     out.assign(unique.begin(), unique.end());
     std::sort(out.begin(), out.end());
 }
@@ -241,29 +253,12 @@ void PublishIfNeeded(const GridContext3D& grid,
     const float span_y = std::max(1e-3f, publish_grid.max_y - publish_grid.min_y);
     const float span_z = std::max(1e-3f, publish_grid.max_z - publish_grid.min_z);
 
-    int nx = 0;
-    int ny = 0;
-    int nz = 0;
-
-    const std::size_t max_cells = (std::size_t)std::clamp(
-        settings.room_vr_sample_target_cells, 4096, (int)RoomSampleFrameProtocol::kMaxCells);
-
-    const float clamped_scale = std::clamp(room_to_world_scale, 0.005f, 0.80f);
-    const int nx_mc = std::clamp((int)std::ceil(span_x * clamped_scale) + 1, 2, 512);
-    const int ny_mc = std::clamp((int)std::ceil(span_y * clamped_scale) + 1, 2, 384);
-    const int nz_mc = std::clamp((int)std::ceil(span_z * clamped_scale) + 1, 2, 512);
-    const std::size_t mc_cells = (std::size_t)nx_mc * (std::size_t)ny_mc * (std::size_t)nz_mc;
-
-    if(mc_cells <= max_cells)
-    {
-        nx = nx_mc;
-        ny = ny_mc;
-        nz = nz_mc;
-    }
-    else
-    {
-        RoomSampleFrameProtocol::ComputeGridDimensions(span_x, span_y, span_z, nx, ny, nz, max_cells);
-    }
+    const int face = std::clamp(settings.room_vr_cubemap_face_size,
+                                32,
+                                RoomSampleFrameProtocol::kCubemapFaceSizeMax);
+    const int nx = face;
+    const int ny = face;
+    const int nz = RoomSampleFrameProtocol::kCubemapFaceCount;
 
     RoomSampleFrameProtocol::ConfigHeader hdr{};
     hdr.magic = RoomSampleFrameProtocol::kConfigMagic;
@@ -271,12 +266,20 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.header_bytes = RoomSampleFrameProtocol::kConfigHeaderBytes;
     hdr.sequence = 2;
     hdr.config_id = 0;
-    hdr.flags = RoomSampleFrameProtocol::kFlagEnabled;
+    hdr.flags = RoomSampleFrameProtocol::kFlagEnabled | RoomSampleFrameProtocol::kFlagCubemap;
     if(settings.room_vr_sky_enabled)
     {
         hdr.flags |= RoomSampleFrameProtocol::kFlagSkyEnabled;
     }
-    hdr.target_cells = (std::uint32_t)std::min(mc_cells, max_cells);
+    if(settings.room_vr_flip_right)
+    {
+        hdr.flags |= RoomSampleFrameProtocol::kFlagFlipRight;
+    }
+    if(settings.room_vr_flip_forward)
+    {
+        hdr.flags |= RoomSampleFrameProtocol::kFlagFlipForward;
+    }
+    hdr.target_cells = (std::uint32_t)((std::size_t)nx * (std::size_t)ny * (std::size_t)nz);
     hdr.size_x = nx;
     hdr.size_y = ny;
     hdr.size_z = nz;
@@ -295,13 +298,19 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.pos_offset_right_blocks = settings.room_vr_pos_offset_right_blocks;
     hdr.pos_offset_up_blocks = settings.room_vr_pos_offset_up_blocks;
 
+    const std::uint32_t uv_dim =
+        (std::uint32_t)RoomSampleFrameProtocol::SnapUvTextureDim(settings.room_vr_texture_uv_dim);
+    std::memcpy(hdr.reserved + RoomSampleFrameProtocol::kReservedUvMaxDimOffset, &uv_dim, sizeof(uv_dim));
+
     std::vector<std::uint32_t> important_cells;
-    BuildImportantCells(hdr, led_xyz, important_cells);
+    BuildImportantCubemapTexels(hdr, led_xyz, important_cells);
     if(!important_cells.empty())
     {
         hdr.flags |= RoomSampleFrameProtocol::kFlagImportantCells;
         const std::uint32_t count = (std::uint32_t)important_cells.size();
-        std::memcpy(hdr.reserved, &count, sizeof(count));
+        std::memcpy(hdr.reserved + RoomSampleFrameProtocol::kReservedImportantCountOffset,
+                    &count,
+                    sizeof(count));
     }
 
     const std::uint32_t hash = HashConfig(hdr, important_cells);
@@ -328,14 +337,17 @@ void PublishIfNeeded(const GridContext3D& grid,
 
     if(config_changed)
     {
-        LOG_INFO("[3DSpatial] room config published (%dx%dx%d, config id %u, scale %.4f, important cells %zu, leds %zu)",
+        LOG_INFO("[3DSpatial] room config published (cubemap %dx%d x6, UV %u, config id %u, scale %.4f, "
+                 "room spans %.1f/%.1f/%.1f, mapped LED texels %zu)",
                  nx,
                  ny,
-                 nz,
+                 uv_dim,
                  hdr.config_id,
                  hdr.room_to_world_scale,
-                 g_last_important_cells.size(),
-                 led_xyz.size() / 3u);
+                 span_x,
+                 span_y,
+                 span_z,
+                 g_last_important_cells.size());
     }
 
     last_hash = hash;

@@ -27,7 +27,7 @@ final class RoomSampleFrameShmWriter
     static final int FRAME_MAGIC = 0x5253414D; // RSAM
     static final short VERSION = 1;
     static final int HEADER_BYTES = 64;
-    static final int SHM_TOTAL_BYTES = 4194304;
+    static final int SHM_TOTAL_BYTES = 8 * 1024 * 1024; // 8 MiB — 512²×6 sparse cubemap headroom
     static final int FLAG_LZ4 = 1 << 0;
 
     private static final int OFF_SEQUENCE = 8;

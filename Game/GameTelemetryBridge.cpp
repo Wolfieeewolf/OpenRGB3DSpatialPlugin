@@ -344,16 +344,6 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                     telemetry.damage_dir_z = msg.value("dir_z", 0.0f);
                     telemetry.damage_received_ms = NowMs();
                 }
-                else if(out_type == "lightning_event")
-                {
-                    telemetry.has_lightning_event = true;
-                    telemetry.lightning_strength = std::clamp(msg.value("strength", 1.0f), 0.0f, 2.0f);
-                    telemetry.lightning_dir_x = msg.value("dir_x", 0.0f);
-                    telemetry.lightning_dir_y = msg.value("dir_y", 1.0f);
-                    telemetry.lightning_dir_z = msg.value("dir_z", 0.0f);
-                    telemetry.lightning_dir_focus = std::clamp(msg.value("dir_focus", 0.0f), 0.0f, 1.0f);
-                    telemetry.lightning_received_ms = NowMs();
-                }
                 else if(out_type == "health_state")
                 {
                     ApplyHealthStateEvent(telemetry, msg);
@@ -362,60 +352,6 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 {
                     // Deferred: TryApplyLatest locks stats_mutex again.
                     apply_room_sample_shm = true;
-                }
-                else if(out_type == "world_light")
-                {
-                    telemetry.has_world_light = true;
-                    telemetry.world_light_r = (unsigned char)(std::max)(0, (std::min)(255, msg.value("r", 255)));
-                    telemetry.world_light_g = (unsigned char)(std::max)(0, (std::min)(255, msg.value("g", 255)));
-                    telemetry.world_light_b = (unsigned char)(std::max)(0, (std::min)(255, msg.value("b", 255)));
-                    telemetry.world_light_intensity = (std::max)(0.0f, msg.value("intensity", 1.0f));
-                    if(msg.contains("sky_r") && msg.contains("sky_g") && msg.contains("sky_b") &&
-                       msg.contains("mid_r") && msg.contains("mid_g") && msg.contains("mid_b") &&
-                       msg.contains("ground_r") && msg.contains("ground_g") && msg.contains("ground_b"))
-                    {
-                        telemetry.has_world_layers = true;
-                        telemetry.world_sky_r = (unsigned char)(std::max)(0, (std::min)(255, msg.value("sky_r", 170)));
-                        telemetry.world_sky_g = (unsigned char)(std::max)(0, (std::min)(255, msg.value("sky_g", 190)));
-                        telemetry.world_sky_b = (unsigned char)(std::max)(0, (std::min)(255, msg.value("sky_b", 255)));
-                        telemetry.world_mid_r = (unsigned char)(std::max)(0, (std::min)(255, msg.value("mid_r", 140)));
-                        telemetry.world_mid_g = (unsigned char)(std::max)(0, (std::min)(255, msg.value("mid_g", 180)));
-                        telemetry.world_mid_b = (unsigned char)(std::max)(0, (std::min)(255, msg.value("mid_b", 120)));
-                        telemetry.world_ground_r = (unsigned char)(std::max)(0, (std::min)(255, msg.value("ground_r", 100)));
-                        telemetry.world_ground_g = (unsigned char)(std::max)(0, (std::min)(255, msg.value("ground_g", 120)));
-                        telemetry.world_ground_b = (unsigned char)(std::max)(0, (std::min)(255, msg.value("ground_b", 80)));
-                    }
-                    if(msg.contains("probe_rgb") && msg["probe_rgb"].is_array())
-                    {
-                        const nlohmann::json& probe_rgb = msg["probe_rgb"];
-                        constexpr int kExpectedProbeRgb = 4 * 9 * 3;
-                        if((int)probe_rgb.size() >= kExpectedProbeRgb)
-                        {
-                            telemetry.has_layered_world_probes = true;
-                            telemetry.layered_probe_rgb.fill(0);
-                            for(int i = 0; i < kExpectedProbeRgb; i++)
-                            {
-                                int v = 0;
-                                if(probe_rgb[(size_t)i].is_number_integer())
-                                {
-                                    v = probe_rgb[(size_t)i].get<int>();
-                                }
-                                else if(probe_rgb[(size_t)i].is_number_float())
-                                {
-                                    v = (int)probe_rgb[(size_t)i].get<float>();
-                                }
-                                telemetry.layered_probe_rgb[(size_t)i] = (unsigned char)(std::max)(0, (std::min)(255, v));
-                            }
-                        }
-                        else
-                        {
-                            telemetry.has_layered_world_probes = false;
-                        }
-                    }
-                    else
-                    {
-                        telemetry.has_layered_world_probes = false;
-                    }
                 }
                 g_telemetry_data_revision.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -475,6 +411,7 @@ void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol:
     telemetry.room_sample.has_frame = true;
     telemetry.room_sample.frame_id = hdr.frame_id;
     telemetry.room_sample.config_id = hdr.config_id;
+    telemetry.room_sample.flags = cfg.flags;
     telemetry.room_sample.size_x = hdr.size_x;
     telemetry.room_sample.size_y = hdr.size_y;
     telemetry.room_sample.size_z = hdr.size_z;
@@ -484,6 +421,13 @@ void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol:
     telemetry.room_sample.room_max_x = cfg.room_max_x;
     telemetry.room_sample.room_max_y = cfg.room_max_y;
     telemetry.room_sample.room_max_z = cfg.room_max_z;
+    telemetry.room_sample.effect_origin_x = cfg.effect_origin_x;
+    telemetry.room_sample.effect_origin_y = cfg.effect_origin_y;
+    telemetry.room_sample.effect_origin_z = cfg.effect_origin_z;
+    telemetry.room_sample.room_to_world_scale = cfg.room_to_world_scale;
+    telemetry.room_sample.pos_offset_forward_blocks = cfg.pos_offset_forward_blocks;
+    telemetry.room_sample.pos_offset_right_blocks = cfg.pos_offset_right_blocks;
+    telemetry.room_sample.pos_offset_up_blocks = cfg.pos_offset_up_blocks;
     telemetry.room_sample.rgba = std::make_shared<const std::vector<unsigned char>>(std::move(rgba));
     telemetry.room_sample.received_ms =
         (hdr.timestamp_ms > 0) ? hdr.timestamp_ms

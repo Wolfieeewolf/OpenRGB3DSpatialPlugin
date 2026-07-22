@@ -10,7 +10,7 @@ MinecraftRoomVrTintEffect3D::MinecraftRoomVrTintEffect3D(QWidget* parent)
 {
     // Temporal blend washes grass/sky into muddy teal — default off; user can raise if needed.
     effect_smoothing = 0;
-    // Sharpness 0 = passthrough (legacy slider 100). Higher = more contrast.
+    // Sharpness 0 = passthrough. Higher = more contrast.
     effect_sharpness = 0;
 }
 

@@ -40,9 +40,17 @@ final class RoomSampleWorldMapper
         final float effOy = cfg.effectOriginY - cfg.posOffsetUpBlocks * gridUnitsPerBlock;
         final float effOz = cfg.effectOriginZ + cfg.posOffsetForwardBlocks * gridUnitsPerBlock;
 
-        final float rightBlocks = (roomX - effOx) * scale;
+        float rightBlocks = (roomX - effOx) * scale;
         final float upBlocks = (roomY - effOy) * scale;
-        final float forwardBlocks = (effOz - roomZ) * scale;
+        float forwardBlocks = (effOz - roomZ) * scale;
+        if(cfg.flipRight())
+        {
+            rightBlocks = -rightBlocks;
+        }
+        if(cfg.flipForward())
+        {
+            forwardBlocks = -forwardBlocks;
+        }
 
         final Basis basis = buildHorizontalBasis(player, cfg.headingOffsetDeg);
         final double ax = player.getX();
@@ -53,6 +61,141 @@ final class RoomSampleWorldMapper
         final double wy = ay + rightBlocks * basis.rightY + upBlocks * basis.upY + forwardBlocks * basis.forwardY;
         final double wz = az + rightBlocks * basis.rightZ + upBlocks * basis.upZ + forwardBlocks * basis.forwardZ;
         return new Vec3(wx, wy, wz);
+    }
+
+    /**
+     * Eye + player-local direction (right, up, forward) scaled by range — used for cubemap rays.
+     * Local axes match OpenGL-style player frame: +X right, +Y up, +Z look-forward (horizontal).
+     * Minecraft world: +X east, +Y up, +Z south; yaw 0 faces south (+Z).
+     */
+    static Vec3 mapLocalDirToWorldTarget(RoomSampleConfigReader.Config cfg,
+                                         LocalPlayer player,
+                                         float localRight,
+                                         float localUp,
+                                         float localForward,
+                                         double range)
+    {
+        float lr = localRight;
+        float lf = localForward;
+        if(cfg.flipRight())
+        {
+            lr = -lr;
+        }
+        if(cfg.flipForward())
+        {
+            lf = -lf;
+        }
+        final Basis basis = buildHorizontalBasis(player, cfg.headingOffsetDeg);
+        final Vec3 eye = player.getEyePosition();
+        final double wx = eye.x + range * (lr * basis.rightX + localUp * basis.upX + lf * basis.forwardX);
+        final double wy = eye.y + range * (lr * basis.rightY + localUp * basis.upY + lf * basis.forwardY);
+        final double wz = eye.z + range * (lr * basis.rightZ + localUp * basis.upZ + lf * basis.forwardZ);
+        return new Vec3(wx, wy, wz);
+    }
+
+    /**
+     * Distance in blocks from the effect origin to the published room AABB along a local direction.
+     * Cubemap rays stop here so we never sample beyond the physical room grid.
+     */
+    static double roomRayRangeBlocks(RoomSampleConfigReader.Config cfg,
+                                     float localRight,
+                                     float localUp,
+                                     float localForward)
+    {
+        float lr = localRight;
+        float lf = localForward;
+        if(cfg.flipRight())
+        {
+            lr = -lr;
+        }
+        if(cfg.flipForward())
+        {
+            lf = -lf;
+        }
+
+        final float scale = Math.max(0.005f, Math.min(0.80f, cfg.roomToWorldScale));
+        final float gridUnitsPerBlock = 1.0f / scale;
+        final float ox = cfg.effectOriginX - cfg.posOffsetRightBlocks * gridUnitsPerBlock;
+        final float oy = cfg.effectOriginY - cfg.posOffsetUpBlocks * gridUnitsPerBlock;
+        final float oz = cfg.effectOriginZ + cfg.posOffsetForwardBlocks * gridUnitsPerBlock;
+
+        float minR = (cfg.roomMinX - ox) * scale;
+        float maxR = (cfg.roomMaxX - ox) * scale;
+        float minU = (cfg.roomMinY - oy) * scale;
+        float maxU = (cfg.roomMaxY - oy) * scale;
+        // forwardBlocks = (oz - roomZ) * scale  → roomZ min/max map to forward max/min
+        float maxF = (oz - cfg.roomMinZ) * scale;
+        float minF = (oz - cfg.roomMaxZ) * scale;
+        if(cfg.flipRight())
+        {
+            final float tMin = -maxR;
+            final float tMax = -minR;
+            minR = tMin;
+            maxR = tMax;
+        }
+        if(cfg.flipForward())
+        {
+            final float tMin = -maxF;
+            final float tMax = -minF;
+            minF = tMin;
+            maxF = tMax;
+        }
+        if(minR > maxR)
+        {
+            final float t = minR;
+            minR = maxR;
+            maxR = t;
+        }
+        if(minU > maxU)
+        {
+            final float t = minU;
+            minU = maxU;
+            maxU = t;
+        }
+        if(minF > maxF)
+        {
+            final float t = minF;
+            minF = maxF;
+            maxF = t;
+        }
+
+        double tExit = Double.POSITIVE_INFINITY;
+        tExit = Math.min(tExit, slabExit(lr, minR, maxR));
+        tExit = Math.min(tExit, slabExit(localUp, minU, maxU));
+        tExit = Math.min(tExit, slabExit(lf, minF, maxF));
+
+        if(!Double.isFinite(tExit) || tExit < 0.35)
+        {
+            // Degenerate direction / origin outside — fall back to room half-diagonal.
+            final double hx = Math.max(Math.abs(minR), Math.abs(maxR));
+            final double hy = Math.max(Math.abs(minU), Math.abs(maxU));
+            final double hz = Math.max(Math.abs(minF), Math.abs(maxF));
+            tExit = Math.sqrt(hx * hx + hy * hy + hz * hz);
+        }
+        // Small margin so wall LEDs still hit the surface block at the boundary.
+        return Math.max(0.5, tExit + 0.35);
+    }
+
+    /** Half-diagonal of the room in blocks — upper bound for entity probe radius. */
+    static double roomHalfDiagonalBlocks(RoomSampleConfigReader.Config cfg)
+    {
+        final float scale = Math.max(0.005f, Math.min(0.80f, cfg.roomToWorldScale));
+        final double hx = 0.5 * Math.max(1e-3f, cfg.roomMaxX - cfg.roomMinX) * scale;
+        final double hy = 0.5 * Math.max(1e-3f, cfg.roomMaxY - cfg.roomMinY) * scale;
+        final double hz = 0.5 * Math.max(1e-3f, cfg.roomMaxZ - cfg.roomMinZ) * scale;
+        return Math.sqrt(hx * hx + hy * hy + hz * hz);
+    }
+
+    private static double slabExit(float dir, float min, float max)
+    {
+        if(Math.abs(dir) < 1e-6f)
+        {
+            // Parallel to slab — no exit on this axis (handled by others).
+            return Double.POSITIVE_INFINITY;
+        }
+        final float bound = dir > 0.0f ? max : min;
+        final double t = bound / (double)dir;
+        return t > 1e-5 ? t : Double.POSITIVE_INFINITY;
     }
 
     private static final class Basis
@@ -81,47 +224,24 @@ final class RoomSampleWorldMapper
         }
     }
 
+    /**
+     * Yaw-locked player basis from Minecraft rotation (not view-vector pitch).
+     * Yaw 0 = south (+Z), +90 = west (−X) — https://minecraft.wiki/w/Rotation
+     * Avoids look-straight-up degeneracy that snapped forward to world +Z incorrectly.
+     */
     private static Basis buildHorizontalBasis(LocalPlayer player, float headingOffsetDeg)
     {
-        final Vec3 look = player.getViewVector(1.0f);
-        double lx = look.x;
-        double ly = look.y;
-        double lz = look.z;
-        double ll = Math.sqrt(lx * lx + ly * ly + lz * lz);
-        if(ll <= 1e-5)
-        {
-            lx = 0.0;
-            ly = 0.0;
-            lz = 1.0;
-        }
-        else
-        {
-            lx /= ll;
-            ly /= ll;
-            lz /= ll;
-        }
+        final double yawRad = Math.toRadians(player.getYRot() + headingOffsetDeg);
+        // Horizontal forward from yaw (pitch ignored so the room does not tilt).
+        double fx = -Math.sin(yawRad);
+        double fy = 0.0;
+        double fz = Math.cos(yawRad);
 
         final double ux = 0.0;
         final double uy = 1.0;
         final double uz = 0.0;
-        final double horiz = lx * ux + ly * uy + lz * uz;
-        double fx = lx - horiz * ux;
-        double fy = ly - horiz * uy;
-        double fz = lz - horiz * uz;
-        double fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
-        if(fl <= 1e-5)
-        {
-            fx = 0.0;
-            fy = 0.0;
-            fz = 1.0;
-        }
-        else
-        {
-            fx /= fl;
-            fy /= fl;
-            fz /= fl;
-        }
 
+        // right = forward × worldUp → yaw 0 gives (−1,0,0) = west = player's right when facing south.
         double rx = fy * uz - fz * uy;
         double ry = fz * ux - fx * uz;
         double rz = fx * uy - fy * ux;
@@ -137,25 +257,6 @@ final class RoomSampleWorldMapper
             rx /= rl;
             ry /= rl;
             rz /= rl;
-        }
-
-        final double yaw = headingOffsetDeg * 0.01745329251;
-        if(Math.abs(yaw) > 1e-5)
-        {
-            final double c = Math.cos(yaw);
-            final double s = Math.sin(yaw);
-            final double fx2 = fx * c + rx * s;
-            final double fy2 = fy * c + ry * s;
-            final double fz2 = fz * c + rz * s;
-            final double rx2 = rx * c - fx * s;
-            final double ry2 = ry * c - fy * s;
-            final double rz2 = rz * c - fz * s;
-            fx = fx2;
-            fy = fy2;
-            fz = fz2;
-            rx = rx2;
-            ry = ry2;
-            rz = rz2;
         }
 
         return new Basis(fx, fy, fz, ux, uy, uz, rx, ry, rz);

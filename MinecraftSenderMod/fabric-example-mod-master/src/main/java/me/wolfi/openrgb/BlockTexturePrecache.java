@@ -42,10 +42,11 @@ final class BlockTexturePrecache
     private static final long BUILD_BUDGET_NS = 1_250_000L;
     private static final int BUILD_MAX_SPRITES_PER_TICK = 16;
     private static final String CACHE_FILE = "block_texture_precache.bin";
-    /** UV pixel cache: downscale side length (keeps memory bounded with HD packs). */
-    private static final int UV_CACHE_MAX_DIM = 64;
-    private static final int MAX_PIXEL_ENTRIES = 160;
-    private static final long MAX_PIXEL_BYTES = 16L << 20; // 16 MiB hard cap
+    /** Default solid UV dim — plugin can raise to 2K/4K via Room VR Texture quality. */
+    private static final int UV_CACHE_DIM_DEFAULT = 512;
+    private static final int MAX_PIXEL_ENTRIES_CAP = 200;
+    /** Headroom for 2K/4K UV buffers on fast machines (LRU still evicts aggressively). */
+    private static final long MAX_PIXEL_BYTES = 512L << 20; // 512 MiB
 
     private static final ConcurrentHashMap<Identifier, BlockDisplayColorSampler.TextureSample> ENTRIES =
             new ConcurrentHashMap<>();
@@ -53,7 +54,14 @@ final class BlockTexturePrecache
     private static final LinkedHashMap<Identifier, SpritePixels> PIXEL_LRU =
             new LinkedHashMap<>(256, 0.75f, true);
     private static long pixelBytes = 0L;
+    /** Live solid UV max side (64…4096). Anim strips use a capped fraction. */
+    private static volatile int uvCacheMaxDim = UV_CACHE_DIM_DEFAULT;
     private static final ArrayDeque<Identifier> BUILD_QUEUE = new ArrayDeque<>();
+    /** On-demand UV pixel loads for Room VR hits (never decode on the ray hot path). */
+    private static final ArrayDeque<Identifier> PIXEL_REQUEST_QUEUE = new ArrayDeque<>();
+    private static final Set<Identifier> PIXEL_REQUESTED = ConcurrentHashMap.newKeySet();
+    private static final long PIXEL_LOAD_BUDGET_NS = 2_000_000L;
+    private static final int PIXEL_LOAD_MAX_PER_TICK = 8;
     private static volatile int contentHash = 0;
     private static volatile boolean diskLoaded = false;
     private static volatile boolean buildScheduled = false;
@@ -75,6 +83,42 @@ final class BlockTexturePrecache
         {
             return PIXEL_LRU.get(spriteId);
         }
+    }
+
+    /**
+     * Apply plugin Texture quality. Clears the UV LRU when the dim changes so sprites
+     * re-decode at the new resolution (async, not on the ray path).
+     */
+    static void setUvMaxDim(int dim)
+    {
+        final int snapped = RoomSampleConfigReader.snapUvTextureDim(dim);
+        if(snapped == uvCacheMaxDim)
+        {
+            return;
+        }
+        uvCacheMaxDim = snapped;
+        clearPixels();
+        LOGGER.info("Room VR UV texture quality set to {} (anim max {})",
+                snapped,
+                animMaxDim(snapped));
+    }
+
+    static int currentUvMaxDim()
+    {
+        return uvCacheMaxDim;
+    }
+
+    private static int animMaxDim(int solidDim)
+    {
+        // Fire/portal strips stack frames — keep them smaller than solids.
+        return Math.min(512, Math.max(64, solidDim / 2));
+    }
+
+    private static int maxPixelEntriesForDim(int dim)
+    {
+        final long per = Math.max(1L, (long)dim * (long)dim * 4L);
+        final int byBytes = (int)Math.max(4L, Math.min((long)MAX_PIXEL_ENTRIES_CAP, MAX_PIXEL_BYTES / per));
+        return byBytes;
     }
 
     /** Average only — never retains full pixel buffers. */
@@ -109,6 +153,25 @@ final class BlockTexturePrecache
         return pixels;
     }
 
+    /**
+     * Queue a UV buffer load for a sprite seen by a Room VR ray. Cheap; decode happens in
+     * {@link #tick} under a soft budget so the client tick never hitch-decodes PNGs.
+     */
+    static void requestPixels(Identifier spriteId)
+    {
+        if(spriteId == null || getPixels(spriteId) != null)
+        {
+            return;
+        }
+        if(PIXEL_REQUESTED.add(spriteId))
+        {
+            synchronized(PIXEL_LOCK)
+            {
+                PIXEL_REQUEST_QUEUE.addLast(spriteId);
+            }
+        }
+    }
+
     static void onModelsReady(Minecraft client)
     {
         if(client == null)
@@ -141,7 +204,14 @@ final class BlockTexturePrecache
 
     static void tick(Minecraft client)
     {
-        if(!building || client == null || BUILD_QUEUE.isEmpty())
+        if(client == null)
+        {
+            return;
+        }
+        // Always drain UV requests — Room VR detail depends on this, not the average warm-up.
+        processPixelRequests(client);
+
+        if(!building || BUILD_QUEUE.isEmpty())
         {
             return;
         }
@@ -158,7 +228,7 @@ final class BlockTexturePrecache
             {
                 continue;
             }
-            // Averages only during warm-up — do not retain ARGB for every atlas sprite.
+            // Averages only during warm-up — UV pixels load on demand via requestPixels.
             final BlockDisplayColorSampler.TextureSample avg = readAverageOnly(client, spriteId);
             if(avg != null)
             {
@@ -168,9 +238,43 @@ final class BlockTexturePrecache
         if(BUILD_QUEUE.isEmpty())
         {
             building = false;
-            clearPixels();
+            // Keep any UV buffers already warmed for Room VR — do not clearPixels here.
             scheduleSaveToDisk(contentHash);
-            LOGGER.info("Block texture pre-cache built ({} averages, pixel cache cleared)", ENTRIES.size());
+            LOGGER.info("Block texture pre-cache built ({} averages; UV pixels load on demand)", ENTRIES.size());
+        }
+    }
+
+    private static void processPixelRequests(Minecraft client)
+    {
+        final long budgetStart = System.nanoTime();
+        int remaining = PIXEL_LOAD_MAX_PER_TICK;
+        while(remaining-- > 0)
+        {
+            if((System.nanoTime() - budgetStart) > PIXEL_LOAD_BUDGET_NS)
+            {
+                break;
+            }
+            final Identifier spriteId;
+            synchronized(PIXEL_LOCK)
+            {
+                spriteId = PIXEL_REQUEST_QUEUE.pollFirst();
+            }
+            if(spriteId == null)
+            {
+                break;
+            }
+            if(getPixels(spriteId) != null)
+            {
+                PIXEL_REQUESTED.remove(spriteId);
+                continue;
+            }
+            final SpritePixels pixels = readSpritePixelsDownscaled(client, spriteId);
+            if(pixels != null)
+            {
+                putPixels(spriteId, pixels);
+                ENTRIES.putIfAbsent(spriteId, pixels.average());
+            }
+            PIXEL_REQUESTED.remove(spriteId);
         }
     }
 
@@ -188,7 +292,7 @@ final class BlockTexturePrecache
             {
                 pixelBytes -= (long)prev.argb().length * 4L;
             }
-            while((PIXEL_LRU.size() >= MAX_PIXEL_ENTRIES || pixelBytes + add > MAX_PIXEL_BYTES)
+            while((PIXEL_LRU.size() >= maxPixelEntriesForDim(uvCacheMaxDim) || pixelBytes + add > MAX_PIXEL_BYTES)
                     && !PIXEL_LRU.isEmpty())
             {
                 final Map.Entry<Identifier, SpritePixels> eldest = PIXEL_LRU.entrySet().iterator().next();
@@ -216,7 +320,9 @@ final class BlockTexturePrecache
         {
             PIXEL_LRU.clear();
             pixelBytes = 0L;
+            PIXEL_REQUEST_QUEUE.clear();
         }
+        PIXEL_REQUESTED.clear();
     }
 
     private static void scheduleBuild(Minecraft client, int hash)
@@ -467,7 +573,7 @@ final class BlockTexturePrecache
         }
     }
 
-    /** Downscaled UV buffer — never keeps raw HD atlas sprites in RAM. */
+    /** Downscaled UV buffer — animation strips keep stacked frames for live fire/portal. */
     private static SpritePixels readSpritePixelsDownscaled(Minecraft client, Identifier spriteId)
     {
         if(client == null || spriteId == null)
@@ -487,32 +593,50 @@ final class BlockTexturePrecache
                 {
                     return null;
                 }
-                final int dstW = Math.min(srcW, UV_CACHE_MAX_DIM);
-                final int dstH = Math.min(srcH, UV_CACHE_MAX_DIM);
-                final int[] argb = new int[dstW * dstH];
+
+                // Vertical strip of square frames (fire, campfire, portal, …).
+                int frameCount = 1;
+                int frameSrcH = srcH;
+                if(srcH > srcW && srcW > 0 && (srcH % srcW) == 0)
+                {
+                    frameCount = srcH / srcW;
+                    frameSrcH = srcW;
+                }
+
+                final int solidDim = uvCacheMaxDim;
+                final int maxDim = frameCount > 1 ? animMaxDim(solidDim) : solidDim;
+                final int dstW = Math.min(srcW, maxDim);
+                final int dstH = Math.min(frameSrcH, maxDim);
+                final int[] argb = new int[dstW * dstH * frameCount];
                 long sumR = 0;
                 long sumG = 0;
                 long sumB = 0;
                 long sumA = 0;
                 int count = 0;
-                for(int y = 0; y < dstH; y++)
+
+                for(int frame = 0; frame < frameCount; frame++)
                 {
-                    final int sy = Math.min(srcH - 1, (y * srcH) / dstH);
-                    for(int x = 0; x < dstW; x++)
+                    final int srcY0 = frame * frameSrcH;
+                    final int frameBase = frame * dstW * dstH;
+                    for(int y = 0; y < dstH; y++)
                     {
-                        final int sx = Math.min(srcW - 1, (x * srcW) / dstW);
-                        final int px = image.getPixel(sx, sy);
-                        argb[y * dstW + x] = px;
-                        final int a = (px >>> 24) & 0xFF;
-                        if(a < 24)
+                        final int sy = srcY0 + Math.min(frameSrcH - 1, (y * frameSrcH) / dstH);
+                        for(int x = 0; x < dstW; x++)
                         {
-                            continue;
+                            final int sx = Math.min(srcW - 1, (x * srcW) / dstW);
+                            final int px = image.getPixel(sx, sy);
+                            argb[frameBase + y * dstW + x] = px;
+                            final int a = (px >>> 24) & 0xFF;
+                            if(a < 24)
+                            {
+                                continue;
+                            }
+                            sumR += (px >> 16) & 0xFF;
+                            sumG += (px >> 8) & 0xFF;
+                            sumB += px & 0xFF;
+                            sumA += a;
+                            count++;
                         }
-                        sumR += (px >> 16) & 0xFF;
-                        sumG += (px >> 8) & 0xFF;
-                        sumB += px & 0xFF;
-                        sumA += a;
-                        count++;
                     }
                 }
                 if(count <= 0)
@@ -523,7 +647,7 @@ final class BlockTexturePrecache
                 final int g = (int)(sumG / count);
                 final int b = (int)(sumB / count);
                 final int avgA = (int)(sumA / count);
-                return new SpritePixels(dstW, dstH, argb, (r << 16) | (g << 8) | b, avgA);
+                return new SpritePixels(dstW, dstH, argb, (r << 16) | (g << 8) | b, avgA, frameCount);
             }
         }
         catch(Throwable t)

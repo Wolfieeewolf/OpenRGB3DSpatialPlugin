@@ -45,6 +45,19 @@ final class BlockDisplayColorSampler
     {
     }
 
+    /** Flower / crop / bush — keep as LED detail, not soft immersion wash. */
+    static boolean isFlowerOrCropDetail(BlockState state)
+    {
+        if(state == null)
+        {
+            return false;
+        }
+        return state.is(BlockTags.FLOWERS) || state.is(BlockTags.CROPS)
+                || state.is(Blocks.SUNFLOWER) || state.is(Blocks.LILAC) || state.is(Blocks.ROSE_BUSH)
+                || state.is(Blocks.PEONY) || state.is(Blocks.PITCHER_PLANT) || state.is(Blocks.TORCHFLOWER)
+                || state.is(Blocks.SWEET_BERRY_BUSH);
+    }
+
     static boolean continuesViewportRay(BlockState state, FluidState fluid, int coverAlpha)
     {
         // Leaf canopies are full surfaces for LEDs — do not punch through holes to sky (reads white).
@@ -62,7 +75,13 @@ final class BlockDisplayColorSampler
             // Fire is a cutout — composite, then keep going so ground behind still contributes.
             return true;
         }
-        // Tall grass / sugarcane / sunflowers etc. must not kill open-sky rays for nearby LEDs.
+        // Flowers / crops: stop when we actually hit a petal/veg texel so grass behind cannot wash
+        // white/pink into light green. Empty sprite holes still pass through.
+        if(isFlowerOrCropDetail(state))
+        {
+            return coverAlpha < 150;
+        }
+        // Tall grass / sugarcane etc. must not kill open-sky rays for nearby LEDs.
         if(isSparseSkyCutout(state))
         {
             return true;
@@ -201,6 +220,16 @@ final class BlockDisplayColorSampler
         {
             // Keep canopy opaque even when the hit texel is a leaf hole.
             return 255;
+        }
+        // Flowers / crops / bushes: keep distinctive petal/veg texels opaque enough to win over grass.
+        if(isFlowerOrCropDetail(state))
+        {
+            if(textureAlpha >= 0)
+            {
+                // Holes stay soft; solid petal/veg texels become a hard LED colour.
+                return textureAlpha < 40 ? ColorMath.clamp255(textureAlpha) : ColorMath.clamp255(Math.max(200, textureAlpha));
+            }
+            return 210;
         }
         if(isSparseSkyCutout(state))
         {

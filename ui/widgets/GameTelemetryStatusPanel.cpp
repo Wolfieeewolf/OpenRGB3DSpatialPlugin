@@ -83,9 +83,8 @@ void GameTelemetryStatusPanel::RefreshStatus()
                               .arg(snap.room_sample.size_y)
                               .arg(snap.room_sample.size_z);
         }
-        signals_label->setText(QStringLiteral("Pose: %1 | Room sample: %2 | World light: %3")
+        signals_label->setText(QStringLiteral("Pose: %1 | Room sample: %2")
                                    .arg(snap.has_player_pose ? QStringLiteral("yes") : QStringLiteral("no"),
-                                        room_detail,
-                                        snap.has_world_light ? QStringLiteral("yes") : QStringLiteral("no")));
+                                        room_detail));
     }
 }

@@ -7,6 +7,7 @@
 #include "SpatialEffect3D.h"
 #include "RoomSampleMapping.h"
 #include "Game/RoomSampleConfigPublisher.h"
+#include "Game/RoomSampleFrameProtocol.h"
 #include "RoomSampleFrameShmReader.h"
 #include "Game/GameTelemetryBridge.h"
 #include "GridSpaceUtils.h"
@@ -295,163 +296,6 @@ static inline void RoomLedToSpatialCore(float rx,
     soz = roz;
 }
 
-static inline float NormalizeRoomVertical01(float y, const GridContext3D& grid, float origin_y)
-{
-    const float d_min = std::fabs(origin_y - grid.min_y);
-    const float d_max = std::fabs(origin_y - grid.max_y);
-    const float floor_y = (d_min <= d_max) ? grid.min_y : grid.max_y;
-    const float ceil_y = (d_min <= d_max) ? grid.max_y : grid.min_y;
-    if(std::fabs(ceil_y - floor_y) <= 1e-6f)
-    {
-        return 0.5f;
-    }
-    return std::clamp((y - floor_y) / (ceil_y - floor_y), 0.0f, 1.0f);
-}
-
-/** When a controller has no room Y span (flat strip), drive sky/mid/ground along its longest horizontal axis. */
-static inline float ResolveTintLayerNorm(float grid_x,
-                                         float grid_z,
-                                         const GridContext3D& grid,
-                                         float y_norm)
-{
-    const float y_span = std::fabs(grid.max_y - grid.min_y);
-    if(y_span > 1e-4f)
-    {
-        return y_norm;
-    }
-    const float z_span = std::fabs(grid.max_z - grid.min_z);
-    const float x_span = std::fabs(grid.max_x - grid.min_x);
-    if(z_span >= x_span && z_span > 1e-4f)
-    {
-        return std::clamp((grid_z - grid.min_z) / z_span, 0.0f, 1.0f);
-    }
-    if(x_span > 1e-4f)
-    {
-        return std::clamp((grid_x - grid.min_x) / x_span, 0.0f, 1.0f);
-    }
-    return y_norm;
-}
-
-static RGBColor SampleWorldProbeCell(const GameTelemetryBridge::TelemetrySnapshot& t, int layer, int sector)
-{
-    const int cell = layer * 9 + sector;
-    const int idx = cell * 3;
-    if(idx + 2 >= (int)t.layered_probe_rgb.size())
-    {
-        return (RGBColor)0;
-    }
-    return MakeRgb(t.layered_probe_rgb[(size_t)idx],
-                   t.layered_probe_rgb[(size_t)idx + 1],
-                   t.layered_probe_rgb[(size_t)idx + 2]);
-}
-
-static RGBColor SampleVerticalWorldLayers(const GameTelemetryBridge::TelemetrySnapshot& t, float layer_norm)
-{
-    if(!t.has_world_layers)
-    {
-        return MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b);
-    }
-    constexpr float kGroundEnd = 0.30f;
-    constexpr float kSkyStart = 0.68f;
-    const RGBColor sky = MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b);
-    const RGBColor mid = MakeRgb(t.world_mid_r, t.world_mid_g, t.world_mid_b);
-    const RGBColor ground = MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b);
-    if(layer_norm < kGroundEnd)
-    {
-        return LerpColor(ground, mid, layer_norm / kGroundEnd);
-    }
-    if(layer_norm > kSkyStart)
-    {
-        const float denom = std::max(1e-3f, 1.0f - kSkyStart);
-        return LerpColor(mid, sky, (layer_norm - kSkyStart) / denom);
-    }
-    return mid;
-}
-
-/** MineLights-style 3D tint: bilinear sample of 4x9 directional world probes per room LED. */
-static RGBColor SampleLayeredWorldProbe(const GameTelemetryBridge::TelemetrySnapshot& t,
-                                        float grid_x,
-                                        float grid_y,
-                                        float grid_z,
-                                        float origin_x,
-                                        float origin_y,
-                                        float origin_z,
-                                        const GridContext3D& grid,
-                                        float heading_offset_deg)
-{
-    if(!t.has_layered_world_probes)
-    {
-        return (RGBColor)0;
-    }
-
-    const float y_norm = ResolveTintLayerNorm(grid_x,
-                                              grid_z,
-                                              grid,
-                                              NormalizeRoomVertical01(grid_y, grid, origin_y));
-    const float layer_f = std::clamp(y_norm * 3.0f, 0.0f, 3.0f);
-    const int layer0 = std::clamp((int)std::floor(layer_f), 0, 3);
-    const int layer1 = std::min(layer0 + 1, 3);
-    const float layer_t = layer_f - (float)layer0;
-
-    auto sample_vertical_center = [&]() {
-        return LerpColor(SampleWorldProbeCell(t, layer0, 8), SampleWorldProbeCell(t, layer1, 8), layer_t);
-    };
-
-    if(!t.has_player_pose)
-    {
-        return sample_vertical_center();
-    }
-
-    SpatialBasisUtils::BasisVectors basis = SpatialBasisUtils::BuildOrthonormalBasis(t.forward_x,
-                                                                                      t.forward_y,
-                                                                                      t.forward_z,
-                                                                                      t.up_x,
-                                                                                      t.up_y,
-                                                                                      t.up_z);
-    const float wx = grid_x - origin_x;
-    const float wy = grid_y - origin_y;
-    const float wz = grid_z - origin_z;
-    float lx = 0.0f;
-    float ly = 0.0f;
-    float lz = 0.0f;
-    SpatialBasisUtils::ToLocal(basis, wx, wy, wz, lx, ly, lz);
-
-    const float yaw = heading_offset_deg * 0.01745329251f;
-    if(std::fabs(yaw) > 1e-5f)
-    {
-        const float c = std::cos(yaw);
-        const float s = std::sin(yaw);
-        const float lx2 = lx * c + lz * s;
-        const float lz2 = -lx * s + lz * c;
-        lx = lx2;
-        lz = lz2;
-    }
-
-    const float horiz_len = std::sqrt(lx * lx + lz * lz);
-    if(horiz_len < 0.08f)
-    {
-        return sample_vertical_center();
-    }
-
-    float angle = std::atan2(lx, lz);
-    float sector_f = angle * 1.27323954f;
-    if(sector_f < 0.0f)
-    {
-        sector_f += 8.0f;
-    }
-    const int sector0 = ((int)std::floor(sector_f)) % 8;
-    const int sector1 = (sector0 + 1) % 8;
-    const float sector_t = sector_f - std::floor(sector_f);
-
-    const RGBColor c00 = SampleWorldProbeCell(t, layer0, sector0);
-    const RGBColor c01 = SampleWorldProbeCell(t, layer0, sector1);
-    const RGBColor c10 = SampleWorldProbeCell(t, layer1, sector0);
-    const RGBColor c11 = SampleWorldProbeCell(t, layer1, sector1);
-    const RGBColor c0 = LerpColor(c00, c01, sector_t);
-    const RGBColor c1 = LerpColor(c10, c11, sector_t);
-    return LerpColor(c0, c1, layer_t);
-}
-
 static bool ComputeNormalizedSampleVector(float grid_x,
                                           float grid_y,
                                           float grid_z,
@@ -724,30 +568,6 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         AddPctSlider(damage_layout, panel, QStringLiteral("Damage flash strength"), &s.damage_flash_strength);
     }
 
-    if(ch(channels, ChWorldTint))
-    {
-        QVBoxLayout* world_layout = content_layout;
-        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("World tint")))
-        {
-            world_layout = body;
-        }
-        QLabel* hint = new QLabel(
-            QStringLiteral(
-                "3D world color: each LED samples directional world_light probes "
-                "from Fabric (4 height layers × 8 compass sectors). Place a reference point at "
-                "eye height, set this effect's 3D origin there, then stand at that spot in-game. "
-                "Room yaw aligns your room layout with in-game look (not player position)."),
-            panel);
-        hint->setWordWrap(true);
-        world_layout->addWidget(hint);
-        AddSliderRow(world_layout, panel, QStringLiteral("World tint strength"), 0, 100, (int)std::lround(std::clamp(s.world_light_mix, 0.0f, 1.0f) * 100.0f),
-                     [&s](int x) { s.world_light_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.world_heading_offset_deg),
-                     [&s](int x) { s.world_heading_offset_deg = (float)std::clamp(x, -180, 180); },
-                     [](int x) { return QString::number(x) + QStringLiteral("°"); });
-    }
-
     if(ch(channels, ChRoomVrTint))
     {
         QVBoxLayout* room_layout = content_layout;
@@ -760,8 +580,10 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                 "Ambilight viewport: each LED samples composited world content along a ray "
                 "(block textures, plants, fire, glass, mobs, drops) — not a flat face average. "
                 "Place a reference point at eye height, set this effect's 3D origin there, then stand "
-                "in-game at that spot. Walls and caves show only line-of-sight surfaces (no x-ray). "
-                "Room yaw fine-tunes heading; block offsets trim origin without turning."),
+                "in-game at that spot. Mapping is player-local (not world East/South): "
+                "room +X = look-right, +Y = up, −Z from origin = look-forward "
+                "(Minecraft: yaw 0 faces +Z/south; +X is east — see minecraft.wiki/w/Coordinates). "
+                "Room yaw fine-tunes heading; flips fix mirrored walls; block offsets trim origin."),
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);
@@ -771,6 +593,18 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         AddSliderRow(room_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.room_vr_heading_offset_deg),
                      [&s](int x) { s.room_vr_heading_offset_deg = (float)std::clamp(x, -180, 180); },
                      [](int x) { return QString::number(x) + QStringLiteral("°"); });
+        AddCheckRow(room_layout,
+                    panel,
+                    QStringLiteral("Flip left / right"),
+                    s.room_vr_flip_right,
+                    [&s](bool v) { s.room_vr_flip_right = v; },
+                    QStringLiteral("Mirror the player-right axis. Use if the left wall shows what should be on the right."));
+        AddCheckRow(room_layout,
+                    panel,
+                    QStringLiteral("Flip front / back"),
+                    s.room_vr_flip_forward,
+                    [&s](bool v) { s.room_vr_flip_forward = v; },
+                    QStringLiteral("Mirror look-forward. Default treats smaller room Z than the origin as in front of you."));
         auto pos_offset_label = [](int tenths) {
             return QString::number(tenths / 10.0, 'f', 1) + QStringLiteral(" blk");
         };
@@ -814,37 +648,58 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                      [&s](int x) { s.room_vr_contrast = std::clamp(x / 100.0f, 0.8f, 2.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); },
                      QStringLiteral("Contrast for Room VR texel samples. Lower preserves grass/dirt/flower detail."));
-        AddCheckRow(room_layout, panel, QStringLiteral("Sharp block sampling (less blur)"), s.room_vr_sharp_sampling,
-                    [&s](bool v) { s.room_vr_sharp_sampling = v; });
         AddCheckRow(room_layout,
                     panel,
                     QStringLiteral("Room VR sky / weather"),
                     s.room_vr_sky_enabled,
                     [&s](bool v) { s.room_vr_sky_enabled = v; },
-                    QStringLiteral("Fill open-air LED samples with sunrise/sunset/night/weather sky. "
-                                   "Only when that world column can see the sky — caves and indoors stay dark."));
-    }
-
-    if(ch(channels, ChLightning))
-    {
-        QVBoxLayout* lightning_layout = content_layout;
-        if(!ch(channels, ChWorldTint))
+                    QStringLiteral("On empty cubemap rays (no block hit inside the room), fill with "
+                                   "sunrise/sunset/night/weather sky. Caves and indoors stay dark."));
+        AddSliderRow(room_layout,
+                     panel,
+                     QStringLiteral("Cubemap face size"),
+                     32,
+                     512,
+                     std::clamp(s.room_vr_cubemap_face_size, 32, 512),
+                     [&s](int x) { s.room_vr_cubemap_face_size = std::clamp(x, 32, 512); },
+                     [](int x) { return QString::number(x); },
+                     QStringLiteral("Resolution per cubemap face (default 128). Only mapped LED directions "
+                                    "are raycast. 256–512 sharpens aiming for small props; cost stays LED-count driven. "
+                                    "Rays stop at the room boundary."));
+        if(QComboBox* tex_combo = AddComboRow(room_layout, QStringLiteral("Texture quality (UV)")))
         {
-            if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Lightning")))
+            tex_combo->addItem(QStringLiteral("64 — Fast"), 64);
+            tex_combo->addItem(QStringLiteral("128 — Light"), 128);
+            tex_combo->addItem(QStringLiteral("256 — Balanced"), 256);
+            tex_combo->addItem(QStringLiteral("512 — HQ"), 512);
+            tex_combo->addItem(QStringLiteral("720 — HD-ish"), 720);
+            tex_combo->addItem(QStringLiteral("1024 — Ultra"), 1024);
+            tex_combo->addItem(QStringLiteral("1080 — Full HD"), 1080);
+            tex_combo->addItem(QStringLiteral("2048 — 2K"), 2048);
+            tex_combo->addItem(QStringLiteral("4096 — 4K (fast PCs)"), 4096);
+            tex_combo->setToolTip(
+                QStringLiteral("Block texture sample resolution in Minecraft. Higher = less blocky / more "
+                               "photo-like grain on LEDs. Uses more RAM and async decode time — 2K/4K can hitch "
+                               "on slower machines. Animated textures (fire) use a capped fraction of this size."));
+            const int want = RoomSampleFrameProtocol::SnapUvTextureDim(s.room_vr_texture_uv_dim);
+            for(int i = 0; i < tex_combo->count(); i++)
             {
-                lightning_layout = body;
+                if(tex_combo->itemData(i).toInt() == want)
+                {
+                    tex_combo->setCurrentIndex(i);
+                    break;
+                }
             }
+            QObject::connect(tex_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel,
+                             [&s, tex_combo](int idx) {
+                                 if(idx < 0)
+                                 {
+                                     return;
+                                 }
+                                 s.room_vr_texture_uv_dim =
+                                     RoomSampleFrameProtocol::SnapUvTextureDim(tex_combo->itemData(idx).toInt());
+                             });
         }
-        AddSliderRow(lightning_layout, panel, QStringLiteral("Lightning flash strength"), 0, 150, (int)std::lround(std::clamp(s.lightning_flash_strength, 0.0f, 1.5f) * 100.0f),
-                     [&s](int x) { s.lightning_flash_strength = std::clamp(x / 100.0f, 0.0f, 1.5f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(lightning_layout, panel, QStringLiteral("Lightning decay (ms)"), 80, 900, (int)std::lround(std::clamp(s.lightning_flash_decay_s, 0.08f, 0.90f) * 1000.0f),
-                     [&s](int x) { s.lightning_flash_decay_s = std::clamp(x / 1000.0f, 0.08f, 0.90f); },
-                     [](int x) { return QString::number(x); });
-        AddPctSlider(lightning_layout, panel, QStringLiteral("Lightning directional response"), &s.lightning_directional_mix);
-        AddSliderRow(lightning_layout, panel, QStringLiteral("Lightning directional sharpness"), 50, 500, (int)std::lround(std::clamp(s.lightning_dir_sharpness, 0.5f, 5.0f) * 100.0f),
-                     [&s](int x) { s.lightning_dir_sharpness = std::clamp(x / 100.0f, 0.5f, 5.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
     }
 
     QVBoxLayout* output_layout = content_layout;
@@ -921,56 +776,6 @@ static RGBColor ApplyDamageFlashChannel(RGBColor in_color,
         flash_mix = std::clamp(flash_mix * dir_factor, 0.0f, 1.0f);
     }
     return LerpColor(in_color, (RGBColor)0x000000FF, flash_mix);
-}
-
-static RGBColor ApplyLightningFlashChannel(RGBColor in_color,
-                                           const GameTelemetryBridge::TelemetrySnapshot& t,
-                                           float grid_x,
-                                           float grid_y,
-                                           float grid_z,
-                                           float origin_x,
-                                           float origin_y,
-                                           float origin_z,
-                                           const GridContext3D& grid,
-                                           const Settings& s)
-{
-    if(!t.has_lightning_event || t.lightning_received_ms == 0)
-    {
-        return in_color;
-    }
-    const unsigned long long now = NowMs();
-    const unsigned long long elapsed_ms = (now > t.lightning_received_ms) ? (now - t.lightning_received_ms) : 0;
-    const float decay_ms = std::max(80.0f, s.lightning_flash_decay_s * 1000.0f);
-    const float lt = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
-    if(lt <= 0.0f)
-    {
-        return in_color;
-    }
-
-    const float y_norm = NormalizeRoomVertical01(grid_y, grid, origin_y);
-    const float skyBias = std::pow(y_norm, 1.9f);
-    const float layer = 0.20f + 0.80f * skyBias;
-    float st = std::clamp(s.lightning_flash_strength * t.lightning_strength * lt * layer, 0.0f, 1.0f);
-    if(s.lightning_directional_mix > 1e-4f && t.has_player_pose)
-    {
-        const float dir_mix = std::clamp(s.lightning_directional_mix, 0.0f, 1.0f) *
-                              (0.25f + 0.75f * std::clamp(t.lightning_dir_focus, 0.0f, 1.0f));
-        const float dir_factor = ComputeDirectionalFactorFullPose(t,
-                                                                  t.lightning_dir_x,
-                                                                  t.lightning_dir_y,
-                                                                  t.lightning_dir_z,
-                                                                  grid_x,
-                                                                  grid_y,
-                                                                  grid_z,
-                                                                  origin_x,
-                                                                  origin_y,
-                                                                  origin_z,
-                                                                  dir_mix,
-                                                                  s.lightning_dir_sharpness,
-                                                                  0.20f);
-        st = std::clamp(st * dir_factor, 0.0f, 1.0f);
-    }
-    return LerpColor(in_color, (RGBColor)0x00FFF0DE, st);
 }
 
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
@@ -1097,34 +902,6 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         }
     }
 
-    if(ch(channels, ChWorldTint) && t.has_world_light)
-    {
-        const float y_norm = NormalizeRoomVertical01(grid_y, grid, origin_y);
-        const float layer_norm = ResolveTintLayerNorm(grid_x, grid_z, grid, y_norm);
-
-        RGBColor projected;
-        if(t.has_layered_world_probes)
-        {
-            projected = SampleLayeredWorldProbe(t,
-                                                grid_x,
-                                                grid_y,
-                                                grid_z,
-                                                origin_x,
-                                                origin_y,
-                                                origin_z,
-                                                grid,
-                                                s.world_heading_offset_deg);
-        }
-        else
-        {
-            projected = SampleVerticalWorldLayers(t, layer_norm);
-        }
-
-        const float wi = std::clamp(t.world_light_intensity, 0.0f, 1.0f);
-        const float mix = std::clamp(s.world_light_mix * wi, 0.0f, 1.0f);
-        out = LerpColor(out, projected, mix);
-    }
-
     if(ch(channels, ChRoomVrTint))
     {
         bool got_room_sample = false;
@@ -1148,11 +925,6 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
     if(ch(channels, ChDamage))
     {
         out = ApplyDamageFlashChannel(out, t, grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, s);
-    }
-
-    if(ch(channels, ChLightning))
-    {
-        out = ApplyLightningFlashChannel(out, t, grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, grid, s);
     }
 
     const int r = std::clamp((int)((out & 0xFF) * s.base_brightness), 0, 255);

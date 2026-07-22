@@ -20,7 +20,7 @@ namespace RoomSampleConfigPublisher
 {
 
 /**
- * Global room grid used for voxel sizing / LED→cell mapping.
+ * Global room grid used for Room VR sizing / LED→cubemap mapping.
  * Must match LED room_position space (not a zone-local effect grid).
  */
 void SetPublishRoomGrid(const GridContext3D& room_grid);

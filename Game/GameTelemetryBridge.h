@@ -7,7 +7,6 @@
 #include <string>
 #include <atomic>
 #include <thread>
-#include <array>
 #include <vector>
 #include <cstdint>
 
@@ -32,6 +31,7 @@ public:
         bool has_frame = false;
         unsigned int frame_id = 0;
         unsigned int config_id = 0;
+        std::uint32_t flags = 0;
         int size_x = 0;
         int size_y = 0;
         int size_z = 0;
@@ -41,6 +41,13 @@ public:
         float room_max_x = 0.0f;
         float room_max_y = 0.0f;
         float room_max_z = 0.0f;
+        float effect_origin_x = 0.0f;
+        float effect_origin_y = 0.0f;
+        float effect_origin_z = 0.0f;
+        float room_to_world_scale = 0.05f;
+        float pos_offset_forward_blocks = 0.0f;
+        float pos_offset_right_blocks = 0.0f;
+        float pos_offset_up_blocks = 0.0f;
         std::shared_ptr<const std::vector<unsigned char>> rgba;
         unsigned long long received_ms = 0;
     };
@@ -69,14 +76,6 @@ public:
         float damage_dir_z = 0.0f;
         unsigned long long damage_received_ms = 0;
 
-        bool has_lightning_event = false;
-        float lightning_strength = 0.0f;
-        float lightning_dir_x = 0.0f;
-        float lightning_dir_y = 1.0f;
-        float lightning_dir_z = 0.0f;
-        float lightning_dir_focus = 0.0f;
-        unsigned long long lightning_received_ms = 0;
-
         bool has_health_state = false;
         float health = 100.0f;
         float health_max = 100.0f;
@@ -90,23 +89,6 @@ public:
         float item_durability = 0.0f;
         float item_durability_max = 1.0f;
 
-        bool has_world_light = false;
-        unsigned char world_light_r = 255;
-        unsigned char world_light_g = 255;
-        unsigned char world_light_b = 255;
-        float world_light_intensity = 1.0f;
-        bool has_world_layers = false;
-        unsigned char world_sky_r = 170;
-        unsigned char world_sky_g = 190;
-        unsigned char world_sky_b = 255;
-        unsigned char world_mid_r = 140;
-        unsigned char world_mid_g = 180;
-        unsigned char world_mid_b = 120;
-        unsigned char world_ground_r = 100;
-        unsigned char world_ground_g = 120;
-        unsigned char world_ground_b = 80;
-        bool has_layered_world_probes = false;
-        std::array<unsigned char, 4 * 9 * 3> layered_probe_rgb{};
         std::string last_source;
         std::string last_type;
         unsigned long long last_event_ms = 0;

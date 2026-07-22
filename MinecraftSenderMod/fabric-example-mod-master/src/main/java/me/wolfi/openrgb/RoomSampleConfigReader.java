@@ -16,9 +16,15 @@ final class RoomSampleConfigReader
     static final int FLAG_ENABLED = 1 << 1;
     static final int FLAG_IMPORTANT_CELLS = 1 << 2;
     static final int FLAG_SKY_ENABLED = 1 << 3;
+    static final int FLAG_CUBEMAP = 1 << 4;
+    static final int FLAG_FLIP_RIGHT = 1 << 5;
+    static final int FLAG_FLIP_FORWARD = 1 << 6;
     static final int MAX_IMPORTANT_CELLS = 16384;
     /** Offset of reserved[0] where important_cell_count is stored when FLAG_IMPORTANT_CELLS is set. */
     static final int IMPORTANT_COUNT_OFFSET = 92;
+    /** reserved[4..7] — UV texture max dim published by the plugin (64…4096). */
+    static final int UV_MAX_DIM_OFFSET = 96;
+    static final int UV_DIM_DEFAULT = 512;
 
     static final class Config
     {
@@ -43,6 +49,8 @@ final class RoomSampleConfigReader
         float posOffsetUpBlocks;
         /** Flat indices (ix*sy+iy)*sz+iz covering active LEDs (+ neighbours). Empty = full grid. */
         int[] importantFlatIndices = new int[0];
+        /** Block UV sample max side (64/128/256/512/1024). Default HQ experiment = 512. */
+        int uvTextureMaxDim = UV_DIM_DEFAULT;
 
         boolean isEnabled()
         {
@@ -58,6 +66,22 @@ final class RoomSampleConfigReader
         boolean isSkyEnabled()
         {
             return (flags & FLAG_SKY_ENABLED) != 0;
+        }
+
+        boolean isCubemap()
+        {
+            return (flags & FLAG_CUBEMAP) != 0 && sizeX > 0 && sizeX == sizeY && sizeZ == RoomSampleCubemap.FACE_COUNT
+                    && sizeX <= RoomSampleCubemap.FACE_SIZE_MAX;
+        }
+
+        boolean flipRight()
+        {
+            return (flags & FLAG_FLIP_RIGHT) != 0;
+        }
+
+        boolean flipForward()
+        {
+            return (flags & FLAG_FLIP_FORWARD) != 0;
         }
     }
 
@@ -116,6 +140,10 @@ final class RoomSampleConfigReader
         cfg.posOffsetRightBlocks = buffer.getFloat();
         cfg.posOffsetUpBlocks = buffer.getFloat();
         // target_cells @ 88, reserved starts @ 92
+        cfg.uvTextureMaxDim = snapUvTextureDim(
+                ByteBuffer.wrap(bytes, UV_MAX_DIM_OFFSET, 4)
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .getInt());
 
         if((cfg.flags & FLAG_IMPORTANT_CELLS) != 0 && bytes.length > HEADER_BYTES)
         {
@@ -145,5 +173,26 @@ final class RoomSampleConfigReader
             }
         }
         return cfg;
+    }
+
+    static int snapUvTextureDim(int dim)
+    {
+        if(dim <= 0)
+        {
+            return UV_DIM_DEFAULT;
+        }
+        final int[] steps = {64, 128, 256, 512, 720, 1024, 1080, 2048, 4096};
+        int best = UV_DIM_DEFAULT;
+        int bestDist = Integer.MAX_VALUE;
+        for(int step : steps)
+        {
+            final int d = Math.abs(dim - step);
+            if(d < bestDist)
+            {
+                bestDist = d;
+                best = step;
+            }
+        }
+        return best;
     }
 }

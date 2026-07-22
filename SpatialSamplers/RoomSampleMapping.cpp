@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "RoomSampleMapping.h"
+#include "Game/RoomSampleFrameProtocol.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,79 +32,93 @@ static float SampleChannel(const GameTelemetryBridge::RoomSampleFrameChannel& rs
     return (float)(*rs.rgba)[bi] / 255.0f;
 }
 
-static float LerpF(float a, float b, float t)
-{
-    return a + (b - a) * t;
-}
-
-static RGBColor TrilinearSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
-                                float grid_x,
-                                float grid_y,
-                                float grid_z,
-                                bool& out_valid)
+static RGBColor PackRgb(float r, float g, float b, float a, bool& out_valid)
 {
     out_valid = false;
-
-    const float span_x = std::max(1e-6f, rs.room_max_x - rs.room_min_x);
-    const float span_y = std::max(1e-6f, rs.room_max_y - rs.room_min_y);
-    const float span_z = std::max(1e-6f, rs.room_max_z - rs.room_min_z);
-
-    const float gx = std::clamp((grid_x - rs.room_min_x) / span_x, 0.0f, 1.0f) * (float)rs.size_x - 0.5f;
-    const float gy = std::clamp((grid_y - rs.room_min_y) / span_y, 0.0f, 1.0f) * (float)rs.size_y - 0.5f;
-    const float gz = std::clamp((grid_z - rs.room_min_z) / span_z, 0.0f, 1.0f) * (float)rs.size_z - 0.5f;
-
-    const int ix0 = std::clamp((int)std::floor(gx), 0, rs.size_x - 1);
-    const int iy0 = std::clamp((int)std::floor(gy), 0, rs.size_y - 1);
-    const int iz0 = std::clamp((int)std::floor(gz), 0, rs.size_z - 1);
-    const int ix1 = std::min(ix0 + 1, rs.size_x - 1);
-    const int iy1 = std::min(iy0 + 1, rs.size_y - 1);
-    const int iz1 = std::min(iz0 + 1, rs.size_z - 1);
-    const float tx = std::clamp(gx - (float)ix0, 0.0f, 1.0f);
-    const float ty = std::clamp(gy - (float)iy0, 0.0f, 1.0f);
-    const float tz = std::clamp(gz - (float)iz0, 0.0f, 1.0f);
-
-    float acc_r = 0.0f;
-    float acc_g = 0.0f;
-    float acc_b = 0.0f;
-    float acc_a = 0.0f;
-
-    for(int sx = 0; sx < 2; sx++)
+    if(a <= 0.02f)
     {
-        const int ix = (sx == 0) ? ix0 : ix1;
-        const float wx = (sx == 0) ? (1.0f - tx) : tx;
-        for(int sy = 0; sy < 2; sy++)
-        {
-            const int iy = (sy == 0) ? iy0 : iy1;
-            const float wy = (sy == 0) ? (1.0f - ty) : ty;
-            for(int sz = 0; sz < 2; sz++)
-            {
-                const int iz = (sz == 0) ? iz0 : iz1;
-                const float wz = (sz == 0) ? (1.0f - tz) : tz;
-                const float w = wx * wy * wz;
-                const float a = SampleChannel(rs, ix, iy, iz, 3);
-                if(a <= 0.02f)
-                {
-                    continue;
-                }
-                acc_r += SampleChannel(rs, ix, iy, iz, 0) * a * w;
-                acc_g += SampleChannel(rs, ix, iy, iz, 1) * a * w;
-                acc_b += SampleChannel(rs, ix, iy, iz, 2) * a * w;
-                acc_a += a * w;
-            }
-        }
+        return (RGBColor)0;
     }
+    const float inv = 1.0f / a;
+    const int r8 = (int)std::lround(std::clamp(r * inv, 0.0f, 1.0f) * 255.0f);
+    const int g8 = (int)std::lround(std::clamp(g * inv, 0.0f, 1.0f) * 255.0f);
+    const int b8 = (int)std::lround(std::clamp(b * inv, 0.0f, 1.0f) * 255.0f);
+    out_valid = true;
+    return (RGBColor)((b8 << 16) | (g8 << 8) | r8);
+}
 
-    if(acc_a <= 0.02f)
+/** Nearest cubemap texel — matches LED-mapped fill (no bilinear flash at high face sizes). */
+static RGBColor NearestFaceSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
+                                  int face,
+                                  float u,
+                                  float v,
+                                  bool& out_valid)
+{
+    out_valid = false;
+    if(face < 0 || face >= rs.size_z || rs.size_x <= 0 || rs.size_y <= 0)
     {
         return (RGBColor)0;
     }
 
-    const float inv = 1.0f / acc_a;
-    const int r8 = (int)std::lround(std::clamp(acc_r * inv, 0.0f, 1.0f) * 255.0f);
-    const int g8 = (int)std::lround(std::clamp(acc_g * inv, 0.0f, 1.0f) * 255.0f);
-    const int b8 = (int)std::lround(std::clamp(acc_b * inv, 0.0f, 1.0f) * 255.0f);
-    out_valid = true;
-    return (RGBColor)((b8 << 16) | (g8 << 8) | r8);
+    const float gu = std::clamp(u, 0.0f, 1.0f) * (float)rs.size_x - 0.5f;
+    const float gv = std::clamp(v, 0.0f, 1.0f) * (float)rs.size_y - 0.5f;
+    const int iu = std::clamp((int)std::lround(gu), 0, rs.size_x - 1);
+    const int iv = std::clamp((int)std::lround(gv), 0, rs.size_y - 1);
+    const float a = SampleChannel(rs, iu, iv, face, 3);
+    if(a <= 0.02f)
+    {
+        return (RGBColor)0;
+    }
+    return PackRgb(SampleChannel(rs, iu, iv, face, 0) * a,
+                   SampleChannel(rs, iu, iv, face, 1) * a,
+                   SampleChannel(rs, iu, iv, face, 2) * a,
+                   a,
+                   out_valid);
+}
+
+static RGBColor CubemapSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
+                              float grid_x,
+                              float grid_y,
+                              float grid_z,
+                              bool& out_valid)
+{
+    out_valid = false;
+    if(!RoomSampleFrameProtocol::IsCubemapLayout(rs.size_x, rs.size_y, rs.size_z, rs.flags))
+    {
+        return (RGBColor)0;
+    }
+
+    const float scale = std::clamp(rs.room_to_world_scale, 0.005f, 0.80f);
+    const float grid_units_per_block = 1.0f / scale;
+    const float eff_ox = rs.effect_origin_x - rs.pos_offset_right_blocks * grid_units_per_block;
+    const float eff_oy = rs.effect_origin_y - rs.pos_offset_up_blocks * grid_units_per_block;
+    const float eff_oz = rs.effect_origin_z + rs.pos_offset_forward_blocks * grid_units_per_block;
+
+    float dx = (grid_x - eff_ox) * scale;
+    float dy = (grid_y - eff_oy) * scale;
+    float dz = (eff_oz - grid_z) * scale;
+    if((rs.flags & RoomSampleFrameProtocol::kFlagFlipRight) != 0)
+    {
+        dx = -dx;
+    }
+    if((rs.flags & RoomSampleFrameProtocol::kFlagFlipForward) != 0)
+    {
+        dz = -dz;
+    }
+    const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if(len <= 1e-5f)
+    {
+        return (RGBColor)0;
+    }
+    dx /= len;
+    dy /= len;
+    dz /= len;
+
+    int face = 0;
+    float u = 0.0f;
+    float v = 0.0f;
+    RoomSampleFrameProtocol::DirectionToCubemapUv(dx, dy, dz, face, u, v);
+    return NearestFaceSample(rs, face, u, v, out_valid);
 }
 }
 
@@ -125,7 +140,7 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
     }
 
     bool valid = false;
-    const RGBColor out = TrilinearSample(rs, grid_x, grid_y, grid_z, valid);
+    const RGBColor out = CubemapSample(rs, grid_x, grid_y, grid_z, valid);
     if(!valid)
     {
         return (RGBColor)0;
