@@ -56,7 +56,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private byte[] roomSampleRgbaBuffer = new byte[0];
     /** Round-robin cursor for mapped LED cubemap texels under the soft tick budget. */
     private int roomSampleCubemapCursor = 0;
-    /** Soft cap per tick so Room VR never stalls a client frame. */
+    /** Soft cap per tick so Room Ambilight never stalls a client frame. */
     private static final long ROOM_SAMPLE_BUDGET_NS = 3_500_000L;
     private static final ThreadLocal<int[]> ROOM_CELL_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_ACCUM_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
@@ -888,7 +888,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
             if(now - lastWaitingForConfigLogMs >= 15000L)
             {
                 lastWaitingForConfigLogMs = now;
-                LOGGER.info("Waiting for room config from OpenRGB (select Minecraft effect with Room VR tint, then join world)");
+                LOGGER.info("Waiting for room config from OpenRGB (select Minecraft effect with Room Ambilight, then join world)");
             }
             return;
         }
@@ -909,12 +909,12 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final int ledTexels = cfg.hasImportantCells() ? cfg.importantFlatIndices.length : 0;
         if(first)
         {
-            LOGGER.info("Room VR cubemap via shared memory ({}x{} x6, UV {}, {} mapped LED texels, config id {})",
+            LOGGER.info("Room Ambilight cubemap via shared memory ({}x{} x6, UV {}, {} mapped LED texels, config id {})",
                     sx, sy, cfg.uvTextureMaxDim, ledTexels, cfg.configId);
         }
         else
         {
-            LOGGER.info("Room VR cubemap updated: {}x{}x{} -> {}x{}x{} ({} LED texels, config id {} -> {})",
+            LOGGER.info("Room Ambilight cubemap updated: {}x{}x{} -> {}x{}x{} ({} LED texels, config id {} -> {})",
                     lastLoggedRoomSizeX, lastLoggedRoomSizeY, lastLoggedRoomSizeZ,
                     sx, sy, sz, ledTexels,
                     lastLoggedRoomConfigId, cfg.configId);

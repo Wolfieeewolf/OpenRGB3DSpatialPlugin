@@ -26,7 +26,7 @@ final class AtmosphereSampler
     private static final SkyRenderState SKY_SCRATCH = new SkyRenderState();
 
     /**
-     * One extract per Room VR frame — sky disc, sunrise/sunset glow, and day/night factor.
+     * One extract per Room Ambilight frame — sky disc, sunrise/sunset glow, and day/night factor.
      * {@code skyBrightness} is 1 at noon and ~0 at midnight (from {@link Level#getSkyDarken()}).
      */
     record Frame(int skyColor,

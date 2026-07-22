@@ -15,7 +15,7 @@ class MinecraftRoomVrTintEffect3D : public MinecraftSubEffect3D
 public:
     explicit MinecraftRoomVrTintEffect3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D_GAME("MinecraftRoomVrTint", "Room tint (VR)", "minecraft", "Minecraft",
+    EFFECT_REGISTERER_3D_GAME("MinecraftRoomVrTint", "Room Ambilight", "minecraft", "Minecraft",
                               []() { return new MinecraftRoomVrTintEffect3D; })
 
     EffectInfo3D GetEffectInfo() const override;

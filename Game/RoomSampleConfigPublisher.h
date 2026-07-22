@@ -20,12 +20,12 @@ namespace RoomSampleConfigPublisher
 {
 
 /**
- * Global room grid used for Room VR sizing / LED→cubemap mapping.
+ * Global room grid used for Room Ambilight sizing / LED→cubemap mapping.
  * Must match LED room_position space (not a zone-local effect grid).
  */
 void SetPublishRoomGrid(const GridContext3D& room_grid);
 
-/** xyz triplets in room space for every LED that Room VR should cover this frame. */
+/** xyz triplets in room space for every LED that Room Ambilight should cover this frame. */
 void SetFrameLedRoomPositions(const float* xyz_triplets, std::size_t triplet_count);
 
 void PublishIfNeeded(const GridContext3D& grid,

@@ -42,7 +42,7 @@ final class BlockTexturePrecache
     private static final long BUILD_BUDGET_NS = 1_250_000L;
     private static final int BUILD_MAX_SPRITES_PER_TICK = 16;
     private static final String CACHE_FILE = "block_texture_precache.bin";
-    /** Default solid UV dim — plugin can raise to 2K/4K via Room VR Texture quality. */
+    /** Default solid UV dim — plugin can raise to 2K/4K via Room Ambilight Texture quality. */
     private static final int UV_CACHE_DIM_DEFAULT = 512;
     private static final int MAX_PIXEL_ENTRIES_CAP = 200;
     /** Headroom for 2K/4K UV buffers on fast machines (LRU still evicts aggressively). */
@@ -57,7 +57,7 @@ final class BlockTexturePrecache
     /** Live solid UV max side (64…4096). Anim strips use a capped fraction. */
     private static volatile int uvCacheMaxDim = UV_CACHE_DIM_DEFAULT;
     private static final ArrayDeque<Identifier> BUILD_QUEUE = new ArrayDeque<>();
-    /** On-demand UV pixel loads for Room VR hits (never decode on the ray hot path). */
+    /** On-demand UV pixel loads for Room Ambilight hits (never decode on the ray hot path). */
     private static final ArrayDeque<Identifier> PIXEL_REQUEST_QUEUE = new ArrayDeque<>();
     private static final Set<Identifier> PIXEL_REQUESTED = ConcurrentHashMap.newKeySet();
     private static final long PIXEL_LOAD_BUDGET_NS = 2_000_000L;
@@ -98,7 +98,7 @@ final class BlockTexturePrecache
         }
         uvCacheMaxDim = snapped;
         clearPixels();
-        LOGGER.info("Room VR UV texture quality set to {} (anim max {})",
+        LOGGER.info("Room Ambilight UV texture quality set to {} (anim max {})",
                 snapped,
                 animMaxDim(snapped));
     }
@@ -154,7 +154,7 @@ final class BlockTexturePrecache
     }
 
     /**
-     * Queue a UV buffer load for a sprite seen by a Room VR ray. Cheap; decode happens in
+     * Queue a UV buffer load for a sprite seen by a Room Ambilight ray. Cheap; decode happens in
      * {@link #tick} under a soft budget so the client tick never hitch-decodes PNGs.
      */
     static void requestPixels(Identifier spriteId)
@@ -208,7 +208,7 @@ final class BlockTexturePrecache
         {
             return;
         }
-        // Always drain UV requests — Room VR detail depends on this, not the average warm-up.
+        // Always drain UV requests — Room Ambilight detail depends on this, not the average warm-up.
         processPixelRequests(client);
 
         if(!building || BUILD_QUEUE.isEmpty())
@@ -238,7 +238,7 @@ final class BlockTexturePrecache
         if(BUILD_QUEUE.isEmpty())
         {
             building = false;
-            // Keep any UV buffers already warmed for Room VR — do not clearPixels here.
+            // Keep any UV buffers already warmed for Room Ambilight — do not clearPixels here.
             scheduleSaveToDisk(contentHash);
             LOGGER.info("Block texture pre-cache built ({} averages; UV pixels load on demand)", ENTRIES.size());
         }

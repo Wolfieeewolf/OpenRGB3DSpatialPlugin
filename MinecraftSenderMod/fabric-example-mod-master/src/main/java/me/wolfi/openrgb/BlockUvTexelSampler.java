@@ -12,7 +12,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -38,7 +37,7 @@ final class BlockUvTexelSampler
     {
     }
 
-    /** Call at the start of each Room VR ray. */
+    /** Call at the start of each Room Ambilight ray. */
     static void beginRay()
     {
         final int[] s = UV_STATS.get();
@@ -151,7 +150,9 @@ final class BlockUvTexelSampler
             {
                 argb = pixels.sampleOpaqueNearLeaves(uNorm, vNorm, 64);
             }
-            else if(BlockDisplayColorSampler.isFlowerOrCropDetail(state) || isFireLikeState(state))
+            else if(BlockDisplayColorSampler.isFlowerOrCropDetail(state)
+                    || BlockDisplayColorSampler.isFireLike(state)
+                    || BlockDisplayColorSampler.isPointLightEmissive(state))
             {
                 argb = pixels.sampleBestOfNeighborhood(uNorm, vNorm, 28);
             }
@@ -175,12 +176,6 @@ final class BlockUvTexelSampler
     static boolean shouldContinueThroughTexel(int textureAlpha)
     {
         return textureAlpha < (int)(CUTOUT_ALPHA_CONTINUE * 255.0f);
-    }
-
-    private static boolean isFireLikeState(BlockState state)
-    {
-        return state.is(Blocks.FIRE) || state.is(Blocks.SOUL_FIRE)
-                || state.is(Blocks.CAMPFIRE) || state.is(Blocks.SOUL_CAMPFIRE);
     }
 
     private static Object[] pickBestQuad(List<BakedQuad> quads, double lx, double ly, double lz)

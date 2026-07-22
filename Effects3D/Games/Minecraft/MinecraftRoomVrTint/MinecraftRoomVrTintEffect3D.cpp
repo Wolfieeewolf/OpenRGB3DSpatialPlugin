@@ -6,7 +6,7 @@
 REGISTER_EFFECT_3D(MinecraftRoomVrTintEffect3D);
 
 MinecraftRoomVrTintEffect3D::MinecraftRoomVrTintEffect3D(QWidget* parent)
-    : MinecraftSubEffect3D(MinecraftGame::ChRoomVrTint, "Room tint (VR)", parent)
+    : MinecraftSubEffect3D(MinecraftGame::ChRoomVrTint, "Room Ambilight", parent)
 {
     // Temporal blend washes grass/sky into muddy teal — default off; user can raise if needed.
     effect_smoothing = 0;
@@ -27,7 +27,7 @@ EffectInfo3D MinecraftRoomVrTintEffect3D::GetEffectInfo() const
 void MinecraftRoomVrTintEffect3D::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = MinecraftGame::CreateEffectWidget(parent,
-                                                   QString::fromUtf8("Room tint (VR)"),
+                                                   QString::fromUtf8("Room Ambilight"),
                                                    mc_settings_,
                                                    channels_,
                                                    this,

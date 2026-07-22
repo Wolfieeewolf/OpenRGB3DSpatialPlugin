@@ -571,13 +571,13 @@ QWidget* CreateSettingsWidget(QWidget* parent,
     if(ch(channels, ChRoomVrTint))
     {
         QVBoxLayout* room_layout = content_layout;
-        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Room tint (VR)")))
+        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Room Ambilight")))
         {
             room_layout = body;
         }
         QLabel* hint = new QLabel(
             QStringLiteral(
-                "Ambilight viewport: each LED samples composited world content along a ray "
+                "Room Ambilight: each LED samples composited world content along a ray "
                 "(block textures, plants, fire, glass, mobs, drops) — not a flat face average. "
                 "Place a reference point at eye height, set this effect's 3D origin there, then stand "
                 "in-game at that spot. Mapping is player-local (not world East/South): "
@@ -587,7 +587,7 @@ QWidget* CreateSettingsWidget(QWidget* parent,
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);
-        AddSliderRow(room_layout, panel, QStringLiteral("Room VR strength"), 0, 100, (int)std::lround(std::clamp(s.room_vr_mix, 0.0f, 1.0f) * 100.0f),
+        AddSliderRow(room_layout, panel, QStringLiteral("Strength"), 0, 100, (int)std::lround(std::clamp(s.room_vr_mix, 0.0f, 1.0f) * 100.0f),
                      [&s](int x) { s.room_vr_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
         AddSliderRow(room_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.room_vr_heading_offset_deg),
@@ -641,16 +641,16 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         AddSliderRow(room_layout, panel, QStringLiteral("Color saturation"), 80, 250, (int)std::lround(std::clamp(s.room_vr_saturation, 0.8f, 2.5f) * 100.0f),
                      [&s](int x) { s.room_vr_saturation = std::clamp(x / 100.0f, 0.8f, 2.5f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); },
-                     QStringLiteral("Boost for Room VR colours. Samples are composited world texels "
+                     QStringLiteral("Boost for Room Ambilight colours. Samples are composited world texels "
                                     "(blocks, plants, fire, mobs, drops) along each ray — keep near 100-120% "
                                     "so detail stays readable."));
         AddSliderRow(room_layout, panel, QStringLiteral("Color contrast"), 80, 200, (int)std::lround(std::clamp(s.room_vr_contrast, 0.8f, 2.0f) * 100.0f),
                      [&s](int x) { s.room_vr_contrast = std::clamp(x / 100.0f, 0.8f, 2.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); },
-                     QStringLiteral("Contrast for Room VR texel samples. Lower preserves grass/dirt/flower detail."));
+                     QStringLiteral("Contrast for Room Ambilight texel samples. Lower preserves grass/dirt/flower detail."));
         AddCheckRow(room_layout,
                     panel,
-                    QStringLiteral("Room VR sky / weather"),
+                    QStringLiteral("Sky / weather"),
                     s.room_vr_sky_enabled,
                     [&s](bool v) { s.room_vr_sky_enabled = v; },
                     QStringLiteral("On empty cubemap rays (no block hit inside the room), fill with "

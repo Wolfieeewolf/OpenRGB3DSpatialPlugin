@@ -139,7 +139,7 @@ record SpritePixels(int width, int height, int[] argb, int avgRgb, int avgAlpha,
 
     /**
      * Nearest opaque texel around {@code u}/{@code v}, else opaque average.
-     * Search radius is capped so Room VR sampling stays cheap on large pack textures.
+     * Search radius is capped so Room Ambilight sampling stays cheap on large pack textures.
      */
     int sampleOpaqueNear(float u, float v, int minAlpha)
     {
@@ -271,6 +271,16 @@ record SpritePixels(int width, int height, int[] argb, int avgRgb, int avgAlpha,
             if(luma > 200 && chroma < 40)
             {
                 score += 180;
+            }
+            // Warm torch/lantern flame tip over brown stick wood.
+            if(r > g + 12 && r > b + 12 && luma > 70)
+            {
+                score += 120 + (r - g);
+            }
+            // Cool soul-flame blues.
+            if(b > r + 20 && b > g + 10 && luma > 60)
+            {
+                score += 100 + (b - r);
             }
         }
         else

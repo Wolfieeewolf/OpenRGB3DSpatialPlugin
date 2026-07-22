@@ -139,7 +139,7 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 ## Game / Minecraft and similar effects
 
 - Telemetry (UDP on localhost for pose/vitals/damage) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
-- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room tint (VR)**. Room VR colours come from the Fabric mod over **room-sample SHM** (cubemap texels), not UDP colour streams.
+- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room Ambilight**. Room Ambilight colours come from the Fabric mod over **room-sample SHM** (cubemap texels), not UDP colour streams.
 - Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
 
 ## UI
@@ -160,7 +160,7 @@ Default rule for every effect: **reuse existing panels and helpers before writin
 
 **Add new UI only when** the control is truly effect-specific or no shared helper exists yet—and if two or more effects need the same custom control, add or extend a shared helper (like `Effects3D/AudioReactiveUi.h`) instead of duplicating code.
 
-Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path. **Minecraft** game layers use dedicated settings under `Effects3D/Games/Minecraft/` (**Room tint (VR)** drives the SHM cubemap path). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
+Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path. **Minecraft** game layers use dedicated settings under `Effects3D/Games/Minecraft/` (**Room Ambilight** drives the SHM cubemap path). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
 
 ### Effect settings tab order (stack / library)
 

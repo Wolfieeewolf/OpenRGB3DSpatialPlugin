@@ -58,6 +58,71 @@ final class BlockDisplayColorSampler
                 || state.is(Blocks.SWEET_BERRY_BUSH);
     }
 
+    /** Fire / campfire — cutout emissive overlay. */
+    static boolean isFireLike(BlockState state)
+    {
+        return state != null && (state.is(Blocks.FIRE) || state.is(Blocks.SOUL_FIRE)
+                || state.is(Blocks.CAMPFIRE) || state.is(Blocks.SOUL_CAMPFIRE));
+    }
+
+    /**
+     * Torches, lanterns, candles, end rods — small bright sources that must read as warm/cool
+     * light on LEDs, not as a dim stick washed into the wall behind them.
+     */
+    static boolean isPointLightEmissive(BlockState state)
+    {
+        if(state == null)
+        {
+            return false;
+        }
+        if(state.is(Blocks.TORCH) || state.is(Blocks.WALL_TORCH)
+                || state.is(Blocks.SOUL_TORCH) || state.is(Blocks.SOUL_WALL_TORCH)
+                || state.is(Blocks.REDSTONE_TORCH) || state.is(Blocks.REDSTONE_WALL_TORCH)
+                || state.is(Blocks.LANTERN) || state.is(Blocks.SOUL_LANTERN)
+                || state.is(Blocks.END_ROD))
+        {
+            return true;
+        }
+        if(state.is(BlockTags.CANDLES) || state.is(BlockTags.CANDLE_CAKES))
+        {
+            return isLitCandle(state);
+        }
+        return false;
+    }
+
+    private static boolean isLitCandle(BlockState state)
+    {
+        for(var prop : state.getProperties())
+        {
+            if(prop.getName().equals("lit") && state.getValue(prop) instanceof Boolean lit)
+            {
+                return lit;
+            }
+        }
+        // Untyped / missing lit — treat as lit so candles still show.
+        return true;
+    }
+
+    /** Fallback flame colour when UV hits a transparent hole or stick-only average. */
+    static int pointLightFallbackRgb(BlockState state)
+    {
+        if(state.is(Blocks.SOUL_TORCH) || state.is(Blocks.SOUL_WALL_TORCH)
+                || state.is(Blocks.SOUL_LANTERN) || state.is(Blocks.SOUL_FIRE)
+                || state.is(Blocks.SOUL_CAMPFIRE))
+        {
+            return 0x5AD4FF;
+        }
+        if(state.is(Blocks.REDSTONE_TORCH) || state.is(Blocks.REDSTONE_WALL_TORCH))
+        {
+            return 0xFF3A28;
+        }
+        if(state.is(Blocks.END_ROD))
+        {
+            return 0xF0E8FF;
+        }
+        return 0xFFB24A;
+    }
+
     static boolean continuesViewportRay(BlockState state, FluidState fluid, int coverAlpha)
     {
         // Leaf canopies are full surfaces for LEDs — do not punch through holes to sky (reads white).
@@ -74,6 +139,12 @@ final class BlockDisplayColorSampler
         {
             // Fire is a cutout — composite, then keep going so ground behind still contributes.
             return true;
+        }
+        // Torches / lanterns: stop on a solid flame texel so the wall behind cannot bury them.
+        // Transparent sprite holes still pass through.
+        if(isPointLightEmissive(state))
+        {
+            return coverAlpha < 110;
         }
         // Flowers / crops: stop when we actually hit a petal/veg texel so grass behind cannot wash
         // white/pink into light green. Empty sprite holes still pass through.
@@ -158,7 +229,7 @@ final class BlockDisplayColorSampler
                 || state.is(Blocks.MANGROVE_PROPAGULE);
     }
 
-    /** Powder snow is denser than a carpet — soft continue, not a hard wall for Room VR. */
+    /** Powder snow is denser than a carpet — soft continue, not a hard wall for Room Ambilight. */
     static boolean isSoftWeatherVolume(BlockState state)
     {
         return state != null && state.is(Blocks.POWDER_SNOW);
@@ -186,6 +257,17 @@ final class BlockDisplayColorSampler
         if(isFireLike(state))
         {
             return textureAlpha >= 0 ? ColorMath.clamp255(Math.max(140, textureAlpha)) : 175;
+        }
+        if(isPointLightEmissive(state))
+        {
+            // Keep torch/lantern flame opaque enough to own the LED colour.
+            if(textureAlpha >= 0)
+            {
+                return textureAlpha < 36
+                        ? ColorMath.clamp255(textureAlpha)
+                        : ColorMath.clamp255(Math.max(210, textureAlpha));
+            }
+            return 230;
         }
         if(state.is(Blocks.MAGMA_BLOCK))
         {
@@ -308,13 +390,28 @@ final class BlockDisplayColorSampler
             writeEmissiveLayer(boostRgb(rgb, EMISSIVE_SATURATION), Math.max(alpha, 160), out);
             return;
         }
+        if(isPointLightEmissive(state))
+        {
+            // Stick / hole texels → warm flame fallback so torches never vanish into the wall.
+            if(texel[3] < 50 || isNearGrayOrWhite(rgb) || isDimStickRgb(rgb))
+            {
+                rgb = pointLightFallbackRgb(state);
+                texel[3] = 220;
+            }
+            writeEmissiveLayer(boostRgb(rgb, EMISSIVE_SATURATION), Math.max(alpha, 200), out);
+            return;
+        }
         writeLitLayer(world, pos, rgb, alpha, out);
     }
 
-    private static boolean isFireLike(BlockState state)
+    private static boolean isDimStickRgb(int rgb)
     {
-        return state.is(Blocks.FIRE) || state.is(Blocks.SOUL_FIRE)
-                || state.is(Blocks.CAMPFIRE) || state.is(Blocks.SOUL_CAMPFIRE);
+        final int r = (rgb >> 16) & 0xFF;
+        final int g = (rgb >> 8) & 0xFF;
+        final int b = rgb & 0xFF;
+        final int luma = (r * 3 + g * 6 + b) / 10;
+        // Dark brown torch stick — not the flame tip.
+        return luma < 90 && r < 140;
     }
 
     private static int boostRgb(int rgb, float sat)

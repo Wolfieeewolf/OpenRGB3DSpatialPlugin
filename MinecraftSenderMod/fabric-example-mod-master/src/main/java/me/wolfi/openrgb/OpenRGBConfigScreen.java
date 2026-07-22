@@ -59,7 +59,7 @@ public class OpenRGBConfigScreen extends Screen
         y += 28;
 
         roomSampleButton = CycleButton.onOffBuilder(config.sendRoomSampleFrames)
-                .create(cx, y, bw, 20, Component.literal("Room VR cubemap (mapped LEDs)"), (btn, val) -> config.sendRoomSampleFrames = val);
+                .create(cx, y, bw, 20, Component.literal("Room Ambilight cubemap (mapped LEDs)"), (btn, val) -> config.sendRoomSampleFrames = val);
         addRenderableWidget(roomSampleButton);
         y += 28;
 

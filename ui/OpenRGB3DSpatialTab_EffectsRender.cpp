@@ -505,7 +505,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         world_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
     }
 
-    // LED-first Room VR: publish against the global room grid + all layout LED room positions.
+    // LED-first Room Ambilight: publish against the global room grid + all layout LED room positions.
     // (Effect-local zone grids must not be used for room bounds — that mapped LEDs to the wrong side.)
     {
         RoomSampleConfigPublisher::SetPublishRoomGrid(room_grid);

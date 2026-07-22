@@ -27,7 +27,7 @@ The whole plugin is **experimental**. Pieces land at different levels of polish:
 - **Spatial layout and stacking** — This is the backbone: 3D grid, overlays, and driving LEDs from that model. It is the most “together” part of the project, and still evolving.
 - **Effects** — A **mix**. Some effects feel great and behave well in 3D; others are **lackluster** or need more tuning, presets, or UX. Treat the library as a grab bag until you find favorites that match your setup.
 - **Screen mirror / ambilight** — **Works**, but it is **experimental**, especially the idea of **mapping live capture into 3D space** (planes, zones, room grid). Expect to tune capture, geometry, and quality settings; behavior can depend on GPU, HDR, and Windows compositor quirks.
-- **Gaming integration** — **Minecraft** uses **Room VR** (room-sample shared memory for ambilight-style viewport colours) plus UDP telemetry for vitals and damage. Treat it as functional best-effort; report issues you hit.
+- **Gaming integration** — **Minecraft** uses **Room Ambilight** (room-sample shared memory for viewport colours on the physical LED room) plus UDP telemetry for vitals and damage. Treat it as functional best-effort; report issues you hit.
 
 Until you have tried a feature on **your** PC, treat it as **unproven** for you—not “done” for everyone.
 
