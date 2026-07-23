@@ -34,6 +34,8 @@ class QHideEvent;
 class QShowEvent;
 class QStackedWidget;
 
+namespace EffectPack { struct Pack; }
+
 #include "OpenRGBPluginInterface.h"
 #include "LEDPosition3D.h"
 #include "LEDViewport3D.h"
@@ -75,6 +77,7 @@ class OpenRGB3DSpatialTab : public QWidget
     friend class EffectLibraryPanel;
     friend class EffectStackPanel;
     friend class EffectPackPanel;
+    friend class EffectPackEditorDialog;
     friend class ZonesPanel;
     friend class EffectGlobalSettingsPanel;
     friend class AudioInputPanel;
@@ -105,6 +108,14 @@ public:
     void SetScenePositionControlsMm(double x_mm, double y_mm, double z_mm);
     void ApplyScenePositionAbsoluteMm(int axis, double value_mm);
     void ScenePositionAxisLimitsMm(int axis, double& min_mm, double& max_mm) const;
+
+    /** Pause spatial stack, then drive hardware + viewport from an effect pack. */
+    void PrepareEffectPackPreview();
+    void ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms);
+    const std::vector<std::unique_ptr<ControllerTransform>>& GetControllerTransforms() const
+    {
+        return controller_transforms;
+    }
 
 protected:
     void showEvent(QShowEvent* event) override;

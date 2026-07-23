@@ -1,6 +1,6 @@
 # Effect / Event Maker (design)
 
-Status: **in progress** — pack list + modeless editor + device preview working; event bindings next.
+Status: **in progress** — viewport-synced preview + xLights-style timeline editor; event bindings next.
 
 Captures the agreed direction: plugin-wide user-authored effect packs bound to event catalogs (games, Windows, manual, later media).
 

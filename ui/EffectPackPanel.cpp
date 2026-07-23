@@ -2,7 +2,6 @@
 
 #include "EffectPackPanel.h"
 #include "EffectPackEditorDialog.h"
-#include "EffectPacks/EffectPackApplier.h"
 #include "EffectPacks/EffectPackLibrary.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginSettingsPaths.h"
@@ -176,7 +175,7 @@ EffectPackEditorDialog* EffectPackPanel::ensureEditor()
     }
     if(!editor_)
     {
-        editor_ = new EffectPackEditorDialog(tab_->resource_manager, tab_);
+    editor_ = new EffectPackEditorDialog(tab_, tab_);
         connect(editor_, &EffectPackEditorDialog::packSaved, this, &EffectPackPanel::onEditorSaved);
         connect(editor_, &EffectPackEditorDialog::previewStarted, this, &EffectPackPanel::onEditorPreviewStarted);
     }
@@ -252,7 +251,7 @@ void EffectPackPanel::onEditorPreviewStarted()
     stopPreview();
     if(tab_)
     {
-        tab_->stopEffectClicked();
+        tab_->PrepareEffectPackPreview();
     }
 }
 
@@ -285,7 +284,8 @@ void EffectPackPanel::onPreview()
         return;
     }
 
-    tab_->stopEffectClicked();
+    // Preview owns the devices — pause the spatial effect stack.
+    tab_->PrepareEffectPackPreview();
 
     const auto controllers = tab_->resource_manager->GetRGBControllers();
     if(controllers.empty())
@@ -294,7 +294,6 @@ void EffectPackPanel::onPreview()
                              QStringLiteral("No OpenRGB controllers available."));
         return;
     }
-    EffectPack::PrepareControllersForPreview(controllers);
 
     player_.SetPack(pack);
     player_.Play();
@@ -330,7 +329,7 @@ void EffectPackPanel::onTick()
     }
 
     const auto controllers = tab_->resource_manager->GetRGBControllers();
-    EffectPack::ApplyPackFrame(player_.GetPack(), player_.LocalMs(), controllers);
+    tab_->ApplyEffectPackPreviewFrame(player_.GetPack(), player_.LocalMs());
 
     const int local = player_.LocalMs();
     const int dur = std::max(1, player_.GetPack().duration_ms);

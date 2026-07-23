@@ -7,6 +7,7 @@
 #include "EffectGlobalSettingsPanel.h"
 #include "EffectLibraryPanel.h"
 #include "EffectPackPanel.h"
+#include "EffectPacks/EffectPackApplier.h"
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
@@ -173,6 +174,29 @@ void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
     if(viewport)
     {
         viewport->SetViewportPaintingEnabled(false);
+    }
+}
+
+void OpenRGB3DSpatialTab::PrepareEffectPackPreview()
+{
+    stopEffectClicked();
+    if(!resource_manager)
+    {
+        return;
+    }
+    EffectPack::PrepareControllersForPreview(resource_manager->GetRGBControllers());
+}
+
+void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms)
+{
+    if(!resource_manager)
+    {
+        return;
+    }
+    EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms);
+    if(viewport)
+    {
+        viewport->UpdateColors();
     }
 }
 
