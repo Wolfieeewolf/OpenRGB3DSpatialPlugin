@@ -27,7 +27,7 @@ void EnsureLibrarySeeded(const filesystem::path& dir)
                 continue;
             }
             const std::string name = entry.path().filename().string();
-            if(name.size() > 13 && name.compare(name.size() - 13, 13, kFileSuffix) == 0)
+            if(IsPackFileName(name))
             {
                 any = true;
                 break;
@@ -42,7 +42,7 @@ void EnsureLibrarySeeded(const filesystem::path& dir)
     const Pack example = MakeExampleRainbowWash();
     const filesystem::path out = dir / (example.id + kFileSuffix);
     std::string err;
-    SaveToFile(out.string(), example, &err);
+    SaveToFile(out, example, &err);
 }
 
 std::vector<PackListEntry> ListPacks(const filesystem::path& dir)
@@ -61,13 +61,13 @@ std::vector<PackListEntry> ListPacks(const filesystem::path& dir)
         }
         const filesystem::path path = entry.path();
         const std::string name = path.filename().string();
-        if(name.size() <= 13 || name.compare(name.size() - 13, 13, kFileSuffix) != 0)
+        if(!IsPackFileName(name))
         {
             continue;
         }
         Pack pack;
         std::string err;
-        if(!LoadFromFile(path.string(), &pack, &err))
+        if(!LoadFromFile(path, &pack, &err))
         {
             continue;
         }
@@ -92,7 +92,7 @@ std::vector<PackListEntry> ListPacks(const filesystem::path& dir)
 
 bool LoadPackByPath(const filesystem::path& path, Pack* out, std::string* error)
 {
-    return LoadFromFile(path.string(), out, error);
+    return LoadFromFile(path, out, error);
 }
 
 } // namespace EffectPack

@@ -187,6 +187,7 @@ HEADERS += \
     ui/ControllerListPanel.h \
     ui/EffectLibraryPanel.h \
     ui/EffectPackPanel.h \
+    ui/EffectPackEditorDialog.h \
     ui/EffectStackPanel.h \
     ui/ZonesPanel.h \
     ui/EffectGlobalSettingsPanel.h \
@@ -350,6 +351,7 @@ SOURCES += \
     ui/ControllerListPanel.cpp \
     ui/EffectLibraryPanel.cpp \
     ui/EffectPackPanel.cpp \
+    ui/EffectPackEditorDialog.cpp \
     ui/EffectStackPanel.cpp \
     ui/ZonesPanel.cpp \
     ui/EffectGlobalSettingsPanel.cpp \
@@ -486,6 +488,7 @@ FORMS += \
     ui/forms/MediaTextureAmbienceBlock.ui \
     ui/forms/EffectLibraryPanel.ui \
     ui/forms/EffectPackPanel.ui \
+    ui/forms/EffectPackEditorDialog.ui \
     ui/forms/EffectStackPanel.ui \
     ui/forms/ZonesPanel.ui \
     ui/forms/EffectGlobalSettingsPanel.ui \

@@ -12,7 +12,7 @@
    <item>
     <widget class="QLabel" name="hintLabel">
      <property name="text">
-      <string>User-authored clips (preview on devices). Event bindings come next.</string>
+      <string>Custom clips — Preview here, or open the editor window to build them.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -58,11 +58,29 @@
     </layout>
    </item>
    <item>
-    <widget class="QPushButton" name="seedExampleButton">
-     <property name="text">
-      <string>Create rainbow example</string>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="editRow">
+     <item>
+      <widget class="QPushButton" name="newButton">
+       <property name="text">
+        <string>New…</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="editButton">
+       <property name="text">
+        <string>Edit…</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="seedExampleButton">
+       <property name="text">
+        <string>Rainbow</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QLabel" name="statusLabel">

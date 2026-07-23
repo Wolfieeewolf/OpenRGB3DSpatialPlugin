@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectPackPanel.h"
+#include "EffectPackEditorDialog.h"
 #include "EffectPacks/EffectPackApplier.h"
 #include "EffectPacks/EffectPackLibrary.h"
 #include "OpenRGB3DSpatialTab.h"
@@ -17,6 +18,27 @@
 #include <algorithm>
 #include <system_error>
 
+namespace
+{
+QString PathToQString(const filesystem::path& path)
+{
+#ifdef _WIN32
+    return QString::fromStdWString(path.wstring());
+#else
+    return QString::fromStdString(path.string());
+#endif
+}
+
+filesystem::path QStringToPath(const QString& s)
+{
+#ifdef _WIN32
+    return filesystem::path(s.toStdWString());
+#else
+    return filesystem::path(s.toStdString());
+#endif
+}
+} // namespace
+
 EffectPackPanel::EffectPackPanel(QWidget* parent)
     : QGroupBox(parent)
     , ui(new Ui::EffectPackPanel)
@@ -30,6 +52,11 @@ EffectPackPanel::EffectPackPanel(QWidget* parent)
 EffectPackPanel::~EffectPackPanel()
 {
     stopPreview();
+    if(editor_)
+    {
+        editor_->stopPreview();
+        editor_->close();
+    }
     delete ui;
 }
 
@@ -47,9 +74,11 @@ void EffectPackPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->refreshButton, &QPushButton::clicked, this, &EffectPackPanel::onRefresh);
     connect(ui->previewButton, &QPushButton::clicked, this, &EffectPackPanel::onPreview);
     connect(ui->stopButton, &QPushButton::clicked, this, &EffectPackPanel::onStop);
+    connect(ui->newButton, &QPushButton::clicked, this, &EffectPackPanel::onNew);
+    connect(ui->editButton, &QPushButton::clicked, this, &EffectPackPanel::onEdit);
     connect(ui->seedExampleButton, &QPushButton::clicked, this, &EffectPackPanel::onSeedExample);
     connect(ui->packList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) {
-        onPreview();
+        onEdit();
     });
 
     populateList();
@@ -62,6 +91,23 @@ filesystem::path EffectPackPanel::packsDir() const
         return {};
     }
     return PluginSettingsPaths::EffectPacksDir(tab_->resource_manager);
+}
+
+QString EffectPackPanel::pathFromItem(QListWidgetItem* item) const
+{
+    return item ? item->data(Qt::UserRole).toString() : QString();
+}
+
+void EffectPackPanel::selectPathInList(const QString& path)
+{
+    for(int i = 0; i < ui->packList->count(); ++i)
+    {
+        if(pathFromItem(ui->packList->item(i)) == path)
+        {
+            ui->packList->setCurrentRow(i);
+            return;
+        }
+    }
 }
 
 void EffectPackPanel::populateList()
@@ -83,14 +129,14 @@ void EffectPackPanel::populateList()
                 .arg(QString::fromStdString(entry.name))
                 .arg(entry.duration_ms)
                 .arg(QString::fromStdString(entry.loop)));
-        item->setData(Qt::UserRole, QString::fromStdString(entry.path.string()));
+        item->setData(Qt::UserRole, PathToQString(entry.path));
         item->setData(Qt::UserRole + 1, QString::fromStdString(entry.id));
         ui->packList->addItem(item);
     }
 
     if(packs.empty())
     {
-        ui->statusLabel->setText(QStringLiteral("No packs — create the rainbow example"));
+        ui->statusLabel->setText(QStringLiteral("No packs found in effect-packs/"));
     }
     else if(!player_.IsPlaying())
     {
@@ -104,6 +150,8 @@ void EffectPackPanel::setPlayingUi(bool playing)
     ui->stopButton->setEnabled(playing);
     ui->refreshButton->setEnabled(!playing);
     ui->seedExampleButton->setEnabled(!playing);
+    ui->newButton->setEnabled(!playing);
+    ui->editButton->setEnabled(!playing);
 }
 
 void EffectPackPanel::stopPreview()
@@ -118,6 +166,21 @@ void EffectPackPanel::stopPreview()
     {
         ui->statusLabel->setText(QStringLiteral("Stopped"));
     }
+}
+
+EffectPackEditorDialog* EffectPackPanel::ensureEditor()
+{
+    if(!tab_ || !tab_->resource_manager)
+    {
+        return nullptr;
+    }
+    if(!editor_)
+    {
+        editor_ = new EffectPackEditorDialog(tab_->resource_manager, tab_);
+        connect(editor_, &EffectPackEditorDialog::packSaved, this, &EffectPackPanel::onEditorSaved);
+        connect(editor_, &EffectPackEditorDialog::previewStarted, this, &EffectPackPanel::onEditorPreviewStarted);
+    }
+    return editor_;
 }
 
 void EffectPackPanel::onRefresh()
@@ -138,14 +201,59 @@ void EffectPackPanel::onSeedExample()
     const EffectPack::Pack example = EffectPack::MakeExampleRainbowWash();
     const filesystem::path out = dir / (example.id + EffectPack::kFileSuffix);
     std::string err;
-    if(!EffectPack::SaveToFile(out.string(), example, &err))
+    if(!EffectPack::SaveToFile(out, example, &err))
     {
         QMessageBox::warning(this, QStringLiteral("Effect Packs"),
                              QStringLiteral("Failed to write example:\n%1").arg(QString::fromStdString(err)));
         return;
     }
     populateList();
-    ui->statusLabel->setText(QStringLiteral("Wrote %1").arg(QString::fromStdString(out.filename().string())));
+    selectPathInList(PathToQString(out));
+    ui->statusLabel->setText(QStringLiteral("Wrote %1").arg(PathToQString(out.filename())));
+}
+
+void EffectPackPanel::onNew()
+{
+    EffectPackEditorDialog* editor = ensureEditor();
+    if(!editor)
+    {
+        return;
+    }
+    stopPreview();
+    editor->NewPack(packsDir());
+}
+
+void EffectPackPanel::onEdit()
+{
+    QListWidgetItem* item = ui->packList->currentItem();
+    if(!item)
+    {
+        QMessageBox::information(this, QStringLiteral("Effect Packs"),
+                                 QStringLiteral("Select a pack to edit, or click New."));
+        return;
+    }
+    EffectPackEditorDialog* editor = ensureEditor();
+    if(!editor)
+    {
+        return;
+    }
+    stopPreview();
+    editor->EditPack(QStringToPath(pathFromItem(item)));
+}
+
+void EffectPackPanel::onEditorSaved(const QString& path)
+{
+    populateList();
+    selectPathInList(path);
+}
+
+void EffectPackPanel::onEditorPreviewStarted()
+{
+    stopPreview();
+    if(tab_)
+    {
+        tab_->stopEffectClicked();
+    }
 }
 
 void EffectPackPanel::onPreview()
@@ -162,17 +270,21 @@ void EffectPackPanel::onPreview()
         return;
     }
 
-    const QString path = item->data(Qt::UserRole).toString();
+    if(editor_)
+    {
+        editor_->stopPreview();
+    }
+
+    const filesystem::path path = QStringToPath(pathFromItem(item));
     EffectPack::Pack pack;
     std::string err;
-    if(!EffectPack::LoadPackByPath(path.toStdString(), &pack, &err))
+    if(!EffectPack::LoadPackByPath(path, &pack, &err))
     {
         QMessageBox::warning(this, QStringLiteral("Effect Packs"),
                              QStringLiteral("Failed to load pack:\n%1").arg(QString::fromStdString(err)));
         return;
     }
 
-    // Preview owns the devices — pause the spatial effect stack.
     tab_->stopEffectClicked();
 
     const auto controllers = tab_->resource_manager->GetRGBControllers();

@@ -2,6 +2,7 @@
 #pragma once
 
 #include "RGBController.h"
+#include "filesystem.h"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -13,6 +14,13 @@ constexpr int kFormatVersion = 1;
 constexpr int kMaxDurationMs = 60000;
 constexpr const char* kFormatId = "openrgb3d.effect_pack";
 constexpr const char* kFileSuffix = ".oreffect.json";
+
+inline bool IsPackFileName(const std::string& name)
+{
+    const std::string suffix = kFileSuffix;
+    return name.size() >= suffix.size()
+        && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
 
 enum class LoopMode
 {
@@ -83,8 +91,8 @@ bool EvaluateTrackColor(const Track& track, int local_ms, RGBColor* out_color, f
 
 nlohmann::json ToJson(const Pack& pack);
 bool FromJson(const nlohmann::json& j, Pack* out, std::string* error);
-bool LoadFromFile(const std::string& path, Pack* out, std::string* error);
-bool SaveToFile(const std::string& path, const Pack& pack, std::string* error);
+bool LoadFromFile(const filesystem::path& path, Pack* out, std::string* error);
+bool SaveToFile(const filesystem::path& path, const Pack& pack, std::string* error);
 
 Pack MakeExampleRainbowWash();
 

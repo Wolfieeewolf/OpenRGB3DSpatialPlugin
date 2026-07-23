@@ -524,14 +524,14 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
     return true;
 }
 
-bool LoadFromFile(const std::string& path, Pack* out, std::string* error)
+bool LoadFromFile(const filesystem::path& path, Pack* out, std::string* error)
 {
-    std::ifstream in(path);
+    std::ifstream in(path, std::ios::binary);
     if(!in)
     {
         if(error)
         {
-            *error = "failed to open pack file";
+            *error = "failed to open pack file: " + path.string();
         }
         return false;
     }
@@ -551,14 +551,14 @@ bool LoadFromFile(const std::string& path, Pack* out, std::string* error)
     return FromJson(j, out, error);
 }
 
-bool SaveToFile(const std::string& path, const Pack& pack, std::string* error)
+bool SaveToFile(const filesystem::path& path, const Pack& pack, std::string* error)
 {
-    std::ofstream out(path);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if(!out)
     {
         if(error)
         {
-            *error = "failed to write pack file";
+            *error = "failed to write pack file: " + path.string();
         }
         return false;
     }
@@ -574,7 +574,7 @@ bool SaveToFile(const std::string& path, const Pack& pack, std::string* error)
         }
         return false;
     }
-    return true;
+    return static_cast<bool>(out);
 }
 
 Pack MakeExampleRainbowWash()
