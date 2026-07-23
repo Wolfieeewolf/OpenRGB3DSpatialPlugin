@@ -55,10 +55,9 @@ static void BuildImportantCubemapTexels(const RoomSampleFrameProtocol::ConfigHea
 
     const int face_size = hdr.size_x;
     const float scale = std::clamp(hdr.room_to_world_scale, 0.005f, 0.80f);
-    const float grid_units_per_block = 1.0f / scale;
-    const float eff_ox = hdr.effect_origin_x - hdr.pos_offset_right_blocks * grid_units_per_block;
-    const float eff_oy = hdr.effect_origin_y - hdr.pos_offset_up_blocks * grid_units_per_block;
-    const float eff_oz = hdr.effect_origin_z + hdr.pos_offset_forward_blocks * grid_units_per_block;
+    const float eff_ox = hdr.effect_origin_x;
+    const float eff_oy = hdr.effect_origin_y;
+    const float eff_oz = hdr.effect_origin_z;
 
     std::unordered_set<std::uint32_t> unique;
     unique.reserve(std::min<std::size_t>(led_xyz.size() / 3u * 4u, RoomSampleFrameProtocol::kMaxImportantCells));
@@ -81,14 +80,6 @@ static void BuildImportantCubemapTexels(const RoomSampleFrameProtocol::ConfigHea
         float dx = (led_xyz[i] - eff_ox) * scale;
         float dy = (led_xyz[i + 1] - eff_oy) * scale;
         float dz = (eff_oz - led_xyz[i + 2]) * scale;
-        if((hdr.flags & RoomSampleFrameProtocol::kFlagFlipRight) != 0)
-        {
-            dx = -dx;
-        }
-        if((hdr.flags & RoomSampleFrameProtocol::kFlagFlipForward) != 0)
-        {
-            dz = -dz;
-        }
         const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
         if(len <= 1e-5f)
         {
@@ -271,14 +262,6 @@ void PublishIfNeeded(const GridContext3D& grid,
     {
         hdr.flags |= RoomSampleFrameProtocol::kFlagSkyEnabled;
     }
-    if(settings.room_ambilight_flip_right)
-    {
-        hdr.flags |= RoomSampleFrameProtocol::kFlagFlipRight;
-    }
-    if(settings.room_ambilight_flip_forward)
-    {
-        hdr.flags |= RoomSampleFrameProtocol::kFlagFlipForward;
-    }
     hdr.target_cells = (std::uint32_t)((std::size_t)nx * (std::size_t)ny * (std::size_t)nz);
     hdr.size_x = nx;
     hdr.size_y = ny;
@@ -293,10 +276,11 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.effect_origin_y = effect_origin_y;
     hdr.effect_origin_z = effect_origin_z;
     hdr.room_to_world_scale = std::clamp(room_to_world_scale, 0.005f, 0.80f);
-    hdr.heading_offset_deg = settings.room_ambilight_heading_offset_deg;
-    hdr.pos_offset_forward_blocks = settings.room_ambilight_pos_offset_forward_blocks;
-    hdr.pos_offset_right_blocks = settings.room_ambilight_pos_offset_right_blocks;
-    hdr.pos_offset_up_blocks = settings.room_ambilight_pos_offset_up_blocks;
+    // Alignment floats kept in the SHM header for layout stability; always identity.
+    hdr.heading_offset_deg = 0.0f;
+    hdr.pos_offset_forward_blocks = 0.0f;
+    hdr.pos_offset_right_blocks = 0.0f;
+    hdr.pos_offset_up_blocks = 0.0f;
 
     const std::uint32_t uv_dim =
         (std::uint32_t)RoomSampleFrameProtocol::SnapUvTextureDim(settings.room_ambilight_texture_uv_dim);

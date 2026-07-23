@@ -34,9 +34,9 @@ constexpr std::uint32_t kFlagSkyEnabled = 1u << 3;
  * Only LED-covered texels are filled (important indices); the rest stay unused.
  */
 constexpr std::uint32_t kFlagCubemap = 1u << 4;
-/** Mirror player-local +X (right ↔ left) — room layout vs look alignment. */
+/** Unused — kept so flag bit indices stay stable. */
 constexpr std::uint32_t kFlagFlipRight = 1u << 5;
-/** Mirror player-local +Z (forward ↔ back). Room +Z is behind the origin by default. */
+/** Unused — kept so flag bit indices stay stable. */
 constexpr std::uint32_t kFlagFlipForward = 1u << 6;
 constexpr std::size_t kDefaultTargetCells = 800u * 600u;
 constexpr std::size_t kMaxCells = 512000u;
@@ -96,6 +96,7 @@ struct ConfigHeader
     float effect_origin_y;
     float effect_origin_z;
     float room_to_world_scale;
+    /** Unused alignment slots (always 0) — kept for 128-byte header layout. */
     float heading_offset_deg;
     float pos_offset_forward_blocks;
     float pos_offset_right_blocks;

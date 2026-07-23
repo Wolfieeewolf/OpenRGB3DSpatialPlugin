@@ -17,8 +17,6 @@ final class RoomSampleConfigReader
     static final int FLAG_IMPORTANT_CELLS = 1 << 2;
     static final int FLAG_SKY_ENABLED = 1 << 3;
     static final int FLAG_CUBEMAP = 1 << 4;
-    static final int FLAG_FLIP_RIGHT = 1 << 5;
-    static final int FLAG_FLIP_FORWARD = 1 << 6;
     static final int MAX_IMPORTANT_CELLS = 16384;
     /** Offset of reserved[0] where important_cell_count is stored when FLAG_IMPORTANT_CELLS is set. */
     static final int IMPORTANT_COUNT_OFFSET = 92;
@@ -43,10 +41,6 @@ final class RoomSampleConfigReader
         float effectOriginY;
         float effectOriginZ;
         float roomToWorldScale;
-        float headingOffsetDeg;
-        float posOffsetForwardBlocks;
-        float posOffsetRightBlocks;
-        float posOffsetUpBlocks;
         /** Flat indices (ix*sy+iy)*sz+iz covering active LEDs (+ neighbours). Empty = full grid. */
         int[] importantFlatIndices = new int[0];
         /** Block UV sample max side (64/128/256/512/1024). Default HQ experiment = 512. */
@@ -72,16 +66,6 @@ final class RoomSampleConfigReader
         {
             return (flags & FLAG_CUBEMAP) != 0 && sizeX > 0 && sizeX == sizeY && sizeZ == RoomSampleCubemap.FACE_COUNT
                     && sizeX <= RoomSampleCubemap.FACE_SIZE_MAX;
-        }
-
-        boolean flipRight()
-        {
-            return (flags & FLAG_FLIP_RIGHT) != 0;
-        }
-
-        boolean flipForward()
-        {
-            return (flags & FLAG_FLIP_FORWARD) != 0;
         }
     }
 
@@ -135,10 +119,11 @@ final class RoomSampleConfigReader
         cfg.effectOriginY = buffer.getFloat();
         cfg.effectOriginZ = buffer.getFloat();
         cfg.roomToWorldScale = buffer.getFloat();
-        cfg.headingOffsetDeg = buffer.getFloat();
-        cfg.posOffsetForwardBlocks = buffer.getFloat();
-        cfg.posOffsetRightBlocks = buffer.getFloat();
-        cfg.posOffsetUpBlocks = buffer.getFloat();
+        // Unused alignment floats (heading + pos offsets) — skip to keep header layout.
+        buffer.getFloat();
+        buffer.getFloat();
+        buffer.getFloat();
+        buffer.getFloat();
         // target_cells @ 88, reserved starts @ 92
         cfg.uvTextureMaxDim = snapUvTextureDim(
                 ByteBuffer.wrap(bytes, UV_MAX_DIM_OFFSET, 4)

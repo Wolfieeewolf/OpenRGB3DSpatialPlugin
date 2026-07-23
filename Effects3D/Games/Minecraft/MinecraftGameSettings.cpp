@@ -35,21 +35,10 @@ static int get_i(const nlohmann::json& j, const char* k, int d)
 void SettingsToJson(const Settings& s, nlohmann::json& j)
 {
     put_f(j, "damage_flash_decay_s", s.damage_flash_decay_s);
-    put_f(j, "room_ambilight_mix", s.room_ambilight_mix);
-    put_f(j, "room_ambilight_heading_offset_deg", s.room_ambilight_heading_offset_deg);
-    put_f(j, "room_ambilight_pos_offset_forward_blocks", s.room_ambilight_pos_offset_forward_blocks);
-    put_f(j, "room_ambilight_pos_offset_right_blocks", s.room_ambilight_pos_offset_right_blocks);
-    put_f(j, "room_ambilight_pos_offset_up_blocks", s.room_ambilight_pos_offset_up_blocks);
-    put_f(j, "room_ambilight_scale_tune", s.room_ambilight_scale_tune);
-    put_f(j, "room_ambilight_saturation", s.room_ambilight_saturation);
-    put_f(j, "room_ambilight_contrast", s.room_ambilight_contrast);
     put_bool(j, "room_ambilight_sky_enabled", s.room_ambilight_sky_enabled);
-    put_bool(j, "room_ambilight_flip_right", s.room_ambilight_flip_right);
-    put_bool(j, "room_ambilight_flip_forward", s.room_ambilight_flip_forward);
     put_i(j, "room_ambilight_cubemap_face_size", s.room_ambilight_cubemap_face_size);
     put_i(j, "room_ambilight_texture_uv_dim", s.room_ambilight_texture_uv_dim);
     put_f(j, "damage_flash_strength", s.damage_flash_strength);
-    put_f(j, "base_brightness", s.base_brightness);
     put_bool(j, "health_per_heart_strip", s.health_per_heart_strip);
     put_bool(j, "health_per_heart_indexed", s.health_per_heart_indexed);
     put_i(j, "health_leds_per_heart", s.health_leds_per_heart);
@@ -68,22 +57,10 @@ void SettingsToJson(const Settings& s, nlohmann::json& j)
 void SettingsFromJson(const nlohmann::json& j, Settings& s)
 {
     s.damage_flash_decay_s = get_f(j, "damage_flash_decay_s", s.damage_flash_decay_s);
-    s.room_ambilight_mix = get_f(j, "room_ambilight_mix", s.room_ambilight_mix);
-    s.room_ambilight_heading_offset_deg = get_f(j, "room_ambilight_heading_offset_deg", s.room_ambilight_heading_offset_deg);
-    s.room_ambilight_pos_offset_forward_blocks = get_f(j, "room_ambilight_pos_offset_forward_blocks", s.room_ambilight_pos_offset_forward_blocks);
-    s.room_ambilight_pos_offset_right_blocks = get_f(j, "room_ambilight_pos_offset_right_blocks", s.room_ambilight_pos_offset_right_blocks);
-    s.room_ambilight_pos_offset_up_blocks = get_f(j, "room_ambilight_pos_offset_up_blocks", s.room_ambilight_pos_offset_up_blocks);
-    s.room_ambilight_scale_tune = get_f(j, "room_ambilight_scale_tune", s.room_ambilight_scale_tune);
-    s.room_ambilight_saturation = get_f(j, "room_ambilight_saturation", s.room_ambilight_saturation);
-    s.room_ambilight_contrast = get_f(j, "room_ambilight_contrast", s.room_ambilight_contrast);
     s.room_ambilight_sky_enabled = get_bool(j, "room_ambilight_sky_enabled", s.room_ambilight_sky_enabled);
-    s.room_ambilight_flip_right = get_bool(j, "room_ambilight_flip_right", s.room_ambilight_flip_right);
-    s.room_ambilight_flip_forward = get_bool(j, "room_ambilight_flip_forward", s.room_ambilight_flip_forward);
-    // Obsolete keys (world tint / lightning / sharp_sampling / old cubemap toggles) are ignored.
     s.room_ambilight_cubemap_face_size = get_i(j, "room_ambilight_cubemap_face_size", s.room_ambilight_cubemap_face_size);
     s.room_ambilight_texture_uv_dim = get_i(j, "room_ambilight_texture_uv_dim", s.room_ambilight_texture_uv_dim);
     s.damage_flash_strength = get_f(j, "damage_flash_strength", s.damage_flash_strength);
-    s.base_brightness = get_f(j, "base_brightness", s.base_brightness);
     s.health_per_heart_strip = get_bool(j, "health_per_heart_strip", s.health_per_heart_strip);
     s.health_per_heart_indexed = get_bool(j, "health_per_heart_indexed", s.health_per_heart_indexed);
     s.health_leds_per_heart = get_i(j, "health_leds_per_heart", s.health_leds_per_heart);
@@ -99,18 +76,6 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.damage_dir_sharpness = get_f(j, "damage_dir_sharpness", s.damage_dir_sharpness);
 
     s.damage_flash_decay_s = std::clamp(s.damage_flash_decay_s, 0.10f, 0.90f);
-    // Room Ambilight UI only exposes sky + quality; force alignment/polish knobs to identity.
-    s.room_ambilight_mix = 1.0f;
-    s.room_ambilight_heading_offset_deg = 0.0f;
-    s.room_ambilight_pos_offset_forward_blocks = 0.0f;
-    s.room_ambilight_pos_offset_right_blocks = 0.0f;
-    s.room_ambilight_pos_offset_up_blocks = 0.0f;
-    s.room_ambilight_scale_tune = 1.0f;
-    s.room_ambilight_saturation = 1.0f;
-    s.room_ambilight_contrast = 1.0f;
-    s.room_ambilight_flip_right = false;
-    s.room_ambilight_flip_forward = false;
-    s.base_brightness = 1.0f;
     s.room_ambilight_cubemap_face_size = std::clamp(s.room_ambilight_cubemap_face_size, 32, 512);
     s.room_ambilight_texture_uv_dim = RoomSampleFrameProtocol::SnapUvTextureDim(
         std::clamp(s.room_ambilight_texture_uv_dim, 64, 4096));

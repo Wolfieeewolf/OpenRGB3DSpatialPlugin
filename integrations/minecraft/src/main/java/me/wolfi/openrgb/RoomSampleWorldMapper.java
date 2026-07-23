@@ -34,25 +34,11 @@ final class RoomSampleWorldMapper
     static Vec3 mapRoomToWorldTarget(RoomSampleConfigReader.Config cfg, LocalPlayer player, float roomX, float roomY, float roomZ)
     {
         final float scale = Math.max(0.005f, Math.min(0.80f, cfg.roomToWorldScale));
-        final float gridUnitsPerBlock = 1.0f / scale;
+        final float rightBlocks = (roomX - cfg.effectOriginX) * scale;
+        final float upBlocks = (roomY - cfg.effectOriginY) * scale;
+        final float forwardBlocks = (cfg.effectOriginZ - roomZ) * scale;
 
-        final float effOx = cfg.effectOriginX - cfg.posOffsetRightBlocks * gridUnitsPerBlock;
-        final float effOy = cfg.effectOriginY - cfg.posOffsetUpBlocks * gridUnitsPerBlock;
-        final float effOz = cfg.effectOriginZ + cfg.posOffsetForwardBlocks * gridUnitsPerBlock;
-
-        float rightBlocks = (roomX - effOx) * scale;
-        final float upBlocks = (roomY - effOy) * scale;
-        float forwardBlocks = (effOz - roomZ) * scale;
-        if(cfg.flipRight())
-        {
-            rightBlocks = -rightBlocks;
-        }
-        if(cfg.flipForward())
-        {
-            forwardBlocks = -forwardBlocks;
-        }
-
-        final Basis basis = buildHorizontalBasis(player, cfg.headingOffsetDeg);
+        final Basis basis = buildHorizontalBasis(player);
         final double ax = player.getX();
         final double ay = player.getEyeY();
         final double az = player.getZ();
@@ -75,21 +61,11 @@ final class RoomSampleWorldMapper
                                          float localForward,
                                          double range)
     {
-        float lr = localRight;
-        float lf = localForward;
-        if(cfg.flipRight())
-        {
-            lr = -lr;
-        }
-        if(cfg.flipForward())
-        {
-            lf = -lf;
-        }
-        final Basis basis = buildHorizontalBasis(player, cfg.headingOffsetDeg);
+        final Basis basis = buildHorizontalBasis(player);
         final Vec3 eye = player.getEyePosition();
-        final double wx = eye.x + range * (lr * basis.rightX + localUp * basis.upX + lf * basis.forwardX);
-        final double wy = eye.y + range * (lr * basis.rightY + localUp * basis.upY + lf * basis.forwardY);
-        final double wz = eye.z + range * (lr * basis.rightZ + localUp * basis.upZ + lf * basis.forwardZ);
+        final double wx = eye.x + range * (localRight * basis.rightX + localUp * basis.upX + localForward * basis.forwardX);
+        final double wy = eye.y + range * (localRight * basis.rightY + localUp * basis.upY + localForward * basis.forwardY);
+        final double wz = eye.z + range * (localRight * basis.rightZ + localUp * basis.upZ + localForward * basis.forwardZ);
         return new Vec3(wx, wy, wz);
     }
 
@@ -102,22 +78,10 @@ final class RoomSampleWorldMapper
                                      float localUp,
                                      float localForward)
     {
-        float lr = localRight;
-        float lf = localForward;
-        if(cfg.flipRight())
-        {
-            lr = -lr;
-        }
-        if(cfg.flipForward())
-        {
-            lf = -lf;
-        }
-
         final float scale = Math.max(0.005f, Math.min(0.80f, cfg.roomToWorldScale));
-        final float gridUnitsPerBlock = 1.0f / scale;
-        final float ox = cfg.effectOriginX - cfg.posOffsetRightBlocks * gridUnitsPerBlock;
-        final float oy = cfg.effectOriginY - cfg.posOffsetUpBlocks * gridUnitsPerBlock;
-        final float oz = cfg.effectOriginZ + cfg.posOffsetForwardBlocks * gridUnitsPerBlock;
+        final float ox = cfg.effectOriginX;
+        final float oy = cfg.effectOriginY;
+        final float oz = cfg.effectOriginZ;
 
         float minR = (cfg.roomMinX - ox) * scale;
         float maxR = (cfg.roomMaxX - ox) * scale;
@@ -126,20 +90,6 @@ final class RoomSampleWorldMapper
         // forwardBlocks = (oz - roomZ) * scale  → roomZ min/max map to forward max/min
         float maxF = (oz - cfg.roomMinZ) * scale;
         float minF = (oz - cfg.roomMaxZ) * scale;
-        if(cfg.flipRight())
-        {
-            final float tMin = -maxR;
-            final float tMax = -minR;
-            minR = tMin;
-            maxR = tMax;
-        }
-        if(cfg.flipForward())
-        {
-            final float tMin = -maxF;
-            final float tMax = -minF;
-            minF = tMin;
-            maxF = tMax;
-        }
         if(minR > maxR)
         {
             final float t = minR;
@@ -160,19 +110,17 @@ final class RoomSampleWorldMapper
         }
 
         double tExit = Double.POSITIVE_INFINITY;
-        tExit = Math.min(tExit, slabExit(lr, minR, maxR));
+        tExit = Math.min(tExit, slabExit(localRight, minR, maxR));
         tExit = Math.min(tExit, slabExit(localUp, minU, maxU));
-        tExit = Math.min(tExit, slabExit(lf, minF, maxF));
+        tExit = Math.min(tExit, slabExit(localForward, minF, maxF));
 
         if(!Double.isFinite(tExit) || tExit < 0.35)
         {
-            // Degenerate direction / origin outside — fall back to room half-diagonal.
             final double hx = Math.max(Math.abs(minR), Math.abs(maxR));
             final double hy = Math.max(Math.abs(minU), Math.abs(maxU));
             final double hz = Math.max(Math.abs(minF), Math.abs(maxF));
             tExit = Math.sqrt(hx * hx + hy * hy + hz * hz);
         }
-        // Small margin so wall LEDs still hit the surface block at the boundary.
         return Math.max(0.5, tExit + 0.35);
     }
 
@@ -190,7 +138,6 @@ final class RoomSampleWorldMapper
     {
         if(Math.abs(dir) < 1e-6f)
         {
-            // Parallel to slab — no exit on this axis (handled by others).
             return Double.POSITIVE_INFINITY;
         }
         final float bound = dir > 0.0f ? max : min;
@@ -227,12 +174,10 @@ final class RoomSampleWorldMapper
     /**
      * Yaw-locked player basis from Minecraft rotation (not view-vector pitch).
      * Yaw 0 = south (+Z), +90 = west (−X) — https://minecraft.wiki/w/Rotation
-     * Avoids look-straight-up degeneracy that snapped forward to world +Z incorrectly.
      */
-    private static Basis buildHorizontalBasis(LocalPlayer player, float headingOffsetDeg)
+    private static Basis buildHorizontalBasis(LocalPlayer player)
     {
-        final double yawRad = Math.toRadians(player.getYRot() + headingOffsetDeg);
-        // Horizontal forward from yaw (pitch ignored so the room does not tilt).
+        final double yawRad = Math.toRadians(player.getYRot());
         double fx = -Math.sin(yawRad);
         double fy = 0.0;
         double fz = Math.cos(yawRad);
@@ -241,7 +186,6 @@ final class RoomSampleWorldMapper
         final double uy = 1.0;
         final double uz = 0.0;
 
-        // right = forward × worldUp → yaw 0 gives (−1,0,0) = west = player's right when facing south.
         double rx = fy * uz - fz * uy;
         double ry = fz * ux - fx * uz;
         double rz = fx * uy - fy * ux;
@@ -251,13 +195,11 @@ final class RoomSampleWorldMapper
             rx = 1.0;
             ry = 0.0;
             rz = 0.0;
+            rl = 1.0;
         }
-        else
-        {
-            rx /= rl;
-            ry /= rl;
-            rz /= rl;
-        }
+        rx /= rl;
+        ry /= rl;
+        rz /= rl;
 
         return new Basis(fx, fy, fz, ux, uy, uz, rx, ry, rz);
     }

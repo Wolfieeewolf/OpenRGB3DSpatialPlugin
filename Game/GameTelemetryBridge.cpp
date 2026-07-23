@@ -425,9 +425,6 @@ void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol:
     telemetry.room_sample.effect_origin_y = cfg.effect_origin_y;
     telemetry.room_sample.effect_origin_z = cfg.effect_origin_z;
     telemetry.room_sample.room_to_world_scale = cfg.room_to_world_scale;
-    telemetry.room_sample.pos_offset_forward_blocks = cfg.pos_offset_forward_blocks;
-    telemetry.room_sample.pos_offset_right_blocks = cfg.pos_offset_right_blocks;
-    telemetry.room_sample.pos_offset_up_blocks = cfg.pos_offset_up_blocks;
     telemetry.room_sample.rgba = std::make_shared<const std::vector<unsigned char>>(std::move(rgba));
     telemetry.room_sample.received_ms =
         (hdr.timestamp_ms > 0) ? hdr.timestamp_ms

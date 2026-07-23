@@ -89,22 +89,13 @@ static RGBColor CubemapSample(const GameTelemetryBridge::RoomSampleFrameChannel&
     }
 
     const float scale = std::clamp(rs.room_to_world_scale, 0.005f, 0.80f);
-    const float grid_units_per_block = 1.0f / scale;
-    const float eff_ox = rs.effect_origin_x - rs.pos_offset_right_blocks * grid_units_per_block;
-    const float eff_oy = rs.effect_origin_y - rs.pos_offset_up_blocks * grid_units_per_block;
-    const float eff_oz = rs.effect_origin_z + rs.pos_offset_forward_blocks * grid_units_per_block;
+    const float eff_ox = rs.effect_origin_x;
+    const float eff_oy = rs.effect_origin_y;
+    const float eff_oz = rs.effect_origin_z;
 
     float dx = (grid_x - eff_ox) * scale;
     float dy = (grid_y - eff_oy) * scale;
     float dz = (eff_oz - grid_z) * scale;
-    if((rs.flags & RoomSampleFrameProtocol::kFlagFlipRight) != 0)
-    {
-        dx = -dx;
-    }
-    if((rs.flags & RoomSampleFrameProtocol::kFlagFlipForward) != 0)
-    {
-        dz = -dz;
-    }
     const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
     if(len <= 1e-5f)
     {

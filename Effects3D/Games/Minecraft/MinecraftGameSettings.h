@@ -20,20 +20,8 @@ constexpr std::uint32_t ChRoomAmbilight = 1u << 7;
 struct Settings
 {
     float damage_flash_decay_s = 0.35f;
-    /** Always full mix — no UI; kept for JSON / render path. */
-    float room_ambilight_mix = 1.0f;
-    /** Alignment knobs removed from UI; fixed at identity (ref point + look direction). */
-    float room_ambilight_heading_offset_deg = 0.0f;
-    float room_ambilight_pos_offset_forward_blocks = 0.0f;
-    float room_ambilight_pos_offset_right_blocks = 0.0f;
-    float room_ambilight_pos_offset_up_blocks = 0.0f;
-    float room_ambilight_scale_tune = 1.0f;
-    float room_ambilight_saturation = 1.0f;
-    float room_ambilight_contrast = 1.0f;
     /** Fill open-air LED rays with outdoor sky/weather when the column can see sky. */
     bool room_ambilight_sky_enabled = true;
-    bool room_ambilight_flip_right = false;
-    bool room_ambilight_flip_forward = false;
     /**
      * Cubemap face resolution (size_x == size_y; size_z == 6). Cost is LED-count driven —
      * higher values mainly improve direction→texel precision for WYSIWYG LED mapping.
@@ -45,7 +33,6 @@ struct Settings
      */
     int room_ambilight_texture_uv_dim = 512;
     float damage_flash_strength = 1.0f;
-    float base_brightness = 1.0f;
     bool health_per_heart_strip = false;
     bool health_per_heart_indexed = false;
     int health_leds_per_heart = 1;

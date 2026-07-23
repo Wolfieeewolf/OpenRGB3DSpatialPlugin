@@ -45,9 +45,6 @@ public:
         float effect_origin_y = 0.0f;
         float effect_origin_z = 0.0f;
         float room_to_world_scale = 0.05f;
-        float pos_offset_forward_blocks = 0.0f;
-        float pos_offset_right_blocks = 0.0f;
-        float pos_offset_up_blocks = 0.0f;
         std::shared_ptr<const std::vector<unsigned char>> rgba;
         unsigned long long received_ms = 0;
     };

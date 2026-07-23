@@ -203,7 +203,7 @@ RGBColor MakeRgb(unsigned char r, unsigned char g, unsigned char b)
 
 static bool ch(std::uint32_t mask, std::uint32_t bit) { return (mask & bit) != 0u; }
 
-static float ComputeRoomToWorldScale(const GridContext3D& grid, float blocks_per_m, float scale_tune)
+static float ComputeRoomToWorldScale(const GridContext3D& grid, float blocks_per_m)
 {
     const float bpm = std::max(0.05f, blocks_per_m);
     const float mm_per_block = 1000.0f / bpm;
@@ -213,7 +213,7 @@ static float ComputeRoomToWorldScale(const GridContext3D& grid, float blocks_per
     {
         return 0.18f;
     }
-    return std::clamp(scale_tune, 0.1f, 6.0f) / grid_units_per_block;
+    return 1.0f / grid_units_per_block;
 }
 
 const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridContext3D& grid,
@@ -250,29 +250,12 @@ const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridConte
     {
         const float blocks_per_m =
             snapshot.has_player_blocks_per_m ? snapshot.player_blocks_per_m : 1.0f;
-        const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m, settings.room_ambilight_scale_tune);
+        const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m);
         RoomSampleConfigPublisher::PublishIfNeeded(grid, settings, origin_x, origin_y, origin_z, room_scale);
         state.room_config_published = true;
     }
 
     return snapshot;
-}
-
-static RGBColor EnhanceRoomAmbilightColor(RGBColor c, float saturation, float contrast)
-{
-    float r = (float)(c & 0xFF) / 255.0f;
-    float g = (float)((c >> 8) & 0xFF) / 255.0f;
-    float b = (float)((c >> 16) & 0xFF) / 255.0f;
-    const float gray = (r + g + b) / 3.0f;
-    r = gray + (r - gray) * saturation;
-    g = gray + (g - gray) * saturation;
-    b = gray + (b - gray) * saturation;
-    r = (r - 0.5f) * contrast + 0.5f;
-    g = (g - 0.5f) * contrast + 0.5f;
-    b = (b - 0.5f) * contrast + 0.5f;
-    return MakeRgb((unsigned char)std::clamp((int)std::lround(r * 255.0f), 0, 255),
-                   (unsigned char)std::clamp((int)std::lround(g * 255.0f), 0, 255),
-                   (unsigned char)std::clamp((int)std::lround(b * 255.0f), 0, 255));
 }
 
 static inline void RoomLedToSpatialCore(float rx,
@@ -843,9 +826,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         // No sky/ambient fill while room viewport is active — air and open LOS stay dark on LEDs.
         if(got_room_sample)
         {
-            room_rgb = EnhanceRoomAmbilightColor(room_rgb, s.room_ambilight_saturation, s.room_ambilight_contrast);
-            const float mix = std::clamp(s.room_ambilight_mix, 0.0f, 1.0f);
-            out = LerpColor(out, room_rgb, mix);
+            out = room_rgb;
         }
     }
 
@@ -853,11 +834,6 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
     {
         out = ApplyDamageFlashChannel(out, t, grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, s);
     }
-
-    const int r = std::clamp((int)((out & 0xFF) * s.base_brightness), 0, 255);
-    const int g = std::clamp((int)(((out >> 8) & 0xFF) * s.base_brightness), 0, 255);
-    const int b = std::clamp((int)(((out >> 16) & 0xFF) * s.base_brightness), 0, 255);
-    out = (RGBColor)((b << 16) | (g << 8) | r);
 
     return out;
 }
