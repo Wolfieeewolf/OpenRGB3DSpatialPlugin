@@ -163,6 +163,8 @@ HEADERS += \
     Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
+    Effects3D/EffectPacks/EffectPack.h \
+    Effects3D/EffectPacks/EffectPackPlayer.h \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
@@ -322,6 +324,7 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
+    Effects3D/EffectPacks/EffectPack.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/BlockerGridOccluder.cpp \

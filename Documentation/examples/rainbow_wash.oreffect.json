@@ -1,0 +1,65 @@
+{
+  "format": "openrgb3d.effect_pack",
+  "version": 1,
+  "id": "rainbow_wash",
+  "name": "Rainbow wash",
+  "duration_ms": 60000,
+  "loop": "forever",
+  "priority": 10,
+  "tracks": [
+    {
+      "name": "All LEDs",
+      "target": { "kind": "all" },
+      "blocks": [
+        {
+          "type": "fade",
+          "start_ms": 0,
+          "end_ms": 10000,
+          "color_from": "#FF0000",
+          "color_to": "#FF8000",
+          "intensity": 1.0
+        },
+        {
+          "type": "fade",
+          "start_ms": 10000,
+          "end_ms": 20000,
+          "color_from": "#FF8000",
+          "color_to": "#FFFF00",
+          "intensity": 1.0
+        },
+        {
+          "type": "fade",
+          "start_ms": 20000,
+          "end_ms": 30000,
+          "color_from": "#FFFF00",
+          "color_to": "#00FF00",
+          "intensity": 1.0
+        },
+        {
+          "type": "fade",
+          "start_ms": 30000,
+          "end_ms": 40000,
+          "color_from": "#00FF00",
+          "color_to": "#0080FF",
+          "intensity": 1.0
+        },
+        {
+          "type": "fade",
+          "start_ms": 40000,
+          "end_ms": 50000,
+          "color_from": "#0080FF",
+          "color_to": "#8000FF",
+          "intensity": 1.0
+        },
+        {
+          "type": "fade",
+          "start_ms": 50000,
+          "end_ms": 60000,
+          "color_from": "#8000FF",
+          "color_to": "#FF0000",
+          "intensity": 1.0
+        }
+      ]
+    }
+  ]
+}

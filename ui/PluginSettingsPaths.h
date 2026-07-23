@@ -27,6 +27,11 @@ inline filesystem::path SpatialShadersDir(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "spatial-shaders";
 }
 
+inline filesystem::path EffectPacksDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "effect-packs";
+}
+
 inline filesystem::path StackPresetFile(OpenRGBPluginAPIInterface* rm, const std::string& preset_name)
 {
     return PluginRoot(rm) / (preset_name + ".stack.json");

@@ -37,6 +37,7 @@ void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
     std::error_code ec;
     filesystem::create_directories(ControllersDir(rm), ec);
     filesystem::create_directories(SpatialShadersDir(rm), ec);
+    filesystem::create_directories(EffectPacksDir(rm), ec);
     filesystem::create_directories(PluginRoot(rm), ec);
 }
 

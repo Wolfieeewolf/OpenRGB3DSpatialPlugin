@@ -1,6 +1,6 @@
 # Effect / Event Maker (design)
 
-Status: **in progress** — format + player scaffolding next; authoring UI later.
+Status: **in progress** — pack format + player library scaffolded; device output and UI next.
 
 Captures the agreed direction: plugin-wide user-authored effect packs bound to event catalogs (games, Windows, manual, later media).
 
@@ -123,8 +123,10 @@ Built-in C++ effects can remain as defaults until replaced by packs.
 - Game APIs / mods publish **events + telemetry**; looks stay in effect packs.
 - Long movie/game beats: prefer **loop while active** or chained cues over a 20‑minute ruler.
 
-## Code home (planned)
+## Code home
 
-- `Effects3D/EffectPacks/` — load/save + player
-- `PluginSettingsPaths::EffectPacksDir` — user pack folder
+- `Effects3D/EffectPacks/EffectPack.*` — load/save/evaluate (solid, fade, pulse)
+- `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock (no device I/O yet)
+- `PluginSettingsPaths::EffectPacksDir` — `{PluginRoot}/effect-packs`
+- Example pack: `Documentation/examples/rainbow_wash.oreffect.json`
 - Bindings JSON later beside packs (e.g. `effect-bindings.json`)
