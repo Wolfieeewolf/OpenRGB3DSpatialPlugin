@@ -18,9 +18,9 @@ EffectInfo3D MinecraftRoomAmbilightEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
     info.effect_description =
-        "Ambilight viewport: room LEDs mirror what you see in-game (line-of-sight), not the whole world. "
+        "Room LEDs mirror what you see in-game (line-of-sight). "
         "Place a reference point at eye height and set this effect's 3D origin there. "
-        "Keep Output shaping → Smoothing at 0 for accurate colours; raise only if LEDs flicker.";
+        "Use Output shaping → Smoothing only if LEDs flicker.";
     return info;
 }
 

@@ -577,77 +577,12 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         }
         QLabel* hint = new QLabel(
             QStringLiteral(
-                "Room Ambilight: each LED samples composited world content along a ray "
-                "(block textures, plants, fire, glass, mobs, drops) — not a flat face average. "
-                "Place a reference point at eye height, set this effect's 3D origin there, then stand "
-                "in-game at that spot. Mapping is player-local (not world East/South): "
-                "room +X = look-right, +Y = up, −Z from origin = look-forward "
-                "(Minecraft: yaw 0 faces +Z/south; +X is east — see minecraft.wiki/w/Coordinates). "
-                "Room yaw fine-tunes heading; flips fix mirrored walls; block offsets trim origin."),
+                "Place a reference point at eye height and set this effect's 3D origin there, then stand "
+                "in-game at that spot. Mapping is player-local: room +X = look-right, +Y = up, "
+                "−Z from origin = look-forward. Tune quality below; alignment comes from the ref point."),
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);
-        AddSliderRow(room_layout, panel, QStringLiteral("Strength"), 0, 100, (int)std::lround(std::clamp(s.room_ambilight_mix, 0.0f, 1.0f) * 100.0f),
-                     [&s](int x) { s.room_ambilight_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(room_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.room_ambilight_heading_offset_deg),
-                     [&s](int x) { s.room_ambilight_heading_offset_deg = (float)std::clamp(x, -180, 180); },
-                     [](int x) { return QString::number(x) + QStringLiteral("°"); });
-        AddCheckRow(room_layout,
-                    panel,
-                    QStringLiteral("Flip left / right"),
-                    s.room_ambilight_flip_right,
-                    [&s](bool v) { s.room_ambilight_flip_right = v; },
-                    QStringLiteral("Mirror the player-right axis. Use if the left wall shows what should be on the right."));
-        AddCheckRow(room_layout,
-                    panel,
-                    QStringLiteral("Flip front / back"),
-                    s.room_ambilight_flip_forward,
-                    [&s](bool v) { s.room_ambilight_flip_forward = v; },
-                    QStringLiteral("Mirror look-forward. Default treats smaller room Z than the origin as in front of you."));
-        auto pos_offset_label = [](int tenths) {
-            return QString::number(tenths / 10.0, 'f', 1) + QStringLiteral(" blk");
-        };
-        AddSliderRow(room_layout,
-                     panel,
-                     QStringLiteral("Player offset forward"),
-                     -80,
-                     80,
-                     (int)std::lround(std::clamp(s.room_ambilight_pos_offset_forward_blocks, -8.0f, 8.0f) * 10.0f),
-                     [&s](int x) { s.room_ambilight_pos_offset_forward_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
-                     pos_offset_label);
-        AddSliderRow(room_layout,
-                     panel,
-                     QStringLiteral("Player offset right"),
-                     -80,
-                     80,
-                     (int)std::lround(std::clamp(s.room_ambilight_pos_offset_right_blocks, -8.0f, 8.0f) * 10.0f),
-                     [&s](int x) { s.room_ambilight_pos_offset_right_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
-                     pos_offset_label);
-        AddSliderRow(room_layout,
-                     panel,
-                     QStringLiteral("Player offset up"),
-                     -80,
-                     80,
-                     (int)std::lround(std::clamp(s.room_ambilight_pos_offset_up_blocks, -8.0f, 8.0f) * 10.0f),
-                     [&s](int x) { s.room_ambilight_pos_offset_up_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
-                     pos_offset_label);
-        AddSliderRow(room_layout, panel, QStringLiteral("MC world scale"), 10, 600, (int)std::lround(std::clamp(s.room_ambilight_scale_tune, 0.1f, 6.0f) * 100.0f),
-                     [&s](int x) { s.room_ambilight_scale_tune = std::clamp(x / 100.0f, 0.1f, 6.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
-                     QStringLiteral("How many Minecraft blocks map to 1 metre of physical room (relative to blocks-per-metre). "
-                                    "Higher = more MC blocks visible across the room = finer colour detail per LED. "
-                                    "100% = 1:1 with blocks-per-metre setting. Try 200-400% for good block-level variety."));
-        AddSliderRow(room_layout, panel, QStringLiteral("Color saturation"), 80, 250, (int)std::lround(std::clamp(s.room_ambilight_saturation, 0.8f, 2.5f) * 100.0f),
-                     [&s](int x) { s.room_ambilight_saturation = std::clamp(x / 100.0f, 0.8f, 2.5f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
-                     QStringLiteral("Boost for Room Ambilight colours. Samples are composited world texels "
-                                    "(blocks, plants, fire, mobs, drops) along each ray — keep near 100-120% "
-                                    "so detail stays readable."));
-        AddSliderRow(room_layout, panel, QStringLiteral("Color contrast"), 80, 200, (int)std::lround(std::clamp(s.room_ambilight_contrast, 0.8f, 2.0f) * 100.0f),
-                     [&s](int x) { s.room_ambilight_contrast = std::clamp(x / 100.0f, 0.8f, 2.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
-                     QStringLiteral("Contrast for Room Ambilight texel samples. Lower preserves grass/dirt/flower detail."));
         AddCheckRow(room_layout,
                     panel,
                     QStringLiteral("Sky / weather"),
@@ -664,8 +599,7 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                      [&s](int x) { s.room_ambilight_cubemap_face_size = std::clamp(x, 32, 512); },
                      [](int x) { return QString::number(x); },
                      QStringLiteral("Resolution per cubemap face (default 128). Only mapped LED directions "
-                                    "are raycast. 256–512 sharpens aiming for small props; cost stays LED-count driven. "
-                                    "Rays stop at the room boundary."));
+                                    "are raycast. 256–512 sharpens aiming for small props; cost stays LED-count driven."));
         if(QComboBox* tex_combo = AddComboRow(room_layout, QStringLiteral("Texture quality (UV)")))
         {
             tex_combo->addItem(QStringLiteral("64 — Fast"), 64);
@@ -700,13 +634,6 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                                      RoomSampleFrameProtocol::SnapUvTextureDim(tex_combo->itemData(idx).toInt());
                              });
         }
-    }
-
-    QVBoxLayout* output_layout = content_layout;
-    {
-        AddSliderRow(output_layout, panel, QStringLiteral("Base brightness"), 80, 150, (int)std::lround(std::clamp(s.base_brightness, 0.8f, 1.5f) * 100.0f),
-                     [&s](int x) { s.base_brightness = std::clamp(x / 100.0f, 0.8f, 1.5f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
     }
 
     return scroll;
@@ -948,8 +875,8 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     effect->SetControlGroupVisibility(effect->scale_slider, effect->scale_label, QStringLiteral("Scale:"), false);
 
     effect->SetControlGroupVisibility(effect->brightness_slider, effect->brightness_label, QStringLiteral("Brightness:"), true);
-    effect->SetControlGroupVisibility(effect->intensity_slider, effect->intensity_label, QStringLiteral("Intensity:"), true);
-    effect->SetControlGroupVisibility(effect->sharpness_slider, effect->sharpness_label, QStringLiteral("Sharpness:"), true);
+    effect->SetControlGroupVisibility(effect->intensity_slider, effect->intensity_label, QStringLiteral("Intensity:"), false);
+    effect->SetControlGroupVisibility(effect->sharpness_slider, effect->sharpness_label, QStringLiteral("Sharpness:"), false);
 
     if(effect->surfaces_section)
     {

@@ -99,19 +99,22 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.damage_dir_sharpness = get_f(j, "damage_dir_sharpness", s.damage_dir_sharpness);
 
     s.damage_flash_decay_s = std::clamp(s.damage_flash_decay_s, 0.10f, 0.90f);
-    s.room_ambilight_mix = std::clamp(s.room_ambilight_mix, 0.0f, 1.0f);
-    s.room_ambilight_heading_offset_deg = std::clamp(s.room_ambilight_heading_offset_deg, -180.0f, 180.0f);
-    s.room_ambilight_pos_offset_forward_blocks = std::clamp(s.room_ambilight_pos_offset_forward_blocks, -8.0f, 8.0f);
-    s.room_ambilight_pos_offset_right_blocks = std::clamp(s.room_ambilight_pos_offset_right_blocks, -8.0f, 8.0f);
-    s.room_ambilight_pos_offset_up_blocks = std::clamp(s.room_ambilight_pos_offset_up_blocks, -8.0f, 8.0f);
-    s.room_ambilight_scale_tune = std::clamp(s.room_ambilight_scale_tune, 0.5f, 2.0f);
-    s.room_ambilight_saturation = std::clamp(s.room_ambilight_saturation, 0.8f, 2.5f);
-    s.room_ambilight_contrast = std::clamp(s.room_ambilight_contrast, 0.8f, 2.0f);
+    // Room Ambilight UI only exposes sky + quality; force alignment/polish knobs to identity.
+    s.room_ambilight_mix = 1.0f;
+    s.room_ambilight_heading_offset_deg = 0.0f;
+    s.room_ambilight_pos_offset_forward_blocks = 0.0f;
+    s.room_ambilight_pos_offset_right_blocks = 0.0f;
+    s.room_ambilight_pos_offset_up_blocks = 0.0f;
+    s.room_ambilight_scale_tune = 1.0f;
+    s.room_ambilight_saturation = 1.0f;
+    s.room_ambilight_contrast = 1.0f;
+    s.room_ambilight_flip_right = false;
+    s.room_ambilight_flip_forward = false;
+    s.base_brightness = 1.0f;
     s.room_ambilight_cubemap_face_size = std::clamp(s.room_ambilight_cubemap_face_size, 32, 512);
     s.room_ambilight_texture_uv_dim = RoomSampleFrameProtocol::SnapUvTextureDim(
         std::clamp(s.room_ambilight_texture_uv_dim, 64, 4096));
     s.damage_flash_strength = std::clamp(s.damage_flash_strength, 0.0f, 1.0f);
-    s.base_brightness = std::clamp(s.base_brightness, 0.8f, 1.5f);
 
     s.hunger_mix = std::clamp(s.hunger_mix, 0.0f, 1.0f);
     s.air_mix = std::clamp(s.air_mix, 0.0f, 1.0f);

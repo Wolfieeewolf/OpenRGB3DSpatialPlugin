@@ -5,22 +5,27 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.MultiLineTextWidget;
+import net.minecraft.client.gui.components.StringWidget;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
+/**
+ * Minimal sender controls + OpenRGB link status.
+ * Room Ambilight quality (UV, face size, sky) is tuned in OpenRGB, not here.
+ */
 public class OpenRGBConfigScreen extends Screen
 {
     private final Screen parent;
     private final OpenRGBSenderConfig config;
     private CycleButton<Boolean> enabledButton;
     private CycleButton<Boolean> roomSampleButton;
-    private EditBox hostField;
-    private EditBox portField;
-    private EditBox blocksField;
     private EditBox tickDivisorField;
+    private MultiLineTextWidget statusWidget;
 
     public OpenRGBConfigScreen(Screen parent)
     {
-        super(Component.literal("OpenRGB Minecraft Sender"));
+        super(Component.literal("OpenRGB Sender"));
         this.parent = parent;
         this.config = OpenRGBSenderConfig.get();
     }
@@ -28,47 +33,43 @@ public class OpenRGBConfigScreen extends Screen
     @Override
     protected void init()
     {
-        int bw = 220;
-        int cx = width / 2 - bw / 2;
-        int y = height / 6;
+        final int bw = 240;
+        final int cx = width / 2 - bw / 2;
+        int y = 28;
+
+        StringWidget title = new StringWidget(cx, y, bw, 12, this.title, font);
+        addRenderableWidget(title);
+        y += 20;
 
         enabledButton = CycleButton.onOffBuilder(config.enabled)
                 .create(cx, y, bw, 20, Component.literal("Send telemetry"), (btn, val) -> config.enabled = val);
         addRenderableWidget(enabledButton);
-        y += 28;
-
-        hostField = new EditBox(font, cx, y, bw, 20, Component.literal("Host"));
-        hostField.setMaxLength(128);
-        hostField.setValue(config.host);
-        hostField.setHint(Component.literal("127.0.0.1"));
-        addRenderableWidget(hostField);
-        y += 28;
-
-        portField = new EditBox(font, cx, y, bw, 20, Component.literal("Port"));
-        portField.setMaxLength(5);
-        portField.setValue(Integer.toString(config.port));
-        portField.setHint(Component.literal("9876"));
-        addRenderableWidget(portField);
-        y += 28;
-
-        blocksField = new EditBox(font, cx, y, bw, 20, Component.literal("Blocks per meter (0.25-16)"));
-        blocksField.setMaxLength(8);
-        blocksField.setValue(String.format(java.util.Locale.US, "%.2f", config.blocksPerMeter));
-        blocksField.setHint(Component.literal("4.00"));
-        addRenderableWidget(blocksField);
-        y += 28;
+        y += 26;
 
         roomSampleButton = CycleButton.onOffBuilder(config.sendRoomSampleFrames)
-                .create(cx, y, bw, 20, Component.literal("Room Ambilight cubemap (mapped LEDs)"), (btn, val) -> config.sendRoomSampleFrames = val);
+                .create(cx, y, bw, 20, Component.literal("Room Ambilight"), (btn, val) -> config.sendRoomSampleFrames = val);
         addRenderableWidget(roomSampleButton);
-        y += 28;
+        y += 26;
 
-        tickDivisorField = new EditBox(font, cx, y, bw, 20, Component.literal("Telemetry tick divisor"));
+        tickDivisorField = new EditBox(font, cx, y, bw, 20, Component.literal("Telemetry every N ticks"));
         tickDivisorField.setMaxLength(2);
         tickDivisorField.setValue(Integer.toString(config.telemetryTickDivisor));
-        tickDivisorField.setHint(Component.literal("1"));
+        tickDivisorField.setHint(Component.literal("1 = every tick"));
+        tickDivisorField.setTooltip(Tooltip.create(
+                Component.literal("Higher = less UDP traffic for vitals. Room Ambilight still runs every tick when enabled.")));
         addRenderableWidget(tickDivisorField);
-        y += 36;
+        y += 28;
+
+        statusWidget = new MultiLineTextWidget(cx, y, Component.literal(buildStatusText()), font)
+                .setMaxWidth(bw)
+                .setMaxRows(5);
+        addRenderableWidget(statusWidget);
+        y += Math.max(48, statusWidget.getHeight()) + 8;
+
+        addRenderableWidget(Button.builder(Component.literal("Refresh status"), btn -> refreshStatus())
+                .bounds(cx, y, bw, 20)
+                .build());
+        y += 28;
 
         addRenderableWidget(Button.builder(Component.literal("Done"), btn -> closeAndSave())
                 .bounds(cx, y, bw, 20)
@@ -78,11 +79,31 @@ public class OpenRGBConfigScreen extends Screen
                 .build());
     }
 
+    private void refreshStatus()
+    {
+        if(statusWidget != null)
+        {
+            statusWidget.setMessage(Component.literal(buildStatusText()));
+        }
+    }
+
+    private static String buildStatusText()
+    {
+        final OpenRGBSenderMod.LinkStatus st = OpenRGBSenderMod.getLinkStatus();
+        if(st == null || !st.linked)
+        {
+            return "OpenRGB: waiting for Room Ambilight config\n"
+                    + "Select Room Ambilight in OpenRGB, then join a world.\n"
+                    + "Host/port: config/openrgb-minecraft-sender.json";
+        }
+        return String.format(java.util.Locale.US,
+                "OpenRGB: linked (config #%d)\nCubemap %dx%d  ·  UV %d  ·  %d LED texels\nSky / weather: %s",
+                st.configId, st.faceSize, st.faceSize, st.uvDim, st.ledTexels,
+                st.skyEnabled ? "on" : "off");
+    }
+
     private void closeAndSave()
     {
-        config.host = hostField.getValue().trim();
-        config.port = parseInt(portField.getValue(), config.port);
-        config.blocksPerMeter = parseFloat(blocksField.getValue(), config.blocksPerMeter);
         config.telemetryTickDivisor = parseInt(tickDivisorField.getValue(), config.telemetryTickDivisor);
         config.save();
         onClose();
@@ -93,18 +114,6 @@ public class OpenRGBConfigScreen extends Screen
         try
         {
             return Integer.parseInt(text.trim());
-        }
-        catch(NumberFormatException ignored)
-        {
-            return fallback;
-        }
-    }
-
-    private static float parseFloat(String text, float fallback)
-    {
-        try
-        {
-            return Float.parseFloat(text.trim());
         }
         catch(NumberFormatException ignored)
         {

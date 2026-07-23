@@ -20,23 +20,19 @@ constexpr std::uint32_t ChRoomAmbilight = 1u << 7;
 struct Settings
 {
     float damage_flash_decay_s = 0.35f;
+    /** Always full mix — no UI; kept for JSON / render path. */
     float room_ambilight_mix = 1.0f;
+    /** Alignment knobs removed from UI; fixed at identity (ref point + look direction). */
     float room_ambilight_heading_offset_deg = 0.0f;
-    /** Player anchor shift in MC blocks (local forward/right/up), not room rotation. */
     float room_ambilight_pos_offset_forward_blocks = 0.0f;
     float room_ambilight_pos_offset_right_blocks = 0.0f;
     float room_ambilight_pos_offset_up_blocks = 0.0f;
     float room_ambilight_scale_tune = 1.0f;
-    float room_ambilight_saturation = 1.25f;
-    float room_ambilight_contrast = 1.08f;
-    /** Fill open-air LED rays with sky/weather when the column can see sky (outdoor only). */
+    float room_ambilight_saturation = 1.0f;
+    float room_ambilight_contrast = 1.0f;
+    /** Fill open-air LED rays with outdoor sky/weather when the column can see sky. */
     bool room_ambilight_sky_enabled = true;
-    /** Mirror player-local right (+X). Use if left/right walls feel swapped. */
     bool room_ambilight_flip_right = false;
-    /**
-     * Mirror player-local forward (+Z). Default: room −Z from origin = look-forward
-     * (front wall / lower depth). Enable if front/back feel reversed.
-     */
     bool room_ambilight_flip_forward = false;
     /**
      * Cubemap face resolution (size_x == size_y; size_z == 6). Cost is LED-count driven —

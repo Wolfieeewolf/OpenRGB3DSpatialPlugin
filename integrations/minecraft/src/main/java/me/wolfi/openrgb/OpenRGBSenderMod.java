@@ -136,6 +136,51 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
     }
 
+    /** Snapshot for Mod Menu status (OpenRGB → mod SHM config). */
+    public static final class LinkStatus
+    {
+        public final boolean linked;
+        public final int configId;
+        public final int faceSize;
+        public final int uvDim;
+        public final int ledTexels;
+        public final boolean skyEnabled;
+
+        LinkStatus(boolean linked, int configId, int faceSize, int uvDim, int ledTexels, boolean skyEnabled)
+        {
+            this.linked = linked;
+            this.configId = configId;
+            this.faceSize = faceSize;
+            this.uvDim = uvDim;
+            this.ledTexels = ledTexels;
+            this.skyEnabled = skyEnabled;
+        }
+    }
+
+    public static LinkStatus getLinkStatus()
+    {
+        if(instance == null)
+        {
+            return new LinkStatus(false, 0, 0, 0, 0, false);
+        }
+        try
+        {
+            final RoomSampleConfigReader.Config cfg = instance.roomSampleConfigReader.readLatest();
+            if(cfg == null || !cfg.isEnabled())
+            {
+                return new LinkStatus(false, 0, 0, 0, 0, false);
+            }
+            final int leds = cfg.hasImportantCells() ? cfg.importantFlatIndices.length : 0;
+            final int face = cfg.isCubemap() ? cfg.sizeX : 0;
+            return new LinkStatus(true, cfg.configId, face, cfg.uvTextureMaxDim, leds, cfg.isSkyEnabled());
+        }
+        catch(Exception e)
+        {
+            QuietCatch.debug(LOGGER, "link status read failed", e);
+            return new LinkStatus(false, 0, 0, 0, 0, false);
+        }
+    }
+
     /**
      * Called from {@link me.wolfi.openrgb.mixin.MinecraftClientMixin} at end of each client tick (main thread only).
      */
