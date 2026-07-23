@@ -165,6 +165,8 @@ HEADERS += \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
     Effects3D/EffectPacks/EffectPack.h \
     Effects3D/EffectPacks/EffectPackPlayer.h \
+    Effects3D/EffectPacks/EffectPackApplier.h \
+    Effects3D/EffectPacks/EffectPackLibrary.h \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
@@ -184,6 +186,7 @@ HEADERS += \
     ui/ObjectCreatorTabPanel.h \
     ui/ControllerListPanel.h \
     ui/EffectLibraryPanel.h \
+    ui/EffectPackPanel.h \
     ui/EffectStackPanel.h \
     ui/ZonesPanel.h \
     ui/EffectGlobalSettingsPanel.h \
@@ -325,6 +328,8 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
     Effects3D/EffectPacks/EffectPack.cpp \
+    Effects3D/EffectPacks/EffectPackApplier.cpp \
+    Effects3D/EffectPacks/EffectPackLibrary.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/BlockerGridOccluder.cpp \
@@ -344,6 +349,7 @@ SOURCES += \
     ui/ObjectCreatorTabPanel.cpp \
     ui/ControllerListPanel.cpp \
     ui/EffectLibraryPanel.cpp \
+    ui/EffectPackPanel.cpp \
     ui/EffectStackPanel.cpp \
     ui/ZonesPanel.cpp \
     ui/EffectGlobalSettingsPanel.cpp \
@@ -479,6 +485,7 @@ FORMS += \
     ui/forms/ControllerListPanel.ui \
     ui/forms/MediaTextureAmbienceBlock.ui \
     ui/forms/EffectLibraryPanel.ui \
+    ui/forms/EffectPackPanel.ui \
     ui/forms/EffectStackPanel.ui \
     ui/forms/ZonesPanel.ui \
     ui/forms/EffectGlobalSettingsPanel.ui \

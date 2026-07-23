@@ -6,6 +6,7 @@
 #include "EffectControlsHostPanel.h"
 #include "EffectGlobalSettingsPanel.h"
 #include "EffectLibraryPanel.h"
+#include "EffectPackPanel.h"
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
@@ -165,6 +166,10 @@ void OpenRGB3DSpatialTab::showEvent(QShowEvent* event)
 void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
 {
     QWidget::hideEvent(event);
+    if(ui && ui->effectPackPanel)
+    {
+        ui->effectPackPanel->stopPreview();
+    }
     if(viewport)
     {
         viewport->SetViewportPaintingEnabled(false);
@@ -224,6 +229,7 @@ void OpenRGB3DSpatialTab::bindUiPanels()
 
     ui->effectLibraryPanel->bindTab(this);
     ui->effectStackPanel->bindTab(this);
+    ui->effectPackPanel->bindTab(this);
     ui->zonesPanel->bindTab(this);
     connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, &OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi);
 

@@ -1,6 +1,6 @@
 # Effect / Event Maker (design)
 
-Status: **in progress** — pack format + player library scaffolded; device output and UI next.
+Status: **in progress** — pack format, device preview, and Run-tab library UI landed; event bindings next.
 
 Captures the agreed direction: plugin-wide user-authored effect packs bound to event catalogs (games, Windows, manual, later media).
 
@@ -126,7 +126,10 @@ Built-in C++ effects can remain as defaults until replaced by packs.
 ## Code home
 
 - `Effects3D/EffectPacks/EffectPack.*` — load/save/evaluate (solid, fade, pulse)
-- `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock (no device I/O yet)
+- `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock
+- `Effects3D/EffectPacks/EffectPackApplier.*` — apply track colours to OpenRGB controllers
+- `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/` folder
+- `ui/EffectPackPanel.*` — Run-tab list + Preview/Stop
 - `PluginSettingsPaths::EffectPacksDir` — `{PluginRoot}/effect-packs`
 - Example pack: `Documentation/examples/rainbow_wash.oreffect.json`
 - Bindings JSON later beside packs (e.g. `effect-bindings.json`)

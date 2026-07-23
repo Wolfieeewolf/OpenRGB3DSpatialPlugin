@@ -102,6 +102,9 @@
           <widget class="EffectStackPanel" name="effectStackPanel"/>
          </item>
          <item>
+          <widget class="EffectPackPanel" name="effectPackPanel"/>
+         </item>
+         <item>
           <widget class="ZonesPanel" name="zonesPanel"/>
          </item>
          <item>
@@ -374,6 +377,11 @@
    <class>EffectStackPanel</class>
    <extends>QGroupBox</extends>
    <header>EffectStackPanel.h</header>
+  </customwidget>
+  <customwidget>
+   <class>EffectPackPanel</class>
+   <extends>QGroupBox</extends>
+   <header>EffectPackPanel.h</header>
   </customwidget>
   <customwidget>
    <class>ZonesPanel</class>
