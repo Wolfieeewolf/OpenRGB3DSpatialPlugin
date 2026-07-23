@@ -534,6 +534,7 @@ protected:
 
     QWidget*            surfaces_group;
     QWidget*            surfaces_section;
+    QWidget*            geometry_section = nullptr;
     QWidget*            colors_patterns_section = nullptr;
     QWidget*            band_modulation_section = nullptr;
     QWidget*            effect_specific_section = nullptr;

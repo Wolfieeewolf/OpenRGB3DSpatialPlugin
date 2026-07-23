@@ -339,7 +339,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                        "Overall coverage uses the Scale slider under Motion and pattern. "
                        "Choose zone and global/target bounds for this layer in the Effect Stack."),
                    geometry_group,
-                   nullptr,
+                   &geometry_section,
                    false);
 
     CreateColorControls();

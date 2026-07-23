@@ -882,6 +882,10 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     {
         effect->surfaces_section->setVisible(false);
     }
+    if(effect->geometry_section)
+    {
+        effect->geometry_section->setVisible(false);
+    }
     if(effect->position_offset_group)
     {
         effect->position_offset_group->setVisible(false);
@@ -893,20 +897,6 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     if(effect->path_plane_group)
     {
         effect->path_plane_group->setVisible(false);
-    }
-
-    if(effect->effect_controls_group)
-    {
-        const QList<QGroupBox*> groups =
-            effect->effect_controls_group->findChildren<QGroupBox*>(QString(), Qt::FindDirectChildrenOnly);
-        for(QGroupBox* gb : groups)
-        {
-            const QString t = gb->title();
-            if(t == QStringLiteral("Effect geometry"))
-            {
-                gb->setVisible(false);
-            }
-        }
     }
 }
 
