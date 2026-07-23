@@ -127,10 +127,11 @@ Built-in C++ effects can remain as defaults until replaced by packs.
 
 - `Effects3D/EffectPacks/EffectPack.*` — load/save/evaluate (solid, fade, pulse)
 - `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock
-- `Effects3D/EffectPacks/EffectPackApplier.*` — apply track colours to OpenRGB controllers
+- `Effects3D/EffectPacks/EffectPackApplier.*` — hardware + viewport `preview_color` apply
 - `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/` folder
 - `ui/EffectPackPanel.*` — Run-tab list + Preview/Stop / New / Edit
-- `ui/EffectPackEditorDialog.*` — modeless editor window (solid / fade / pulse blocks)
+- `ui/EffectPackEditorDialog.*` — modeless editor: models left, timeline center, props right
+- `ui/EffectPackTimelineWidget.*` — ruler / rows / blocks / playhead (Ctrl+wheel zoom)
 - `PluginSettingsPaths::EffectPacksDir` — `{PluginRoot}/effect-packs`
 - Example pack: `Documentation/examples/rainbow_wash.oreffect.json`
 - Bindings JSON later beside packs (e.g. `effect-bindings.json`)
