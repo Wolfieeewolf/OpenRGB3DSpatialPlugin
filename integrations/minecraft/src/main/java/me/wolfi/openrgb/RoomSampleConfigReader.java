@@ -70,6 +70,10 @@ final class RoomSampleConfigReader
     }
 
     private Path configPath;
+    private Config cached;
+    private int cachedSequence = Integer.MIN_VALUE;
+    private long cachedSize = -1L;
+    private long cachedMtime = -1L;
 
     synchronized void ensurePath() throws IOException
     {
@@ -84,7 +88,18 @@ final class RoomSampleConfigReader
         ensurePath();
         if(!Files.isRegularFile(configPath))
         {
+            cached = null;
+            cachedSequence = Integer.MIN_VALUE;
+            cachedSize = -1L;
+            cachedMtime = -1L;
             return null;
+        }
+
+        final long size = Files.size(configPath);
+        final long mtime = Files.getLastModifiedTime(configPath).toMillis();
+        if(cached != null && size == cachedSize && mtime == cachedMtime)
+        {
+            return cached;
         }
 
         final byte[] bytes = Files.readAllBytes(configPath);
@@ -101,6 +116,12 @@ final class RoomSampleConfigReader
         if(magic != CONFIG_MAGIC || version != VERSION || headerBytes != HEADER_BYTES || (sequence & 1) != 0)
         {
             return null;
+        }
+
+        if(cached != null && sequence == cachedSequence && size == cachedSize)
+        {
+            cachedMtime = mtime;
+            return cached;
         }
 
         final Config cfg = new Config();
@@ -157,6 +178,10 @@ final class RoomSampleConfigReader
                 cfg.importantFlatIndices = wrote == importantCount ? indices : Arrays.copyOf(indices, wrote);
             }
         }
+        cached = cfg;
+        cachedSequence = sequence;
+        cachedSize = size;
+        cachedMtime = mtime;
         return cfg;
     }
 

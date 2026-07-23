@@ -57,7 +57,11 @@ public class OpenRGBSenderMod implements ClientModInitializer
     /** Round-robin cursor for mapped LED cubemap texels under the soft tick budget. */
     private int roomSampleCubemapCursor = 0;
     /** Soft cap per tick so Room Ambilight never stalls a client frame. */
-    private static final long ROOM_SAMPLE_BUDGET_NS = 3_500_000L;
+    private static final long ROOM_SAMPLE_BUDGET_NS = 2_500_000L;
+    /** Hard ceiling for all OpenRGB client-tick work (precache + room + telemetry setup). */
+    private static final long CLIENT_TICK_WORK_BUDGET_NS = 5_000_000L;
+    private static final double ENTITY_PROBE_RADIUS_MAX = 28.0;
+    private int roomSampleSkipTicks = 0;
     private static final ThreadLocal<int[]> ROOM_CELL_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_ACCUM_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_LAYER_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
@@ -190,15 +194,26 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             return;
         }
+        final long tickStart = System.nanoTime();
         BlockTexturePrecache.tick(client);
-        BlockFaceColorCache.tick(client);
+        if((System.nanoTime() - tickStart) < CLIENT_TICK_WORK_BUDGET_NS)
+        {
+            BlockFaceColorCache.tick(client);
+        }
         // Room samples every tick — UV pixels load async; face-average warm-up must not starve LED fill
         // (that caused the startup pop-in flash under the old every-4th-tick + tiny budget path).
-        instance.tickRoomSamples(client);
+        if((System.nanoTime() - tickStart) < CLIENT_TICK_WORK_BUDGET_NS)
+        {
+            instance.tickRoomSamples(client, tickStart);
+        }
+        else if(instance.roomSampleSkipTicks < 40)
+        {
+            instance.roomSampleSkipTicks = 40;
+        }
         instance.tickSendTelemetry(client);
     }
 
-    private void tickRoomSamples(Minecraft client)
+    private void tickRoomSamples(Minecraft client, long tickStartNs)
     {
         if(client.player == null || client.level == null)
         {
@@ -207,6 +222,11 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final OpenRGBSenderConfig cfg = OpenRGBSenderConfig.get();
         if(!cfg.enabled || !cfg.sendRoomSampleFrames)
         {
+            return;
+        }
+        if(roomSampleSkipTicks > 0)
+        {
+            roomSampleSkipTicks--;
             return;
         }
         roomTickCounter++;
@@ -223,7 +243,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
             if(roomTickCounter % roomInterval == 0)
             {
                 DatagramSocket socket = ensureSharedUdp(cfg);
-                sendRoomSampleFrame(socket, sharedUdpAddress, client.player, client.level, roomCfg);
+                sendRoomSampleFrame(socket, sharedUdpAddress, client.player, client.level, roomCfg, tickStartNs);
             }
         }
         catch(Exception e)
@@ -788,7 +808,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
     }
 
     private void sendRoomSampleFrame(DatagramSocket socket, InetAddress address, LocalPlayer player, Level world,
-                                     RoomSampleConfigReader.Config cfg) throws Exception
+                                     RoomSampleConfigReader.Config cfg, long tickStartNs) throws Exception
     {
         if(cfg == null || !cfg.isEnabled() || !cfg.isCubemap())
         {
@@ -826,7 +846,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final long budgetStart = System.nanoTime();
         final AtmosphereSampler.Frame atmosphere = AtmosphereSampler.captureFrame(world);
         final Vec3 eye = player.getEyePosition();
-        final double probeRadius = Math.max(16.0, Math.min(80.0, RoomSampleWorldMapper.roomHalfDiagonalBlocks(cfg) + 4.0));
+        final double probeRadius = Math.max(12.0,
+                Math.min(ENTITY_PROBE_RADIUS_MAX, RoomSampleWorldMapper.roomHalfDiagonalBlocks(cfg) + 4.0));
 
         if(roomSampleClearedForConfigId != cfg.configId)
         {
@@ -846,7 +867,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
             int processed = 0;
             for(int step = 0; step < n; step++)
             {
-                if((step & 7) == 0 && (System.nanoTime() - budgetStart) > budgetNs)
+                final long now = System.nanoTime();
+                if((now - budgetStart) > budgetNs || (now - tickStartNs) > CLIENT_TICK_WORK_BUDGET_NS)
                 {
                     break;
                 }

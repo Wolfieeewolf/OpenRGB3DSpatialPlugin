@@ -58,7 +58,7 @@ final class EntityDisplayColorSampler
         }
         try
         {
-            final double range = Math.max(8.0, Math.min(96.0, maxRangeBlocks));
+            final double range = Math.max(8.0, Math.min(28.0, maxRangeBlocks));
             final Vec3 eye = player.getEyePosition();
             final AABB volume = new AABB(eye, eye).inflate(range);
             final List<Entity> found = world.getEntities(player, volume,
