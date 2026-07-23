@@ -7,5 +7,3 @@ Companion apps/mods that talk to the OpenRGB 3D Spatial plugin (UDP telemetry, s
 | [minecraft/](minecraft/) | Minecraft (Fabric) | `openrgb-minecraft-sender` JAR |
 
 Plugin effect layers for games stay under `Effects3D/Games/<Game>/`.
-
-Planned plugin-wide effect/event authoring: [Documentation/effect-event-maker.md](../Documentation/effect-event-maker.md).
