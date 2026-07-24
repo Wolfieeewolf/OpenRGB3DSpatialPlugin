@@ -187,13 +187,13 @@ void OpenRGB3DSpatialTab::PrepareEffectPackPreview()
     EffectPack::PrepareControllersForPreview(resource_manager->GetRGBControllers());
 }
 
-void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms)
+void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms, bool force_hw_update)
 {
     if(!resource_manager)
     {
         return;
     }
-    EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms);
+    EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms, force_hw_update);
     if(viewport)
     {
         viewport->UpdateColors();

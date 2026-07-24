@@ -2,15 +2,19 @@
 #pragma once
 
 #include "EffectPacks/EffectPack.h"
+#include "LEDPosition3D.h"
 #include <QSet>
 #include <QString>
 #include <QVector>
 #include <QWidget>
+#include <memory>
+#include <vector>
+
+struct ControllerTransform;
 
 /**
- * Sequencer-style timeline: one row per controller (device).
- * Click [+] to expand into zone layers, then LED layers under a zone.
- * Blocks: drag middle to move, drag edges to resize, right-click to recolour.
+ * Sequencer-style timeline: All (this pack) + selected controllers.
+ * Click [+] to expand zones, then LEDs. Blocks: move / resize / delete / right-click colour.
  */
 class EffectPackTimelineWidget : public QWidget
 {
@@ -23,24 +27,29 @@ public:
         EffectPack::Target target;
         QVector<Node> children;
         bool expanded = false;
+        /** Total LEDs under this node (device/zone/All) for in-block spatial preview. */
+        int led_count = 1;
     };
 
-    /** Flattened visible row for hit-testing / block placement. */
     struct Row
     {
         QString label;
         EffectPack::Target target;
         int depth = 0;
-        /** Index path into the node tree (empty = synthetic). */
         QVector<int> path;
         bool expandable = false;
         bool expanded = false;
+        /** For LED rows under a zone/device: index within sibling LEDs for spatial preview. */
+        int led_index = 0;
+        int led_count = 1;
+        bool single_led_row = false;
     };
 
     explicit EffectPackTimelineWidget(QWidget* parent = nullptr);
 
     void setPack(EffectPack::Pack* pack);
-    /** Replace the model tree (controllers → zones → LEDs). Preserves expand state by target key when possible. */
+    /** Scene transforms for world-space wipe/chase preview inside blocks. */
+    void setControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms);
     void setModel(QVector<Node> roots);
     void setDurationMs(int duration_ms);
     void setPlayheadMs(int ms);
@@ -57,7 +66,6 @@ public:
 
     int trackIndexForRow(int row) const;
     const QVector<Row>& visibleRows() const { return visible_rows_; }
-    /** Alias used by editor helpers. */
     const QVector<Row>& rows() const { return visible_rows_; }
 
 public slots:
@@ -66,9 +74,10 @@ public slots:
 signals:
     void playheadChanged(int ms);
     void blockSelected(int track_index, int block_index);
-    /** Fired after move/resize or in-place colour edit. */
     void blockEdited(int track_index, int block_index);
-    void emptyCellClicked(int row_index, int ms);
+    void blockDeleteRequested(int track_index, int block_index);
+    /** Place a new effect on a row at time (from right-click menu / effects palette). */
+    void effectAddRequested(int row_index, int ms, int block_type);
     void rowSelected(int row_index);
     void contentHeightChanged(int height);
     void modelExpandedChanged();
@@ -79,6 +88,7 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void leaveEvent(QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
@@ -101,6 +111,17 @@ private:
         RightEdge
     };
 
+    struct PaintBlock
+    {
+        const EffectPack::Block* block = nullptr;
+        int track = -1;
+        int block_index = -1;
+        int led_index = 0;
+        int led_count = 1;
+        bool single_led_row = false;
+        EffectPack::Target view_target;
+    };
+
     int timeToX(int ms) const;
     int xToTime(int x) const;
     int snapMs(int ms) const;
@@ -108,22 +129,30 @@ private:
     int contentHeight() const;
     void updateGeometrySize();
     void rebuildVisibleRows();
-    void flattenNode(const Node& node, const QVector<int>& path, int depth);
+    void flattenNode(const Node& node, const QVector<int>& path, int depth, int led_index, int led_count);
     Node* nodeAtPath(const QVector<int>& path);
     const Node* nodeAtPath(const QVector<int>& path) const;
     void toggleExpand(const QVector<int>& path);
-    bool hitTestBlock(int x, int y, int* out_row, int* out_track, int* out_block, BlockHit* out_hit = nullptr) const;
+    bool hitTestBlock(int x, int y, int* out_row, int* out_track, int* out_block,
+                      BlockHit* out_hit = nullptr) const;
     QRect blockRect(int row, const EffectPack::Block& block) const;
     EffectPack::Block* mutableBlock(int track, int block);
     void applyDrag(int mouse_x);
     void finishDrag();
     void updateHoverCursor(int x, int y);
     void editBlockColorAt(int track, int block, const QPoint& global_pos);
+    void showAddEffectMenu(int row, int ms, const QPoint& global_pos);
     QString targetKey(const EffectPack::Target& t) const;
     void captureExpandState(QSet<QString>* expanded_keys) const;
     void restoreExpandState(const QSet<QString>& expanded_keys);
+    QVector<PaintBlock> paintBlocksForRow(int row) const;
+    void paintBlockVisual(QPainter& p, const QRect& br, const PaintBlock& pb, bool selected) const;
+    void paintBlockGradientBar(QPainter& p, const QRect& br, const EffectPack::Block& block, int alpha) const;
+    void paintBlockSpatialRaster(QPainter& p, const QRect& br, const PaintBlock& pb,
+                                 const EffectPack::Block& sample) const;
 
     EffectPack::Pack* pack_ = nullptr;
+    std::vector<std::unique_ptr<ControllerTransform>>* transforms_ = nullptr;
     QVector<Node> roots_;
     QVector<Row> visible_rows_;
     int duration_ms_ = 5000;

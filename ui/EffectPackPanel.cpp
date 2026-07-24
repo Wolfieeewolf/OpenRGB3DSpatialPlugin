@@ -155,9 +155,14 @@ void EffectPackPanel::setPlayingUi(bool playing)
 
 void EffectPackPanel::stopPreview()
 {
+    const bool was_playing = player_.IsPlaying();
     if(timer_ && timer_->isActive())
     {
         timer_->stop();
+    }
+    if(was_playing && tab_)
+    {
+        tab_->ApplyEffectPackPreviewFrame(player_.GetPack(), player_.LocalMs(), true);
     }
     player_.Stop();
     setPlayingUi(false);
@@ -328,7 +333,6 @@ void EffectPackPanel::onTick()
         return;
     }
 
-    const auto controllers = tab_->resource_manager->GetRGBControllers();
     tab_->ApplyEffectPackPreviewFrame(player_.GetPack(), player_.LocalMs());
 
     const int local = player_.LocalMs();

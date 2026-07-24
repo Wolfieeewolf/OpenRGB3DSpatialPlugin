@@ -1,6 +1,6 @@
 # Effect / Event Maker (design)
 
-Status: **in progress** — viewport-synced preview + xLights-style timeline editor; event bindings next.
+Status: **in progress** — viewport-synced preview + timeline pack editor; event bindings next.
 
 Captures the agreed direction: plugin-wide user-authored effect packs bound to event catalogs (games, Windows, manual, later media).
 
@@ -35,39 +35,48 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 
 Do **not** rely on plugins calling each other live; share **files + a player**.
 
-## Effect packs (v1)
+## Effect packs (current)
 
-- Timeline length: short clips up to about **60 seconds** (extend later if needed).
+- Timeline length: short clips up to about **60 seconds**.
 - Modes: one-shot, loop forever, or loop **while event active**.
-- Targets: all LEDs → device → zone → LED (coarse first; fine only when needed).
-- Simple tools: solid colour, fade, pulse/chase-style blocks (grow later).
-- Metadata: duration, loop mode, priority (so a toast can interrupt a rainbow, then resume).
-- Storage: `{PluginRoot}/effect-packs/*.oreffect.json`
+- Targets: all LEDs → device → zone → LED.
+- Timeline marks appear **only on the row matching that target** (no ghosting onto child zone/LED rows). A wipe on a device uses the whole-device canvas; the same wipe on one LED is a different effect.
+- Pack `devices` lists scene controllers in scope (empty = whole scene).
+- Tools: Set Level, Fade, Pulse, Wipe, Chase, Twinkle, ColorWash.
+- Gradients, direction (grid/world Left/Right/Up/Down), speed, chase length.
+- Spatial wipe/chase/colorwash use **3D layout world positions**, not raw OpenRGB LED index order.
+- Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (`format` version **2**).
 
-## Pack file schema (v1 draft)
+## Pack file schema (v2)
 
-Extension: `.oreffect.json` (JSON, UTF-8). Version field required.
+Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`2`).
 
 ```json
 {
   "format": "openrgb3d.effect_pack",
-  "version": 1,
+  "version": 2,
   "id": "rainbow_wash",
   "name": "Rainbow wash",
   "duration_ms": 60000,
   "loop": "forever",
   "priority": 10,
+  "devices": ["Keyboard"],
   "tracks": [
     {
       "name": "All LEDs",
       "target": { "kind": "all" },
       "blocks": [
         {
-          "type": "solid",
+          "type": "wipe",
           "start_ms": 0,
-          "end_ms": 60000,
-          "color": "#FF0000",
-          "intensity": 1.0
+          "end_ms": 2000,
+          "direction": "right",
+          "speed": 1.0,
+          "intensity": 1.0,
+          "gradient": [
+            { "pos": 0.0, "color": "#FF0000" },
+            { "pos": 1.0, "color": "#FFFFFF" }
+          ]
         }
       ]
     }
@@ -78,19 +87,13 @@ Extension: `.oreffect.json` (JSON, UTF-8). Version field required.
 ### Fields
 
 | Field | Notes |
-|-------|--------|
+| ----- | ----- |
 | `loop` | `once` \| `forever` \| `while_active` |
-| `duration_ms` | 1…60000 in v1 |
+| `duration_ms` | 1…60000 |
 | `priority` | Higher wins when multiple packs want the same LEDs |
+| `devices` | Optional scene controller names; empty = all |
 | `target.kind` | `all` \| `device` \| `zone` \| `leds` |
-| `target` extras | `device_name`, `zone_name`, `led_indices` as needed |
-| `blocks[].type` | v1: `solid`, `fade`, `pulse` |
-
-### Block types (v1)
-
-- **solid** — constant `color` + `intensity` over `[start_ms, end_ms)`
-- **fade** — `color_from` → `color_to` over the span
-- **pulse** — `color`, `period_ms`, optional `min_intensity` / `max_intensity`
+| `blocks[].type` | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `colorwash` |
 
 ## Runtime spine
 
@@ -99,10 +102,8 @@ Event catalog (game / Windows / manual / media)
         ↓ binding table (default or user override)
 Effect pack (.oreffect.json)
         ↓ player
-LED frames over time → existing OpenRGB / 3D Spatial output
+LED frames over time → OpenRGB + 3D viewport (layout-aware)
 ```
-
-Built-in C++ effects can remain as defaults until replaced by packs.
 
 ## Build order
 
@@ -118,20 +119,14 @@ Built-in C++ effects can remain as defaults until replaced by packs.
 - Live E1.31 bridge as the main workflow.
 - Cross-plugin in-process API.
 
-## Related product notes
-
-- Game APIs / mods publish **events + telemetry**; looks stay in effect packs.
-- Long movie/game beats: prefer **loop while active** or chained cues over a 20‑minute ruler.
-
 ## Code home
 
-- `Effects3D/EffectPacks/EffectPack.*` — load/save/evaluate (solid, fade, pulse)
+- `Effects3D/EffectPacks/EffectPack.*` — load/save/evaluate
 - `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock
-- `Effects3D/EffectPacks/EffectPackApplier.*` — hardware + viewport `preview_color` apply
-- `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/` folder
+- `Effects3D/EffectPacks/EffectPackApplier.*` — hardware + viewport apply (throttled `UpdateLEDs`)
+- `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/`
 - `ui/EffectPackPanel.*` — Run-tab list + Preview/Stop / New / Edit
-- `ui/EffectPackEditorDialog.*` — modeless editor: models left, timeline center, props right
-- `ui/EffectPackTimelineWidget.*` — ruler / rows / blocks / playhead (Ctrl+wheel zoom)
+- `ui/EffectPackEditorDialog.*` — modeless editor
+- `ui/EffectPackTimelineWidget.*` — ruler / rows / blocks / playhead
+- `ui/EffectPackGradientBar.*` — gradient stops UI
 - `PluginSettingsPaths::EffectPacksDir` — `{PluginRoot}/effect-packs`
-- Example pack: `Documentation/examples/rainbow_wash.oreffect.json`
-- Bindings JSON later beside packs (e.g. `effect-bindings.json`)

@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectPackApplier.h"
+#include "ControllerLayout3D.h"
 #include "VirtualController3D.h"
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstdint>
 #include <unordered_set>
+#include <vector>
 
 namespace EffectPack
 {
@@ -119,27 +123,6 @@ bool TransformMatchesDevice(ControllerTransform* transform, const std::string& d
     return false;
 }
 
-/** Empty pack.devices = whole scene / all OpenRGB controllers (legacy packs). */
-bool PackIncludesTransform(const Pack& pack, ControllerTransform* transform)
-{
-    if(!transform)
-    {
-        return false;
-    }
-    if(pack.devices.empty())
-    {
-        return true;
-    }
-    for(const std::string& device : pack.devices)
-    {
-        if(TransformMatchesDevice(transform, device))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool PackIncludesController(const Pack& pack, RGBControllerInterface* c)
 {
     if(!c)
@@ -223,25 +206,90 @@ void ApplyColorToMappedLed(const LEDPosition3D& led,
     touched->insert(mapping);
 }
 
-int PaintTransformTarget(ControllerTransform* transform,
-                         const Target& target,
-                         RGBColor color,
-                         std::unordered_set<RGBControllerInterface*>* touched)
+int PaintTransformTargetSpatial(ControllerTransform* transform,
+                                const Track& track,
+                                int local_ms,
+                                std::unordered_set<RGBControllerInterface*>* touched)
 {
     if(!transform)
     {
         return 0;
     }
-    int painted = 0;
+    if(transform->world_positions_dirty)
+    {
+        ControllerLayout3D::UpdateWorldPositions(transform);
+    }
+
+    std::vector<LEDPosition3D*> matching;
+    matching.reserve(transform->led_positions.size());
     for(LEDPosition3D& led : transform->led_positions)
     {
-        if(!LedMatchesTarget(led, transform->controller, target))
+        if(LedMatchesTarget(led, transform->controller, track.target))
         {
-            continue;
+            matching.push_back(&led);
         }
-        led.preview_color = color;
-        ApplyColorToMappedLed(led, transform->controller, color, touched);
-        ++painted;
+    }
+    if(matching.empty())
+    {
+        return 0;
+    }
+
+    const Block* top = FindActiveBlock(track, local_ms);
+    float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;
+    bool have_bounds = false;
+    if(!matching.empty())
+    {
+        min_x = max_x = matching[0]->world_position.x;
+        min_y = max_y = matching[0]->world_position.y;
+        min_z = max_z = matching[0]->world_position.z;
+        for(LEDPosition3D* led : matching)
+        {
+            const Vector3D& p = led->world_position;
+            min_x = std::min(min_x, p.x); max_x = std::max(max_x, p.x);
+            min_y = std::min(min_y, p.y); max_y = std::max(max_y, p.y);
+            min_z = std::min(min_z, p.z); max_z = std::max(max_z, p.z);
+        }
+        have_bounds = true;
+    }
+    const Direction dir = top ? top->direction : Direction::Right;
+
+    int painted = 0;
+    for(int i = 0; i < (int)matching.size(); ++i)
+    {
+        LEDPosition3D* led = matching[(size_t)i];
+        RGBColor color = ToRGBColor(0, 0, 0);
+        float intensity = 0.0f;
+        bool on = false;
+        if(top)
+        {
+            float axis = 0.0f;
+            if(have_bounds)
+            {
+                axis = WorldAxisPos(dir,
+                                    led->world_position.x, led->world_position.y, led->world_position.z,
+                                    min_x, max_x, min_y, max_y, min_z, max_z);
+            }
+            else
+            {
+                axis = (matching.size() <= 1) ? 0.0f : (float)i / (float)(matching.size() - 1);
+                if(dir == Direction::Left || dir == Direction::Up)
+                {
+                    axis = 1.0f - axis;
+                }
+            }
+            const int seed = (int)(led->zone_idx * 4096u + led->led_idx);
+            on = EvaluateBlockAtAxis(*top, local_ms, axis, seed, &color, &intensity);
+        }
+        if(!on)
+        {
+            color = ToRGBColor(0, 0, 0);
+        }
+        led->preview_color = color;
+        ApplyColorToMappedLed(*led, transform->controller, color, touched);
+        if(on)
+        {
+            ++painted;
+        }
     }
     return painted;
 }
@@ -312,14 +360,15 @@ void PrepareControllersForPreview(const std::vector<RGBControllerInterface*>& co
 ApplyStats ApplyPackFrame(const Pack& pack,
                           int local_ms,
                           const std::vector<RGBControllerInterface*>& controllers,
-                          std::vector<std::unique_ptr<ControllerTransform>>* transforms)
+                          std::vector<std::unique_ptr<ControllerTransform>>* transforms,
+                          bool force_hw_update)
 {
     ApplyStats stats;
     std::unordered_set<RGBControllerInterface*> touched;
     const bool use_transforms = transforms && !transforms->empty();
     const RGBColor off = ToRGBColor(0, 0, 0);
 
-    // Clear pack-scoped LEDs first so a block that ended turns them off after end_ms.
+    // Viewport clear only — avoid a full hardware black frame every tick (USB hitch).
     if(use_transforms)
     {
         for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
@@ -332,7 +381,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             for(LEDPosition3D& led : transform->led_positions)
             {
                 led.preview_color = off;
-                ApplyColorToMappedLed(led, transform->controller, off, &touched);
             }
         }
     }
@@ -349,16 +397,9 @@ ApplyStats ApplyPackFrame(const Pack& pack,
 
     for(const Track& track : pack.tracks)
     {
-        RGBColor color = ToRGBColor(0, 0, 0);
-        float intensity = 0.0f;
-        if(!EvaluateTrackColor(track, local_ms, &color, &intensity))
-        {
-            continue;
-        }
-        ++stats.tracks_applied;
-
         if(use_transforms)
         {
+            int painted = 0;
             for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
             {
                 ControllerTransform* transform = transform_ptr.get();
@@ -371,10 +412,23 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 {
                     continue;
                 }
-                stats.viewport_leds_painted += PaintTransformTarget(transform, track.target, color, &touched);
+                painted += PaintTransformTargetSpatial(transform, track, local_ms, &touched);
+            }
+            if(painted > 0)
+            {
+                ++stats.tracks_applied;
+                stats.viewport_leds_painted += painted;
             }
             continue;
         }
+
+        RGBColor color = ToRGBColor(0, 0, 0);
+        float intensity = 0.0f;
+        if(!EvaluateTrackColor(track, local_ms, &color, &intensity))
+        {
+            continue;
+        }
+        ++stats.tracks_applied;
 
         switch(track.target.kind)
         {
@@ -436,18 +490,156 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         }
     }
 
-    for(RGBControllerInterface* c : touched)
+    // Also push blacks for scoped LEDs that were cleared in viewport but not touched by a track.
+    if(use_transforms)
     {
-        try
+        for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
         {
-            c->UpdateLEDs();
+            ControllerTransform* transform = transform_ptr.get();
+            if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+            {
+                continue;
+            }
+            for(LEDPosition3D& led : transform->led_positions)
+            {
+                if(led.preview_color != off)
+                {
+                    continue;
+                }
+                ApplyColorToMappedLed(led, transform->controller, off, &touched);
+            }
         }
-        catch(...)
+    }
+
+    // Throttle device I/O — SetColor fills buffers every frame; USB flush ~20 Hz.
+    static std::int64_t s_last_hw_ms = 0;
+    const std::int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    const bool flush_hw = force_hw_update || (now_ms - s_last_hw_ms) >= 45;
+    if(flush_hw)
+    {
+        s_last_hw_ms = now_ms;
+        for(RGBControllerInterface* c : touched)
         {
+            try
+            {
+                c->UpdateLEDs();
+            }
+            catch(...)
+            {
+            }
         }
     }
     stats.controllers_touched = (int)touched.size();
     return stats;
+}
+
+
+bool PackIncludesTransform(const Pack& pack, ControllerTransform* transform)
+{
+    if(!transform)
+    {
+        return false;
+    }
+    if(pack.devices.empty())
+    {
+        return true;
+    }
+    for(const std::string& device : pack.devices)
+    {
+        if(TransformMatchesDevice(transform, device))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ComputeLedWorldBounds(const std::vector<LEDPosition3D*>& leds,
+                           float* min_x, float* max_x,
+                           float* min_y, float* max_y,
+                           float* min_z, float* max_z)
+{
+    if(!min_x || !max_x || !min_y || !max_y || !min_z || !max_z || leds.empty())
+    {
+        return false;
+    }
+    *min_x = *max_x = leds.front()->world_position.x;
+    *min_y = *max_y = leds.front()->world_position.y;
+    *min_z = *max_z = leds.front()->world_position.z;
+    for(LEDPosition3D* led : leds)
+    {
+        const Vector3D& p = led->world_position;
+        *min_x = std::min(*min_x, p.x); *max_x = std::max(*max_x, p.x);
+        *min_y = std::min(*min_y, p.y); *max_y = std::max(*max_y, p.y);
+        *min_z = std::min(*min_z, p.z); *max_z = std::max(*max_z, p.z);
+    }
+    return true;
+}
+
+void BuildSpatialAxesForTarget(const Pack& pack,
+                               const Target& target,
+                               Direction dir,
+                               std::vector<std::unique_ptr<ControllerTransform>>* transforms,
+                               std::vector<float>* out_axes,
+                               std::vector<int>* out_seeds)
+{
+    if(!out_axes || !out_seeds)
+    {
+        return;
+    }
+    out_axes->clear();
+    out_seeds->clear();
+    if(!transforms)
+    {
+        return;
+    }
+
+    for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+    {
+        ControllerTransform* transform = transform_ptr.get();
+        if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+        {
+            continue;
+        }
+        if(target.kind != TargetKind::All
+           && !TransformMatchesDevice(transform, target.device_name)
+           && !target.device_name.empty())
+        {
+            continue;
+        }
+        if(transform->world_positions_dirty)
+        {
+            ControllerLayout3D::UpdateWorldPositions(transform);
+        }
+
+        std::vector<LEDPosition3D*> matching;
+        matching.reserve(transform->led_positions.size());
+        for(LEDPosition3D& led : transform->led_positions)
+        {
+            if(LedMatchesTarget(led, transform->controller, target))
+            {
+                matching.push_back(&led);
+            }
+        }
+        if(matching.empty())
+        {
+            continue;
+        }
+
+        float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;
+        if(!ComputeLedWorldBounds(matching, &min_x, &max_x, &min_y, &max_y, &min_z, &max_z))
+        {
+            continue;
+        }
+        for(LEDPosition3D* led : matching)
+        {
+            out_axes->push_back(WorldAxisPos(dir,
+                                             led->world_position.x, led->world_position.y, led->world_position.z,
+                                             min_x, max_x, min_y, max_y, min_z, max_z));
+            out_seeds->push_back((int)(led->zone_idx * 4096u + led->led_idx));
+        }
+    }
 }
 
 } // namespace EffectPack

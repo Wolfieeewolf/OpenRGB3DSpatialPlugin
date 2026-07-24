@@ -20,6 +20,17 @@ public:
 
     const Pack& GetPack() const { return pack_; }
 
+    /** Replace pack data without resetting the playback clock (live editor edits). */
+    void UpdatePack(const Pack& pack) { pack_ = pack; }
+
+    /** Jump playback to a pack-local time (keeps playing). */
+    void SeekToLocalMs(int local_ms)
+    {
+        const int dur = std::max(1, pack_.duration_ms);
+        local_ms_ = std::clamp(local_ms, 0, dur - 1);
+        elapsed_ms_ = local_ms_;
+    }
+
     void Play() { playing_ = true; }
     void Stop()
     {

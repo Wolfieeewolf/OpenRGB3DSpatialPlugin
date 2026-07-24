@@ -111,10 +111,14 @@ public:
 
     /** Pause spatial stack, then drive hardware + viewport from an effect pack. */
     void PrepareEffectPackPreview();
-    void ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms);
+    void ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms, bool force_hw_update = false);
     const std::vector<std::unique_ptr<ControllerTransform>>& GetControllerTransforms() const
     {
         return controller_transforms;
+    }
+    std::vector<std::unique_ptr<ControllerTransform>>* GetControllerTransformsMutable()
+    {
+        return &controller_transforms;
     }
 
 protected:

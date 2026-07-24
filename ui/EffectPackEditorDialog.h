@@ -9,11 +9,14 @@
 #include <QElapsedTimer>
 
 class QComboBox;
+class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
 class QTimer;
+class QWidget;
+class EffectPackGradientBar;
 class OpenRGB3DSpatialTab;
 struct ControllerTransform;
 
@@ -36,20 +39,25 @@ signals:
 public slots:
     void stopPreview();
 
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
+
 private slots:
     void onRebuildTimelineModel();
     void onPickControllers();
     void onDurationChanged(int value);
     void onPlayheadChanged(int ms);
     void onBlockSelected(int track_index, int block_index);
-    void onEmptyCellClicked(int row_index, int ms);
-    void onAddSolid();
-    void onAddFade();
-    void onAddPulse();
+    void onEffectAddRequested(int row_index, int ms, int block_type);
+    void onAddEffectFromPalette();
     void onRemoveBlock();
+    void onBlockDeleteRequested(int track_index, int block_index);
     void onBlockFieldChanged();
+    void onTypeChanged();
     void onPickColor();
     void onPickColorTo();
+    void onGradientPreset();
+    void onGradientStopsChanged();
     void onSave();
     void onPreview();
     void onTick();
@@ -64,12 +72,16 @@ private:
     int ensureTrackForTarget(const EffectPack::Target& target, const QString& label);
     void applyBlockToForm();
     void applyFormToSelectedBlock();
+    void updatePropVisibility();
+    void syncGradientBar();
+    void updateSelectionActions();
     void setColorButton(QPushButton* button, RGBColor color);
     RGBColor colorFromButton(QPushButton* button) const;
     QString sanitizeId(const QString& name) const;
     void setPlayingUi(bool playing);
     void addBlockAt(int row_index, int ms, EffectPack::BlockType type);
     int currentTimelineRow() const;
+    EffectPack::Block* selectedBlock();
 
     OpenRGB3DSpatialTab* tab_ = nullptr;
     filesystem::path packs_dir_;
@@ -84,14 +96,27 @@ private:
     EffectPackTimelineWidget* timeline_ = nullptr;
     QLabel* status_label_ = nullptr;
 
+    QComboBox* effect_palette_ = nullptr;
+    QComboBox* type_combo_ = nullptr;
     QSpinBox* start_spin_ = nullptr;
     QSpinBox* end_spin_ = nullptr;
     QSpinBox* period_spin_ = nullptr;
     QSpinBox* intensity_spin_ = nullptr;
+    QSpinBox* min_intensity_spin_ = nullptr;
+    QDoubleSpinBox* speed_spin_ = nullptr;
+    QSpinBox* pulse_length_spin_ = nullptr;
+    QComboBox* direction_combo_ = nullptr;
     QPushButton* color_button_ = nullptr;
     QPushButton* color_to_button_ = nullptr;
-    QLabel* color_to_label_ = nullptr;
-    QLabel* period_label_ = nullptr;
+    QPushButton* remove_block_button_ = nullptr;
+    QComboBox* gradient_preset_ = nullptr;
+    EffectPackGradientBar* gradient_bar_ = nullptr;
+    QWidget* direction_section_ = nullptr;
+    QWidget* speed_section_ = nullptr;
+    QWidget* pulse_section_ = nullptr;
+    QWidget* color_to_row_ = nullptr;
+    QWidget* period_row_ = nullptr;
+    QWidget* min_intensity_row_ = nullptr;
 
     QPushButton* preview_button_ = nullptr;
     QPushButton* stop_button_ = nullptr;
