@@ -22,20 +22,16 @@
 #include <QSpinBox>
 #include <QSplitter>
 #include <QTimer>
-#include <QTreeWidget>
 #include <QVBoxLayout>
 
 #include <algorithm>
-#include <functional>
+#include <map>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 namespace
 {
-
-constexpr int kRoleKind = Qt::UserRole;
-constexpr int kRoleDevice = Qt::UserRole + 1;
-constexpr int kRoleZone = Qt::UserRole + 2;
-constexpr int kRoleLed = Qt::UserRole + 3;
 
 QColor RgbToQColor(RGBColor c)
 {
@@ -87,6 +83,42 @@ std::string ControllerKeyName(const ControllerTransform* transform, int index)
     return std::string("controller_") + std::to_string(index);
 }
 
+QString ZoneLabelForLed(RGBControllerInterface* rgb, unsigned int zone_idx)
+{
+    if(rgb && zone_idx < rgb->GetZoneCount())
+    {
+        QString name = QString::fromStdString(rgb->GetZoneDisplayName(zone_idx));
+        if(name.isEmpty())
+        {
+            name = QString::fromStdString(rgb->GetZoneName(zone_idx));
+        }
+        if(!name.isEmpty())
+        {
+            return name;
+        }
+    }
+    return QStringLiteral("Zone %1").arg(zone_idx);
+}
+
+bool TryGlobalLedIndex(RGBControllerInterface* rgb, unsigned int zone_idx, unsigned int led_idx, int* out)
+{
+    if(!rgb || !out || zone_idx >= rgb->GetZoneCount())
+    {
+        return false;
+    }
+    if(led_idx >= rgb->GetZoneLEDsCount(zone_idx))
+    {
+        return false;
+    }
+    const unsigned int global = rgb->GetZoneStartIndex(zone_idx) + led_idx;
+    if(global >= rgb->GetLEDCount())
+    {
+        return false;
+    }
+    *out = (int)global;
+    return true;
+}
+
 } // namespace
 
 EffectPackEditorDialog::EffectPackEditorDialog(OpenRGB3DSpatialTab* tab, QWidget* parent)
@@ -132,12 +164,6 @@ void EffectPackEditorDialog::buildUi()
     root->addLayout(meta_row);
 
     auto* splitter = new QSplitter(Qt::Horizontal);
-
-    scene_tree_ = new QTreeWidget();
-    scene_tree_->setHeaderLabel(QStringLiteral("Models"));
-    scene_tree_->setMinimumWidth(200);
-    scene_tree_->setUniformRowHeights(true);
-    splitter->addWidget(scene_tree_);
 
     auto* timeline_scroll = new QScrollArea();
     timeline_scroll->setWidgetResizable(true);
@@ -187,9 +213,8 @@ void EffectPackEditorDialog::buildUi()
     props_wrap->setMinimumWidth(220);
     splitter->addWidget(props_wrap);
 
-    splitter->setStretchFactor(0, 0);
-    splitter->setStretchFactor(1, 1);
-    splitter->setStretchFactor(2, 0);
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 0);
     root->addWidget(splitter, 1);
 
     status_label_ = new QLabel(QStringLiteral("Idle"));
@@ -213,10 +238,9 @@ void EffectPackEditorDialog::buildUi()
     setColorButton(color_to_button_, ToRGBColor(0, 128, 255));
 
     connect(duration_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onDurationChanged);
-    connect(scene_tree_, &QTreeWidget::itemExpanded, this, &EffectPackEditorDialog::onTreeExpandedOrCollapsed);
-    connect(scene_tree_, &QTreeWidget::itemCollapsed, this, &EffectPackEditorDialog::onTreeExpandedOrCollapsed);
     connect(timeline_, &EffectPackTimelineWidget::playheadChanged, this, &EffectPackEditorDialog::onPlayheadChanged);
     connect(timeline_, &EffectPackTimelineWidget::blockSelected, this, &EffectPackEditorDialog::onBlockSelected);
+    connect(timeline_, &EffectPackTimelineWidget::blockEdited, this, &EffectPackEditorDialog::onBlockSelected);
     connect(timeline_, &EffectPackTimelineWidget::emptyCellClicked, this, &EffectPackEditorDialog::onEmptyCellClicked);
     connect(add_solid, &QPushButton::clicked, this, &EffectPackEditorDialog::onAddSolid);
     connect(add_fade, &QPushButton::clicked, this, &EffectPackEditorDialog::onAddFade);
@@ -244,20 +268,10 @@ void EffectPackEditorDialog::NewPack(const filesystem::path& packs_dir)
     pack_.duration_ms = 5000;
     pack_.loop = EffectPack::LoopMode::Once;
     pack_.priority = 10;
-    EffectPack::Track track;
-    track.name = "All LEDs";
-    track.target.kind = EffectPack::TargetKind::All;
-    EffectPack::Block block;
-    block.type = EffectPack::BlockType::Solid;
-    block.start_ms = 0;
-    block.end_ms = 1000;
-    block.color = ToRGBColor(255, 64, 0);
-    block.intensity = 1.0f;
-    track.blocks.push_back(block);
-    pack_.tracks.push_back(std::move(track));
+    // Tracks are created when you place a block on a controller / zone / LED row.
     loadIntoUi(pack_);
     setWindowTitle(QStringLiteral("Effect Pack Editor — New"));
-    status_label_->setText(QStringLiteral("Click empty timeline cells to place blocks on device/zone/LED rows"));
+    status_label_->setText(QStringLiteral("Drag edges to resize · drag block to move · right-click to recolour"));
     show();
     raise();
     activateWindow();
@@ -300,161 +314,119 @@ void EffectPackEditorDialog::loadIntoUi(const EffectPack::Pack& pack)
     timeline_->setPack(&pack_);
     timeline_->setDurationMs(pack_.duration_ms);
     timeline_->setPlayheadMs(0);
-    refreshSceneTree();
-    onRebuildTimelineRows();
+    onRebuildTimelineModel();
     applyBlockToForm();
 }
 
-void EffectPackEditorDialog::refreshSceneTree()
+void EffectPackEditorDialog::onRebuildTimelineModel()
 {
-    scene_tree_->clear();
-    auto* all_item = new QTreeWidgetItem(QStringList{QStringLiteral("All LEDs")});
-    all_item->setData(0, kRoleKind, (int)EffectPack::TargetKind::All);
-    scene_tree_->addTopLevelItem(all_item);
+    QVector<EffectPackTimelineWidget::Node> roots;
 
-    if(!tab_)
+    if(tab_)
     {
-        return;
-    }
-    const auto& transforms = tab_->GetControllerTransforms();
-    for(int i = 0; i < (int)transforms.size(); ++i)
-    {
-        ControllerTransform* transform = transforms[(size_t)i].get();
-        if(!transform || transform->hidden_by_virtual)
+        const auto& transforms = tab_->GetControllerTransforms();
+        for(int i = 0; i < (int)transforms.size(); ++i)
         {
-            continue;
-        }
-        const QString label = ControllerLabel(transform, i);
-        const std::string key = ControllerKeyName(transform, i);
-        auto* ctrl_item = new QTreeWidgetItem(QStringList{label});
-        ctrl_item->setData(0, kRoleKind, (int)EffectPack::TargetKind::Device);
-        ctrl_item->setData(0, kRoleDevice, QString::fromStdString(key));
-        ctrl_item->setData(0, kRoleLed, -1);
-
-        RGBControllerInterface* rgb = transform->controller;
-        if(!rgb && !transform->led_positions.empty())
-        {
-            rgb = transform->led_positions.front().controller;
-        }
-        if(rgb)
-        {
-            for(unsigned int z = 0; z < rgb->GetZoneCount(); ++z)
+            ControllerTransform* transform = transforms[(size_t)i].get();
+            if(!transform || transform->hidden_by_virtual)
             {
-                QString zone_name = QString::fromStdString(rgb->GetZoneDisplayName(z));
-                if(zone_name.isEmpty())
-                {
-                    zone_name = QString::fromStdString(rgb->GetZoneName(z));
-                }
-                if(zone_name.isEmpty())
-                {
-                    zone_name = QStringLiteral("Zone %1").arg(z);
-                }
-                auto* zone_item = new QTreeWidgetItem(QStringList{zone_name});
-                zone_item->setData(0, kRoleKind, (int)EffectPack::TargetKind::Zone);
-                zone_item->setData(0, kRoleDevice, QString::fromStdString(key));
-                zone_item->setData(0, kRoleZone, zone_name);
-                zone_item->setData(0, kRoleLed, -1);
-
-                const unsigned int zone_leds = rgb->GetZoneLEDsCount(z);
-                const unsigned int start = rgb->GetZoneStartIndex(z);
-                // Cap LED children so huge strips stay usable; still placeable via zone row.
-                const unsigned int led_cap = std::min(zone_leds, 64u);
-                for(unsigned int li = 0; li < led_cap; ++li)
-                {
-                    auto* led_item = new QTreeWidgetItem(QStringList{QStringLiteral("LED %1").arg(li)});
-                    led_item->setData(0, kRoleKind, (int)EffectPack::TargetKind::Leds);
-                    led_item->setData(0, kRoleDevice, QString::fromStdString(key));
-                    led_item->setData(0, kRoleZone, zone_name);
-                    led_item->setData(0, kRoleLed, (int)(start + li));
-                    zone_item->addChild(led_item);
-                }
-                if(zone_leds > led_cap)
-                {
-                    auto* more = new QTreeWidgetItem(
-                        QStringList{QStringLiteral("… %1 more LEDs (use zone row)").arg(zone_leds - led_cap)});
-                    more->setDisabled(true);
-                    zone_item->addChild(more);
-                }
-                ctrl_item->addChild(zone_item);
+                continue;
             }
+
+            // One timeline line per scene controller (whole device).
+            EffectPackTimelineWidget::Node ctrl;
+            ctrl.label = ControllerLabel(transform, i);
+            const std::string key = ControllerKeyName(transform, i);
+            ctrl.target.kind = EffectPack::TargetKind::Device;
+            ctrl.target.device_name = key;
+
+            // Group this controller's mapped LEDs into zones, then LEDs under each zone.
+            // Uses scene led_positions so custom/virtual controllers expand correctly.
+            struct ZoneBucket
+            {
+                QString label;           // display (may be disambiguated)
+                QString zone_name;       // OpenRGB zone name used for targeting
+                std::vector<int> led_globals;
+                std::vector<unsigned int> led_in_zone;
+            };
+            std::map<std::pair<RGBControllerInterface*, unsigned int>, ZoneBucket> zones;
+
+            for(const LEDPosition3D& led : transform->led_positions)
+            {
+                RGBControllerInterface* rgb = led.controller ? led.controller : transform->controller;
+                if(!rgb)
+                {
+                    continue;
+                }
+                const auto zone_key = std::make_pair(rgb, led.zone_idx);
+                ZoneBucket& bucket = zones[zone_key];
+                if(bucket.zone_name.isEmpty())
+                {
+                    bucket.zone_name = ZoneLabelForLed(rgb, led.zone_idx);
+                    bucket.label = bucket.zone_name;
+                }
+                int global = -1;
+                if(TryGlobalLedIndex(rgb, led.zone_idx, led.led_idx, &global))
+                {
+                    if(std::find(bucket.led_globals.begin(), bucket.led_globals.end(), global) == bucket.led_globals.end())
+                    {
+                        bucket.led_globals.push_back(global);
+                        bucket.led_in_zone.push_back(led.led_idx);
+                    }
+                }
+            }
+
+            for(auto& entry : zones)
+            {
+                ZoneBucket& bucket = entry.second;
+                int same_label = 0;
+                for(const auto& other : zones)
+                {
+                    if(other.second.zone_name == bucket.zone_name)
+                    {
+                        ++same_label;
+                    }
+                }
+                if(same_label > 1 && entry.first.first)
+                {
+                    QString device = QString::fromStdString(entry.first.first->GetDisplayName());
+                    if(device.isEmpty())
+                    {
+                        device = QString::fromStdString(entry.first.first->GetName());
+                    }
+                    if(!device.isEmpty())
+                    {
+                        bucket.label = bucket.zone_name + QStringLiteral(" · ") + device;
+                    }
+                }
+
+                EffectPackTimelineWidget::Node zone;
+                zone.label = bucket.label;
+                zone.target.kind = EffectPack::TargetKind::Zone;
+                zone.target.device_name = key;
+                zone.target.zone_name = bucket.zone_name.toStdString();
+
+                const size_t led_count = bucket.led_globals.size();
+                // Cap ultra-dense strips so the timeline stays usable; zone row still paints all LEDs.
+                const size_t led_cap = std::min(led_count, size_t{128});
+                for(size_t li = 0; li < led_cap; ++li)
+                {
+                    EffectPackTimelineWidget::Node led_node;
+                    led_node.label = QStringLiteral("LED %1").arg(bucket.led_in_zone[li]);
+                    led_node.target.kind = EffectPack::TargetKind::Leds;
+                    led_node.target.device_name = key;
+                    led_node.target.zone_name = bucket.zone_name.toStdString();
+                    led_node.target.led_indices = {bucket.led_globals[li]};
+                    zone.children.push_back(std::move(led_node));
+                }
+                ctrl.children.push_back(std::move(zone));
+            }
+
+            roots.push_back(std::move(ctrl));
         }
-        scene_tree_->addTopLevelItem(ctrl_item);
     }
-    scene_tree_->expandToDepth(0);
-}
 
-EffectPack::Target EffectPackEditorDialog::targetFromTreeItem(QTreeWidgetItem* item) const
-{
-    EffectPack::Target target;
-    if(!item)
-    {
-        target.kind = EffectPack::TargetKind::All;
-        return target;
-    }
-    target.kind = (EffectPack::TargetKind)item->data(0, kRoleKind).toInt();
-    target.device_name = item->data(0, kRoleDevice).toString().toStdString();
-    target.zone_name = item->data(0, kRoleZone).toString().toStdString();
-    const int led = item->data(0, kRoleLed).toInt();
-    if(target.kind == EffectPack::TargetKind::Leds && led >= 0)
-    {
-        target.led_indices = {led};
-    }
-    return target;
-}
-
-void EffectPackEditorDialog::onRebuildTimelineRows()
-{
-    QVector<EffectPackTimelineWidget::Row> rows;
-
-    std::function<void(QTreeWidgetItem*)> walk = [&](QTreeWidgetItem* item) {
-        if(!item || item->isDisabled())
-        {
-            return;
-        }
-        const int kind = item->data(0, kRoleKind).toInt();
-        const bool is_target = kind == (int)EffectPack::TargetKind::All
-            || kind == (int)EffectPack::TargetKind::Device
-            || kind == (int)EffectPack::TargetKind::Zone
-            || kind == (int)EffectPack::TargetKind::Leds;
-        // Show All + device always; zone/LED only when that branch is expanded into view
-        // (zone visible if parent expanded; LED if zone expanded).
-        bool include = false;
-        if(kind == (int)EffectPack::TargetKind::All || kind == (int)EffectPack::TargetKind::Device)
-        {
-            include = true;
-        }
-        else if(kind == (int)EffectPack::TargetKind::Zone)
-        {
-            include = item->parent() && item->parent()->isExpanded();
-        }
-        else if(kind == (int)EffectPack::TargetKind::Leds)
-        {
-            include = item->parent() && item->parent()->isExpanded();
-        }
-        if(include && is_target)
-        {
-            EffectPackTimelineWidget::Row row;
-            row.label = item->text(0);
-            row.target = targetFromTreeItem(item);
-            rows.push_back(row);
-        }
-        for(int i = 0; i < item->childCount(); ++i)
-        {
-            walk(item->child(i));
-        }
-    };
-
-    for(int i = 0; i < scene_tree_->topLevelItemCount(); ++i)
-    {
-        walk(scene_tree_->topLevelItem(i));
-    }
-
-    timeline_->setRows(rows);
-}
-
-void EffectPackEditorDialog::onTreeExpandedOrCollapsed()
-{
-    onRebuildTimelineRows();
+    timeline_->setModel(std::move(roots));
 }
 
 void EffectPackEditorDialog::onDurationChanged(int value)
@@ -497,7 +469,6 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
     const QVector<EffectPackTimelineWidget::Row>& built = timeline_->rows();
     if(row_index < 0 || row_index >= built.size())
     {
-        // Fall back to All LEDs row 0 if present.
         if(built.isEmpty())
         {
             return;
@@ -545,23 +516,12 @@ void EffectPackEditorDialog::onBlockSelected(int track_index, int block_index)
 
 int EffectPackEditorDialog::currentTimelineRow() const
 {
-    int row = 0;
-    if(QTreeWidgetItem* item = scene_tree_->currentItem())
+    const int selected = timeline_->selectedRowIndex();
+    if(selected >= 0 && selected < timeline_->rows().size())
     {
-        const EffectPack::Target target = targetFromTreeItem(item);
-        const auto& rows = timeline_->rows();
-        for(int i = 0; i < rows.size(); ++i)
-        {
-            if(rows[i].target.kind == target.kind
-               && rows[i].target.device_name == target.device_name
-               && rows[i].target.zone_name == target.zone_name
-               && rows[i].target.led_indices == target.led_indices)
-            {
-                return i;
-            }
-        }
+        return selected;
     }
-    return row;
+    return 0;
 }
 
 void EffectPackEditorDialog::onAddSolid()

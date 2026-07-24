@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectPackApplier.h"
+#include "VirtualController3D.h"
 
 #include <algorithm>
 #include <cctype>
@@ -98,6 +99,11 @@ bool TransformMatchesDevice(ControllerTransform* transform, const std::string& d
     {
         return true;
     }
+    if(transform->virtual_controller
+       && NameMatches(transform->virtual_controller->GetName(), device_name))
+    {
+        return true;
+    }
     if(transform->controller && ControllerMatchesDevice(transform->controller, device_name))
     {
         return true;
@@ -113,9 +119,73 @@ bool TransformMatchesDevice(ControllerTransform* transform, const std::string& d
     return false;
 }
 
-int PaintViewportLeds(ControllerTransform* transform,
-                      const Target& target,
-                      RGBColor color)
+bool LedMatchesTarget(const LEDPosition3D& led,
+                      RGBControllerInterface* fallback_controller,
+                      const Target& target)
+{
+    RGBControllerInterface* mapping = led.controller ? led.controller : fallback_controller;
+    if(!mapping)
+    {
+        return false;
+    }
+
+    switch(target.kind)
+    {
+        case TargetKind::All:
+            return true;
+        case TargetKind::Device:
+            // Caller already filtered the transform (device / virtual name).
+            return true;
+        case TargetKind::Zone:
+        {
+            if(target.zone_name.empty())
+            {
+                return true;
+            }
+            const int zone = FindZoneIndex(mapping, target.zone_name);
+            return (zone >= 0 && (unsigned int)zone == led.zone_idx);
+        }
+        case TargetKind::Leds:
+        {
+            unsigned int global_idx = 0;
+            if(!TryGetGlobalLedIndex(mapping, led.zone_idx, led.led_idx, &global_idx))
+            {
+                return false;
+            }
+            return LedIndexInList(target.led_indices, (int)global_idx);
+        }
+        default:
+        {
+            const TargetKind unused = target.kind;
+            (void)unused;
+            return false;
+        }
+    }
+}
+
+void ApplyColorToMappedLed(const LEDPosition3D& led,
+                           RGBControllerInterface* fallback_controller,
+                           RGBColor color,
+                           std::unordered_set<RGBControllerInterface*>* touched)
+{
+    RGBControllerInterface* mapping = led.controller ? led.controller : fallback_controller;
+    if(!mapping || !touched)
+    {
+        return;
+    }
+    unsigned int global_idx = 0;
+    if(!TryGetGlobalLedIndex(mapping, led.zone_idx, led.led_idx, &global_idx))
+    {
+        return;
+    }
+    mapping->SetColor(global_idx, color);
+    touched->insert(mapping);
+}
+
+int PaintTransformTarget(ControllerTransform* transform,
+                         const Target& target,
+                         RGBColor color,
+                         std::unordered_set<RGBControllerInterface*>* touched)
 {
     if(!transform)
     {
@@ -124,60 +194,13 @@ int PaintViewportLeds(ControllerTransform* transform,
     int painted = 0;
     for(LEDPosition3D& led : transform->led_positions)
     {
-        RGBControllerInterface* mapping = led.controller ? led.controller : transform->controller;
-        if(!mapping)
+        if(!LedMatchesTarget(led, transform->controller, target))
         {
             continue;
         }
-
-        bool hit = false;
-        switch(target.kind)
-        {
-            case TargetKind::All:
-                hit = true;
-                break;
-            case TargetKind::Device:
-                hit = ControllerMatchesDevice(mapping, target.device_name)
-                    || (transform->controller && ControllerMatchesDevice(transform->controller, target.device_name));
-                break;
-            case TargetKind::Zone:
-            {
-                if(!ControllerMatchesDevice(mapping, target.device_name)
-                   && !(transform->controller && ControllerMatchesDevice(transform->controller, target.device_name)))
-                {
-                    break;
-                }
-                if(target.zone_name.empty())
-                {
-                    hit = true;
-                    break;
-                }
-                const int zone = FindZoneIndex(mapping, target.zone_name);
-                hit = (zone >= 0 && (unsigned int)zone == led.zone_idx);
-                break;
-            }
-            case TargetKind::Leds:
-            {
-                if(!ControllerMatchesDevice(mapping, target.device_name)
-                   && !(transform->controller && ControllerMatchesDevice(transform->controller, target.device_name)))
-                {
-                    break;
-                }
-                unsigned int global_idx = 0;
-                if(TryGetGlobalLedIndex(mapping, led.zone_idx, led.led_idx, &global_idx))
-                {
-                    hit = LedIndexInList(target.led_indices, (int)global_idx);
-                }
-                break;
-            }
-            default:
-                break;
-        }
-        if(hit)
-        {
-            led.preview_color = color;
-            ++painted;
-        }
+        led.preview_color = color;
+        ApplyColorToMappedLed(led, transform->controller, color, touched);
+        ++painted;
     }
     return painted;
 }
@@ -252,6 +275,33 @@ ApplyStats ApplyPackFrame(const Pack& pack,
 {
     ApplyStats stats;
     std::unordered_set<RGBControllerInterface*> touched;
+    const bool use_transforms = transforms && !transforms->empty();
+    const RGBColor off = ToRGBColor(0, 0, 0);
+
+    // Clear first so a block that ended (e.g. 0–1000ms) turns LEDs off after end_ms.
+    if(use_transforms)
+    {
+        for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+        {
+            ControllerTransform* transform = transform_ptr.get();
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+            for(LEDPosition3D& led : transform->led_positions)
+            {
+                led.preview_color = off;
+                ApplyColorToMappedLed(led, transform->controller, off, &touched);
+            }
+        }
+    }
+    else
+    {
+        for(RGBControllerInterface* c : controllers)
+        {
+            ApplyToControllerAll(c, off, &touched);
+        }
+    }
 
     for(const Track& track : pack.tracks)
     {
@@ -262,6 +312,25 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             continue;
         }
         ++stats.tracks_applied;
+
+        if(use_transforms)
+        {
+            for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+            {
+                ControllerTransform* transform = transform_ptr.get();
+                if(!transform || transform->hidden_by_virtual)
+                {
+                    continue;
+                }
+                if(track.target.kind != TargetKind::All
+                   && !TransformMatchesDevice(transform, track.target.device_name))
+                {
+                    continue;
+                }
+                stats.viewport_leds_painted += PaintTransformTarget(transform, track.target, color, &touched);
+            }
+            continue;
+        }
 
         switch(track.target.kind)
         {
@@ -313,23 +382,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 const TargetKind unused = track.target.kind;
                 (void)unused;
                 break;
-            }
-        }
-
-        if(transforms)
-        {
-            for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
-            {
-                ControllerTransform* transform = transform_ptr.get();
-                if(!transform)
-                {
-                    continue;
-                }
-                if(track.target.kind != TargetKind::All && !TransformMatchesDevice(transform, track.target.device_name))
-                {
-                    continue;
-                }
-                stats.viewport_leds_painted += PaintViewportLeds(transform, track.target, color);
             }
         }
     }

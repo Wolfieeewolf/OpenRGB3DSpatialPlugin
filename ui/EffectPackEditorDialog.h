@@ -12,9 +12,6 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
-class QSplitter;
-class QTreeWidget;
-class QTreeWidgetItem;
 class QTimer;
 class EffectPackTimelineWidget;
 class OpenRGB3DSpatialTab;
@@ -39,8 +36,7 @@ public slots:
     void stopPreview();
 
 private slots:
-    void onRebuildTimelineRows();
-    void onTreeExpandedOrCollapsed();
+    void onRebuildTimelineModel();
     void onDurationChanged(int value);
     void onPlayheadChanged(int ms);
     void onBlockSelected(int track_index, int block_index);
@@ -59,9 +55,7 @@ private slots:
 private:
     void buildUi();
     void loadIntoUi(const EffectPack::Pack& pack);
-    void refreshSceneTree();
     void applyMetaToPack();
-    EffectPack::Target targetFromTreeItem(QTreeWidgetItem* item) const;
     int ensureTrackForTarget(const EffectPack::Target& target, const QString& label);
     void applyBlockToForm();
     void applyFormToSelectedBlock();
@@ -81,7 +75,6 @@ private:
     QLineEdit* name_edit_ = nullptr;
     QSpinBox* duration_spin_ = nullptr;
     QComboBox* loop_combo_ = nullptr;
-    QTreeWidget* scene_tree_ = nullptr;
     EffectPackTimelineWidget* timeline_ = nullptr;
     QLabel* status_label_ = nullptr;
 
