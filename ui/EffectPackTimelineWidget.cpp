@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectPackTimelineWidget.h"
+#include "EffectPackCatalog.h"
 #include "EffectPacks/EffectPackApplier.h"
 
 #include <QColorDialog>
 #include <QCursor>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QSet>
@@ -57,6 +62,7 @@ EffectPackTimelineWidget::EffectPackTimelineWidget(QWidget* parent)
 {
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
+    setAcceptDrops(true);
     setAutoFillBackground(true);
     QPalette pal = palette();
     pal.setColor(QPalette::Window, QColor(32, 32, 36));
@@ -774,27 +780,149 @@ void EffectPackTimelineWidget::updateHoverCursor(int x, int y)
     unsetCursor();
 }
 
+void EffectPackTimelineWidget::populateAddEffectMenu(QMenu* menu, int row, int ms)
+{
+    if(!menu)
+    {
+        return;
+    }
+    QMenu* basic = menu->addMenu(QStringLiteral("Basic Lighting"));
+    QMenu* pixel = menu->addMenu(QStringLiteral("Pixel Lighting"));
+    for(const EffectPackCatalog::Entry& e : EffectPackCatalog::AllEntries())
+    {
+        QMenu* dest = (e.category == EffectPackCatalog::Category::Basic) ? basic : pixel;
+        QAction* act = dest->addAction(EffectPackCatalog::MakeEffectIcon(e), QString::fromUtf8(e.name));
+        connect(act, &QAction::triggered, this, [this, row, ms, type = e.type]() {
+            emit effectAddRequested(row, ms, (int)type);
+        });
+    }
+}
+
 void EffectPackTimelineWidget::showAddEffectMenu(int row, int ms, const QPoint& global_pos)
 {
     QMenu menu(this);
     QMenu* add = menu.addMenu(QStringLiteral("Add effect"));
-    const struct { const char* name; EffectPack::BlockType type; } items[] = {
-        {"Set Level", EffectPack::BlockType::Solid},
-        {"Fade", EffectPack::BlockType::Fade},
-        {"Pulse", EffectPack::BlockType::Pulse},
-        {"Wipe", EffectPack::BlockType::Wipe},
-        {"Chase", EffectPack::BlockType::Chase},
-        {"Twinkle", EffectPack::BlockType::Twinkle},
-        {"ColorWash", EffectPack::BlockType::ColorWash},
-    };
-    for(const auto& it : items)
-    {
-        QAction* act = add->addAction(QString::fromUtf8(it.name));
-        connect(act, &QAction::triggered, this, [this, row, ms, type = it.type]() {
-            emit effectAddRequested(row, ms, (int)type);
-        });
-    }
+    populateAddEffectMenu(add, row, ms);
     menu.exec(global_pos);
+}
+
+void EffectPackTimelineWidget::applyColorToBlock(int track, int block, RGBColor color)
+{
+    EffectPack::Block* b = mutableBlock(track, block);
+    if(!b)
+    {
+        return;
+    }
+    b->color = color;
+    b->color_from = color;
+    if(!b->gradient.empty())
+    {
+        b->gradient.front().color = color;
+    }
+    EffectPack::EnsureBlockGradient(b);
+    selected_track_ = track;
+    selected_block_ = block;
+    emit blockSelected(track, block);
+    update();
+    emit blockEdited(track, block);
+}
+
+bool EffectPackTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
+{
+    if(!mime || !pack_)
+    {
+        return false;
+    }
+
+    EffectPack::BlockType type = EffectPack::BlockType::Solid;
+    if(EffectPackCatalog::EffectTypeFromMime(mime, &type))
+    {
+        if(pos.y() < header_height_ || pos.x() < gutter_width_)
+        {
+            return false;
+        }
+        const int row = (pos.y() - header_height_) / row_height_;
+        if(row < 0 || row >= visible_rows_.size())
+        {
+            return false;
+        }
+        const int ms = xToTime(pos.x());
+        selected_row_ = row;
+        emit rowSelected(row);
+        emit effectAddRequested(row, ms, (int)type);
+        return true;
+    }
+
+    RGBColor color = 0;
+    QString preset;
+    const bool has_color = EffectPackCatalog::ColorFromMime(mime, &color);
+    const bool has_grad = EffectPackCatalog::GradientPresetFromMime(mime, &preset);
+    if(!has_color && !has_grad)
+    {
+        return false;
+    }
+
+    int row = -1;
+    int track = -1;
+    int block = -1;
+    if(!hitTestBlock(pos.x(), pos.y(), &row, &track, &block))
+    {
+        // Prefer currently selected block when dropping on empty space of its row.
+        if(selected_track_ >= 0 && selected_block_ >= 0)
+        {
+            track = selected_track_;
+            block = selected_block_;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    if(has_color)
+    {
+        applyColorToBlock(track, block, color);
+        return true;
+    }
+    emit gradientPresetApplied(track, block, preset);
+    return true;
+}
+
+void EffectPackTimelineWidget::dragEnterEvent(QDragEnterEvent* event)
+{
+    const QMimeData* mime = event->mimeData();
+    if(mime && (mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kEffectMimeType))
+                || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kColorMimeType))
+                || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kGradientPresetMimeType))
+                || mime->hasColor()))
+    {
+        event->acceptProposedAction();
+        return;
+    }
+    event->ignore();
+}
+
+void EffectPackTimelineWidget::dragMoveEvent(QDragMoveEvent* event)
+{
+    const QMimeData* mime = event->mimeData();
+    if(mime && (mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kEffectMimeType))
+                || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kColorMimeType))
+                || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kGradientPresetMimeType))
+                || mime->hasColor()))
+    {
+        event->acceptProposedAction();
+        return;
+    }
+    event->ignore();
+}
+
+void EffectPackTimelineWidget::dropEvent(QDropEvent* event)
+{
+    if(dropAt(event->position().toPoint(), event->mimeData()))
+    {
+        event->acceptProposedAction();
+        return;
+    }
+    event->ignore();
 }
 
 void EffectPackTimelineWidget::editBlockColorAt(int track, int block, const QPoint& /*global_pos*/)
@@ -934,6 +1062,7 @@ void EffectPackTimelineWidget::mousePressEvent(QMouseEvent* event)
             emit blockSelected(track, block);
             QMenu menu(this);
             QAction* color_act = menu.addAction(QStringLiteral("Change color…"));
+            menu.addSeparator();
             QAction* del_act = menu.addAction(QStringLiteral("Delete"));
             QAction* chosen = menu.exec(event->globalPosition().toPoint());
             if(chosen == color_act)

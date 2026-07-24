@@ -17,6 +17,7 @@ class QSpinBox;
 class QTimer;
 class QWidget;
 class EffectPackGradientBar;
+class EffectPackToolBar;
 class OpenRGB3DSpatialTab;
 struct ControllerTransform;
 
@@ -49,7 +50,10 @@ private slots:
     void onPlayheadChanged(int ms);
     void onBlockSelected(int track_index, int block_index);
     void onEffectAddRequested(int row_index, int ms, int block_type);
-    void onAddEffectFromPalette();
+    void onToolbarEffectClicked(int block_type);
+    void onToolbarColorClicked(unsigned int rgb);
+    void onToolbarGradientClicked(const QString& preset_id);
+    void onGradientPresetApplied(int track_index, int block_index, const QString& preset_id);
     void onRemoveBlock();
     void onBlockDeleteRequested(int track_index, int block_index);
     void onBlockFieldChanged();
@@ -82,6 +86,7 @@ private:
     void addBlockAt(int row_index, int ms, EffectPack::BlockType type);
     int currentTimelineRow() const;
     EffectPack::Block* selectedBlock();
+    void applyGradientPresetToBlock(EffectPack::Block* block, const QString& preset_id);
 
     OpenRGB3DSpatialTab* tab_ = nullptr;
     filesystem::path packs_dir_;
@@ -93,10 +98,10 @@ private:
     QSpinBox* duration_spin_ = nullptr;
     QComboBox* loop_combo_ = nullptr;
     QPushButton* controllers_button_ = nullptr;
+    EffectPackToolBar* effect_toolbar_ = nullptr;
     EffectPackTimelineWidget* timeline_ = nullptr;
     QLabel* status_label_ = nullptr;
 
-    QComboBox* effect_palette_ = nullptr;
     QComboBox* type_combo_ = nullptr;
     QSpinBox* start_spin_ = nullptr;
     QSpinBox* end_spin_ = nullptr;

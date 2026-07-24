@@ -42,10 +42,12 @@ Do **not** rely on plugins calling each other live; share **files + a player**.
 - Targets: all LEDs → device → zone → LED.
 - Timeline marks appear **only on the row matching that target** (no ghosting onto child zone/LED rows). A wipe on a device uses the whole-device canvas; the same wipe on one LED is a different effect.
 - Pack `devices` lists scene controllers in scope (empty = whole scene).
-- Tools: Set Level, Fade, Pulse, Wipe, Chase, Twinkle, ColorWash.
+- Tools: Set Level, Fade, Pulse, Wipe, Chase, Twinkle, ColorWash (Basic + Pixel catalog; more types planned).
+- Dual add UX (Vixen/xLights-style): **right-click** Add effect (Basic/Pixel) and **drag** from the effect toolbar onto a row; drag colors/gradients onto blocks.
 - Gradients, direction (grid/world Left/Right/Up/Down), speed, chase length.
 - Spatial wipe/chase/colorwash use **3D layout world positions**, not raw OpenRGB LED index order.
 - Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (`format` version **2**).
+- Later: curve + gradient libraries (intensity curves, saved presets) — see plan `vixen_xlights_compare`.
 
 ## Pack file schema (v2)
 

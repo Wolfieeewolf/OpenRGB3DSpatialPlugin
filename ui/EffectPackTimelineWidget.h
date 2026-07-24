@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+class QMimeData;
 struct ControllerTransform;
 
 /**
@@ -76,8 +77,10 @@ signals:
     void blockSelected(int track_index, int block_index);
     void blockEdited(int track_index, int block_index);
     void blockDeleteRequested(int track_index, int block_index);
-    /** Place a new effect on a row at time (from right-click menu / effects palette). */
+    /** Place a new effect on a row at time (from right-click menu / effects palette / drag-drop). */
     void effectAddRequested(int row_index, int ms, int block_type);
+    /** Gradient preset id dropped or applied onto a block (e.g. "rainbow"). */
+    void gradientPresetApplied(int track_index, int block_index, const QString& preset_id);
     void rowSelected(int row_index);
     void contentHeightChanged(int height);
     void modelExpandedChanged();
@@ -90,6 +93,9 @@ protected:
     void leaveEvent(QEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
 
@@ -142,6 +148,9 @@ private:
     void updateHoverCursor(int x, int y);
     void editBlockColorAt(int track, int block, const QPoint& global_pos);
     void showAddEffectMenu(int row, int ms, const QPoint& global_pos);
+    void populateAddEffectMenu(QMenu* menu, int row, int ms);
+    void applyColorToBlock(int track, int block, RGBColor color);
+    bool dropAt(const QPoint& pos, const QMimeData* mime);
     QString targetKey(const EffectPack::Target& t) const;
     void captureExpandState(QSet<QString>* expanded_keys) const;
     void restoreExpandState(const QSet<QString>& expanded_keys);

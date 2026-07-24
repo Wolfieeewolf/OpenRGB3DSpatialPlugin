@@ -190,6 +190,7 @@ HEADERS += \
     ui/EffectPackEditorDialog.h \
     ui/EffectPackTimelineWidget.h \
     ui/EffectPackGradientBar.h \
+    ui/EffectPackToolBar.h \
     ui/EffectStackPanel.h \
     ui/ZonesPanel.h \
     ui/EffectGlobalSettingsPanel.h \
@@ -356,6 +357,7 @@ SOURCES += \
     ui/EffectPackEditorDialog.cpp \
     ui/EffectPackTimelineWidget.cpp \
     ui/EffectPackGradientBar.cpp \
+    ui/EffectPackToolBar.cpp \
     ui/EffectStackPanel.cpp \
     ui/ZonesPanel.cpp \
     ui/EffectGlobalSettingsPanel.cpp \

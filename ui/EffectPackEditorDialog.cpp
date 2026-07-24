@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectPackEditorDialog.h"
+#include "EffectPackCatalog.h"
 #include "EffectPackGradientBar.h"
 #include "EffectPackTimelineWidget.h"
+#include "EffectPackToolBar.h"
 #include "EffectPacks/EffectPackApplier.h"
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
@@ -176,6 +178,9 @@ void EffectPackEditorDialog::buildUi()
     meta_row->addWidget(controllers_button_);
     root->addLayout(meta_row);
 
+    effect_toolbar_ = new EffectPackToolBar();
+    root->addWidget(effect_toolbar_);
+
     auto* splitter = new QSplitter(Qt::Horizontal);
 
     auto* timeline_scroll = new QScrollArea();
@@ -190,18 +195,10 @@ void EffectPackEditorDialog::buildUi()
     props_layout->setContentsMargins(4, 4, 4, 4);
 
     auto* palette_row = new QHBoxLayout();
-    effect_palette_ = new QComboBox();
-    effect_palette_->addItem(QStringLiteral("Set Level"), (int)EffectPack::BlockType::Solid);
-    effect_palette_->addItem(QStringLiteral("Fade"), (int)EffectPack::BlockType::Fade);
-    effect_palette_->addItem(QStringLiteral("Pulse"), (int)EffectPack::BlockType::Pulse);
-    effect_palette_->addItem(QStringLiteral("Wipe"), (int)EffectPack::BlockType::Wipe);
-    effect_palette_->addItem(QStringLiteral("Chase"), (int)EffectPack::BlockType::Chase);
-    effect_palette_->addItem(QStringLiteral("Twinkle"), (int)EffectPack::BlockType::Twinkle);
-    effect_palette_->addItem(QStringLiteral("ColorWash"), (int)EffectPack::BlockType::ColorWash);
-    auto* add_effect = new QPushButton(QStringLiteral("Add"));
-    remove_block_button_ = new QPushButton(QStringLiteral("Remove"));
-    palette_row->addWidget(effect_palette_, 1);
-    palette_row->addWidget(add_effect);
+    remove_block_button_ = new QPushButton(QStringLiteral("Remove effect"));
+    remove_block_button_->setToolTip(QStringLiteral("Delete selected block (Delete / Backspace)"));
+    palette_row->addWidget(new QLabel(QStringLiteral("Drag effects from the toolbar · right-click timeline to add")));
+    palette_row->addStretch(1);
     palette_row->addWidget(remove_block_button_);
     props_layout->addLayout(palette_row);
 
@@ -216,13 +213,10 @@ void EffectPackEditorDialog::buildUi()
     effect_sec->setExpanded(true);
     auto* effect_form = new QFormLayout();
     type_combo_ = new QComboBox();
-    type_combo_->addItem(QStringLiteral("Set Level"), (int)EffectPack::BlockType::Solid);
-    type_combo_->addItem(QStringLiteral("Fade"), (int)EffectPack::BlockType::Fade);
-    type_combo_->addItem(QStringLiteral("Pulse"), (int)EffectPack::BlockType::Pulse);
-    type_combo_->addItem(QStringLiteral("Wipe"), (int)EffectPack::BlockType::Wipe);
-    type_combo_->addItem(QStringLiteral("Chase"), (int)EffectPack::BlockType::Chase);
-    type_combo_->addItem(QStringLiteral("Twinkle"), (int)EffectPack::BlockType::Twinkle);
-    type_combo_->addItem(QStringLiteral("ColorWash"), (int)EffectPack::BlockType::ColorWash);
+    for(const EffectPackCatalog::Entry& e : EffectPackCatalog::AllEntries())
+    {
+        type_combo_->addItem(EffectPackCatalog::MakeEffectIcon(e), QString::fromUtf8(e.name), (int)e.type);
+    }
     start_spin_ = new QSpinBox();
     start_spin_->setRange(0, EffectPack::kMaxDurationMs);
     end_spin_ = new QSpinBox();
@@ -356,7 +350,10 @@ void EffectPackEditorDialog::buildUi()
     connect(timeline_, &EffectPackTimelineWidget::blockEdited, this, &EffectPackEditorDialog::onBlockSelected);
     connect(timeline_, &EffectPackTimelineWidget::blockDeleteRequested, this, &EffectPackEditorDialog::onBlockDeleteRequested);
     connect(timeline_, &EffectPackTimelineWidget::effectAddRequested, this, &EffectPackEditorDialog::onEffectAddRequested);
-    connect(add_effect, &QPushButton::clicked, this, &EffectPackEditorDialog::onAddEffectFromPalette);
+    connect(timeline_, &EffectPackTimelineWidget::gradientPresetApplied, this, &EffectPackEditorDialog::onGradientPresetApplied);
+    connect(effect_toolbar_, &EffectPackToolBar::effectClicked, this, &EffectPackEditorDialog::onToolbarEffectClicked);
+    connect(effect_toolbar_, &EffectPackToolBar::colorClicked, this, &EffectPackEditorDialog::onToolbarColorClicked);
+    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetClicked, this, &EffectPackEditorDialog::onToolbarGradientClicked);
     connect(remove_block_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onRemoveBlock);
     connect(type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onTypeChanged);
     connect(start_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
@@ -400,7 +397,8 @@ void EffectPackEditorDialog::NewPack(const filesystem::path& packs_dir)
 
     loadIntoUi(pack_);
     setWindowTitle(QStringLiteral("Effect Pack Editor — New"));
-    status_label_->setText(QStringLiteral("Right-click timeline to add effects · Delete removes · drag edges to resize"));
+    status_label_->setText(QStringLiteral(
+        "Drag effects onto a row · right-click to add · drag colors/gradients onto blocks · Delete removes"));
     show();
     raise();
     activateWindow();
@@ -877,10 +875,96 @@ int EffectPackEditorDialog::currentTimelineRow() const
     return 0;
 }
 
-void EffectPackEditorDialog::onAddEffectFromPalette()
+void EffectPackEditorDialog::onToolbarEffectClicked(int block_type)
 {
-    const EffectPack::BlockType type = (EffectPack::BlockType)effect_palette_->currentData().toInt();
-    addBlockAt(currentTimelineRow(), timeline_->playheadMs(), type);
+    addBlockAt(currentTimelineRow(), timeline_ ? timeline_->playheadMs() : 0,
+               (EffectPack::BlockType)block_type);
+}
+
+void EffectPackEditorDialog::onToolbarColorClicked(unsigned int rgb)
+{
+    EffectPack::Block* b = selectedBlock();
+    if(!b)
+    {
+        return;
+    }
+    b->color = (RGBColor)rgb;
+    b->color_from = (RGBColor)rgb;
+    if(!b->gradient.empty())
+    {
+        b->gradient.front().color = (RGBColor)rgb;
+    }
+    EffectPack::EnsureBlockGradient(b);
+    setColorButton(color_button_, b->color);
+    syncGradientBar();
+    timeline_->update();
+}
+
+void EffectPackEditorDialog::onToolbarGradientClicked(const QString& preset_id)
+{
+    applyGradientPresetToBlock(selectedBlock(), preset_id);
+}
+
+void EffectPackEditorDialog::onGradientPresetApplied(int track_index, int block_index, const QString& preset_id)
+{
+    if(track_index < 0 || track_index >= (int)pack_.tracks.size())
+    {
+        return;
+    }
+    auto& blocks = pack_.tracks[(size_t)track_index].blocks;
+    if(block_index < 0 || block_index >= (int)blocks.size())
+    {
+        return;
+    }
+    selected_track_ = track_index;
+    selected_block_ = block_index;
+    timeline_->setSelectedBlock(selected_track_, selected_block_);
+    applyGradientPresetToBlock(&blocks[(size_t)block_index], preset_id);
+    applyBlockToForm();
+}
+
+void EffectPackEditorDialog::applyGradientPresetToBlock(EffectPack::Block* b, const QString& preset)
+{
+    if(!b || preset.isEmpty())
+    {
+        return;
+    }
+    if(preset == QStringLiteral("rainbow"))
+    {
+        b->gradient = {
+            {0.0f, ToRGBColor(255, 0, 0)},
+            {0.2f, ToRGBColor(255, 128, 0)},
+            {0.4f, ToRGBColor(255, 255, 0)},
+            {0.6f, ToRGBColor(0, 255, 0)},
+            {0.8f, ToRGBColor(0, 128, 255)},
+            {1.0f, ToRGBColor(128, 0, 255)},
+        };
+    }
+    else if(preset == QStringLiteral("red_blue"))
+    {
+        b->gradient = {{0.0f, ToRGBColor(255, 0, 0)}, {1.0f, ToRGBColor(0, 80, 255)}};
+    }
+    else if(preset == QStringLiteral("white_color"))
+    {
+        b->gradient = {{0.0f, ToRGBColor(255, 255, 255)}, {1.0f, colorFromButton(color_button_)}};
+    }
+    else
+    {
+        return;
+    }
+    if(!b->gradient.empty())
+    {
+        b->color = b->gradient.front().color;
+        b->color_from = b->gradient.front().color;
+        b->color_to = b->gradient.back().color;
+        setColorButton(color_button_, b->color);
+        setColorButton(color_to_button_, b->color_to);
+    }
+    syncGradientBar();
+    if(timeline_)
+    {
+        timeline_->update();
+    }
 }
 
 void EffectPackEditorDialog::onBlockDeleteRequested(int track_index, int block_index)
@@ -1188,48 +1272,11 @@ void EffectPackEditorDialog::onGradientPreset()
     {
         return;
     }
-    EffectPack::Block* b = selectedBlock();
-    if(!b)
-    {
-        return;
-    }
     const QString preset = gradient_preset_->currentData().toString();
     gradient_preset_->blockSignals(true);
     gradient_preset_->setCurrentIndex(0);
     gradient_preset_->blockSignals(false);
-    if(preset.isEmpty())
-    {
-        return;
-    }
-    if(preset == QStringLiteral("rainbow"))
-    {
-        b->gradient = {
-            {0.0f, ToRGBColor(255, 0, 0)},
-            {0.2f, ToRGBColor(255, 128, 0)},
-            {0.4f, ToRGBColor(255, 255, 0)},
-            {0.6f, ToRGBColor(0, 255, 0)},
-            {0.8f, ToRGBColor(0, 128, 255)},
-            {1.0f, ToRGBColor(128, 0, 255)},
-        };
-    }
-    else if(preset == QStringLiteral("red_blue"))
-    {
-        b->gradient = {{0.0f, ToRGBColor(255, 0, 0)}, {1.0f, ToRGBColor(0, 80, 255)}};
-    }
-    else if(preset == QStringLiteral("white_color"))
-    {
-        b->gradient = {{0.0f, ToRGBColor(255, 255, 255)}, {1.0f, colorFromButton(color_button_)}};
-    }
-    if(!b->gradient.empty())
-    {
-        b->color = b->gradient.front().color;
-        b->color_from = b->gradient.front().color;
-        b->color_to = b->gradient.back().color;
-        setColorButton(color_button_, b->color);
-        setColorButton(color_to_button_, b->color_to);
-    }
-    syncGradientBar();
-    timeline_->update();
+    applyGradientPresetToBlock(selectedBlock(), preset);
 }
 
 void EffectPackEditorDialog::onBlockFieldChanged()
