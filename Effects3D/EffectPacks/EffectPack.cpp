@@ -314,6 +314,10 @@ nlohmann::json ToJson(const Pack& pack)
     j["duration_ms"] = pack.duration_ms;
     j["loop"] = LoopToString(pack.loop);
     j["priority"] = pack.priority;
+    if(!pack.devices.empty())
+    {
+        j["devices"] = pack.devices;
+    }
     j["tracks"] = nlohmann::json::array();
     for(const Track& track : pack.tracks)
     {
@@ -422,6 +426,21 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
         return false;
     }
     pack.loop = loop;
+
+    if(j.contains("devices") && j["devices"].is_array())
+    {
+        for(const auto& d : j["devices"])
+        {
+            if(d.is_string())
+            {
+                const std::string name = d.get<std::string>();
+                if(!name.empty())
+                {
+                    pack.devices.push_back(name);
+                }
+            }
+        }
+    }
 
     if(!j.contains("tracks") || !j["tracks"].is_array())
     {

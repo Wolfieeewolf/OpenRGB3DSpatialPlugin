@@ -3,6 +3,7 @@
 
 #include "EffectPacks/EffectPack.h"
 #include "EffectPacks/EffectPackPlayer.h"
+#include "EffectPackTimelineWidget.h"
 #include "filesystem.h"
 #include <QDialog>
 #include <QElapsedTimer>
@@ -13,8 +14,8 @@ class QLineEdit;
 class QPushButton;
 class QSpinBox;
 class QTimer;
-class EffectPackTimelineWidget;
 class OpenRGB3DSpatialTab;
+struct ControllerTransform;
 
 class EffectPackEditorDialog : public QDialog
 {
@@ -37,6 +38,7 @@ public slots:
 
 private slots:
     void onRebuildTimelineModel();
+    void onPickControllers();
     void onDurationChanged(int value);
     void onPlayheadChanged(int ms);
     void onBlockSelected(int track_index, int block_index);
@@ -56,6 +58,9 @@ private:
     void buildUi();
     void loadIntoUi(const EffectPack::Pack& pack);
     void applyMetaToPack();
+    bool promptSelectControllers(std::vector<std::string>* devices, bool require_selection);
+    EffectPackTimelineWidget::Node buildControllerNode(ControllerTransform* transform, int index) const;
+    bool deviceSelectedForPack(const std::string& key) const;
     int ensureTrackForTarget(const EffectPack::Target& target, const QString& label);
     void applyBlockToForm();
     void applyFormToSelectedBlock();
@@ -75,6 +80,7 @@ private:
     QLineEdit* name_edit_ = nullptr;
     QSpinBox* duration_spin_ = nullptr;
     QComboBox* loop_combo_ = nullptr;
+    QPushButton* controllers_button_ = nullptr;
     EffectPackTimelineWidget* timeline_ = nullptr;
     QLabel* status_label_ = nullptr;
 

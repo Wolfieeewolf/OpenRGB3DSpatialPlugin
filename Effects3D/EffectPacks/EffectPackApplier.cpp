@@ -119,6 +119,47 @@ bool TransformMatchesDevice(ControllerTransform* transform, const std::string& d
     return false;
 }
 
+/** Empty pack.devices = whole scene / all OpenRGB controllers (legacy packs). */
+bool PackIncludesTransform(const Pack& pack, ControllerTransform* transform)
+{
+    if(!transform)
+    {
+        return false;
+    }
+    if(pack.devices.empty())
+    {
+        return true;
+    }
+    for(const std::string& device : pack.devices)
+    {
+        if(TransformMatchesDevice(transform, device))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool PackIncludesController(const Pack& pack, RGBControllerInterface* c)
+{
+    if(!c)
+    {
+        return false;
+    }
+    if(pack.devices.empty())
+    {
+        return true;
+    }
+    for(const std::string& device : pack.devices)
+    {
+        if(ControllerMatchesDevice(c, device))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool LedMatchesTarget(const LEDPosition3D& led,
                       RGBControllerInterface* fallback_controller,
                       const Target& target)
@@ -278,13 +319,13 @@ ApplyStats ApplyPackFrame(const Pack& pack,
     const bool use_transforms = transforms && !transforms->empty();
     const RGBColor off = ToRGBColor(0, 0, 0);
 
-    // Clear first so a block that ended (e.g. 0–1000ms) turns LEDs off after end_ms.
+    // Clear pack-scoped LEDs first so a block that ended turns them off after end_ms.
     if(use_transforms)
     {
         for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
         {
             ControllerTransform* transform = transform_ptr.get();
-            if(!transform || transform->hidden_by_virtual)
+            if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
             {
                 continue;
             }
@@ -299,7 +340,10 @@ ApplyStats ApplyPackFrame(const Pack& pack,
     {
         for(RGBControllerInterface* c : controllers)
         {
-            ApplyToControllerAll(c, off, &touched);
+            if(PackIncludesController(pack, c))
+            {
+                ApplyToControllerAll(c, off, &touched);
+            }
         }
     }
 
@@ -318,7 +362,7 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
             {
                 ControllerTransform* transform = transform_ptr.get();
-                if(!transform || transform->hidden_by_virtual)
+                if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
                 {
                     continue;
                 }
@@ -337,13 +381,17 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             case TargetKind::All:
                 for(RGBControllerInterface* c : controllers)
                 {
-                    ApplyToControllerAll(c, color, &touched);
+                    if(PackIncludesController(pack, c))
+                    {
+                        ApplyToControllerAll(c, color, &touched);
+                    }
                 }
                 break;
             case TargetKind::Device:
                 for(RGBControllerInterface* c : controllers)
                 {
-                    if(ControllerMatchesDevice(c, track.target.device_name))
+                    if(PackIncludesController(pack, c)
+                       && ControllerMatchesDevice(c, track.target.device_name))
                     {
                         ApplyToControllerAll(c, color, &touched);
                     }
@@ -352,7 +400,8 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             case TargetKind::Zone:
                 for(RGBControllerInterface* c : controllers)
                 {
-                    if(!ControllerMatchesDevice(c, track.target.device_name))
+                    if(!PackIncludesController(pack, c)
+                       || !ControllerMatchesDevice(c, track.target.device_name))
                     {
                         continue;
                     }
@@ -370,7 +419,8 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             case TargetKind::Leds:
                 for(RGBControllerInterface* c : controllers)
                 {
-                    if(!ControllerMatchesDevice(c, track.target.device_name))
+                    if(!PackIncludesController(pack, c)
+                       || !ControllerMatchesDevice(c, track.target.device_name))
                     {
                         continue;
                     }

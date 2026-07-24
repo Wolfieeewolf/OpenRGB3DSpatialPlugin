@@ -80,6 +80,12 @@ struct Pack
     int duration_ms = 1000;
     LoopMode loop = LoopMode::Once;
     int priority = 0;
+    /**
+     * Scene controllers this pack owns on the timeline.
+     * Empty = legacy / all controllers (e.g. seeded rainbow wash).
+     * TargetKind::All means “all devices listed here” (or every scene device if empty).
+     */
+    std::vector<std::string> devices;
     std::vector<Track> tracks;
 };
 

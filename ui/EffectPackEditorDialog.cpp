@@ -10,12 +10,16 @@
 
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDialogButtonBox>
+#include <QAbstractItemView>
 #include <QFormLayout>
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
+#include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
@@ -161,6 +165,9 @@ void EffectPackEditorDialog::buildUi()
     meta_row->addWidget(duration_spin_);
     meta_row->addWidget(new QLabel(QStringLiteral("Loop")));
     meta_row->addWidget(loop_combo_);
+    controllers_button_ = new QPushButton(QStringLiteral("Controllers…"));
+    controllers_button_->setToolTip(QStringLiteral("Choose which scene controllers appear on this pack’s timeline"));
+    meta_row->addWidget(controllers_button_);
     root->addLayout(meta_row);
 
     auto* splitter = new QSplitter(Qt::Horizontal);
@@ -238,6 +245,7 @@ void EffectPackEditorDialog::buildUi()
     setColorButton(color_to_button_, ToRGBColor(0, 128, 255));
 
     connect(duration_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onDurationChanged);
+    connect(controllers_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickControllers);
     connect(timeline_, &EffectPackTimelineWidget::playheadChanged, this, &EffectPackEditorDialog::onPlayheadChanged);
     connect(timeline_, &EffectPackTimelineWidget::blockSelected, this, &EffectPackEditorDialog::onBlockSelected);
     connect(timeline_, &EffectPackTimelineWidget::blockEdited, this, &EffectPackEditorDialog::onBlockSelected);
@@ -268,10 +276,17 @@ void EffectPackEditorDialog::NewPack(const filesystem::path& packs_dir)
     pack_.duration_ms = 5000;
     pack_.loop = EffectPack::LoopMode::Once;
     pack_.priority = 10;
-    // Tracks are created when you place a block on a controller / zone / LED row.
+
+    std::vector<std::string> devices;
+    if(!promptSelectControllers(&devices, true))
+    {
+        return;
+    }
+    pack_.devices = std::move(devices);
+
     loadIntoUi(pack_);
     setWindowTitle(QStringLiteral("Effect Pack Editor — New"));
-    status_label_->setText(QStringLiteral("Drag edges to resize · drag block to move · right-click to recolour"));
+    status_label_->setText(QStringLiteral("All (this pack) = every selected controller · [+] expands zones / LEDs"));
     show();
     raise();
     activateWindow();
@@ -292,10 +307,249 @@ void EffectPackEditorDialog::EditPack(const filesystem::path& path)
     pack_ = std::move(pack);
     loadIntoUi(pack_);
     setWindowTitle(QStringLiteral("Effect Pack Editor — %1").arg(QString::fromStdString(pack_.name)));
-    status_label_->setText(QStringLiteral("Editing %1").arg(QString::fromStdString(path.filename().string())));
+    status_label_->setText(QStringLiteral("Editing %1 — All (this pack) shows pack-wide blocks").arg(
+        QString::fromStdString(path.filename().string())));
     show();
     raise();
     activateWindow();
+}
+
+bool EffectPackEditorDialog::promptSelectControllers(std::vector<std::string>* devices, bool require_selection)
+{
+    if(!devices || !tab_)
+    {
+        return false;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("Select controllers for this effect"));
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->addWidget(new QLabel(
+        QStringLiteral("Pick which scene controllers this pack can use.\n"
+                       "Pack-wide blocks go on “All (this pack)”; per-device rows are underneath.")));
+
+    auto* list = new QListWidget();
+    list->setSelectionMode(QAbstractItemView::NoSelection);
+    const auto& transforms = tab_->GetControllerTransforms();
+    int visible = 0;
+    for(int i = 0; i < (int)transforms.size(); ++i)
+    {
+        ControllerTransform* transform = transforms[(size_t)i].get();
+        if(!transform || transform->hidden_by_virtual)
+        {
+            continue;
+        }
+        const std::string key = ControllerKeyName(transform, i);
+        auto* item = new QListWidgetItem(ControllerLabel(transform, i), list);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setData(Qt::UserRole, QString::fromStdString(key));
+        const bool checked = devices->empty()
+            || std::any_of(devices->begin(), devices->end(),
+                           [&](const std::string& d) {
+                               return EffectPack::NameMatches(key, d) || EffectPack::NameMatches(d, key);
+                           });
+        item->setCheckState(checked ? Qt::Checked : Qt::Unchecked);
+        ++visible;
+    }
+    layout->addWidget(list, 1);
+
+    if(visible == 0)
+    {
+        QMessageBox::warning(this, QStringLiteral("Effect Pack Editor"),
+                             QStringLiteral("Add at least one controller to the 3D scene first."));
+        return false;
+    }
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    auto* select_all = buttons->addButton(QStringLiteral("Select all"), QDialogButtonBox::ActionRole);
+    auto* clear_all = buttons->addButton(QStringLiteral("Clear"), QDialogButtonBox::ActionRole);
+    connect(select_all, &QPushButton::clicked, list, [list]() {
+        for(int i = 0; i < list->count(); ++i)
+        {
+            list->item(i)->setCheckState(Qt::Checked);
+        }
+    });
+    connect(clear_all, &QPushButton::clicked, list, [list]() {
+        for(int i = 0; i < list->count(); ++i)
+        {
+            list->item(i)->setCheckState(Qt::Unchecked);
+        }
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if(dlg.exec() != QDialog::Accepted)
+    {
+        return false;
+    }
+
+    std::vector<std::string> picked;
+    for(int i = 0; i < list->count(); ++i)
+    {
+        QListWidgetItem* item = list->item(i);
+        if(item->checkState() == Qt::Checked)
+        {
+            picked.push_back(item->data(Qt::UserRole).toString().toStdString());
+        }
+    }
+    if(require_selection && picked.empty())
+    {
+        QMessageBox::warning(this, QStringLiteral("Effect Pack Editor"),
+                             QStringLiteral("Select at least one controller."));
+        return false;
+    }
+    *devices = std::move(picked);
+    return true;
+}
+
+void EffectPackEditorDialog::onPickControllers()
+{
+    std::vector<std::string> devices = pack_.devices;
+    if(!promptSelectControllers(&devices, true))
+    {
+        return;
+    }
+    pack_.devices = std::move(devices);
+    onRebuildTimelineModel();
+    status_label_->setText(QStringLiteral("%1 controller(s) on this pack").arg((int)pack_.devices.size()));
+}
+
+bool EffectPackEditorDialog::deviceSelectedForPack(const std::string& key) const
+{
+    if(pack_.devices.empty())
+    {
+        return true; // legacy / rainbow = whole scene
+    }
+    for(const std::string& d : pack_.devices)
+    {
+        if(EffectPack::NameMatches(key, d) || EffectPack::NameMatches(d, key))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+EffectPackTimelineWidget::Node EffectPackEditorDialog::buildControllerNode(ControllerTransform* transform, int index) const
+{
+    EffectPackTimelineWidget::Node ctrl;
+    ctrl.label = ControllerLabel(transform, index);
+    const std::string key = ControllerKeyName(transform, index);
+    ctrl.target.kind = EffectPack::TargetKind::Device;
+    ctrl.target.device_name = key;
+
+    struct ZoneBucket
+    {
+        QString label;
+        QString zone_name;
+        std::vector<int> led_globals;
+        std::vector<unsigned int> led_in_zone;
+    };
+    std::map<std::pair<RGBControllerInterface*, unsigned int>, ZoneBucket> zones;
+
+    for(const LEDPosition3D& led : transform->led_positions)
+    {
+        RGBControllerInterface* rgb = led.controller ? led.controller : transform->controller;
+        if(!rgb)
+        {
+            continue;
+        }
+        const auto zone_key = std::make_pair(rgb, led.zone_idx);
+        ZoneBucket& bucket = zones[zone_key];
+        if(bucket.zone_name.isEmpty())
+        {
+            bucket.zone_name = ZoneLabelForLed(rgb, led.zone_idx);
+            bucket.label = bucket.zone_name;
+        }
+        int global = -1;
+        if(TryGlobalLedIndex(rgb, led.zone_idx, led.led_idx, &global))
+        {
+            if(std::find(bucket.led_globals.begin(), bucket.led_globals.end(), global) == bucket.led_globals.end())
+            {
+                bucket.led_globals.push_back(global);
+                bucket.led_in_zone.push_back(led.led_idx);
+            }
+        }
+    }
+
+    for(auto& entry : zones)
+    {
+        ZoneBucket& bucket = entry.second;
+        int same_label = 0;
+        for(const auto& other : zones)
+        {
+            if(other.second.zone_name == bucket.zone_name)
+            {
+                ++same_label;
+            }
+        }
+        if(same_label > 1 && entry.first.first)
+        {
+            QString device = QString::fromStdString(entry.first.first->GetDisplayName());
+            if(device.isEmpty())
+            {
+                device = QString::fromStdString(entry.first.first->GetName());
+            }
+            if(!device.isEmpty())
+            {
+                bucket.label = bucket.zone_name + QStringLiteral(" · ") + device;
+            }
+        }
+
+        EffectPackTimelineWidget::Node zone;
+        zone.label = bucket.label;
+        zone.target.kind = EffectPack::TargetKind::Zone;
+        zone.target.device_name = key;
+        zone.target.zone_name = bucket.zone_name.toStdString();
+
+        const size_t led_count = bucket.led_globals.size();
+        const size_t led_cap = std::min(led_count, size_t{128});
+        for(size_t li = 0; li < led_cap; ++li)
+        {
+            EffectPackTimelineWidget::Node led_node;
+            led_node.label = QStringLiteral("LED %1").arg(bucket.led_in_zone[li]);
+            led_node.target.kind = EffectPack::TargetKind::Leds;
+            led_node.target.device_name = key;
+            led_node.target.zone_name = bucket.zone_name.toStdString();
+            led_node.target.led_indices = {bucket.led_globals[li]};
+            zone.children.push_back(std::move(led_node));
+        }
+        ctrl.children.push_back(std::move(zone));
+    }
+    return ctrl;
+}
+
+void EffectPackEditorDialog::onRebuildTimelineModel()
+{
+    QVector<EffectPackTimelineWidget::Node> roots;
+
+    // Pack-wide row — rainbow wash and other “all selected” blocks live here.
+    EffectPackTimelineWidget::Node all;
+    all.label = QStringLiteral("All (this pack)");
+    all.target.kind = EffectPack::TargetKind::All;
+    roots.push_back(std::move(all));
+
+    if(tab_)
+    {
+        const auto& transforms = tab_->GetControllerTransforms();
+        for(int i = 0; i < (int)transforms.size(); ++i)
+        {
+            ControllerTransform* transform = transforms[(size_t)i].get();
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+            const std::string key = ControllerKeyName(transform, i);
+            if(!deviceSelectedForPack(key))
+            {
+                continue;
+            }
+            roots.push_back(buildControllerNode(transform, i));
+        }
+    }
+
+    timeline_->setModel(std::move(roots));
 }
 
 void EffectPackEditorDialog::loadIntoUi(const EffectPack::Pack& pack)
@@ -316,117 +570,6 @@ void EffectPackEditorDialog::loadIntoUi(const EffectPack::Pack& pack)
     timeline_->setPlayheadMs(0);
     onRebuildTimelineModel();
     applyBlockToForm();
-}
-
-void EffectPackEditorDialog::onRebuildTimelineModel()
-{
-    QVector<EffectPackTimelineWidget::Node> roots;
-
-    if(tab_)
-    {
-        const auto& transforms = tab_->GetControllerTransforms();
-        for(int i = 0; i < (int)transforms.size(); ++i)
-        {
-            ControllerTransform* transform = transforms[(size_t)i].get();
-            if(!transform || transform->hidden_by_virtual)
-            {
-                continue;
-            }
-
-            // One timeline line per scene controller (whole device).
-            EffectPackTimelineWidget::Node ctrl;
-            ctrl.label = ControllerLabel(transform, i);
-            const std::string key = ControllerKeyName(transform, i);
-            ctrl.target.kind = EffectPack::TargetKind::Device;
-            ctrl.target.device_name = key;
-
-            // Group this controller's mapped LEDs into zones, then LEDs under each zone.
-            // Uses scene led_positions so custom/virtual controllers expand correctly.
-            struct ZoneBucket
-            {
-                QString label;           // display (may be disambiguated)
-                QString zone_name;       // OpenRGB zone name used for targeting
-                std::vector<int> led_globals;
-                std::vector<unsigned int> led_in_zone;
-            };
-            std::map<std::pair<RGBControllerInterface*, unsigned int>, ZoneBucket> zones;
-
-            for(const LEDPosition3D& led : transform->led_positions)
-            {
-                RGBControllerInterface* rgb = led.controller ? led.controller : transform->controller;
-                if(!rgb)
-                {
-                    continue;
-                }
-                const auto zone_key = std::make_pair(rgb, led.zone_idx);
-                ZoneBucket& bucket = zones[zone_key];
-                if(bucket.zone_name.isEmpty())
-                {
-                    bucket.zone_name = ZoneLabelForLed(rgb, led.zone_idx);
-                    bucket.label = bucket.zone_name;
-                }
-                int global = -1;
-                if(TryGlobalLedIndex(rgb, led.zone_idx, led.led_idx, &global))
-                {
-                    if(std::find(bucket.led_globals.begin(), bucket.led_globals.end(), global) == bucket.led_globals.end())
-                    {
-                        bucket.led_globals.push_back(global);
-                        bucket.led_in_zone.push_back(led.led_idx);
-                    }
-                }
-            }
-
-            for(auto& entry : zones)
-            {
-                ZoneBucket& bucket = entry.second;
-                int same_label = 0;
-                for(const auto& other : zones)
-                {
-                    if(other.second.zone_name == bucket.zone_name)
-                    {
-                        ++same_label;
-                    }
-                }
-                if(same_label > 1 && entry.first.first)
-                {
-                    QString device = QString::fromStdString(entry.first.first->GetDisplayName());
-                    if(device.isEmpty())
-                    {
-                        device = QString::fromStdString(entry.first.first->GetName());
-                    }
-                    if(!device.isEmpty())
-                    {
-                        bucket.label = bucket.zone_name + QStringLiteral(" · ") + device;
-                    }
-                }
-
-                EffectPackTimelineWidget::Node zone;
-                zone.label = bucket.label;
-                zone.target.kind = EffectPack::TargetKind::Zone;
-                zone.target.device_name = key;
-                zone.target.zone_name = bucket.zone_name.toStdString();
-
-                const size_t led_count = bucket.led_globals.size();
-                // Cap ultra-dense strips so the timeline stays usable; zone row still paints all LEDs.
-                const size_t led_cap = std::min(led_count, size_t{128});
-                for(size_t li = 0; li < led_cap; ++li)
-                {
-                    EffectPackTimelineWidget::Node led_node;
-                    led_node.label = QStringLiteral("LED %1").arg(bucket.led_in_zone[li]);
-                    led_node.target.kind = EffectPack::TargetKind::Leds;
-                    led_node.target.device_name = key;
-                    led_node.target.zone_name = bucket.zone_name.toStdString();
-                    led_node.target.led_indices = {bucket.led_globals[li]};
-                    zone.children.push_back(std::move(led_node));
-                }
-                ctrl.children.push_back(std::move(zone));
-            }
-
-            roots.push_back(std::move(ctrl));
-        }
-    }
-
-    timeline_->setModel(std::move(roots));
 }
 
 void EffectPackEditorDialog::onDurationChanged(int value)

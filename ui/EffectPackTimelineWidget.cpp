@@ -555,7 +555,7 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
         p.drawLine(x, header_height_ - 8, x, header_height_);
         p.drawText(x + 2, header_height_ - 10, QString::number(sec) + QStringLiteral("s"));
     }
-    p.drawText(8, header_height_ - 8, QStringLiteral("Controllers"));
+    p.drawText(8, header_height_ - 8, QStringLiteral("Pack scope"));
 
     for(int row = 0; row < visible_rows_.size(); ++row)
     {
