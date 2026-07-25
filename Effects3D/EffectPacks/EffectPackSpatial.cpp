@@ -211,6 +211,14 @@ void ApplyBuiltinIntensityCurve(Block* block, const char* preset_id)
     {
         block->intensity_curve = {{0.0f, 0.15f}, {0.2f, 1.0f}, {0.4f, 0.15f}, {1.0f, 0.15f}};
     }
+    else if(id == "hold_peak")
+    {
+        block->intensity_curve = {{0.0f, 0.0f}, {0.2f, 1.0f}, {0.8f, 1.0f}, {1.0f, 0.0f}};
+    }
+    else if(id == "snap")
+    {
+        block->intensity_curve = {{0.0f, 0.0f}, {0.08f, 1.0f}, {0.92f, 1.0f}, {1.0f, 0.0f}};
+    }
     else if(id == "flat")
     {
         return;
@@ -227,7 +235,9 @@ const char* MatchBuiltinIntensityCurve(const std::vector<CurvePoint>& curve)
     {
         return "flat";
     }
-    static const char* kIds[] = {"triangle", "ease_in", "ease_out", "pulse_curve"};
+    static const char* kIds[] = {
+        "triangle", "ease_in", "ease_out", "pulse_curve", "hold_peak", "snap"
+    };
     for(const char* id : kIds)
     {
         Block probe;
@@ -238,6 +248,87 @@ const char* MatchBuiltinIntensityCurve(const std::vector<CurvePoint>& curve)
         }
     }
     return nullptr;
+}
+
+bool ApplyGradientPresetId(Block* block, const char* preset_id, RGBColor accent)
+{
+    if(!block || !preset_id)
+    {
+        return false;
+    }
+    const std::string id(preset_id);
+    if(id == "rainbow")
+    {
+        block->gradient = {
+            {0.0f, ToRGBColor(255, 0, 0)},
+            {0.2f, ToRGBColor(255, 128, 0)},
+            {0.4f, ToRGBColor(255, 255, 0)},
+            {0.6f, ToRGBColor(0, 255, 0)},
+            {0.8f, ToRGBColor(0, 128, 255)},
+            {1.0f, ToRGBColor(128, 0, 255)},
+        };
+    }
+    else if(id == "red_blue")
+    {
+        block->gradient = {{0.0f, ToRGBColor(255, 0, 0)}, {1.0f, ToRGBColor(0, 80, 255)}};
+    }
+    else if(id == "white_color")
+    {
+        block->gradient = {{0.0f, ToRGBColor(255, 255, 255)}, {1.0f, accent}};
+    }
+    else if(id == "fire")
+    {
+        block->gradient = {
+            {0.0f, ToRGBColor(20, 0, 0)},
+            {0.35f, ToRGBColor(255, 40, 0)},
+            {0.7f, ToRGBColor(255, 160, 0)},
+            {1.0f, ToRGBColor(255, 255, 180)},
+        };
+    }
+    else if(id == "ice")
+    {
+        block->gradient = {
+            {0.0f, ToRGBColor(20, 40, 80)},
+            {0.5f, ToRGBColor(120, 200, 255)},
+            {1.0f, ToRGBColor(240, 250, 255)},
+        };
+    }
+    else if(id == "forest")
+    {
+        block->gradient = {
+            {0.0f, ToRGBColor(10, 40, 10)},
+            {0.5f, ToRGBColor(40, 160, 60)},
+            {1.0f, ToRGBColor(180, 255, 120)},
+        };
+    }
+    else if(id == "sunset")
+    {
+        block->gradient = {
+            {0.0f, ToRGBColor(40, 20, 80)},
+            {0.4f, ToRGBColor(255, 80, 40)},
+            {0.75f, ToRGBColor(255, 180, 60)},
+            {1.0f, ToRGBColor(255, 240, 200)},
+        };
+    }
+    else if(id == "cyber")
+    {
+        block->gradient = {
+            {0.0f, ToRGBColor(0, 255, 180)},
+            {0.5f, ToRGBColor(0, 120, 255)},
+            {1.0f, ToRGBColor(200, 0, 255)},
+        };
+    }
+    else
+    {
+        return false;
+    }
+    if(!block->gradient.empty())
+    {
+        block->color = block->gradient.front().color;
+        block->color_from = block->gradient.front().color;
+        block->color_to = block->gradient.back().color;
+    }
+    return true;
 }
 
 void AxisUnitVector(const Block& block, float* out_x, float* out_y, float* out_z)
@@ -332,6 +423,7 @@ bool BlockNeedsWorldEval(BlockType t)
         case BlockType::Ripple:
         case BlockType::Meteor:
         case BlockType::Noise3D:
+        case BlockType::Burst:
         case BlockType::Plasma:
         case BlockType::Snow:
         case BlockType::Fire:
@@ -349,12 +441,14 @@ bool BlockNeedsDirection(BlockType t)
     {
         case BlockType::Wipe:
         case BlockType::Chase:
+        case BlockType::Wave:
         case BlockType::ColorWash:
         case BlockType::Spin:
         case BlockType::Alternating:
         case BlockType::Orbit:
         case BlockType::Meteor:
         case BlockType::Bars:
+        case BlockType::Scanner:
             return true;
         default:
             return false;
@@ -374,6 +468,7 @@ bool BlockUsesSequenceAxis(const Block& block)
         case BlockType::Orbit:
         case BlockType::Ripple:
         case BlockType::Noise3D:
+        case BlockType::Burst:
         case BlockType::Plasma:
         case BlockType::Snow:
         case BlockType::Fire:
@@ -578,6 +673,30 @@ bool EvaluateBlockAtWorld(const Block& block,
             if(pos > 0.62f) { return false; }
             intensity *= 0.75f + 0.25f * (1.0f - pos / 0.62f);
             color = SampleGradient(block, axis);
+            break;
+        }
+        case BlockType::Burst:
+        {
+            const float edge = std::clamp(block.pulse_length, 0.06f, 0.45f);
+            const float front = progress * (1.0f + 2.0f * edge);
+            const float d = front - s.radius;
+            float cover = 0.0f;
+            if(d >= 0.0f && d <= edge)
+            {
+                cover = 1.0f - (d / edge);
+            }
+            else if(d < 0.0f && -d <= edge * 0.35f)
+            {
+                cover = 1.0f + (d / (edge * 0.35f));
+            }
+            // Soft afterglow near center early in the burst.
+            if(progress < 0.2f)
+            {
+                cover = std::max(cover, (1.0f - progress / 0.2f) * (1.0f - std::clamp(s.radius, 0.0f, 1.0f)));
+            }
+            if(cover <= 0.001f) { return false; }
+            intensity *= cover;
+            color = SampleGradient(block, std::clamp(s.radius, 0.0f, 1.0f));
             break;
         }
         default:

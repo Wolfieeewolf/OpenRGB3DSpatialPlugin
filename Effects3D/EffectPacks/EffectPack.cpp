@@ -108,17 +108,20 @@ std::string BlockTypeToString(BlockType t)
         case BlockType::Spin: return "spin";
         case BlockType::Candle: return "candle";
         case BlockType::Dissolve: return "dissolve";
+        case BlockType::Wave: return "wave";
         case BlockType::ColorWash: return "colorwash";
         case BlockType::Plasma: return "plasma";
         case BlockType::Snow: return "snow";
         case BlockType::Fire: return "fire";
         case BlockType::Balls: return "balls";
         case BlockType::Bars: return "bars";
+        case BlockType::Scanner: return "scanner";
         case BlockType::SphereWipe: return "spherewipe";
         case BlockType::Orbit: return "orbit";
         case BlockType::Ripple: return "ripple";
         case BlockType::Meteor: return "meteor";
         case BlockType::Noise3D: return "noise3d";
+        case BlockType::Burst: return "burst";
         default:
         {
             const BlockType unused = t;
@@ -142,16 +145,19 @@ bool BlockTypeFromString(const std::string& s, BlockType* out)
     if(s == "spin") { *out = BlockType::Spin; return true; }
     if(s == "candle" || s == "candle_flicker") { *out = BlockType::Candle; return true; }
     if(s == "dissolve") { *out = BlockType::Dissolve; return true; }
+    if(s == "wave") { *out = BlockType::Wave; return true; }
     if(s == "plasma") { *out = BlockType::Plasma; return true; }
     if(s == "snow" || s == "meteors") { *out = BlockType::Snow; return true; }
     if(s == "fire") { *out = BlockType::Fire; return true; }
     if(s == "balls") { *out = BlockType::Balls; return true; }
     if(s == "bars") { *out = BlockType::Bars; return true; }
+    if(s == "scanner") { *out = BlockType::Scanner; return true; }
     if(s == "spherewipe" || s == "sphere_wipe") { *out = BlockType::SphereWipe; return true; }
     if(s == "orbit") { *out = BlockType::Orbit; return true; }
     if(s == "ripple") { *out = BlockType::Ripple; return true; }
     if(s == "meteor") { *out = BlockType::Meteor; return true; }
     if(s == "noise3d" || s == "plasma3d") { *out = BlockType::Noise3D; return true; }
+    if(s == "burst") { *out = BlockType::Burst; return true; }
     return false;
 }
 
@@ -412,16 +418,19 @@ const char* BlockTypeDisplayName(BlockType t)
         case BlockType::Spin: return "Spin";
         case BlockType::Candle: return "Candle Flicker";
         case BlockType::Dissolve: return "Dissolve";
+        case BlockType::Wave: return "Wave";
         case BlockType::Plasma: return "Plasma";
         case BlockType::Snow: return "Snow";
         case BlockType::Fire: return "Fire";
         case BlockType::Balls: return "Balls";
         case BlockType::Bars: return "Bars";
+        case BlockType::Scanner: return "Scanner";
         case BlockType::SphereWipe: return "Sphere Wipe";
         case BlockType::Orbit: return "Orbit";
         case BlockType::Ripple: return "Ripple";
         case BlockType::Meteor: return "Meteor";
         case BlockType::Noise3D: return "Noise 3D";
+        case BlockType::Burst: return "Burst";
         default: return "Effect";
     }
 }
@@ -791,6 +800,41 @@ bool EvaluateBlockAtAxis(const Block& block,
             }
             intensity *= std::clamp(cover, 0.0f, 1.0f);
             color = SampleGradient(block, threshold);
+            break;
+        }
+        case BlockType::Wave:
+        {
+            const float cycles = std::max(0.25f, block.speed);
+            const float phase = progress * cycles * 6.2831853f;
+            const float wave = 0.5f + 0.5f * std::sin((axis * 6.2831853f * std::max(0.5f, block.pulse_length * 4.0f)) - phase);
+            intensity *= std::clamp(wave, 0.0f, 1.0f);
+            color = SampleGradient(block, axis);
+            break;
+        }
+        case BlockType::Scanner:
+        {
+            float head = progress * 2.0f;
+            if(head > 1.0f)
+            {
+                head = 2.0f - head;
+            }
+            if(DirectionInvertsAxis(block.direction))
+            {
+                head = 1.0f - head;
+            }
+            const float half_w = std::max(0.02f, block.pulse_length * 0.5f);
+            const float dist = std::fabs(axis - head);
+            float cover = 0.0f;
+            if(dist <= half_w)
+            {
+                cover = 1.0f - (dist / half_w);
+            }
+            if(cover <= 0.001f)
+            {
+                return false;
+            }
+            intensity *= cover;
+            color = SampleGradient(block, head);
             break;
         }
         case BlockType::ColorWash:
@@ -1323,6 +1367,82 @@ Pack MakeExampleRainbowWash()
         EnsureBlockGradient(&block);
         track.blocks.push_back(block);
     }
+    pack.tracks.push_back(std::move(track));
+    return pack;
+}
+
+Pack MakeExampleDeskRipple()
+{
+    Pack pack;
+    pack.id = "desk_ripple";
+    pack.name = "Desk ripple";
+    pack.duration_ms = 4000;
+    pack.loop = LoopMode::Once;
+    pack.priority = 20;
+
+    Track track;
+    track.name = "All LEDs";
+    track.target.kind = TargetKind::All;
+
+    Block ripple;
+    ripple.type = BlockType::Ripple;
+    ripple.start_ms = 0;
+    ripple.end_ms = 3500;
+    ripple.axis_space = AxisSpace::Room;
+    ripple.pulse_length = 0.18f;
+    ripple.intensity = 1.0f;
+    ApplyGradientPresetId(&ripple, "ice");
+    track.blocks.push_back(ripple);
+
+    Block burst;
+    burst.type = BlockType::Burst;
+    burst.start_ms = 800;
+    burst.end_ms = 2800;
+    burst.axis_space = AxisSpace::Room;
+    burst.pulse_length = 0.22f;
+    burst.intensity = 0.85f;
+    ApplyGradientPresetId(&burst, "cyber");
+    track.blocks.push_back(burst);
+
+    pack.tracks.push_back(std::move(track));
+    return pack;
+}
+
+Pack MakeExampleSequenceWipe()
+{
+    Pack pack;
+    pack.id = "sequence_wipe";
+    pack.name = "Sequence wipe";
+    pack.duration_ms = 3000;
+    pack.loop = LoopMode::Once;
+    pack.priority = 15;
+
+    Track track;
+    track.name = "All LEDs";
+    track.target.kind = TargetKind::All;
+
+    Block wipe;
+    wipe.type = BlockType::Wipe;
+    wipe.start_ms = 0;
+    wipe.end_ms = 2200;
+    wipe.axis_space = AxisSpace::Sequence;
+    wipe.direction = Direction::Right;
+    wipe.intensity = 1.0f;
+    ApplyGradientPresetId(&wipe, "sunset");
+    ApplyBuiltinIntensityCurve(&wipe, "ease_out");
+    track.blocks.push_back(wipe);
+
+    Block scanner;
+    scanner.type = BlockType::Scanner;
+    scanner.start_ms = 400;
+    scanner.end_ms = 3000;
+    scanner.axis_space = AxisSpace::Sequence;
+    scanner.direction = Direction::Right;
+    scanner.pulse_length = 0.12f;
+    scanner.intensity = 1.0f;
+    ApplyGradientPresetId(&scanner, "fire");
+    track.blocks.push_back(scanner);
+
     pack.tracks.push_back(std::move(track));
     return pack;
 }

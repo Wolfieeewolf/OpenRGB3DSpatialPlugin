@@ -37,26 +37,30 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 
 - Timeline length: short clips up to about **60 seconds**.
 - Modes: one-shot, loop forever, or loop **while event active**.
-- Targets: All (pack) → **scene zone** (left-panel Zones) → device → OpenRGB HW zone → LED.
+- Targets: All (pack) → **scene zone** (Object Creator → Zone) → device → OpenRGB HW zone → LED.
 - Scene zone rows mirror `ZoneManager3D` groups (Desk / Wall / …), each with **All LEDs** plus member controllers. Drag controllers in the gutter to reorder (drives **Sequence** space).
 - Timeline marks appear **only on the row matching that target** (no ghosting onto child rows).
 - Pack `devices` lists scene controllers in scope (empty = whole scene).
 - Catalog categories: **Basic** | **Pixel** | **Volume** (toolbar and right-click share `EffectPackCatalog`).
 - Dual add UX: right-click Add effect, or drag from the effect toolbar; drag colors / gradients / intensity curves onto blocks.
+- Authoring entry points: **Object Creator** → Zone / Effect Pack (removed from the Run left column).
 - Spatial sampling (`axis_space`):
   - **Device** (default on device / HW-zone / LED rows): per-controller local axes / AABB.
   - **Room** (default on All / scene zone): one shared **world** AABB across all LEDs in the target — Wipe, Ripple, Sphere Wipe, Fire, etc. continue across controllers using the 3D layout.
   - **Sequence**: Wipe/Chase/Spin/Meteor/Bars march along controller→LED order (zone drag order); Volume/Pixel types still use room XYZ.
   - Preset directions or custom yaw/pitch in Device/Room space.
 - Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (format version **4**; older packs still load).
+- Empty library seeds three examples: rainbow wash, desk ripple (Room), sequence wipe.
 
 ### Block types
 
 | Category | Types |
 |----------|--------|
-| Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve` |
-| Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars` |
-| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d` |
+| Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve`, `wave` |
+| Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars`, `scanner` |
+| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst` |
+
+Shared toolbar/props presets live in `EffectPackCatalog`: solid colors (incl. warm white / cyan / magenta / dim gray), gradients (`rainbow`, `red_blue`, `white_color`, `fire`, `ice`, `forest`, `sunset`, `cyber`), and intensity curves (`flat`, `triangle`, `ease_in`, `ease_out`, `pulse_curve`, `hold_peak`, `snap`).
 
 ## Pack file schema (v4)
 
@@ -155,7 +159,8 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 - `Effects3D/EffectPacks/EffectPackApplier.*` — hardware + viewport apply
 - `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/`
 - `ui/EffectPackCatalog.h` — shared Basic/Pixel/Volume catalog
-- `ui/EffectPackPanel.*` — Run-tab list + Preview/Stop / New / Edit
+- `ui/EffectPackPanel.*` — Object Creator → Effect Pack list + Preview/Stop / New / Edit
+- `ui/ZonesPanel.*` — Object Creator → Zone list + Create / Edit / Delete
 - `ui/EffectPackEditorDialog.*` — modeless editor
 - `ui/EffectPackTimelineWidget.*` — ruler / rows / blocks / playhead
 - `ui/EffectPackToolBar.*` — effect/color/gradient/curve strips

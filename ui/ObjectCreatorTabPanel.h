@@ -8,6 +8,8 @@
 class QLabel;
 class QListWidget;
 class QPushButton;
+class ZonesPanel;
+class EffectPackPanel;
 
 namespace Ui {
 class ObjectCreatorTabPanel;
@@ -28,6 +30,8 @@ public:
     void showCustomControllerSection();
     void showReferencePointSection();
     void showDisplayPlaneSection();
+    void showZoneSection();
+    void showEffectPackSection();
 
     QLabel*         statusLabel() const;
     QListWidget*    customControllersList() const;
@@ -45,6 +49,8 @@ public:
     QPushButton*    createDisplayPlaneButton() const;
     QPushButton*    editDisplayPlaneButton() const;
     QPushButton*    removeDisplayPlaneButton() const;
+    ZonesPanel*     zonesPanel() const;
+    EffectPackPanel* effectPackPanel() const;
 
 private slots:
     void onObjectTypeChanged(int index);
@@ -52,6 +58,7 @@ private slots:
 
 private:
     void applyVisualStyles();
+    void setObjectTypeIndex(int index);
 
     Ui::ObjectCreatorTabPanel* ui;
     OpenRGB3DSpatialTab*       host_tab_ = nullptr;

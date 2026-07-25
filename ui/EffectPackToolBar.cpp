@@ -9,7 +9,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
-#include <QPainter>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <functional>
@@ -107,7 +106,7 @@ void EffectPackToolBar::buildUi()
             btn->setAutoRaise(true);
             btn->setIcon(EffectPackCatalog::MakeEffectIcon(e));
             btn->setIconSize(QSize(22, 22));
-            btn->setToolTip(QString::fromUtf8(e.name) + QStringLiteral(" — drag onto a timeline row"));
+            btn->setToolTip(EffectPackCatalog::EffectTooltip(e));
             btn->setMimeFactory([type = e.type]() {
                 return EffectPackCatalog::MakeEffectMime(type);
             });
@@ -126,19 +125,16 @@ void EffectPackToolBar::buildUi()
     auto* colors_row = new QHBoxLayout();
     colors_row->setSpacing(3);
     colors_row->addWidget(new QLabel(QStringLiteral("Colors")));
-    const QColor solids[] = {
-        QColor(255, 255, 255), QColor(255, 0, 0), QColor(0, 255, 0), QColor(0, 0, 255),
-        QColor(255, 255, 0), QColor(255, 0, 255), QColor(0, 255, 255), QColor(255, 128, 0),
-        QColor(128, 0, 255), QColor(0, 0, 0)
-    };
-    for(const QColor& c : solids)
+    for(const EffectPackCatalog::ColorEntry& c : EffectPackCatalog::ColorEntries())
     {
-        auto* btn = MakeSwatchButton(this, c);
-        const RGBColor rgb = ToRGBColor(c.red(), c.green(), c.blue());
+        auto* btn = MakeSwatchButton(this, c.color);
+        const RGBColor rgb = ToRGBColor(c.color.red(), c.color.green(), c.color.blue());
         btn->setMimeFactory([rgb]() {
             return EffectPackCatalog::MakeColorMime(rgb);
         });
-        btn->setToolTip(c.name() + QStringLiteral(" — drag onto an effect block"));
+        const QString label = QString::fromUtf8(c.label ? c.label : "Color");
+        btn->setToolTip(label + QStringLiteral(" — ") + c.color.name()
+                        + QStringLiteral(" — drag onto an effect block"));
         connect(btn, &QToolButton::clicked, this, [this, rgb]() {
             emit colorClicked(rgb);
         });
@@ -147,38 +143,16 @@ void EffectPackToolBar::buildUi()
 
     colors_row->addSpacing(10);
     colors_row->addWidget(new QLabel(QStringLiteral("Gradients")));
-    const struct { const char* label; const char* id; QColor a; QColor b; } grads[] = {
-        {"Rainbow", "rainbow", QColor(255, 0, 0), QColor(0, 0, 255)},
-        {"Red→Blue", "red_blue", QColor(255, 0, 0), QColor(0, 0, 255)},
-        {"White→Color", "white_color", QColor(255, 255, 255), QColor(255, 80, 40)},
-    };
-    for(const auto& g : grads)
+    for(const EffectPackCatalog::GradientEntry& g : EffectPackCatalog::GradientEntries())
     {
         auto* btn = new DragToolButton(this);
         btn->setAutoRaise(true);
         btn->setFixedSize(40, 24);
-        QPixmap pm(34, 16);
-        QPainter p(&pm);
-        QLinearGradient grad(0, 0, 34, 0);
-        if(QString(g.id) == QStringLiteral("rainbow"))
-        {
-            grad.setColorAt(0.0, QColor(255, 0, 0));
-            grad.setColorAt(0.2, QColor(255, 128, 0));
-            grad.setColorAt(0.4, QColor(255, 255, 0));
-            grad.setColorAt(0.6, QColor(0, 255, 0));
-            grad.setColorAt(0.8, QColor(0, 128, 255));
-            grad.setColorAt(1.0, QColor(180, 0, 255));
-        }
-        else
-        {
-            grad.setColorAt(0.0, g.a);
-            grad.setColorAt(1.0, g.b);
-        }
-        p.fillRect(pm.rect(), grad);
-        btn->setIcon(QIcon(pm));
+        btn->setIcon(QIcon(EffectPackCatalog::MakeGradientPreview(g.id)));
         btn->setIconSize(QSize(34, 16));
-        btn->setToolTip(QString::fromUtf8(g.label) + QStringLiteral(" — drag onto an effect block"));
-        const QString id = QString::fromUtf8(g.id);
+        const QString label = QString::fromUtf8(g.label ? g.label : "Gradient");
+        btn->setToolTip(label + QStringLiteral(" — drag onto an effect block"));
+        const QString id = QString::fromUtf8(g.id ? g.id : "");
         btn->setMimeFactory([id]() {
             return EffectPackCatalog::MakeGradientPresetMime(id);
         });
@@ -189,20 +163,14 @@ void EffectPackToolBar::buildUi()
     }
     colors_row->addSpacing(10);
     colors_row->addWidget(new QLabel(QStringLiteral("Curves")));
-    const struct { const char* label; const char* id; } curves[] = {
-        {"Flat", "flat"},
-        {"Triangle", "triangle"},
-        {"Ease In", "ease_in"},
-        {"Ease Out", "ease_out"},
-        {"Pulse", "pulse_curve"},
-    };
-    for(const auto& c : curves)
+    for(const EffectPackCatalog::CurveEntry& c : EffectPackCatalog::CurveEntries())
     {
         auto* btn = new DragToolButton(this);
         btn->setAutoRaise(true);
-        btn->setText(QString::fromUtf8(c.label));
-        btn->setToolTip(QString::fromUtf8(c.label) + QStringLiteral(" intensity — drag onto a block"));
-        const QString id = QString::fromUtf8(c.id);
+        const QString label = QString::fromUtf8(c.label ? c.label : "Curve");
+        btn->setText(label);
+        btn->setToolTip(label + QStringLiteral(" intensity — drag onto a block"));
+        const QString id = QString::fromUtf8(c.id ? c.id : "");
         btn->setMimeFactory([id]() {
             return EffectPackCatalog::MakeCurvePresetMime(id);
         });

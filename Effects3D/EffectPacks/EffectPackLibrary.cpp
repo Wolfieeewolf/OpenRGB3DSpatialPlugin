@@ -39,10 +39,17 @@ void EnsureLibrarySeeded(const filesystem::path& dir)
         return;
     }
 
-    const Pack example = MakeExampleRainbowWash();
-    const filesystem::path out = dir / (example.id + kFileSuffix);
-    std::string err;
-    SaveToFile(out, example, &err);
+    const Pack examples[] = {
+        MakeExampleRainbowWash(),
+        MakeExampleDeskRipple(),
+        MakeExampleSequenceWipe(),
+    };
+    for(const Pack& example : examples)
+    {
+        const filesystem::path out = dir / (example.id + kFileSuffix);
+        std::string err;
+        SaveToFile(out, example, &err);
+    }
 }
 
 std::vector<PackListEntry> ListPacks(const filesystem::path& dir)

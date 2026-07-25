@@ -52,6 +52,7 @@ enum class BlockType
     Spin,
     Candle,
     Dissolve,
+    Wave,
     // Pixel (plane)
     ColorWash,
     Plasma,
@@ -59,12 +60,14 @@ enum class BlockType
     Fire,
     Balls,
     Bars,
+    Scanner,
     // Volume (3D)
     SphereWipe,
     Orbit,
     Ripple,
     Meteor,
     Noise3D,
+    Burst,
 };
 
 enum class Direction
@@ -173,6 +176,8 @@ float SampleCurve(const std::vector<CurvePoint>& curve, float t);
 void EnsureBlockGradient(Block* block);
 void ApplyBuiltinIntensityCurve(Block* block, const char* preset_id);
 const char* MatchBuiltinIntensityCurve(const std::vector<CurvePoint>& curve);
+/** Fill block gradient from a shared catalog preset id. accent used by white_color. */
+bool ApplyGradientPresetId(Block* block, const char* preset_id, RGBColor accent = ToRGBColor(255, 80, 40));
 float BlockProgress(const Block& block, int local_ms);
 
 bool EvaluateBlock(const Block& block, int local_ms, RGBColor* out_color, float* out_intensity);
@@ -256,5 +261,7 @@ bool LoadFromFile(const filesystem::path& path, Pack* out, std::string* error);
 bool SaveToFile(const filesystem::path& path, const Pack& pack, std::string* error);
 
 Pack MakeExampleRainbowWash();
+Pack MakeExampleDeskRipple();
+Pack MakeExampleSequenceWipe();
 
 } // namespace EffectPack

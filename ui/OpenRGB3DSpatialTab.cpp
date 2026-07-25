@@ -167,9 +167,9 @@ void OpenRGB3DSpatialTab::showEvent(QShowEvent* event)
 void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
 {
     QWidget::hideEvent(event);
-    if(ui && ui->effectPackPanel)
+    if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->effectPackPanel())
     {
-        ui->effectPackPanel->stopPreview();
+        ui->objectCreatorTabPanel->effectPackPanel()->stopPreview();
     }
     if(viewport)
     {
@@ -254,8 +254,6 @@ void OpenRGB3DSpatialTab::bindUiPanels()
 
     ui->effectLibraryPanel->bindTab(this);
     ui->effectStackPanel->bindTab(this);
-    ui->effectPackPanel->bindTab(this);
-    ui->zonesPanel->bindTab(this);
     connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, &OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi);
 
     ui->availableControllersPanel->bindTab(this, ControllerListPanel::Mode::Available);
@@ -1717,17 +1715,20 @@ void OpenRGB3DSpatialTab::ApplyRotationComponent(int axis, double value)
 
 QListWidget* OpenRGB3DSpatialTab::zonesList() const
 {
-    return ui && ui->zonesPanel ? ui->zonesPanel->zonesList() : nullptr;
+    ZonesPanel* panel = ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->zonesPanel() : nullptr;
+    return panel ? panel->zonesList() : nullptr;
 }
 
 QPushButton* OpenRGB3DSpatialTab::editZoneButton() const
 {
-    return ui && ui->zonesPanel ? ui->zonesPanel->editZoneButton() : nullptr;
+    ZonesPanel* panel = ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->zonesPanel() : nullptr;
+    return panel ? panel->editZoneButton() : nullptr;
 }
 
 QPushButton* OpenRGB3DSpatialTab::deleteZoneButton() const
 {
-    return ui && ui->zonesPanel ? ui->zonesPanel->deleteZoneButton() : nullptr;
+    ZonesPanel* panel = ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->zonesPanel() : nullptr;
+    return panel ? panel->deleteZoneButton() : nullptr;
 }
 
 QComboBox* OpenRGB3DSpatialTab::effectCategoryCombo() const

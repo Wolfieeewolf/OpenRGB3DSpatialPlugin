@@ -56,6 +56,16 @@
        <string>Display Plane</string>
       </property>
      </item>
+     <item>
+      <property name="text">
+       <string>Zone</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Effect Pack</string>
+      </property>
+     </item>
     </widget>
    </item>
    <item>
@@ -380,6 +390,78 @@
    </item>
   </layout>
  </widget>
+
+<widget class="QWidget" name="zonePage">
+  <layout class="QVBoxLayout" name="zonePageLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="ZonesPanel" name="zonesPanel"/>
+   </item>
+   <item>
+    <spacer name="zonePageSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+
+<widget class="QWidget" name="effectPackPage">
+  <layout class="QVBoxLayout" name="effectPackPageLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="EffectPackPanel" name="effectPackPanel"/>
+   </item>
+   <item>
+    <spacer name="effectPackPageSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
  
     </widget>
    </item>
@@ -404,6 +486,16 @@
    <extends>QWidget</extends>
    <header>EffectInfoLabel.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ZonesPanel</class>
+   <extends>QGroupBox</extends>
+   <header>ZonesPanel.h</header>
+  </customwidget>
+  <customwidget>
+   <class>EffectPackPanel</class>
+   <extends>QGroupBox</extends>
+   <header>EffectPackPanel.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
