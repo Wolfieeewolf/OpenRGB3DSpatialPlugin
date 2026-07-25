@@ -54,6 +54,8 @@ private slots:
     void onToolbarColorClicked(unsigned int rgb);
     void onToolbarGradientClicked(const QString& preset_id);
     void onGradientPresetApplied(int track_index, int block_index, const QString& preset_id);
+    void onCurvePresetApplied(int track_index, int block_index, const QString& preset_id);
+    void onToolbarCurveClicked(const QString& preset_id);
     void onRemoveBlock();
     void onBlockDeleteRequested(int track_index, int block_index);
     void onBlockFieldChanged();
@@ -111,6 +113,11 @@ private:
     QDoubleSpinBox* speed_spin_ = nullptr;
     QSpinBox* pulse_length_spin_ = nullptr;
     QComboBox* direction_combo_ = nullptr;
+    QComboBox* axis_space_combo_ = nullptr;
+    QComboBox* axis_mode_combo_ = nullptr;
+    QDoubleSpinBox* axis_yaw_spin_ = nullptr;
+    QDoubleSpinBox* axis_pitch_spin_ = nullptr;
+    QComboBox* curve_combo_ = nullptr;
     QPushButton* color_button_ = nullptr;
     QPushButton* color_to_button_ = nullptr;
     QPushButton* remove_block_button_ = nullptr;

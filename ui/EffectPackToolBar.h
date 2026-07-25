@@ -4,8 +4,7 @@
 #include <QWidget>
 
 /**
- * Vixen-style dual strip: effect icons (Basic/Pixel) + color/gradient swatches.
- * Drag effects onto timeline rows; drag colors/gradients onto blocks.
+ * Effect icons (Basic/Pixel/Volume) + color/gradient/curve swatches.
  */
 class EffectPackToolBar : public QWidget
 {
@@ -19,6 +18,7 @@ signals:
     void effectClicked(int block_type);
     void colorClicked(unsigned int rgb);
     void gradientPresetClicked(const QString& preset_id);
+    void curvePresetClicked(const QString& preset_id);
 
 private:
     void buildUi();

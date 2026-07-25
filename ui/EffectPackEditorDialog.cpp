@@ -274,14 +274,67 @@ void EffectPackEditorDialog::buildUi()
     direction_section_ = new EffectCollapsibleSection(QStringLiteral("Direction"));
     static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(true);
     direction_combo_ = new QComboBox();
-    direction_combo_->addItem(QStringLiteral("Left"), (int)EffectPack::Direction::Left);
-    direction_combo_->addItem(QStringLiteral("Right"), (int)EffectPack::Direction::Right);
-    direction_combo_->addItem(QStringLiteral("Up"), (int)EffectPack::Direction::Up);
-    direction_combo_->addItem(QStringLiteral("Down"), (int)EffectPack::Direction::Down);
+    auto add_dir = [&](const QString& label, EffectPack::Direction d, const QString& tip) {
+        direction_combo_->addItem(label, (int)d);
+        direction_combo_->setItemData(direction_combo_->count() - 1, tip, Qt::ToolTipRole);
+    };
+    add_dir(QStringLiteral("Left"), EffectPack::Direction::Left,
+            QStringLiteral("Room −X. Along the key row on a typical keyboard."));
+    add_dir(QStringLiteral("Right"), EffectPack::Direction::Right,
+            QStringLiteral("Room +X."));
+    add_dir(QStringLiteral("Up"), EffectPack::Direction::Up,
+            QStringLiteral("Room +Y (vertical). On a flat keyboard Y is thin — uses depth (Z) as fallback."));
+    add_dir(QStringLiteral("Down"), EffectPack::Direction::Down,
+            QStringLiteral("Room −Y. Flat boards fall back to depth (Z), not Left/Right."));
+    add_dir(QStringLiteral("Forward"), EffectPack::Direction::Forward,
+            QStringLiteral("Room +Z (floor depth). Spacebar ↔ F-keys on a desk keyboard."));
+    add_dir(QStringLiteral("Back"), EffectPack::Direction::Back,
+            QStringLiteral("Room −Z."));
+    direction_combo_->insertSeparator(direction_combo_->count());
+    add_dir(QStringLiteral("+X"), EffectPack::Direction::PosX, QStringLiteral("Explicit room +X"));
+    add_dir(QStringLiteral("−X"), EffectPack::Direction::NegX, QStringLiteral("Explicit room −X"));
+    add_dir(QStringLiteral("+Y"), EffectPack::Direction::PosY, QStringLiteral("Explicit room +Y (up)"));
+    add_dir(QStringLiteral("−Y"), EffectPack::Direction::NegY, QStringLiteral("Explicit room −Y (down)"));
+    add_dir(QStringLiteral("+Z"), EffectPack::Direction::PosZ, QStringLiteral("Explicit room +Z"));
+    add_dir(QStringLiteral("−Z"), EffectPack::Direction::NegZ, QStringLiteral("Explicit room −Z"));
+    direction_combo_->setToolTip(
+        QStringLiteral("Travel / spin axis. With Space=Device this follows the controller orientation from the viewport."));
+    axis_space_combo_ = new QComboBox();
+    axis_space_combo_->addItem(QStringLiteral("Device (layout)"), (int)EffectPack::AxisSpace::Device);
+    axis_space_combo_->addItem(QStringLiteral("Room"), (int)EffectPack::AxisSpace::Room);
+    axis_space_combo_->setToolTip(
+        QStringLiteral("Device uses this controller's rotation from the 3D layout. Room uses fixed room ±X/Y/Z."));
+    axis_mode_combo_ = new QComboBox();
+    axis_mode_combo_->addItem(QStringLiteral("Preset direction"), (int)EffectPack::AxisMode::Preset);
+    axis_mode_combo_->addItem(QStringLiteral("Custom yaw/pitch"), (int)EffectPack::AxisMode::Custom);
+    axis_yaw_spin_ = new QDoubleSpinBox();
+    axis_yaw_spin_->setRange(-180.0, 180.0);
+    axis_yaw_spin_->setSuffix(QStringLiteral("°"));
+    axis_pitch_spin_ = new QDoubleSpinBox();
+    axis_pitch_spin_->setRange(-90.0, 90.0);
+    axis_pitch_spin_->setSuffix(QStringLiteral("°"));
     auto* dir_form = new QFormLayout();
+    dir_form->addRow(QStringLiteral("Space"), axis_space_combo_);
+    dir_form->addRow(QStringLiteral("Axis"), axis_mode_combo_);
     dir_form->addRow(QStringLiteral("Direction"), direction_combo_);
+    dir_form->addRow(QStringLiteral("Yaw"), axis_yaw_spin_);
+    dir_form->addRow(QStringLiteral("Pitch"), axis_pitch_spin_);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->addLayout(dir_form);
     props_inner_layout->addWidget(direction_section_);
+
+    curve_combo_ = new QComboBox();
+    curve_combo_->addItem(QStringLiteral("Flat (none)"), QStringLiteral("flat"));
+    curve_combo_->addItem(QStringLiteral("Triangle"), QStringLiteral("triangle"));
+    curve_combo_->addItem(QStringLiteral("Ease In"), QStringLiteral("ease_in"));
+    curve_combo_->addItem(QStringLiteral("Ease Out"), QStringLiteral("ease_out"));
+    curve_combo_->addItem(QStringLiteral("Pulse"), QStringLiteral("pulse_curve"));
+    curve_combo_->addItem(QStringLiteral("Custom"), QStringLiteral("custom"));
+    auto* curve_sec = new EffectCollapsibleSection(QStringLiteral("Intensity Curve"));
+    curve_sec->setExpanded(false);
+    auto* curve_form = new QFormLayout();
+    curve_form->addRow(QStringLiteral("Preset"), curve_combo_);
+    curve_sec->bodyLayout()->addLayout(curve_form);
+    props_inner_layout->addWidget(curve_sec);
 
     speed_section_ = new EffectCollapsibleSection(QStringLiteral("Speed"));
     static_cast<EffectCollapsibleSection*>(speed_section_)->setExpanded(true);
@@ -309,7 +362,7 @@ void EffectPackEditorDialog::buildUi()
     pulse_length_spin_->setRange(2, 100);
     pulse_length_spin_->setValue(25);
     auto* pulse_form = new QFormLayout();
-    pulse_form->addRow(QStringLiteral("Length %"), pulse_length_spin_);
+    pulse_form->addRow(QStringLiteral("Length / Duty %"), pulse_length_spin_);
     static_cast<EffectCollapsibleSection*>(pulse_section_)->bodyLayout()->addLayout(pulse_form);
     props_inner_layout->addWidget(pulse_section_);
 
@@ -351,9 +404,11 @@ void EffectPackEditorDialog::buildUi()
     connect(timeline_, &EffectPackTimelineWidget::blockDeleteRequested, this, &EffectPackEditorDialog::onBlockDeleteRequested);
     connect(timeline_, &EffectPackTimelineWidget::effectAddRequested, this, &EffectPackEditorDialog::onEffectAddRequested);
     connect(timeline_, &EffectPackTimelineWidget::gradientPresetApplied, this, &EffectPackEditorDialog::onGradientPresetApplied);
+    connect(timeline_, &EffectPackTimelineWidget::curvePresetApplied, this, &EffectPackEditorDialog::onCurvePresetApplied);
     connect(effect_toolbar_, &EffectPackToolBar::effectClicked, this, &EffectPackEditorDialog::onToolbarEffectClicked);
     connect(effect_toolbar_, &EffectPackToolBar::colorClicked, this, &EffectPackEditorDialog::onToolbarColorClicked);
     connect(effect_toolbar_, &EffectPackToolBar::gradientPresetClicked, this, &EffectPackEditorDialog::onToolbarGradientClicked);
+    connect(effect_toolbar_, &EffectPackToolBar::curvePresetClicked, this, &EffectPackEditorDialog::onToolbarCurveClicked);
     connect(remove_block_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onRemoveBlock);
     connect(type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onTypeChanged);
     connect(start_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
@@ -364,6 +419,11 @@ void EffectPackEditorDialog::buildUi()
     connect(speed_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(pulse_length_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(direction_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(axis_space_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(axis_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(axis_yaw_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(axis_pitch_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(curve_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(color_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickColor);
     connect(color_to_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickColorTo);
     connect(gradient_preset_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onGradientPreset);
@@ -784,6 +844,13 @@ int EffectPackEditorDialog::ensureTrackForTarget(const EffectPack::Target& targe
 
 void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::BlockType type)
 {
+    if(timeline_)
+    {
+        timeline_->cancelDrag();
+    }
+    // Flush props into the previously selected block before creating another.
+    applyFormToSelectedBlock();
+
     const QVector<EffectPackTimelineWidget::Row>& built = timeline_->rows();
     if(row_index < 0 || row_index >= built.size())
     {
@@ -813,6 +880,12 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
     block.max_intensity = 1.0f;
     block.intensity = 1.0f;
     block.direction = EffectPack::Direction::Right;
+    block.axis_space = (row.target.kind == EffectPack::TargetKind::All)
+        ? EffectPack::AxisSpace::Room
+        : EffectPack::AxisSpace::Device;
+    block.axis_mode = EffectPack::AxisMode::Preset;
+    block.axis_yaw_deg = 0.0f;
+    block.axis_pitch_deg = 0.0f;
     block.speed = 1.0f;
     block.pulse_length = 0.25f;
     if(type == EffectPack::BlockType::Twinkle)
@@ -827,9 +900,94 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
         block.color_from = block.color;
         block.color_to = block.gradient.back().color;
     }
-    else if(type == EffectPack::BlockType::ColorWash || type == EffectPack::BlockType::Wipe
-       || type == EffectPack::BlockType::Chase)
+    else if(type == EffectPack::BlockType::Candle)
     {
+        block.period_ms = 120;
+        block.min_intensity = 0.35f;
+        block.gradient = {
+            {0.0f, ToRGBColor(180, 40, 0)},
+            {0.45f, ToRGBColor(255, 120, 20)},
+            {1.0f, ToRGBColor(255, 220, 80)},
+        };
+        block.color = block.gradient[1].color;
+    }
+    else if(type == EffectPack::BlockType::Strobe)
+    {
+        block.period_ms = 120;
+        block.pulse_length = 0.35f;
+        block.gradient = {
+            {0.0f, ToRGBColor(255, 255, 255)},
+            {1.0f, ToRGBColor(255, 255, 255)},
+        };
+        block.color = block.gradient.front().color;
+    }
+    else if(type == EffectPack::BlockType::Alternating)
+    {
+        block.period_ms = 400;
+        block.gradient = {
+            {0.0f, ToRGBColor(255, 40, 40)},
+            {1.0f, ToRGBColor(40, 80, 255)},
+        };
+        block.color = block.gradient.front().color;
+        block.color_to = block.gradient.back().color;
+    }
+    else if(type == EffectPack::BlockType::Spin)
+    {
+        block.direction = EffectPack::Direction::Up; // spin around room vertical
+        block.pulse_length = 0.18f;
+        block.speed = 1.5f;
+        block.gradient = {
+            {0.0f, ToRGBColor(40, 200, 255)},
+            {0.5f, ToRGBColor(255, 255, 255)},
+            {1.0f, ToRGBColor(40, 80, 255)},
+        };
+        block.color = block.gradient.front().color;
+    }
+    else if(type == EffectPack::BlockType::Dissolve)
+    {
+        const int default_dissolve = 2500;
+        block.end_ms = std::min(pack_.duration_ms, block.start_ms + default_dissolve);
+        block.gradient = {
+            {0.0f, ToRGBColor(255, 0, 0)},
+            {0.5f, ToRGBColor(255, 128, 0)},
+            {1.0f, ToRGBColor(255, 255, 120)},
+        };
+        block.color = block.gradient.front().color;
+    }
+    else if(type == EffectPack::BlockType::Fire)
+    {
+        block.gradient = {
+            {0.0f, ToRGBColor(20, 0, 0)},
+            {0.35f, ToRGBColor(255, 40, 0)},
+            {0.7f, ToRGBColor(255, 160, 0)},
+            {1.0f, ToRGBColor(255, 255, 180)},
+        };
+        block.color = block.gradient[2].color;
+    }
+    else if(type == EffectPack::BlockType::Snow)
+    {
+        block.gradient = {
+            {0.0f, ToRGBColor(200, 220, 255)},
+            {1.0f, ToRGBColor(255, 255, 255)},
+        };
+        block.color = block.gradient.back().color;
+    }
+    else if(type == EffectPack::BlockType::SphereWipe || type == EffectPack::BlockType::Ripple
+            || type == EffectPack::BlockType::Orbit || type == EffectPack::BlockType::Meteor
+            || type == EffectPack::BlockType::Noise3D || type == EffectPack::BlockType::Plasma
+            || type == EffectPack::BlockType::Balls || type == EffectPack::BlockType::Bars
+            || type == EffectPack::BlockType::ColorWash || type == EffectPack::BlockType::Wipe
+            || type == EffectPack::BlockType::Chase)
+    {
+        if(type == EffectPack::BlockType::SphereWipe || type == EffectPack::BlockType::Ripple)
+        {
+            block.end_ms = std::min(pack_.duration_ms, block.start_ms + 2500);
+        }
+        if(type == EffectPack::BlockType::Meteor)
+        {
+            block.direction = EffectPack::Direction::Down;
+            block.pulse_length = 0.2f;
+        }
         block.gradient = {
             {0.0f, ToRGBColor(255, 0, 0)},
             {0.2f, ToRGBColor(255, 128, 0)},
@@ -838,6 +996,7 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
             {0.8f, ToRGBColor(0, 128, 255)},
             {1.0f, ToRGBColor(128, 0, 255)},
         };
+        block.color = block.gradient.front().color;
     }
     else
     {
@@ -848,7 +1007,12 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
     selected_block_ = (int)pack_.tracks[(size_t)track].blocks.size() - 1;
     timeline_->setPack(&pack_);
     timeline_->setSelectedBlock(selected_track_, selected_block_);
+    if(player_.IsPlaying())
+    {
+        player_.UpdatePack(pack_);
+    }
     applyBlockToForm();
+    updateSelectionActions();
     timeline_->update();
 }
 
@@ -859,6 +1023,15 @@ void EffectPackEditorDialog::onEffectAddRequested(int row_index, int ms, int blo
 
 void EffectPackEditorDialog::onBlockSelected(int track_index, int block_index)
 {
+    if(timeline_)
+    {
+        timeline_->cancelDrag();
+    }
+    // Commit the previously selected block before switching the form target.
+    if(selected_track_ != track_index || selected_block_ != block_index)
+    {
+        applyFormToSelectedBlock();
+    }
     selected_track_ = track_index;
     selected_block_ = block_index;
     applyBlockToForm();
@@ -903,6 +1076,59 @@ void EffectPackEditorDialog::onToolbarColorClicked(unsigned int rgb)
 void EffectPackEditorDialog::onToolbarGradientClicked(const QString& preset_id)
 {
     applyGradientPresetToBlock(selectedBlock(), preset_id);
+}
+
+void EffectPackEditorDialog::onToolbarCurveClicked(const QString& preset_id)
+{
+    EffectPack::Block* b = selectedBlock();
+    if(!b)
+    {
+        return;
+    }
+    if(preset_id.isEmpty() || preset_id == QStringLiteral("flat"))
+    {
+        b->intensity_curve.clear();
+    }
+    else
+    {
+        EffectPack::ApplyBuiltinIntensityCurve(b, preset_id.toUtf8().constData());
+    }
+    if(curve_combo_)
+    {
+        const int idx = curve_combo_->findData(preset_id);
+        if(idx >= 0)
+        {
+            curve_combo_->setCurrentIndex(idx);
+        }
+    }
+    timeline_->update();
+}
+
+void EffectPackEditorDialog::onCurvePresetApplied(int track_index, int block_index, const QString& preset_id)
+{
+    if(track_index < 0 || track_index >= (int)pack_.tracks.size())
+    {
+        return;
+    }
+    auto& blocks = pack_.tracks[(size_t)track_index].blocks;
+    if(block_index < 0 || block_index >= (int)blocks.size())
+    {
+        return;
+    }
+    selected_track_ = track_index;
+    selected_block_ = block_index;
+    timeline_->setSelectedBlock(selected_track_, selected_block_);
+    EffectPack::Block* b = &blocks[(size_t)block_index];
+    if(preset_id.isEmpty() || preset_id == QStringLiteral("flat"))
+    {
+        b->intensity_curve.clear();
+    }
+    else
+    {
+        EffectPack::ApplyBuiltinIntensityCurve(b, preset_id.toUtf8().constData());
+    }
+    applyBlockToForm();
+    timeline_->update();
 }
 
 void EffectPackEditorDialog::onGradientPresetApplied(int track_index, int block_index, const QString& preset_id)
@@ -985,15 +1211,35 @@ void EffectPackEditorDialog::onRemoveBlock()
     {
         return;
     }
+    if(timeline_)
+    {
+        timeline_->cancelDrag();
+    }
+    // Stop writing form values into a block that is about to vanish.
+    suppress_ui_ = true;
     blocks.erase(blocks.begin() + selected_block_);
-    selected_block_ = std::min(selected_block_, (int)blocks.size() - 1);
+    // Drop empty tracks so stale target rows cannot keep painting blacks forever.
     if(blocks.empty())
     {
+        pack_.tracks.erase(pack_.tracks.begin() + selected_track_);
         selected_track_ = -1;
         selected_block_ = -1;
     }
-    timeline_->setSelectedBlock(selected_track_, selected_block_);
-    timeline_->update();
+    else
+    {
+        selected_block_ = std::min(selected_block_, (int)blocks.size() - 1);
+    }
+    if(timeline_)
+    {
+        timeline_->setPack(&pack_);
+        timeline_->setSelectedBlock(selected_track_, selected_block_);
+        timeline_->update();
+    }
+    if(player_.IsPlaying())
+    {
+        player_.UpdatePack(pack_);
+    }
+    suppress_ui_ = false;
     applyBlockToForm();
     updateSelectionActions();
 }
@@ -1022,11 +1268,26 @@ void EffectPackEditorDialog::updatePropVisibility()
     const bool fade = type == EffectPack::BlockType::Fade;
     const bool wipe_chase = type == EffectPack::BlockType::Wipe || type == EffectPack::BlockType::Chase;
     const bool pulse_twinkle = type == EffectPack::BlockType::Pulse || type == EffectPack::BlockType::Twinkle;
+    const bool alternating = type == EffectPack::BlockType::Alternating;
+    const bool strobe = type == EffectPack::BlockType::Strobe;
+    const bool spin = type == EffectPack::BlockType::Spin;
+    const bool candle = type == EffectPack::BlockType::Candle;
+    const bool dissolve = type == EffectPack::BlockType::Dissolve;
     const bool chase = type == EffectPack::BlockType::Chase;
     const bool colorwash = type == EffectPack::BlockType::ColorWash;
-    const bool needs_period = pulse_twinkle;
-    const bool needs_speed = wipe_chase || colorwash || pulse_twinkle;
-    const bool needs_direction = wipe_chase || colorwash;
+    const bool worldish = EffectPack::BlockNeedsWorldEval(type);
+    const bool needs_period = pulse_twinkle || alternating || strobe;
+    const bool needs_speed = wipe_chase || colorwash || pulse_twinkle || alternating || strobe || spin
+        || dissolve || worldish;
+    const bool needs_direction = EffectPack::BlockNeedsDirection(type);
+    const bool needs_pulse_length = chase || spin || strobe
+        || type == EffectPack::BlockType::Orbit
+        || type == EffectPack::BlockType::Ripple
+        || type == EffectPack::BlockType::Meteor
+        || type == EffectPack::BlockType::Balls;
+    const bool needs_min_intensity = pulse_twinkle || candle;
+    const bool custom_axis = axis_mode_combo_
+        && (EffectPack::AxisMode)axis_mode_combo_->currentData().toInt() == EffectPack::AxisMode::Custom;
 
     if(color_to_row_)
     {
@@ -1039,6 +1300,21 @@ void EffectPackEditorDialog::updatePropVisibility()
     if(direction_section_)
     {
         direction_section_->setVisible(needs_direction);
+    }
+    if(direction_combo_)
+    {
+        direction_combo_->setEnabled(ok && needs_direction && !custom_axis);
+        direction_combo_->setVisible(!custom_axis);
+    }
+    if(axis_yaw_spin_)
+    {
+        axis_yaw_spin_->setVisible(custom_axis && needs_direction);
+        axis_yaw_spin_->setEnabled(ok && custom_axis && needs_direction);
+    }
+    if(axis_pitch_spin_)
+    {
+        axis_pitch_spin_->setVisible(custom_axis && needs_direction);
+        axis_pitch_spin_->setEnabled(ok && custom_axis && needs_direction);
     }
     if(speed_section_)
     {
@@ -1054,15 +1330,15 @@ void EffectPackEditorDialog::updatePropVisibility()
     }
     if(pulse_section_)
     {
-        pulse_section_->setVisible(chase);
+        pulse_section_->setVisible(needs_pulse_length);
     }
     if(min_intensity_row_)
     {
-        min_intensity_row_->setVisible(pulse_twinkle);
+        min_intensity_row_->setVisible(needs_min_intensity);
     }
     if(min_intensity_spin_)
     {
-        min_intensity_spin_->setEnabled(ok && pulse_twinkle);
+        min_intensity_spin_->setEnabled(ok && needs_min_intensity);
     }
     updateSelectionActions();
 }
@@ -1147,6 +1423,31 @@ void EffectPackEditorDialog::applyBlockToForm()
     pulse_length_spin_->setValue((int)std::lround(std::clamp(b->pulse_length, 0.02f, 1.0f) * 100.0f));
     const int dir_idx = direction_combo_->findData((int)b->direction);
     direction_combo_->setCurrentIndex(dir_idx >= 0 ? dir_idx : 1);
+    if(axis_space_combo_)
+    {
+        const int sidx = axis_space_combo_->findData((int)b->axis_space);
+        axis_space_combo_->setCurrentIndex(sidx >= 0 ? sidx : 0);
+    }
+    if(axis_mode_combo_)
+    {
+        const int midx = axis_mode_combo_->findData((int)b->axis_mode);
+        axis_mode_combo_->setCurrentIndex(midx >= 0 ? midx : 0);
+    }
+    if(axis_yaw_spin_)
+    {
+        axis_yaw_spin_->setValue(b->axis_yaw_deg);
+    }
+    if(axis_pitch_spin_)
+    {
+        axis_pitch_spin_->setValue(b->axis_pitch_deg);
+    }
+    if(curve_combo_)
+    {
+        const char* matched = EffectPack::MatchBuiltinIntensityCurve(b->intensity_curve);
+        const QString id = matched ? QString::fromUtf8(matched) : QStringLiteral("custom");
+        const int cidx = curve_combo_->findData(id);
+        curve_combo_->setCurrentIndex(cidx >= 0 ? cidx : curve_combo_->findData(QStringLiteral("custom")));
+    }
     setColorButton(color_button_, b->type == EffectPack::BlockType::Fade ? b->color_from : b->color);
     setColorButton(color_to_button_, b->color_to);
     suppress_ui_ = false;
@@ -1181,6 +1482,37 @@ void EffectPackEditorDialog::applyFormToSelectedBlock()
     b->speed = (float)speed_spin_->value();
     b->pulse_length = pulse_length_spin_->value() / 100.0f;
     b->direction = (EffectPack::Direction)direction_combo_->currentData().toInt();
+    if(axis_space_combo_)
+    {
+        b->axis_space = (EffectPack::AxisSpace)axis_space_combo_->currentData().toInt();
+    }
+    if(axis_mode_combo_)
+    {
+        b->axis_mode = (EffectPack::AxisMode)axis_mode_combo_->currentData().toInt();
+    }
+    if(axis_yaw_spin_)
+    {
+        b->axis_yaw_deg = (float)axis_yaw_spin_->value();
+    }
+    if(axis_pitch_spin_)
+    {
+        b->axis_pitch_deg = (float)axis_pitch_spin_->value();
+    }
+    if(curve_combo_)
+    {
+        const QString cid = curve_combo_->currentData().toString();
+        if(cid == QStringLiteral("custom"))
+        {
+        }
+        else if(cid.isEmpty() || cid == QStringLiteral("flat"))
+        {
+            b->intensity_curve.clear();
+        }
+        else
+        {
+            EffectPack::ApplyBuiltinIntensityCurve(b, cid.toUtf8().constData());
+        }
+    }
     const RGBColor c = colorFromButton(color_button_);
     const RGBColor c2 = colorFromButton(color_to_button_);
     b->color = c;
@@ -1222,7 +1554,11 @@ void EffectPackEditorDialog::onTypeChanged()
     {
         const bool spatial = b->type == EffectPack::BlockType::Wipe
             || b->type == EffectPack::BlockType::Chase
-            || b->type == EffectPack::BlockType::ColorWash;
+            || b->type == EffectPack::BlockType::ColorWash
+            || b->type == EffectPack::BlockType::Spin
+            || b->type == EffectPack::BlockType::Alternating
+            || b->type == EffectPack::BlockType::Dissolve
+            || EffectPack::BlockNeedsWorldEval(b->type);
         if(b->type == EffectPack::BlockType::Twinkle)
         {
             // Floor between flashes — keep sparky by default when switching type.
@@ -1478,6 +1814,20 @@ void EffectPackEditorDialog::onPreview()
     }
     applyFormToSelectedBlock();
     applyMetaToPack();
+    if(tab_)
+    {
+        auto* transforms = tab_->GetControllerTransformsMutable();
+        if(transforms)
+        {
+            for(std::unique_ptr<ControllerTransform>& t : *transforms)
+            {
+                if(t)
+                {
+                    t->world_positions_dirty = true;
+                }
+            }
+        }
+    }
     tab_->PrepareEffectPackPreview();
     if(tab_->resource_manager && tab_->resource_manager->GetRGBControllers().empty())
     {

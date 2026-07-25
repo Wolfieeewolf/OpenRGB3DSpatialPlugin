@@ -119,6 +119,7 @@ void EffectPackToolBar::buildUi()
     };
     add_category(EffectPackCatalog::Category::Basic);
     add_category(EffectPackCatalog::Category::Pixel);
+    add_category(EffectPackCatalog::Category::Volume);
     effects_row->addStretch(1);
     root->addLayout(effects_row);
 
@@ -183,6 +184,30 @@ void EffectPackToolBar::buildUi()
         });
         connect(btn, &QToolButton::clicked, this, [this, id]() {
             emit gradientPresetClicked(id);
+        });
+        colors_row->addWidget(btn);
+    }
+    colors_row->addSpacing(10);
+    colors_row->addWidget(new QLabel(QStringLiteral("Curves")));
+    const struct { const char* label; const char* id; } curves[] = {
+        {"Flat", "flat"},
+        {"Triangle", "triangle"},
+        {"Ease In", "ease_in"},
+        {"Ease Out", "ease_out"},
+        {"Pulse", "pulse_curve"},
+    };
+    for(const auto& c : curves)
+    {
+        auto* btn = new DragToolButton(this);
+        btn->setAutoRaise(true);
+        btn->setText(QString::fromUtf8(c.label));
+        btn->setToolTip(QString::fromUtf8(c.label) + QStringLiteral(" intensity — drag onto a block"));
+        const QString id = QString::fromUtf8(c.id);
+        btn->setMimeFactory([id]() {
+            return EffectPackCatalog::MakeCurvePresetMime(id);
+        });
+        connect(btn, &QToolButton::clicked, this, [this, id]() {
+            emit curvePresetClicked(id);
         });
         colors_row->addWidget(btn);
     }

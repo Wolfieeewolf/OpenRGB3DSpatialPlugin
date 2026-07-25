@@ -10,7 +10,7 @@
 namespace EffectPack
 {
 
-constexpr int kFormatVersion = 2;
+constexpr int kFormatVersion = 3;
 constexpr int kMaxDurationMs = 60000;
 constexpr const char* kFormatId = "openrgb3d.effect_pack";
 constexpr const char* kFileSuffix = ".oreffect.json";
@@ -39,13 +39,31 @@ enum class TargetKind
 
 enum class BlockType
 {
-    Solid,      // Set Level
+    // Basic
+    Solid,
     Fade,
     Pulse,
     Wipe,
     Chase,
     Twinkle,
+    Alternating,
+    Strobe,
+    Spin,
+    Candle,
+    Dissolve,
+    // Pixel (plane)
     ColorWash,
+    Plasma,
+    Snow,
+    Fire,
+    Balls,
+    Bars,
+    // Volume (3D)
+    SphereWipe,
+    Orbit,
+    Ripple,
+    Meteor,
+    Noise3D,
 };
 
 enum class Direction
@@ -54,6 +72,26 @@ enum class Direction
     Right,
     Up,
     Down,
+    Forward,
+    Back,
+    PosX,
+    NegX,
+    PosY,
+    NegY,
+    PosZ,
+    NegZ,
+};
+
+enum class AxisSpace
+{
+    Room,
+    Device,
+};
+
+enum class AxisMode
+{
+    Preset,
+    Custom,
 };
 
 struct Target
@@ -66,8 +104,14 @@ struct Target
 
 struct GradientStop
 {
-    float pos = 0.0f; // 0..1
+    float pos = 0.0f;
     RGBColor color = ToRGBColor(255, 0, 0);
+};
+
+struct CurvePoint
+{
+    float pos = 0.0f;
+    float value = 1.0f;
 };
 
 struct Block
@@ -83,9 +127,14 @@ struct Block
     float max_intensity = 1.0f;
     int period_ms = 1000;
     Direction direction = Direction::Right;
-    float speed = 1.0f;          // relative speed multiplier
-    float pulse_length = 0.25f;  // chase head size 0..1
+    AxisSpace axis_space = AxisSpace::Device;
+    AxisMode axis_mode = AxisMode::Preset;
+    float axis_yaw_deg = 0.0f;
+    float axis_pitch_deg = 0.0f;
+    float speed = 1.0f;
+    float pulse_length = 0.25f;
     std::vector<GradientStop> gradient;
+    std::vector<CurvePoint> intensity_curve;
 };
 
 struct Track
@@ -102,32 +151,21 @@ struct Pack
     int duration_ms = 1000;
     LoopMode loop = LoopMode::Once;
     int priority = 0;
-    /**
-     * Scene controllers this pack owns on the timeline.
-     * Empty = all scene controllers (e.g. seeded rainbow wash).
-     * TargetKind::All means “all devices listed here” (or every scene device if empty).
-     */
     std::vector<std::string> devices;
     std::vector<Track> tracks;
 };
 
-/** Map pack-local time into [0, duration) respecting loop mode. Returns false if finished (once). */
 bool MapPlaybackTime(const Pack& pack, int elapsed_ms, bool event_active, int* out_local_ms);
 
-/** Sample block gradient (or color_from/to / color fallback) at t in [0,1]. */
 RGBColor SampleGradient(const Block& block, float t);
-
-/** Fill empty gradients from color / color_from / color_to fields. */
+float SampleCurve(const std::vector<CurvePoint>& curve, float t);
 void EnsureBlockGradient(Block* block);
+void ApplyBuiltinIntensityCurve(Block* block, const char* preset_id);
+const char* MatchBuiltinIntensityCurve(const std::vector<CurvePoint>& curve);
+float BlockProgress(const Block& block, int local_ms);
 
-/** Evaluate colour for a whole-target sample (no spatial axis). */
 bool EvaluateBlock(const Block& block, int local_ms, RGBColor* out_color, float* out_intensity);
 
-/**
- * Evaluate colour using a normalised spatial axis position in [0,1]
- * (0 = wipe/chase start side for the chosen direction).
- * twinkle_seed should be a stable LED identity (not spatial rank).
- */
 bool EvaluateBlockAtAxis(const Block& block,
                          int local_ms,
                          float axis_pos,
@@ -135,10 +173,17 @@ bool EvaluateBlockAtAxis(const Block& block,
                          RGBColor* out_color,
                          float* out_intensity);
 
-/**
- * Evaluate colour for one LED in a strip of led_count (indices 0..led_count-1).
- * Index order is used as a fallback axis when world positions are unavailable.
- */
+/** Sample-space position + AABB (device-local or room). Flat axes are treated as centered. */
+bool EvaluateBlockAtWorld(const Block& block,
+                          int local_ms,
+                          float x, float y, float z,
+                          float min_x, float max_x,
+                          float min_y, float max_y,
+                          float min_z, float max_z,
+                          int twinkle_seed,
+                          RGBColor* out_color,
+                          float* out_intensity);
+
 bool EvaluateBlockAtLed(const Block& block,
                         int local_ms,
                         int led_index,
@@ -146,10 +191,8 @@ bool EvaluateBlockAtLed(const Block& block,
                         RGBColor* out_color,
                         float* out_intensity);
 
-/** Evaluate the last matching block colour for a track at local time (non-spatial). */
 bool EvaluateTrackColor(const Track& track, int local_ms, RGBColor* out_color, float* out_intensity);
 
-/** Spatial track evaluate for one LED (index-order axis fallback). */
 bool EvaluateTrackColorAtLed(const Track& track,
                              int local_ms,
                              int led_index,
@@ -157,19 +200,38 @@ bool EvaluateTrackColorAtLed(const Track& track,
                              RGBColor* out_color,
                              float* out_intensity);
 
-/** Active (top-most) block at local time, or nullptr. */
 const Block* FindActiveBlock(const Track& track, int local_ms);
 
-/**
- * World-space axis in [0,1] for wipe/chase/colorwash.
- * Left/Right use room X; Up/Down use room Y. If that axis has almost no span
- * (e.g. flat horizontal strip + Up), falls back to the dominant span axis.
- */
+bool DirectionInvertsAxis(Direction dir);
+int DirectionPreferredAxis(Direction dir);
+void AxisUnitVector(const Block& block, float* out_x, float* out_y, float* out_z);
+
 float WorldAxisPos(Direction dir,
                    float x, float y, float z,
                    float min_x, float max_x,
                    float min_y, float max_y,
                    float min_z, float max_z);
+
+float WorldSpinAngle(Direction dir,
+                     float x, float y, float z,
+                     float min_x, float max_x,
+                     float min_y, float max_y,
+                     float min_z, float max_z);
+
+float SampleAxisPos(const Block& block,
+                    float x, float y, float z,
+                    float min_x, float max_x,
+                    float min_y, float max_y,
+                    float min_z, float max_z);
+
+float SampleSpinAngle(const Block& block,
+                      float x, float y, float z,
+                      float min_x, float max_x,
+                      float min_y, float max_y,
+                      float min_z, float max_z);
+
+bool BlockNeedsWorldEval(BlockType t);
+bool BlockNeedsDirection(BlockType t);
 
 const char* BlockTypeDisplayName(BlockType t);
 

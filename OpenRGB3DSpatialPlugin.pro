@@ -332,6 +332,7 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
     Effects3D/EffectPacks/EffectPack.cpp \
+    Effects3D/EffectPacks/EffectPackSpatial.cpp \
     Effects3D/EffectPacks/EffectPackApplier.cpp \
     Effects3D/EffectPacks/EffectPackLibrary.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \

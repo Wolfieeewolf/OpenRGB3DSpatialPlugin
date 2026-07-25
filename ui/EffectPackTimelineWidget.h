@@ -71,6 +71,8 @@ public:
 
 public slots:
     void setSelectedBlock(int track_index, int block_index);
+    /** Abort in-progress move/resize so delete/swap cannot mutate stale indices. */
+    void cancelDrag();
 
 signals:
     void playheadChanged(int ms);
@@ -81,6 +83,7 @@ signals:
     void effectAddRequested(int row_index, int ms, int block_type);
     /** Gradient preset id dropped or applied onto a block (e.g. "rainbow"). */
     void gradientPresetApplied(int track_index, int block_index, const QString& preset_id);
+    void curvePresetApplied(int track_index, int block_index, const QString& preset_id);
     void rowSelected(int row_index);
     void contentHeightChanged(int height);
     void modelExpandedChanged();

@@ -10,6 +10,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QEvent>
+#include <QImage>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMimeData>
@@ -262,6 +263,19 @@ void EffectPackTimelineWidget::setSelectedBlock(int track_index, int block_index
     update();
 }
 
+void EffectPackTimelineWidget::cancelDrag()
+{
+    if(drag_op_ == DragOp::None)
+    {
+        return;
+    }
+    drag_op_ = DragOp::None;
+    drag_track_ = -1;
+    drag_block_ = -1;
+    drag_moved_ = false;
+    unsetCursor();
+}
+
 int EffectPackTimelineWidget::trackIndexForRow(int row) const
 {
     if(!pack_ || row < 0 || row >= visible_rows_.size())
@@ -287,8 +301,7 @@ QVector<EffectPackTimelineWidget::PaintBlock> EffectPackTimelineWidget::paintBlo
         return out;
     }
     const Row& r = visible_rows_[row];
-    // Exact target only (device / zone / LED). Like Vixen/xLights: an effect placed on a
-    // parent does not ghost onto finer rows — granularity stays where you authored it.
+    // Exact target only — no ghosting onto child zone/LED rows.
     for(int ti = 0; ti < (int)pack_->tracks.size(); ++ti)
     {
         const EffectPack::Track& track = pack_->tracks[(size_t)ti];
@@ -437,13 +450,168 @@ bool EffectPackTimelineWidget::hitTestBlock(int x, int y, int* out_row, int* out
     return false;
 }
 
+void EffectPackTimelineWidget::paintBlockSpatialRaster(QPainter& p, const QRect& br, const PaintBlock& pb,
+                                                       const EffectPack::Block& sample) const
+{
+    {
+        EffectPack::Block grad_sample = sample;
+        EffectPack::EnsureBlockGradient(&grad_sample);
+        QLinearGradient under(br.topLeft(), br.topRight());
+        if(grad_sample.gradient.empty())
+        {
+            QColor c = RgbToQColor(grad_sample.color);
+            c.setAlpha(220);
+            under.setColorAt(0.0, c);
+            under.setColorAt(1.0, c);
+        }
+        else
+        {
+            for(const EffectPack::GradientStop& s : grad_sample.gradient)
+            {
+                QColor c = RgbToQColor(s.color);
+                c.setAlpha(200);
+                under.setColorAt(std::clamp(s.pos, 0.0f, 1.0f), c);
+            }
+        }
+        p.fillRect(br, under);
+        p.fillRect(br, QColor(0, 0, 0, 140));
+    }
+
+    std::vector<float> axes;
+    std::vector<int> seeds;
+    std::vector<float> nxs, nys, nzs;
+    if(pack_ && transforms_ && !pb.single_led_row)
+    {
+        EffectPack::BuildSpatialAxesForTarget(*pack_, pb.view_target, sample,
+                                              transforms_, &axes, &seeds, &nxs, &nys, &nzs);
+    }
+
+    std::vector<int> order;
+    if(!axes.empty() && axes.size() == seeds.size())
+    {
+        order.resize((int)axes.size());
+        for(int i = 0; i < (int)order.size(); ++i)
+        {
+            order[i] = i;
+        }
+        std::sort(order.begin(), order.end(), [&](int a, int b) {
+            return axes[(size_t)a] < axes[(size_t)b];
+        });
+    }
+
+    const int led_n = pb.single_led_row
+        ? 1
+        : (!order.empty() ? (int)order.size() : std::max(1, pb.led_count > 1 ? pb.led_count : 24));
+
+    const int max_rows = pb.single_led_row ? 1 : std::max(2, br.height() / 2 + 1);
+    const int skip = (led_n > max_rows) ? std::max(1, led_n / max_rows) : 1;
+    const int rows = pb.single_led_row ? 1 : std::max(1, (led_n + skip - 1) / skip);
+
+    QImage img(std::max(1, br.width()), rows, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+
+    const int dur = std::max(1, sample.end_ms - sample.start_ms);
+    const float floor_i = std::clamp(sample.min_intensity, 0.0f, 1.0f);
+    const bool twinkle = (sample.type == EffectPack::BlockType::Twinkle);
+    const bool chase = (sample.type == EffectPack::BlockType::Chase
+                        || sample.type == EffectPack::BlockType::Spin
+                        || sample.type == EffectPack::BlockType::Orbit);
+    const bool world_eval = EffectPack::BlockNeedsWorldEval(sample.type);
+
+    auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
+        constexpr float k0 = 0.0f;
+        constexpr float k1 = 1.0f;
+        if(pb.single_led_row)
+        {
+            if(!order.empty() && pb.led_index >= 0 && pb.led_index < (int)axes.size())
+            {
+                const int idx = pb.led_index;
+                if(world_eval && idx < (int)nxs.size())
+                {
+                    return EffectPack::EvaluateBlockAtWorld(sample, ms,
+                                                            nxs[(size_t)idx], nys[(size_t)idx], nzs[(size_t)idx],
+                                                            k0, k1, k0, k1, k0, k1,
+                                                            seeds[(size_t)idx], c, intens);
+                }
+                return EffectPack::EvaluateBlockAtAxis(sample, ms,
+                                                       axes[(size_t)idx],
+                                                       seeds[(size_t)idx],
+                                                       c, intens);
+            }
+            return EffectPack::EvaluateBlockAtLed(sample, ms, pb.led_index,
+                                                  std::max(1, pb.led_count), c, intens);
+        }
+        if(!order.empty())
+        {
+            const int idx = order[(size_t)std::clamp(led_slot, 0, (int)order.size() - 1)];
+            if(world_eval && idx < (int)nxs.size())
+            {
+                return EffectPack::EvaluateBlockAtWorld(sample, ms,
+                                                        nxs[(size_t)idx], nys[(size_t)idx], nzs[(size_t)idx],
+                                                        k0, k1, k0, k1, k0, k1,
+                                                        seeds[(size_t)idx], c, intens);
+            }
+            return EffectPack::EvaluateBlockAtAxis(sample, ms,
+                                                   axes[(size_t)idx], seeds[(size_t)idx],
+                                                   c, intens);
+        }
+        if(world_eval)
+        {
+            const float t = (led_n <= 1) ? 0.5f : (float)led_slot / (float)(led_n - 1);
+            return EffectPack::EvaluateBlockAtWorld(sample, ms, t, 0.5f, 0.5f,
+                                                    k0, k1, k0, k1, k0, k1,
+                                                    led_slot, c, intens);
+        }
+        return EffectPack::EvaluateBlockAtLed(sample, ms, led_slot, led_n, c, intens);
+    };
+
+    for(int x = 0; x < img.width(); ++x)
+    {
+        const float t = (img.width() <= 1) ? 0.0f : (float)x / (float)(img.width() - 1);
+        const int ms = sample.start_ms + (int)std::lround(t * (float)dur);
+        const int sample_ms = std::min(std::max(ms, sample.start_ms), sample.end_ms - 1);
+
+        int row = 0;
+        for(int led = 0; led < led_n; led += skip, ++row)
+        {
+            if(row >= rows)
+            {
+                break;
+            }
+            RGBColor c = 0;
+            float intens = 0.0f;
+            if(!sampleLed(led, sample_ms, &c, &intens))
+            {
+                continue;
+            }
+            if(twinkle && intens <= floor_i + 0.05f)
+            {
+                continue;
+            }
+            if(chase && intens < 0.12f)
+            {
+                continue;
+            }
+            if(intens < 0.02f)
+            {
+                continue;
+            }
+            QColor qc = RgbToQColor(c);
+            qc.setAlpha(255);
+            img.setPixelColor(x, row, qc);
+        }
+    }
+
+    p.setRenderHint(QPainter::SmoothPixmapTransform, false);
+    p.drawImage(br, img);
+}
+
 void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& br,
                                                          const EffectPack::Block& block, int alpha) const
 {
     EffectPack::Block sample = block;
     EffectPack::EnsureBlockGradient(&sample);
-    // Vixen IntentRasterizer: full-height horizontal color gradient across the mark.
-    QLinearGradient grad(br.topLeft(), br.topRight());
+    QLinearGradient grad(QPointF(br.left(), br.top()), QPointF(br.right() + 1, br.top()));
     if(sample.gradient.empty())
     {
         QColor c = RgbToQColor(sample.color);
@@ -467,10 +635,19 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
             c.setAlpha(alpha);
             grad.setColorAt(std::clamp(s.pos, 0.0f, 1.0f), c);
         }
+        // Guard: QLinearGradient needs at least one stop.
+        if(sample.gradient.empty())
+        {
+            QColor c = RgbToQColor(sample.color);
+            c.setAlpha(alpha);
+            grad.setColorAt(0.0, c);
+            grad.setColorAt(1.0, c);
+        }
     }
-    p.fillRect(br, grad);
+    p.setPen(Qt::NoPen);
+    p.setBrush(grad);
+    p.drawRect(br);
 
-    // Pulse: subtle period bands so the cycle still reads on solid-looking fills.
     if(sample.type == EffectPack::BlockType::Pulse && br.width() > 8)
     {
         const float speed = std::max(0.05f, sample.speed);
@@ -492,146 +669,6 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
     }
 }
 
-void EffectPackTimelineWidget::paintBlockSpatialRaster(QPainter& p, const QRect& br, const PaintBlock& pb,
-                                                       const EffectPack::Block& sample) const
-{
-    std::vector<float> axes;
-    std::vector<int> seeds;
-    if(pack_ && transforms_ && !pb.single_led_row)
-    {
-        EffectPack::BuildSpatialAxesForTarget(*pack_, pb.view_target, sample.direction,
-                                              transforms_, &axes, &seeds);
-    }
-
-    // Sort by axis so wipe/chase form clean Vixen diagonals (Y = spatial order).
-    std::vector<int> order;
-    if(!axes.empty())
-    {
-        order.resize((int)axes.size());
-        for(int i = 0; i < (int)order.size(); ++i)
-        {
-            order[i] = i;
-        }
-        std::sort(order.begin(), order.end(), [&](int a, int b) {
-            return axes[(size_t)a] < axes[(size_t)b];
-        });
-    }
-
-    const int led_n = pb.single_led_row
-        ? 1
-        : (!order.empty() ? (int)order.size() : std::max(1, pb.led_count > 1 ? pb.led_count : 24));
-
-    // Match Vixen EffectRasterizer: tmpsiz = height/2 + 1, skip elements when dense.
-    const int max_rows = pb.single_led_row ? 1 : std::max(2, br.height() / 2 + 1);
-    const int skip = (led_n > max_rows) ? (led_n / max_rows) : 1;
-    const int rows = pb.single_led_row ? 1 : std::max(1, (led_n + skip - 1) / skip);
-    const float row_h = (float)br.height() / (float)rows;
-
-    // Sample ~every 2px like Vixen IntentRasterizer static chunks (~50ms).
-    const int n_chunks = std::max(1, (br.width() + 1) / 2);
-    const int dur = std::max(1, sample.end_ms - sample.start_ms);
-    const float floor_i = std::clamp(sample.min_intensity, 0.0f, 1.0f);
-    const bool twinkle = (sample.type == EffectPack::BlockType::Twinkle);
-
-    auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
-        if(pb.single_led_row)
-        {
-            if(!axes.empty() && pb.led_index >= 0 && pb.led_index < (int)axes.size())
-            {
-                return EffectPack::EvaluateBlockAtAxis(sample, ms,
-                                                       axes[(size_t)pb.led_index],
-                                                       seeds[(size_t)pb.led_index],
-                                                       c, intens);
-            }
-            return EffectPack::EvaluateBlockAtLed(sample, ms, pb.led_index,
-                                                  std::max(1, pb.led_count), c, intens);
-        }
-        if(!order.empty())
-        {
-            const int idx = order[(size_t)led_slot];
-            return EffectPack::EvaluateBlockAtAxis(sample, ms,
-                                                   axes[(size_t)idx], seeds[(size_t)idx],
-                                                   c, intens);
-        }
-        return EffectPack::EvaluateBlockAtLed(sample, ms, led_slot, led_n, c, intens);
-    };
-
-    auto toPaintColor = [&](RGBColor c, float /*intens*/) -> QColor {
-        // Intensity is already baked into RGB by Evaluate*; keep mark opaque like Vixen.
-        QColor qc = RgbToQColor(c);
-        qc.setAlpha(255);
-        return qc;
-    };
-
-    auto visible = [&](bool on, float intens) -> bool {
-        if(!on)
-        {
-            return false;
-        }
-        // Twinkle: only paint flashes so the mark reads as sparse colored dashes.
-        if(twinkle)
-        {
-            return intens > (floor_i + 0.08f);
-        }
-        // Chase tails: drop near-black tips so diagonals stay thin/crisp.
-        if(sample.type == EffectPack::BlockType::Chase)
-        {
-            return intens > 0.18f;
-        }
-        return intens > 0.02f;
-    };
-
-    for(int row = 0, led = 0; row < rows && led < led_n; ++row, led += skip)
-    {
-        const float y0 = (float)br.top() + row_h * (float)row;
-        const float y1 = (float)br.top() + row_h * (float)(row + 1);
-        const QRectF row_rect(br.left(), y0, br.width(), std::max(1.0f, y1 - y0));
-
-        for(int chunk = 0; chunk < n_chunks; ++chunk)
-        {
-            const float t0 = (float)chunk / (float)n_chunks;
-            const float t1 = (float)(chunk + 1) / (float)n_chunks;
-            const int ms0 = sample.start_ms + (int)std::lround(t0 * (float)dur);
-            const int ms1 = sample.start_ms + (int)std::lround(t1 * (float)dur);
-            const int s0 = std::min(ms0, sample.end_ms - 1);
-            const int s1 = std::min(std::max(ms1 - 1, sample.start_ms), sample.end_ms - 1);
-
-            RGBColor c0 = 0, c1 = 0;
-            float i0 = 0.0f, i1 = 0.0f;
-            const bool on0 = sampleLed(led, s0, &c0, &i0);
-            const bool on1 = sampleLed(led, s1, &c1, &i1);
-            const bool v0 = visible(on0, i0);
-            const bool v1 = visible(on1, i1);
-            if(!v0 && !v1)
-            {
-                continue;
-            }
-
-            const float x0 = (float)br.left() + t0 * (float)br.width();
-            const float x1 = (float)br.left() + t1 * (float)br.width();
-            QRectF cell(x0, row_rect.top(), std::max(1.0f, x1 - x0), row_rect.height());
-            // Tiny inset avoids 1px bleed between stacked intent rows (Vixen gradient quirk).
-            cell.adjust(0.0, 0.15, 0.0, -0.15);
-
-            if(v0 && v1 && c0 == c1)
-            {
-                p.fillRect(cell, toPaintColor(c0, std::max(i0, i1)));
-            }
-            else if(v0 && v1)
-            {
-                QLinearGradient g(cell.topLeft(), cell.topRight());
-                g.setColorAt(0.0, toPaintColor(c0, i0));
-                g.setColorAt(1.0, toPaintColor(c1, i1));
-                p.fillRect(cell, g);
-            }
-            else
-            {
-                p.fillRect(cell, toPaintColor(v0 ? c0 : c1, v0 ? i0 : i1));
-            }
-        }
-    }
-}
-
 void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, const PaintBlock& pb, bool selected) const
 {
     if(!pb.block || br.width() < 2 || br.height() < 2)
@@ -643,23 +680,39 @@ void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, co
 
     const int alpha = 255;
     p.save();
-    p.setClipRect(br);
+    p.setClipRect(br, Qt::IntersectClip);
     p.setRenderHint(QPainter::Antialiasing, false);
 
-    // Vixen marks sit on an opaque near-black plate; grid never shows through.
-    p.fillRect(br, QColor(0, 0, 0));
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(8, 8, 10));
+    p.drawRect(br);
 
     switch(sample.type)
     {
         case EffectPack::BlockType::Solid:
         case EffectPack::BlockType::Fade:
         case EffectPack::BlockType::Pulse:
+        case EffectPack::BlockType::Strobe:
+        case EffectPack::BlockType::Candle:
             paintBlockGradientBar(p, br, sample, alpha);
             break;
         case EffectPack::BlockType::Wipe:
         case EffectPack::BlockType::Chase:
         case EffectPack::BlockType::Twinkle:
         case EffectPack::BlockType::ColorWash:
+        case EffectPack::BlockType::Alternating:
+        case EffectPack::BlockType::Spin:
+        case EffectPack::BlockType::Dissolve:
+        case EffectPack::BlockType::Plasma:
+        case EffectPack::BlockType::Snow:
+        case EffectPack::BlockType::Fire:
+        case EffectPack::BlockType::Balls:
+        case EffectPack::BlockType::Bars:
+        case EffectPack::BlockType::SphereWipe:
+        case EffectPack::BlockType::Orbit:
+        case EffectPack::BlockType::Ripple:
+        case EffectPack::BlockType::Meteor:
+        case EffectPack::BlockType::Noise3D:
             paintBlockSpatialRaster(p, br, pb, sample);
             break;
         default:
@@ -673,8 +726,8 @@ void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, co
         p.fillRect(br.right() - grip + 1, br.top(), grip, br.height(), QColor(255, 255, 255, 28));
     }
 
-    // Thin dark outline (gold when selected) — matches Vixen element chrome.
-    p.setPen(selected ? QColor(255, 220, 80) : QColor(40, 40, 44));
+    p.setBrush(Qt::NoBrush);
+    p.setPen(selected ? QColor(255, 220, 80) : QColor(70, 70, 78));
     p.drawRect(br.adjusted(0, 0, -1, -1));
     p.restore();
 }
@@ -786,11 +839,20 @@ void EffectPackTimelineWidget::populateAddEffectMenu(QMenu* menu, int row, int m
     {
         return;
     }
-    QMenu* basic = menu->addMenu(QStringLiteral("Basic Lighting"));
-    QMenu* pixel = menu->addMenu(QStringLiteral("Pixel Lighting"));
+    QMenu* basic = menu->addMenu(EffectPackCatalog::CategoryLabel(EffectPackCatalog::Category::Basic));
+    QMenu* pixel = menu->addMenu(EffectPackCatalog::CategoryLabel(EffectPackCatalog::Category::Pixel));
+    QMenu* volume = menu->addMenu(EffectPackCatalog::CategoryLabel(EffectPackCatalog::Category::Volume));
     for(const EffectPackCatalog::Entry& e : EffectPackCatalog::AllEntries())
     {
-        QMenu* dest = (e.category == EffectPackCatalog::Category::Basic) ? basic : pixel;
+        QMenu* dest = basic;
+        if(e.category == EffectPackCatalog::Category::Pixel)
+        {
+            dest = pixel;
+        }
+        else if(e.category == EffectPackCatalog::Category::Volume)
+        {
+            dest = volume;
+        }
         QAction* act = dest->addAction(EffectPackCatalog::MakeEffectIcon(e), QString::fromUtf8(e.name));
         connect(act, &QAction::triggered, this, [this, row, ms, type = e.type]() {
             emit effectAddRequested(row, ms, (int)type);
@@ -855,9 +917,11 @@ bool EffectPackTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
 
     RGBColor color = 0;
     QString preset;
+    QString curve;
     const bool has_color = EffectPackCatalog::ColorFromMime(mime, &color);
     const bool has_grad = EffectPackCatalog::GradientPresetFromMime(mime, &preset);
-    if(!has_color && !has_grad)
+    const bool has_curve = EffectPackCatalog::CurvePresetFromMime(mime, &curve);
+    if(!has_color && !has_grad && !has_curve)
     {
         return false;
     }
@@ -883,6 +947,11 @@ bool EffectPackTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
         applyColorToBlock(track, block, color);
         return true;
     }
+    if(has_curve)
+    {
+        emit curvePresetApplied(track, block, curve);
+        return true;
+    }
     emit gradientPresetApplied(track, block, preset);
     return true;
 }
@@ -893,6 +962,7 @@ void EffectPackTimelineWidget::dragEnterEvent(QDragEnterEvent* event)
     if(mime && (mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kEffectMimeType))
                 || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kColorMimeType))
                 || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kGradientPresetMimeType))
+                || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kCurvePresetMimeType))
                 || mime->hasColor()))
     {
         event->acceptProposedAction();
@@ -907,6 +977,7 @@ void EffectPackTimelineWidget::dragMoveEvent(QDragMoveEvent* event)
     if(mime && (mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kEffectMimeType))
                 || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kColorMimeType))
                 || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kGradientPresetMimeType))
+                || mime->hasFormat(QString::fromUtf8(EffectPackCatalog::kCurvePresetMimeType))
                 || mime->hasColor()))
     {
         event->acceptProposedAction();

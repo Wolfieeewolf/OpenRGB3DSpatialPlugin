@@ -73,7 +73,22 @@ std::string BlockTypeToString(BlockType t)
         case BlockType::Wipe: return "wipe";
         case BlockType::Chase: return "chase";
         case BlockType::Twinkle: return "twinkle";
+        case BlockType::Alternating: return "alternating";
+        case BlockType::Strobe: return "strobe";
+        case BlockType::Spin: return "spin";
+        case BlockType::Candle: return "candle";
+        case BlockType::Dissolve: return "dissolve";
         case BlockType::ColorWash: return "colorwash";
+        case BlockType::Plasma: return "plasma";
+        case BlockType::Snow: return "snow";
+        case BlockType::Fire: return "fire";
+        case BlockType::Balls: return "balls";
+        case BlockType::Bars: return "bars";
+        case BlockType::SphereWipe: return "spherewipe";
+        case BlockType::Orbit: return "orbit";
+        case BlockType::Ripple: return "ripple";
+        case BlockType::Meteor: return "meteor";
+        case BlockType::Noise3D: return "noise3d";
         default:
         {
             const BlockType unused = t;
@@ -92,32 +107,21 @@ bool BlockTypeFromString(const std::string& s, BlockType* out)
     if(s == "chase") { *out = BlockType::Chase; return true; }
     if(s == "twinkle") { *out = BlockType::Twinkle; return true; }
     if(s == "colorwash" || s == "color_wash") { *out = BlockType::ColorWash; return true; }
-    return false;
-}
-
-std::string DirectionToString(Direction d)
-{
-    switch(d)
-    {
-        case Direction::Left: return "left";
-        case Direction::Right: return "right";
-        case Direction::Up: return "up";
-        case Direction::Down: return "down";
-        default:
-        {
-            const Direction unused = d;
-            (void)unused;
-            return "right";
-        }
-    }
-}
-
-bool DirectionFromString(const std::string& s, Direction* out)
-{
-    if(s == "left") { *out = Direction::Left; return true; }
-    if(s == "right") { *out = Direction::Right; return true; }
-    if(s == "up") { *out = Direction::Up; return true; }
-    if(s == "down") { *out = Direction::Down; return true; }
+    if(s == "alternating") { *out = BlockType::Alternating; return true; }
+    if(s == "strobe") { *out = BlockType::Strobe; return true; }
+    if(s == "spin") { *out = BlockType::Spin; return true; }
+    if(s == "candle" || s == "candle_flicker") { *out = BlockType::Candle; return true; }
+    if(s == "dissolve") { *out = BlockType::Dissolve; return true; }
+    if(s == "plasma") { *out = BlockType::Plasma; return true; }
+    if(s == "snow" || s == "meteors") { *out = BlockType::Snow; return true; }
+    if(s == "fire") { *out = BlockType::Fire; return true; }
+    if(s == "balls") { *out = BlockType::Balls; return true; }
+    if(s == "bars") { *out = BlockType::Bars; return true; }
+    if(s == "spherewipe" || s == "sphere_wipe") { *out = BlockType::SphereWipe; return true; }
+    if(s == "orbit") { *out = BlockType::Orbit; return true; }
+    if(s == "ripple") { *out = BlockType::Ripple; return true; }
+    if(s == "meteor") { *out = BlockType::Meteor; return true; }
+    if(s == "noise3d" || s == "plasma3d") { *out = BlockType::Noise3D; return true; }
     return false;
 }
 
@@ -179,16 +183,7 @@ float AxisPos(Direction dir, int led_index, int led_count)
         return 0.0f;
     }
     const float t = (float)led_index / (float)(led_count - 1);
-    switch(dir)
-    {
-        case Direction::Left:
-        case Direction::Up:
-            return 1.0f - t;
-        case Direction::Right:
-        case Direction::Down:
-        default:
-            return t;
-    }
+    return DirectionInvertsAxis(dir) ? (1.0f - t) : t;
 }
 
 float NormOnAxis(float v, float vmin, float vmax, bool invert)
@@ -200,27 +195,6 @@ float NormOnAxis(float v, float vmin, float vmax, bool invert)
     }
     float t = std::clamp((v - vmin) / span, 0.0f, 1.0f);
     return invert ? (1.0f - t) : t;
-}
-
-float BlockProgress(const Block& block, int local_ms)
-{
-    const float dur = (float)std::max(1, block.end_ms - block.start_ms);
-    float t = (float)(local_ms - block.start_ms) / dur;
-    t = std::clamp(t, 0.0f, 1.0f);
-    const float speed = std::max(0.05f, block.speed);
-    // speed > 1 = multiple cycles within the block; still fills the resized span.
-    const float scaled = t * speed;
-    if(scaled <= 0.0f)
-    {
-        return 0.0f;
-    }
-    // Exact cycle boundaries must read as "complete" (1.0), not wrap to 0.0.
-    const float wrapped = scaled - std::floor(scaled);
-    if(wrapped <= 1e-6f)
-    {
-        return 1.0f;
-    }
-    return wrapped;
 }
 
 unsigned int HashLed(int led_index, int local_ms, int period)
@@ -270,6 +244,128 @@ void GradientFromJson(const nlohmann::json& j, std::vector<GradientStop>* out)
 
 } // namespace
 
+float BlockProgress(const Block& block, int local_ms)
+{
+    const float dur = (float)std::max(1, block.end_ms - block.start_ms);
+    float t = (float)(local_ms - block.start_ms) / dur;
+    t = std::clamp(t, 0.0f, 1.0f);
+    const float speed = std::max(0.05f, block.speed);
+    const float scaled = t * speed;
+    if(scaled <= 0.0f)
+    {
+        return 0.0f;
+    }
+    const float wrapped = scaled - std::floor(scaled);
+    if(wrapped <= 1e-6f)
+    {
+        return 1.0f;
+    }
+    return wrapped;
+}
+
+std::string DirectionToString(Direction d)
+{
+    switch(d)
+    {
+        case Direction::Left: return "left";
+        case Direction::Right: return "right";
+        case Direction::Up: return "up";
+        case Direction::Down: return "down";
+        case Direction::Forward: return "forward";
+        case Direction::Back: return "back";
+        case Direction::PosX: return "+x";
+        case Direction::NegX: return "-x";
+        case Direction::PosY: return "+y";
+        case Direction::NegY: return "-y";
+        case Direction::PosZ: return "+z";
+        case Direction::NegZ: return "-z";
+        default:
+        {
+            const Direction unused = d;
+            (void)unused;
+            return "right";
+        }
+    }
+}
+
+bool DirectionFromString(const std::string& s, Direction* out)
+{
+    if(!out)
+    {
+        return false;
+    }
+    if(s == "left") { *out = Direction::Left; return true; }
+    if(s == "right") { *out = Direction::Right; return true; }
+    if(s == "up") { *out = Direction::Up; return true; }
+    if(s == "down") { *out = Direction::Down; return true; }
+    if(s == "forward" || s == "front") { *out = Direction::Forward; return true; }
+    if(s == "back" || s == "backward") { *out = Direction::Back; return true; }
+    if(s == "+x" || s == "pos_x" || s == "x+") { *out = Direction::PosX; return true; }
+    if(s == "-x" || s == "neg_x" || s == "x-") { *out = Direction::NegX; return true; }
+    if(s == "+y" || s == "pos_y" || s == "y+") { *out = Direction::PosY; return true; }
+    if(s == "-y" || s == "neg_y" || s == "y-") { *out = Direction::NegY; return true; }
+    if(s == "+z" || s == "pos_z" || s == "z+") { *out = Direction::PosZ; return true; }
+    if(s == "-z" || s == "neg_z" || s == "z-") { *out = Direction::NegZ; return true; }
+    return false;
+}
+
+/** True when wipe progresses toward the negative end of the chosen axis. */
+bool DirectionInvertsAxis(Direction dir)
+{
+    switch(dir)
+    {
+        case Direction::Left:
+        case Direction::Down:
+        case Direction::Back:
+        case Direction::NegX:
+        case Direction::NegY:
+        case Direction::NegZ:
+            return true;
+        case Direction::Right:
+        case Direction::Up:
+        case Direction::Forward:
+        case Direction::PosX:
+        case Direction::PosY:
+        case Direction::PosZ:
+            return false;
+        default:
+        {
+            const Direction unused = dir;
+            (void)unused;
+            return false;
+        }
+    }
+}
+
+/** Preferred room axis: 0=X, 1=Y, 2=Z. */
+int DirectionPreferredAxis(Direction dir)
+{
+    switch(dir)
+    {
+        case Direction::Left:
+        case Direction::Right:
+        case Direction::PosX:
+        case Direction::NegX:
+            return 0;
+        case Direction::Up:
+        case Direction::Down:
+        case Direction::PosY:
+        case Direction::NegY:
+            return 1;
+        case Direction::Forward:
+        case Direction::Back:
+        case Direction::PosZ:
+        case Direction::NegZ:
+            return 2;
+        default:
+        {
+            const Direction unused = dir;
+            (void)unused;
+            return 0;
+        }
+    }
+}
+
 const char* BlockTypeDisplayName(BlockType t)
 {
     switch(t)
@@ -281,6 +377,21 @@ const char* BlockTypeDisplayName(BlockType t)
         case BlockType::Chase: return "Chase";
         case BlockType::Twinkle: return "Twinkle";
         case BlockType::ColorWash: return "ColorWash";
+        case BlockType::Alternating: return "Alternating";
+        case BlockType::Strobe: return "Strobe";
+        case BlockType::Spin: return "Spin";
+        case BlockType::Candle: return "Candle Flicker";
+        case BlockType::Dissolve: return "Dissolve";
+        case BlockType::Plasma: return "Plasma";
+        case BlockType::Snow: return "Snow";
+        case BlockType::Fire: return "Fire";
+        case BlockType::Balls: return "Balls";
+        case BlockType::Bars: return "Bars";
+        case BlockType::SphereWipe: return "Sphere Wipe";
+        case BlockType::Orbit: return "Orbit";
+        case BlockType::Ripple: return "Ripple";
+        case BlockType::Meteor: return "Meteor";
+        case BlockType::Noise3D: return "Noise 3D";
         default: return "Effect";
     }
 }
@@ -353,41 +464,106 @@ float WorldAxisPos(Direction dir,
     const float sz = max_z - min_z;
     const float diag = std::max(1e-5f, std::sqrt(sx * sx + sy * sy + sz * sz));
     const float eps = diag * 0.02f;
+    const bool invert = DirectionInvertsAxis(dir);
+    const int preferred = DirectionPreferredAxis(dir);
 
-    const bool horiz = (dir == Direction::Left || dir == Direction::Right);
-    const bool invert = (dir == Direction::Left || dir == Direction::Down);
-
-    // Preferred room axes: Left/Right → X, Up/Down → Y.
-    if(horiz)
-    {
-        if(sx > eps)
+    auto span_of = [&](int axis) -> float {
+        return (axis == 0) ? sx : ((axis == 1) ? sy : sz);
+    };
+    auto sample = [&](int axis) -> float {
+        if(axis == 0)
         {
             return NormOnAxis(x, min_x, max_x, invert);
         }
-        if(sz >= sy && sz > eps)
-        {
-            return NormOnAxis(z, min_z, max_z, invert);
-        }
-        if(sy > eps)
+        if(axis == 1)
         {
             return NormOnAxis(y, min_y, max_y, invert);
         }
-        return invert ? 1.0f : 0.0f;
+        return NormOnAxis(z, min_z, max_z, invert);
+    };
+
+    // Preferred axis first; Up/Down fall back Y→Z→X (never X before Z).
+    int order[3] = {preferred, 0, 0};
+    if(preferred == 0)
+    {
+        order[1] = 2;
+        order[2] = 1;
+    }
+    else if(preferred == 1)
+    {
+        order[1] = 2;
+        order[2] = 0;
+    }
+    else
+    {
+        order[1] = 0;
+        order[2] = 1;
     }
 
-    if(sy > eps)
+    for(int i = 0; i < 3; ++i)
     {
-        return NormOnAxis(y, min_y, max_y, invert);
-    }
-    if(sz >= sx && sz > eps)
-    {
-        return NormOnAxis(z, min_z, max_z, invert);
-    }
-    if(sx > eps)
-    {
-        return NormOnAxis(x, min_x, max_x, invert);
+        if(span_of(order[i]) > eps)
+        {
+            return sample(order[i]);
+        }
     }
     return invert ? 1.0f : 0.0f;
+}
+
+float WorldSpinAngle(Direction dir,
+                     float x, float y, float z,
+                     float min_x, float max_x,
+                     float min_y, float max_y,
+                     float min_z, float max_z)
+{
+    const float sx = max_x - min_x;
+    const float sy = max_y - min_y;
+    const float sz = max_z - min_z;
+    const float diag = std::max(1e-5f, std::sqrt(sx * sx + sy * sy + sz * sz));
+    const float eps = diag * 0.02f;
+    const bool invert = DirectionInvertsAxis(dir);
+    const int axis = DirectionPreferredAxis(dir);
+
+    const float cx = 0.5f * (min_x + max_x);
+    const float cy = 0.5f * (min_y + max_y);
+    const float cz = 0.5f * (min_z + max_z);
+    float u = 0.0f;
+    float v = 0.0f;
+    float su = 0.0f;
+    float sv = 0.0f;
+    if(axis == 0)
+    {
+        u = y - cy;
+        v = z - cz;
+        su = sy;
+        sv = sz;
+    }
+    else if(axis == 1)
+    {
+        u = x - cx;
+        v = z - cz;
+        su = sx;
+        sv = sz;
+    }
+    else
+    {
+        u = x - cx;
+        v = y - cy;
+        su = sx;
+        sv = sy;
+    }
+
+    if(su <= eps || sv <= eps)
+    {
+        return WorldAxisPos(dir, x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
+    }
+
+    u /= std::max(su, eps);
+    v /= std::max(sv, eps);
+    float ang = std::atan2(v, u); // −π..π
+    float t = ang / (2.0f * 3.14159265358979323846f) + 0.5f;
+    t -= std::floor(t);
+    return invert ? (1.0f - t) : t;
 }
 
 bool EvaluateBlockAtAxis(const Block& block,
@@ -467,41 +643,124 @@ bool EvaluateBlockAtAxis(const Block& block,
         }
         case BlockType::Twinkle:
         {
-            // Sparse per-LED flashes: most of the time near floor, occasional smooth peaks.
             const float speed = std::max(0.05f, block.speed);
             const int period = std::max(80, (int)std::lround((float)std::max(80, block.period_ms) / speed));
             const unsigned int h0 = HashLed(twinkle_seed, 0, 1);
             const float phase0 = (float)(h0 & 0xFFFF) / 65535.0f;
-            // Higher block intensity → more LEDs flash each cycle (density).
             const float density = 0.12f + 0.55f * std::clamp(block.intensity, 0.0f, 1.0f);
-
             const int local = std::max(0, local_ms - block.start_ms);
             const int epoch = local / period;
             const unsigned int he = HashLed(twinkle_seed ^ 0xA5A5, epoch * period, period);
             const float roll = (float)((he >> 8) & 0xFF) / 255.0f;
             const bool active_cycle = (roll < density);
-
             const float lo = std::clamp(block.min_intensity, 0.0f, 1.0f);
             const float hi = std::clamp(block.max_intensity, lo, 1.0f);
-
             float flash = 0.0f;
             if(active_cycle)
             {
                 const int phase_ms = (local + (int)std::lround(phase0 * (float)period)) % period;
                 const float phase = (float)phase_ms / (float)period;
-                // Flash occupies the first ~30% of the cycle, smooth in/out.
                 const float win = 0.30f;
                 if(phase < win)
                 {
                     flash = std::sin((phase / win) * 3.14159265358979323846f);
                 }
             }
-
             intensity *= lo + (hi - lo) * flash;
-            // Per-LED colour from gradient identity; brighten toward white end when flashing hard.
             const RGBColor base = SampleGradient(block, phase0);
             const RGBColor peak = SampleGradient(block, std::min(1.0f, phase0 + 0.35f));
             color = LerpColor(base, peak, flash);
+            break;
+        }
+        case BlockType::Alternating:
+        {
+            const float speed = std::max(0.05f, block.speed);
+            const int period = std::max(50, (int)std::lround((float)std::max(50, block.period_ms) / speed));
+            const int phase_bit = ((local_ms - block.start_ms) / period) & 1;
+            const int led_bit = (twinkle_seed ^ (int)std::lround(axis * 1024.0f)) & 1;
+            const bool a = (led_bit ^ phase_bit) == 0;
+            color = a ? SampleGradient(block, 0.0f) : SampleGradient(block, 1.0f);
+            break;
+        }
+        case BlockType::Strobe:
+        {
+            const float speed = std::max(0.05f, block.speed);
+            const int period = std::max(40, (int)std::lround((float)std::max(40, block.period_ms) / speed));
+            const float phase = (float)((local_ms - block.start_ms) % period) / (float)period;
+            const float duty = std::clamp(block.pulse_length, 0.05f, 0.95f);
+            if(phase > duty)
+            {
+                return false;
+            }
+            color = SampleGradient(block, progress);
+            break;
+        }
+        case BlockType::Spin:
+        {
+            const float width = std::clamp(block.pulse_length, 0.04f, 0.55f);
+            float delta = axis - progress;
+            delta -= std::floor(delta + 0.5f);
+            const float lead = width * 0.22f;
+            const float trail = width;
+            float cover = 0.0f;
+            if(delta >= 0.0f && delta <= lead)
+            {
+                cover = 1.0f - (delta / lead);
+            }
+            else if(delta < 0.0f && -delta <= trail)
+            {
+                cover = 1.0f + (delta / trail);
+            }
+            if(width <= 0.28f)
+            {
+                float delta2 = delta - ((delta >= 0.0f) ? 0.5f : -0.5f);
+                delta2 -= std::floor(delta2 + 0.5f);
+                float cover2 = 0.0f;
+                if(delta2 >= 0.0f && delta2 <= lead)
+                {
+                    cover2 = 1.0f - (delta2 / lead);
+                }
+                else if(delta2 < 0.0f && -delta2 <= trail)
+                {
+                    cover2 = 1.0f + (delta2 / trail);
+                }
+                cover = std::max(cover, cover2 * 0.85f);
+            }
+            if(cover <= 0.001f)
+            {
+                return false;
+            }
+            intensity *= cover;
+            color = SampleGradient(block, progress);
+            break;
+        }
+        case BlockType::Candle:
+        {
+            const unsigned int h = HashLed(twinkle_seed, local_ms / 30, 30);
+            const float n1 = (float)(h & 0xFF) / 255.0f;
+            const float n2 = (float)((h >> 8) & 0xFF) / 255.0f;
+            const float flicker = 0.55f + 0.45f * (0.65f * n1 + 0.35f * n2);
+            const float lo = std::clamp(block.min_intensity, 0.0f, 1.0f);
+            const float hi = std::clamp(block.max_intensity, lo, 1.0f);
+            intensity *= lo + (hi - lo) * flicker;
+            color = SampleGradient(block, 0.15f + 0.7f * n1);
+            break;
+        }
+        case BlockType::Dissolve:
+        {
+            const unsigned int h = HashLed(twinkle_seed ^ 0x5F3759DF, 0, 1);
+            const float threshold = (float)(h & 0xFFFF) / 65535.0f;
+            if(progress + 0.001f < threshold)
+            {
+                return false;
+            }
+            float cover = 1.0f;
+            if(progress < threshold + 0.08f)
+            {
+                cover = (progress - threshold) / 0.08f;
+            }
+            intensity *= std::clamp(cover, 0.0f, 1.0f);
+            color = SampleGradient(block, threshold);
             break;
         }
         case BlockType::ColorWash:
@@ -512,11 +771,20 @@ bool EvaluateBlockAtAxis(const Block& block,
             break;
         }
         default:
-        {
-            const BlockType unused = block.type;
-            (void)unused;
+            if(BlockNeedsWorldEval(block.type))
+            {
+                // Axis-only fallback: treat as a line along X in a unit cube.
+                return EvaluateBlockAtWorld(block, local_ms,
+                                            axis, 0.5f, 0.5f,
+                                            0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+                                            twinkle_seed, out_color, out_intensity);
+            }
             break;
-        }
+    }
+
+    if(!block.intensity_curve.empty())
+    {
+        intensity *= SampleCurve(block.intensity_curve, progress);
     }
 
     if(out_color)
@@ -664,11 +932,27 @@ nlohmann::json ToJson(const Pack& pack)
             bj["min_intensity"] = block.min_intensity;
             bj["max_intensity"] = block.max_intensity;
             bj["direction"] = DirectionToString(block.direction);
+            bj["axis_space"] = (block.axis_space == AxisSpace::Room) ? "room" : "device";
+            bj["axis_mode"] = (block.axis_mode == AxisMode::Custom) ? "custom" : "preset";
+            bj["axis_yaw_deg"] = block.axis_yaw_deg;
+            bj["axis_pitch_deg"] = block.axis_pitch_deg;
             bj["speed"] = block.speed;
             bj["pulse_length"] = block.pulse_length;
             if(!block.gradient.empty())
             {
                 bj["gradient"] = GradientToJson(block.gradient);
+            }
+            if(!block.intensity_curve.empty())
+            {
+                nlohmann::json carr = nlohmann::json::array();
+                for(const CurvePoint& cp : block.intensity_curve)
+                {
+                    nlohmann::json cj;
+                    cj["pos"] = cp.pos;
+                    cj["value"] = cp.value;
+                    carr.push_back(cj);
+                }
+                bj["intensity_curve"] = carr;
             }
             tj["blocks"].push_back(bj);
         }
@@ -828,6 +1112,41 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
                 DirectionFromString(bj["direction"].get<std::string>(), &dir);
             }
             block.direction = dir;
+
+            block.axis_space = (ver >= 3) ? AxisSpace::Device : AxisSpace::Room;
+            if(bj.contains("axis_space") && bj["axis_space"].is_string())
+            {
+                const std::string sp = bj["axis_space"].get<std::string>();
+                if(sp == "device")
+                {
+                    block.axis_space = AxisSpace::Device;
+                }
+                else if(sp == "room")
+                {
+                    block.axis_space = AxisSpace::Room;
+                }
+            }
+            block.axis_mode = AxisMode::Preset;
+            if(bj.contains("axis_mode") && bj["axis_mode"].is_string()
+               && bj["axis_mode"].get<std::string>() == "custom")
+            {
+                block.axis_mode = AxisMode::Custom;
+            }
+            block.axis_yaw_deg = bj.value("axis_yaw_deg", 0.0f);
+            block.axis_pitch_deg = bj.value("axis_pitch_deg", 0.0f);
+
+            if(bj.contains("intensity_curve") && bj["intensity_curve"].is_array())
+            {
+                for(const auto& cj : bj["intensity_curve"])
+                {
+                    CurvePoint cp;
+                    cp.pos = std::clamp(cj.value("pos", 0.0f), 0.0f, 1.0f);
+                    cp.value = std::clamp(cj.value("value", 1.0f), 0.0f, 1.0f);
+                    block.intensity_curve.push_back(cp);
+                }
+                std::sort(block.intensity_curve.begin(), block.intensity_curve.end(),
+                          [](const CurvePoint& a, const CurvePoint& b) { return a.pos < b.pos; });
+            }
 
             RGBColor color = ToRGBColor(255, 0, 0);
             if(bj.contains("color") && bj["color"].is_string())

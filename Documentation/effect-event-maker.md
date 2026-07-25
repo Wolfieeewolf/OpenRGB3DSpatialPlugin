@@ -30,33 +30,41 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 ## Plugin packaging
 
 - **v1:** authoring + player + bindings live in **3D Spatial**.
-- **Portable contract:** effect pack files + playback rules so other OpenRGB plugins (Effects, Visual Map, …) could play the same packs later.
-- Extract a standalone “Effect Studio” plugin only if the editor grows large enough to deserve its own home.
-
-Do **not** rely on plugins calling each other live; share **files + a player**.
+- **Portable contract:** effect pack files + playback rules so other OpenRGB plugins could play the same packs later.
+- Do **not** rely on plugins calling each other live; share **files + a player**.
 
 ## Effect packs (current)
 
 - Timeline length: short clips up to about **60 seconds**.
 - Modes: one-shot, loop forever, or loop **while event active**.
 - Targets: all LEDs → device → zone → LED.
-- Timeline marks appear **only on the row matching that target** (no ghosting onto child zone/LED rows). A wipe on a device uses the whole-device canvas; the same wipe on one LED is a different effect.
+- Timeline marks appear **only on the row matching that target** (no ghosting onto child rows).
 - Pack `devices` lists scene controllers in scope (empty = whole scene).
-- Tools: Set Level, Fade, Pulse, Wipe, Chase, Twinkle, ColorWash (Basic + Pixel catalog; more types planned).
-- Dual add UX (Vixen/xLights-style): **right-click** Add effect (Basic/Pixel) and **drag** from the effect toolbar onto a row; drag colors/gradients onto blocks.
-- Gradients, direction (grid/world Left/Right/Up/Down), speed, chase length.
-- Spatial wipe/chase/colorwash use **3D layout world positions**, not raw OpenRGB LED index order.
-- Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (`format` version **2**).
-- Later: curve + gradient libraries (intensity curves, saved presets) — see plan `vixen_xlights_compare`.
+- Catalog categories: **Basic** | **Pixel** | **Volume** (toolbar and right-click share `EffectPackCatalog`).
+- Dual add UX: right-click Add effect, or drag from the effect toolbar; drag colors / gradients / intensity curves onto blocks.
+- Spatial sampling:
+  - **Device** space (default on device/zone/LED rows): axes follow that controller’s viewport orientation.
+  - **Room** space (default on All): one shared world AABB across pack devices in scope.
+  - Preset directions or custom yaw/pitch in the chosen space.
+- Volume / field types sample full XYZ; wipe/chase/spin use axis or angle in that space.
+- Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (format version **3**; v1–v2 still load).
 
-## Pack file schema (v2)
+### Block types
 
-Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`2`).
+| Category | Types |
+|----------|--------|
+| Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve` |
+| Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars` |
+| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d` |
+
+## Pack file schema (v3)
+
+Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`3`).
 
 ```json
 {
   "format": "openrgb3d.effect_pack",
-  "version": 2,
+  "version": 3,
   "id": "rainbow_wash",
   "name": "Rainbow wash",
   "duration_ms": 60000,
@@ -73,11 +81,20 @@ Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`2`).
           "start_ms": 0,
           "end_ms": 2000,
           "direction": "right",
+          "axis_space": "device",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
           "speed": 1.0,
           "intensity": 1.0,
           "gradient": [
             { "pos": 0.0, "color": "#FF0000" },
             { "pos": 1.0, "color": "#FFFFFF" }
+          ],
+          "intensity_curve": [
+            { "pos": 0.0, "value": 0.0 },
+            { "pos": 0.5, "value": 1.0 },
+            { "pos": 1.0, "value": 0.0 }
           ]
         }
       ]
@@ -95,7 +112,11 @@ Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`2`).
 | `priority` | Higher wins when multiple packs want the same LEDs |
 | `devices` | Optional scene controller names; empty = all |
 | `target.kind` | `all` \| `device` \| `zone` \| `leds` |
-| `blocks[].type` | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `colorwash` |
+| `blocks[].type` | See table above |
+| `axis_space` | `device` \| `room` (v2 missing → room; v3 missing → device) |
+| `axis_mode` | `preset` \| `custom` |
+| `axis_yaw_deg` / `axis_pitch_deg` | Custom unit axis in the chosen space |
+| `intensity_curve` | Optional `{pos,value}` points 0…1 |
 
 ## Runtime spine
 
@@ -123,12 +144,15 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 
 ## Code home
 
-- `Effects3D/EffectPacks/EffectPack.*` — load/save/evaluate
+- `Effects3D/EffectPacks/EffectPack.*` — load/save/axis evaluate
+- `Effects3D/EffectPacks/EffectPackSpatial.cpp` — curves, world/volume evaluate
 - `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock
-- `Effects3D/EffectPacks/EffectPackApplier.*` — hardware + viewport apply (throttled `UpdateLEDs`)
+- `Effects3D/EffectPacks/EffectPackApplier.*` — hardware + viewport apply
 - `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/`
+- `ui/EffectPackCatalog.h` — shared Basic/Pixel/Volume catalog
 - `ui/EffectPackPanel.*` — Run-tab list + Preview/Stop / New / Edit
 - `ui/EffectPackEditorDialog.*` — modeless editor
 - `ui/EffectPackTimelineWidget.*` — ruler / rows / blocks / playhead
+- `ui/EffectPackToolBar.*` — effect/color/gradient/curve strips
 - `ui/EffectPackGradientBar.*` — gradient stops UI
 - `PluginSettingsPaths::EffectPacksDir` — `{PluginRoot}/effect-packs`
