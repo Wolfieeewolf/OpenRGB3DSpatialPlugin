@@ -4,12 +4,15 @@
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"
 #include "VirtualController3D.h"
+#include "ZoneManager3D.h"
 
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <map>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -95,36 +98,6 @@ void ApplyToLeds(RGBControllerInterface* c, const std::vector<int>& indices, RGB
     }
 }
 
-bool TransformMatchesDevice(ControllerTransform* transform, const std::string& device_name)
-{
-    if(!transform)
-    {
-        return false;
-    }
-    if(device_name.empty())
-    {
-        return true;
-    }
-    if(transform->virtual_controller
-       && NameMatches(transform->virtual_controller->GetName(), device_name))
-    {
-        return true;
-    }
-    if(transform->controller && ControllerMatchesDevice(transform->controller, device_name))
-    {
-        return true;
-    }
-    // Fall back: any LED mapping controller name.
-    for(const LEDPosition3D& led : transform->led_positions)
-    {
-        if(led.controller && ControllerMatchesDevice(led.controller, device_name))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool PackIncludesController(const Pack& pack, RGBControllerInterface* c)
 {
     if(!c)
@@ -158,9 +131,9 @@ bool LedMatchesTarget(const LEDPosition3D& led,
     switch(target.kind)
     {
         case TargetKind::All:
-            return true;
         case TargetKind::Device:
-            // Caller already filtered the transform (device / virtual name).
+        case TargetKind::SceneZone:
+            // Caller already filtered the transform (device / scene zone).
             return true;
         case TargetKind::Zone:
         {
@@ -233,11 +206,14 @@ void ExpandBounds(SampleBounds* b, const Vector3D& p)
     b->min_z = std::min(b->min_z, p.z); b->max_z = std::max(b->max_z, p.z);
 }
 
+using SeqAxesMap = std::unordered_map<ControllerTransform*, std::vector<float>>;
+
 int PaintTransformTargetSpatial(ControllerTransform* transform,
                                 const Track& track,
                                 int local_ms,
                                 std::unordered_set<RGBControllerInterface*>* touched,
-                                const SampleBounds* room_bounds)
+                                const SampleBounds* shared_bounds,
+                                const std::vector<float>* sequence_axes)
 {
     if(!transform)
     {
@@ -264,17 +240,19 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
 
     const Block* top = FindActiveBlock(track, local_ms);
     const bool use_device = top && top->axis_space == AxisSpace::Device;
-    const bool use_room_global = top && top->axis_space == AxisSpace::Room && room_bounds && room_bounds->valid;
+    const bool use_shared = top && BlockUsesSharedWorldBounds(*top) && shared_bounds && shared_bounds->valid;
+    const bool use_sequence = top && BlockUsesSequenceAxis(*top)
+        && sequence_axes && sequence_axes->size() == matching.size();
 
     std::vector<Vector3D> sample_pos;
     sample_pos.resize(matching.size());
     float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;
     bool have_bounds = false;
-    if(use_room_global)
+    if(use_shared)
     {
-        min_x = room_bounds->min_x; max_x = room_bounds->max_x;
-        min_y = room_bounds->min_y; max_y = room_bounds->max_y;
-        min_z = room_bounds->min_z; max_z = room_bounds->max_z;
+        min_x = shared_bounds->min_x; max_x = shared_bounds->max_x;
+        min_y = shared_bounds->min_y; max_y = shared_bounds->max_y;
+        min_z = shared_bounds->min_z; max_z = shared_bounds->max_z;
         have_bounds = true;
         for(int i = 0; i < (int)matching.size(); ++i)
         {
@@ -317,7 +295,16 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
         {
             const int seed = (int)(led->zone_idx * 4096u + led->led_idx);
             const Vector3D& p = sample_pos[(size_t)i];
-            if(have_bounds && BlockNeedsWorldEval(top->type))
+            if(use_sequence)
+            {
+                float axis = (*sequence_axes)[(size_t)i];
+                if(DirectionInvertsAxis(top->direction))
+                {
+                    axis = 1.0f - axis;
+                }
+                on = EvaluateBlockAtAxis(*top, local_ms, axis, seed, &color, &intensity);
+            }
+            else if(have_bounds && BlockNeedsWorldEval(top->type) && !BlockUsesSequenceAxis(*top))
             {
                 on = EvaluateBlockAtWorld(*top, local_ms,
                                           p.x, p.y, p.z,
@@ -363,6 +350,121 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
     return painted;
 }
 
+void AppendMatchingLeds(ControllerTransform* transform,
+                        const Target& target,
+                        std::vector<std::pair<ControllerTransform*, LEDPosition3D*>>* out)
+{
+    if(!transform || !out)
+    {
+        return;
+    }
+    for(LEDPosition3D& led : transform->led_positions)
+    {
+        if(LedMatchesTarget(led, transform->controller, target))
+        {
+            out->push_back({transform, &led});
+        }
+    }
+}
+
+void BuildOrderedSequenceLeds(const Pack& pack,
+                              const Track& track,
+                              std::vector<std::unique_ptr<ControllerTransform>>* transforms,
+                              ZoneManager3D* zone_manager,
+                              std::vector<std::pair<ControllerTransform*, LEDPosition3D*>>* ordered)
+{
+    if(!transforms || !ordered)
+    {
+        return;
+    }
+    ordered->clear();
+
+    auto append_index = [&](int idx) {
+        if(idx < 0 || idx >= (int)transforms->size())
+        {
+            return;
+        }
+        ControllerTransform* transform = (*transforms)[(size_t)idx].get();
+        if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+        {
+            return;
+        }
+        if(!TrackAppliesToTransform(pack, track, transform, idx, zone_manager))
+        {
+            return;
+        }
+        if(transform->world_positions_dirty)
+        {
+            ControllerLayout3D::UpdateWorldPositions(transform);
+        }
+        AppendMatchingLeds(transform, track.target, ordered);
+    };
+
+    if(track.target.kind == TargetKind::SceneZone && zone_manager)
+    {
+        Zone3D* zone = zone_manager->GetZoneByName(track.target.scene_zone_name);
+        if(zone)
+        {
+            for(int idx : zone->GetControllers())
+            {
+                append_index(idx);
+            }
+            return;
+        }
+    }
+
+    if(track.target.kind == TargetKind::All && !pack.devices.empty())
+    {
+        std::vector<bool> used(transforms->size(), false);
+        for(const std::string& device : pack.devices)
+        {
+            for(int i = 0; i < (int)transforms->size(); ++i)
+            {
+                if(used[(size_t)i])
+                {
+                    continue;
+                }
+                ControllerTransform* transform = (*transforms)[(size_t)i].get();
+                if(transform && TransformMatchesDevice(transform, device))
+                {
+                    used[(size_t)i] = true;
+                    append_index(i);
+                }
+            }
+        }
+        for(int i = 0; i < (int)transforms->size(); ++i)
+        {
+            if(!used[(size_t)i])
+            {
+                append_index(i);
+            }
+        }
+        return;
+    }
+
+    for(int i = 0; i < (int)transforms->size(); ++i)
+    {
+        append_index(i);
+    }
+}
+
+void BuildSequenceAxesMap(const std::vector<std::pair<ControllerTransform*, LEDPosition3D*>>& ordered,
+                          SeqAxesMap* out)
+{
+    if(!out)
+    {
+        return;
+    }
+    out->clear();
+    const int n = (int)ordered.size();
+    for(int i = 0; i < n; ++i)
+    {
+        ControllerTransform* t = ordered[(size_t)i].first;
+        const float axis = (n <= 1) ? 0.0f : (float)i / (float)(n - 1);
+        (*out)[t].push_back(axis);
+    }
+}
+
 } // namespace
 
 bool NameMatches(const std::string& haystack, const std::string& needle)
@@ -374,6 +476,78 @@ bool NameMatches(const std::string& haystack, const std::string& needle)
     const std::string h = ToLower(haystack);
     const std::string n = ToLower(needle);
     return h.find(n) != std::string::npos;
+}
+
+bool TransformMatchesDevice(ControllerTransform* transform, const std::string& device_name)
+{
+    if(!transform)
+    {
+        return false;
+    }
+    if(device_name.empty())
+    {
+        return true;
+    }
+    if(transform->virtual_controller
+       && NameMatches(transform->virtual_controller->GetName(), device_name))
+    {
+        return true;
+    }
+    if(transform->controller && ControllerMatchesDevice(transform->controller, device_name))
+    {
+        return true;
+    }
+    for(const LEDPosition3D& led : transform->led_positions)
+    {
+        if(led.controller && ControllerMatchesDevice(led.controller, device_name))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TransformInSceneZone(ControllerTransform* transform,
+                          int transform_index,
+                          const Target& target,
+                          ZoneManager3D* zone_manager)
+{
+    (void)transform;
+    if(target.kind != TargetKind::SceneZone || !zone_manager || target.scene_zone_name.empty())
+    {
+        return false;
+    }
+    Zone3D* zone = zone_manager->GetZoneByName(target.scene_zone_name);
+    return zone && zone->ContainsController(transform_index);
+}
+
+bool TrackAppliesToTransform(const Pack& pack,
+                             const Track& track,
+                             ControllerTransform* transform,
+                             int transform_index,
+                             ZoneManager3D* zone_manager)
+{
+    if(!transform || !PackIncludesTransform(pack, transform))
+    {
+        return false;
+    }
+    switch(track.target.kind)
+    {
+        case TargetKind::All:
+            return true;
+        case TargetKind::Device:
+        case TargetKind::Zone:
+        case TargetKind::Leds:
+            return TransformMatchesDevice(transform, track.target.device_name);
+        case TargetKind::SceneZone:
+            return TransformInSceneZone(transform, transform_index, track.target, zone_manager);
+        default:
+        {
+            const TargetKind unused = track.target.kind;
+            (void)unused;
+            return false;
+        }
+    }
 }
 
 bool ControllerMatchesDevice(RGBControllerInterface* c, const std::string& device_name)
@@ -430,7 +604,8 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                           int local_ms,
                           const std::vector<RGBControllerInterface*>& controllers,
                           std::vector<std::unique_ptr<ControllerTransform>>* transforms,
-                          bool force_hw_update)
+                          bool force_hw_update,
+                          ZoneManager3D* zone_manager)
 {
     ApplyStats stats;
     std::unordered_set<RGBControllerInterface*> touched;
@@ -469,50 +644,50 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         if(use_transforms)
         {
             const Block* top = FindActiveBlock(track, local_ms);
-            SampleBounds room_bounds;
-            if(top && top->axis_space == AxisSpace::Room)
+            SampleBounds shared_bounds;
+            SeqAxesMap seq_map;
+            const bool want_shared = top && BlockUsesSharedWorldBounds(*top);
+            const bool want_sequence = top && BlockUsesSequenceAxis(*top);
+
+            if(want_shared || want_sequence)
             {
-                for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+                std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
+                BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
+                if(want_sequence)
                 {
-                    ControllerTransform* transform = transform_ptr.get();
-                    if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+                    BuildSequenceAxesMap(ordered, &seq_map);
+                }
+                if(want_shared)
+                {
+                    for(const auto& pair : ordered)
+                    {
+                        ExpandBounds(&shared_bounds, pair.second->world_position);
+                    }
+                    // Never fall back to per-device AABB for Room/Sequence-volume on groups.
+                    if(!shared_bounds.valid && TargetIsMultiDeviceGroup(track.target))
                     {
                         continue;
-                    }
-                    if(track.target.kind != TargetKind::All
-                       && !TransformMatchesDevice(transform, track.target.device_name))
-                    {
-                        continue;
-                    }
-                    if(transform->world_positions_dirty)
-                    {
-                        ControllerLayout3D::UpdateWorldPositions(transform);
-                    }
-                    for(LEDPosition3D& led : transform->led_positions)
-                    {
-                        if(LedMatchesTarget(led, transform->controller, track.target))
-                        {
-                            ExpandBounds(&room_bounds, led.world_position);
-                        }
                     }
                 }
             }
 
             int painted = 0;
-            for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+            for(int ti = 0; ti < (int)transforms->size(); ++ti)
             {
-                ControllerTransform* transform = transform_ptr.get();
-                if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+                ControllerTransform* transform = (*transforms)[(size_t)ti].get();
+                if(!TrackAppliesToTransform(pack, track, transform, ti, zone_manager))
                 {
                     continue;
                 }
-                if(track.target.kind != TargetKind::All
-                   && !TransformMatchesDevice(transform, track.target.device_name))
+                const std::vector<float>* seq_axes = nullptr;
+                auto it = seq_map.find(transform);
+                if(it != seq_map.end())
                 {
-                    continue;
+                    seq_axes = &it->second;
                 }
                 painted += PaintTransformTargetSpatial(transform, track, local_ms, &touched,
-                                                       room_bounds.valid ? &room_bounds : nullptr);
+                                                       shared_bounds.valid ? &shared_bounds : nullptr,
+                                                       seq_axes);
             }
             if(painted > 0)
             {
@@ -580,6 +755,9 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                     }
                     ApplyToLeds(c, track.target.led_indices, color, &touched);
                 }
+                break;
+            case TargetKind::SceneZone:
+                // Without transforms, scene zones cannot resolve controller indices.
                 break;
             default:
             {
@@ -663,7 +841,8 @@ void BuildSpatialAxesForTarget(const Pack& pack,
                                std::vector<int>* out_seeds,
                                std::vector<float>* out_nx,
                                std::vector<float>* out_ny,
-                               std::vector<float>* out_nz)
+                               std::vector<float>* out_nz,
+                               ZoneManager3D* zone_manager)
 {
     if(!out_axes || !out_seeds)
     {
@@ -679,49 +858,50 @@ void BuildSpatialAxesForTarget(const Pack& pack,
         return;
     }
 
+    Track probe;
+    probe.target = target;
     const bool use_device = sample.axis_space == AxisSpace::Device;
-    const bool angular = sample.type == BlockType::Spin;
+    const bool use_sequence = BlockUsesSequenceAxis(sample);
+    const bool use_shared = BlockUsesSharedWorldBounds(sample);
+    const bool angular = sample.type == BlockType::Spin && !use_sequence;
 
-    SampleBounds room_bounds;
-    if(!use_device)
+    std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
+    BuildOrderedSequenceLeds(pack, probe, transforms, zone_manager, &ordered);
+
+    SampleBounds shared_bounds;
+    if(use_shared || !use_device)
     {
-        for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+        for(const auto& pair : ordered)
         {
-            ControllerTransform* transform = transform_ptr.get();
-            if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
-            {
-                continue;
-            }
-            if(target.kind != TargetKind::All
-               && !TransformMatchesDevice(transform, target.device_name)
-               && !target.device_name.empty())
-            {
-                continue;
-            }
-            if(transform->world_positions_dirty)
-            {
-                ControllerLayout3D::UpdateWorldPositions(transform);
-            }
-            for(LEDPosition3D& led : transform->led_positions)
-            {
-                if(LedMatchesTarget(led, transform->controller, target))
-                {
-                    ExpandBounds(&room_bounds, led.world_position);
-                }
-            }
+            ExpandBounds(&shared_bounds, pair.second->world_position);
         }
     }
 
-    for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+    if(use_sequence)
     {
-        ControllerTransform* transform = transform_ptr.get();
-        if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+        const int n = (int)ordered.size();
+        for(int i = 0; i < n; ++i)
         {
-            continue;
+            float axis = (n <= 1) ? 0.0f : (float)i / (float)(n - 1);
+            if(DirectionInvertsAxis(sample.direction))
+            {
+                axis = 1.0f - axis;
+            }
+            out_axes->push_back(axis);
+            LEDPosition3D* led = ordered[(size_t)i].second;
+            out_seeds->push_back((int)(led->zone_idx * 4096u + led->led_idx));
+            if(out_nx) { out_nx->push_back(axis); }
+            if(out_ny) { out_ny->push_back(0.5f); }
+            if(out_nz) { out_nz->push_back(0.5f); }
         }
-        if(target.kind != TargetKind::All
-           && !TransformMatchesDevice(transform, target.device_name)
-           && !target.device_name.empty())
+        return;
+    }
+
+    // Group by transform while preserving ordered LED appearance for nx/ny/nz.
+    for(int ti = 0; ti < (int)transforms->size(); ++ti)
+    {
+        ControllerTransform* transform = (*transforms)[(size_t)ti].get();
+        if(!TrackAppliesToTransform(pack, probe, transform, ti, zone_manager))
         {
             continue;
         }
@@ -761,7 +941,7 @@ void BuildSpatialAxesForTarget(const Pack& pack,
         }
         if(!use_device)
         {
-            bounds = room_bounds;
+            bounds = shared_bounds;
         }
         if(!bounds.valid)
         {
@@ -795,7 +975,6 @@ void BuildSpatialAxesForTarget(const Pack& pack,
                 out_axes->push_back(SampleAxisPos(sample, p.x, p.y, p.z,
                                                   min_x, max_x, min_y, max_y, min_z, max_z));
             }
-            // Normalized 0..1 with flat axes centered — unit-cube world eval in timeline.
             if(out_nx) { out_nx->push_back(flat_norm(p.x, min_x, span_x)); }
             if(out_ny) { out_ny->push_back(flat_norm(p.y, min_y, span_y)); }
             if(out_nz) { out_nz->push_back(flat_norm(p.z, min_z, span_z)); }

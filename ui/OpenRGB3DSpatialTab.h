@@ -120,6 +120,8 @@ public:
     {
         return &controller_transforms;
     }
+    ZoneManager3D* GetZoneManager() { return zone_manager.get(); }
+    const ZoneManager3D* GetZoneManager() const { return zone_manager.get(); }
 
 protected:
     void showEvent(QShowEvent* event) override;

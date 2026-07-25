@@ -10,7 +10,7 @@
 namespace EffectPack
 {
 
-constexpr int kFormatVersion = 3;
+constexpr int kFormatVersion = 4;
 constexpr int kMaxDurationMs = 60000;
 constexpr const char* kFormatId = "openrgb3d.effect_pack";
 constexpr const char* kFileSuffix = ".oreffect.json";
@@ -33,8 +33,9 @@ enum class TargetKind
 {
     All,
     Device,
-    Zone,
+    Zone,       // OpenRGB hardware zone on a device
     Leds,
+    SceneZone,  // left-panel ZoneManager3D group (Desk / Wall / …)
 };
 
 enum class BlockType
@@ -84,8 +85,9 @@ enum class Direction
 
 enum class AxisSpace
 {
-    Room,
-    Device,
+    Room,      // shared world AABB across target LEDs
+    Device,    // per-controller local space
+    Sequence,  // 0..1 along ordered controllers/LEDs (axis effects); Volume uses Room XYZ
 };
 
 enum class AxisMode
@@ -99,8 +101,17 @@ struct Target
     TargetKind kind = TargetKind::All;
     std::string device_name;
     std::string zone_name;
+    std::string scene_zone_name; // TargetKind::SceneZone
+    /** Under a scene zone: synthetic “All LEDs” row (same LED set, distinct track). */
+    bool flatten_leds = false;
     std::vector<int> led_indices;
 };
+
+/** True for All / SceneZone group rows (default Room space). */
+inline bool TargetIsMultiDeviceGroup(const Target& t)
+{
+    return t.kind == TargetKind::All || t.kind == TargetKind::SceneZone;
+}
 
 struct GradientStop
 {
@@ -232,6 +243,10 @@ float SampleSpinAngle(const Block& block,
 
 bool BlockNeedsWorldEval(BlockType t);
 bool BlockNeedsDirection(BlockType t);
+/** Room, or Sequence with a Volume/Pixel type (falls back to room XYZ). */
+bool BlockUsesSharedWorldBounds(const Block& block);
+/** Sequence space on axis-style effects (Wipe/Chase/…). */
+bool BlockUsesSequenceAxis(const Block& block);
 
 const char* BlockTypeDisplayName(BlockType t);
 

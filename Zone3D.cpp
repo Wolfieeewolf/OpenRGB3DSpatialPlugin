@@ -43,6 +43,11 @@ bool Zone3D::ContainsController(int controller_idx) const
            != controller_indices.end();
 }
 
+void Zone3D::SetControllers(std::vector<int> indices)
+{
+    controller_indices = std::move(indices);
+}
+
 nlohmann::json Zone3D::ToJSON() const
 {
     nlohmann::json json;

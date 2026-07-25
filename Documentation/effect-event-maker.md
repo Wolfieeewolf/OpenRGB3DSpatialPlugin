@@ -37,17 +37,18 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 
 - Timeline length: short clips up to about **60 seconds**.
 - Modes: one-shot, loop forever, or loop **while event active**.
-- Targets: all LEDs → device → zone → LED.
+- Targets: All (pack) → **scene zone** (left-panel Zones) → device → OpenRGB HW zone → LED.
+- Scene zone rows mirror `ZoneManager3D` groups (Desk / Wall / …), each with **All LEDs** plus member controllers. Drag controllers in the gutter to reorder (drives **Sequence** space).
 - Timeline marks appear **only on the row matching that target** (no ghosting onto child rows).
 - Pack `devices` lists scene controllers in scope (empty = whole scene).
 - Catalog categories: **Basic** | **Pixel** | **Volume** (toolbar and right-click share `EffectPackCatalog`).
 - Dual add UX: right-click Add effect, or drag from the effect toolbar; drag colors / gradients / intensity curves onto blocks.
-- Spatial sampling:
-  - **Device** space (default on device/zone/LED rows): axes follow that controller’s viewport orientation.
-  - **Room** space (default on All): one shared world AABB across pack devices in scope.
-  - Preset directions or custom yaw/pitch in the chosen space.
-- Volume / field types sample full XYZ; wipe/chase/spin use axis or angle in that space.
-- Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (format version **3**; v1–v2 still load).
+- Spatial sampling (`axis_space`):
+  - **Device** (default on device / HW-zone / LED rows): per-controller local axes / AABB.
+  - **Room** (default on All / scene zone): one shared **world** AABB across all LEDs in the target — Wipe, Ripple, Sphere Wipe, Fire, etc. continue across controllers using the 3D layout.
+  - **Sequence**: Wipe/Chase/Spin/Meteor/Bars march along controller→LED order (zone drag order); Volume/Pixel types still use room XYZ.
+  - Preset directions or custom yaw/pitch in Device/Room space.
+- Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (format version **4**; older packs still load).
 
 ### Block types
 
@@ -57,47 +58,49 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 | Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars` |
 | Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d` |
 
-## Pack file schema (v3)
+## Pack file schema (v4)
 
-Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`3`).
+Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`4`).
 
 ```json
 {
   "format": "openrgb3d.effect_pack",
-  "version": 3,
-  "id": "rainbow_wash",
-  "name": "Rainbow wash",
-  "duration_ms": 60000,
-  "loop": "forever",
+  "version": 4,
+  "id": "desk_ripple",
+  "name": "Desk ripple",
+  "duration_ms": 5000,
+  "loop": "once",
   "priority": 10,
-  "devices": ["Keyboard"],
+  "devices": ["Keyboard", "Mouse"],
   "tracks": [
     {
-      "name": "All LEDs",
-      "target": { "kind": "all" },
+      "name": "Desk",
+      "target": { "kind": "scene_zone", "scene_zone_name": "Desk" },
       "blocks": [
         {
-          "type": "wipe",
+          "type": "ripple",
           "start_ms": 0,
-          "end_ms": 2000,
+          "end_ms": 2500,
           "direction": "right",
-          "axis_space": "device",
+          "axis_space": "room",
           "axis_mode": "preset",
-          "axis_yaw_deg": 0.0,
-          "axis_pitch_deg": 0.0,
           "speed": 1.0,
           "intensity": 1.0,
           "gradient": [
-            { "pos": 0.0, "color": "#FF0000" },
+            { "pos": 0.0, "color": "#00AAFF" },
             { "pos": 1.0, "color": "#FFFFFF" }
-          ],
-          "intensity_curve": [
-            { "pos": 0.0, "value": 0.0 },
-            { "pos": 0.5, "value": 1.0 },
-            { "pos": 1.0, "value": 0.0 }
           ]
         }
       ]
+    },
+    {
+      "name": "Desk All LEDs",
+      "target": {
+        "kind": "scene_zone",
+        "scene_zone_name": "Desk",
+        "flatten_leds": true
+      },
+      "blocks": []
     }
   ]
 }
@@ -111,9 +114,11 @@ Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`3`).
 | `duration_ms` | 1…60000 |
 | `priority` | Higher wins when multiple packs want the same LEDs |
 | `devices` | Optional scene controller names; empty = all |
-| `target.kind` | `all` \| `device` \| `zone` \| `leds` |
+| `target.kind` | `all` \| `device` \| `zone` (OpenRGB HW zone) \| `leds` \| `scene_zone` (left-panel ZoneManager3D) |
+| `target.scene_zone_name` | Required for `scene_zone` |
+| `target.flatten_leds` | Optional; synthetic All LEDs row under a scene zone |
 | `blocks[].type` | See table above |
-| `axis_space` | `device` \| `room` (v2 missing → room; v3 missing → device) |
+| `axis_space` | `device` \| `room` \| `sequence` — missing on All/scene_zone → `room`; else v3+ → `device`; v2 → `room` |
 | `axis_mode` | `preset` \| `custom` |
 | `axis_yaw_deg` / `axis_pitch_deg` | Custom unit axis in the chosen space |
 | `intensity_curve` | Optional `{pos,value}` points 0…1 |

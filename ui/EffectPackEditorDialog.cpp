@@ -10,6 +10,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
 #include "VirtualController3D.h"
+#include "ZoneManager3D.h"
 #include "EffectCollapsibleSection.h"
 
 #include <QAbstractItemView>
@@ -302,8 +303,11 @@ void EffectPackEditorDialog::buildUi()
     axis_space_combo_ = new QComboBox();
     axis_space_combo_->addItem(QStringLiteral("Device (layout)"), (int)EffectPack::AxisSpace::Device);
     axis_space_combo_->addItem(QStringLiteral("Room"), (int)EffectPack::AxisSpace::Room);
+    axis_space_combo_->addItem(QStringLiteral("Sequence (order)"), (int)EffectPack::AxisSpace::Sequence);
     axis_space_combo_->setToolTip(
-        QStringLiteral("Device uses this controller's rotation from the 3D layout. Room uses fixed room ±X/Y/Z."));
+        QStringLiteral("Device: per-controller local space.\n"
+                       "Room: one shared 3D box across the target (All / scene zone).\n"
+                       "Sequence: wipe/chase along timeline controller order (drag to reorder)."));
     axis_mode_combo_ = new QComboBox();
     axis_mode_combo_->addItem(QStringLiteral("Preset direction"), (int)EffectPack::AxisMode::Preset);
     axis_mode_combo_->addItem(QStringLiteral("Custom yaw/pitch"), (int)EffectPack::AxisMode::Custom);
@@ -405,6 +409,8 @@ void EffectPackEditorDialog::buildUi()
     connect(timeline_, &EffectPackTimelineWidget::effectAddRequested, this, &EffectPackEditorDialog::onEffectAddRequested);
     connect(timeline_, &EffectPackTimelineWidget::gradientPresetApplied, this, &EffectPackEditorDialog::onGradientPresetApplied);
     connect(timeline_, &EffectPackTimelineWidget::curvePresetApplied, this, &EffectPackEditorDialog::onCurvePresetApplied);
+    connect(timeline_, &EffectPackTimelineWidget::sceneZoneControllersReordered,
+            this, &EffectPackEditorDialog::onSceneZoneControllersReordered);
     connect(effect_toolbar_, &EffectPackToolBar::effectClicked, this, &EffectPackEditorDialog::onToolbarEffectClicked);
     connect(effect_toolbar_, &EffectPackToolBar::colorClicked, this, &EffectPackEditorDialog::onToolbarColorClicked);
     connect(effect_toolbar_, &EffectPackToolBar::gradientPresetClicked, this, &EffectPackEditorDialog::onToolbarGradientClicked);
@@ -704,7 +710,6 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
 {
     QVector<EffectPackTimelineWidget::Node> roots;
 
-    // Pack-wide row — rainbow wash and other “all selected” blocks live here.
     EffectPackTimelineWidget::Node all;
     all.label = QStringLiteral("All (this pack)");
     all.target.kind = EffectPack::TargetKind::All;
@@ -713,28 +718,214 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
     if(tab_)
     {
         timeline_->setControllerTransforms(tab_->GetControllerTransformsMutable());
+        timeline_->setZoneManager(tab_->GetZoneManager());
         const auto& transforms = tab_->GetControllerTransforms();
-        for(int i = 0; i < (int)transforms.size(); ++i)
-        {
+        ZoneManager3D* zones = tab_->GetZoneManager();
+
+        std::vector<bool> claimed((size_t)transforms.size(), false);
+
+        auto append_controller = [&](int i, EffectPackTimelineWidget::Node* parent,
+                                     const QString& scene_zone_name, bool reorderable) {
+            if(i < 0 || i >= (int)transforms.size())
+            {
+                return;
+            }
             ControllerTransform* transform = transforms[(size_t)i].get();
             if(!transform || transform->hidden_by_virtual)
             {
-                continue;
+                return;
             }
             const std::string key = ControllerKeyName(transform, i);
             if(!deviceSelectedForPack(key))
             {
-                continue;
+                return;
             }
             EffectPackTimelineWidget::Node ctrl = buildControllerNode(transform, i);
+            ctrl.transform_index = i;
+            ctrl.scene_zone_name = scene_zone_name;
+            ctrl.reorderable = reorderable;
             pack_leds += ctrl.led_count;
-            roots.push_back(std::move(ctrl));
+            claimed[(size_t)i] = true;
+            if(parent)
+            {
+                parent->led_count += ctrl.led_count;
+                parent->children.push_back(std::move(ctrl));
+            }
+            else
+            {
+                roots.push_back(std::move(ctrl));
+            }
+        };
+
+        if(zones)
+        {
+            for(int zi = 0; zi < zones->GetZoneCount(); ++zi)
+            {
+                Zone3D* zone = zones->GetZone(zi);
+                if(!zone)
+                {
+                    continue;
+                }
+                // Only show zones that intersect pack devices.
+                bool any = false;
+                for(int ci : zone->GetControllers())
+                {
+                    if(ci < 0 || ci >= (int)transforms.size())
+                    {
+                        continue;
+                    }
+                    ControllerTransform* t = transforms[(size_t)ci].get();
+                    if(t && !t->hidden_by_virtual && deviceSelectedForPack(ControllerKeyName(t, ci)))
+                    {
+                        any = true;
+                        break;
+                    }
+                }
+                if(!any)
+                {
+                    continue;
+                }
+
+                EffectPackTimelineWidget::Node zone_node;
+                zone_node.label = QString::fromStdString(zone->GetName());
+                zone_node.target.kind = EffectPack::TargetKind::SceneZone;
+                zone_node.target.scene_zone_name = zone->GetName();
+                zone_node.expanded = true;
+                zone_node.led_count = 0;
+
+                // All LEDs — flat list of every LED under the zone.
+                EffectPackTimelineWidget::Node all_leds;
+                all_leds.label = QStringLiteral("All LEDs");
+                all_leds.target.kind = EffectPack::TargetKind::SceneZone;
+                all_leds.target.scene_zone_name = zone->GetName();
+                all_leds.target.flatten_leds = true;
+                all_leds.expanded = false;
+                all_leds.led_count = 0;
+
+                for(int ci : zone->GetControllers())
+                {
+                    if(ci < 0 || ci >= (int)transforms.size())
+                    {
+                        continue;
+                    }
+                    ControllerTransform* transform = transforms[(size_t)ci].get();
+                    if(!transform || transform->hidden_by_virtual)
+                    {
+                        continue;
+                    }
+                    const std::string key = ControllerKeyName(transform, ci);
+                    if(!deviceSelectedForPack(key))
+                    {
+                        continue;
+                    }
+                    // Individual LED children under All LEDs.
+                    int led_slot = 0;
+                    for(const LEDPosition3D& led : transform->led_positions)
+                    {
+                        RGBControllerInterface* rgb = led.controller ? led.controller : transform->controller;
+                        int global = -1;
+                        if(!rgb || !TryGlobalLedIndex(rgb, led.zone_idx, led.led_idx, &global))
+                        {
+                            continue;
+                        }
+                        EffectPackTimelineWidget::Node led_node;
+                        led_node.label = ControllerLabel(transform, ci)
+                            + QStringLiteral(" · LED %1").arg(led.led_idx);
+                        led_node.target.kind = EffectPack::TargetKind::Leds;
+                        led_node.target.device_name = key;
+                        led_node.target.zone_name = ZoneLabelForLed(rgb, led.zone_idx).toStdString();
+                        led_node.target.led_indices = {global};
+                        led_node.led_count = 1;
+                        all_leds.children.push_back(std::move(led_node));
+                        ++led_slot;
+                    }
+                    all_leds.led_count += led_slot;
+                }
+                if(all_leds.led_count > 0)
+                {
+                    zone_node.led_count += all_leds.led_count;
+                    zone_node.children.push_back(std::move(all_leds));
+                }
+
+                for(int ci : zone->GetControllers())
+                {
+                    append_controller(ci, &zone_node, zone_node.label, true);
+                }
+
+                if(!zone_node.children.isEmpty())
+                {
+                    zone_node.led_count = std::max(1, zone_node.led_count);
+                    roots.push_back(std::move(zone_node));
+                }
+            }
+        }
+
+        EffectPackTimelineWidget::Node ungrouped;
+        ungrouped.label = QStringLiteral("Ungrouped");
+        ungrouped.target.kind = EffectPack::TargetKind::All; // not used for painting; containers only
+        ungrouped.expanded = true;
+        for(int i = 0; i < (int)transforms.size(); ++i)
+        {
+            if(claimed[(size_t)i])
+            {
+                continue;
+            }
+            append_controller(i, &ungrouped, QString(), false);
+        }
+        // Prefer real device targets under Ungrouped — if we used a fake All target on the
+        // folder itself, only promote children to roots when the folder has no identity.
+        if(!ungrouped.children.isEmpty())
+        {
+            // Re-parent: Ungrouped is a UI folder; children keep Device targets.
+            // Use a distinct scene_zone_name marker so we don't collide with All.
+            ungrouped.target.kind = EffectPack::TargetKind::SceneZone;
+            ungrouped.target.scene_zone_name = std::string("__ungrouped__");
+            // Don't allow placing blocks on the fake ungrouped zone — strip by making
+            // it non-trackable: keep as folder only via empty scene zone that applier ignores.
+            // Blocks on Ungrouped row would not match any Zone3D — skip creating that track
+            // by not exposing a paintable target. Use Device-less label folder:
+            for(EffectPackTimelineWidget::Node& child : ungrouped.children)
+            {
+                roots.push_back(std::move(child));
+            }
         }
     }
     all.led_count = std::max(1, pack_leds);
     roots.prepend(std::move(all));
 
     timeline_->setModel(std::move(roots));
+}
+
+void EffectPackEditorDialog::onSceneZoneControllersReordered(const QString& scene_zone_name,
+                                                             const QVector<int>& controller_indices)
+{
+    if(!tab_ || scene_zone_name.isEmpty() || scene_zone_name == QStringLiteral("__ungrouped__"))
+    {
+        return;
+    }
+    ZoneManager3D* zones = tab_->GetZoneManager();
+    if(!zones)
+    {
+        return;
+    }
+    Zone3D* zone = zones->GetZoneByName(scene_zone_name.toStdString());
+    if(!zone)
+    {
+        return;
+    }
+    std::vector<int> order;
+    order.reserve((size_t)controller_indices.size());
+    for(int idx : controller_indices)
+    {
+        order.push_back(idx);
+    }
+    zone->SetControllers(std::move(order));
+    onRebuildTimelineModel();
+    if(status_label_)
+    {
+        status_label_->setText(QStringLiteral("Reordered controllers in “%1” (Sequence space uses this order)")
+                                   .arg(scene_zone_name));
+    }
 }
 
 void EffectPackEditorDialog::loadIntoUi(const EffectPack::Pack& pack)
@@ -880,7 +1071,7 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
     block.max_intensity = 1.0f;
     block.intensity = 1.0f;
     block.direction = EffectPack::Direction::Right;
-    block.axis_space = (row.target.kind == EffectPack::TargetKind::All)
+    block.axis_space = EffectPack::TargetIsMultiDeviceGroup(row.target)
         ? EffectPack::AxisSpace::Room
         : EffectPack::AxisSpace::Device;
     block.axis_mode = EffectPack::AxisMode::Preset;

@@ -11,6 +11,7 @@
 #include <vector>
 
 class QMimeData;
+class ZoneManager3D;
 struct ControllerTransform;
 
 /**
@@ -30,6 +31,11 @@ public:
         bool expanded = false;
         /** Total LEDs under this node (device/zone/All) for in-block spatial preview. */
         int led_count = 1;
+        /** Scene controller_transforms index when this node is a device under a scene zone. */
+        int transform_index = -1;
+        /** Parent scene zone name for drag-reorder of controllers. */
+        QString scene_zone_name;
+        bool reorderable = false;
     };
 
     struct Row
@@ -44,6 +50,9 @@ public:
         int led_index = 0;
         int led_count = 1;
         bool single_led_row = false;
+        int transform_index = -1;
+        QString scene_zone_name;
+        bool reorderable = false;
     };
 
     explicit EffectPackTimelineWidget(QWidget* parent = nullptr);
@@ -51,6 +60,7 @@ public:
     void setPack(EffectPack::Pack* pack);
     /** Scene transforms for world-space wipe/chase preview inside blocks. */
     void setControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms);
+    void setZoneManager(ZoneManager3D* zone_manager);
     void setModel(QVector<Node> roots);
     void setDurationMs(int duration_ms);
     void setPlayheadMs(int ms);
@@ -87,6 +97,8 @@ signals:
     void rowSelected(int row_index);
     void contentHeightChanged(int height);
     void modelExpandedChanged();
+    /** Controllers under a scene zone were reordered (new Zone3D controller index list). */
+    void sceneZoneControllersReordered(const QString& scene_zone_name, const QVector<int>& controller_indices);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -165,6 +177,7 @@ private:
 
     EffectPack::Pack* pack_ = nullptr;
     std::vector<std::unique_ptr<ControllerTransform>>* transforms_ = nullptr;
+    ZoneManager3D* zone_manager_ = nullptr;
     QVector<Node> roots_;
     QVector<Row> visible_rows_;
     int duration_ms_ = 5000;
@@ -188,4 +201,8 @@ private:
     int drag_origin_end_ = 0;
     int drag_grab_offset_ms_ = 0;
     bool drag_moved_ = false;
+
+    /** Gutter drag to reorder controllers under a scene zone. */
+    int row_reorder_from_ = -1;
+    int row_reorder_hover_ = -1;
 };

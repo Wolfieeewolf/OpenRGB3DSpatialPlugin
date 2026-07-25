@@ -361,6 +361,39 @@ bool BlockNeedsDirection(BlockType t)
     }
 }
 
+bool BlockUsesSequenceAxis(const Block& block)
+{
+    if(block.axis_space != AxisSpace::Sequence)
+    {
+        return false;
+    }
+    // Volume / field types keep room XYZ; everything else marches along order.
+    switch(block.type)
+    {
+        case BlockType::SphereWipe:
+        case BlockType::Orbit:
+        case BlockType::Ripple:
+        case BlockType::Noise3D:
+        case BlockType::Plasma:
+        case BlockType::Snow:
+        case BlockType::Fire:
+        case BlockType::Balls:
+            return false;
+        default:
+            return true;
+    }
+}
+
+bool BlockUsesSharedWorldBounds(const Block& block)
+{
+    if(block.axis_space == AxisSpace::Room)
+    {
+        return true;
+    }
+    // Sequence + volume/field → room XYZ
+    return block.axis_space == AxisSpace::Sequence && !BlockUsesSequenceAxis(block);
+}
+
 bool EvaluateBlockAtWorld(const Block& block,
                           int local_ms,
                           float x, float y, float z,

@@ -193,7 +193,8 @@ void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pa
     {
         return;
     }
-    EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms, force_hw_update);
+    EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
+                               force_hw_update, zone_manager.get());
     if(viewport)
     {
         viewport->UpdateColors();

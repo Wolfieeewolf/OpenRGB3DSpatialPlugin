@@ -45,6 +45,7 @@ std::string TargetKindToString(TargetKind k)
         case TargetKind::Device: return "device";
         case TargetKind::Zone: return "zone";
         case TargetKind::Leds: return "leds";
+        case TargetKind::SceneZone: return "scene_zone";
         default:
         {
             const TargetKind unused = k;
@@ -60,6 +61,35 @@ bool TargetKindFromString(const std::string& s, TargetKind* out)
     if(s == "device") { *out = TargetKind::Device; return true; }
     if(s == "zone") { *out = TargetKind::Zone; return true; }
     if(s == "leds") { *out = TargetKind::Leds; return true; }
+    if(s == "scene_zone") { *out = TargetKind::SceneZone; return true; }
+    return false;
+}
+
+std::string AxisSpaceToString(AxisSpace s)
+{
+    switch(s)
+    {
+        case AxisSpace::Room: return "room";
+        case AxisSpace::Device: return "device";
+        case AxisSpace::Sequence: return "sequence";
+        default:
+        {
+            const AxisSpace unused = s;
+            (void)unused;
+            return "device";
+        }
+    }
+}
+
+bool AxisSpaceFromString(const std::string& s, AxisSpace* out)
+{
+    if(!out)
+    {
+        return false;
+    }
+    if(s == "room") { *out = AxisSpace::Room; return true; }
+    if(s == "device") { *out = AxisSpace::Device; return true; }
+    if(s == "sequence") { *out = AxisSpace::Sequence; return true; }
     return false;
 }
 
@@ -912,6 +942,14 @@ nlohmann::json ToJson(const Pack& pack)
         {
             target["zone_name"] = track.target.zone_name;
         }
+        if(!track.target.scene_zone_name.empty())
+        {
+            target["scene_zone_name"] = track.target.scene_zone_name;
+        }
+        if(track.target.flatten_leds)
+        {
+            target["flatten_leds"] = true;
+        }
         if(!track.target.led_indices.empty())
         {
             target["led_indices"] = track.target.led_indices;
@@ -932,7 +970,7 @@ nlohmann::json ToJson(const Pack& pack)
             bj["min_intensity"] = block.min_intensity;
             bj["max_intensity"] = block.max_intensity;
             bj["direction"] = DirectionToString(block.direction);
-            bj["axis_space"] = (block.axis_space == AxisSpace::Room) ? "room" : "device";
+            bj["axis_space"] = AxisSpaceToString(block.axis_space);
             bj["axis_mode"] = (block.axis_mode == AxisMode::Custom) ? "custom" : "preset";
             bj["axis_yaw_deg"] = block.axis_yaw_deg;
             bj["axis_pitch_deg"] = block.axis_pitch_deg;
@@ -1064,6 +1102,8 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             track.target.kind = kind;
             track.target.device_name = target.value("device_name", std::string());
             track.target.zone_name = target.value("zone_name", std::string());
+            track.target.scene_zone_name = target.value("scene_zone_name", std::string());
+            track.target.flatten_leds = target.value("flatten_leds", false);
             if(target.contains("led_indices") && target["led_indices"].is_array())
             {
                 for(const auto& idx : target["led_indices"])
@@ -1113,17 +1153,25 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             }
             block.direction = dir;
 
-            block.axis_space = (ver >= 3) ? AxisSpace::Device : AxisSpace::Room;
+            // Multi-device group rows default to Room; device rows default to Device (v3+).
+            if(ver < 3)
+            {
+                block.axis_space = AxisSpace::Room;
+            }
+            else if(TargetIsMultiDeviceGroup(track.target))
+            {
+                block.axis_space = AxisSpace::Room;
+            }
+            else
+            {
+                block.axis_space = AxisSpace::Device;
+            }
             if(bj.contains("axis_space") && bj["axis_space"].is_string())
             {
-                const std::string sp = bj["axis_space"].get<std::string>();
-                if(sp == "device")
+                AxisSpace parsed = block.axis_space;
+                if(AxisSpaceFromString(bj["axis_space"].get<std::string>(), &parsed))
                 {
-                    block.axis_space = AxisSpace::Device;
-                }
-                else if(sp == "room")
-                {
-                    block.axis_space = AxisSpace::Room;
+                    block.axis_space = parsed;
                 }
             }
             block.axis_mode = AxisMode::Preset;

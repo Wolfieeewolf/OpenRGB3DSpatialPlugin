@@ -3,6 +3,7 @@
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackCatalog.h"
 #include "EffectPacks/EffectPackApplier.h"
+#include "ZoneManager3D.h"
 
 #include <QColorDialog>
 #include <QCursor>
@@ -28,7 +29,7 @@ namespace
 
 bool TargetsEqual(const EffectPack::Target& a, const EffectPack::Target& b)
 {
-    if(a.kind != b.kind)
+    if(a.kind != b.kind || a.flatten_leds != b.flatten_leds)
     {
         return false;
     }
@@ -41,7 +42,12 @@ bool TargetsEqual(const EffectPack::Target& a, const EffectPack::Target& b)
         case EffectPack::TargetKind::Zone:
             return a.device_name == b.device_name && a.zone_name == b.zone_name;
         case EffectPack::TargetKind::Leds:
-            return a.device_name == b.device_name && a.led_indices == b.led_indices;
+            return a.device_name == b.device_name
+                && a.zone_name == b.zone_name
+                && a.led_indices == b.led_indices;
+        case EffectPack::TargetKind::SceneZone:
+            return a.scene_zone_name == b.scene_zone_name
+                && a.flatten_leds == b.flatten_leds;
     }
     return false;
 }
@@ -83,11 +89,19 @@ void EffectPackTimelineWidget::setControllerTransforms(std::vector<std::unique_p
     update();
 }
 
+void EffectPackTimelineWidget::setZoneManager(ZoneManager3D* zone_manager)
+{
+    zone_manager_ = zone_manager;
+    update();
+}
+
 QString EffectPackTimelineWidget::targetKey(const EffectPack::Target& t) const
 {
     QString key = QString::number((int)t.kind) + QLatin1Char('|')
         + QString::fromStdString(t.device_name) + QLatin1Char('|')
-        + QString::fromStdString(t.zone_name);
+        + QString::fromStdString(t.zone_name) + QLatin1Char('|')
+        + QString::fromStdString(t.scene_zone_name) + QLatin1Char('|')
+        + (t.flatten_leds ? QLatin1Char('1') : QLatin1Char('0'));
     for(int led : t.led_indices)
     {
         key += QLatin1Char(',') + QString::number(led);
@@ -155,6 +169,9 @@ void EffectPackTimelineWidget::flattenNode(const Node& node, const QVector<int>&
     row.expandable = !node.children.isEmpty();
     row.expanded = node.expanded;
     row.single_led_row = (node.target.kind == EffectPack::TargetKind::Leds);
+    row.transform_index = node.transform_index;
+    row.scene_zone_name = node.scene_zone_name;
+    row.reorderable = node.reorderable;
     if(row.single_led_row)
     {
         row.led_index = led_index;
@@ -265,8 +282,11 @@ void EffectPackTimelineWidget::setSelectedBlock(int track_index, int block_index
 
 void EffectPackTimelineWidget::cancelDrag()
 {
+    row_reorder_from_ = -1;
+    row_reorder_hover_ = -1;
     if(drag_op_ == DragOp::None)
     {
+        update();
         return;
     }
     drag_op_ = DragOp::None;
@@ -274,6 +294,7 @@ void EffectPackTimelineWidget::cancelDrag()
     drag_block_ = -1;
     drag_moved_ = false;
     unsetCursor();
+    update();
 }
 
 int EffectPackTimelineWidget::trackIndexForRow(int row) const
@@ -483,7 +504,8 @@ void EffectPackTimelineWidget::paintBlockSpatialRaster(QPainter& p, const QRect&
     if(pack_ && transforms_ && !pb.single_led_row)
     {
         EffectPack::BuildSpatialAxesForTarget(*pack_, pb.view_target, sample,
-                                              transforms_, &axes, &seeds, &nxs, &nys, &nzs);
+                                              transforms_, &axes, &seeds, &nxs, &nys, &nzs,
+                                              zone_manager_);
     }
 
     std::vector<int> order;
@@ -1059,11 +1081,22 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
         p.setPen(QColor(55, 55, 60));
         p.drawLine(0, y + row_height_ - 1, width(), y + row_height_ - 1);
 
-        if(r.depth == 0)
+        if(r.depth == 0 || r.target.kind == EffectPack::TargetKind::SceneZone)
         {
-            const QColor accent = (r.target.kind == EffectPack::TargetKind::All)
-                ? QColor(220, 160, 60) : QColor(90, 140, 220);
+            QColor accent = QColor(90, 140, 220);
+            if(r.target.kind == EffectPack::TargetKind::All)
+            {
+                accent = QColor(220, 160, 60);
+            }
+            else if(r.target.kind == EffectPack::TargetKind::SceneZone)
+            {
+                accent = QColor(120, 200, 140);
+            }
             p.fillRect(0, y, 3, row_height_, accent);
+        }
+        if(row_reorder_from_ >= 0 && row == row_reorder_hover_ && row != row_reorder_from_)
+        {
+            p.fillRect(0, y, gutter_width_, 2, QColor(255, 220, 80));
         }
 
         const int indent = 6 + r.depth * 14;
@@ -1198,6 +1231,12 @@ void EffectPackTimelineWidget::mousePressEvent(QMouseEvent* event)
                 return;
             }
         }
+        if(r.reorderable && !r.scene_zone_name.isEmpty() && r.transform_index >= 0)
+        {
+            row_reorder_from_ = row;
+            row_reorder_hover_ = row;
+            setCursor(Qt::ClosedHandCursor);
+        }
         update();
         return;
     }
@@ -1259,6 +1298,24 @@ void EffectPackTimelineWidget::mousePressEvent(QMouseEvent* event)
 void EffectPackTimelineWidget::mouseMoveEvent(QMouseEvent* event)
 {
     const QPoint pt = event->position().toPoint();
+    if(row_reorder_from_ >= 0 && (event->buttons() & Qt::LeftButton))
+    {
+        const int y = pt.y();
+        const int row = (y >= header_height_) ? ((y - header_height_) / row_height_) : -1;
+        if(row >= 0 && row < visible_rows_.size())
+        {
+            const Row& from = visible_rows_[row_reorder_from_];
+            const Row& hover = visible_rows_[row];
+            if(hover.reorderable
+               && hover.scene_zone_name == from.scene_zone_name
+               && hover.transform_index >= 0)
+            {
+                row_reorder_hover_ = row;
+            }
+        }
+        update();
+        return;
+    }
     if(drag_op_ != DragOp::None && (event->buttons() & Qt::LeftButton))
     {
         applyDrag(pt.x());
@@ -1271,6 +1328,43 @@ void EffectPackTimelineWidget::mouseReleaseEvent(QMouseEvent* event)
 {
     if(event->button() == Qt::LeftButton)
     {
+        if(row_reorder_from_ >= 0)
+        {
+            const int from = row_reorder_from_;
+            const int to = row_reorder_hover_;
+            row_reorder_from_ = -1;
+            row_reorder_hover_ = -1;
+            unsetCursor();
+            if(from >= 0 && to >= 0 && from != to
+               && from < visible_rows_.size() && to < visible_rows_.size())
+            {
+                const Row& a = visible_rows_[from];
+                const Row& b = visible_rows_[to];
+                if(a.reorderable && b.reorderable
+                   && a.scene_zone_name == b.scene_zone_name
+                   && !a.scene_zone_name.isEmpty())
+                {
+                    QVector<int> order;
+                    for(const Row& r : visible_rows_)
+                    {
+                        if(r.reorderable && r.scene_zone_name == a.scene_zone_name
+                           && r.transform_index >= 0)
+                        {
+                            order.push_back(r.transform_index);
+                        }
+                    }
+                    const int ai = order.indexOf(a.transform_index);
+                    const int bi = order.indexOf(b.transform_index);
+                    if(ai >= 0 && bi >= 0)
+                    {
+                        order.move(ai, bi);
+                        emit sceneZoneControllersReordered(a.scene_zone_name, order);
+                    }
+                }
+            }
+            update();
+            return;
+        }
         finishDrag();
     }
 }

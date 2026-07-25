@@ -58,6 +58,7 @@ private slots:
     void onToolbarCurveClicked(const QString& preset_id);
     void onRemoveBlock();
     void onBlockDeleteRequested(int track_index, int block_index);
+    void onSceneZoneControllersReordered(const QString& scene_zone_name, const QVector<int>& controller_indices);
     void onBlockFieldChanged();
     void onTypeChanged();
     void onPickColor();
