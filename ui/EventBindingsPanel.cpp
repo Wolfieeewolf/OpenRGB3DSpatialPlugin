@@ -53,8 +53,11 @@ void EventBindingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     PluginUiApplyMutedSecondaryLabel(ui->statusLabel);
 
     registry_.BuildForPlatform();
-    registry_.SetListener([this](const std::string& source, const std::string& event, bool active) {
-        runtime_.OnEvent(source, event, active);
+    registry_.SetListener([this](const std::string& source,
+                                 const std::string& event,
+                                 bool active,
+                                 EffectBinding::EventEdge edge) {
+        runtime_.OnEvent(source, event, active, edge);
         if(runtime_.IsPlaying() && !timer_->isActive())
         {
             timer_->start();
@@ -83,8 +86,7 @@ void EventBindingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         });
 
     reloadDocument();
-    // Defer native HWND / WTS registration — calling winId() on the plugin tab during
-    // construction hangs OpenRGB before the UI can appear.
+    /* Defer native registration — winId() during tab construction hangs the host UI. */
     QTimer::singleShot(0, this, [this]() {
         if(bound_)
         {
@@ -151,7 +153,6 @@ void EventBindingsPanel::populateList()
     {
         if(!registry_.HasSource(b.source))
         {
-            // Keep on disk; hide foreign-OS bindings in the list.
             continue;
         }
         const QString label = QStringLiteral("%1 → %2 / %3%4")
@@ -233,8 +234,12 @@ bool EventBindingsPanel::editBindingDialog(EffectBinding::Binding* binding)
         }
         for(const EffectBinding::EventInfo& ev : src->ListEvents())
         {
-            event_combo->addItem(QString::fromStdString(ev.display_name),
-                                 QString::fromStdString(ev.id));
+            QString label = QString::fromStdString(ev.display_name);
+            if(ev.edge == EffectBinding::EventEdge::Pulse)
+            {
+                label += QStringLiteral(" (pulse)");
+            }
+            event_combo->addItem(label, QString::fromStdString(ev.id));
         }
     };
     connect(source_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), &dlg, [&](int) {

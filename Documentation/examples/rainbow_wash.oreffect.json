@@ -1,6 +1,6 @@
 {
   "format": "openrgb3d.effect_pack",
-  "version": 1,
+  "version": 4,
   "id": "rainbow_wash",
   "name": "Rainbow wash",
   "duration_ms": 60000,

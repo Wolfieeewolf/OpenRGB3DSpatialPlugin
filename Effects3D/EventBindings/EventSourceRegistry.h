@@ -12,7 +12,7 @@ namespace EffectBinding
 class EventSourceRegistry
 {
 public:
-    /** Build platform sources. Manual always; Windows on Win32. */
+    /** Manual always; Windows / Linux / macOS OS factories when available. */
     void BuildForPlatform();
 
     void SetListener(EventSignalFn fn);

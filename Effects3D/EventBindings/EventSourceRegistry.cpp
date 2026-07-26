@@ -2,6 +2,8 @@
 
 #include "EventSourceRegistry.h"
 #include "WindowsEventSource.h"
+#include "LinuxEventSource.h"
+#include "MacEventSource.h"
 
 namespace EffectBinding
 {
@@ -19,6 +21,14 @@ void EventSourceRegistry::BuildForPlatform()
     if(auto win = TryCreateWindowsEventSource())
     {
         sources_.push_back(std::move(win));
+    }
+    if(auto linux_src = TryCreateLinuxEventSource())
+    {
+        sources_.push_back(std::move(linux_src));
+    }
+    if(auto mac = TryCreateMacEventSource())
+    {
+        sources_.push_back(std::move(mac));
     }
 }
 

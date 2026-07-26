@@ -3,6 +3,7 @@
 #include "EffectPackToolBar.h"
 #include "EffectPackCatalog.h"
 #include "EffectPacks/EffectPack.h"
+#include "PluginUiUtils.h"
 
 #include <QApplication>
 #include <QDrag>
@@ -98,7 +99,7 @@ void EffectPackToolBar::buildUi()
     auto add_category = [&](EffectPackCatalog::Category cat) {
         effects_row->addSpacing(8);
         auto* lab = new QLabel(EffectPackCatalog::CategoryLabel(cat));
-        lab->setStyleSheet(QStringLiteral("color: #aaa; font-size: 11px;"));
+        PluginUiApplyMutedSecondaryLabel(lab);
         effects_row->addWidget(lab);
         for(const EffectPackCatalog::Entry& e : EffectPackCatalog::EntriesFor(cat))
         {
@@ -181,8 +182,4 @@ void EffectPackToolBar::buildUi()
     }
     colors_row->addStretch(1);
     root->addLayout(colors_row);
-
-    setStyleSheet(QStringLiteral(
-        "EffectPackToolBar { background: #2a2a30; border: 1px solid #3a3a42; border-radius: 4px; }"
-        "QLabel { color: #ddd; }"));
 }

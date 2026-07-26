@@ -171,6 +171,8 @@ HEADERS += \
     Effects3D/EventBindings/EventSource.h \
     Effects3D/EventBindings/ManualEventSource.h \
     Effects3D/EventBindings/WindowsEventSource.h \
+    Effects3D/EventBindings/LinuxEventSource.h \
+    Effects3D/EventBindings/MacEventSource.h \
     Effects3D/EventBindings/EventSourceRegistry.h \
     Effects3D/EventBindings/BindingRuntime.h \
     SpatialRoom/SpatialRoomTypes.h \
@@ -339,11 +341,16 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
     Effects3D/EffectPacks/EffectPack.cpp \
+    Effects3D/EffectPacks/EffectPackSerialize.cpp \
+    Effects3D/EffectPacks/EffectPackBlockEvalAxis.cpp \
+    Effects3D/EffectPacks/EffectPackExamples.cpp \
     Effects3D/EffectPacks/EffectPackSpatial.cpp \
     Effects3D/EffectPacks/EffectPackApplier.cpp \
     Effects3D/EffectPacks/EffectPackLibrary.cpp \
     Effects3D/EventBindings/EventBinding.cpp \
     Effects3D/EventBindings/WindowsEventSource.cpp \
+    Effects3D/EventBindings/LinuxEventSource.cpp \
+    Effects3D/EventBindings/MacEventSource.cpp \
     Effects3D/EventBindings/EventSourceRegistry.cpp \
     Effects3D/EventBindings/BindingRuntime.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
@@ -368,7 +375,11 @@ SOURCES += \
     ui/EffectPackPanel.cpp \
     ui/EventBindingsPanel.cpp \
     ui/EffectPackEditorDialog.cpp \
+    ui/EffectPackEditorProps.cpp \
+    ui/EffectPackEditorTimelineBridge.cpp \
     ui/EffectPackTimelineWidget.cpp \
+    ui/EffectPackTimelinePaint.cpp \
+    ui/EffectPackTimelineInteract.cpp \
     ui/EffectPackGradientBar.cpp \
     ui/EffectPackToolBar.cpp \
     ui/EffectStackPanel.cpp \
@@ -549,6 +560,7 @@ FORMS += \
     ui/forms/MinecraftGameSettingsScroll.ui
 
 unix:!macx {
+    QT += dbus
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/
@@ -557,4 +569,4 @@ unix:!macx {
 }
 
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
-macx:LIBS += -framework OpenGL
+macx:LIBS += -framework OpenGL -framework CoreFoundation -framework IOKit

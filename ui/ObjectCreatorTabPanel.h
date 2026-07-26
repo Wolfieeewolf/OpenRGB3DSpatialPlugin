@@ -60,11 +60,23 @@ private slots:
     void onReferencePointListRowChanged(int list_row);
 
 private:
+    enum ObjectTypeIndex
+    {
+        ObjectTypeSelect = 0,
+        ObjectTypeCustomController = 1,
+        ObjectTypeReferencePoint = 2,
+        ObjectTypeDisplayPlane = 3,
+        ObjectTypeZone = 4,
+        ObjectTypeEffectPack = 5,
+        ObjectTypeEventBindings = 6,
+    };
+
     void applyVisualStyles();
     void setObjectTypeIndex(int index);
 
     Ui::ObjectCreatorTabPanel* ui;
     OpenRGB3DSpatialTab*       host_tab_ = nullptr;
+    bool                       bound_ = false;
 };
 
 #endif

@@ -2,13 +2,17 @@
 
 #include "BindingRuntime.h"
 #include "EffectPacks/EffectPackLibrary.h"
+#include "PluginLog.h"
 
 #include <algorithm>
 
 namespace EffectBinding
 {
 
-void BindingRuntime::OnEvent(const std::string& source, const std::string& event, bool active)
+void BindingRuntime::OnEvent(const std::string& source,
+                             const std::string& event,
+                             bool active,
+                             EventEdge edge)
 {
     if(source.empty() || event.empty())
     {
@@ -17,36 +21,34 @@ void BindingRuntime::OnEvent(const std::string& source, const std::string& event
 
     if(!active)
     {
-        // Edge off: stop plays tied to this event (while_active / hold / OS session).
-        // Manual Fire uses StopFire the same way; Once packs also end via Tick.
-        if(source == "manual" && event == "fire")
+        if(edge == EventEdge::Pulse)
+        {
+            return;
+        }
+        // Manual stop / level-off: drop matching plays (Once mid-run included for fire/hold stop).
+        if(source == "manual")
         {
             StopMatching(source, event);
+            return;
         }
-        else if(source == "manual" && event == "hold")
+        for(auto it = plays_.begin(); it != plays_.end(); )
         {
-            StopMatching(source, event);
-        }
-        else
-        {
-            for(auto it = plays_.begin(); it != plays_.end(); )
+            if(it->source != source || it->event != event)
             {
-                if(it->source == source && it->event == event
-                   && it->pack.loop == EffectPack::LoopMode::WhileActive)
-                {
-                    it = plays_.erase(it);
-                    continue;
-                }
-                if(it->source == source && it->event == event)
-                {
-                    it->event_active = false;
-                }
                 ++it;
+                continue;
             }
-            if(plays_.empty())
+            if(it->pack.loop == EffectPack::LoopMode::WhileActive)
             {
-                prepared_ = false;
+                it = plays_.erase(it);
+                continue;
             }
+            it->event_active = false;
+            ++it;
+        }
+        if(plays_.empty())
+        {
+            prepared_ = false;
         }
         return;
     }
@@ -57,17 +59,12 @@ void BindingRuntime::OnEvent(const std::string& source, const std::string& event
         {
             continue;
         }
-        StartBinding(b, true);
+        StartBinding(b, true, edge);
     }
-
-    // Momentary OS pulses (unlock): after starting, if Once they run; if WhileActive
-    // keep active until matching false. For unlock as one-shot pulse, leave event_active true
-    // until Once ends — Forever would run until StopAll.
 }
 
-void BindingRuntime::StartBinding(const Binding& binding, bool event_active)
+void BindingRuntime::StartBinding(const Binding& binding, bool event_active, EventEdge edge)
 {
-    // Replace existing play for same binding id.
     plays_.erase(std::remove_if(plays_.begin(), plays_.end(),
                                 [&](const ActivePlay& p) { return p.binding_id == binding.id; }),
                  plays_.end());
@@ -76,7 +73,17 @@ void BindingRuntime::StartBinding(const Binding& binding, bool event_active)
     std::string err;
     if(!EffectPack::LoadPackById(packs_dir_, binding.pack_id, &pack, &err))
     {
+        LOG_WARNING("[3DSpatial] Effect binding '%s': failed to load pack '%s': %s",
+                    binding.id.c_str(),
+                    binding.pack_id.c_str(),
+                    err.c_str());
         return;
+    }
+
+    // Pulse edges have no lasting "active" state — WhileActive would never end.
+    if(edge == EventEdge::Pulse && pack.loop == EffectPack::LoopMode::WhileActive)
+    {
+        pack.loop = EffectPack::LoopMode::Once;
     }
 
     ActivePlay play;

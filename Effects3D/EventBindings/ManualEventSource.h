@@ -6,7 +6,6 @@
 namespace EffectBinding
 {
 
-/** Always available. Events: fire (start until stopped), hold (press/release). */
 class ManualEventSource : public EventSource
 {
 public:
@@ -16,15 +15,15 @@ public:
     std::vector<EventInfo> ListEvents() const override
     {
         return {
-            {"fire", "Fire (run until stop / once ends)"},
-            {"hold", "Hold (while_active while held)"},
+            {"fire", "Fire (run until stop / once ends)", EventEdge::Level},
+            {"hold", "Hold (while_active while held)", EventEdge::Level},
         };
     }
 
-    void Fire() { Emit("fire", true); }
-    void StopFire() { Emit("fire", false); }
-    void BeginHold() { Emit("hold", true); }
-    void EndHold() { Emit("hold", false); }
+    void Fire() { EmitLevel("fire", true); }
+    void StopFire() { EmitLevel("fire", false); }
+    void BeginHold() { EmitLevel("hold", true); }
+    void EndHold() { EmitLevel("hold", false); }
 };
 
 } // namespace EffectBinding

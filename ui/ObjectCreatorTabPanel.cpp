@@ -63,12 +63,13 @@ void ObjectCreatorTabPanel::applyVisualStyles()
 
 void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
 {
-    if(!tab)
+    if(!tab || bound_)
     {
         return;
     }
 
     host_tab_ = tab;
+    bound_ = true;
 
     ui->importCustomControllerButton->setToolTip(
         tr("Copy portable preset .json files into the controllers folder (see OpenRGB3DSpatialPresets on GitHub). "
@@ -135,7 +136,7 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->objectTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ObjectCreatorTabPanel::onObjectTypeChanged);
 
-    ui->objectTypeCombo->setCurrentIndex(0);
+    ui->objectTypeCombo->setCurrentIndex(ObjectTypeSelect);
 }
 
 void ObjectCreatorTabPanel::onObjectTypeChanged(int index)
@@ -145,36 +146,33 @@ void ObjectCreatorTabPanel::onObjectTypeChanged(int index)
         return;
     }
 
-    if(index <= 0)
+    switch(index)
     {
-        ui->contentStack->setCurrentWidget(ui->emptyPage);
-    }
-    else if(index == 1)
-    {
-        ui->contentStack->setCurrentWidget(ui->customPage);
-    }
-    else if(index == 2)
-    {
-        ui->contentStack->setCurrentWidget(ui->referencePage);
-    }
-    else if(index == 3)
-    {
-        ui->contentStack->setCurrentWidget(ui->displayPage);
-        host_tab_->UpdateDisplayPlanesList();
-        host_tab_->RefreshDisplayPlaneDetails();
-    }
-    else if(index == 4)
-    {
-        ui->contentStack->setCurrentWidget(ui->zonePage);
-        host_tab_->UpdateZonesList();
-    }
-    else if(index == 5)
-    {
-        ui->contentStack->setCurrentWidget(ui->effectPackPage);
-    }
-    else if(index == 6)
-    {
-        ui->contentStack->setCurrentWidget(ui->eventBindingsPage);
+        case ObjectTypeCustomController:
+            ui->contentStack->setCurrentWidget(ui->customPage);
+            break;
+        case ObjectTypeReferencePoint:
+            ui->contentStack->setCurrentWidget(ui->referencePage);
+            break;
+        case ObjectTypeDisplayPlane:
+            ui->contentStack->setCurrentWidget(ui->displayPage);
+            host_tab_->UpdateDisplayPlanesList();
+            host_tab_->RefreshDisplayPlaneDetails();
+            break;
+        case ObjectTypeZone:
+            ui->contentStack->setCurrentWidget(ui->zonePage);
+            host_tab_->UpdateZonesList();
+            break;
+        case ObjectTypeEffectPack:
+            ui->contentStack->setCurrentWidget(ui->effectPackPage);
+            break;
+        case ObjectTypeEventBindings:
+            ui->contentStack->setCurrentWidget(ui->eventBindingsPage);
+            break;
+        case ObjectTypeSelect:
+        default:
+            ui->contentStack->setCurrentWidget(ui->emptyPage);
+            break;
     }
 }
 
@@ -192,32 +190,32 @@ void ObjectCreatorTabPanel::setObjectTypeIndex(int index)
 
 void ObjectCreatorTabPanel::showCustomControllerSection()
 {
-    setObjectTypeIndex(1);
+    setObjectTypeIndex(ObjectTypeCustomController);
 }
 
 void ObjectCreatorTabPanel::showReferencePointSection()
 {
-    setObjectTypeIndex(2);
+    setObjectTypeIndex(ObjectTypeReferencePoint);
 }
 
 void ObjectCreatorTabPanel::showDisplayPlaneSection()
 {
-    setObjectTypeIndex(3);
+    setObjectTypeIndex(ObjectTypeDisplayPlane);
 }
 
 void ObjectCreatorTabPanel::showZoneSection()
 {
-    setObjectTypeIndex(4);
+    setObjectTypeIndex(ObjectTypeZone);
 }
 
 void ObjectCreatorTabPanel::showEffectPackSection()
 {
-    setObjectTypeIndex(5);
+    setObjectTypeIndex(ObjectTypeEffectPack);
 }
 
 void ObjectCreatorTabPanel::showEventBindingsSection()
 {
-    setObjectTypeIndex(6);
+    setObjectTypeIndex(ObjectTypeEventBindings);
 }
 
 void ObjectCreatorTabPanel::onReferencePointListRowChanged(int list_row)

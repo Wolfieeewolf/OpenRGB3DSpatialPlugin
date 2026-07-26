@@ -31,6 +31,7 @@ public:
 
 private:
     Ui::ZonesPanel* ui = nullptr;
+    bool bound_ = false;
 };
 
 #endif

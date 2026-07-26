@@ -61,11 +61,12 @@ EffectPackPanel::~EffectPackPanel()
 
 void EffectPackPanel::bindTab(OpenRGB3DSpatialTab* tab)
 {
-    tab_ = tab;
-    if(!tab_)
+    if(!tab || bound_)
     {
         return;
     }
+    tab_ = tab;
+    bound_ = true;
 
     PluginUiApplyMutedSecondaryLabel(ui->hintLabel);
     PluginUiApplyMutedSecondaryLabel(ui->statusLabel);

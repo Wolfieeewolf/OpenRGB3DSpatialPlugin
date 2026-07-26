@@ -74,7 +74,7 @@ bool FromJson(const nlohmann::json& j, Document* out, std::string* error)
         return false;
     }
     const int ver = j.value("version", 0);
-    if(ver < 1 || ver > kFormatVersion)
+    if(ver != kFormatVersion)
     {
         if(error) { *error = "unsupported bindings version"; }
         return false;
@@ -95,11 +95,7 @@ bool FromJson(const nlohmann::json& j, Document* out, std::string* error)
             b.source = bj.value("source", std::string());
             b.event = bj.value("event", std::string());
             b.pack_id = bj.value("pack_id", std::string());
-            if(b.id.empty())
-            {
-                b.id = MakeBindingId();
-            }
-            if(b.source.empty() || b.event.empty() || b.pack_id.empty())
+            if(b.id.empty() || b.source.empty() || b.event.empty() || b.pack_id.empty())
             {
                 continue;
             }

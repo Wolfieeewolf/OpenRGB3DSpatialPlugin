@@ -2,16 +2,13 @@
 #pragma once
 
 #include "EventBinding.h"
+#include "EventSource.h"
 #include "EffectPacks/EffectPack.h"
 #include "EffectPacks/EffectPackPlayer.h"
-#include "LEDPosition3D.h"
-#include "RGBControllerInterface.h"
 #include "filesystem.h"
 #include <functional>
 #include <string>
 #include <vector>
-
-class ZoneManager3D;
 
 namespace EffectBinding
 {
@@ -33,10 +30,9 @@ public:
         apply_ = std::move(apply);
     }
 
-    void OnEvent(const std::string& source, const std::string& event, bool active);
+    void OnEvent(const std::string& source, const std::string& event, bool active, EventEdge edge);
     void StopAll();
 
-    /** Advance active plays; returns true if any frame was applied. */
     bool Tick(int dt_ms);
 
     bool IsPlaying() const { return !plays_.empty(); }
@@ -52,7 +48,7 @@ private:
         bool event_active = true;
     };
 
-    void StartBinding(const Binding& binding, bool event_active);
+    void StartBinding(const Binding& binding, bool event_active, EventEdge edge);
     void StopMatching(const std::string& source, const std::string& event);
     void ApplyPlays(bool force_hw);
 

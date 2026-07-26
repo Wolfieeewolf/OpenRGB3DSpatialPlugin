@@ -7,7 +7,7 @@
 namespace EffectPack
 {
 
-/** Lightweight playback clock for a loaded pack (no OpenRGB device I/O yet). */
+/** Playback clock for a loaded pack. Hardware apply is done by EffectPackApplier. */
 class Player
 {
 public:

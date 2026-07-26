@@ -52,4 +52,5 @@ private:
     EffectPack::Player player_;
     QElapsedTimer wall_;
     int last_elapsed_ms_ = 0;
+    bool bound_ = false;
 };
