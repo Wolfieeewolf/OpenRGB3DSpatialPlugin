@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "EffectPack.h"
+#include "EffectPackBlockEval.h"
 
 #include <algorithm>
 #include <cmath>
@@ -83,24 +84,14 @@ float ProjectOnUnitAxis(float x, float y, float z,
     return std::clamp((t - t_min) / span, 0.0f, 1.0f);
 }
 
-struct NormSample
-{
-    float nx = 0.5f;
-    float ny = 0.5f;
-    float nz = 0.5f;
-    float radius = 0.0f;
-    float height = 0.5f;
-    float span_x = 0.0f;
-    float span_y = 0.0f;
-    float span_z = 0.0f;
-};
+using block_eval::WorldNorm;
 
-NormSample MakeNormSample(float x, float y, float z,
-                          float min_x, float max_x,
-                          float min_y, float max_y,
-                          float min_z, float max_z)
+WorldNorm MakeNormSample(float x, float y, float z,
+                         float min_x, float max_x,
+                         float min_y, float max_y,
+                         float min_z, float max_z)
 {
-    NormSample s;
+    WorldNorm s;
     s.span_x = max_x - min_x;
     s.span_y = max_y - min_y;
     s.span_z = max_z - min_z;
@@ -489,6 +480,245 @@ bool BlockUsesSharedWorldBounds(const Block& block)
     return block.axis_space == AxisSpace::Sequence && !BlockUsesSequenceAxis(block);
 }
 
+namespace
+{
+
+using block_eval::WorldCtx;
+using block_eval::WorldFn;
+
+bool EvalSphereWipe(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float edge = 0.12f;
+    const float front = ctx.progress * (1.0f + 2.0f * edge) - edge;
+    const float d = front - ctx.s.radius;
+    float cover = 0.0f;
+    if(d >= edge) { cover = 1.0f; }
+    else if(d > -edge) { cover = (d + edge) / (2.0f * edge); }
+    if(cover <= 0.001f) { return false; }
+    ctx.intensity *= cover;
+    ctx.color = SampleGradient(block, ctx.progress);
+    return true;
+}
+
+bool EvalOrbit(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    float ux, uy, uz;
+    AxisUnitVector(block, &ux, &uy, &uz);
+    float rx = 0.0f, ry = 1.0f, rz = 0.0f;
+    if(std::fabs(uy) > 0.9f) { rx = 1.0f; ry = 0.0f; }
+    float tx = ry * uz - rz * uy;
+    float ty = rz * ux - rx * uz;
+    float tz = rx * uy - ry * ux;
+    float tlen = std::max(1e-6f, std::sqrt(tx * tx + ty * ty + tz * tz));
+    tx /= tlen; ty /= tlen; tz /= tlen;
+    float bx = uy * tz - uz * ty;
+    float by = uz * tx - ux * tz;
+    float bz = ux * ty - uy * tx;
+    const float u = ctx.dx * tx + ctx.dy * ty + ctx.dz * tz;
+    const float v = ctx.dx * bx + ctx.dy * by + ctx.dz * bz;
+    float ang = std::atan2(v, u) / (2.0f * 3.14159265358979323846f) + 0.5f;
+    ang -= std::floor(ang);
+    const float width = std::clamp(block.pulse_length, 0.06f, 0.5f);
+    float delta = ang - ctx.progress;
+    delta -= std::floor(delta + 0.5f);
+    const float lead = width * 0.25f;
+    const float trail = width;
+    float cover = 0.0f;
+    if(delta >= 0.0f && delta <= lead) { cover = 1.0f - (delta / lead); }
+    else if(delta < 0.0f && -delta <= trail) { cover = 1.0f + (delta / trail); }
+    cover *= 0.45f + 0.55f * (1.0f - std::clamp(ctx.s.radius, 0.0f, 1.0f) * 0.5f);
+    if(cover <= 0.001f) { return false; }
+    ctx.intensity *= cover;
+    ctx.color = SampleGradient(block, ctx.progress);
+    return true;
+}
+
+bool EvalRipple(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float band = std::clamp(block.pulse_length, 0.06f, 0.4f);
+    float cover = 0.0f;
+    const float wave = std::fabs(ctx.s.radius - ctx.progress);
+    if(wave <= band) { cover = 1.0f - (wave / band); }
+    const float wave2 = std::fabs(ctx.s.radius - std::fmod(ctx.progress + 0.5f, 1.0f));
+    if(wave2 <= band) { cover = std::max(cover, (1.0f - (wave2 / band)) * 0.75f); }
+    if(cover <= 0.001f) { return false; }
+    ctx.intensity *= cover;
+    ctx.color = SampleGradient(block, ctx.s.radius);
+    return true;
+}
+
+bool EvalMeteor(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float along = SampleAxisPos(block, ctx.x, ctx.y, ctx.z,
+                                      ctx.min_x, ctx.max_x, ctx.min_y, ctx.max_y, ctx.min_z, ctx.max_z);
+    const float trail = std::clamp(block.pulse_length, 0.08f, 0.55f);
+    auto hit = [&](float head) -> float {
+        const float delta = head - along;
+        if(delta < 0.0f || delta > trail) { return 0.0f; }
+        return 1.0f - (delta / trail);
+    };
+    float cover = hit(ctx.progress);
+    if(cover <= 0.001f)
+    {
+        const float h = Hash01((unsigned int)ctx.twinkle_seed * 2654435761u);
+        cover = hit(std::fmod(ctx.progress + h * 0.85f, 1.0f)) * 0.85f;
+    }
+    if(cover <= 0.001f) { return false; }
+    ctx.intensity *= cover;
+    ctx.color = SampleGradient(block, cover);
+    return true;
+}
+
+bool EvalNoiseOrPlasma(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float t = ctx.progress * 3.0f;
+    const float n = ValueNoise3(ctx.s.nx * 2.5f + t, ctx.s.ny * 2.5f - t * 0.6f, ctx.s.nz * 2.5f + t * 0.35f);
+    const float n2 = ValueNoise3(ctx.s.nx * 5.0f - t * 0.5f, ctx.s.ny * 5.0f + t * 0.4f, ctx.s.nz * 5.0f);
+    const float field = std::clamp(0.5f * n + 0.5f * n2, 0.0f, 1.0f);
+    ctx.intensity *= 0.35f + 0.65f * field;
+    ctx.color = SampleGradient(block, field);
+    return true;
+}
+
+bool EvalSnow(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float h = Hash01((unsigned int)ctx.twinkle_seed * 9743197u + 17u);
+    const float fall = std::fmod(ctx.progress + h, 1.0f);
+    const float flake_h = 1.0f - fall;
+    const float drift = 0.12f * std::sin(fall * 10.0f + h * 8.0f);
+    float plane = ctx.s.nx;
+    if(ctx.s.height == ctx.s.nx)
+    {
+        plane = (ctx.s.span_z >= ctx.s.span_y) ? ctx.s.nz : ctx.s.ny;
+    }
+    else if(ctx.s.height == ctx.s.ny)
+    {
+        plane = (ctx.s.span_x >= ctx.s.span_z) ? ctx.s.nx : ctx.s.nz;
+    }
+    else
+    {
+        plane = (ctx.s.span_x >= ctx.s.span_y) ? ctx.s.nx : ctx.s.ny;
+    }
+    const float fx = std::fmod(h + drift + 1.0f, 1.0f);
+    const float d = std::fabs(plane - fx) * 1.2f + std::fabs(ctx.s.height - flake_h);
+    if(d > 0.16f) { return false; }
+    ctx.intensity *= 1.0f - d / 0.16f;
+    ctx.color = SampleGradient(block, h);
+    return true;
+}
+
+bool EvalFire(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float rise = 1.0f - ctx.s.height;
+    const float flicker = ValueNoise3(ctx.s.nx * 4.0f, ctx.s.height * 3.0f + ctx.progress * 6.0f, ctx.s.nz * 4.0f);
+    const float heat = std::clamp(rise * (0.4f + 0.6f * flicker) + 0.08f * flicker, 0.0f, 1.0f);
+    if(heat < 0.08f) { return false; }
+    ctx.intensity *= heat;
+    ctx.color = SampleGradient(block, heat);
+    return true;
+}
+
+bool EvalBalls(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float rad = std::clamp(block.pulse_length * 0.5f, 0.1f, 0.35f);
+    float best = 1.0f;
+    for(int i = 0; i < 4; ++i)
+    {
+        const float ph = (float)i / 4.0f;
+        const float cx = 0.5f + 0.38f * std::sin((ctx.progress + ph) * 6.2831853f);
+        const float cy = 0.5f + 0.38f * std::cos((ctx.progress * 1.2f + ph) * 6.2831853f);
+        const float cz = 0.5f + 0.38f * std::sin((ctx.progress * 0.85f + ph * 1.7f) * 6.2831853f);
+        float ddx = ctx.s.nx - cx;
+        float ddy = ctx.s.ny - cy;
+        float ddz = ctx.s.nz - cz;
+        const float diag = std::max(1e-5f, std::sqrt(ctx.s.span_x * ctx.s.span_x + ctx.s.span_y * ctx.s.span_y + ctx.s.span_z * ctx.s.span_z));
+        const float eps = diag * 0.02f;
+        if(ctx.s.span_x <= eps) { ddx = 0.0f; }
+        if(ctx.s.span_y <= eps) { ddy = 0.0f; }
+        if(ctx.s.span_z <= eps) { ddz = 0.0f; }
+        best = std::min(best, std::sqrt(ddx * ddx + ddy * ddy + ddz * ddz));
+    }
+    if(best > rad) { return false; }
+    ctx.intensity *= 1.0f - best / rad;
+    ctx.color = SampleGradient(block, ctx.progress);
+    return true;
+}
+
+bool EvalBars(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float axis = SampleAxisPos(block, ctx.x, ctx.y, ctx.z,
+                                     ctx.min_x, ctx.max_x, ctx.min_y, ctx.max_y, ctx.min_z, ctx.max_z);
+    const int bars = 5;
+    const float pos = std::fmod(axis * (float)bars + ctx.progress * (float)bars + 1.0f, 1.0f);
+    if(pos > 0.62f) { return false; }
+    ctx.intensity *= 0.75f + 0.25f * (1.0f - pos / 0.62f);
+    ctx.color = SampleGradient(block, axis);
+    return true;
+}
+
+bool EvalBurst(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float edge = std::clamp(block.pulse_length, 0.06f, 0.45f);
+    const float front = ctx.progress * (1.0f + 2.0f * edge);
+    const float d = front - ctx.s.radius;
+    float cover = 0.0f;
+    if(d >= 0.0f && d <= edge)
+    {
+        cover = 1.0f - (d / edge);
+    }
+    else if(d < 0.0f && -d <= edge * 0.35f)
+    {
+        cover = 1.0f + (d / (edge * 0.35f));
+    }
+    if(ctx.progress < 0.2f)
+    {
+        cover = std::max(cover, (1.0f - ctx.progress / 0.2f) * (1.0f - std::clamp(ctx.s.radius, 0.0f, 1.0f)));
+    }
+    if(cover <= 0.001f) { return false; }
+    ctx.intensity *= cover;
+    ctx.color = SampleGradient(block, std::clamp(ctx.s.radius, 0.0f, 1.0f));
+    return true;
+}
+
+bool EvalWorldDefault(WorldCtx& ctx)
+{
+    float t = ctx.progress + ctx.s.nx * 0.25f + ctx.s.ny * 0.25f + ctx.s.nz * 0.25f;
+    t -= std::floor(t);
+    ctx.color = SampleGradient(*ctx.block, t);
+    return true;
+}
+
+WorldFn WorldFnFor(BlockType type)
+{
+    switch(type)
+    {
+        case BlockType::SphereWipe: return &EvalSphereWipe;
+        case BlockType::Orbit: return &EvalOrbit;
+        case BlockType::Ripple: return &EvalRipple;
+        case BlockType::Meteor: return &EvalMeteor;
+        case BlockType::Noise3D:
+        case BlockType::Plasma: return &EvalNoiseOrPlasma;
+        case BlockType::Snow: return &EvalSnow;
+        case BlockType::Fire: return &EvalFire;
+        case BlockType::Balls: return &EvalBalls;
+        case BlockType::Bars: return &EvalBars;
+        case BlockType::Burst: return &EvalBurst;
+        default: return &EvalWorldDefault;
+    }
+}
+
+} // namespace
+
 bool EvaluateBlockAtWorld(const Block& block,
                           int local_ms,
                           float x, float y, float z,
@@ -504,222 +734,45 @@ bool EvaluateBlockAtWorld(const Block& block,
         return false;
     }
 
-    const NormSample s = MakeNormSample(x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
-    float intensity = std::clamp(block.intensity, 0.0f, 1.0f);
-    RGBColor color = block.color;
-    const float progress = BlockProgress(block, local_ms);
-    const float dx = s.nx - 0.5f;
-    const float dy = s.ny - 0.5f;
-    const float dz = s.nz - 0.5f;
+    WorldCtx ctx;
+    ctx.block = &block;
+    ctx.local_ms = local_ms;
+    ctx.progress = BlockProgress(block, local_ms);
+    ctx.twinkle_seed = twinkle_seed;
+    ctx.x = x;
+    ctx.y = y;
+    ctx.z = z;
+    ctx.min_x = min_x;
+    ctx.max_x = max_x;
+    ctx.min_y = min_y;
+    ctx.max_y = max_y;
+    ctx.min_z = min_z;
+    ctx.max_z = max_z;
+    ctx.s = MakeNormSample(x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
+    ctx.dx = ctx.s.nx - 0.5f;
+    ctx.dy = ctx.s.ny - 0.5f;
+    ctx.dz = ctx.s.nz - 0.5f;
+    ctx.intensity = std::clamp(block.intensity, 0.0f, 1.0f);
+    ctx.color = block.color;
 
-    switch(block.type)
+    WorldFn fn = WorldFnFor(block.type);
+    if(!fn(ctx))
     {
-        case BlockType::SphereWipe:
-        {
-            const float edge = 0.12f;
-            const float front = progress * (1.0f + 2.0f * edge) - edge;
-            const float d = front - s.radius;
-            float cover = 0.0f;
-            if(d >= edge) { cover = 1.0f; }
-            else if(d > -edge) { cover = (d + edge) / (2.0f * edge); }
-            if(cover <= 0.001f) { return false; }
-            intensity *= cover;
-            color = SampleGradient(block, progress);
-            break;
-        }
-        case BlockType::Orbit:
-        {
-            float ux, uy, uz;
-            AxisUnitVector(block, &ux, &uy, &uz);
-            float rx = 0.0f, ry = 1.0f, rz = 0.0f;
-            if(std::fabs(uy) > 0.9f) { rx = 1.0f; ry = 0.0f; }
-            float tx = ry * uz - rz * uy;
-            float ty = rz * ux - rx * uz;
-            float tz = rx * uy - ry * ux;
-            float tlen = std::max(1e-6f, std::sqrt(tx * tx + ty * ty + tz * tz));
-            tx /= tlen; ty /= tlen; tz /= tlen;
-            float bx = uy * tz - uz * ty;
-            float by = uz * tx - ux * tz;
-            float bz = ux * ty - uy * tx;
-            const float u = dx * tx + dy * ty + dz * tz;
-            const float v = dx * bx + dy * by + dz * bz;
-            float ang = std::atan2(v, u) / (2.0f * 3.14159265358979323846f) + 0.5f;
-            ang -= std::floor(ang);
-            const float width = std::clamp(block.pulse_length, 0.06f, 0.5f);
-            float delta = ang - progress;
-            delta -= std::floor(delta + 0.5f);
-            const float lead = width * 0.25f;
-            const float trail = width;
-            float cover = 0.0f;
-            if(delta >= 0.0f && delta <= lead) { cover = 1.0f - (delta / lead); }
-            else if(delta < 0.0f && -delta <= trail) { cover = 1.0f + (delta / trail); }
-            cover *= 0.45f + 0.55f * (1.0f - std::clamp(s.radius, 0.0f, 1.0f) * 0.5f);
-            if(cover <= 0.001f) { return false; }
-            intensity *= cover;
-            color = SampleGradient(block, progress);
-            break;
-        }
-        case BlockType::Ripple:
-        {
-            const float band = std::clamp(block.pulse_length, 0.06f, 0.4f);
-            float cover = 0.0f;
-            const float wave = std::fabs(s.radius - progress);
-            if(wave <= band) { cover = 1.0f - (wave / band); }
-            const float wave2 = std::fabs(s.radius - std::fmod(progress + 0.5f, 1.0f));
-            if(wave2 <= band) { cover = std::max(cover, (1.0f - (wave2 / band)) * 0.75f); }
-            if(cover <= 0.001f) { return false; }
-            intensity *= cover;
-            color = SampleGradient(block, s.radius);
-            break;
-        }
-        case BlockType::Meteor:
-        {
-            const float along = SampleAxisPos(block, x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
-            const float trail = std::clamp(block.pulse_length, 0.08f, 0.55f);
-            auto hit = [&](float head) -> float {
-                const float delta = head - along;
-                if(delta < 0.0f || delta > trail) { return 0.0f; }
-                return 1.0f - (delta / trail);
-            };
-            float cover = hit(progress);
-            if(cover <= 0.001f)
-            {
-                const float h = Hash01((unsigned int)twinkle_seed * 2654435761u);
-                cover = hit(std::fmod(progress + h * 0.85f, 1.0f)) * 0.85f;
-            }
-            if(cover <= 0.001f) { return false; }
-            intensity *= cover;
-            color = SampleGradient(block, cover);
-            break;
-        }
-        case BlockType::Noise3D:
-        case BlockType::Plasma:
-        {
-            const float t = progress * 3.0f;
-            const float n = ValueNoise3(s.nx * 2.5f + t, s.ny * 2.5f - t * 0.6f, s.nz * 2.5f + t * 0.35f);
-            const float n2 = ValueNoise3(s.nx * 5.0f - t * 0.5f, s.ny * 5.0f + t * 0.4f, s.nz * 5.0f);
-            const float field = std::clamp(0.5f * n + 0.5f * n2, 0.0f, 1.0f);
-            intensity *= 0.35f + 0.65f * field;
-            color = SampleGradient(block, field);
-            break;
-        }
-        case BlockType::Snow:
-        {
-            const float h = Hash01((unsigned int)twinkle_seed * 9743197u + 17u);
-            const float fall = std::fmod(progress + h, 1.0f);
-            const float flake_h = 1.0f - fall;
-            const float drift = 0.12f * std::sin(fall * 10.0f + h * 8.0f);
-            // Spread across an axis that is not the fall (height) axis.
-            float plane = s.nx;
-            if(s.height == s.nx)
-            {
-                plane = (s.span_z >= s.span_y) ? s.nz : s.ny;
-            }
-            else if(s.height == s.ny)
-            {
-                plane = (s.span_x >= s.span_z) ? s.nx : s.nz;
-            }
-            else
-            {
-                plane = (s.span_x >= s.span_y) ? s.nx : s.ny;
-            }
-            const float fx = std::fmod(h + drift + 1.0f, 1.0f);
-            const float d = std::fabs(plane - fx) * 1.2f + std::fabs(s.height - flake_h);
-            if(d > 0.16f) { return false; }
-            intensity *= 1.0f - d / 0.16f;
-            color = SampleGradient(block, h);
-            break;
-        }
-        case BlockType::Fire:
-        {
-            const float rise = 1.0f - s.height;
-            const float flicker = ValueNoise3(s.nx * 4.0f, s.height * 3.0f + progress * 6.0f, s.nz * 4.0f);
-            const float heat = std::clamp(rise * (0.4f + 0.6f * flicker) + 0.08f * flicker, 0.0f, 1.0f);
-            if(heat < 0.08f) { return false; }
-            intensity *= heat;
-            color = SampleGradient(block, heat);
-            break;
-        }
-        case BlockType::Balls:
-        {
-            const float rad = std::clamp(block.pulse_length * 0.5f, 0.1f, 0.35f);
-            float best = 1.0f;
-            for(int i = 0; i < 4; ++i)
-            {
-                const float ph = (float)i / 4.0f;
-                const float cx = 0.5f + 0.38f * std::sin((progress + ph) * 6.2831853f);
-                const float cy = 0.5f + 0.38f * std::cos((progress * 1.2f + ph) * 6.2831853f);
-                const float cz = 0.5f + 0.38f * std::sin((progress * 0.85f + ph * 1.7f) * 6.2831853f);
-                float ddx = s.nx - cx;
-                float ddy = s.ny - cy;
-                float ddz = s.nz - cz;
-                const float diag = std::max(1e-5f, std::sqrt(s.span_x * s.span_x + s.span_y * s.span_y + s.span_z * s.span_z));
-                const float eps = diag * 0.02f;
-                if(s.span_x <= eps) { ddx = 0.0f; }
-                if(s.span_y <= eps) { ddy = 0.0f; }
-                if(s.span_z <= eps) { ddz = 0.0f; }
-                best = std::min(best, std::sqrt(ddx * ddx + ddy * ddy + ddz * ddz));
-            }
-            if(best > rad) { return false; }
-            intensity *= 1.0f - best / rad;
-            color = SampleGradient(block, progress);
-            break;
-        }
-        case BlockType::Bars:
-        {
-            const float axis = SampleAxisPos(block, x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
-            const int bars = 5;
-            const float pos = std::fmod(axis * (float)bars + progress * (float)bars + 1.0f, 1.0f);
-            if(pos > 0.62f) { return false; }
-            intensity *= 0.75f + 0.25f * (1.0f - pos / 0.62f);
-            color = SampleGradient(block, axis);
-            break;
-        }
-        case BlockType::Burst:
-        {
-            const float edge = std::clamp(block.pulse_length, 0.06f, 0.45f);
-            const float front = progress * (1.0f + 2.0f * edge);
-            const float d = front - s.radius;
-            float cover = 0.0f;
-            if(d >= 0.0f && d <= edge)
-            {
-                cover = 1.0f - (d / edge);
-            }
-            else if(d < 0.0f && -d <= edge * 0.35f)
-            {
-                cover = 1.0f + (d / (edge * 0.35f));
-            }
-            // Soft afterglow near center early in the burst.
-            if(progress < 0.2f)
-            {
-                cover = std::max(cover, (1.0f - progress / 0.2f) * (1.0f - std::clamp(s.radius, 0.0f, 1.0f)));
-            }
-            if(cover <= 0.001f) { return false; }
-            intensity *= cover;
-            color = SampleGradient(block, std::clamp(s.radius, 0.0f, 1.0f));
-            break;
-        }
-        default:
-        {
-            float t = progress + s.nx * 0.25f + s.ny * 0.25f + s.nz * 0.25f;
-            t -= std::floor(t);
-            color = SampleGradient(block, t);
-            break;
-        }
+        return false;
     }
 
     if(!block.intensity_curve.empty())
     {
-        intensity *= SampleCurve(block.intensity_curve, progress);
+        ctx.intensity *= SampleCurve(block.intensity_curve, ctx.progress);
     }
 
     if(out_color)
     {
-        *out_color = ScaleI(color, intensity);
+        *out_color = ScaleI(ctx.color, ctx.intensity);
     }
     if(out_intensity)
     {
-        *out_intensity = intensity;
+        *out_intensity = ctx.intensity;
     }
     return true;
 }
