@@ -25,4 +25,7 @@ std::vector<PackListEntry> ListPacks(const filesystem::path& dir);
 
 bool LoadPackByPath(const filesystem::path& path, Pack* out, std::string* error);
 
+/** Load first pack whose id matches (scans directory). */
+bool LoadPackById(const filesystem::path& dir, const std::string& id, Pack* out, std::string* error);
+
 } // namespace EffectPack

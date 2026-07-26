@@ -77,6 +77,7 @@ class OpenRGB3DSpatialTab : public QWidget
     friend class EffectLibraryPanel;
     friend class EffectStackPanel;
     friend class EffectPackPanel;
+    friend class EventBindingsPanel;
     friend class EffectPackEditorDialog;
     friend class ZonesPanel;
     friend class EffectGlobalSettingsPanel;

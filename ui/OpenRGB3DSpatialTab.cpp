@@ -9,6 +9,7 @@
 #include "EffectPackPanel.h"
 #include "EffectPacks/EffectPackApplier.h"
 #include "EffectStackPanel.h"
+#include "EventBindingsPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
 #include "SceneTransformPanel.h"
@@ -170,6 +171,10 @@ void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
     if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->effectPackPanel())
     {
         ui->objectCreatorTabPanel->effectPackPanel()->stopPreview();
+    }
+    if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->eventBindingsPanel())
+    {
+        ui->objectCreatorTabPanel->eventBindingsPanel()->stopAll();
     }
     if(viewport)
     {

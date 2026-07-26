@@ -1,6 +1,6 @@
 # Effect / Event Maker (design)
 
-Status: **in progress** — viewport-synced preview + timeline pack editor; event bindings next.
+Status: **in progress** — pack authoring solid; **event bindings v1** (Manual + Windows session lock/unlock).
 
 Captures the agreed direction: plugin-wide user-authored effect packs bound to event catalogs (games, Windows, manual, later media).
 
@@ -43,7 +43,9 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 - Pack `devices` lists scene controllers in scope (empty = whole scene).
 - Catalog categories: **Basic** | **Pixel** | **Volume** (toolbar and right-click share `EffectPackCatalog`).
 - Dual add UX: right-click Add effect, or drag from the effect toolbar; drag colors / gradients / intensity curves onto blocks.
-- Authoring entry points: **Object Creator** → Zone / Effect Pack (removed from the Run left column).
+- Authoring entry points: **Object Creator** → Zone / Effect Pack / **Event Bindings** (removed from the Run left column).
+- Bindings file: `{PluginRoot}/effect-bindings.json` (format `openrgb3d.effect_bindings` v1).
+- Event sources shown only for this OS/build: **Manual** always; **Windows** (`session_lock` / `session_unlock`) on Win32. Linux/macOS/game sources later.
 - Spatial sampling (`axis_space`):
   - **Device** (default on device / HW-zone / LED rows): per-controller local axes / AABB.
   - **Room** (default on All / scene zone): one shared **world** AABB across all LEDs in the target — Wipe, Ripple, Sphere Wipe, Fire, etc. continue across controllers using the 3D layout.
@@ -127,22 +129,47 @@ Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`4`).
 | `axis_yaw_deg` / `axis_pitch_deg` | Custom unit axis in the chosen space |
 | `intensity_curve` | Optional `{pos,value}` points 0…1 |
 
+## Event bindings (v1)
+
+```json
+{
+  "format": "openrgb3d.effect_bindings",
+  "version": 1,
+  "bindings": [
+    {
+      "id": "bind_…",
+      "enabled": true,
+      "source": "manual",
+      "event": "fire",
+      "pack_id": "desk_ripple"
+    }
+  ]
+}
+```
+
+| Source | Events | Platform |
+|--------|--------|----------|
+| `manual` | `fire`, `hold` | All |
+| `windows` | `session_lock`, `session_unlock` | Windows only |
+
+UI: Object Creator → Event Bindings (Add/Edit/Delete, enable checkbox, Fire / Hold / Stop). Foreign-OS bindings stay on disk but are hidden in the list.
+
 ## Runtime spine
 
 ```text
-Event catalog (game / Windows / manual / media)
-        ↓ binding table (default or user override)
+Event catalog (Manual / Windows / later games + Linux/macOS)
+        ↓ effect-bindings.json
 Effect pack (.oreffect.json)
-        ↓ player
+        ↓ BindingRuntime + pack player (priority order)
 LED frames over time → OpenRGB + 3D viewport (layout-aware)
 ```
 
 ## Build order
 
-1. Pack format + player (incl. ~60s + loop + priority).
-2. Effects library UI (create/preview/save with minimal tools).
-3. Bindings UI — Manual + at least one real source (Minecraft or Windows).
-4. Grow catalogs and authoring tools; media/VLC cues when packs are solid.
+1. Pack format + player (incl. ~60s + loop + priority). **done**
+2. Effects library UI (create/preview/save with minimal tools). **done**
+3. Bindings UI — Manual + Windows session lock/unlock. **in progress**
+4. Grow catalogs / Linux+macOS sources / Minecraft bindings / media cues.
 
 ## Non-goals for v1
 
@@ -161,6 +188,8 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 - `ui/EffectPackCatalog.h` — shared Basic/Pixel/Volume catalog
 - `ui/EffectPackPanel.*` — Object Creator → Effect Pack list + Preview/Stop / New / Edit
 - `ui/ZonesPanel.*` — Object Creator → Zone list + Create / Edit / Delete
+- `ui/EventBindingsPanel.*` — Object Creator → Event Bindings list + Fire/Hold/Stop
+- `Effects3D/EventBindings/*` — binding file, sources, BindingRuntime
 - `ui/EffectPackEditorDialog.*` — modeless editor
 - `ui/EffectPackTimelineWidget.*` — ruler / rows / blocks / playhead
 - `ui/EffectPackToolBar.*` — effect/color/gradient/curve strips

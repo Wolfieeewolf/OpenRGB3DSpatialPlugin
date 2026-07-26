@@ -102,4 +102,28 @@ bool LoadPackByPath(const filesystem::path& path, Pack* out, std::string* error)
     return LoadFromFile(path, out, error);
 }
 
+bool LoadPackById(const filesystem::path& dir, const std::string& id, Pack* out, std::string* error)
+{
+    if(id.empty() || !out)
+    {
+        if(error)
+        {
+            *error = "pack id is empty";
+        }
+        return false;
+    }
+    for(const PackListEntry& entry : ListPacks(dir))
+    {
+        if(entry.id == id)
+        {
+            return LoadFromFile(entry.path, out, error);
+        }
+    }
+    if(error)
+    {
+        *error = "pack not found: " + id;
+    }
+    return false;
+}
+
 } // namespace EffectPack

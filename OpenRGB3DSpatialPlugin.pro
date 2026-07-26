@@ -167,6 +167,12 @@ HEADERS += \
     Effects3D/EffectPacks/EffectPackPlayer.h \
     Effects3D/EffectPacks/EffectPackApplier.h \
     Effects3D/EffectPacks/EffectPackLibrary.h \
+    Effects3D/EventBindings/EventBinding.h \
+    Effects3D/EventBindings/EventSource.h \
+    Effects3D/EventBindings/ManualEventSource.h \
+    Effects3D/EventBindings/WindowsEventSource.h \
+    Effects3D/EventBindings/EventSourceRegistry.h \
+    Effects3D/EventBindings/BindingRuntime.h \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
@@ -191,6 +197,7 @@ HEADERS += \
     ui/EffectPackTimelineWidget.h \
     ui/EffectPackGradientBar.h \
     ui/EffectPackToolBar.h \
+    ui/EventBindingsPanel.h \
     ui/EffectStackPanel.h \
     ui/ZonesPanel.h \
     ui/EffectGlobalSettingsPanel.h \
@@ -335,6 +342,10 @@ SOURCES += \
     Effects3D/EffectPacks/EffectPackSpatial.cpp \
     Effects3D/EffectPacks/EffectPackApplier.cpp \
     Effects3D/EffectPacks/EffectPackLibrary.cpp \
+    Effects3D/EventBindings/EventBinding.cpp \
+    Effects3D/EventBindings/WindowsEventSource.cpp \
+    Effects3D/EventBindings/EventSourceRegistry.cpp \
+    Effects3D/EventBindings/BindingRuntime.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/BlockerGridOccluder.cpp \
@@ -355,6 +366,7 @@ SOURCES += \
     ui/ControllerListPanel.cpp \
     ui/EffectLibraryPanel.cpp \
     ui/EffectPackPanel.cpp \
+    ui/EventBindingsPanel.cpp \
     ui/EffectPackEditorDialog.cpp \
     ui/EffectPackTimelineWidget.cpp \
     ui/EffectPackGradientBar.cpp \
@@ -453,7 +465,7 @@ win32:CONFIG += QTPLUGIN
 win32:LIBS += \
     -lOle32 -lOleAut32 -lAvrt -lMmdevapi -lPropsys -luuid \
     -lgdi32 -luser32 -ld3d11 -ldxgi -ld3dcompiler \
-    -lws2_32 -lopengl32 -lglu32
+    -lws2_32 -lopengl32 -lglu32 -lWtsapi32
 
 win32:CONFIG(debug, debug|release): DESTDIR = debug
 win32:CONFIG(release, debug|release): DESTDIR = release
@@ -495,6 +507,7 @@ FORMS += \
     ui/forms/MediaTextureAmbienceBlock.ui \
     ui/forms/EffectLibraryPanel.ui \
     ui/forms/EffectPackPanel.ui \
+    ui/forms/EventBindingsPanel.ui \
     ui/forms/EffectStackPanel.ui \
     ui/forms/ZonesPanel.ui \
     ui/forms/EffectGlobalSettingsPanel.ui \

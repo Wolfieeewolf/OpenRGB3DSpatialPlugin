@@ -3,6 +3,7 @@
 #include "ObjectCreatorTabPanel.h"
 
 #include "EffectPackPanel.h"
+#include "EventBindingsPanel.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
 #include "ZonesPanel.h"
@@ -40,7 +41,7 @@ void ObjectCreatorTabPanel::applyVisualStyles()
     ui->displayListLabel->setFont(bold);
 
     ui->emptyHelpLabel->setText(QStringLiteral(
-        "Choose Custom Controller, Reference Point, Display Plane, Zone, or Effect Pack above."));
+        "Choose Custom Controller, Reference Point, Display Plane, Zone, Effect Pack, or Event Bindings above."));
     PluginUiApplyMutedSecondaryLabel(ui->emptyHelpLabel->label());
     QFont empty_font = ui->emptyHelpLabel->label()->font();
     empty_font.setItalic(true);
@@ -126,6 +127,10 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
     {
         ui->effectPackPanel->bindTab(tab);
     }
+    if(ui->eventBindingsPanel)
+    {
+        ui->eventBindingsPanel->bindTab(tab);
+    }
 
     connect(ui->objectTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ObjectCreatorTabPanel::onObjectTypeChanged);
@@ -167,6 +172,10 @@ void ObjectCreatorTabPanel::onObjectTypeChanged(int index)
     {
         ui->contentStack->setCurrentWidget(ui->effectPackPage);
     }
+    else if(index == 6)
+    {
+        ui->contentStack->setCurrentWidget(ui->eventBindingsPage);
+    }
 }
 
 void ObjectCreatorTabPanel::setObjectTypeIndex(int index)
@@ -206,6 +215,11 @@ void ObjectCreatorTabPanel::showEffectPackSection()
     setObjectTypeIndex(5);
 }
 
+void ObjectCreatorTabPanel::showEventBindingsSection()
+{
+    setObjectTypeIndex(6);
+}
+
 void ObjectCreatorTabPanel::onReferencePointListRowChanged(int list_row)
 {
     if(!host_tab_)
@@ -233,3 +247,4 @@ QPushButton* ObjectCreatorTabPanel::editDisplayPlaneButton() const { return ui->
 QPushButton* ObjectCreatorTabPanel::removeDisplayPlaneButton() const { return ui->removeDisplayPlaneButton; }
 ZonesPanel* ObjectCreatorTabPanel::zonesPanel() const { return ui->zonesPanel; }
 EffectPackPanel* ObjectCreatorTabPanel::effectPackPanel() const { return ui->effectPackPanel; }
+EventBindingsPanel* ObjectCreatorTabPanel::eventBindingsPanel() const { return ui->eventBindingsPanel; }

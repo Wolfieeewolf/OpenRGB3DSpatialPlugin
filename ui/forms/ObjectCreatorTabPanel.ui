@@ -66,6 +66,11 @@
        <string>Effect Pack</string>
       </property>
      </item>
+     <item>
+      <property name="text">
+       <string>Event Bindings</string>
+      </property>
+     </item>
     </widget>
    </item>
    <item>
@@ -462,6 +467,42 @@
    </item>
   </layout>
  </widget>
+
+<widget class="QWidget" name="eventBindingsPage">
+  <layout class="QVBoxLayout" name="eventBindingsPageLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="EventBindingsPanel" name="eventBindingsPanel"/>
+   </item>
+   <item>
+    <spacer name="eventBindingsPageSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
  
     </widget>
    </item>
@@ -496,6 +537,11 @@
    <class>EffectPackPanel</class>
    <extends>QGroupBox</extends>
    <header>EffectPackPanel.h</header>
+  </customwidget>
+  <customwidget>
+   <class>EventBindingsPanel</class>
+   <extends>QGroupBox</extends>
+   <header>EventBindingsPanel.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

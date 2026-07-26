@@ -10,6 +10,7 @@ class QListWidget;
 class QPushButton;
 class ZonesPanel;
 class EffectPackPanel;
+class EventBindingsPanel;
 
 namespace Ui {
 class ObjectCreatorTabPanel;
@@ -32,6 +33,7 @@ public:
     void showDisplayPlaneSection();
     void showZoneSection();
     void showEffectPackSection();
+    void showEventBindingsSection();
 
     QLabel*         statusLabel() const;
     QListWidget*    customControllersList() const;
@@ -51,6 +53,7 @@ public:
     QPushButton*    removeDisplayPlaneButton() const;
     ZonesPanel*     zonesPanel() const;
     EffectPackPanel* effectPackPanel() const;
+    EventBindingsPanel* eventBindingsPanel() const;
 
 private slots:
     void onObjectTypeChanged(int index);
