@@ -21,6 +21,7 @@ This project follows the same model as [OpenRGB](https://gitlab.com/CalcProgramm
 | Variable | Purpose |
 | -------- | ------- |
 | `GITHUB_MIRROR_TOKEN` | GitHub PAT with `contents: write` — pushes `main` and tags to the GitHub mirror |
+| `RUN_CI` | Set to `true` (pipeline variable) to auto-run Linux/Windows **build** jobs. Otherwise those jobs stay **manual** so shared-runner minutes are not spent on every push. Or use **Build → Pipelines → Run pipeline** (web) when you want a build. Primary packaged releases are GitHub Actions on `v*` tags (`.github/workflows/release.yml`). |
 
 Until the project namespace is finalized on `OpenRGBDevelopers`, the maintainer fork `wolfieeewolf1/OpenRGB3DSpatialPlugin` is also treated as upstream for automatic CI (see `.gitlab-ci.yml` rules).
 
