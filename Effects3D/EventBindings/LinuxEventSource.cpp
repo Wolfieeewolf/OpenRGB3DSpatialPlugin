@@ -4,6 +4,8 @@
 #include "PluginLog.h"
 
 #ifdef Q_OS_LINUX
+#include "LinuxLoginWatcher.h"
+
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>

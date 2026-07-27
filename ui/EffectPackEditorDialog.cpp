@@ -31,6 +31,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QTimer>
@@ -198,9 +199,11 @@ void EffectPackEditorDialog::buildUi()
     auto* palette_row = new QHBoxLayout();
     remove_block_button_ = new QPushButton(QStringLiteral("Remove effect"));
     remove_block_button_->setToolTip(QStringLiteral("Delete selected block (Delete / Backspace)"));
-    palette_row->addWidget(new QLabel(QStringLiteral("Drag effects from the toolbar · right-click timeline to add")));
-    palette_row->addStretch(1);
-    palette_row->addWidget(remove_block_button_);
+    auto* props_hint = new QLabel(QStringLiteral("Select a block to edit"));
+    props_hint->setWordWrap(true);
+    PluginUiApplyMutedSecondaryLabel(props_hint);
+    palette_row->addWidget(props_hint, 1);
+    palette_row->addWidget(remove_block_button_, 0, Qt::AlignTop);
     props_layout->addLayout(palette_row);
 
     auto* props_scroll = new QScrollArea();
@@ -212,7 +215,12 @@ void EffectPackEditorDialog::buildUi()
 
     auto* effect_sec = new EffectCollapsibleSection(QStringLiteral("Effect"));
     effect_sec->setExpanded(true);
+    effect_sec->bodyLayout()->setSpacing(6);
+    effect_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     auto* effect_form = new QFormLayout();
+    effect_form->setContentsMargins(0, 0, 0, 0);
+    effect_form->setSpacing(6);
+    effect_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     type_combo_ = new QComboBox();
     for(const EffectPackCatalog::Entry& e : EffectPackCatalog::AllEntries())
     {
@@ -230,13 +238,20 @@ void EffectPackEditorDialog::buildUi()
 
     auto* color_sec = new EffectCollapsibleSection(QStringLiteral("Color"));
     color_sec->setExpanded(true);
+    color_sec->bodyLayout()->setSpacing(6);
+    color_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     color_button_ = new QPushButton(QStringLiteral("Pick…"));
+    color_button_->setMinimumHeight(28);
+    color_button_->setMaximumHeight(28);
+    color_button_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     color_to_button_ = new QPushButton(QStringLiteral("Pick…"));
+    color_to_button_->setMinimumHeight(28);
+    color_to_button_->setMaximumHeight(28);
+    color_to_button_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     color_to_row_ = new QWidget();
     auto* color_to_layout = new QHBoxLayout(color_to_row_);
     color_to_layout->setContentsMargins(0, 0, 0, 0);
-    color_to_layout->addWidget(new QLabel(QStringLiteral("End")));
-    color_to_layout->addWidget(color_to_button_, 1);
+    color_to_layout->setSpacing(6);
     gradient_preset_ = new QComboBox();
     gradient_preset_->addItem(QStringLiteral("Preset…"), QString());
     for(const EffectPackCatalog::GradientEntry& g : EffectPackCatalog::GradientEntries())
@@ -245,18 +260,35 @@ void EffectPackEditorDialog::buildUi()
                                   QString::fromUtf8(g.id ? g.id : ""));
     }
     gradient_bar_ = new EffectPackGradientBar();
-    color_sec->bodyLayout()->addWidget(new QLabel(QStringLiteral("Primary")));
-    color_sec->bodyLayout()->addWidget(color_button_);
+    auto* color_form = new QFormLayout();
+    color_form->setContentsMargins(0, 0, 0, 0);
+    color_form->setSpacing(6);
+    color_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    color_form->addRow(QStringLiteral("Primary"), color_button_);
+    color_sec->bodyLayout()->addLayout(color_form);
+    // End color lives outside the form so hide/show keeps its label with the row.
+    color_to_layout->addWidget(new QLabel(QStringLiteral("End")));
+    color_to_layout->addWidget(color_to_button_, 1);
     color_sec->bodyLayout()->addWidget(color_to_row_);
-    color_sec->bodyLayout()->addWidget(gradient_preset_);
+    auto* preset_form = new QFormLayout();
+    preset_form->setContentsMargins(0, 0, 0, 0);
+    preset_form->setSpacing(6);
+    preset_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    preset_form->addRow(QStringLiteral("Preset"), gradient_preset_);
+    color_sec->bodyLayout()->addLayout(preset_form);
     color_sec->bodyLayout()->addWidget(new QLabel(QStringLiteral("Color gradient")));
     color_sec->bodyLayout()->addWidget(gradient_bar_);
-    color_sec->bodyLayout()->addWidget(new QLabel(
-        QStringLiteral("Drag stops · click bar to add · double-click recolour · right-click remove")));
+    auto* grad_help = new QLabel(
+        QStringLiteral("Drag stops · click bar to add · double-click recolour · right-click remove"));
+    grad_help->setWordWrap(true);
+    PluginUiApplyMutedSecondaryLabel(grad_help);
+    color_sec->bodyLayout()->addWidget(grad_help);
     props_inner_layout->addWidget(color_sec);
 
     auto* bright_sec = new EffectCollapsibleSection(QStringLiteral("Brightness"));
     bright_sec->setExpanded(true);
+    bright_sec->bodyLayout()->setSpacing(6);
+    bright_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     intensity_spin_ = new QSpinBox();
     intensity_spin_->setRange(1, 100);
     intensity_spin_->setValue(100);
@@ -264,6 +296,9 @@ void EffectPackEditorDialog::buildUi()
     min_intensity_spin_->setRange(0, 100);
     min_intensity_spin_->setValue(15);
     auto* bright_form = new QFormLayout();
+    bright_form->setContentsMargins(0, 0, 0, 0);
+    bright_form->setSpacing(6);
+    bright_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     bright_form->addRow(QStringLiteral("Intensity %"), intensity_spin_);
     min_intensity_row_ = new QWidget();
     auto* min_row_layout = new QHBoxLayout(min_intensity_row_);
@@ -276,6 +311,8 @@ void EffectPackEditorDialog::buildUi()
 
     direction_section_ = new EffectCollapsibleSection(QStringLiteral("Direction"));
     static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(true);
+    static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setSpacing(6);
+    static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     direction_combo_ = new QComboBox();
     auto add_dir = [&](const QString& label, EffectPack::Direction d, const QString& tip) {
         direction_combo_->addItem(label, (int)d);
@@ -320,6 +357,9 @@ void EffectPackEditorDialog::buildUi()
     axis_pitch_spin_->setRange(-90.0, 90.0);
     axis_pitch_spin_->setSuffix(QStringLiteral("°"));
     auto* dir_form = new QFormLayout();
+    dir_form->setContentsMargins(0, 0, 0, 0);
+    dir_form->setSpacing(6);
+    dir_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     dir_form->addRow(QStringLiteral("Space"), axis_space_combo_);
     dir_form->addRow(QStringLiteral("Axis"), axis_mode_combo_);
     dir_form->addRow(QStringLiteral("Direction"), direction_combo_);
@@ -372,14 +412,18 @@ void EffectPackEditorDialog::buildUi()
     static_cast<EffectCollapsibleSection*>(pulse_section_)->bodyLayout()->addLayout(pulse_form);
     props_inner_layout->addWidget(pulse_section_);
 
+    props_inner_layout->setSpacing(8);
     props_inner_layout->addStretch(1);
     props_scroll->setWidget(props_inner);
+    props_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     props_layout->addWidget(props_scroll, 1);
-    props_wrap->setMinimumWidth(280);
+    props_wrap->setMinimumWidth(300);
+    props_wrap->setMaximumWidth(420);
     splitter->addWidget(props_wrap);
 
     splitter->setStretchFactor(0, 1);
     splitter->setStretchFactor(1, 0);
+    splitter->setSizes({900, 340});
     root->addWidget(splitter, 1);
 
     status_label_ = new QLabel(QStringLiteral("Idle"));

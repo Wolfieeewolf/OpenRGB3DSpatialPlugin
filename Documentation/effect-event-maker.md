@@ -212,7 +212,8 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 4. Linux + macOS OS sources. **done**
 5. Production clean: event edges, LogManager tracing, CONTRIBUTING chrome/legacy. **done**
 6. Structural split of editor/timeline/pack eval mega-files. **done** (Pass 1)
-7. Later: block-eval dispatcher table; Minecraft bindings / media cues / WinRT toasts / Discord.
+7. Pack-eval dispatcher + EffectPackApplier peel. **done**
+8. Later: Minecraft bindings / media cues / WinRT toasts / Discord.
 
 ## Non-goals for v1
 
@@ -229,7 +230,7 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 - `Effects3D/EffectPacks/EffectPackExamples.cpp` — seed packs
 - `Effects3D/EffectPacks/EffectPackSpatial.cpp` — curves, world/volume evaluate
 - `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock
-- `Effects3D/EffectPacks/EffectPackApplier.*` — hardware + viewport apply
+- `Effects3D/EffectPacks/EffectPackApplier*.cpp` — hardware + viewport apply (frame / match / spatial)
 - `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/`
 - `ui/EffectPackCatalog.h` — shared Basic/Pixel/Volume catalog
 - `ui/EffectPackPanel.*` — Object Creator → Effect Pack list + Preview/Stop / New / Edit

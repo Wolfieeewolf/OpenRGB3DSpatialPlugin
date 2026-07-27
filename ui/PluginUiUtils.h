@@ -264,8 +264,21 @@ inline void PluginUiApplyPrimaryButton(QPushButton* btn)
 inline void PluginUiSetRgbSwatchButton(QPushButton* btn, int r, int g, int b)
 {
     if(!btn) return;
-    int w = btn->maximumWidth() > 0 ? btn->maximumWidth() : 40;
-    int h = btn->maximumHeight() > 0 ? btn->maximumHeight() : 30;
+    // maximumWidth/Height default to QWIDGETSIZE_MAX — never treat that as a pixel size
+    // (pack-editor color buttons used to explode the props column with huge icons).
+    auto resolve = [](int max_v, int min_v, int fallback) -> int {
+        if(max_v > 0 && max_v < QWIDGETSIZE_MAX)
+        {
+            return max_v;
+        }
+        if(min_v > 0)
+        {
+            return min_v;
+        }
+        return fallback;
+    };
+    int w = resolve(btn->maximumWidth(), btn->minimumWidth(), 40);
+    int h = resolve(btn->maximumHeight(), btn->minimumHeight(), 30);
     w = std::max(4, w - 2);
     h = std::max(4, h - 2);
     QPixmap pm(w, h);

@@ -23,12 +23,14 @@
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
@@ -634,8 +636,13 @@ void EffectPackEditorDialog::setColorButton(QPushButton* button, RGBColor color)
         return;
     }
     button->setProperty("rgbColor", (uint)color);
-    PluginUiSetRgbSwatchButton(button, RGBGetRValue(color), RGBGetGValue(color), RGBGetBValue(color));
-    button->setText(RgbToQColor(color).name().toUpper());
+    // Compact leading swatch + hex label (do not use full-button swatch sizing).
+    const QColor qc = RgbToQColor(color);
+    QPixmap pm(22, 16);
+    pm.fill(qc);
+    button->setIcon(QIcon(pm));
+    button->setIconSize(QSize(22, 16));
+    button->setText(qc.name().toUpper());
 }
 
 RGBColor EffectPackEditorDialog::colorFromButton(QPushButton* button) const

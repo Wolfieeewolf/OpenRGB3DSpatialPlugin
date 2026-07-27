@@ -166,6 +166,7 @@ HEADERS += \
     Effects3D/EffectPacks/EffectPack.h \
     Effects3D/EffectPacks/EffectPackPlayer.h \
     Effects3D/EffectPacks/EffectPackApplier.h \
+    Effects3D/EffectPacks/EffectPackApplierDetail.h \
     Effects3D/EffectPacks/EffectPackLibrary.h \
     Effects3D/EventBindings/EventBinding.h \
     Effects3D/EventBindings/EventSource.h \
@@ -346,6 +347,8 @@ SOURCES += \
     Effects3D/EffectPacks/EffectPackExamples.cpp \
     Effects3D/EffectPacks/EffectPackSpatial.cpp \
     Effects3D/EffectPacks/EffectPackApplier.cpp \
+    Effects3D/EffectPacks/EffectPackApplierMatch.cpp \
+    Effects3D/EffectPacks/EffectPackApplierSpatial.cpp \
     Effects3D/EffectPacks/EffectPackLibrary.cpp \
     Effects3D/EventBindings/EventBinding.cpp \
     Effects3D/EventBindings/WindowsEventSource.cpp \
@@ -561,6 +564,8 @@ FORMS += \
 
 unix:!macx {
     QT += dbus
+    # Q_OBJECT helper — only moc on Linux (header is #ifdef Q_OS_LINUX).
+    HEADERS += Effects3D/EventBindings/LinuxLoginWatcher.h
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/
