@@ -16,8 +16,10 @@ QSurfaceFormat BuildSurfaceFormat()
     fmt.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     fmt.setSwapInterval(1);
     fmt.setRenderableType(QSurfaceFormat::OpenGL);
+    // Phase 1 (OpenGL 4.1 migration): Compatibility keeps fixed-function while we
+    // migrate draws/picking. Flip to CoreProfile only after legacy APIs are gone.
     fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
-    fmt.setVersion(2, 1);
+    fmt.setVersion(4, 1);
     return fmt;
 }
 

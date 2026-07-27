@@ -19,6 +19,7 @@
 #include "viewport/ViewportGLIncludes.h"
 #include "VirtualReferencePoint3D.h"
 #include "ScreenCaptureManager.h"
+#include "PluginLog.h"
 
 #ifdef near
 #undef near
@@ -662,6 +663,23 @@ void LEDViewport3D::NotifyControllerTransformChanged()
 void LEDViewport3D::initializeGL()
 {
     initializeOpenGLFunctions();
+
+    {
+        const QSurfaceFormat req = format();
+        const char* gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        const char* gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        const char* gl_vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const char* profile =
+            (req.profile() == QSurfaceFormat::CoreProfile) ? "Core" :
+            (req.profile() == QSurfaceFormat::CompatibilityProfile) ? "Compatibility" : "NoProfile";
+        LOG_INFO("[3DSpatial] Viewport GL requested %d.%d %s; GL_VERSION=\"%s\" GL_RENDERER=\"%s\" GL_VENDOR=\"%s\"",
+                 req.majorVersion(),
+                 req.minorVersion(),
+                 profile,
+                 gl_version ? gl_version : "(null)",
+                 gl_renderer ? gl_renderer : "(null)",
+                 gl_vendor ? gl_vendor : "(null)");
+    }
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
