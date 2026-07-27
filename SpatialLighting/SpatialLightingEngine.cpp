@@ -431,14 +431,7 @@ static Vec3 ControllerLocalToWorld(const ::ControllerTransform* ctrl,
 
 static Vector3D ControllerLocalCenterOffset(const ::ControllerTransform* ctrl)
 {
-    Vector3D min_bounds{};
-    Vector3D max_bounds{};
-    ControllerLayout3D::CalculateControllerLocalBounds(ctrl, min_bounds, max_bounds);
-    return {
-        (min_bounds.x + max_bounds.x) * 0.5f,
-        (min_bounds.y + max_bounds.y) * 0.5f,
-        (min_bounds.z + max_bounds.z) * 0.5f,
-    };
+    return ControllerLayout3D::GetLedLocalCenter(ctrl);
 }
 
 static void PushControllerAabbFromPoints(std::vector<OccluderAabb>& out,

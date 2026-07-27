@@ -10,12 +10,22 @@
 
 namespace
 {
+void PushPosColor(std::vector<float>& out, float x, float y, float z, float r, float g, float b)
+{
+    out.push_back(x);
+    out.push_back(y);
+    out.push_back(z);
+    out.push_back(r);
+    out.push_back(g);
+    out.push_back(b);
+}
+
 void meshAddLine(GizmoDrawMesh& mesh, float width, const float color[3],
                  float x0, float y0, float z0, float x1, float y1, float z1)
 {
     GizmoDrawMesh::LineBatch& batch = mesh.lineBatchForWidth(width);
-    batch.positions.insert(batch.positions.end(), {x0, y0, z0, x1, y1, z1});
-    batch.colors.insert(batch.colors.end(), {color[0], color[1], color[2], color[0], color[1], color[2]});
+    PushPosColor(batch.interleaved, x0, y0, z0, color[0], color[1], color[2]);
+    PushPosColor(batch.interleaved, x1, y1, z1, color[0], color[1], color[2]);
 }
 
 void meshAddTriangle(GizmoDrawMesh& mesh, const float color[3],
@@ -23,11 +33,9 @@ void meshAddTriangle(GizmoDrawMesh& mesh, const float color[3],
                      float x1, float y1, float z1,
                      float x2, float y2, float z2)
 {
-    mesh.triangle_positions.insert(mesh.triangle_positions.end(), {x0, y0, z0, x1, y1, z1, x2, y2, z2});
-    mesh.triangle_colors.insert(mesh.triangle_colors.end(),
-                               {color[0], color[1], color[2],
-                                color[0], color[1], color[2],
-                                color[0], color[1], color[2]});
+    PushPosColor(mesh.triangle_interleaved, x0, y0, z0, color[0], color[1], color[2]);
+    PushPosColor(mesh.triangle_interleaved, x1, y1, z1, color[0], color[1], color[2]);
+    PushPosColor(mesh.triangle_interleaved, x2, y2, z2, color[0], color[1], color[2]);
 }
 
 void meshAddQuad(GizmoDrawMesh& mesh, const float color[3],
@@ -94,8 +102,7 @@ void meshAddSphere(GizmoDrawMesh& mesh, const float color[3], float cx, float cy
 void GizmoDrawMesh::clear()
 {
     line_batches.clear();
-    triangle_positions.clear();
-    triangle_colors.clear();
+    triangle_interleaved.clear();
 }
 
 GizmoDrawMesh::LineBatch& GizmoDrawMesh::lineBatchForWidth(float width)
@@ -138,25 +145,28 @@ void Gizmo3D::buildDrawMesh(GizmoDrawMesh& mesh) const
 void Gizmo3D::appendMoveGizmoMesh(GizmoDrawMesh& mesh) const
 {
     const GizmoAxis hl = dragging ? selected_axis : hover_axis;
+    const float tip = gizmo_size * 0.22f;
+    const float tip_w = gizmo_size * 0.10f;
+    const float line_w = 6.0f;
 
     auto axisColor = [&](GizmoAxis axis, const float base[3]) -> const float* {
         return (hl == axis) ? color_highlight : base;
     };
 
     const float* color = axisColor(GIZMO_AXIS_X, color_x_axis);
-    meshAddLine(mesh, 4.0f, color, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, 0.0f);
-    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - 0.3f, 0.15f, 0.0f, gizmo_size - 0.3f, -0.15f, 0.0f);
-    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - 0.3f, 0.0f, 0.15f, gizmo_size - 0.3f, 0.0f, -0.15f);
+    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, 0.0f);
+    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, tip_w, 0.0f, gizmo_size - tip, -tip_w, 0.0f);
+    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, 0.0f, tip_w, gizmo_size - tip, 0.0f, -tip_w);
 
     color = axisColor(GIZMO_AXIS_Y, color_y_axis);
-    meshAddLine(mesh, 4.0f, color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
-    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, 0.15f, gizmo_size - 0.3f, 0.0f, -0.15f, gizmo_size - 0.3f, 0.0f);
-    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, 0.0f, gizmo_size - 0.3f, 0.15f, 0.0f, gizmo_size - 0.3f, -0.15f);
+    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
+    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, tip_w, gizmo_size - tip, 0.0f, -tip_w, gizmo_size - tip, 0.0f);
+    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, tip_w, 0.0f, gizmo_size - tip, -tip_w);
 
     color = axisColor(GIZMO_AXIS_Z, color_z_axis);
-    meshAddLine(mesh, 4.0f, color, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size);
-    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, 0.15f, 0.0f, gizmo_size - 0.3f, -0.15f, 0.0f, gizmo_size - 0.3f);
-    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, 0.0f, 0.15f, gizmo_size - 0.3f, 0.0f, -0.15f, gizmo_size - 0.3f);
+    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size);
+    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, tip_w, 0.0f, gizmo_size - tip, -tip_w, 0.0f, gizmo_size - tip);
+    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, 0.0f, tip_w, gizmo_size - tip, 0.0f, -tip_w, gizmo_size - tip);
 
     const float orange[3] = {1.0f, 0.5f, 0.0f};
     color = axisColor(GIZMO_AXIS_CENTER, orange);
@@ -165,13 +175,13 @@ void Gizmo3D::appendMoveGizmoMesh(GizmoDrawMesh& mesh) const
 
 void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
 {
-    const float handle_radius = 0.15f;
+    const float handle_radius = gizmo_size * 0.10f;
     const GizmoAxis hl = dragging ? selected_axis : hover_axis;
     const int ring_segments = 33;
 
     auto drawRingX = [&]() {
         const float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
-        const float width = (hl == GIZMO_AXIS_X) ? 6.0f : 3.0f;
+        const float width = (hl == GIZMO_AXIS_X) ? 7.0f : 4.0f;
         for(int i = 0; i < ring_segments - 1; i++)
         {
             const float a0 = (i / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
@@ -189,7 +199,7 @@ void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
 
     auto drawRingY = [&]() {
         const float* color = (hl == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
-        const float width = (hl == GIZMO_AXIS_Y) ? 6.0f : 3.0f;
+        const float width = (hl == GIZMO_AXIS_Y) ? 7.0f : 4.0f;
         for(int i = 0; i < ring_segments - 1; i++)
         {
             const float a0 = (i / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
@@ -207,7 +217,7 @@ void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
 
     auto drawRingZ = [&]() {
         const float* color = (hl == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
-        const float width = (hl == GIZMO_AXIS_Z) ? 6.0f : 3.0f;
+        const float width = (hl == GIZMO_AXIS_Z) ? 7.0f : 4.0f;
         for(int i = 0; i < ring_segments - 1; i++)
         {
             const float a0 = (i / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
@@ -232,8 +242,22 @@ void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
     {
         const float arc_radius = gizmo_size * 1.12f;
         const float start = rot_drag_start_angle;
+        /* Accum is wrapped to (-360, 360]; arc shows at most one full turn. */
         const float sweep = rot_drag_accum_degrees * ((float)M_PI / 180.0f);
-        const int segments = 40;
+        const float abs_sweep = fabsf(sweep);
+        int segments = (int)lroundf(abs_sweep / ((float)M_PI / 20.0f));
+        if(segments < 8)
+        {
+            segments = 8;
+        }
+        if(segments > 48)
+        {
+            segments = 48;
+        }
+        if(abs_sweep < 1e-4f)
+        {
+            segments = 0;
+        }
         const float white[3] = {1.0f, 1.0f, 1.0f};
         for(int i = 0; i < segments; i++)
         {
@@ -282,9 +306,9 @@ void Gizmo3D::appendFreeroamGizmoMesh(GizmoDrawMesh& mesh) const
     const GizmoAxis hl = dragging ? selected_axis : hover_axis;
     const float purple[3] = {0.5f, 0.0f, 1.0f};
     const float* stick_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : purple;
-    meshAddLine(mesh, 5.0f, stick_color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
+    meshAddLine(mesh, 6.0f, stick_color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
 
-    const float cube_size = 0.3f;
+    const float cube_size = gizmo_size * 0.12f;
     const float stick_height = gizmo_size;
     const float orange[3] = {1.0f, 0.5f, 0.0f};
     const float* center_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;

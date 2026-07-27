@@ -327,16 +327,16 @@ void EffectPackEditorDialog::buildUi()
     add_dir(QStringLiteral("Down"), EffectPack::Direction::Down,
             QStringLiteral("Room −Y. Flat boards fall back to depth (Z), not Left/Right."));
     add_dir(QStringLiteral("Forward"), EffectPack::Direction::Forward,
-            QStringLiteral("Room +Z (floor depth). Spacebar ↔ F-keys on a desk keyboard."));
+            QStringLiteral("Toward Front wall (Z=0 / room −Z). Wipe: Back → Front."));
     add_dir(QStringLiteral("Back"), EffectPack::Direction::Back,
-            QStringLiteral("Room −Z."));
+            QStringLiteral("Toward Back wall (+Z). Wipe: Front → Back."));
     direction_combo_->insertSeparator(direction_combo_->count());
-    add_dir(QStringLiteral("+X"), EffectPack::Direction::PosX, QStringLiteral("Explicit room +X"));
-    add_dir(QStringLiteral("−X"), EffectPack::Direction::NegX, QStringLiteral("Explicit room −X"));
-    add_dir(QStringLiteral("+Y"), EffectPack::Direction::PosY, QStringLiteral("Explicit room +Y (up)"));
-    add_dir(QStringLiteral("−Y"), EffectPack::Direction::NegY, QStringLiteral("Explicit room −Y (down)"));
-    add_dir(QStringLiteral("+Z"), EffectPack::Direction::PosZ, QStringLiteral("Explicit room +Z"));
-    add_dir(QStringLiteral("−Z"), EffectPack::Direction::NegZ, QStringLiteral("Explicit room −Z"));
+    add_dir(QStringLiteral("+X"), EffectPack::Direction::PosX, QStringLiteral("Explicit room +X (toward Right wall)"));
+    add_dir(QStringLiteral("−X"), EffectPack::Direction::NegX, QStringLiteral("Explicit room −X (toward Left wall)"));
+    add_dir(QStringLiteral("+Y"), EffectPack::Direction::PosY, QStringLiteral("Explicit room +Y (toward Ceiling)"));
+    add_dir(QStringLiteral("−Y"), EffectPack::Direction::NegY, QStringLiteral("Explicit room −Y (toward Floor)"));
+    add_dir(QStringLiteral("+Z"), EffectPack::Direction::PosZ, QStringLiteral("Explicit room +Z (toward Back wall)"));
+    add_dir(QStringLiteral("−Z"), EffectPack::Direction::NegZ, QStringLiteral("Explicit room −Z (toward Front wall)"));
     direction_combo_->setToolTip(
         QStringLiteral("Travel / spin axis. With Space=Device this follows the controller orientation from the viewport."));
     axis_space_combo_ = new QComboBox();

@@ -240,7 +240,10 @@ HEADERS += \
     ui/Gizmo3D.h \
     ui/viewport/ViewportMath.h \
     ui/viewport/ViewportGLFormat.h \
-    ui/viewport/ViewportGLIncludes.h \
+    ui/viewport/GlProgram.h \
+    ui/viewport/MeshBatch.h \
+    ui/viewport/MeshGeometry.h \
+    ui/viewport/ViewportShaders.h \
     ui/CaptureZonesWidget.h \
     ui/PluginUiUtils.h \
     Effects3D/EffectStratumBlend.h \
@@ -406,7 +409,10 @@ SOURCES += \
     ui/OpenRGB3DSpatialTab_EffectsProfiles.cpp \
     ui/LEDViewport3D.cpp \
     ui/LEDViewport3D_Input.cpp \
+    ui/LEDViewport3D_Camera.cpp \
     ui/LEDViewport3D_Draw.cpp \
+    ui/LEDViewport3D_Controllers.cpp \
+    ui/LEDViewport3D_SceneObjects.cpp \
     ui/LEDViewport3D_DisplayPlanes.cpp \
     ui/CustomControllerDialog.cpp \
     ui/CustomControllerDialog_Grid.cpp \
@@ -428,6 +434,10 @@ SOURCES += \
     ui/Gizmo3D_Mesh.cpp \
     ui/viewport/ViewportMath.cpp \
     ui/viewport/ViewportGLFormat.cpp \
+    ui/viewport/GlProgram.cpp \
+    ui/viewport/MeshBatch.cpp \
+    ui/viewport/MeshGeometry.cpp \
+    ui/viewport/ViewportShaders.cpp \
     ui/CaptureZonesWidget.cpp \
     ui/widgets/StratumBandPanel.cpp \
     ui/widgets/StripKernelColormapPanel.cpp \
@@ -479,7 +489,7 @@ win32:CONFIG += QTPLUGIN
 win32:LIBS += \
     -lOle32 -lOleAut32 -lAvrt -lMmdevapi -lPropsys -luuid \
     -lgdi32 -luser32 -ld3d11 -ldxgi -ld3dcompiler \
-    -lws2_32 -lopengl32 -lglu32 -lWtsapi32
+    -lws2_32 -lopengl32 -lWtsapi32
 
 win32:CONFIG(debug, debug|release): DESTDIR = debug
 win32:CONFIG(release, debug|release): DESTDIR = release
@@ -564,13 +574,13 @@ FORMS += \
 
 unix:!macx {
     QT += dbus
-    # Q_OBJECT helper — only moc on Linux (header is #ifdef Q_OS_LINUX).
+    # Q_OBJECT helper - only moc on Linux (header is #ifdef Q_OS_LINUX).
     HEADERS += Effects3D/EventBindings/LinuxLoginWatcher.h
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/
     INSTALLS += target
-    LIBS += -lGL -lGLU
+    LIBS += -lGL
 }
 
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15

@@ -4,7 +4,7 @@
 #define LEDVIEWPORT3D_H
 
 #include <QOpenGLWidget>
-#include <QOpenGLFunctions>
+#include <QOpenGLFunctions_4_1_Core>
 #include <QPointF>
 #include <QString>
 #include <QTimer>
@@ -23,6 +23,8 @@
 #include "VirtualController3D.h"
 #include "DisplayPlane3D.h"
 #include "viewport/ViewportMath.h"
+#include "viewport/GlProgram.h"
+#include "viewport/MeshBatch.h"
 
 class QFocusEvent;
 class QHideEvent;
@@ -35,7 +37,7 @@ class QShortcut;
 class QWheelEvent;
 class QWidget;
 
-class LEDViewport3D : public QOpenGLWidget, protected QOpenGLFunctions
+class LEDViewport3D : public QOpenGLWidget, protected QOpenGLFunctions_4_1_Core
 {
     Q_OBJECT
 
@@ -193,9 +195,20 @@ private:
     ViewportMat4 roomTurntableMatrix() const;
     bool buildPickRay(int win_x, int win_y, Ray3D& ray);
     bool pickRoomVolume(const Ray3D& ray);
-    void pushRoomTurntableGl() const;
     void DrawRoomViewportSelection();
-    void fillRoomViewportSelectionLineBuffers(std::vector<float>& positions, std::vector<float>& colors) const;
+    void drawUnlitBatch(const MeshBatch& batch,
+                        MeshBatch::Primitive primitive,
+                        float line_width,
+                        float alpha,
+                        const ViewportMat4* model = nullptr);
+    void drawUnlitPoints(const MeshBatch& batch,
+                         float point_size,
+                         float alpha,
+                         const ViewportMat4& model);
+    void drawTexturedBatch(const MeshBatch& batch,
+                           unsigned int texture_id,
+                           float alpha,
+                           const ViewportMat4* model = nullptr);
     void applyGizmoMoveMode();
     void applyGizmoRotateMode();
     void applyGizmoFreeroamMode();
@@ -204,18 +217,26 @@ private:
     GridExtents GetRoomExtents() const;
     void DrawGrid();
     void DrawReferencePoints();
+    void drawGizmo();
+    void drawGizmoMeshPass(const GizmoDrawMesh& mesh, const ViewportMat4& model);
+    void syncGizmoScreenScale();
     void DrawAxes();
-    void DrawAxisLabels(const float modelview[16], const float projection[16], const int viewport[4]);
     void paintRoomGuideLabels(QPainter& painter,
-                              const GLdouble modelview[16],
-                              const GLdouble projection[16],
-                              const GLint viewport[4]) const;
+                              const float modelview[16],
+                              const float projection[16],
+                              const int viewport[4]) const;
+    void paintRotateReadout(QPainter& painter,
+                            const float modelview[16],
+                            const float projection[16],
+                            const int viewport[4]) const;
+    void paintGizmoModeToast(QPainter& painter) const;
     int viewportFramebufferWidth(int logical_w) const;
     int viewportFramebufferHeight(int logical_h) const;
     void paintViewportText2D();
-    void paintViewportLabelsAfterScene();
     bool ensureGlCurrent() const;
-    void capturePickMatricesFromGl();
+    ViewportFrame BuildViewportFrame() const;
+    void syncPickMatricesFromFrame(const ViewportFrame& frame);
+    /** Rebuild pick caches from CPU matrices (no glGet). */
     void computePickMatricesFallback();
     /** Camera view only (no room turntable) — pan/orbit axes. */
     void loadPickMatrices(float modelview[16], float projection[16], int viewport[4]);
@@ -223,10 +244,13 @@ private:
     void loadScenePickMatrices(float modelview[16], float projection[16], int viewport[4]);
     void paintGlScene();
     void prepareForQtPainterInPaintGl();
+    void initViewportShaderPrograms();
+    void destroyViewportGlResources();
+    void abandonViewportGlHandles();
     size_t populateLedDrawBuffers(ControllerTransform* ctrl);
     void RebuildFloorGridCache(const GridExtents& extents);
     void DrawControllers();
-    void DrawLEDs(ControllerTransform* ctrl);
+    void DrawLEDs(ControllerTransform* ctrl, const ViewportMat4& model);
     void DrawUserFigure();
     void DrawRoomBoundary();
     void DrawRoomGridOverlay();
@@ -251,9 +275,6 @@ private:
     void CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds);
     Vector3D GetControllerCenter(ControllerTransform* ctrl);
     Vector3D GetControllerSize(ControllerTransform* ctrl);
-
-    bool IsControllerAboveFloor(ControllerTransform* ctrl);
-    float GetControllerMinY(ControllerTransform* ctrl);
 
     Vector3D TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform);
 
@@ -287,6 +308,7 @@ private:
     std::vector<RGBColor>                   room_grid_color_buffer;
     std::function<RGBColor(float, float, float)> room_grid_color_callback;
     std::vector<float>                      room_grid_overlay_positions;
+    std::vector<float>                      room_grid_overlay_interleaved_;
     std::vector<float>                      room_grid_overlay_colors;
     int                                     room_grid_overlay_last_nx;
     int                                     room_grid_overlay_last_ny;
@@ -341,12 +363,33 @@ private:
     bool    viewport_keyboard_shortcuts_installed_ = false;
     bool    viewport_paint_enabled_ = false;
 
+    GlProgram gl_prog_unlit_color_;
+    GlProgram gl_prog_unlit_point_;
+    GlProgram gl_prog_textured_unlit_;
+    bool      viewport_shader_programs_ok_ = false;
+    MeshBatch floor_grid_batch_;
+    MeshBatch floor_border_batch_;
+    MeshBatch room_sel_lines_batch_;
+    MeshBatch room_sel_fill_batch_;
+    MeshBatch axes_lines_batch_;
+    MeshBatch axes_heads_batch_;
+    MeshBatch room_boundary_batch_;
+    MeshBatch controller_faces_batch_;
+    MeshBatch controller_edges_batch_;
+    MeshBatch controller_leds_batch_;
+    MeshBatch controller_indicator_batch_;
+    MeshBatch room_grid_overlay_batch_;
+    MeshBatch display_plane_batch_;
+    MeshBatch gizmo_lines_batch_;
+    MeshBatch gizmo_tris_batch_;
+    float     room_boundary_cached_max_x_ = -1.0f;
+    float     room_boundary_cached_max_y_ = -1.0f;
+    float     room_boundary_cached_max_z_ = -1.0f;
+
     float   cached_floor_grid_max_x;
     float   cached_floor_grid_max_z;
-    std::vector<float> cached_floor_grid_vertices;
-    std::vector<float> cached_floor_grid_colors;
-    std::vector<float> led_draw_positions;
-    std::vector<float> led_draw_colors;
+    std::vector<float> cached_floor_grid_interleaved_;
+    std::vector<float> led_draw_interleaved_;
 };
 
 #endif

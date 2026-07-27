@@ -125,6 +125,9 @@ ViewportMat4 Scale(float x, float y, float z)
 
 static ViewportMat4 RotationAxis(float degrees, float ax, float ay, float az)
 {
+    /* Column-major Rodrigues — same sense as glRotatef / Geometry3D::ComputeRotationMatrix.
+     * (Earlier sin cross-terms were transposed, so RotationX(+θ) drew as Rx(−θ) while
+     * effects still sampled Rx(+θ) — controllers looked depth-flipped vs the room wipe.) */
     const float rad = degrees * (float)M_PI / 180.0f;
     const float c = std::cos(rad);
     const float s = std::sin(rad);
@@ -132,13 +135,13 @@ static ViewportMat4 RotationAxis(float degrees, float ax, float ay, float az)
 
     ViewportMat4 out = Identity();
     out.m[0] = t * ax * ax + c;
-    out.m[4] = t * ax * ay + s * az;
-    out.m[8] = t * ax * az - s * ay;
-    out.m[1] = t * ax * ay - s * az;
+    out.m[4] = t * ax * ay - s * az;
+    out.m[8] = t * ax * az + s * ay;
+    out.m[1] = t * ax * ay + s * az;
     out.m[5] = t * ay * ay + c;
-    out.m[9] = t * ay * az + s * ax;
-    out.m[2] = t * ax * az + s * ay;
-    out.m[6] = t * ay * az - s * ax;
+    out.m[9] = t * ay * az - s * ax;
+    out.m[2] = t * ax * az - s * ay;
+    out.m[6] = t * ay * az + s * ax;
     out.m[10] = t * az * az + c;
     return out;
 }

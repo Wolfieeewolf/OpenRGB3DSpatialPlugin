@@ -8,11 +8,24 @@
       when: manual
       allow_failure: true
 
+# Builds burn shared-runner minutes. Default: do not auto-build on push/MR/tag.
+# Start a pipeline from the GitLab UI ("Run pipeline") or set RUN_CI=true (API/web variables)
+# when you actually want Linux/Windows jobs. Mirror-to-GitHub stays automatic on main/tags.
+.upstream_build_rules:
+  rules:
+    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && $RUN_CI == "true" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG || $CI_PIPELINE_SOURCE == "web")'
+      when: on_success
+    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && ($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")'
+      when: on_success
+    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG)'
+      when: manual
+      allow_failure: true
+    - !reference [.downstream_rules, rules]
+
+# Back-compat alias used by older job references (if any).
 .upstream_rules:
   rules:
-    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG)'
-      when: on_success
-    - !reference [.downstream_rules, rules]
+    - !reference [.upstream_build_rules, rules]
 
 # OpenRGB org private runners (OpenRGBDevelopers project only)
 .org_linux_runners:
@@ -86,7 +99,13 @@ before_script:
     paths: [dist/, libOpenRGB3DSpatialPlugin.so]
     expire_in: 30 days
   rules:
+    - if: '$CI_PROJECT_PATH == "OpenRGBDevelopers/OpenRGB3DSpatialPlugin" && $RUN_CI == "true" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG || $CI_PIPELINE_SOURCE == "web")'
+      when: on_success
+    - if: '$CI_PROJECT_PATH == "OpenRGBDevelopers/OpenRGB3DSpatialPlugin" && ($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")'
+      when: on_success
     - if: '$CI_PROJECT_PATH == "OpenRGBDevelopers/OpenRGB3DSpatialPlugin" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG)'
+      when: manual
+      allow_failure: true
 
 "Linux amd64 (org runners)":
   extends: .hidden_linux_org
@@ -164,4 +183,10 @@ release:
         --description "OpenRGB 3D Spatial Plugin ${CI_COMMIT_TAG} (Qt6). Windows: unzip the .dll into OpenRGB plugins. Linux: install the .deb or extract the .tar.gz to /usr/lib/openrgb/plugins/. Requires Qt6 OpenRGB." \
         --assets-path dist/
   rules:
+    - if: '$CI_COMMIT_TAG && $RUN_CI == "true"'
+      when: on_success
+    - if: '$CI_COMMIT_TAG && ($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")'
+      when: on_success
     - if: $CI_COMMIT_TAG
+      when: manual
+      allow_failure: true

@@ -16,8 +16,8 @@ QSurfaceFormat BuildSurfaceFormat()
     fmt.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     fmt.setSwapInterval(1);
     fmt.setRenderableType(QSurfaceFormat::OpenGL);
-    fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
-    fmt.setVersion(2, 1);
+    fmt.setProfile(QSurfaceFormat::CoreProfile);
+    fmt.setVersion(4, 1);
     return fmt;
 }
 

@@ -13,12 +13,18 @@
 #include <cstring>
 #include <algorithm>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #include "QtCompat.h"
 #include "LEDViewport3D.h"
 #include "LEDViewport3D_Internal.h"
 #include "ControllerDisplayUtils.h"
-#include "viewport/ViewportGLIncludes.h"
+#include "ControllerLayout3D.h"
+#include "Geometry3DUtils.h"
 #include "viewport/ViewportMath.h"
+#include "viewport/ViewportGLFormat.h"
 #include "VirtualReferencePoint3D.h"
 
 #ifdef near
@@ -31,11 +37,9 @@
 namespace
 {
 constexpr float kRoomTurntableSpinSensitivity = 0.25f;
-constexpr float kRoomTurntablePitchLimitDeg = 89.0f;
-constexpr float kRoomVolumePickPadUnits = 0.02f;
 constexpr float kViewportClickSlopGlPx = 3.0f;
 
-void MapQtMouseToGluWindow(const QWidget* widget, const QMouseEvent* event, const GLint vp[4], int& out_win_x, int& out_win_y)
+void MapQtMouseToGlWindow(const QWidget* widget, const QMouseEvent* event, const GLint vp[4], int& out_win_x, int& out_win_y)
 {
     const int qw = std::max(1, widget->width());
     const int qh = std::max(1, widget->height());
@@ -66,371 +70,6 @@ float ViewportQtDragDistanceGl(const QWidget* widget, const GLint vp[4], const Q
 }
 } // namespace
 
-void LEDViewport3D::capturePickMatricesFromGl()
-{
-    glGetFloatv(GL_MODELVIEW_MATRIX, pick_scene_modelview_);
-    glGetFloatv(GL_PROJECTION_MATRIX, pick_projection_);
-    glGetIntegerv(GL_VIEWPORT, pick_viewport_);
-    pick_matrices_valid_ = (pick_viewport_[2] > 0 && pick_viewport_[3] > 0);
-}
-
-void LEDViewport3D::computePickMatricesFallback()
-{
-    const int fb_w = viewportFramebufferWidth(width());
-    const int fb_h = viewportFramebufferHeight(height());
-    pick_viewport_[0] = 0;
-    pick_viewport_[1] = 0;
-    pick_viewport_[2] = fb_w;
-    pick_viewport_[3] = fb_h;
-
-    const float aspect = (float)fb_w / (float)std::max(1, fb_h);
-    const ViewportMat4 proj = ViewportMath::Perspective(45.0f, aspect, 0.1f, 100000.0f);
-    std::memcpy(pick_projection_, proj.m, sizeof(float) * 16);
-
-    const float pitch_rad = camera_pitch * (float)M_PI / 180.0f;
-    const float yaw_rad = camera_yaw * (float)M_PI / 180.0f;
-    const float cos_pitch = std::cos(pitch_rad);
-    const ViewportVec3 eye = {
-        camera_target_x + camera_distance * cos_pitch * std::cos(yaw_rad),
-        camera_target_y + camera_distance * std::sin(pitch_rad),
-        camera_target_z + camera_distance * cos_pitch * std::sin(yaw_rad),
-    };
-    const ViewportVec3 center = {camera_target_x, camera_target_y, camera_target_z};
-    const ViewportVec3 up = {0.0f, 1.0f, 0.0f};
-    const ViewportMat4 view = ViewportMath::LookAt(eye, center, up);
-    std::memcpy(pick_view_modelview_, view.m, sizeof(float) * 16);
-
-    ViewportMat4 scene = view;
-    if(hasRoomPreviewRotation())
-    {
-        scene = ViewportMath::Multiply(view, roomTurntableMatrix());
-    }
-    std::memcpy(pick_scene_modelview_, scene.m, sizeof(float) * 16);
-    pick_matrices_valid_ = true;
-}
-
-void LEDViewport3D::loadPickMatrices(float modelview[16], float projection[16], int viewport[4])
-{
-    if(!pick_matrices_valid_)
-    {
-        computePickMatricesFallback();
-    }
-    std::memcpy(modelview, pick_view_modelview_, sizeof(float) * 16);
-    std::memcpy(projection, pick_projection_, sizeof(float) * 16);
-    std::memcpy(viewport, pick_viewport_, sizeof(int) * 4);
-}
-
-void LEDViewport3D::loadScenePickMatrices(float modelview[16], float projection[16], int viewport[4])
-{
-    if(!pick_matrices_valid_)
-    {
-        computePickMatricesFallback();
-    }
-    std::memcpy(modelview, pick_scene_modelview_, sizeof(float) * 16);
-    std::memcpy(projection, pick_projection_, sizeof(float) * 16);
-    std::memcpy(viewport, pick_viewport_, sizeof(int) * 4);
-}
-
-void LEDViewport3D::DefaultCamera(float& distance, float& yaw, float& pitch,
-                                  float& target_x, float& target_y, float& target_z)
-{
-    distance = 20.0f;
-    yaw = 45.0f;
-    pitch = 30.0f;
-    target_x = 0.0f;
-    target_y = 0.0f;
-    target_z = 0.0f;
-}
-
-void LEDViewport3D::getRoomTurntablePivot(float& pivot_x, float& pivot_y, float& pivot_z) const
-{
-    const GridExtents extents = GetRoomExtents();
-    pivot_x = extents.width_units * 0.5f;
-    pivot_y = extents.height_units * 0.5f;
-    pivot_z = extents.depth_units * 0.5f;
-}
-
-void LEDViewport3D::getRoomVolumeAabb(Vector3D& box_min, Vector3D& box_max) const
-{
-    const GridExtents extents = GetRoomExtents();
-    box_min.x = -kRoomVolumePickPadUnits;
-    box_min.y = -kRoomVolumePickPadUnits;
-    box_min.z = -kRoomVolumePickPadUnits;
-    box_max.x = extents.width_units + kRoomVolumePickPadUnits;
-    box_max.y = extents.height_units + kRoomVolumePickPadUnits;
-    box_max.z = extents.depth_units + kRoomVolumePickPadUnits;
-}
-
-bool LEDViewport3D::hasRoomPreviewRotation() const
-{
-    return std::fabs(room_turntable_yaw_deg) > 1e-4f || std::fabs(room_turntable_pitch_deg) > 1e-4f;
-}
-
-ViewportMat4 LEDViewport3D::roomTurntableMatrix() const
-{
-    if(!hasRoomPreviewRotation())
-    {
-        return ViewportMath::Identity();
-    }
-
-    float pivot_x = 0.0f;
-    float pivot_y = 0.0f;
-    float pivot_z = 0.0f;
-    getRoomTurntablePivot(pivot_x, pivot_y, pivot_z);
-    using namespace ViewportMath;
-    return Multiply(Translation(pivot_x, pivot_y, pivot_z),
-                    Multiply(RotationY(room_turntable_yaw_deg),
-                             Multiply(RotationX(room_turntable_pitch_deg), Translation(-pivot_x, -pivot_y, -pivot_z))));
-}
-
-bool LEDViewport3D::buildPickRay(int win_x, int win_y, Ray3D& ray)
-{
-    float modelview[16];
-    float projection[16];
-    int viewport[4];
-    // Unproject with the same V*T used to draw controllers/planes — ray is in layout space.
-    loadScenePickMatrices(modelview, projection, viewport);
-
-    GLdouble near_x = 0.0;
-    GLdouble near_y = 0.0;
-    GLdouble near_z = 0.0;
-    GLdouble far_x = 0.0;
-    GLdouble far_y = 0.0;
-    GLdouble far_z = 0.0;
-
-    GLdouble mv[16];
-    GLdouble proj[16];
-    GLint vp[4];
-    for(int i = 0; i < 16; i++)
-    {
-        mv[i] = (GLdouble)modelview[i];
-        proj[i] = (GLdouble)projection[i];
-    }
-    for(int i = 0; i < 4; i++)
-    {
-        vp[i] = (GLint)viewport[i];
-    }
-
-    if(gluUnProject((GLdouble)win_x, (GLdouble)win_y, 0.0, mv, proj, vp, &near_x, &near_y, &near_z) == GL_FALSE)
-    {
-        return false;
-    }
-    if(gluUnProject((GLdouble)win_x, (GLdouble)win_y, 1.0, mv, proj, vp, &far_x, &far_y, &far_z) == GL_FALSE)
-    {
-        return false;
-    }
-
-    ray.origin[0] = (float)near_x;
-    ray.origin[1] = (float)near_y;
-    ray.origin[2] = (float)near_z;
-    ray.direction[0] = (float)(far_x - near_x);
-    ray.direction[1] = (float)(far_y - near_y);
-    ray.direction[2] = (float)(far_z - near_z);
-
-    const float length = std::sqrt(ray.direction[0] * ray.direction[0] + ray.direction[1] * ray.direction[1] +
-                                   ray.direction[2] * ray.direction[2]);
-    if(length <= 1e-6f)
-    {
-        return false;
-    }
-
-    ray.direction[0] /= length;
-    ray.direction[1] /= length;
-    ray.direction[2] /= length;
-    return true;
-}
-
-bool LEDViewport3D::pickRoomVolume(const Ray3D& ray)
-{
-    Vector3D box_min{};
-    Vector3D box_max{};
-    getRoomVolumeAabb(box_min, box_max);
-
-    float distance = 0.0f;
-    return RayBoxIntersect(ray, box_min, box_max, distance);
-}
-
-void LEDViewport3D::clearSceneObjectSelection()
-{
-    selected_controller_indices.clear();
-    selected_controller_idx = -1;
-    selected_display_plane_idx = -1;
-    selected_ref_point_idx = -1;
-    gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
-}
-
-void LEDViewport3D::selectRoomViewport()
-{
-    clearSceneObjectSelection();
-    if(room_viewport_selected_)
-    {
-        return;
-    }
-
-    room_viewport_selected_ = true;
-    emit RoomViewportSelected(true);
-    emit ControllerSelected(-1);
-    emit ReferencePointSelected(-1);
-    emit DisplayPlaneSelected(-1);
-    update();
-}
-
-void LEDViewport3D::deselectRoomViewport()
-{
-    if(!room_viewport_selected_)
-    {
-        return;
-    }
-    room_viewport_selected_ = false;
-    emit RoomViewportSelected(false);
-    update();
-}
-
-void LEDViewport3D::pushRoomTurntableGl() const
-{
-    if(!hasRoomPreviewRotation())
-    {
-        return;
-    }
-
-    float pivot_x = 0.0f;
-    float pivot_y = 0.0f;
-    float pivot_z = 0.0f;
-    getRoomTurntablePivot(pivot_x, pivot_y, pivot_z);
-    glTranslatef(pivot_x, pivot_y, pivot_z);
-    glRotatef(room_turntable_yaw_deg, 0.0f, 1.0f, 0.0f);
-    glRotatef(room_turntable_pitch_deg, 1.0f, 0.0f, 0.0f);
-    glTranslatef(-pivot_x, -pivot_y, -pivot_z);
-}
-
-void LEDViewport3D::resetRoomPreviewSpin()
-{
-    room_turntable_yaw_deg = 0.0f;
-    room_turntable_pitch_deg = 0.0f;
-}
-
-void LEDViewport3D::clampRoomTurntablePitch()
-{
-    if(room_turntable_pitch_deg > kRoomTurntablePitchLimitDeg)
-    {
-        room_turntable_pitch_deg = kRoomTurntablePitchLimitDeg;
-    }
-    if(room_turntable_pitch_deg < -kRoomTurntablePitchLimitDeg)
-    {
-        room_turntable_pitch_deg = -kRoomTurntablePitchLimitDeg;
-    }
-}
-
-void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
-{
-    Ray3D ray{};
-    if(!buildPickRay(gl_win_x, gl_win_y, ray))
-    {
-        ClearSelection();
-        emit ControllerSelected(-1);
-        emit ReferencePointSelected(-1);
-        emit DisplayPlaneSelected(-1);
-        return;
-    }
-
-    const int picked_controller = PickController(ray);
-    if(picked_controller >= 0)
-    {
-        ClearSelection();
-        AddControllerToSelection(picked_controller);
-        SelectController(picked_controller);
-        emit ControllerSelected(picked_controller);
-        return;
-    }
-
-    const int picked_ref = PickReferencePoint(ray);
-    if(picked_ref >= 0)
-    {
-        ClearSelection();
-        SelectReferencePoint(picked_ref);
-        emit ReferencePointSelected(picked_ref);
-        return;
-    }
-
-    const int picked_plane = PickDisplayPlane(ray);
-    if(picked_plane >= 0)
-    {
-        ClearSelection();
-        SelectDisplayPlane(picked_plane);
-        emit DisplayPlaneSelected(picked_plane);
-        return;
-    }
-
-    if(pickRoomVolume(ray))
-    {
-        selectRoomViewport();
-        return;
-    }
-
-    ClearSelection();
-    emit ControllerSelected(-1);
-    emit ReferencePointSelected(-1);
-    emit DisplayPlaneSelected(-1);
-}
-
-void LEDViewport3D::ResetCameraToDefault()
-{
-    DefaultCamera(camera_distance, camera_yaw, camera_pitch,
-                  camera_target_x, camera_target_y, camera_target_z);
-    const GridExtents extents = GetRoomExtents();
-    camera_target_x = extents.width_units * 0.5f;
-    camera_target_y = extents.height_units * 0.5f;
-    camera_target_z = extents.depth_units * 0.5f;
-
-    /* Fit the whole room in view instead of a fixed close-up distance. */
-    const float span_units = std::max(1.5f,
-        std::max(extents.width_units, std::max(extents.height_units, extents.depth_units)) * 1.15f);
-    const float fov_rad = 45.0f * (float)M_PI / 180.0f;
-    float distance = (span_units * 0.55f) / tanf(fov_rad * 0.5f);
-    camera_distance = std::max(2.0f, std::min(50000.0f, distance));
-
-    resetRoomPreviewSpin();
-    deselectRoomViewport();
-    pick_matrices_valid_ = false;
-    update();
-}
-
-void LEDViewport3D::clearCameraDragState()
-{
-    dragging_rotate = false;
-    dragging_pan = false;
-    dragging_grab = false;
-    dragging_room_turntable = false;
-}
-
-void LEDViewport3D::showGizmoModeFeedback()
-{
-    gizmo_mode_feedback_timer_.start(1200);
-    update();
-}
-
-void LEDViewport3D::retargetOrbitToRoomCenterPreservingEye()
-{
-    const float pitch_rad = camera_pitch * (float)M_PI / 180.0f;
-    const float yaw_rad = camera_yaw * (float)M_PI / 180.0f;
-    const float cos_pitch = std::cos(pitch_rad);
-    const float eye_x = camera_target_x + camera_distance * cos_pitch * std::cos(yaw_rad);
-    const float eye_y = camera_target_y + camera_distance * std::sin(pitch_rad);
-    const float eye_z = camera_target_z + camera_distance * cos_pitch * std::sin(yaw_rad);
-
-    const GridExtents extents = GetRoomExtents();
-    camera_target_x = extents.width_units * 0.5f;
-    camera_target_y = extents.height_units * 0.5f;
-    camera_target_z = extents.depth_units * 0.5f;
-
-    const float dx = eye_x - camera_target_x;
-    const float dy = eye_y - camera_target_y;
-    const float dz = eye_z - camera_target_z;
-    camera_distance = std::max(1.0f, std::sqrt(dx * dx + dy * dy + dz * dz));
-    camera_pitch = std::asin(std::clamp(dy / camera_distance, -1.0f, 1.0f)) * 180.0f / (float)M_PI;
-    camera_yaw = std::atan2(dz, dx) * 180.0f / (float)M_PI;
-    pick_matrices_valid_ = false;
-}
 
 void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 {
@@ -445,7 +84,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 
     int gl_win_x = 0;
     int gl_win_y = 0;
-    MapQtMouseToGluWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
+    MapQtMouseToGlWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
 
     if(event->button() == Qt::LeftButton)
     {
@@ -459,7 +98,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         if(has_controller_selected || has_ref_point_selected || has_display_plane_selected)
         {
             gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
-            gizmo.SetCameraDistance(camera_distance);
+            syncGizmoScreenScale();
             if(gizmo.HandleMousePress(event, gl_win_x, gl_win_y, modelview, projection, viewport))
             {
                 update();
@@ -605,10 +244,10 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
     int gl_win_x = 0;
     int gl_win_y = 0;
-    MapQtMouseToGluWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
+    MapQtMouseToGlWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
 
     gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
-    gizmo.SetCameraDistance(camera_distance);
+    syncGizmoScreenScale();
 
     const bool left_held = (event->buttons() & Qt::LeftButton) != 0;
     float gizmo_modelview[16];
@@ -694,6 +333,8 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     {
         float pan_sensitivity = 0.002f * camera_distance;
 
+        /* View-space axes from camera LookAt (row 0 = right, row 1 = up).
+         * Horizontal matches left-drag grab: mouse right → content follows (target − right). */
         const float right_x = modelview[0];
         const float right_y = modelview[4];
         const float right_z = modelview[8];
@@ -701,9 +342,9 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         const float up_y = modelview[5];
         const float up_z = modelview[9];
 
-        camera_target_x += right_x * delta_x_gl * pan_sensitivity;
-        camera_target_y += right_y * delta_x_gl * pan_sensitivity;
-        camera_target_z += right_z * delta_x_gl * pan_sensitivity;
+        camera_target_x -= right_x * delta_x_gl * pan_sensitivity;
+        camera_target_y -= right_y * delta_x_gl * pan_sensitivity;
+        camera_target_z -= right_z * delta_x_gl * pan_sensitivity;
         camera_target_x += up_x * delta_y_gl * pan_sensitivity;
         camera_target_y += up_y * delta_y_gl * pan_sensitivity;
         camera_target_z += up_z * delta_y_gl * pan_sensitivity;
@@ -729,7 +370,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     (void)projection;
     int gl_win_x = 0;
     int gl_win_y = 0;
-    MapQtMouseToGluWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
+    MapQtMouseToGlWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
 
     if(dragging_grab && event->button() == Qt::LeftButton)
     {
@@ -947,10 +588,11 @@ int LEDViewport3D::PickController(const Ray3D& ray)
         Vector3D min_bounds, max_bounds;
         CalculateControllerBounds(ctrl, min_bounds, max_bounds);
 
-        Vector3D center_offset = {
-            -(min_bounds.x + max_bounds.x) * 0.5f,
-            -(min_bounds.y + max_bounds.y) * 0.5f,
-            -(min_bounds.z + max_bounds.z) * 0.5f
+        const Vector3D led_center = ControllerLayout3D::GetLedLocalCenter(ctrl);
+        const Vector3D center_offset = {
+            -led_center.x,
+            -led_center.y,
+            -led_center.z
         };
 
         Vector3D local_corners[8] = {
@@ -964,11 +606,12 @@ int LEDViewport3D::PickController(const Ray3D& ray)
             {max_bounds.x + center_offset.x, max_bounds.y + center_offset.y, max_bounds.z + center_offset.z}
         };
 
-        Vector3D world_min = TransformLocalToWorld(local_corners[0], ctrl->transform);
+        /* Match effect / UpdateWorldPositions rotation (Rx×Ry×Rz), not display-plane Euler. */
+        Vector3D world_min = Geometry3D::TransformLocalToWorldScaled(local_corners[0], ctrl->transform);
         Vector3D world_max = world_min;
         for(int corner = 1; corner < 8; corner++)
         {
-            Vector3D world_corner = TransformLocalToWorld(local_corners[corner], ctrl->transform);
+            Vector3D world_corner = Geometry3D::TransformLocalToWorldScaled(local_corners[corner], ctrl->transform);
             if(world_corner.x < world_min.x) world_min.x = world_corner.x;
             if(world_corner.y < world_min.y) world_min.y = world_corner.y;
             if(world_corner.z < world_min.z) world_min.z = world_corner.z;

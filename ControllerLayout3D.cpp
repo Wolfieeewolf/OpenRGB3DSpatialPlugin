@@ -758,22 +758,29 @@ void ControllerLayout3D::BuildViewportStripDrawSamples(const ControllerTransform
     }
 }
 
-static Vector3D TransformLocalToWorldWithScale(const Vector3D& local_pos, const Transform3D& transform)
+Vector3D ControllerLayout3D::GetLedLocalCenter(const ControllerTransform* ctrl_transform)
 {
-    Vector3D scaled = {
-        local_pos.x * transform.scale.x,
-        local_pos.y * transform.scale.y,
-        local_pos.z * transform.scale.z
-    };
+    if(!ctrl_transform || ctrl_transform->led_positions.empty())
+    {
+        return {0.0f, 0.0f, 0.0f};
+    }
 
-    float rotation_matrix[9];
-    Geometry3D::ComputeRotationMatrix(transform.rotation, rotation_matrix);
-    Vector3D rotated = Geometry3D::RotateVector(scaled, rotation_matrix);
-
+    Vector3D local_min = ctrl_transform->led_positions[0].local_position;
+    Vector3D local_max = local_min;
+    for(unsigned int i = 1; i < ctrl_transform->led_positions.size(); i++)
+    {
+        const Vector3D& p = ctrl_transform->led_positions[i].local_position;
+        if(p.x < local_min.x) local_min.x = p.x;
+        if(p.y < local_min.y) local_min.y = p.y;
+        if(p.z < local_min.z) local_min.z = p.z;
+        if(p.x > local_max.x) local_max.x = p.x;
+        if(p.y > local_max.y) local_max.y = p.y;
+        if(p.z > local_max.z) local_max.z = p.z;
+    }
     return {
-        rotated.x + transform.position.x,
-        rotated.y + transform.position.y,
-        rotated.z + transform.position.z
+        (local_min.x + local_max.x) * 0.5f,
+        (local_min.y + local_max.y) * 0.5f,
+        (local_min.z + local_max.z) * 0.5f,
     };
 }
 
@@ -784,17 +791,8 @@ Vector3D ControllerLayout3D::GetControllerCenterWorld(const ControllerTransform*
         return {0.0f, 0.0f, 0.0f};
     }
 
-    Vector3D min_bounds;
-    Vector3D max_bounds;
-    CalculateControllerLocalBounds(ctrl_transform, min_bounds, max_bounds);
-
-    const Vector3D local_center = {
-        (min_bounds.x + max_bounds.x) * 0.5f,
-        (min_bounds.y + max_bounds.y) * 0.5f,
-        (min_bounds.z + max_bounds.z) * 0.5f
-    };
-
-    return TransformLocalToWorldWithScale(local_center, ctrl_transform->transform);
+    /* Pivot matches UpdateWorldPositions: LED cloud is centered on transform.position. */
+    return ctrl_transform->transform.position;
 }
 
 void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transform)
@@ -804,35 +802,7 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         return;
     }
 
-    Vector3D local_min = {0.0f, 0.0f, 0.0f};
-    Vector3D local_max = {0.0f, 0.0f, 0.0f};
-    bool have_bounds = false;
-    for(unsigned int i = 0; i < ctrl_transform->led_positions.size(); i++)
-    {
-        const Vector3D& p = ctrl_transform->led_positions[i].local_position;
-        if(!have_bounds)
-        {
-            local_min = p;
-            local_max = p;
-            have_bounds = true;
-        }
-        else
-        {
-            if(p.x < local_min.x) local_min.x = p.x;
-            if(p.y < local_min.y) local_min.y = p.y;
-            if(p.z < local_min.z) local_min.z = p.z;
-            if(p.x > local_max.x) local_max.x = p.x;
-            if(p.y > local_max.y) local_max.y = p.y;
-            if(p.z > local_max.z) local_max.z = p.z;
-        }
-    }
-    Vector3D local_center = {0.0f, 0.0f, 0.0f};
-    if(have_bounds)
-    {
-        local_center.x = (local_min.x + local_max.x) * 0.5f;
-        local_center.y = (local_min.y + local_max.y) * 0.5f;
-        local_center.z = (local_min.z + local_max.z) * 0.5f;
-    }
+    const Vector3D local_center = GetLedLocalCenter(ctrl_transform);
 
     float rotation_matrix[9];
     Geometry3D::ComputeRotationMatrix(ctrl_transform->transform.rotation, rotation_matrix);

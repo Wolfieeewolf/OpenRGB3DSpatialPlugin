@@ -6,19 +6,27 @@
 #include <QTimer>
 #include <QSurfaceFormat>
 #include <QOpenGLContext>
+#include <QOpenGLExtraFunctions>
 
 #include <cmath>
 #include <cfloat>
 #include <algorithm>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #include "QtCompat.h"
 #include "LEDViewport3D.h"
 #include "LEDViewport3D_Internal.h"
 #include "ControllerLayout3D.h"
+#include "Geometry3DUtils.h"
 #include "viewport/ViewportGLFormat.h"
-#include "viewport/ViewportGLIncludes.h"
 #include "VirtualReferencePoint3D.h"
 #include "ScreenCaptureManager.h"
+#include "PluginLog.h"
+#include "viewport/ViewportMath.h"
+#include "viewport/ViewportShaders.h"
 
 #ifdef near
 #undef near
@@ -26,26 +34,6 @@
 #ifdef far
 #undef far
 #endif
-
-namespace
-{
-void ExpandBoundsForBlockerCell(Vector3D& min_bounds,
-                                Vector3D& max_bounds,
-                                float x0,
-                                float y0,
-                                float z0,
-                                float x1,
-                                float y1,
-                                float z1)
-{
-    if(x0 < min_bounds.x) min_bounds.x = x0;
-    if(y0 < min_bounds.y) min_bounds.y = y0;
-    if(z0 < min_bounds.z) min_bounds.z = z0;
-    if(x1 > max_bounds.x) max_bounds.x = x1;
-    if(y1 > max_bounds.y) max_bounds.y = y1;
-    if(z1 > max_bounds.z) max_bounds.z = z1;
-}
-} // namespace
 
 bool LEDViewport3D::ensureGlCurrent() const
 {
@@ -137,13 +125,14 @@ LEDViewport3D::~LEDViewport3D()
     }
     if(ensureGlCurrent())
     {
-    for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
-        it != display_plane_textures.end();
-        ++it)
-    {
-        glDeleteTextures(1, &it->second);
-    }
-    doneCurrent();
+        destroyViewportGlResources();
+        for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
+            it != display_plane_textures.end();
+            ++it)
+        {
+            glDeleteTextures(1, &it->second);
+        }
+        doneCurrent();
     }
     display_plane_textures.clear();
     display_plane_tex_upload_state.clear();
@@ -662,11 +651,119 @@ void LEDViewport3D::NotifyControllerTransformChanged()
 void LEDViewport3D::initializeGL()
 {
     initializeOpenGLFunctions();
+    if(QOpenGLExtraFunctions* xf = context() ? context()->extraFunctions() : nullptr)
+    {
+        xf->initializeOpenGLFunctions();
+    }
+
+    {
+        const QSurfaceFormat req = format();
+        const char* gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        const char* gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        const char* gl_vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const char* profile =
+            (req.profile() == QSurfaceFormat::CoreProfile) ? "Core" :
+            (req.profile() == QSurfaceFormat::CompatibilityProfile) ? "Compatibility" : "NoProfile";
+        LOG_INFO("[3DSpatial] Viewport GL requested %d.%d %s; GL_VERSION=\"%s\" GL_RENDERER=\"%s\" GL_VENDOR=\"%s\"",
+                 req.majorVersion(),
+                 req.minorVersion(),
+                 profile,
+                 gl_version ? gl_version : "(null)",
+                 gl_renderer ? gl_renderer : "(null)",
+                 gl_vendor ? gl_vendor : "(null)");
+    }
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(0.11f, 0.12f, 0.15f, 1.0f);
+
+    /* Context may have been recreated; old VAO/VBO/texture names are invalid. */
+    abandonViewportGlHandles();
+    initViewportShaderPrograms();
+}
+
+void LEDViewport3D::initViewportShaderPrograms()
+{
+    viewport_shader_programs_ok_ = false;
+
+    QString err;
+    auto compile_one = [&](const char* name, bool (*fn)(GlProgram&, QString*), GlProgram& prog) -> bool {
+        err.clear();
+        if(!fn(prog, &err))
+        {
+            LOG_WARNING("[3DSpatial] Viewport shader %s failed: %s",
+                        name,
+                        err.isEmpty() ? "(no log)" : err.toUtf8().constData());
+            return false;
+        }
+        LOG_INFO("[3DSpatial] Viewport shader %s linked (program %u)", name, prog.Id());
+        return true;
+    };
+
+    const bool ok_color = compile_one("unlit_color", &ViewportShaders::CompileUnlitColor, gl_prog_unlit_color_);
+    const bool ok_point = compile_one("unlit_point", &ViewportShaders::CompileUnlitPoint, gl_prog_unlit_point_);
+    const bool ok_tex = compile_one("textured_unlit", &ViewportShaders::CompileTexturedUnlit, gl_prog_textured_unlit_);
+    viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex;
+    if(viewport_shader_programs_ok_)
+    {
+        LOG_INFO("[3DSpatial] Viewport GLSL 410 programs ready");
+    }
+}
+
+void LEDViewport3D::destroyViewportGlResources()
+{
+    floor_grid_batch_.Destroy();
+    floor_border_batch_.Destroy();
+    room_sel_lines_batch_.Destroy();
+    room_sel_fill_batch_.Destroy();
+    axes_lines_batch_.Destroy();
+    axes_heads_batch_.Destroy();
+    room_boundary_batch_.Destroy();
+    controller_faces_batch_.Destroy();
+    controller_edges_batch_.Destroy();
+    controller_leds_batch_.Destroy();
+    controller_indicator_batch_.Destroy();
+    room_grid_overlay_batch_.Destroy();
+    display_plane_batch_.Destroy();
+    gizmo_lines_batch_.Destroy();
+    gizmo_tris_batch_.Destroy();
+    room_boundary_cached_max_x_ = -1.0f;
+    room_boundary_cached_max_y_ = -1.0f;
+    room_boundary_cached_max_z_ = -1.0f;
+    gl_prog_unlit_color_.Destroy();
+    gl_prog_unlit_point_.Destroy();
+    gl_prog_textured_unlit_.Destroy();
+    viewport_shader_programs_ok_ = false;
+}
+
+void LEDViewport3D::abandonViewportGlHandles()
+{
+    floor_grid_batch_.Abandon();
+    floor_border_batch_.Abandon();
+    room_sel_lines_batch_.Abandon();
+    room_sel_fill_batch_.Abandon();
+    axes_lines_batch_.Abandon();
+    axes_heads_batch_.Abandon();
+    room_boundary_batch_.Abandon();
+    controller_faces_batch_.Abandon();
+    controller_edges_batch_.Abandon();
+    controller_leds_batch_.Abandon();
+    controller_indicator_batch_.Abandon();
+    room_grid_overlay_batch_.Abandon();
+    display_plane_batch_.Abandon();
+    gizmo_lines_batch_.Abandon();
+    gizmo_tris_batch_.Abandon();
+    room_boundary_cached_max_x_ = -1.0f;
+    room_boundary_cached_max_y_ = -1.0f;
+    room_boundary_cached_max_z_ = -1.0f;
+    display_plane_textures.clear();
+    display_plane_tex_upload_state.clear();
+    display_plane_tex_params_set.clear();
+    gl_prog_unlit_color_.Destroy();
+    gl_prog_unlit_point_.Destroy();
+    gl_prog_textured_unlit_.Destroy();
+    viewport_shader_programs_ok_ = false;
 }
 
 void LEDViewport3D::hideEvent(QHideEvent* event)
@@ -694,13 +791,13 @@ void LEDViewport3D::update()
 int LEDViewport3D::viewportFramebufferWidth(int logical_w) const
 {
     const qreal dpr = devicePixelRatioF();
-    return std::max(1, (int)std::lround((double)std::max(1, logical_w) * dpr));
+    return std::max(1, qRound((qreal)std::max(1, logical_w) * dpr));
 }
 
 int LEDViewport3D::viewportFramebufferHeight(int logical_h) const
 {
     const qreal dpr = devicePixelRatioF();
-    return std::max(1, (int)std::lround((double)std::max(1, logical_h) * dpr));
+    return std::max(1, qRound((qreal)std::max(1, logical_h) * dpr));
 }
 
 void LEDViewport3D::resizeGL(int w, int h)
@@ -712,15 +809,6 @@ void LEDViewport3D::resizeGL(int w, int h)
     const int fb_h = viewportFramebufferHeight(h);
 
     glViewport(0, 0, fb_w, fb_h);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-
-    float aspect = (float)fb_w / (float)fb_h;
-    gluPerspective(45.0, aspect, 0.1, 100000.0);
-
-    glMatrixMode(GL_MODELVIEW);
-
     gizmo.SetViewportSize(fb_w, fb_h);
 }
 
@@ -729,6 +817,12 @@ bool LEDViewport3D::event(QEvent* event)
 #if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
     if(event->type() == QEvent::DevicePixelRatioChange)
     {
+        if(isValid())
+        {
+            makeCurrent();
+            resizeGL(width(), height());
+            doneCurrent();
+        }
         update();
     }
 #endif
@@ -743,153 +837,6 @@ GridExtents LEDViewport3D::GetRoomExtents() const
                                                          room_depth);
     GridDimensionDefaults defaults = MakeGridDefaults(grid_x, grid_y, grid_z);
     return ResolveGridExtents(settings, grid_scale_mm, defaults);
-}
-
-void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds)
-{
-    bool have_bounds = false;
-    if(ctrl && !ctrl->led_positions.empty())
-    {
-        Vector3D first_pos = ctrl->led_positions[0].local_position;
-        min_bounds = first_pos;
-        max_bounds = first_pos;
-        have_bounds = true;
-
-        for(unsigned int i = 0; i < ctrl->led_positions.size(); i++)
-        {
-            const Vector3D& pos = ctrl->led_positions[i].local_position;
-
-            if(pos.x < min_bounds.x) min_bounds.x = pos.x;
-            if(pos.y < min_bounds.y) min_bounds.y = pos.y;
-            if(pos.z < min_bounds.z) min_bounds.z = pos.z;
-
-            if(pos.x > max_bounds.x) max_bounds.x = pos.x;
-            if(pos.y > max_bounds.y) max_bounds.y = pos.y;
-            if(pos.z > max_bounds.z) max_bounds.z = pos.z;
-        }
-    }
-
-    if(ctrl && ctrl->virtual_controller)
-    {
-        for(const CustomControllerLightBlocker& blocker : ctrl->virtual_controller->GetLightBlockers())
-        {
-            Vector3D local_min{};
-            Vector3D local_max{};
-            ctrl->virtual_controller->CellLocalBoundsMm(blocker.x, blocker.y, blocker.z, &local_min, &local_max);
-            const float x0 = MMToGridUnits(local_min.x, grid_scale_mm);
-            const float y0 = MMToGridUnits(local_min.y, grid_scale_mm);
-            const float z0 = MMToGridUnits(local_min.z, grid_scale_mm);
-            const float x1 = MMToGridUnits(local_max.x, grid_scale_mm);
-            const float y1 = MMToGridUnits(local_max.y, grid_scale_mm);
-            const float z1 = MMToGridUnits(local_max.z, grid_scale_mm);
-
-            if(!have_bounds)
-            {
-                min_bounds = {x0, y0, z0};
-                max_bounds = {x1, y1, z1};
-                have_bounds = true;
-        }
-        else
-        {
-                ExpandBoundsForBlockerCell(min_bounds, max_bounds, x0, y0, z0, x1, y1, z1);
-            }
-        }
-    }
-
-    if(!have_bounds)
-    {
-        min_bounds = {-0.5f, -0.5f, -0.5f};
-        max_bounds = {0.5f, 0.5f, 0.5f};
-        return;
-    }
-
-    float size_x = max_bounds.x - min_bounds.x;
-    float size_y = max_bounds.y - min_bounds.y;
-    float size_z = max_bounds.z - min_bounds.z;
-
-    float min_dimension = 0.2f;
-
-    if(size_x < 0.001f)
-    {
-        float center_x = (min_bounds.x + max_bounds.x) * 0.5f;
-        min_bounds.x = center_x - min_dimension;
-        max_bounds.x = center_x + min_dimension;
-    }
-    if(size_y < 0.001f)
-    {
-        float center_y = (min_bounds.y + max_bounds.y) * 0.5f;
-        min_bounds.y = center_y - min_dimension;
-        max_bounds.y = center_y + min_dimension;
-    }
-    if(size_z < 0.001f)
-    {
-        float center_z = (min_bounds.z + max_bounds.z) * 0.5f;
-        min_bounds.z = center_z - min_dimension;
-        max_bounds.z = center_z + min_dimension;
-    }
-
-    float padding = 0.1f;
-    min_bounds.x -= padding;
-    min_bounds.y -= padding;
-    min_bounds.z -= padding;
-    max_bounds.x += padding;
-    max_bounds.y += padding;
-    max_bounds.z += padding;
-}
-
-Vector3D LEDViewport3D::GetControllerCenter(ControllerTransform* ctrl)
-{
-    return ControllerLayout3D::GetControllerCenterWorld(ctrl);
-}
-
-Vector3D LEDViewport3D::GetControllerSize(ControllerTransform* ctrl)
-{
-    Vector3D min_bounds, max_bounds;
-    CalculateControllerBounds(ctrl, min_bounds, max_bounds);
-
-    return {
-        max_bounds.x - min_bounds.x,
-        max_bounds.y - min_bounds.y,
-        max_bounds.z - min_bounds.z
-    };
-}
-
-bool LEDViewport3D::IsControllerAboveFloor(ControllerTransform* ctrl)
-{
-    if(!ctrl) return true;
-
-    return GetControllerMinY(ctrl) >= 0.0f;
-}
-
-float LEDViewport3D::GetControllerMinY(ControllerTransform* ctrl)
-{
-    if(!ctrl) return 0.0f;
-
-    Vector3D min_bounds, max_bounds;
-    CalculateControllerBounds(ctrl, min_bounds, max_bounds);
-
-    Vector3D corners[8] = {
-        {min_bounds.x, min_bounds.y, min_bounds.z},
-        {max_bounds.x, min_bounds.y, min_bounds.z},
-        {min_bounds.x, max_bounds.y, min_bounds.z},
-        {max_bounds.x, max_bounds.y, min_bounds.z},
-        {min_bounds.x, min_bounds.y, max_bounds.z},
-        {max_bounds.x, min_bounds.y, max_bounds.z},
-        {min_bounds.x, max_bounds.y, max_bounds.z},
-        {max_bounds.x, max_bounds.y, max_bounds.z}
-    };
-
-    float min_y = FLT_MAX;
-    for(int i = 0; i < 8; i++)
-    {
-        Vector3D world_corner = TransformLocalToWorld(corners[i], ctrl->transform);
-        if(world_corner.y < min_y)
-        {
-            min_y = world_corner.y;
-        }
-    }
-
-    return min_y;
 }
 
 Vector3D LEDViewport3D::TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform)

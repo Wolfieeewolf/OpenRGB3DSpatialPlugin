@@ -42,19 +42,18 @@ struct Box3D
 
 class QMouseEvent;
 
-/** Line batches + triangles for mesh draw helpers (local gizmo space). */
+/** Line batches + triangles for mesh draw helpers (local gizmo space).
+ *  Vertices are interleaved PosColor: xyz rgb (6 floats per vertex). */
 struct GizmoDrawMesh
 {
     struct LineBatch
     {
         float                   width = 1.0f;
-        std::vector<float>      positions;
-        std::vector<float>      colors;
+        std::vector<float>      interleaved;
     };
 
     std::vector<LineBatch>  line_batches;
-    std::vector<float>      triangle_positions;
-    std::vector<float>      triangle_colors;
+    std::vector<float>      triangle_interleaved;
 
     void clear();
     LineBatch& lineBatchForWidth(float width);
@@ -74,7 +73,8 @@ public:
     void SetTarget(DisplayPlane3D* target);
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
-    void SetCameraDistance(float distance);
+    /** Keep gizmo ~constant on screen: pass eye→gizmo distance and vertical FOV (degrees). */
+    void SetScreenScale(float eye_distance, float fovy_degrees);
 
     bool HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
                           const float* modelview, const float* projection, const int* viewport);
@@ -82,7 +82,6 @@ public:
                          const float* modelview, const float* projection, const int* viewport);
     bool HandleMouseRelease(QMouseEvent* event);
 
-    void Render(const float* modelview, const float* projection, const int* viewport);
     void buildDrawMesh(GizmoDrawMesh& mesh) const;
 
     bool IsActive() const { return active; }
@@ -95,6 +94,8 @@ public:
     void GetPosition(float& x, float& y, float& z) const { x = gizmo_x; y = gizmo_y; z = gizmo_z; }
 
 private:
+    /** Keep drag readout / arc in (-360, 360] so multi-turn spins do not explode mesh/HUD. */
+    void accumulateRotateDegrees(float delta_deg);
     Ray3D GenerateRay(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
     bool RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance);
     bool RaySphereIntersect(const Ray3D& ray, float sphere_x, float sphere_y, float sphere_z, float radius, float& distance);
@@ -110,25 +111,12 @@ private:
     void ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport);
     void ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
 
-    void DrawMoveGizmo();
-    void DrawRotateGizmo();
-    void DrawFreeroamGizmo();
     void appendMoveGizmoMesh(GizmoDrawMesh& mesh) const;
     void appendRotateGizmoMesh(GizmoDrawMesh& mesh) const;
     void appendFreeroamGizmoMesh(GizmoDrawMesh& mesh) const;
-    void DrawAxis(float start[3], float end[3], float color[3], bool highlighted);
-    void DrawArrowHead(float pos[3], float dir[3], float color[3]);
-    void DrawSphere(float pos[3], float radius, float color[3]);
-    void DrawCube(float pos[3], float size, float color[3]);
-
-    void WorldToScreen(float world_x, float world_y, float world_z, int& screen_x, int& screen_y,
-                       const float* modelview, const float* projection, const int* viewport);
-    void ScreenToWorld(int screen_x, int screen_y, float& world_x, float& world_y, float& world_z,
-                       const float* modelview, const float* projection, const int* viewport);
 
     float SnapToGrid(float value);
     float Dot3(const float a[3], const float b[3]);
-    void Cross3(const float a[3], const float b[3], float out[3]);
     float ClosestAxisParamToRay(const float axis_origin[3], const float axis_dir_unit[3], const Ray3D& ray);
 
 private:
@@ -145,7 +133,6 @@ private:
     float                  gizmo_x;
     float                  gizmo_y;
     float                  gizmo_z;
-    float                  base_gizmo_size;
 
     QPoint                 last_mouse_pos;
     QPoint                 last_gl_mouse_pos;
@@ -153,11 +140,13 @@ private:
 
     int                    viewport_width;
     int                    viewport_height;
-    float                  camera_distance;
 
     float                  gizmo_size;
     float                  axis_thickness;
+    float                  axis_hit_thickness_;
     float                  center_sphere_radius;
+    float                  center_hit_radius_;
+    float                  rotate_ring_hit_thickness_;
 
     float                  color_x_axis[3];
     float                  color_y_axis[3];

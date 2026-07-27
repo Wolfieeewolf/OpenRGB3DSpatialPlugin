@@ -1,20 +1,19 @@
-// SPDX-License-Identifier: GPL-2.0-only
+﻿// SPDX-License-Identifier: GPL-2.0-only
 
 #include <QPainter>
 #include <QFont>
 #include <QFontMetrics>
 #include <QOpenGLContext>
+#include <QOpenGLExtraFunctions>
 
 #include <cmath>
 #include <algorithm>
+#include <cstring>
 
-#include "Colors.h"
 #include "LEDViewport3D.h"
-#include "LEDViewport3D_Internal.h"
-#include "ControllerDisplayUtils.h"
-#include "ControllerLayout3D.h"
-#include "viewport/ViewportGLIncludes.h"
-#include "VirtualReferencePoint3D.h"
+#include "viewport/ViewportMath.h"
+#include "viewport/ViewportGLFormat.h"
+#include "viewport/MeshGeometry.h"
 
 #ifdef near
 #undef near
@@ -23,91 +22,39 @@
 #undef far
 #endif
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace
 {
-void DrawAxisAlignedBoxFaces(float x0, float y0, float z0, float x1, float y1, float z1,
-                                    float r, float g, float b, float alpha)
-{
-    /* Alpha faces must not write depth or interior LED points disappear when zoomed in. */
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
-    glColor4f(r, g, b, alpha);
-    glBegin(GL_QUADS);
-
-    glVertex3f(x0, y0, z0);
-    glVertex3f(x1, y0, z0);
-    glVertex3f(x1, y0, z1);
-    glVertex3f(x0, y0, z1);
-
-    glVertex3f(x0, y1, z0);
-    glVertex3f(x1, y1, z0);
-    glVertex3f(x1, y1, z1);
-    glVertex3f(x0, y1, z1);
-
-    glVertex3f(x0, y0, z0);
-    glVertex3f(x0, y1, z0);
-    glVertex3f(x0, y1, z1);
-    glVertex3f(x0, y0, z1);
-
-    glVertex3f(x1, y0, z0);
-    glVertex3f(x1, y1, z0);
-    glVertex3f(x1, y1, z1);
-    glVertex3f(x1, y0, z1);
-
-    glVertex3f(x0, y0, z0);
-    glVertex3f(x0, y1, z0);
-    glVertex3f(x1, y1, z0);
-    glVertex3f(x1, y0, z0);
-
-    glVertex3f(x0, y0, z1);
-    glVertex3f(x0, y1, z1);
-    glVertex3f(x1, y1, z1);
-    glVertex3f(x1, y0, z1);
-
-    glEnd();
-    glDepthMask(GL_TRUE);
-}
-
+using MeshGeometry::PushPosColor;
 void ProjectPointToScreen(float x,
                                  float y,
                                  float z,
-                                 const GLdouble modelview[16],
-                                 const GLdouble projection[16],
-                                 const GLint viewport[4],
+                                 const float modelview[16],
+                                 const float projection[16],
+                                 const int viewport[4],
                                  double& screen_x,
                                  double& screen_y)
 {
-    GLdouble winX;
-    GLdouble winY;
-    GLdouble winZ;
-    gluProject(x, y, z, modelview, projection, viewport, &winX, &winY, &winZ);
-    screen_x = winX;
-    screen_y = viewport[3] - winY;
+    ViewportMat4 mv;
+    ViewportMat4 proj;
+    std::memcpy(mv.m, modelview, sizeof(float) * 16);
+    std::memcpy(proj.m, projection, sizeof(float) * 16);
+    float sx = 0.0f;
+    float sy = 0.0f;
+    if(!ViewportMath::ProjectWorldToScreen(mv, proj, viewport, x, y, z, sx, sy))
+    {
+        screen_x = 0.0;
+        screen_y = 0.0;
+        return;
+    }
+    screen_x = (double)sx;
+    screen_y = (double)sy;
 }
 
-bool TryGetViewportGlobalLedIndex(RGBControllerInterface* controller,
-                                         unsigned int zone_idx,
-                                         unsigned int led_idx,
-                                         unsigned int* global_led_idx)
-{
-    if(!controller || !global_led_idx)
-    {
-        return false;
-    }
-    if(zone_idx >= controller->GetZoneCount())
-    {
-        return false;
-    }
-    if(led_idx >= controller->GetZoneLEDsCount(zone_idx))
-    {
-        return false;
-    }
-
-    *global_led_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
-    return (*global_led_idx < controller->GetLEDCount());
-}
-
+/* Map framebuffer top-down coords (from ProjectWorldToScreen) into Qt logical widget space. */
 void GlWindowPointToQtLogical(const QWidget* widget, const GLint vp[4], double gl_x, double gl_y, double& qt_x, double& qt_y)
 {
     qt_x = (gl_x - (double)vp[0]) * (double)std::max(1, widget->width()) / (double)std::max(1, vp[2]);
@@ -126,6 +73,7 @@ const char* GizmoModeLabel(GizmoMode mode)
 }
 } // namespace
 
+
 void LEDViewport3D::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -136,35 +84,16 @@ void LEDViewport3D::paintGL()
     }
 
     paintGlScene();
-    paintViewportLabelsAfterScene();
+    paintViewportText2D();
 }
 
 void LEDViewport3D::paintGlScene()
 {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
-    glColor3f(1.0f, 1.0f, 1.0f);
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    float camera_x = camera_target_x + camera_distance * cosf(camera_pitch * M_PI / 180.0f) * cosf(camera_yaw * M_PI / 180.0f);
-    float camera_y = camera_target_y + camera_distance * sinf(camera_pitch * M_PI / 180.0f);
-    float camera_z = camera_target_z + camera_distance * cosf(camera_pitch * M_PI / 180.0f) * sinf(camera_yaw * M_PI / 180.0f);
-
-    gluLookAt(camera_x, camera_y, camera_z,
-              camera_target_x, camera_target_y, camera_target_z,
-              0.0f, 1.0f, 0.0f);
-
-    glGetFloatv(GL_MODELVIEW_MATRIX, pick_view_modelview_);
-
-    glPushMatrix();
-    pushRoomTurntableGl();
-
-    // Capture V*T (+ proj/viewport) while GL still matches what controllers/planes see.
-    capturePickMatricesFromGl();
+    const ViewportFrame frame = BuildViewportFrame();
+    syncPickMatricesFromFrame(frame);
 
     DrawGrid();
     DrawAxes();
@@ -193,22 +122,95 @@ void LEDViewport3D::paintGlScene()
 
     if(has_controller_selected || has_ref_point_selected || has_display_plane_selected)
     {
-        gizmo.SetCameraDistance(camera_distance);
-        gizmo.Render(pick_scene_modelview_, pick_projection_, pick_viewport_);
+        syncGizmoScreenScale();
+        drawGizmo();
     }
-
-    glPopMatrix();
-
 }
 
-void LEDViewport3D::paintViewportLabelsAfterScene()
+void LEDViewport3D::syncGizmoScreenScale()
 {
-    if(width() < 2 || height() < 2 || !viewport_paint_enabled_)
+    float gx = 0.0f;
+    float gy = 0.0f;
+    float gz = 0.0f;
+    gizmo.GetPosition(gx, gy, gz);
+
+    /* View-space |z| from the scene matrix used to draw the gizmo. */
+    float depth = camera_distance;
+    if(pick_matrices_valid_)
+    {
+        const float* mv = pick_scene_modelview_;
+        const float vz = mv[2] * gx + mv[6] * gy + mv[10] * gz + mv[14];
+        depth = std::fabs(vz);
+    }
+
+    if(depth < 0.01f)
+    {
+        depth = 0.01f;
+    }
+    gizmo.SetScreenScale(depth, ViewportGLFormat::kDefaultFovyDegrees);
+}
+
+void LEDViewport3D::drawGizmoMeshPass(const GizmoDrawMesh& mesh, const ViewportMat4& model)
+{
+    if(!mesh.triangle_interleaved.empty() && (mesh.triangle_interleaved.size() % 6) == 0)
+    {
+        const size_t vert_count = mesh.triangle_interleaved.size() / 6;
+        gizmo_tris_batch_.Upload(MeshBatch::Layout::PosColor,
+                                 mesh.triangle_interleaved.data(),
+                                 vert_count);
+        drawUnlitBatch(gizmo_tris_batch_, MeshBatch::Primitive::Triangles, 1.0f, 1.0f, &model);
+    }
+
+    for(const GizmoDrawMesh::LineBatch& line_batch : mesh.line_batches)
+    {
+        if(line_batch.interleaved.empty() || (line_batch.interleaved.size() % 6) != 0)
+        {
+            continue;
+        }
+        const size_t vert_count = line_batch.interleaved.size() / 6;
+        gizmo_lines_batch_.Upload(MeshBatch::Layout::PosColor,
+                                  line_batch.interleaved.data(),
+                                  vert_count);
+        drawUnlitBatch(gizmo_lines_batch_, MeshBatch::Primitive::Lines, line_batch.width, 1.0f, &model);
+    }
+}
+
+void LEDViewport3D::drawGizmo()
+{
+    if(!gizmo.IsActive() || !viewport_shader_programs_ok_)
     {
         return;
     }
 
-    paintViewportText2D();
+    GizmoDrawMesh mesh;
+    gizmo.buildDrawMesh(mesh);
+    if(mesh.triangle_interleaved.empty() && mesh.line_batches.empty())
+    {
+        return;
+    }
+
+    float gx = 0.0f;
+    float gy = 0.0f;
+    float gz = 0.0f;
+    gizmo.GetPosition(gx, gy, gz);
+    const ViewportMat4 model = ViewportMath::Translation(gx, gy, gz);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+    /* Pass 1: depth-tested, no depth write (under overlay). */
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    drawGizmoMeshPass(mesh, model);
+
+    /* Pass 2: overlay without depth so handles stay visible. */
+    glDisable(GL_DEPTH_TEST);
+    drawGizmoMeshPass(mesh, model);
+
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
 }
 
 void LEDViewport3D::paintViewportText2D()
@@ -218,85 +220,43 @@ void LEDViewport3D::paintViewportText2D()
         return;
     }
 
-    prepareForQtPainterInPaintGl();
-
-    float modelview[16];
-    float projection[16];
-    int viewport[4];
-    loadScenePickMatrices(modelview, projection, viewport);
-
-    DrawAxisLabels(modelview, projection, viewport);
-
     const bool has_selection = (selected_controller_idx >= 0 && controller_transforms &&
                                 selected_controller_idx < (int)controller_transforms->size()) ||
                                (selected_ref_point_idx >= 0 && reference_points &&
                                 selected_ref_point_idx < (int)reference_points->size()) ||
                                (selected_display_plane_idx >= 0 && display_planes &&
                                 selected_display_plane_idx < (int)display_planes->size());
-
-    if(has_selection && gizmo.GetMode() == GIZMO_MODE_ROTATE && gizmo.IsDragging())
+    const bool need_rotate_readout =
+        has_selection && gizmo.GetMode() == GIZMO_MODE_ROTATE && gizmo.IsDragging();
+    const bool need_gizmo_toast = gizmo_mode_feedback_timer_.isActive();
+    if(!show_room_guide_labels_ && !need_rotate_readout && !need_gizmo_toast)
     {
-        float gx = 0.0f;
-        float gy = 0.0f;
-        float gz = 0.0f;
-        gizmo.GetPosition(gx, gy, gz);
-        double screen_x = 0.0;
-        double screen_y = 0.0;
-        GLdouble modelview_d[16];
-        GLdouble projection_d[16];
-        GLint viewport_i[4];
-        for(int i = 0; i < 16; i++)
-        {
-            modelview_d[i] = (GLdouble)modelview[i];
-            projection_d[i] = (GLdouble)projection[i];
-        }
-        for(int i = 0; i < 4; i++)
-        {
-            viewport_i[i] = (GLint)viewport[i];
-        }
-        ProjectPointToScreen(gx, gy, gz, modelview_d, projection_d, viewport_i, screen_x, screen_y);
-        double label_x = 0.0;
-        double label_y = 0.0;
-        GlWindowPointToQtLogical(this, viewport_i, screen_x, screen_y, label_x, label_y);
-
-        prepareForQtPainterInPaintGl();
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::TextAntialiasing);
-        painter.setPen(QColor(255, 255, 255));
-        QFont font("Arial", 10, QFont::Bold);
-        painter.setFont(font);
-
-        const char axis_char = (gizmo.GetSelectedAxis() == GIZMO_AXIS_X) ? 'X' :
-                               (gizmo.GetSelectedAxis() == GIZMO_AXIS_Y) ? 'Y' : 'Z';
-        const QString snap_text = gizmo.IsRotateSnapActive() ? " | Snap 15 deg" : " | Hold Shift to snap 15 deg";
-        const QString text = QString("Rotate %1: %2 deg%3")
-                               .arg(QChar(axis_char),
-                                    QString::number(gizmo.GetRotateAccumDegrees(), 'f', 1),
-                                    snap_text);
-        painter.drawText(QPointF(label_x + 12.0, label_y - 12.0), text);
-        painter.end();
+        return;
     }
 
-    if(gizmo_mode_feedback_timer_.isActive())
+    // Pick matrices were snapshotted in paintGlScene before any QPainter work.
+    float modelview[16];
+    float projection[16];
+    int viewport[4];
+    loadScenePickMatrices(modelview, projection, viewport);
+
+    prepareForQtPainterInPaintGl();
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::TextAntialiasing);
+
+    paintRoomGuideLabels(painter, modelview, projection, viewport);
+    if(need_rotate_readout)
     {
-        prepareForQtPainterInPaintGl();
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.setRenderHint(QPainter::TextAntialiasing);
-
-        const QString text = QString("Gizmo: %1").arg(QString::fromLatin1(GizmoModeLabel(gizmo.GetMode())));
-        const QFont font("Arial", 10, QFont::Bold);
-        painter.setFont(font);
-        const QRect text_bounds = QFontMetrics(font).boundingRect(text);
-        const QRectF panel(12.0, 12.0, text_bounds.width() + 24.0, text_bounds.height() + 14.0);
-
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(20, 24, 30, 205));
-        painter.drawRoundedRect(panel, 5.0, 5.0);
-        painter.setPen(QColor(245, 245, 245));
-        painter.drawText(panel, Qt::AlignCenter, text);
-        painter.end();
+        paintRotateReadout(painter, modelview, projection, viewport);
     }
+    if(need_gizmo_toast)
+    {
+        paintGizmoModeToast(painter);
+    }
+
+    painter.end();
 }
 
 
@@ -309,30 +269,172 @@ void LEDViewport3D::prepareForQtPainterInPaintGl()
 
     makeCurrent();
 
-    /* OpenRGB's Qt build does not expose QOpenGLWidget::resetOpenGLState(); mirror the intent manually. */
+    /* Qt 6 has no QOpenGLWidget::resetOpenGLState(); manual Core-safe reset before QPainter. */
     glUseProgram(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    if(QOpenGLContext* ctx = context())
+    {
+        if(QOpenGLExtraFunctions* xf = ctx->extraFunctions())
+        {
+            xf->glBindVertexArray(0);
+            xf->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+        }
+    }
 
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_CULL_FACE);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_PROGRAM_POINT_SIZE);
+}
+
+void LEDViewport3D::paintRotateReadout(QPainter& painter,
+                                       const float modelview[16],
+                                       const float projection[16],
+                                       const int viewport[4]) const
+{
+    float gx = 0.0f;
+    float gy = 0.0f;
+    float gz = 0.0f;
+    gizmo.GetPosition(gx, gy, gz);
+    double screen_x = 0.0;
+    double screen_y = 0.0;
+    ProjectPointToScreen(gx, gy, gz, modelview, projection, viewport, screen_x, screen_y);
+    double label_x = 0.0;
+    double label_y = 0.0;
+    const GLint viewport_i[4] = {
+        (GLint)viewport[0], (GLint)viewport[1], (GLint)viewport[2], (GLint)viewport[3]
+    };
+    GlWindowPointToQtLogical(this, viewport_i, screen_x, screen_y, label_x, label_y);
+
+    painter.setPen(QColor(255, 255, 255));
+    painter.setFont(QFont("Arial", 10, QFont::Bold));
+
+    const char axis_char = (gizmo.GetSelectedAxis() == GIZMO_AXIS_X) ? 'X' :
+                           (gizmo.GetSelectedAxis() == GIZMO_AXIS_Y) ? 'Y' : 'Z';
+    const QString snap_text = gizmo.IsRotateSnapActive() ? " | Snap 15 deg" : " | Hold Shift to snap 15 deg";
+    const QString text = QString("Rotate %1: %2 deg%3")
+                           .arg(QChar(axis_char),
+                                QString::number(gizmo.GetRotateAccumDegrees(), 'f', 1),
+                                snap_text);
+    painter.drawText(QPointF(label_x + 12.0, label_y - 12.0), text);
+}
+
+void LEDViewport3D::paintGizmoModeToast(QPainter& painter) const
+{
+    const QString text = QString("Gizmo: %1").arg(QString::fromLatin1(GizmoModeLabel(gizmo.GetMode())));
+    const QFont font("Arial", 10, QFont::Bold);
+    painter.setFont(font);
+    const QRect text_bounds = QFontMetrics(font).boundingRect(text);
+    const QRectF panel(12.0, 12.0, text_bounds.width() + 24.0, text_bounds.height() + 14.0);
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(20, 24, 30, 205));
+    painter.drawRoundedRect(panel, 5.0, 5.0);
+    painter.setPen(QColor(245, 245, 245));
+    painter.drawText(panel, Qt::AlignCenter, text);
 }
 
 float LEDViewport3D::ledPreviewPointSizeGl() const
 {
     float size = 220.0f / std::max(camera_distance, 4.0f);
     return std::max(4.0f, std::min(12.0f, size));
+}
+
+void LEDViewport3D::drawUnlitBatch(const MeshBatch& batch,
+                                   MeshBatch::Primitive primitive,
+                                   float line_width,
+                                   float alpha,
+                                   const ViewportMat4* model)
+{
+    if(!viewport_shader_programs_ok_ || !batch.IsValid() || !gl_prog_unlit_color_.IsValid())
+    {
+        return;
+    }
+
+    ViewportMat4 projection;
+    ViewportMat4 view;
+    std::memcpy(projection.m, pick_projection_, sizeof(float) * 16);
+    std::memcpy(view.m, pick_scene_modelview_, sizeof(float) * 16);
+    const ViewportMat4 mvp = model
+        ? ViewportMath::ModelViewProjection(projection, view, *model)
+        : ViewportMath::Multiply(projection, view);
+
+    if(primitive == MeshBatch::Primitive::Lines)
+    {
+        glLineWidth(line_width);
+    }
+
+    gl_prog_unlit_color_.Bind();
+    gl_prog_unlit_color_.SetUniformMat4("u_mvp", mvp.m);
+    gl_prog_unlit_color_.SetUniform1f("u_alpha", alpha);
+    batch.Draw(primitive);
+    gl_prog_unlit_color_.Unbind();
+
+    if(primitive == MeshBatch::Primitive::Lines)
+    {
+        glLineWidth(1.0f);
+    }
+}
+
+void LEDViewport3D::drawUnlitPoints(const MeshBatch& batch,
+                                    float point_size,
+                                    float alpha,
+                                    const ViewportMat4& model)
+{
+    if(!viewport_shader_programs_ok_ || !batch.IsValid() || !gl_prog_unlit_point_.IsValid())
+    {
+        return;
+    }
+
+    ViewportMat4 projection;
+    ViewportMat4 view;
+    std::memcpy(projection.m, pick_projection_, sizeof(float) * 16);
+    std::memcpy(view.m, pick_scene_modelview_, sizeof(float) * 16);
+    const ViewportMat4 mvp = ViewportMath::ModelViewProjection(projection, view, model);
+
+    glEnable(GL_PROGRAM_POINT_SIZE);
+    gl_prog_unlit_point_.Bind();
+    gl_prog_unlit_point_.SetUniformMat4("u_mvp", mvp.m);
+    gl_prog_unlit_point_.SetUniform1f("u_point_size", point_size);
+    gl_prog_unlit_point_.SetUniform1f("u_alpha", alpha);
+    batch.Draw(MeshBatch::Primitive::Points);
+    gl_prog_unlit_point_.Unbind();
+    glDisable(GL_PROGRAM_POINT_SIZE);
+}
+
+void LEDViewport3D::drawTexturedBatch(const MeshBatch& batch,
+                                      unsigned int texture_id,
+                                      float alpha,
+                                      const ViewportMat4* model)
+{
+    if(!viewport_shader_programs_ok_ || !batch.IsValid() || !gl_prog_textured_unlit_.IsValid() || texture_id == 0)
+    {
+        return;
+    }
+
+    ViewportMat4 projection;
+    ViewportMat4 view;
+    std::memcpy(projection.m, pick_projection_, sizeof(float) * 16);
+    std::memcpy(view.m, pick_scene_modelview_, sizeof(float) * 16);
+    const ViewportMat4 mvp = model
+        ? ViewportMath::ModelViewProjection(projection, view, *model)
+        : ViewportMath::Multiply(projection, view);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    gl_prog_textured_unlit_.Bind();
+    gl_prog_textured_unlit_.SetUniformMat4("u_mvp", mvp.m);
+    gl_prog_textured_unlit_.SetUniform1i("u_texture", 0);
+    gl_prog_textured_unlit_.SetUniform1f("u_alpha", alpha);
+    batch.Draw(MeshBatch::Primitive::Triangles);
+    gl_prog_textured_unlit_.Unbind();
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
@@ -342,25 +444,23 @@ void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
     cached_floor_grid_max_x = max_x;
     cached_floor_grid_max_z = max_z;
 
-    cached_floor_grid_vertices.clear();
-    cached_floor_grid_colors.clear();
+    cached_floor_grid_interleaved_.clear();
     const int line_count = ((int)max_x + 1) + ((int)max_z + 1);
-    cached_floor_grid_vertices.reserve((size_t)line_count * 6);
-    cached_floor_grid_colors.reserve((size_t)line_count * 6);
+    cached_floor_grid_interleaved_.reserve((size_t)line_count * 2 * 6);
 
     auto push_line = [&](float x0, float y0, float z0, float x1, float y1, float z1, float r, float g, float b) {
-        cached_floor_grid_vertices.push_back(x0);
-        cached_floor_grid_vertices.push_back(y0);
-        cached_floor_grid_vertices.push_back(z0);
-        cached_floor_grid_vertices.push_back(x1);
-        cached_floor_grid_vertices.push_back(y1);
-        cached_floor_grid_vertices.push_back(z1);
-        cached_floor_grid_colors.push_back(r);
-        cached_floor_grid_colors.push_back(g);
-        cached_floor_grid_colors.push_back(b);
-        cached_floor_grid_colors.push_back(r);
-        cached_floor_grid_colors.push_back(g);
-        cached_floor_grid_colors.push_back(b);
+        cached_floor_grid_interleaved_.push_back(x0);
+        cached_floor_grid_interleaved_.push_back(y0);
+        cached_floor_grid_interleaved_.push_back(z0);
+        cached_floor_grid_interleaved_.push_back(r);
+        cached_floor_grid_interleaved_.push_back(g);
+        cached_floor_grid_interleaved_.push_back(b);
+        cached_floor_grid_interleaved_.push_back(x1);
+        cached_floor_grid_interleaved_.push_back(y1);
+        cached_floor_grid_interleaved_.push_back(z1);
+        cached_floor_grid_interleaved_.push_back(r);
+        cached_floor_grid_interleaved_.push_back(g);
+        cached_floor_grid_interleaved_.push_back(b);
     };
 
     for(int i = 0; i <= (int)max_x; i++)
@@ -402,100 +502,90 @@ void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
         }
         push_line(0.0f, 0.0f, (float)i, max_x, 0.0f, (float)i, r, g, b);
     }
+
+    if(!cached_floor_grid_interleaved_.empty())
+    {
+        floor_grid_batch_.Upload(MeshBatch::Layout::PosColor,
+                                 cached_floor_grid_interleaved_.data(),
+                                 cached_floor_grid_interleaved_.size() / 6);
+    }
+    else
+    {
+        floor_grid_batch_.Destroy();
+    }
+
+    const float border_r = 0.45f;
+    const float border_g = 0.55f;
+    const float border_b = 0.48f;
+    const float border[] = {
+        0.0f, 0.0f, 0.0f, border_r, border_g, border_b,
+        max_x, 0.0f, 0.0f, border_r, border_g, border_b,
+        max_x, 0.0f, 0.0f, border_r, border_g, border_b,
+        max_x, 0.0f, max_z, border_r, border_g, border_b,
+        max_x, 0.0f, max_z, border_r, border_g, border_b,
+        0.0f, 0.0f, max_z, border_r, border_g, border_b,
+        0.0f, 0.0f, max_z, border_r, border_g, border_b,
+        0.0f, 0.0f, 0.0f, border_r, border_g, border_b,
+    };
+    floor_border_batch_.Upload(MeshBatch::Layout::PosColor, border, 8);
 }
 
 void LEDViewport3D::DrawGrid()
 {
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
     glDepthMask(GL_TRUE);
-    glLineWidth(1.0f);
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
     const float max_z = extents.depth_units;
 
-    if(cached_floor_grid_max_x != max_x || cached_floor_grid_max_z != max_z)
+    if(cached_floor_grid_max_x != max_x || cached_floor_grid_max_z != max_z || !floor_grid_batch_.IsValid())
     {
         RebuildFloorGridCache(extents);
     }
 
-    if(!cached_floor_grid_vertices.empty())
-    {
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glVertexPointer(3, GL_FLOAT, 0, cached_floor_grid_vertices.data());
-        glColorPointer(3, GL_FLOAT, 0, cached_floor_grid_colors.data());
-        glDrawArrays(GL_LINES, 0, (GLsizei)(cached_floor_grid_vertices.size() / 3));
-        glDisableClientState(GL_COLOR_ARRAY);
-        glDisableClientState(GL_VERTEX_ARRAY);
-    }
-
-    glLineWidth(1.5f);
-    glColor3f(0.45f, 0.55f, 0.48f);
-    glBegin(GL_LINE_LOOP);
-    glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(max_x, 0.0f, 0.0f);
-    glVertex3f(max_x, 0.0f, max_z);
-    glVertex3f(0.0f, 0.0f, max_z);
-    glEnd();
-
-    glLineWidth(1.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
+    drawUnlitBatch(floor_grid_batch_, MeshBatch::Primitive::Lines, 1.0f, 1.0f);
+    drawUnlitBatch(floor_border_batch_, MeshBatch::Primitive::Lines, 1.5f, 1.0f);
 }
 
 void LEDViewport3D::DrawAxes()
 {
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
-    glLineWidth(3.0f);
 
-    glBegin(GL_LINES);
+    if(!axes_lines_batch_.IsValid())
+    {
+        const float lines[] = {
+            0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+            3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 3.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+            0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 1.0f,
+        };
+        axes_lines_batch_.Upload(MeshBatch::Layout::PosColor, lines, 6);
+    }
+    if(!axes_heads_batch_.IsValid())
+    {
+        const float heads[] = {
+            3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+            2.7f, 0.15f, 0.0f, 1.0f, 0.0f, 0.0f,
+            2.7f, -0.15f, 0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 3.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.15f, 2.7f, 0.0f, 0.0f, 1.0f, 0.0f,
+            -0.15f, 2.7f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 1.0f,
+            0.15f, 0.0f, 2.7f, 0.0f, 0.0f, 1.0f,
+            -0.15f, 0.0f, 2.7f, 0.0f, 0.0f, 1.0f,
+        };
+        axes_heads_batch_.Upload(MeshBatch::Layout::PosColor, heads, 9);
+    }
 
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(3.0f, 0.0f, 0.0f);
-
-    glColor3f(0.0f, 1.0f, 0.0f);
-    glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, 3.0f, 0.0f);
-
-    glColor3f(0.0f, 0.0f, 1.0f);
-    glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, 0.0f, 3.0f);
-
-    glEnd();
-
-    glLineWidth(2.0f);
-
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glBegin(GL_TRIANGLES);
-    glVertex3f(3.0f, 0.0f, 0.0f);
-    glVertex3f(2.7f, 0.15f, 0.0f);
-    glVertex3f(2.7f, -0.15f, 0.0f);
-    glEnd();
-
-    glColor3f(0.0f, 1.0f, 0.0f);
-    glBegin(GL_TRIANGLES);
-    glVertex3f(0.0f, 3.0f, 0.0f);
-    glVertex3f(0.15f, 2.7f, 0.0f);
-    glVertex3f(-0.15f, 2.7f, 0.0f);
-    glEnd();
-
-    glColor3f(0.0f, 0.0f, 1.0f);
-    glBegin(GL_TRIANGLES);
-    glVertex3f(0.0f, 0.0f, 3.0f);
-    glVertex3f(0.15f, 0.0f, 2.7f);
-    glVertex3f(-0.15f, 0.0f, 2.7f);
-    glEnd();
-
-    glLineWidth(1.0f);
+    drawUnlitBatch(axes_lines_batch_, MeshBatch::Primitive::Lines, 3.0f, 1.0f);
+    drawUnlitBatch(axes_heads_batch_, MeshBatch::Primitive::Triangles, 1.0f, 1.0f);
 }
 
 void LEDViewport3D::paintRoomGuideLabels(QPainter& painter,
-                                         const GLdouble modelview[16],
-                                         const GLdouble projection[16],
-                                         const GLint viewport[4]) const
+                                         const float modelview[16],
+                                         const float projection[16],
+                                         const int viewport[4]) const
 {
     if(!show_room_guide_labels_)
     {
@@ -518,6 +608,9 @@ void LEDViewport3D::paintRoomGuideLabels(QPainter& painter,
     double screen_y = 0.0;
     double label_x = 0.0;
     double label_y = 0.0;
+    const GLint viewport_gl[4] = {
+        (GLint)viewport[0], (GLint)viewport[1], (GLint)viewport[2], (GLint)viewport[3]
+    };
 
     QVector<QRectF> placed;
     placed.reserve(8);
@@ -544,7 +637,7 @@ void LEDViewport3D::paintRoomGuideLabels(QPainter& painter,
                               qreal offset_y,
                               bool multiline = false) -> bool {
         ProjectPointToScreen(wx, wy, wz, modelview, projection, viewport, screen_x, screen_y);
-        GlWindowPointToQtLogical(this, viewport, screen_x, screen_y, label_x, label_y);
+        GlWindowPointToQtLogical(this, viewport_gl, screen_x, screen_y, label_x, label_y);
         const QPointF anchor(label_x + offset_x, label_y + offset_y);
         QRectF bounds;
         if(multiline)
@@ -595,110 +688,58 @@ void LEDViewport3D::paintRoomGuideLabels(QPainter& painter,
     try_draw_label(cx, 0.0f, cz, QColor(100, 100, 255), QStringLiteral("Floor (Y=0)"), 10.0, 0.0);
 }
 
-void LEDViewport3D::DrawAxisLabels(const float modelview_f[16], const float projection_f[16], const int viewport_i[4])
-{
-    prepareForQtPainterInPaintGl();
-
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.setRenderHint(QPainter::TextAntialiasing);
-
-    GLdouble modelview[16];
-    GLdouble projection[16];
-    GLint viewport[4];
-    for(int i = 0; i < 16; i++)
-    {
-        modelview[i] = (GLdouble)modelview_f[i];
-        projection[i] = (GLdouble)projection_f[i];
-    }
-    for(int i = 0; i < 4; i++)
-    {
-        viewport[i] = (GLint)viewport_i[i];
-    }
-
-    paintRoomGuideLabels(painter, modelview, projection, viewport);
-
-    painter.end();
-}
-
-void LEDViewport3D::fillRoomViewportSelectionLineBuffers(std::vector<float>& positions, std::vector<float>& colors) const
-{
-    const GridExtents extents = GetRoomExtents();
-    const float max_x = extents.width_units;
-    const float max_y = extents.height_units;
-    const float max_z = extents.depth_units;
-
-    const auto add_line = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
-        positions.push_back(x0);
-        positions.push_back(y0);
-        positions.push_back(z0);
-        positions.push_back(x1);
-        positions.push_back(y1);
-        positions.push_back(z1);
-        for(int i = 0; i < 2; ++i)
-        {
-            colors.push_back(1.0f);
-            colors.push_back(0.85f);
-            colors.push_back(0.1f);
-            colors.push_back(1.0f);
-        }
-    };
-
-    add_line(0.0f, 0.0f, 0.0f, max_x, 0.0f, 0.0f);
-    add_line(max_x, 0.0f, 0.0f, max_x, 0.0f, max_z);
-    add_line(max_x, 0.0f, max_z, 0.0f, 0.0f, max_z);
-    add_line(0.0f, 0.0f, max_z, 0.0f, 0.0f, 0.0f);
-    add_line(0.0f, max_y, 0.0f, max_x, max_y, 0.0f);
-    add_line(max_x, max_y, 0.0f, max_x, max_y, max_z);
-    add_line(max_x, max_y, max_z, 0.0f, max_y, max_z);
-    add_line(0.0f, max_y, max_z, 0.0f, max_y, 0.0f);
-    add_line(0.0f, 0.0f, 0.0f, 0.0f, max_y, 0.0f);
-    add_line(max_x, 0.0f, 0.0f, max_x, max_y, 0.0f);
-    add_line(max_x, 0.0f, max_z, max_x, max_y, max_z);
-    add_line(0.0f, 0.0f, max_z, 0.0f, max_y, max_z);
-}
-
 void LEDViewport3D::DrawRoomViewportSelection()
 {
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glLineWidth(3.0f);
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
     const float max_y = extents.height_units;
     const float max_z = extents.depth_units;
+    const float r = 1.0f;
+    const float g = 0.85f;
+    const float b = 0.1f;
 
-    glColor4f(1.0f, 0.85f, 0.1f, 0.95f);
-    glBegin(GL_LINES);
-    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(max_x, 0.0f, 0.0f);
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, 0.0f, max_z);
-    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(0.0f, 0.0f, max_z);
-    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, max_y, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
-    glVertex3f(max_x, max_y, 0.0f);     glVertex3f(max_x, max_y, max_z);
-    glVertex3f(max_x, max_y, max_z);    glVertex3f(0.0f, max_y, max_z);
-    glVertex3f(0.0f, max_y, max_z);     glVertex3f(0.0f, max_y, 0.0f);
-    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(0.0f, max_y, 0.0f);
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
-    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(max_x, max_y, max_z);
-    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, max_y, max_z);
-    glEnd();
+    auto push_line = [](std::vector<float>& out, float x0, float y0, float z0, float x1, float y1, float z1,
+                        float cr, float cg, float cb) {
+        out.push_back(x0); out.push_back(y0); out.push_back(z0);
+        out.push_back(cr); out.push_back(cg); out.push_back(cb);
+        out.push_back(x1); out.push_back(y1); out.push_back(z1);
+        out.push_back(cr); out.push_back(cg); out.push_back(cb);
+    };
 
-    glColor4f(1.0f, 0.85f, 0.1f, 0.12f);
-    glBegin(GL_QUADS);
-    glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(max_x, 0.0f, 0.0f);
-    glVertex3f(max_x, 0.0f, max_z);
-    glVertex3f(0.0f, 0.0f, max_z);
-    glEnd();
+    std::vector<float> lines;
+    lines.reserve(12 * 2 * 6);
+    push_line(lines, 0.0f, 0.0f, 0.0f, max_x, 0.0f, 0.0f, r, g, b);
+    push_line(lines, max_x, 0.0f, 0.0f, max_x, 0.0f, max_z, r, g, b);
+    push_line(lines, max_x, 0.0f, max_z, 0.0f, 0.0f, max_z, r, g, b);
+    push_line(lines, 0.0f, 0.0f, max_z, 0.0f, 0.0f, 0.0f, r, g, b);
+    push_line(lines, 0.0f, max_y, 0.0f, max_x, max_y, 0.0f, r, g, b);
+    push_line(lines, max_x, max_y, 0.0f, max_x, max_y, max_z, r, g, b);
+    push_line(lines, max_x, max_y, max_z, 0.0f, max_y, max_z, r, g, b);
+    push_line(lines, 0.0f, max_y, max_z, 0.0f, max_y, 0.0f, r, g, b);
+    push_line(lines, 0.0f, 0.0f, 0.0f, 0.0f, max_y, 0.0f, r, g, b);
+    push_line(lines, max_x, 0.0f, 0.0f, max_x, max_y, 0.0f, r, g, b);
+    push_line(lines, max_x, 0.0f, max_z, max_x, max_y, max_z, r, g, b);
+    push_line(lines, 0.0f, 0.0f, max_z, 0.0f, max_y, max_z, r, g, b);
+    room_sel_lines_batch_.Upload(MeshBatch::Layout::PosColor, lines.data(), lines.size() / 6);
+
+    const float fill[] = {
+        0.0f, 0.0f, 0.0f, r, g, b,
+        max_x, 0.0f, 0.0f, r, g, b,
+        max_x, 0.0f, max_z, r, g, b,
+        0.0f, 0.0f, 0.0f, r, g, b,
+        max_x, 0.0f, max_z, r, g, b,
+        0.0f, 0.0f, max_z, r, g, b,
+    };
+    room_sel_fill_batch_.Upload(MeshBatch::Layout::PosColor, fill, 6);
+
+    drawUnlitBatch(room_sel_lines_batch_, MeshBatch::Primitive::Lines, 3.0f, 0.95f);
+    drawUnlitBatch(room_sel_fill_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.12f);
 
     glDisable(GL_BLEND);
-    glLineWidth(1.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
 }
 
 void LEDViewport3D::DrawRoomBoundary()
@@ -707,608 +748,46 @@ void LEDViewport3D::DrawRoomBoundary()
     {
         return;
     }
-
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
-    glLineWidth(2.0f);
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
     const float max_y = extents.height_units;
     const float max_z = extents.depth_units;
 
-    glColor3f(0.0f, 0.8f, 0.8f);
-
-    glBegin(GL_LINES);
-
-    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(max_x, 0.0f, 0.0f);
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, 0.0f, max_z);
-    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(0.0f, 0.0f, max_z);
-    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, 0.0f, 0.0f);
-
-    glVertex3f(0.0f, max_y, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
-    glVertex3f(max_x, max_y, 0.0f);     glVertex3f(max_x, max_y, max_z);
-    glVertex3f(max_x, max_y, max_z);    glVertex3f(0.0f, max_y, max_z);
-    glVertex3f(0.0f, max_y, max_z);     glVertex3f(0.0f, max_y, 0.0f);
-
-    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(0.0f, max_y, 0.0f);
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
-    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(max_x, max_y, max_z);
-    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, max_y, max_z);
-
-    glEnd();
-
-    glLineWidth(1.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
-}
-
-void LEDViewport3D::DrawControllers()
-{
-    if(!controller_transforms) return;
-
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_DEPTH_TEST);
-
-    for(size_t i = 0; i < controller_transforms->size(); i++)
+    if(room_boundary_cached_max_x_ != max_x || room_boundary_cached_max_y_ != max_y ||
+       room_boundary_cached_max_z_ != max_z || !room_boundary_batch_.IsValid())
     {
-        ControllerTransform* ctrl = (*controller_transforms)[i].get();
-        if(!ctrl || ctrl->hidden_by_virtual) continue;
-
-        glPushMatrix();
-
-        glTranslatef(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z);
-        glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
-        glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
-        glRotatef(ctrl->transform.rotation.z, 0.0f, 0.0f, 1.0f);
-        glScalef(ctrl->transform.scale.x, ctrl->transform.scale.y, ctrl->transform.scale.z);
-
-        Vector3D min_bounds, max_bounds;
-        CalculateControllerBounds(ctrl, min_bounds, max_bounds);
-
-        Vector3D center_offset = {
-            -(min_bounds.x + max_bounds.x) * 0.5f,
-            -(min_bounds.y + max_bounds.y) * 0.5f,
-            -(min_bounds.z + max_bounds.z) * 0.5f
+        const float r = 0.0f;
+        const float g = 0.8f;
+        const float b = 0.8f;
+        auto push_line = [](std::vector<float>& out, float x0, float y0, float z0, float x1, float y1, float z1,
+                            float cr, float cg, float cb) {
+            out.push_back(x0); out.push_back(y0); out.push_back(z0);
+            out.push_back(cr); out.push_back(cg); out.push_back(cb);
+            out.push_back(x1); out.push_back(y1); out.push_back(z1);
+            out.push_back(cr); out.push_back(cg); out.push_back(cb);
         };
-
-        glTranslatef(center_offset.x, center_offset.y, center_offset.z);
-
-        bool is_selected = IsControllerSelected((int)i);
-        bool is_primary = ((int)i == selected_controller_idx);
-
-        float face_r = 0.42f;
-        float face_g = 0.46f;
-        float face_b = 0.52f;
-        float face_alpha = 0.10f;
-        float edge_r = 0.50f;
-        float edge_g = 0.54f;
-        float edge_b = 0.60f;
-        float edge_width = 1.25f;
-
-        if(is_primary)
-        {
-            face_r = 0.95f;
-            face_g = 0.85f;
-            face_b = 0.20f;
-            face_alpha = 0.18f;
-            edge_r = 1.0f;
-            edge_g = 0.95f;
-            edge_b = 0.35f;
-            edge_width = 2.0f;
-        }
-        else if(is_selected)
-        {
-            face_r = 0.90f;
-            face_g = 0.70f;
-            face_b = 0.15f;
-            face_alpha = 0.14f;
-            edge_r = 1.0f;
-            edge_g = 0.80f;
-            edge_b = 0.25f;
-            edge_width = 1.75f;
-        }
-
-        DrawAxisAlignedBoxFaces(min_bounds.x, min_bounds.y, min_bounds.z,
-                                max_bounds.x, max_bounds.y, max_bounds.z,
-                                face_r, face_g, face_b, face_alpha);
-
-        DrawLEDs(ctrl);
-
-        glColor3f(edge_r, edge_g, edge_b);
-        glLineWidth(edge_width);
-
-        glBegin(GL_LINES);
-
-        glVertex3f(min_bounds.x, min_bounds.y, min_bounds.z); glVertex3f(max_bounds.x, min_bounds.y, min_bounds.z);
-        glVertex3f(max_bounds.x, min_bounds.y, min_bounds.z); glVertex3f(max_bounds.x, min_bounds.y, max_bounds.z);
-        glVertex3f(max_bounds.x, min_bounds.y, max_bounds.z); glVertex3f(min_bounds.x, min_bounds.y, max_bounds.z);
-        glVertex3f(min_bounds.x, min_bounds.y, max_bounds.z); glVertex3f(min_bounds.x, min_bounds.y, min_bounds.z);
-
-        glVertex3f(min_bounds.x, max_bounds.y, min_bounds.z); glVertex3f(max_bounds.x, max_bounds.y, min_bounds.z);
-        glVertex3f(max_bounds.x, max_bounds.y, min_bounds.z); glVertex3f(max_bounds.x, max_bounds.y, max_bounds.z);
-        glVertex3f(max_bounds.x, max_bounds.y, max_bounds.z); glVertex3f(min_bounds.x, max_bounds.y, max_bounds.z);
-        glVertex3f(min_bounds.x, max_bounds.y, max_bounds.z); glVertex3f(min_bounds.x, max_bounds.y, min_bounds.z);
-
-        glVertex3f(min_bounds.x, min_bounds.y, min_bounds.z); glVertex3f(min_bounds.x, max_bounds.y, min_bounds.z);
-        glVertex3f(max_bounds.x, min_bounds.y, min_bounds.z); glVertex3f(max_bounds.x, max_bounds.y, min_bounds.z);
-        glVertex3f(max_bounds.x, min_bounds.y, max_bounds.z); glVertex3f(max_bounds.x, max_bounds.y, max_bounds.z);
-        glVertex3f(min_bounds.x, min_bounds.y, max_bounds.z); glVertex3f(min_bounds.x, max_bounds.y, max_bounds.z);
-
-        glEnd();
-
-        float top_y = max_bounds.y;
-        float center_x = (min_bounds.x + max_bounds.x) * 0.5f;
-        float center_z = (min_bounds.z + max_bounds.z) * 0.5f;
-        const float indicator_radius = 0.15f;
-        const int sphere_segments = 8;
-
-        glPushMatrix();
-        glTranslatef(center_x, top_y, center_z);
-
-        for(int i = 0; i < sphere_segments / 2; i++)
-        {
-            float lat0 = M_PI * (0.0f + (float)i / sphere_segments);
-            float lat1 = M_PI * (0.0f + (float)(i + 1) / sphere_segments);
-            float y0 = indicator_radius * sinf(lat0);
-            float y1 = indicator_radius * sinf(lat1);
-            float r0 = indicator_radius * cosf(lat0);
-            float r1 = indicator_radius * cosf(lat1);
-
-            glBegin(GL_QUAD_STRIP);
-            for(int j = 0; j <= sphere_segments; j++)
-            {
-                float lng = 2.0f * M_PI * (float)j / sphere_segments;
-                float x = cosf(lng);
-                float z = sinf(lng);
-
-                glColor3f(0.0f, 1.0f, 0.0f);
-                glVertex3f(x * r0, y0, z * r0);
-                glVertex3f(x * r1, y1, z * r1);
-            }
-            glEnd();
-        }
-
-        for(int i = sphere_segments / 2; i < sphere_segments; i++)
-        {
-            float lat0 = M_PI * (0.0f + (float)i / sphere_segments);
-            float lat1 = M_PI * (0.0f + (float)(i + 1) / sphere_segments);
-            float y0 = indicator_radius * sinf(lat0);
-            float y1 = indicator_radius * sinf(lat1);
-            float r0 = indicator_radius * cosf(lat0);
-            float r1 = indicator_radius * cosf(lat1);
-
-            glBegin(GL_QUAD_STRIP);
-            for(int j = 0; j <= sphere_segments; j++)
-            {
-                float lng = 2.0f * M_PI * (float)j / sphere_segments;
-                float x = cosf(lng);
-                float z = sinf(lng);
-
-                glColor3f(1.0f, 0.0f, 0.0f);
-                glVertex3f(x * r0, y0, z * r0);
-                glVertex3f(x * r1, y1, z * r1);
-            }
-            glEnd();
-        }
-
-        glPopMatrix();
-
-        glPopMatrix();
+        std::vector<float> lines;
+        lines.reserve(12 * 2 * 6);
+        push_line(lines, 0.0f, 0.0f, 0.0f, max_x, 0.0f, 0.0f, r, g, b);
+        push_line(lines, max_x, 0.0f, 0.0f, max_x, 0.0f, max_z, r, g, b);
+        push_line(lines, max_x, 0.0f, max_z, 0.0f, 0.0f, max_z, r, g, b);
+        push_line(lines, 0.0f, 0.0f, max_z, 0.0f, 0.0f, 0.0f, r, g, b);
+        push_line(lines, 0.0f, max_y, 0.0f, max_x, max_y, 0.0f, r, g, b);
+        push_line(lines, max_x, max_y, 0.0f, max_x, max_y, max_z, r, g, b);
+        push_line(lines, max_x, max_y, max_z, 0.0f, max_y, max_z, r, g, b);
+        push_line(lines, 0.0f, max_y, max_z, 0.0f, max_y, 0.0f, r, g, b);
+        push_line(lines, 0.0f, 0.0f, 0.0f, 0.0f, max_y, 0.0f, r, g, b);
+        push_line(lines, max_x, 0.0f, 0.0f, max_x, max_y, 0.0f, r, g, b);
+        push_line(lines, max_x, 0.0f, max_z, max_x, max_y, max_z, r, g, b);
+        push_line(lines, 0.0f, 0.0f, max_z, 0.0f, max_y, max_z, r, g, b);
+        room_boundary_batch_.Upload(MeshBatch::Layout::PosColor, lines.data(), lines.size() / 6);
+        room_boundary_cached_max_x_ = max_x;
+        room_boundary_cached_max_y_ = max_y;
+        room_boundary_cached_max_z_ = max_z;
     }
 
-    glLineWidth(1.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
-}
-
-void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
-{
-    if(!ctrl || ctrl->hidden_by_virtual) return;
-    if(!ctrl->controller && !ctrl->virtual_controller) return;
-
-    const size_t draw_count = populateLedDrawBuffers(ctrl);
-    if(draw_count == 0)
-    {
-        return;
-    }
-
-    glDisable(GL_LIGHTING);
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glPointSize(ledPreviewPointSizeGl());
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 0, led_draw_positions.data());
-    glColorPointer(3, GL_FLOAT, 0, led_draw_colors.data());
-    glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(draw_count));
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glPointSize(1.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
-}
-
-size_t LEDViewport3D::populateLedDrawBuffers(ControllerTransform* ctrl)
-{
-    if(!ctrl || ctrl->hidden_by_virtual)
-    {
-        return 0;
-    }
-    if(!ctrl->controller && !ctrl->virtual_controller)
-    {
-        return 0;
-    }
-
-    const size_t led_count = ctrl->led_positions.size();
-    if(led_count == 0)
-    {
-        return 0;
-    }
-
-    auto resolve_mapped_led_color = [](const LEDPosition3D& led_pos) -> RGBColor
-    {
-        RGBColor color = led_pos.preview_color;
-        if(!led_pos.controller)
-        {
-            return color;
-        }
-
-        unsigned int global_led_idx = 0;
-        if(!TryGetViewportGlobalLedIndex(led_pos.controller, led_pos.zone_idx, led_pos.led_idx, &global_led_idx))
-        {
-            return color;
-        }
-
-        const RGBColor live_color = led_pos.controller->GetColor(global_led_idx);
-        if(color == 0x00FFFFFF)
-        {
-            return live_color;
-        }
-
-        return color;
-    };
-
-    std::vector<ControllerLayout3D::ViewportStripDrawSample> strip_samples;
-    strip_samples.reserve(led_count * 3);
-
-    led_draw_positions.clear();
-    led_draw_colors.clear();
-    led_draw_positions.reserve(led_count * 9);
-    led_draw_colors.reserve(led_count * 9);
-
-    ControllerLayout3D::BuildViewportStripDrawSamples(ctrl, grid_scale_mm, strip_samples);
-    for(const ControllerLayout3D::ViewportStripDrawSample& sample : strip_samples)
-    {
-        const RGBColor mapped_color = resolve_mapped_led_color(ctrl->led_positions[sample.logical_index]);
-        const float    r            = static_cast<float>(RGBGetRValue(mapped_color)) / 255.0f;
-        const float    g            = static_cast<float>(RGBGetGValue(mapped_color)) / 255.0f;
-        const float    b            = static_cast<float>(RGBGetBValue(mapped_color)) / 255.0f;
-
-        led_draw_positions.push_back(sample.position.x);
-        led_draw_positions.push_back(sample.position.y);
-        led_draw_positions.push_back(sample.position.z);
-        led_draw_colors.push_back(r);
-        led_draw_colors.push_back(g);
-        led_draw_colors.push_back(b);
-    }
-
-    return led_draw_positions.size() / 3;
-}
-
-
-namespace
-{
-void DrawLocalFlatQuadXY(float x0, float y0, float x1, float y1, float z,
-                         float r, float g, float b, float a)
-{
-    glColor4f(r, g, b, a);
-    glBegin(GL_QUADS);
-    glVertex3f(x0, y0, z);
-    glVertex3f(x1, y0, z);
-    glVertex3f(x1, y1, z);
-    glVertex3f(x0, y1, z);
-    glEnd();
-}
-
-void DrawLocalFlatQuadBorderXY(float x0, float y0, float x1, float y1, float z,
-                               float r, float g, float b, float a, float line_width)
-{
-    glColor4f(r, g, b, a);
-    glLineWidth(line_width);
-    glBegin(GL_LINE_LOOP);
-    glVertex3f(x0, y0, z);
-    glVertex3f(x1, y0, z);
-    glVertex3f(x1, y1, z);
-    glVertex3f(x0, y1, z);
-    glEnd();
-}
-} // namespace
-
-void LEDViewport3D::DrawLightBlockerLayers()
-{
-    if(!controller_transforms)
-    {
-        return;
-    }
-
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
-
-    constexpr float kCellFillR = 0.22f;
-    constexpr float kCellFillG = 0.14f;
-    constexpr float kCellFillB = 0.29f;
-    constexpr float kCellFillA = 0.38f;
-    constexpr float kBorderR = 0.47f;
-    constexpr float kBorderG = 0.27f;
-    constexpr float kBorderB = 0.63f;
-    constexpr float kBorderA = 0.85f;
-
-    for(size_t i = 0; i < controller_transforms->size(); i++)
-    {
-        ControllerTransform* ctrl = (*controller_transforms)[i].get();
-        if(!ctrl || ctrl->hidden_by_virtual || !ctrl->virtual_controller)
-        {
-            continue;
-        }
-
-        VirtualController3D* layout = ctrl->virtual_controller;
-        const std::vector<CustomControllerLightBlocker>& blockers = layout->GetLightBlockers();
-        if(blockers.empty())
-        {
-            continue;
-        }
-
-        Vector3D min_bounds{};
-        Vector3D max_bounds{};
-        CalculateControllerBounds(ctrl, min_bounds, max_bounds);
-        const Vector3D center_offset = {
-            -(min_bounds.x + max_bounds.x) * 0.5f,
-            -(min_bounds.y + max_bounds.y) * 0.5f,
-            -(min_bounds.z + max_bounds.z) * 0.5f,
-        };
-
-        const bool is_primary = ((int)i == selected_controller_idx);
-        const bool is_selected = IsControllerSelected((int)i);
-        const float cell_alpha = is_primary ? 0.50f : (is_selected ? 0.44f : kCellFillA);
-        const float border_width = is_primary ? 2.5f : (is_selected ? 2.0f : 1.5f);
-
-        glPushMatrix();
-        glTranslatef(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z);
-        glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
-        glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
-        glRotatef(ctrl->transform.rotation.z, 0.0f, 0.0f, 1.0f);
-        glScalef(ctrl->transform.scale.x, ctrl->transform.scale.y, ctrl->transform.scale.z);
-        glTranslatef(center_offset.x, center_offset.y, center_offset.z);
-
-        for(const CustomControllerLightBlocker& blocker : blockers)
-        {
-            Vector3D local_min{};
-            Vector3D local_max{};
-            layout->CellLocalBoundsMm(blocker.x, blocker.y, blocker.z, &local_min, &local_max);
-            const float x0 = MMToGridUnits(local_min.x, grid_scale_mm);
-            const float y0 = MMToGridUnits(local_min.y, grid_scale_mm);
-            const float x1 = MMToGridUnits(local_max.x, grid_scale_mm);
-            const float y1 = MMToGridUnits(local_max.y, grid_scale_mm);
-            const float z_plane = MMToGridUnits(local_max.z, grid_scale_mm);
-
-            DrawLocalFlatQuadXY(x0, y0, x1, y1, z_plane,
-                                kCellFillR, kCellFillG, kCellFillB, cell_alpha);
-            DrawLocalFlatQuadBorderXY(x0, y0, x1, y1, z_plane,
-                                      kBorderR, kBorderG, kBorderB, kBorderA, border_width);
-        }
-
-        glPopMatrix();
-    }
-
-    glDepthMask(GL_TRUE);
-    glLineWidth(1.0f);
-    glDisable(GL_BLEND);
-    glColor3f(1.0f, 1.0f, 1.0f);
-}
-
-void LEDViewport3D::DrawUserFigure()
-{
-    if(!reference_points) return;
-
-    for(size_t idx = 0; idx < reference_points->size(); idx++)
-    {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[idx].get();
-        if(ref_point->GetType() == REF_POINT_USER && ref_point->IsVisible())
-        {
-            bool is_selected = ((int)idx == selected_ref_point_idx);
-            Vector3D pos = ref_point->GetPosition();
-            Rotation3D rot = ref_point->GetRotation();
-            RGBColor color = ref_point->GetDisplayColor();
-
-            float r = (color & 0xFF) / 255.0f;
-            float g = ((color >> 8) & 0xFF) / 255.0f;
-            float b = ((color >> 16) & 0xFF) / 255.0f;
-
-            glPushMatrix();
-            glTranslatef(pos.x, pos.y, pos.z);
-            glRotatef(rot.x, 1.0f, 0.0f, 0.0f);
-            glRotatef(rot.y, 0.0f, 1.0f, 0.0f);
-            glRotatef(rot.z, 0.0f, 0.0f, 1.0f);
-
-            const float head_radius = 0.4f;
-            const int segments = 20;
-
-            glColor3f(r, g, b);
-            glLineWidth(2.0f);
-
-            glBegin(GL_LINE_LOOP);
-            for(int i = 0; i < segments; i++)
-            {
-                float angle = 2.0f * M_PI * i / segments;
-                float x = head_radius * cosf(angle);
-                float y = head_radius * sinf(angle);
-                glVertex3f(x, y, 0.0f);
-            }
-            glEnd();
-
-            glPointSize(6.0f);
-            glBegin(GL_POINTS);
-            glVertex3f(-0.15f, 0.1f, 0.0f);
-            glVertex3f(0.15f, 0.1f, 0.0f);
-            glEnd();
-
-            glBegin(GL_LINE_STRIP);
-            for(int i = 0; i <= 10; i++)
-            {
-                float t = (float)i / 10.0f;
-                float angle = M_PI + t * M_PI;
-                float x = 0.25f * cosf(angle);
-                float y = -0.05f + 0.25f * sinf(angle);
-                glVertex3f(x, y, 0.0f);
-            }
-            glEnd();
-
-            if(is_selected)
-            {
-                glDisable(GL_DEPTH_TEST);
-                float box_size = head_radius * 1.5f;
-                glColor3f(1.0f, 1.0f, 0.0f);
-                glLineWidth(3.0f);
-
-                glBegin(GL_LINES);
-                glVertex3f(-box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, -box_size);
-                glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, box_size);
-                glVertex3f(box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, box_size);
-                glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, -box_size);
-
-                glVertex3f(-box_size, box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
-                glVertex3f(box_size, box_size, -box_size); glVertex3f(box_size, box_size, box_size);
-                glVertex3f(box_size, box_size, box_size); glVertex3f(-box_size, box_size, box_size);
-                glVertex3f(-box_size, box_size, box_size); glVertex3f(-box_size, box_size, -box_size);
-
-                glVertex3f(-box_size, -box_size, -box_size); glVertex3f(-box_size, box_size, -box_size);
-                glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
-                glVertex3f(box_size, -box_size, box_size); glVertex3f(box_size, box_size, box_size);
-                glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, box_size, box_size);
-                glEnd();
-
-                glEnable(GL_DEPTH_TEST);
-            }
-
-            glLineWidth(1.0f);
-            glPointSize(1.0f);
-            glPopMatrix();
-
-            break;
-        }
-    }
-}
-
-void LEDViewport3D::DrawReferencePoints()
-{
-    if(!reference_points) return;
-
-    const float sphere_radius = 0.3f;
-    const int segments = 16;
-    const int rings = 12;
-
-    for(size_t idx = 0; idx < reference_points->size(); idx++)
-    {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[idx].get();
-        if(!ref_point->IsVisible()) continue;
-
-        if(ref_point->GetType() == REF_POINT_USER) continue;
-
-        bool is_selected = ((int)idx == selected_ref_point_idx);
-
-        Vector3D pos = ref_point->GetPosition();
-        Rotation3D rot = ref_point->GetRotation();
-        RGBColor color = ref_point->GetDisplayColor();
-
-        float r = (color & 0xFF) / 255.0f;
-        float g = ((color >> 8) & 0xFF) / 255.0f;
-        float b = ((color >> 16) & 0xFF) / 255.0f;
-
-        glPushMatrix();
-        glTranslatef(pos.x, pos.y, pos.z);
-        glRotatef(rot.x, 1.0f, 0.0f, 0.0f);
-        glRotatef(rot.y, 0.0f, 1.0f, 0.0f);
-        glRotatef(rot.z, 0.0f, 0.0f, 1.0f);
-
-        glColor3f(r, g, b);
-        for(int i = 0; i < rings; i++)
-        {
-            float lat0 = M_PI * (-0.5f + (float)i / rings);
-            float lat1 = M_PI * (-0.5f + (float)(i + 1) / rings);
-            float y0 = sphere_radius * sinf(lat0);
-            float y1 = sphere_radius * sinf(lat1);
-            float r0 = sphere_radius * cosf(lat0);
-            float r1 = sphere_radius * cosf(lat1);
-
-            glBegin(GL_QUAD_STRIP);
-            for(int j = 0; j <= segments; j++)
-            {
-                float lng = 2.0f * M_PI * (float)j / segments;
-                float x = cosf(lng);
-                float z = sinf(lng);
-
-                glVertex3f(x * r0, y0, z * r0);
-                glVertex3f(x * r1, y1, z * r1);
-            }
-            glEnd();
-        }
-
-        if(is_selected)
-        {
-            glColor3f(1.0f, 1.0f, 0.0f);
-            glLineWidth(4.0f);
-        }
-        else
-        {
-            glColor3f(r * 0.5f, g * 0.5f, b * 0.5f);
-            glLineWidth(2.0f);
-        }
-
-        glBegin(GL_LINE_LOOP);
-        for(int i = 0; i < segments; i++)
-        {
-            float angle = 2.0f * M_PI * i / segments;
-            float x = sphere_radius * cosf(angle);
-            float z = sphere_radius * sinf(angle);
-            glVertex3f(x, 0.0f, z);
-        }
-        glEnd();
-
-        if(is_selected)
-        {
-            glDisable(GL_DEPTH_TEST);
-            float box_size = sphere_radius * 1.5f;
-            glColor3f(1.0f, 1.0f, 0.0f);
-            glLineWidth(3.0f);
-
-            glBegin(GL_LINES);
-            glVertex3f(-box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, -box_size);
-            glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, box_size);
-            glVertex3f(box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, box_size);
-            glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, -box_size);
-
-            glVertex3f(-box_size, box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
-            glVertex3f(box_size, box_size, -box_size); glVertex3f(box_size, box_size, box_size);
-            glVertex3f(box_size, box_size, box_size); glVertex3f(-box_size, box_size, box_size);
-            glVertex3f(-box_size, box_size, box_size); glVertex3f(-box_size, box_size, -box_size);
-
-            glVertex3f(-box_size, -box_size, -box_size); glVertex3f(-box_size, box_size, -box_size);
-            glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
-            glVertex3f(box_size, -box_size, box_size); glVertex3f(box_size, box_size, box_size);
-            glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, box_size, box_size);
-            glEnd();
-
-            glEnable(GL_DEPTH_TEST);
-        }
-
-        glLineWidth(1.0f);
-        glPopMatrix();
-    }
+    drawUnlitBatch(room_boundary_batch_, MeshBatch::Primitive::Lines, 2.0f, 1.0f);
 }
 
