@@ -3,6 +3,7 @@
 
 #include "EffectPacks/EffectPack.h"
 #include "LEDPosition3D.h"
+#include <QMenu>
 #include <QSet>
 #include <QString>
 #include <QVector>
