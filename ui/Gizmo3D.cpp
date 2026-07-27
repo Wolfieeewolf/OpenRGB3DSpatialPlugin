@@ -1,17 +1,16 @@
-// SPDX-License-Identifier: GPL-2.0-only
+﻿// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Gizmo3D.h"
 #include "QtCompat.h"
-#include "viewport/ViewportGLIncludes.h"
+#include "viewport/ViewportMath.h"
 
 #include <cmath>
+#include <cstring>
 #include <QMouseEvent>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
-
-#define GIZMO_RING_SEGMENTS         72
 
 #define GIZMO_SIZE                  1.5f
 #define AXIS_THICKNESS              0.1f
@@ -20,63 +19,8 @@
 #define CENTER_SPHERE_HIT_RADIUS    0.40f
 #define ROTATE_RING_HIT_THICKNESS   0.35f
 #define GIZMO_DRAG_SLOP_GL_PX       3.0f
-
-namespace
-{
-
-void BeginGizmoSmoothLines()
-{
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-}
-
-void EndGizmoSmoothLines()
-{
-    glDisable(GL_LINE_SMOOTH);
-}
-
-void DrawGizmoRingLoop(int plane_axis, float radius, float r, float g, float b, float alpha)
-{
-    BeginGizmoSmoothLines();
-    glColor4f(r, g, b, alpha);
-    glBegin(GL_LINE_LOOP);
-    for(int i = 0; i < GIZMO_RING_SEGMENTS; i++)
-    {
-        const float angle = ((float)i / (float)GIZMO_RING_SEGMENTS) * 2.0f * (float)M_PI;
-        const float c = cosf(angle);
-        const float s = sinf(angle);
-        if(plane_axis == 0)
-        {
-            glVertex3f(0.0f, c * radius, s * radius);
-        }
-        else if(plane_axis == 1)
-        {
-            glVertex3f(c * radius, 0.0f, s * radius);
-        }
-        else
-        {
-            glVertex3f(c * radius, s * radius, 0.0f);
-        }
-    }
-    glEnd();
-    EndGizmoSmoothLines();
-}
-
-void DrawGizmoLineSegment(float x0, float y0, float z0, float x1, float y1, float z1,
-                        float r, float g, float b, float alpha)
-{
-    BeginGizmoSmoothLines();
-    glColor4f(r, g, b, alpha);
-    glBegin(GL_LINES);
-    glVertex3f(x0, y0, z0);
-    glVertex3f(x1, y1, z1);
-    glEnd();
-    EndGizmoSmoothLines();
-}
-
-} // namespace
+/** Fraction of view height at the gizmo used as axis arm length. */
+#define GIZMO_ARM_VIEW_FRACTION     0.072f
 
 Gizmo3D::Gizmo3D()
 {
@@ -96,10 +40,12 @@ Gizmo3D::Gizmo3D()
     viewport_width = 800;
     viewport_height = 600;
 
-    base_gizmo_size = GIZMO_SIZE;
     gizmo_size = GIZMO_SIZE;
     axis_thickness = AXIS_THICKNESS;
+    axis_hit_thickness_ = AXIS_HIT_THICKNESS;
     center_sphere_radius = CENTER_SPHERE_RADIUS;
+    center_hit_radius_ = CENTER_SPHERE_HIT_RADIUS;
+    rotate_ring_hit_thickness_ = ROTATE_RING_HIT_THICKNESS;
 
     color_x_axis[0] = 1.0f; color_x_axis[1] = 0.0f; color_x_axis[2] = 0.0f;
     color_y_axis[0] = 0.0f; color_y_axis[1] = 1.0f; color_y_axis[2] = 0.0f;
@@ -109,8 +55,6 @@ Gizmo3D::Gizmo3D()
 
     grid_snap_enabled = false;
     grid_size = 1.0f;
-
-    camera_distance = 20.0f;
 
     drag_axis_t0 = 0.0f;
     drag_axis_t_begin = 0.0f;
@@ -224,14 +168,39 @@ void Gizmo3D::SetGridSnap(bool enabled, float size)
     grid_size = size;
 }
 
-void Gizmo3D::SetCameraDistance(float distance)
+void Gizmo3D::SetScreenScale(float eye_distance, float fovy_degrees)
 {
-    if(distance < 0.01f) distance = 0.01f;
-    camera_distance = distance;
-    float scale = camera_distance * 0.05f;
-    if(scale < 0.25f) scale = 0.25f;
-    if(scale > 10.0f) scale = 10.0f;
-    gizmo_size = base_gizmo_size * scale;
+    if(eye_distance < 0.01f)
+    {
+        eye_distance = 0.01f;
+    }
+    if(fovy_degrees < 1.0f)
+    {
+        fovy_degrees = 1.0f;
+    }
+    if(fovy_degrees > 179.0f)
+    {
+        fovy_degrees = 179.0f;
+    }
+
+    /* World arm length ∝ depth so projected size stays ~constant. */
+    const float fovy_rad = fovy_degrees * (float)M_PI / 180.0f;
+    const float view_height_at_depth = 2.0f * eye_distance * std::tan(fovy_rad * 0.5f);
+    gizmo_size = view_height_at_depth * GIZMO_ARM_VIEW_FRACTION;
+    if(gizmo_size < 0.35f)
+    {
+        gizmo_size = 0.35f;
+    }
+    if(gizmo_size > 12.0f)
+    {
+        gizmo_size = 12.0f;
+    }
+
+    center_sphere_radius = gizmo_size * 0.12f;
+    axis_thickness = gizmo_size * 0.06f;
+    axis_hit_thickness_ = gizmo_size * 0.16f;
+    center_hit_radius_ = gizmo_size * 0.18f;
+    rotate_ring_hit_thickness_ = gizmo_size * 0.18f;
 }
 
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
@@ -333,16 +302,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
             if(selected_axis == GIZMO_AXIS_X) { drag_axis_dir[0] = 1.0f; drag_axis_dir[1] = 0.0f; drag_axis_dir[2] = 0.0f; }
             if(selected_axis == GIZMO_AXIS_Y) { drag_axis_dir[0] = 0.0f; drag_axis_dir[1] = 1.0f; drag_axis_dir[2] = 0.0f; }
             if(selected_axis == GIZMO_AXIS_Z) { drag_axis_dir[0] = 0.0f; drag_axis_dir[1] = 0.0f; drag_axis_dir[2] = 1.0f; }
-            float a[3] = { drag_axis_dir[0], drag_axis_dir[1], drag_axis_dir[2] };
-            float d[3] = { ray.direction[0], ray.direction[1], ray.direction[2] };
-            float w0[3] = { origin[0] - ray.origin[0], origin[1] - ray.origin[1], origin[2] - ray.origin[2] };
-            float A = a[0]*a[0] + a[1]*a[1] + a[2]*a[2];
-            float B = a[0]*d[0] + a[1]*d[1] + a[2]*d[2];
-            float C = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
-            float D = a[0]*w0[0] + a[1]*w0[1] + a[2]*w0[2];
-            float E = d[0]*w0[0] + d[1]*w0[1] + d[2]*w0[2];
-            float denom = A*C - B*B;
-            drag_axis_t0 = (fabsf(denom) < 1e-6f) ? D : ((B*E - C*D) / denom);
+            drag_axis_t0 = ClosestAxisParamToRay(origin, drag_axis_dir, ray);
             drag_axis_t_begin = drag_axis_t0;
             captureDragStartPosition();
         }
@@ -425,93 +385,43 @@ bool Gizmo3D::HandleMouseRelease(QMouseEvent* event)
     return false;
 }
 
-void Gizmo3D::Render(const float* modelview, const float* projection, const int* viewport)
-{
-    (void)modelview;
-    (void)projection;
-    (void)viewport;
-    if(!active)
-        return;
-
-    glPushMatrix();
-    glTranslatef(gizmo_x, gizmo_y, gizmo_z);
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_BLEND);
-
-    switch(mode)
-    {
-        case GIZMO_MODE_MOVE:
-            DrawMoveGizmo();
-            break;
-        case GIZMO_MODE_ROTATE:
-            DrawRotateGizmo();
-            break;
-        case GIZMO_MODE_FREEROAM:
-            DrawFreeroamGizmo();
-            break;
-    }
-
-    glDisable(GL_DEPTH_TEST);
-    switch(mode)
-    {
-        case GIZMO_MODE_MOVE:
-            DrawMoveGizmo();
-            break;
-        case GIZMO_MODE_ROTATE:
-            DrawRotateGizmo();
-            break;
-        case GIZMO_MODE_FREEROAM:
-            DrawFreeroamGizmo();
-            break;
-    }
-
-    glPopMatrix();
-
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-}
-
 Ray3D Gizmo3D::GenerateRay(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
 {
     Ray3D ray;
 
-    GLdouble near_x, near_y, near_z;
-    GLdouble far_x, far_y, far_z;
+    /* mouse_x / mouse_y: OpenGL window coords (bottom-left origin). */
+    ViewportMat4 mv;
+    ViewportMat4 proj;
+    std::memcpy(mv.m, modelview, sizeof(float) * 16);
+    std::memcpy(proj.m, projection, sizeof(float) * 16);
 
-    /* mouse_x / mouse_y are OpenGL window coords (same as gluProject / GL_VIEWPORT), from LEDViewport3D::MapQtMouseToGluWindow. */
-    const GLdouble gl_win_y = (GLdouble)mouse_y;
-
-    GLdouble mv[16], proj[16];
-    GLint vp[4];
-    for(int i = 0; i < 16; i++)
+    float near_x = 0.0f;
+    float near_y = 0.0f;
+    float near_z = 0.0f;
+    float far_x = 0.0f;
+    float far_y = 0.0f;
+    float far_z = 0.0f;
+    if(!ViewportMath::UnprojectWindow(mv, proj, viewport, (float)mouse_x, (float)mouse_y, 0.0f,
+                                      near_x, near_y, near_z)
+       || !ViewportMath::UnprojectWindow(mv, proj, viewport, (float)mouse_x, (float)mouse_y, 1.0f,
+                                         far_x, far_y, far_z))
     {
-        mv[i] = (GLdouble)modelview[i];
-        proj[i] = (GLdouble)projection[i];
+        ray.origin[0] = 0.0f;
+        ray.origin[1] = 0.0f;
+        ray.origin[2] = 0.0f;
+        ray.direction[0] = 0.0f;
+        ray.direction[1] = 0.0f;
+        ray.direction[2] = -1.0f;
+        return ray;
     }
-    for(int i = 0; i < 4; i++)
-    {
-        vp[i] = (GLint)viewport[i];
-    }
 
-    gluUnProject((GLdouble)mouse_x, gl_win_y, 0.0,
-                 mv, proj, vp,
-                 &near_x, &near_y, &near_z);
+    ray.origin[0] = near_x;
+    ray.origin[1] = near_y;
+    ray.origin[2] = near_z;
 
-    gluUnProject((GLdouble)mouse_x, gl_win_y, 1.0,
-                 mv, proj, vp,
-                 &far_x, &far_y, &far_z);
-
-    ray.origin[0] = (float)near_x;
-    ray.origin[1] = (float)near_y;
-    ray.origin[2] = (float)near_z;
-
-    float dx = (float)(far_x - near_x);
-    float dy = (float)(far_y - near_y);
-    float dz = (float)(far_z - near_z);
+    float dx = far_x - near_x;
+    float dy = far_y - near_y;
+    float dz = far_z - near_z;
     float length = sqrtf(dx * dx + dy * dy + dz * dz);
 
     if(length > 0.0f)
@@ -597,7 +507,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     GizmoAxis closest_axis = GIZMO_AXIS_NONE;
 
     float distance;
-    if(RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, CENTER_SPHERE_HIT_RADIUS, distance))
+    if(RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, center_hit_radius_, distance))
     {
         return GIZMO_AXIS_CENTER;
     }
@@ -605,7 +515,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     if(mode == GIZMO_MODE_ROTATE)
     {
         const float ring_radius = gizmo_size;
-        const float ring_thickness = ROTATE_RING_HIT_THICKNESS;
+        const float ring_thickness = rotate_ring_hit_thickness_;
         for(int axis = 0; axis < 3; axis++)
         {
             float n[3] = { 0.0f, 0.0f, 0.0f };
@@ -649,7 +559,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     if(mode == GIZMO_MODE_FREEROAM)
     {
         float cube_center[3] = { gizmo_x, gizmo_y + gizmo_size, gizmo_z };
-        float s = 0.3f;
+        float s = gizmo_size * 0.2f;
         Box3D cube_box;
         cube_box.min[0] = cube_center[0] - s; cube_box.max[0] = cube_center[0] + s;
         cube_box.min[1] = cube_center[1] - s; cube_box.max[1] = cube_center[1] + s;
@@ -663,8 +573,8 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
 
     Box3D x_box;
     x_box.min[0] = gizmo_x; x_box.max[0] = gizmo_x + gizmo_size;
-    x_box.min[1] = gizmo_y - AXIS_HIT_THICKNESS; x_box.max[1] = gizmo_y + AXIS_HIT_THICKNESS;
-    x_box.min[2] = gizmo_z - AXIS_HIT_THICKNESS; x_box.max[2] = gizmo_z + AXIS_HIT_THICKNESS;
+    x_box.min[1] = gizmo_y - axis_hit_thickness_; x_box.max[1] = gizmo_y + axis_hit_thickness_;
+    x_box.min[2] = gizmo_z - axis_hit_thickness_; x_box.max[2] = gizmo_z + axis_hit_thickness_;
 
     if(RayBoxIntersect(ray, x_box, distance) && distance < closest_distance)
     {
@@ -673,9 +583,9 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     }
 
     Box3D y_box;
-    y_box.min[0] = gizmo_x - AXIS_HIT_THICKNESS; y_box.max[0] = gizmo_x + AXIS_HIT_THICKNESS;
+    y_box.min[0] = gizmo_x - axis_hit_thickness_; y_box.max[0] = gizmo_x + axis_hit_thickness_;
     y_box.min[1] = gizmo_y; y_box.max[1] = gizmo_y + gizmo_size;
-    y_box.min[2] = gizmo_z - AXIS_HIT_THICKNESS; y_box.max[2] = gizmo_z + AXIS_HIT_THICKNESS;
+    y_box.min[2] = gizmo_z - axis_hit_thickness_; y_box.max[2] = gizmo_z + axis_hit_thickness_;
 
     if(RayBoxIntersect(ray, y_box, distance) && distance < closest_distance)
     {
@@ -684,8 +594,8 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     }
 
     Box3D z_box;
-    z_box.min[0] = gizmo_x - AXIS_HIT_THICKNESS; z_box.max[0] = gizmo_x + AXIS_HIT_THICKNESS;
-    z_box.min[1] = gizmo_y - AXIS_HIT_THICKNESS; z_box.max[1] = gizmo_y + AXIS_HIT_THICKNESS;
+    z_box.min[0] = gizmo_x - axis_hit_thickness_; z_box.max[0] = gizmo_x + axis_hit_thickness_;
+    z_box.min[1] = gizmo_y - axis_hit_thickness_; z_box.max[1] = gizmo_y + axis_hit_thickness_;
     z_box.min[2] = gizmo_z; z_box.max[2] = gizmo_z + gizmo_size;
 
     if(RayBoxIntersect(ray, z_box, distance) && distance < closest_distance)
@@ -701,7 +611,7 @@ bool Gizmo3D::PickGizmoCenter(int mouse_x, int mouse_y, const float* modelview, 
     Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
 
     float distance;
-    return RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, CENTER_SPHERE_HIT_RADIUS, distance);
+    return RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, center_hit_radius_, distance);
 }
 
 void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
@@ -725,15 +635,7 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
                         a[1] /= alen;
                         a[2] /= alen;
                     }
-                    const float d[3] = {ray.direction[0], ray.direction[1], ray.direction[2]};
-                    const float w0[3] = {origin[0] - ray.origin[0], origin[1] - ray.origin[1], origin[2] - ray.origin[2]};
-                    const float A = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
-                    const float B = a[0] * d[0] + a[1] * d[1] + a[2] * d[2];
-                    const float C = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-                    const float D = a[0] * w0[0] + a[1] * w0[1] + a[2] * w0[2];
-                    const float E = d[0] * w0[0] + d[1] * w0[1] + d[2] * w0[2];
-                    const float denom = A * C - B * B;
-                    const float t_now = (fabsf(denom) < 1e-6f) ? D : ((B * E - C * D) / denom);
+                    const float t_now = ClosestAxisParamToRay(origin, a, ray);
                     const float along = t_now - drag_axis_t_begin;
                     setTargetWorldPosition(drag_start_position[0] + a[0] * along,
                                            drag_start_position[1] + a[1] * along,
@@ -785,7 +687,7 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
                         if(selected_axis == GIZMO_AXIS_Z) rz = deg;
                         ApplyRotation(rx, ry, rz);
                         rot_angle0 = angle_now;
-                        rot_drag_accum_degrees += deg;
+                        accumulateRotateDegrees(deg);
                     }
                     else
                     {
@@ -797,6 +699,9 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
                         if(selected_axis == GIZMO_AXIS_Y) ry = delta_x * sensitivity * 10.0f;
                         if(selected_axis == GIZMO_AXIS_Z) rz = delta_x * sensitivity * 10.0f;
                         ApplyRotation(rx, ry, rz);
+                        const float fallback_deg = (selected_axis == GIZMO_AXIS_X) ? rx :
+                                                   (selected_axis == GIZMO_AXIS_Y) ? ry : rz;
+                        accumulateRotateDegrees(fallback_deg);
                     }
                 }
             }
@@ -816,6 +721,19 @@ float Gizmo3D::SnapToGrid(float value)
         return value;
 
     return roundf(value / grid_size) * grid_size;
+}
+
+void Gizmo3D::accumulateRotateDegrees(float delta_deg)
+{
+    rot_drag_accum_degrees += delta_deg;
+    while(rot_drag_accum_degrees > 360.0f)
+    {
+        rot_drag_accum_degrees -= 360.0f;
+    }
+    while(rot_drag_accum_degrees < -360.0f)
+    {
+        rot_drag_accum_degrees += 360.0f;
+    }
 }
 
 void Gizmo3D::captureDragStartPosition()
@@ -881,13 +799,6 @@ void Gizmo3D::setTargetWorldPosition(float x, float y, float z)
 float Gizmo3D::Dot3(const float a[3], const float b[3])
 {
     return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-}
-
-void Gizmo3D::Cross3(const float a[3], const float b[3], float out[3])
-{
-    out[0] = a[1]*b[2] - a[2]*b[1];
-    out[1] = a[2]*b[0] - a[0]*b[2];
-    out[2] = a[0]*b[1] - a[1]*b[0];
 }
 
 float Gizmo3D::ClosestAxisParamToRay(const float axis_origin[3], const float axis_dir_unit[3], const Ray3D& ray)
@@ -1033,326 +944,3 @@ void Gizmo3D::ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* m
     setTargetWorldPosition(target_x, target_y, target_z);
 }
 
-void Gizmo3D::DrawMoveGizmo()
-{
-    glDisable(GL_LIGHTING);
-
-    GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
-    const float x_alpha = (hl == GIZMO_AXIS_X) ? 1.0f : 0.92f;
-    glLineWidth((hl == GIZMO_AXIS_X) ? 4.5f : 3.5f);
-    DrawGizmoLineSegment(0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, 0.0f, color[0], color[1], color[2], x_alpha);
-
-    glBegin(GL_TRIANGLES);
-    glVertex3f(gizmo_size, 0.0f, 0.0f);
-    glVertex3f(gizmo_size - 0.3f, 0.15f, 0.0f);
-    glVertex3f(gizmo_size - 0.3f, -0.15f, 0.0f);
-
-    glVertex3f(gizmo_size, 0.0f, 0.0f);
-    glVertex3f(gizmo_size - 0.3f, 0.0f, 0.15f);
-    glVertex3f(gizmo_size - 0.3f, 0.0f, -0.15f);
-    glEnd();
-
-    color = (hl == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
-    const float y_alpha = (hl == GIZMO_AXIS_Y) ? 1.0f : 0.92f;
-    glLineWidth((hl == GIZMO_AXIS_Y) ? 4.5f : 3.5f);
-    DrawGizmoLineSegment(0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, color[0], color[1], color[2], y_alpha);
-
-    glBegin(GL_TRIANGLES);
-    glVertex3f(0.0f, gizmo_size, 0.0f);
-    glVertex3f(0.15f, gizmo_size - 0.3f, 0.0f);
-    glVertex3f(-0.15f, gizmo_size - 0.3f, 0.0f);
-
-    glVertex3f(0.0f, gizmo_size, 0.0f);
-    glVertex3f(0.0f, gizmo_size - 0.3f, 0.15f);
-    glVertex3f(0.0f, gizmo_size - 0.3f, -0.15f);
-    glEnd();
-
-    color = (hl == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
-    const float z_alpha = (hl == GIZMO_AXIS_Z) ? 1.0f : 0.92f;
-    glLineWidth((hl == GIZMO_AXIS_Z) ? 4.5f : 3.5f);
-    DrawGizmoLineSegment(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, color[0], color[1], color[2], z_alpha);
-
-    glBegin(GL_TRIANGLES);
-    glVertex3f(0.0f, 0.0f, gizmo_size);
-    glVertex3f(0.15f, 0.0f, gizmo_size - 0.3f);
-    glVertex3f(-0.15f, 0.0f, gizmo_size - 0.3f);
-
-    glVertex3f(0.0f, 0.0f, gizmo_size);
-    glVertex3f(0.0f, 0.15f, gizmo_size - 0.3f);
-    glVertex3f(0.0f, -0.15f, gizmo_size - 0.3f);
-    glEnd();
-
-    float orange[3] = {1.0f, 0.5f, 0.0f};
-    color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
-    float center[3] = { 0.0f, 0.0f, 0.0f };
-    DrawCube(center, center_sphere_radius, color);
-
-    glLineWidth(1.0f);
-    glEnable(GL_LIGHTING);
-}
-
-void Gizmo3D::DrawCube(float pos[3], float size, float color[3])
-{
-    glColor3f(color[0], color[1], color[2]);
-
-    glPushMatrix();
-    glTranslatef(pos[0], pos[1], pos[2]);
-
-    glBegin(GL_QUADS);
-
-    glVertex3f(-size, -size, -size);
-    glVertex3f(+size, -size, -size);
-    glVertex3f(+size, +size, -size);
-    glVertex3f(-size, +size, -size);
-
-    glVertex3f(-size, -size, +size);
-    glVertex3f(+size, -size, +size);
-    glVertex3f(+size, +size, +size);
-    glVertex3f(-size, +size, +size);
-
-    glVertex3f(-size, -size, -size);
-    glVertex3f(-size, -size, +size);
-    glVertex3f(-size, +size, +size);
-    glVertex3f(-size, +size, -size);
-
-    glVertex3f(+size, -size, -size);
-    glVertex3f(+size, -size, +size);
-    glVertex3f(+size, +size, +size);
-    glVertex3f(+size, +size, -size);
-
-    glVertex3f(-size, -size, -size);
-    glVertex3f(+size, -size, -size);
-    glVertex3f(+size, -size, +size);
-    glVertex3f(-size, -size, +size);
-
-    glVertex3f(-size, +size, -size);
-    glVertex3f(+size, +size, -size);
-    glVertex3f(+size, +size, +size);
-    glVertex3f(-size, +size, +size);
-
-    glEnd();
-    glPopMatrix();
-}
-
-void Gizmo3D::DrawRotateGizmo()
-{
-    glDisable(GL_LIGHTING);
-
-    float handle_radius = 0.15f;
-
-    GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
-    glLineWidth((hl == GIZMO_AXIS_X) ? 5.0f : 3.0f);
-    DrawGizmoRingLoop(0, gizmo_size, color[0], color[1], color[2], (hl == GIZMO_AXIS_X) ? 1.0f : 0.88f);
-    for(int i = 0; i < 4; i++)
-    {
-        float angle = (i / 4.0f) * 2.0f * M_PI;
-        float handle_pos[3] = {0.0f, cosf(angle) * gizmo_size, sinf(angle) * gizmo_size};
-        DrawSphere(handle_pos, handle_radius, color);
-    }
-
-    color = (hl == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
-    glLineWidth((hl == GIZMO_AXIS_Y) ? 5.0f : 3.0f);
-    DrawGizmoRingLoop(1, gizmo_size, color[0], color[1], color[2], (hl == GIZMO_AXIS_Y) ? 1.0f : 0.88f);
-    for(int i = 0; i < 4; i++)
-    {
-        float angle = (i / 4.0f) * 2.0f * M_PI;
-        float handle_pos[3] = {cosf(angle) * gizmo_size, 0.0f, sinf(angle) * gizmo_size};
-        DrawSphere(handle_pos, handle_radius, color);
-    }
-
-    color = (hl == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
-    glLineWidth((hl == GIZMO_AXIS_Z) ? 5.0f : 3.0f);
-    DrawGizmoRingLoop(2, gizmo_size, color[0], color[1], color[2], (hl == GIZMO_AXIS_Z) ? 1.0f : 0.88f);
-    for(int i = 0; i < 4; i++)
-    {
-        float angle = (i / 4.0f) * 2.0f * M_PI;
-        float handle_pos[3] = {cosf(angle) * gizmo_size, sinf(angle) * gizmo_size, 0.0f};
-        DrawSphere(handle_pos, handle_radius, color);
-    }
-
-    if(dragging && mode == GIZMO_MODE_ROTATE &&
-       (selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z))
-    {
-        float arc_radius = gizmo_size * 1.12f;
-        float start = rot_drag_start_angle;
-        float sweep = rot_drag_accum_degrees * ((float)M_PI / 180.0f);
-        const int segments = 72;
-
-        glLineWidth(4.5f);
-        BeginGizmoSmoothLines();
-        glColor4f(1.0f, 1.0f, 1.0f, 0.95f);
-        glBegin(GL_LINE_STRIP);
-        for(int i = 0; i <= segments; i++)
-        {
-            float t = (float)i / (float)segments;
-            float a = start + sweep * t;
-            if(selected_axis == GIZMO_AXIS_X) glVertex3f(0.0f, cosf(a) * arc_radius, sinf(a) * arc_radius);
-            if(selected_axis == GIZMO_AXIS_Y) glVertex3f(cosf(a) * arc_radius, 0.0f, sinf(a) * arc_radius);
-            if(selected_axis == GIZMO_AXIS_Z) glVertex3f(cosf(a) * arc_radius, sinf(a) * arc_radius, 0.0f);
-        }
-        glEnd();
-        EndGizmoSmoothLines();
-        glLineWidth(3.0f);
-    }
-
-    float orange[3] = {1.0f, 0.5f, 0.0f};
-    color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
-    float center[3] = { 0.0f, 0.0f, 0.0f };
-    DrawCube(center, center_sphere_radius, color);
-
-    glLineWidth(1.0f);
-    glEnable(GL_LIGHTING);
-}
-
-void Gizmo3D::DrawAxis(float start[3], float end[3], float color[3], bool highlighted)
-{
-    (void)highlighted;
-
-    glColor3f(color[0], color[1], color[2]);
-
-    glBegin(GL_LINES);
-    glVertex3f(start[0], start[1], start[2]);
-    glVertex3f(end[0], end[1], end[2]);
-    glEnd();
-
-    DrawArrowHead(end, end, color);
-}
-
-void Gizmo3D::DrawArrowHead(float pos[3], float dir[3], float color[3])
-{
-    (void)dir;
-
-    glColor3f(color[0], color[1], color[2]);
-
-    float arrow_size = 0.1f;
-
-    glPushMatrix();
-    glTranslatef(pos[0], pos[1], pos[2]);
-
-    glBegin(GL_TRIANGLES);
-    glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(-arrow_size, arrow_size, 0.0f);
-    glVertex3f(-arrow_size, -arrow_size, 0.0f);
-    glEnd();
-
-    glPopMatrix();
-}
-
-void Gizmo3D::DrawSphere(float pos[3], float radius, float color[3])
-{
-    glColor3f(color[0], color[1], color[2]);
-
-    glPushMatrix();
-    glTranslatef(pos[0], pos[1], pos[2]);
-
-    const int slices = 16;
-    const int stacks = 16;
-
-    for(int i = 0; i < stacks; i++)
-    {
-        float lat0 = M_PI * (-0.5f + (float)i / stacks);
-        float lat1 = M_PI * (-0.5f + (float)(i + 1) / stacks);
-        float y0 = radius * sinf(lat0);
-        float y1 = radius * sinf(lat1);
-        float r0 = radius * cosf(lat0);
-        float r1 = radius * cosf(lat1);
-
-        glBegin(GL_TRIANGLE_STRIP);
-        for(int j = 0; j <= slices; j++)
-        {
-            float lng = 2.0f * M_PI * j / slices;
-            float x = cosf(lng);
-            float z = sinf(lng);
-
-            glVertex3f(x * r0, y0, z * r0);
-            glVertex3f(x * r1, y1, z * r1);
-        }
-        glEnd();
-    }
-
-    glPopMatrix();
-}
-
-void Gizmo3D::WorldToScreen(float world_x, float world_y, float world_z, int& screen_x, int& screen_y,
-                           const float* modelview, const float* projection, const int* viewport)
-{
-    (void)world_z;
-    (void)modelview;
-    (void)projection;
-    (void)viewport;
-
-    screen_x = (int)(world_x * 100.0f + viewport_width / 2);
-    screen_y = (int)(world_y * 100.0f + viewport_height / 2);
-}
-
-void Gizmo3D::ScreenToWorld(int screen_x, int screen_y, float& world_x, float& world_y, float& world_z,
-                           const float* modelview, const float* projection, const int* viewport)
-{
-    (void)modelview;
-    (void)projection;
-    (void)viewport;
-
-    world_x = (screen_x - viewport_width / 2) / 100.0f;
-    world_y = (screen_y - viewport_height / 2) / 100.0f;
-    world_z = 0.0f;
-}
-
-void Gizmo3D::DrawFreeroamGizmo()
-{
-    glDisable(GL_LIGHTING);
-
-    float purple[3] = {0.5f, 0.0f, 1.0f};
-    GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    float* stick_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : purple;
-    glLineWidth((hl == GIZMO_AXIS_CENTER) ? 5.0f : 4.0f);
-    DrawGizmoLineSegment(0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f,
-                         stick_color[0], stick_color[1], stick_color[2],
-                         (hl == GIZMO_AXIS_CENTER) ? 1.0f : 0.9f);
-
-    float cube_size = 0.3f;
-    float stick_height = gizmo_size;
-
-    glBegin(GL_QUADS);
-
-    glVertex3f(-cube_size, stick_height - cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height - cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height + cube_size, -cube_size);
-    glVertex3f(-cube_size, stick_height + cube_size, -cube_size);
-
-    glVertex3f(-cube_size, stick_height - cube_size, +cube_size);
-    glVertex3f(+cube_size, stick_height - cube_size, +cube_size);
-    glVertex3f(+cube_size, stick_height + cube_size, +cube_size);
-    glVertex3f(-cube_size, stick_height + cube_size, +cube_size);
-
-    glVertex3f(-cube_size, stick_height - cube_size, -cube_size);
-    glVertex3f(-cube_size, stick_height + cube_size, -cube_size);
-    glVertex3f(-cube_size, stick_height + cube_size, +cube_size);
-    glVertex3f(-cube_size, stick_height - cube_size, +cube_size);
-
-    glVertex3f(+cube_size, stick_height - cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height + cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height + cube_size, +cube_size);
-    glVertex3f(+cube_size, stick_height - cube_size, +cube_size);
-
-    glVertex3f(-cube_size, stick_height - cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height - cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height - cube_size, +cube_size);
-    glVertex3f(-cube_size, stick_height - cube_size, +cube_size);
-
-    glVertex3f(-cube_size, stick_height + cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height + cube_size, -cube_size);
-    glVertex3f(+cube_size, stick_height + cube_size, +cube_size);
-    glVertex3f(-cube_size, stick_height + cube_size, +cube_size);
-
-    glEnd();
-
-    float orange[3] = {1.0f, 0.5f, 0.0f};
-    float* center_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
-    float center[3] = { 0.0f, 0.0f, 0.0f };
-    DrawCube(center, center_sphere_radius, center_color);
-
-    glLineWidth(1.0f);
-    glEnable(GL_LIGHTING);
-}

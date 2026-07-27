@@ -34,16 +34,17 @@ bool DirectionInvertsAxis(Direction dir)
 {
     switch(dir)
     {
+        /* Named dirs aim at the matching room wall (Forward→Front Z=0, Back→+Z). */
         case Direction::Left:
         case Direction::Down:
-        case Direction::Back:
+        case Direction::Forward:
         case Direction::NegX:
         case Direction::NegY:
         case Direction::NegZ:
             return true;
         case Direction::Right:
         case Direction::Up:
-        case Direction::Forward:
+        case Direction::Back:
         case Direction::PosX:
         case Direction::PosY:
         case Direction::PosZ:

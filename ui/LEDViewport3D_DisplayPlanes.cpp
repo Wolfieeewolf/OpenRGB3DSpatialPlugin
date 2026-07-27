@@ -8,12 +8,83 @@
 
 #include "Colors.h"
 #include "LEDViewport3D.h"
-#include "viewport/ViewportGLIncludes.h"
+#include "viewport/ViewportMath.h"
+#include "viewport/MeshBatch.h"
 #include "ScreenCaptureManager.h"
 
 namespace
 {
 constexpr float kRoomGridOverlayCellEps = 1e-4f;
+
+void PushPC(std::vector<float>& out, float x, float y, float z, float r, float g, float b)
+{
+    out.push_back(x); out.push_back(y); out.push_back(z);
+    out.push_back(r); out.push_back(g); out.push_back(b);
+}
+
+void PushTriPC(std::vector<float>& out,
+               float x0, float y0, float z0,
+               float x1, float y1, float z1,
+               float x2, float y2, float z2,
+               float r, float g, float b)
+{
+    PushPC(out, x0, y0, z0, r, g, b);
+    PushPC(out, x1, y1, z1, r, g, b);
+    PushPC(out, x2, y2, z2, r, g, b);
+}
+
+void PushQuadPC(std::vector<float>& out,
+                const Vector3D& a, const Vector3D& b, const Vector3D& c, const Vector3D& d,
+                float cr, float cg, float cb)
+{
+    PushTriPC(out, a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, cr, cg, cb);
+    PushTriPC(out, a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z, cr, cg, cb);
+}
+
+void PushTexturedQuad(std::vector<float>& out, const Vector3D corners[4])
+{
+    // PosColorUv: white tint.
+    const float uv[4][2] = {{0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f}};
+    auto push_vert = [&](int i) {
+        out.push_back(corners[i].x);
+        out.push_back(corners[i].y);
+        out.push_back(corners[i].z);
+        out.push_back(1.0f);
+        out.push_back(1.0f);
+        out.push_back(1.0f);
+        out.push_back(uv[i][0]);
+        out.push_back(uv[i][1]);
+    };
+    push_vert(0); push_vert(1); push_vert(2);
+    push_vert(0); push_vert(2); push_vert(3);
+}
+
+void AppendCalibrationQuads(std::vector<float>& out, const Vector3D world_corners[4])
+{
+    Vector3D center;
+    center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
+    center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
+    center.z = (world_corners[0].z + world_corners[2].z) * 0.5f;
+
+    Vector3D mid_bottom, mid_top, mid_left, mid_right;
+    mid_bottom.x = (world_corners[0].x + world_corners[1].x) * 0.5f;
+    mid_bottom.y = (world_corners[0].y + world_corners[1].y) * 0.5f;
+    mid_bottom.z = (world_corners[0].z + world_corners[1].z) * 0.5f;
+    mid_top.x = (world_corners[2].x + world_corners[3].x) * 0.5f;
+    mid_top.y = (world_corners[2].y + world_corners[3].y) * 0.5f;
+    mid_top.z = (world_corners[2].z + world_corners[3].z) * 0.5f;
+    mid_left.x = (world_corners[0].x + world_corners[3].x) * 0.5f;
+    mid_left.y = (world_corners[0].y + world_corners[3].y) * 0.5f;
+    mid_left.z = (world_corners[0].z + world_corners[3].z) * 0.5f;
+    mid_right.x = (world_corners[1].x + world_corners[2].x) * 0.5f;
+    mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
+    mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
+
+    PushQuadPC(out, world_corners[0], mid_bottom, center, mid_left, 1.0f, 0.0f, 0.0f);
+    PushQuadPC(out, mid_bottom, world_corners[1], mid_right, center, 0.0f, 1.0f, 0.0f);
+    PushQuadPC(out, center, mid_right, world_corners[2], mid_top, 0.0f, 0.0f, 1.0f);
+    PushQuadPC(out, mid_left, center, mid_top, world_corners[3], 1.0f, 1.0f, 0.0f);
+}
 
 int RoomGridOverlayCellCountAlong(float min_v, float max_v)
 {
@@ -235,8 +306,6 @@ void LEDViewport3D::SwapRoomGridColorBuffer(std::vector<RGBColor>& buf)
 
 void LEDViewport3D::DrawRoomGridOverlay()
 {
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
 
@@ -327,24 +396,27 @@ void LEDViewport3D::DrawRoomGridOverlay()
         }
     }
 
-    glPointSize(room_grid_point_size);
-    glVertexPointer(3, GL_FLOAT, 0, room_grid_overlay_positions.data());
-    glColorPointer(3, GL_FLOAT, 0, room_grid_overlay_colors.data());
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glDrawArrays(GL_POINTS, 0, (GLsizei)count);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glPointSize(1.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
+    room_grid_overlay_interleaved_.resize(6u * count);
+    for(size_t i = 0; i < count; ++i)
+    {
+        room_grid_overlay_interleaved_[i * 6 + 0] = room_grid_overlay_positions[i * 3 + 0];
+        room_grid_overlay_interleaved_[i * 6 + 1] = room_grid_overlay_positions[i * 3 + 1];
+        room_grid_overlay_interleaved_[i * 6 + 2] = room_grid_overlay_positions[i * 3 + 2];
+        room_grid_overlay_interleaved_[i * 6 + 3] = room_grid_overlay_colors[i * 3 + 0];
+        room_grid_overlay_interleaved_[i * 6 + 4] = room_grid_overlay_colors[i * 3 + 1];
+        room_grid_overlay_interleaved_[i * 6 + 5] = room_grid_overlay_colors[i * 3 + 2];
+    }
+
+    room_grid_overlay_batch_.Upload(MeshBatch::Layout::PosColor,
+                                    room_grid_overlay_interleaved_.data(),
+                                    count);
+    const ViewportMat4 identity = ViewportMath::Identity();
+    drawUnlitPoints(room_grid_overlay_batch_, room_grid_point_size, 1.0f, identity);
 }
 
 void LEDViewport3D::DrawDisplayPlanes()
 {
     if(!display_planes) return;
-
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -379,65 +451,22 @@ void LEDViewport3D::DrawDisplayPlanes()
             world_corners[i] = TransformLocalToWorld(local_corners[i], plane_ptr->GetTransform());
         }
 
-        bool selected = ((int)plane_index == selected_display_plane_idx);
-        float fill_color[4]   = { selected ? 0.35f : 0.2f,  selected ? 0.80f : 0.60f, 1.0f, selected ? 0.30f : 0.18f };
-        float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
+        const bool selected = ((int)plane_index == selected_display_plane_idx);
+        const float fill_r = selected ? 0.35f : 0.2f;
+        const float fill_g = selected ? 0.80f : 0.60f;
+        const float fill_b = 1.0f;
+        const float fill_a = selected ? 0.30f : 0.18f;
+        const float border_r = selected ? 0.65f : 0.35f;
+        const float border_g = selected ? 0.90f : 0.70f;
+        const float border_b = 1.0f;
+        const float border_a = selected ? 1.00f : 0.85f;
 
         if(wants_cal)
         {
-            Vector3D center;
-            center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
-            center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
-            center.z = (world_corners[0].z + world_corners[2].z) * 0.5f;
-
-            Vector3D mid_bottom, mid_top, mid_left, mid_right;
-            mid_bottom.x = (world_corners[0].x + world_corners[1].x) * 0.5f;
-            mid_bottom.y = (world_corners[0].y + world_corners[1].y) * 0.5f;
-            mid_bottom.z = (world_corners[0].z + world_corners[1].z) * 0.5f;
-
-            mid_top.x = (world_corners[2].x + world_corners[3].x) * 0.5f;
-            mid_top.y = (world_corners[2].y + world_corners[3].y) * 0.5f;
-            mid_top.z = (world_corners[2].z + world_corners[3].z) * 0.5f;
-
-            mid_left.x = (world_corners[0].x + world_corners[3].x) * 0.5f;
-            mid_left.y = (world_corners[0].y + world_corners[3].y) * 0.5f;
-            mid_left.z = (world_corners[0].z + world_corners[3].z) * 0.5f;
-
-            mid_right.x = (world_corners[1].x + world_corners[2].x) * 0.5f;
-            mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
-            mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
-
-            glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
-            glBegin(GL_QUADS);
-            glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
-            glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
-            glVertex3f(center.x, center.y, center.z);
-            glVertex3f(mid_left.x, mid_left.y, mid_left.z);
-            glEnd();
-
-            glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
-            glBegin(GL_QUADS);
-            glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
-            glVertex3f(world_corners[1].x, world_corners[1].y, world_corners[1].z);
-            glVertex3f(mid_right.x, mid_right.y, mid_right.z);
-            glVertex3f(center.x, center.y, center.z);
-            glEnd();
-
-            glColor4f(0.0f, 0.0f, 1.0f, 0.85f);
-            glBegin(GL_QUADS);
-            glVertex3f(center.x, center.y, center.z);
-            glVertex3f(mid_right.x, mid_right.y, mid_right.z);
-            glVertex3f(world_corners[2].x, world_corners[2].y, world_corners[2].z);
-            glVertex3f(mid_top.x, mid_top.y, mid_top.z);
-            glEnd();
-
-            glColor4f(1.0f, 1.0f, 0.0f, 0.85f);
-            glBegin(GL_QUADS);
-            glVertex3f(mid_left.x, mid_left.y, mid_left.z);
-            glVertex3f(center.x, center.y, center.z);
-            glVertex3f(mid_top.x, mid_top.y, mid_top.z);
-            glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
-            glEnd();
+            std::vector<float> cal;
+            AppendCalibrationQuads(cal, world_corners);
+            display_plane_batch_.Upload(MeshBatch::Layout::PosColor, cal.data(), cal.size() / 6);
+            drawUnlitBatch(display_plane_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.85f, nullptr);
         }
         else if(wants_prev)
         {
@@ -457,102 +486,39 @@ void LEDViewport3D::DrawDisplayPlanes()
 
             if(has_texture)
             {
-                glEnable(GL_TEXTURE_2D);
-                glBindTexture(GL_TEXTURE_2D, texture_id);
-                glColor4f(1.0f, 1.0f, 1.0f, 0.85f);
-
-                glBegin(GL_QUADS);
-                glTexCoord2f(0.0f, 1.0f);
-                glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
-                glTexCoord2f(1.0f, 1.0f);
-                glVertex3f(world_corners[1].x, world_corners[1].y, world_corners[1].z);
-                glTexCoord2f(1.0f, 0.0f);
-                glVertex3f(world_corners[2].x, world_corners[2].y, world_corners[2].z);
-                glTexCoord2f(0.0f, 0.0f);
-                glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
-                glEnd();
-
-                glBindTexture(GL_TEXTURE_2D, 0);
-                glDisable(GL_TEXTURE_2D);
+                std::vector<float> textured;
+                PushTexturedQuad(textured, world_corners);
+                display_plane_batch_.Upload(MeshBatch::Layout::PosColorUv, textured.data(), textured.size() / 8);
+                drawTexturedBatch(display_plane_batch_, texture_id, 0.85f, nullptr);
             }
             else
             {
-                Vector3D center;
-                center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
-                center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
-                center.z = (world_corners[0].z + world_corners[2].z) * 0.5f;
-
-                Vector3D mid_bottom, mid_top, mid_left, mid_right;
-                mid_bottom.x = (world_corners[0].x + world_corners[1].x) * 0.5f;
-                mid_bottom.y = (world_corners[0].y + world_corners[1].y) * 0.5f;
-                mid_bottom.z = (world_corners[0].z + world_corners[1].z) * 0.5f;
-
-                mid_top.x = (world_corners[2].x + world_corners[3].x) * 0.5f;
-                mid_top.y = (world_corners[2].y + world_corners[3].y) * 0.5f;
-                mid_top.z = (world_corners[2].z + world_corners[3].z) * 0.5f;
-
-                mid_left.x = (world_corners[0].x + world_corners[3].x) * 0.5f;
-                mid_left.y = (world_corners[0].y + world_corners[3].y) * 0.5f;
-                mid_left.z = (world_corners[0].z + world_corners[3].z) * 0.5f;
-
-                mid_right.x = (world_corners[1].x + world_corners[2].x) * 0.5f;
-                mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
-                mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
-
-                glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
-                glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
-                glVertex3f(center.x, center.y, center.z);
-                glVertex3f(mid_left.x, mid_left.y, mid_left.z);
-                glEnd();
-
-                glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
-                glVertex3f(world_corners[1].x, world_corners[1].y, world_corners[1].z);
-                glVertex3f(mid_right.x, mid_right.y, mid_right.z);
-                glVertex3f(center.x, center.y, center.z);
-                glEnd();
-
-                glColor4f(0.0f, 0.0f, 1.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(center.x, center.y, center.z);
-                glVertex3f(mid_right.x, mid_right.y, mid_right.z);
-                glVertex3f(world_corners[2].x, world_corners[2].y, world_corners[2].z);
-                glVertex3f(mid_top.x, mid_top.y, mid_top.z);
-                glEnd();
-
-                glColor4f(1.0f, 1.0f, 0.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(mid_left.x, mid_left.y, mid_left.z);
-                glVertex3f(center.x, center.y, center.z);
-                glVertex3f(mid_top.x, mid_top.y, mid_top.z);
-                glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
-                glEnd();
+                std::vector<float> cal;
+                AppendCalibrationQuads(cal, world_corners);
+                display_plane_batch_.Upload(MeshBatch::Layout::PosColor, cal.data(), cal.size() / 6);
+                drawUnlitBatch(display_plane_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.85f, nullptr);
             }
         }
         else
         {
-            glColor4fv(fill_color);
-            glBegin(GL_QUADS);
-            for(int i = 0; i < 4; ++i)
-            {
-                glVertex3f(world_corners[i].x, world_corners[i].y, world_corners[i].z);
-            }
-            glEnd();
+            std::vector<float> fill;
+            PushQuadPC(fill, world_corners[0], world_corners[1], world_corners[2], world_corners[3],
+                       fill_r, fill_g, fill_b);
+            display_plane_batch_.Upload(MeshBatch::Layout::PosColor, fill.data(), fill.size() / 6);
+            drawUnlitBatch(display_plane_batch_, MeshBatch::Primitive::Triangles, 1.0f, fill_a, nullptr);
         }
 
-        glColor4fv(border_color);
-        glLineWidth(selected ? 3.0f : 2.0f);
-        glBegin(GL_LINE_LOOP);
+        std::vector<float> border;
         for(int i = 0; i < 4; ++i)
         {
-            glVertex3f(world_corners[i].x, world_corners[i].y, world_corners[i].z);
+            const Vector3D& a = world_corners[i];
+            const Vector3D& b = world_corners[(i + 1) % 4];
+            PushPC(border, a.x, a.y, a.z, border_r, border_g, border_b);
+            PushPC(border, b.x, b.y, b.z, border_r, border_g, border_b);
         }
-        glEnd();
-        glLineWidth(1.0f);
-
+        // Reuse controller edges scratch so textured PosColorUv upload is not overwritten mid-draw.
+        controller_edges_batch_.Upload(MeshBatch::Layout::PosColor, border.data(), border.size() / 6);
+        drawUnlitBatch(controller_edges_batch_, MeshBatch::Primitive::Lines, selected ? 3.0f : 2.0f, border_a, nullptr);
     }
 
     glDisable(GL_BLEND);

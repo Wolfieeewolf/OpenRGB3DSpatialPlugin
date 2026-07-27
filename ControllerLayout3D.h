@@ -17,6 +17,8 @@ public:
     static std::vector<LEDPosition3D> GenerateCustomGridLayoutWithSpacing(RGBControllerInterface* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm, bool center_layout = true);
     static Vector3D CalculateWorldPosition(Vector3D local_pos, Transform3D transform);
     static Vector3D GetControllerCenterWorld(const ControllerTransform* ctrl_transform);
+    /** LED AABB center in local layout space — same pivot UpdateWorldPositions / effects use. */
+    static Vector3D GetLedLocalCenter(const ControllerTransform* ctrl_transform);
     static void UpdateWorldPositions(ControllerTransform* ctrl_transform);
     static void MarkWorldPositionsDirty(ControllerTransform* ctrl_transform);
     static void CalculateControllerLocalBounds(const ControllerTransform* ctrl_transform,

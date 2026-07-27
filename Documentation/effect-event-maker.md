@@ -51,6 +51,8 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
   - **Room** (default on All / scene zone): one shared **world** AABB across all LEDs in the target — Wipe, Ripple, Sphere Wipe, Fire, etc. continue across controllers using the 3D layout.
   - **Sequence**: Wipe/Chase/Spin/Meteor/Bars march along controller→LED order (zone drag order); Volume/Pixel types still use room XYZ.
   - Preset directions or custom yaw/pitch in Device/Room space.
+  - Named directions aim at the matching viewport wall/side: Left/Right (±X), Down/Up (±Y),
+    **Forward → Front wall (Z=0 / −Z)**, **Back → Back wall (+Z)**. Explicit `+z`/`-z` stay geometric.
 - Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (format version **4** only).
 - Empty library seeds three examples: rainbow wash, desk ripple (Room), sequence wipe.
 

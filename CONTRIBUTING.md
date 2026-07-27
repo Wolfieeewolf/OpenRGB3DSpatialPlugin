@@ -111,7 +111,7 @@ When changing plugin behavior—especially anything that touches devices, colors
 | Presets / scripts | Export/import uses current schema only | One-off `convert_*.py` migration tools in the repo |
 | Plugin settings | `LEDSpacing` X/Y/Z in host settings JSON | `legacy_grid_pitch_mm` or other retired keys |
 
-**Exception — viewport only:** the Qt **OpenGL 4.1** room (`LEDViewport3D` / `QOpenGLWidget`, currently Compatibility while migrating to Core; `ViewportGLIncludes`) is the only viewport path (no GPU shader dual path). That is rendering infrastructure, not data-format backward compatibility. Requires **Qt 6.8**.
+**Exception — viewport only:** the Qt **OpenGL 4.1 Core** room (`LEDViewport3D` / `QOpenGLWidget` + `QOpenGLFunctions_4_1_Core`) is the only viewport path (no GPU shader dual path). That is rendering infrastructure, not data-format backward compatibility. Requires **Qt 6.8**.
 
 When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
@@ -191,7 +191,7 @@ Optional local notes may live in a gitignored **`docs/`** folder on your machine
 Aligned with **this file**, **`OpenRGB/CONTRIBUTING.md`**, and the OpenRGB docs in **OpenRGB reference documentation** above (minimum: **`RGBControllerAPI.md`** when touching LEDs/zones/colors).
 
 - [ ] **Scope:** changes only under plugin-owned paths; no edits in `OpenRGB/` unless intentional.
-- [ ] **No legacy paths:** no new migration or old-format fallbacks; remove any you touch unless the viewport OpenGL 4.1 Compat→Core migration (see **No legacy or backward-compatibility paths**).
+- [ ] **No legacy paths:** no new migration or old-format fallbacks; remove any you touch (viewport is OpenGL 4.1 Core only — see **No legacy or backward-compatibility paths**).
 - [ ] **Logging:** no `QDebug`, `printf`, or `std::cout`; use `LogManager`.
 - [ ] **UI chrome:** no `setStyleSheet` on structural chrome; no custom theme `QPalette` on panels/`QGroupBox` (card selection exception in **UI** only).
 - [ ] **Headers:** SPDX on new or substantially new `.cpp`/`.h`; match brace/naming style in the file.

@@ -7,7 +7,7 @@
 
 class QOpenGLWidget;
 
-/** OpenGL 4.1 Compatibility surface for the room viewport (QOpenGLWidget). */
+/** OpenGL 4.1 Core surface for the room viewport (QOpenGLWidget). */
 namespace ViewportGLFormat
 {
 constexpr float kDefaultFovyDegrees = 45.0f;

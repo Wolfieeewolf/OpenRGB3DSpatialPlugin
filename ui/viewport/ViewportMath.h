@@ -21,11 +21,13 @@ struct ViewportVec3
     float z = 0.0f;
 };
 
-struct ViewportFrameMatrices
+/** Full frame for paint + pick: view = camera only; scene = view × room turntable. */
+struct ViewportFrame
 {
     ViewportMat4 projection;
     ViewportMat4 view;
-    int viewport[4] = {0, 0, 0, 0};
+    ViewportMat4 scene;
+    int viewport[4] = {0, 0, 1, 1};
 };
 
 struct Transform3D;
@@ -43,11 +45,11 @@ ViewportMat4 Scale(float x, float y, float z);
 ViewportMat4 RotationX(float degrees);
 ViewportMat4 RotationY(float degrees);
 ViewportMat4 RotationZ(float degrees);
-/** Matches LEDViewport3D glTranslate / glRotate(X,Y,Z) / glScale order. */
+/** Matches LEDViewport3D transform order: translate, rotate X/Y/Z, scale. */
 ViewportMat4 FromTransform3D(const Transform3D& transform);
 ViewportMat4 ModelViewProjection(const ViewportMat4& projection, const ViewportMat4& view, const ViewportMat4& model);
 
-/** Window coords: origin bottom-left (matches legacy gluProject). */
+/** Window coords: origin bottom-left (OpenGL convention). */
 bool ProjectWorldToWindow(const ViewportMat4& modelview,
                           const ViewportMat4& projection,
                           const int viewport[4],
@@ -68,7 +70,7 @@ bool ProjectWorldToScreen(const ViewportMat4& modelview,
                           float& out_screen_x,
                           float& out_screen_y);
 
-/** Window coords: origin bottom-left (matches gluUnProject / picking). win_z: 0 = near, 1 = far. */
+/** Window coords: origin bottom-left. win_z: 0 = near, 1 = far. */
 bool UnprojectWindow(const ViewportMat4& modelview,
                      const ViewportMat4& projection,
                      const int viewport[4],
