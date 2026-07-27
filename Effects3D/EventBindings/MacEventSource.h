@@ -2,6 +2,8 @@
 #pragma once
 
 #include "EventSource.h"
+
+#include <QtGlobal>
 #include <memory>
 
 namespace EffectBinding

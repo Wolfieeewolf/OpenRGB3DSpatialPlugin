@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-#ifdef Q_OS_LINUX
+#include <QtGlobal>
 
-#include "LinuxEventSource.h"
+#ifdef Q_OS_LINUX
 
 #include <QObject>
 #include <QString>
@@ -11,6 +11,8 @@
 
 namespace EffectBinding
 {
+
+class LinuxEventSource;
 
 class LinuxLoginWatcher : public QObject
 {
