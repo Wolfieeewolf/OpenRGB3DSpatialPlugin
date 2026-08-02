@@ -354,7 +354,6 @@ nlohmann::json Wave::SaveSettings() const
 void Wave::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    // Old Wave Line keys (mode/shape_type/edge_shape/wave_thickness) are ignored — use Traveling Light → Wave Fronts.
     if(settings.contains("wave_style") && settings["wave_style"].is_number_integer())
         wave_style = std::max(0, std::min(settings["wave_style"].get<int>(), STYLE_COUNT - 1));
     if(settings.contains("surface_thickness") && settings["surface_thickness"].is_number())

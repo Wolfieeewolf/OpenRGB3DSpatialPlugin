@@ -147,28 +147,6 @@ inline void AppendOnsetThresholdRow(QVBoxLayout* layout,
                         on_changed);
 }
 
-inline void AppendPercentScaledRow(QVBoxLayout* layout,
-                                   float& value_0_to_1,
-                                   QObject* owner,
-                                   const std::function<void()>& on_changed,
-                                   const QString& label,
-                                   int slider_min,
-                                   int slider_max,
-                                   const QString& tooltip)
-{
-    AppendSliderHBoxRow(layout,
-                        label,
-                        slider_min,
-                        slider_max,
-                        (int)(value_0_to_1 * 100.0f),
-                        tooltip,
-                        40,
-                        owner,
-                        [](int v) { return QString::number(v) + QStringLiteral("%"); },
-                        [&value_0_to_1](int v) { value_0_to_1 = v / 100.0f; },
-                        on_changed);
-}
-
 inline void AppendFrequencyBandRows(QVBoxLayout* layout,
                                     AudioReactiveSettings3D& cfg,
                                     QObject* owner,
@@ -672,16 +650,6 @@ inline void AppendStandardResponseSection(QVBoxLayout* layout,
     {
         AppendAudioPeakBoostRow(layout, cfg, owner, on_changed, opts.peak_boost_tooltip);
     }
-}
-
-inline void AppendStandardSpectrumAnalyzerSections(QVBoxLayout* layout,
-                                                   AudioReactiveSettings3D& cfg,
-                                                   QObject* owner,
-                                                   const std::function<void()>& on_changed,
-                                                   const AudioResponseUiOptions& response_opts = {})
-{
-    AppendStandardFrequencyBandSection(layout, cfg, owner, on_changed);
-    AppendStandardResponseSection(layout, cfg, owner, on_changed, response_opts);
 }
 
 struct AudioBeatUiOptions

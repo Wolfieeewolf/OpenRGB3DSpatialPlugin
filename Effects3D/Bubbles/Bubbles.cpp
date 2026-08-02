@@ -113,7 +113,6 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
     const float speed_scale = 0.006f + GetScaledSpeed() * 0.016f;
-    EffectGridAxisHalfExtents e_room = MakeEffectGridAxisHalfExtents(grid, 1.0f);
     const float rise_rate =
         std::max(0.1f, std::min(4.0f, rise_speed)) * speed_scale * 2.2f;
     const float interval = std::max(0.25f, std::min(2.5f, spawn_interval))

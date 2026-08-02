@@ -205,8 +205,15 @@ void Plasma::OnPlasmaParameterChanged()
 
 void Plasma::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
-    progress = CalculateProgress(time_sec);
-    const float detail = std::max(0.05f, GetScaledDetail());
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
+    progress = CalculateProgress(time_sec) * bb.speed_mul;
+    const float detail = std::max(0.05f, GetScaledDetail()) * bb.tight_mul;
     const float size_multiplier = GetNormalizedSize();
     const float freq_scale = std::min(8.0f, detail * 0.8f / fmax(0.1f, size_multiplier));
     float ox = 0.5f, oy = 0.5f, oz = 0.5f;

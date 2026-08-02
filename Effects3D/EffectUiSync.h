@@ -61,23 +61,6 @@ inline void setComboIndex(QWidget* root, const char* row_name, int index)
     }
 }
 
-inline void setComboData(QWidget* root, const char* row_name, int data_value)
-{
-    if(EffectLabeledComboRow* row = comboRow(root, row_name))
-    {
-        if(QComboBox* combo = row->combo())
-        {
-            int idx = combo->findData(data_value);
-            if(idx < 0)
-            {
-                idx = 0;
-            }
-            QSignalBlocker blocker(combo);
-            combo->setCurrentIndex(idx);
-        }
-    }
-}
-
 inline void setSliderValue(QWidget* root,
                           const char* row_name,
                           int value,

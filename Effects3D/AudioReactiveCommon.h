@@ -514,17 +514,6 @@ inline RGBColor ModulateRGBColors(RGBColor color, RGBColor modifier)
     return ((RGBColor)b << 16) | ((RGBColor)g << 8) | (RGBColor)r;
 }
 
-inline float NormalizeRange(float value, float min, float max)
-{
-    float range = max - min;
-    if(range <= 1e-5f)
-    {
-        return 0.5f;
-    }
-    float t = (value - min) / range;
-    return std::clamp(t, 0.0f, 1.0f);
-}
-
 inline float ComputeRadialNormalized(float dx, float dy, float dz, float max_radius)
 {
     float radius = std::sqrt(dx * dx + dy * dy + dz * dz);

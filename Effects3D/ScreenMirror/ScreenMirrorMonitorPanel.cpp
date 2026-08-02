@@ -440,35 +440,20 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     ui->calibrationPatternCheck->setToolTip(
         QStringLiteral("LEDs use a grid, rings, spokes, and quadrant colors (same as the zone preview). "
                        "Tune radial corners, map roll, and corner blend until geometry looks straight and corners behave like the preview."));
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
     QObject::connect(ui->calibrationPatternCheck, &QCheckBox::checkStateChanged, effect, [effect]() {
         effect->OnParameterChanged();
         effect->OnCalibrationPatternChanged();
     });
-#else
-    QObject::connect(ui->calibrationPatternCheck, &QCheckBox::stateChanged, effect, [effect](int) {
-        effect->OnParameterChanged();
-        effect->OnCalibrationPatternChanged();
-    });
-#endif
 
     settings.screen_preview_check = ui->screenPreviewCheck;
     ui->screenPreviewCheck->setEnabled(has_capture_source);
     ui->screenPreviewCheck->setChecked(settings.show_screen_preview);
     ui->screenPreviewCheck->setToolTip(
         QStringLiteral("Show captured screen on display planes in the 3D viewport. Turn off to save CPU/GPU."));
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
     QObject::connect(ui->screenPreviewCheck, &QCheckBox::checkStateChanged, effect, [effect]() {
         effect->OnParameterChanged();
         effect->OnScreenPreviewChanged();
     });
-#else
-    QObject::connect(ui->screenPreviewCheck, &QCheckBox::stateChanged, effect, [effect](int) {
-        effect->OnParameterChanged();
-        effect->OnScreenPreviewChanged();
-    });
-#endif
-
     auto* zones_layout = new QVBoxLayout(ui->captureZonesHost);
     zones_layout->setContentsMargins(0, 0, 0, 0);
     auto* zones_widget = new CaptureZonesWidget(

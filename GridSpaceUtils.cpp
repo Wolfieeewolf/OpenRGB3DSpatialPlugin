@@ -9,16 +9,9 @@
 namespace
 {
 
-    enum class BoundsSpace
-    {
-        World,
-        RoomAligned
-    };
-
     GridBounds ComputeBoundsInternal(const ManualRoomSettings& settings,
                                      float grid_scale_mm,
-                                     const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
-                                     BoundsSpace space)
+                                     const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
     {
         GridBounds bounds{};
 
@@ -51,8 +44,7 @@ namespace
             for(unsigned int j = 0; j < transform->led_positions.size(); j++)
             {
                 const LEDPosition3D& led = transform->led_positions[j];
-                const Vector3D& pos = (space == BoundsSpace::RoomAligned) ? led.room_position
-                                                                          : led.world_position;
+                const Vector3D& pos = led.world_position;
 
                 if(!has_leds)
                 {
@@ -133,7 +125,7 @@ GridBounds ComputeGridBounds(const ManualRoomSettings& settings,
                              float grid_scale_mm,
                              const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
 {
-    return ComputeBoundsInternal(settings, grid_scale_mm, transforms, BoundsSpace::World);
+    return ComputeBoundsInternal(settings, grid_scale_mm, transforms);
 }
 
 bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,

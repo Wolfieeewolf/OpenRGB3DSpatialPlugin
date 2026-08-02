@@ -42,8 +42,15 @@ Spiral::~Spiral() = default;
 
 void Spiral::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
-    const float progress = CalculateProgress(time_sec);
-    const float detail = std::max(0.05f, GetScaledDetail());
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
+    const float progress = CalculateProgress(time_sec) * bb.speed_mul;
+    const float detail = std::max(0.05f, GetScaledDetail()) * bb.tight_mul;
     const float size_multiplier = GetNormalizedSize();
     float ox = 0.5f, oy = 0.5f, oz = 0.5f;
     PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
@@ -247,6 +254,34 @@ void Spiral::SetupCustomUI(QWidget* parent)
         [](int v) { return QString::number(v); },
         nullptr);
 
+    EffectSliderRow* coil_row = EffectUiRows::AppendSliderRow(
+        layout, QStringLiteral("Coil:"), 0, 100, (int)coil_amount,
+        QStringLiteral("0 = straight spin rays; higher = tighter spiral bend center→edge."));
+    coil_row->setObjectName(QStringLiteral("coilRow"));
+    coil_slider = coil_row->slider();
+    coil_row->bindValueChanged(
+        this,
+        [this](int v) {
+            coil_amount = (unsigned int)v;
+            OnSpiralParameterChanged();
+        },
+        [](int v) { return QString::number(v); },
+        nullptr);
+
+    EffectSliderRow* height_coil_row = EffectUiRows::AppendSliderRow(
+        layout, QStringLiteral("Height coil:"), 0, 100, (int)height_coil_amount,
+        QStringLiteral("0 = flat spin; higher = stronger vertical helix twist."));
+    height_coil_row->setObjectName(QStringLiteral("heightCoilRow"));
+    height_coil_slider = height_coil_row->slider();
+    height_coil_row->bindValueChanged(
+        this,
+        [this](int v) {
+            height_coil_amount = (unsigned int)v;
+            OnSpiralParameterChanged();
+        },
+        [](int v) { return QString::number(v); },
+        nullptr);
+
     AddWidgetToParent(w, parent);
 }
 
@@ -258,6 +293,10 @@ void Spiral::OnSpiralParameterChanged()
         num_arms = (unsigned int)arms_slider->value();
     if(gap_slider)
         gap_size = (unsigned int)gap_slider->value();
+    if(coil_slider)
+        coil_amount = (unsigned int)coil_slider->value();
+    if(height_coil_slider)
+        height_coil_amount = (unsigned int)height_coil_slider->value();
     emit ParametersChanged();
 }
 
@@ -306,9 +345,12 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     const float rate_e = rate * spd_mul;
     const float progress_e = progress * spd_mul;
     const float freq_scale_e = detail_e * 0.15f / fmax(0.1f, size_multiplier);
-    float z_twist = norm_twist * (0.35f + 0.25f * detail_e);
-    float spiral_angle =
-        angle * (float)num_arms + norm_radius * (detail_e * 6.5f) + z_twist - progress_e * 1.35f;
+    const float coil01 = coil_amount / 100.0f;
+    const float height01 = height_coil_amount / 100.0f;
+    const float two_pi = 6.2831853f;
+    float radial_coil = norm_radius * coil01 * two_pi * (2.2f + 1.4f * std::clamp(detail_e / 20.0f, 0.0f, 1.5f));
+    float z_twist = norm_twist * height01 * two_pi * (1.0f + 0.75f * std::clamp(detail_e / 20.0f, 0.0f, 1.5f));
+    float spiral_angle = angle * (float)num_arms + radial_coil + z_twist - progress_e * 1.35f;
     spiral_angle += EffectStratumBlend::PhaseShiftRad(bb);
     spiral_angle += stratum_mot01 * 6.2831853f * 0.55f;
 
@@ -416,6 +458,8 @@ nlohmann::json Spiral::SaveSettings() const
     j["num_arms"] = num_arms;
     j["pattern_type"] = pattern_type;
     j["gap_size"] = gap_size;
+    j["coil_amount"] = coil_amount;
+    j["height_coil_amount"] = height_coil_amount;
     return j;
 }
 
@@ -445,5 +489,17 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
         {
             gap_slider->setValue((int)gap_size);
         }
+    }
+    if(settings.contains("coil_amount") && settings["coil_amount"].is_number_integer())
+    {
+        coil_amount = (unsigned int)std::clamp(settings["coil_amount"].get<int>(), 0, 100);
+        if(coil_slider)
+            coil_slider->setValue((int)coil_amount);
+    }
+    if(settings.contains("height_coil_amount") && settings["height_coil_amount"].is_number_integer())
+    {
+        height_coil_amount = (unsigned int)std::clamp(settings["height_coil_amount"].get<int>(), 0, 100);
+        if(height_coil_slider)
+            height_coil_slider->setValue((int)height_coil_amount);
     }
 }

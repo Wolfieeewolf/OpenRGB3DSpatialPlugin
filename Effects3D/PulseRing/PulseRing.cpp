@@ -242,7 +242,7 @@ void PulseRing::SetupCustomUI(QWidget* parent)
 float PulseRing::EvaluatePulseCpu(float nx, float ny, float nz, float progress, float time_sec, float* out_color01) const
 {
     const float hole_r = std::clamp(hole_size, 0.0f, 0.75f);
-    const float sigma = std::max(ring_thickness, 0.012f);
+    const float sigma = std::max(ring_thickness, 0.015f);
     const float amp = std::clamp(pulse_amplitude, 0.2f, 2.0f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float size_scale = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.25f, 2.5f);

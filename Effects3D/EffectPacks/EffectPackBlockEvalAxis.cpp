@@ -428,7 +428,7 @@ bool EvaluateBlockAtAxis(const Block& block,
                                         0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,
                                         twinkle_seed, out_color, out_intensity);
         }
-        // Unknown axis type: keep block color / intensity (legacy default fall-through).
+        // Unknown axis type: keep block color / intensity.
     }
 
     AxisCtx ctx;

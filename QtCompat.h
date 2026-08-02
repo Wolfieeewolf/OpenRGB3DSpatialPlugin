@@ -13,7 +13,6 @@ inline constexpr int kScreenPreviewTimerIntervalMs = 50;
 
 inline QImage FlipImageVertical(const QImage& image)
 {
-    // mirrored() works on Qt 5 and all Qt 6 versions shipped by CI/distros; flipped() is not universal.
     return image.mirrored(false, true);
 }
 }
@@ -23,9 +22,7 @@ inline QImage FlipImageVertical(const QImage& image)
     #define MOUSE_EVENT_Y(event) ((event)->position().y())
     #define MOUSE_EVENT_POS(event) ((event)->position().toPoint())
 #else
-    #define MOUSE_EVENT_X(event) ((event)->x())
-    #define MOUSE_EVENT_Y(event) ((event)->y())
-    #define MOUSE_EVENT_POS(event) ((event)->pos())
+#error OpenRGB 3D Spatial Plugin requires Qt 6.8 or newer
 #endif
 
 #endif

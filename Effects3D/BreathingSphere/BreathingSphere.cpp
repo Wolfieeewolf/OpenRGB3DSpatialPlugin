@@ -225,7 +225,7 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     float ox = 0.5f, oy = 0.5f, oz = 0.5f;
     PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
 
-    const float progress_v = CalculateProgress(time_sec);
+    float progress_v = CalculateProgress(time_sec);
     const float detail = std::max(0.05f, GetScaledDetail());
     const float size_multiplier = GetNormalizedSize();
     const float base_scale = 0.45f;
@@ -263,6 +263,7 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     if(shape == SHAPE_WHOLE_ROOM)
     {
         breath_phase *= bb.speed_mul;
+        progress_v *= bb.speed_mul;
         detail_gpu = detail / tm;
     }
 
@@ -371,8 +372,8 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         float exhale = sinf(breath_phase + 1.2f) * pulse_strength;
         const float tm = std::max(0.25f, bb.tight_mul);
         float wave = sinf(inhale * 3.14159265f * 1.15f - dist_norm * (9.0f + 5.0f * detail) / tm) * pulse_strength;
-        float ripple = sinf(breath_phase * 2.1f * bb.speed_mul - dist_norm * TWO_PI * 2.2f / tm + rel_y * 0.02f * detail / tm) * pulse_strength;
-        float rush = sinf(exhale * 1.7f * bb.speed_mul + (rel_x + rel_z) * 0.015f * detail / tm) * 0.4f * pulse_strength;
+        float ripple = sinf(breath_phase * 2.1f - dist_norm * TWO_PI * 2.2f / tm + rel_y * 0.02f * detail / tm) * pulse_strength;
+        float rush = sinf(exhale * 1.7f + (rel_x + rel_z) * 0.015f * detail / tm) * 0.4f * pulse_strength;
 
         RGBColor c;
         if(UseEffectStripColormap())
