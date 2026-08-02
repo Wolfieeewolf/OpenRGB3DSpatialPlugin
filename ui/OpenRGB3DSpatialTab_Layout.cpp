@@ -15,7 +15,7 @@
 namespace
 {
 constexpr int kLayoutVersion = 7;
-constexpr int kMinSupportedLayoutVersion = 6;
+constexpr int kMinSupportedLayoutVersion = 7;
 
 std::string ValidateLayoutDocument(const nlohmann::json& j)
 {
@@ -34,7 +34,7 @@ std::string ValidateLayoutDocument(const nlohmann::json& j)
     const int version = j["version"].get<int>();
     if(version < kMinSupportedLayoutVersion || version > kLayoutVersion)
     {
-        return "layout version must be 6 or 7";
+        return "layout version must be 7";
     }
 
     /* Camera may still appear in older saves; it is ignored and no longer required. */

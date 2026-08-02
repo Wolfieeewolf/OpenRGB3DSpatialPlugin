@@ -583,22 +583,13 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
 
-    const float speed_norm = std::clamp(GetNormalizedSpeed(), 0.05f, 1.0f);
     const float freq_norm = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
-    const float wander = std::clamp(wander_amt, 0.15f, 2.0f);
-    const float spin_t = time * motion_rate * (0.10f + 0.55f * speed_norm) * (0.55f + 0.45f * wander);
     const float hue_scroll = time * freq_norm * 0.12f;
-    const float scale = std::max(1e-5f, cone_scale * (0.5f + 0.5f * GetNormalizedSize()));
-    const int count = std::clamp(cone_count, 1, kMaxCones);
-    const int surf = std::clamp(surface, 0, SURF_COUNT - 1);
-    const int mot = std::clamp(motion_mode, 0, MOTION_COUNT - 1);
-    float ox, oy, oz;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
 
     float sat = 0.0f;
     float val = 0.0f;
@@ -609,49 +600,6 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
         sat = samp.x();
         val = samp.y();
         h_base = samp.z();
-    }
-    else
-    {
-        const float elev = ElevBiasForSurface(surf);
-        float best_sat = 0.0f, best_val = 0.0f, best_h = 0.0f;
-        for(int i = 0; i < count; i++)
-        {
-            Vec3 apex = ResolveApex(surf, apex_u[i], apex_v[i], ox, oy, oz);
-            Vec3 aim = AimWander(i, count, mot, spin_t, wander, elev);
-            if(surf == SURF_WALLS)
-            {
-                Vec3 inward = Normalize({0.5f - apex.x, 0.5f - apex.y, 0.5f - apex.z});
-                aim = Normalize({inward.x * 0.35f + aim.x * 0.65f,
-                                 inward.y * 0.35f + aim.y * 0.65f,
-                                 inward.z * 0.35f + aim.z * 0.65f});
-            }
-            else if(surf == SURF_CEILING)
-            {
-                aim = Normalize({aim.x * 0.70f, aim.y * 0.70f - 0.30f, aim.z * 0.70f});
-            }
-            else if(surf == SURF_FLOOR)
-            {
-                aim = Normalize({aim.x * 0.70f, aim.y * 0.70f + 0.30f, aim.z * 0.70f});
-            }
-
-            Vec3 local = ConeLocal({nx - apex.x, ny - apex.y, nz - apex.z}, aim);
-            if(local.z <= 0.0f)
-                continue;
-            const float radial = std::sqrt((local.x * local.x + local.y * local.y) / scale);
-            float dist = std::clamp(local.z - radial, -1.0f, 1.0f);
-            const float si = std::clamp(1.0f - dist, 0.0f, 1.0f);
-            const float vi = std::clamp(std::pow(std::max(0.0f, 1.0f + dist), 4.0f), 0.0f, 1.0f);
-            const float hi = std::fmod(hue01 + (float)i / (float)count + 0.07f * apex.x + 1.0f, 1.0f);
-            if(si > best_sat)
-            {
-                best_sat = si;
-                best_val = vi;
-                best_h = hi;
-            }
-        }
-        sat = best_sat;
-        val = best_val;
-        h_base = best_h;
     }
 
     if(sat <= 1e-5f)
@@ -735,10 +683,6 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
         for(int i = 0; i < kMaxCones && i < (int)a.size(); i++)
             if(a[i].is_number())
                 apex_v[i] = std::clamp(a[i].get<float>(), 0.0f, 1.0f);
-    }
-    else if(!settings.contains("cone_spot_apex_u"))
-    {
-        ApplyLayoutPreset(layout_preset == LAYOUT_CUSTOM ? LAYOUT_AUTO : layout_preset);
     }
 
     if(cone_slider)

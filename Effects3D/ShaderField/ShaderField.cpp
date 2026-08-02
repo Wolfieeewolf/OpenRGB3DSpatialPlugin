@@ -302,8 +302,6 @@ void ShaderField::SyncUniforms(float time)
     u.params[2] = hue;
     u.params[3] = detail;
     u.param_count = 4;
-    u.audio_ptr = nullptr;
-    u.audio_count = 0;
     shader_engine->setUniforms(u);
 }
 

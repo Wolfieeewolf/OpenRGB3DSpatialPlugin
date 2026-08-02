@@ -80,67 +80,6 @@ HexLattice::HexLattice(QWidget* parent) : SpatialEffect3D(parent)
 }
 
 HexLattice::~HexLattice() = default;
-
-void HexLattice::EvaluateHexFieldCpu(float nx, float ny, float nz, float flow_t, float hue_t,
-                                     float detail_norm, float* out_v, float* out_h01) const
-{
-    // Mirrors HexLatticeVolumeFieldGlsl — keep the two in sync.
-    const auto mod_pos = [](float v, float m) {
-        float r = std::fmod(v, m);
-        if(r < 0.0f)
-            r += m;
-        return r;
-    };
-    const auto smstep = [](float e0, float e1, float x) {
-        const float t = std::clamp((x - e0) / std::max(e1 - e0, 1e-5f), 0.0f, 1.0f);
-        return t * t * (3.0f - 2.0f * t);
-    };
-
-    const float base_scale = std::max(0.2f, GetNormalizedSize());
-    const float flow_mode_mul[3] = {0.68f, 1.0f, 1.55f};
-    const float flow_mul = flow_mode_mul[std::clamp(flow_mode, 0, 2)];
-    const float turbulence = std::clamp(turbulence_amount, 0.0f, 2.0f);
-    const float pulse_amt = std::clamp(pulse_amount, 0.0f, 2.0f);
-
-    const float breathe = 1.0f + (Wave01(flow_t * 0.30f) - 0.5f) * 0.35f * breathing_amount;
-    const float cells = std::min(12.0f, (5.0f + 7.0f * detail_norm) / base_scale * breathe);
-
-    float ux = nx + turbulence * 0.07f * std::sin(kTwoPi * (ny * 0.8f + flow_t * 0.11f));
-    float uy = nz + turbulence * 0.07f * std::cos(kTwoPi * (ny * 0.8f - flow_t * 0.09f));
-    ux = ux * cells + flow_t * flow_mul * 0.22f;
-    uy = uy * cells + flow_t * flow_mul * 0.31f;
-
-    const float ry = 1.7320508f;
-    const float ax = mod_pos(ux, 1.0f) - 0.5f;
-    const float ay = mod_pos(uy, ry) - ry * 0.5f;
-    const float bx = mod_pos(ux - 0.5f, 1.0f) - 0.5f;
-    const float by = mod_pos(uy - ry * 0.5f, ry) - ry * 0.5f;
-    float gx = ax;
-    float gy = ay;
-    if(ax * ax + ay * ay >= bx * bx + by * by)
-    {
-        gx = bx;
-        gy = by;
-    }
-    const float idx = ux - gx;
-    const float idy = uy - gy;
-
-    // Hex metric: 0 at cell centre, 0.5 on the wall.
-    const float hd = std::max(std::fabs(gx) * 0.5f + std::fabs(gy) * 0.8660254f, std::fabs(gx));
-    const float edge_w = 0.20f - 0.08f * detail_norm;
-    const float edge = smstep(0.5f - edge_w, 0.5f - edge_w * 0.15f, hd);
-
-    float hcell = std::sin(idx * 12.9898f + idy * 78.233f) * 43758.547f;
-    hcell -= std::floor(hcell);
-    const float pulse = Wave01(flow_t * (0.20f + 0.35f * hcell) * flow_mul + hcell);
-    const float cell_fill = (0.06f + 0.30f * pulse * pulse_amt) * (1.0f - edge);
-
-    *out_v = std::clamp(edge * (0.80f + 0.20f * pulse) + cell_fill, 0.0f, 1.0f);
-
-    float h = idx * 0.045f + idy * 0.030f + hcell * 0.18f + (ny - 0.5f) * 0.10f + hue_t;
-    *out_h01 = h - std::floor(h);
-}
-
 EffectInfo3D HexLattice::GetEffectInfo() const
 {
     EffectInfo3D info{};
@@ -263,17 +202,10 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
-
-    const float speed_norm = std::max(0.05f, GetNormalizedSpeed());
-    const float freq_norm = std::max(0.05f, GetNormalizedFrequency());
-    const float detail_norm = std::max(0.05f, GetNormalizedDetail());
-
-    const float flow_t = time * (0.15f + speed_norm * 1.10f);
-    const float hue_t = time * (0.04f + freq_norm * 0.45f);
 
     float v = 0.0f;
     float h01 = 0.0f;
@@ -282,15 +214,6 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
         const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
         v = samp.x();
         h01 = samp.y();
-    }
-    else
-    {
-        float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-        PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-        const float lnx = std::clamp(nx - ox + 0.5f, 0.0f, 1.0f);
-        const float lny = std::clamp(ny - oy + 0.5f, 0.0f, 1.0f);
-        const float lnz = std::clamp(nz - oz + 0.5f, 0.0f, 1.0f);
-        EvaluateHexFieldCpu(lnx, lny, lnz, flow_t, hue_t, detail_norm, &v, &h01);
     }
 
     RGBColor c = 0x00000000;

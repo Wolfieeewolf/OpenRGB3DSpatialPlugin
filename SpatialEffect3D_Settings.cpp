@@ -4,6 +4,7 @@
 
 #include "Colors.h"
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "PluginLog.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
@@ -580,10 +581,17 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("room_output_role") && settings["room_output_role"].is_number_integer())
     {
         const int raw_role = settings["room_output_role"].get<int>();
-        effect_room_output_role_ =
-            (raw_role == (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
-                ? SpatialRoom::SpatialRoomOutputRole::EmitterRelay
-                : SpatialRoom::SpatialRoomOutputRole::Direct;
+        if(raw_role == (int)SpatialRoom::SpatialRoomOutputRole::Direct
+           || raw_role == (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+        {
+            effect_room_output_role_ = (SpatialRoom::SpatialRoomOutputRole)raw_role;
+        }
+        else
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Ignoring unsupported room_output_role %d (need 0 or 1)",
+                        raw_role);
+            effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::Direct;
+        }
     }
     RoomSpatialLightingUi::LoadParamsFromJson(settings, "room_relay_light", effect_room_relay_params_);
     if(room_ao_slider)

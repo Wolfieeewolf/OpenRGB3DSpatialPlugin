@@ -225,18 +225,14 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
-    const float ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
-    const float oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
-    const float oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
 
     SpatialLayerCore::Basis basis;
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
     SpatialLayerCore::MapperSettings map;
-    const float detail_norm = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
     SpatialLayerCore::SamplePoint sp{};
     sp.grid_x = x;
@@ -252,14 +248,6 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     const float freq = std::max(0.05f, GetScaledFrequency());
     const float pos = std::fmod(time * spd * 0.085f + time * freq * 0.028f + 1000.0f, 1.0f);
 
-    const int dc = std::clamp(depth_tone_count, 2, 32);
-    const float hue_span = (float)(dc - 1) / (float)dc;
-    const float percent_dim = std::clamp(dim_amount, 0.0f, 1.0f);
-    const int axis = std::clamp(depth_axis, 0, AXIS_COUNT - 1);
-    const int layout_i = std::clamp(depth_layout, 0, LAYOUT_COUNT - 1);
-    // Size zooms gradient; Scale widens/narrows soft influence slightly via size_zoom.
-    const float size_zoom = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.15f, 2.5f);
-
     float hue01 = 0.0f;
     float v = 1.0f;
     if(volume_assist_.isAvailable())
@@ -270,42 +258,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
         v = std::clamp(samp.z(), 0.0f, 1.0f);
     }
     else
-    {
-        float linear01 = nz;
-        if(axis == AXIS_X)
-            linear01 = nx;
-        else if(axis == AXIS_Y)
-            linear01 = ny;
-
-        float d01 = linear01;
-        if(layout_i == LAYOUT_CENTER)
-        {
-            const float dx = nx - 0.5f;
-            const float dy = ny - 0.5f;
-            const float dz = nz - 0.5f;
-            d01 = std::clamp(std::sqrt(dx * dx + dy * dy + dz * dz) / 0.8660254f, 0.0f, 1.0f);
-        }
-        else if(layout_i == LAYOUT_REF)
-        {
-            const float dx = nx - ox;
-            const float dy = ny - oy;
-            const float dz = nz - oz;
-            d01 = std::clamp(std::sqrt(dx * dx + dy * dy + dz * dz) / 0.8660254f, 0.0f, 1.0f);
-        }
-
-        // Mirrors the GLSL: origin-anchored zoom for radial layouts, and phase
-        // (not distance) quantization so tone bands flow with Speed.
-        const float d_mapped = (layout_i == LAYOUT_LINEAR)
-                                   ? std::clamp((d01 - 0.5f) / size_zoom + 0.5f, 0.0f, 1.0f)
-                                   : std::clamp(d01 / size_zoom, 0.0f, 1.0f);
-        const float tones = std::max(2.0f, 2.0f + hue_span * 32.0f);
-        const float phase = pos + d_mapped * hue_span;
-        const float stepped = std::floor(phase * tones + 1e-4f) / tones;
-        const float phase_use = phase * (1.0f - 0.85f * detail_norm) + stepped * (0.85f * detail_norm);
-        hue01 = std::fmod(phase_use + 1.0f, 1.0f);
-        const float center = 1.0f - std::fabs(d_mapped - 0.5f) * 2.0f;
-        v = std::clamp(1.0f - percent_dim * center, 0.0f, 1.0f);
-    }
+        return 0x00000000;
 
     const float size_m = std::max(0.2f, GetNormalizedSize());
     const float rainbow_rate = spd * 0.35f + freq * 0.12f;

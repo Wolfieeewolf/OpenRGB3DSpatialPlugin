@@ -436,7 +436,7 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    Vector3D rp{x, y, z};
     const int mode_i = std::clamp(this->mode, 0, MODE_COUNT - 1);
 
     EvalContext ctx;
@@ -478,16 +478,7 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
         const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
         return FinishSample(ctx, samp.x(), samp.y(), samp.z(), mode_i);
     }
-
-    switch(mode_i)
-    {
-    case MODE_BLACKHOLE:
-        return EvalBlackhole(ctx);
-    case MODE_WORMHOLE:
-        return EvalWormhole(ctx);
-    default:
-        return AccumParticles(ctx, mode_i);
-    }
+    return 0x00000000;
 }
 
 nlohmann::json Starfield::SaveSettings() const

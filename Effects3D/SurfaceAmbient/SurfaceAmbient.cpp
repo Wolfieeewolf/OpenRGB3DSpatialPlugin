@@ -572,7 +572,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    Vector3D rp{x, y, z};
     float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -587,8 +587,6 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
 
     float h_pct = std::max(0.05f, std::min(1.0f, height_pct));
     float sigma = std::max(thickness * 0.5f, 0.02f) / tm;
-    float detail = std::max(0.05f, GetScaledDetail()) * tm;
-    float freq = std::max(0.3f, std::min(3.0f, 0.3f + detail * 0.27f));
     float speed = std::max(0.0f, std::min(2.0f, GetScaledSpeed() / 4.0f));
     const float time_e = time * bb.speed_mul;
     int mask = GetSurfaceMask();
@@ -608,36 +606,25 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         if(GetStratumLayoutMode() == 1)
             best_intensity = EffectStratumBlend::ApplyMotionToUnit01(best_intensity, stratum_mot01, 0.18f);
     }
-    else
+    else if(kernel_on_wall)
     {
-    for(int bit = 1; bit <= 32; bit <<= 1)
-    {
-        if(!(mask & bit)) continue;
-        float dist, alongA, alongB, up01, extent;
-        int role = 0;
-        eval_surface_role(bit, grid, x, y, z, dist, alongA, alongB, up01, extent, role);
-        float height_ext = h_pct * extent;
-        if(dist < 0.0f || dist > height_ext) continue;
-        float d_sigma = sigma * extent;
-        float intensity = expf(-dist * dist / (d_sigma * d_sigma));
-        float plasma = 0.0f;
-        float sparse = 1.0f;
-        if(kernel_on_wall)
+        for(int bit = 1; bit <= 32; bit <<= 1)
         {
+            if(!(mask & bit)) continue;
+            float dist, alongA, alongB, up01, extent;
+            int role = 0;
+            eval_surface_role(bit, grid, x, y, z, dist, alongA, alongB, up01, extent, role);
+            float height_ext = h_pct * extent;
+            if(dist < 0.0f || dist > height_ext) continue;
+            float d_sigma = sigma * extent;
+            float intensity = expf(-dist * dist / (d_sigma * d_sigma));
             float s01 = std::fmod(alongA * 0.72f + alongB * 0.28f + 2.0f, 1.0f);
             float k = EvalSpatialPatternKernel(wall_kernel_id, s01, CalculateProgress(time_e),
                                                wall_kernel_repeats, time_e);
-            plasma = std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
+            float plasma = std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
             plasma = ApplySpatialMotion(motion, role, alongA, alongB, up01, time_e, speed, plasma);
+            if(intensity > best_intensity) { best_intensity = intensity; best_plasma = plasma; }
         }
-        else
-        {
-            plasma = EvalPresetField(style, role, alongA, alongB, up01, time_e, freq, speed, &sparse);
-            plasma = ApplySpatialMotion(motion, role, alongA, alongB, up01, time_e, speed, plasma);
-            intensity *= sparse;
-        }
-        if(intensity > best_intensity) { best_intensity = intensity; best_plasma = plasma; }
-    }
     }
 
     if(best_intensity < 0.01f) return 0x00000000;

@@ -33,7 +33,6 @@ QString BuildFragmentShader(const QString& user_body)
                "uniform float u_time;\n"
                "uniform vec2 u_resolution;\n"
                "uniform float u_params[8];\n"
-               "uniform float u_audio[128];\n"
                "void spatialMain(out vec4 out_color, in vec2 frag_coord);\n")
            + user_body
            + QStringLiteral(
@@ -132,13 +131,6 @@ void SpatialShaderEngine::setUniforms(const SpatialShaderUniforms& uniforms)
     {
         uniform_values.params[i] = (i < uniforms.param_count) ? uniforms.params[i] : 0.0f;
     }
-    // Audio bins stay zero — Shader Field no longer feeds live spectrum.
-    for(int i = 0; i < 128; ++i)
-    {
-        uniform_values.audio_bins[i] = 0.0f;
-    }
-    uniform_values.audio_ptr = uniform_values.audio_bins;
-    uniform_values.audio_count = 128;
 }
 
 void SpatialShaderEngine::start()
@@ -226,8 +218,6 @@ void SpatialShaderEngine::renderThreadMain()
         int h = render_height;
         QString body;
         SpatialShaderUniforms locals;
-        int audio_count = 0;
-        float audio_bins[128] = {};
         float params[8] = {};
         {
             std::lock_guard<std::mutex> lock(state_mutex);
@@ -238,14 +228,6 @@ void SpatialShaderEngine::renderThreadMain()
             for(int i = 0; i < 8; ++i)
             {
                 params[i] = uniform_values.params[i];
-            }
-            audio_count = std::min(uniform_values.audio_count, 128);
-            if(audio_count > 0)
-            {
-                for(int i = 0; i < audio_count; ++i)
-                {
-                    audio_bins[i] = uniform_values.audio_bins[i];
-                }
             }
         }
 
@@ -300,10 +282,6 @@ void SpatialShaderEngine::renderThreadMain()
         program.setUniformValue("u_time", locals.time_sec);
         program.setUniformValue("u_resolution", QVector2D((float)w, (float)h));
         program.setUniformValueArray("u_params", params, 8, 1);
-        if(audio_count > 0)
-        {
-            program.setUniformValueArray("u_audio", audio_bins, audio_count, 1);
-        }
 
         static const float quad[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
         program.enableAttributeArray("a_position");

@@ -105,14 +105,16 @@ When changing plugin behavior—especially anything that touches devices, colors
 | Area | Current contract | Do not keep |
 |------|------------------|-------------|
 | OpenRGB profile payload | Plugin payload **version 1** with required `layout` and `effects` objects | Standalone layout/effect profiles, auto-load, quick-save, or parallel session files |
-| Layout data | Write `OpenRGB3DSpatialLayout` **version 7**; load **6–7**. Camera is not written and is ignored if present | Defaults for missing required sections/fields; standalone file profiles |
+| Layout data | Write `OpenRGB3DSpatialLayout` **version 7**; load **7 only**. Camera is not written and is ignored if present | Defaults for missing required sections/fields; standalone file profiles; layout version 6 |
 | Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** — `spacing_mm_x/y/z` required | Alternate spacing key names; `Normalize*` / `TryRead*` import helpers |
-| Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings`; write embedded effects **version 9**, load **8–9**. Room output role is `Direct` (0) or `EmitterRelay` (1) | Versions outside 8–9; obsolete room output role ints; renamed-key migration |
+| Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings`; write embedded effects **version 9**, load **9 only**. Room output role is `Direct` (0) or `EmitterRelay` (1) | Versions outside 9; obsolete room output role ints; renamed-key migration |
 | Effect UI | `EffectUiRows` + shared `ui/forms/Effect*.ui` panels | Per-effect legacy-only `.ui` trees or duplicate control paths “for old layouts” |
 | Presets / scripts | Export/import uses current schema only | One-off `convert_*.py` migration tools in the repo |
 | Plugin settings | `LEDSpacing` X/Y/Z in host settings JSON | `legacy_grid_pitch_mm` or other retired keys |
 
 **Exception — viewport only:** the Qt **OpenGL 4.1 Core** room (`LEDViewport3D` / `QOpenGLWidget` + `QOpenGLFunctions_4_1_Core`) is the only viewport path (no GPU shader dual path). That is rendering infrastructure, not data-format backward compatibility. Requires **Qt 6.8**.
+
+**GPU volume/strip field assists:** when an effect uses `SpatialVolumeFieldAssist` / `SpatialStripFieldAssist`, the atlas is the source of truth. Do not keep parallel CPU formula fallbacks. Sample coords reaching `CalculateColorGrid` are already axis-scaled and rotated by the render path (`ApplyEffectRotation`) unless `SkipsSpatialSampleWarp()` is true. Single-atlas height bands bake mid-band stratum scalars at `PrepareGpuFields` — full per-LED multi-atlas stratum is out of scope until designed deliberately.
 
 When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.

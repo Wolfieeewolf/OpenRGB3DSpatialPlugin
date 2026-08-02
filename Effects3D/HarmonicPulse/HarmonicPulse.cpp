@@ -230,7 +230,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
     float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
@@ -238,19 +238,14 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
     // Real motion — do not divide ScaledSpeed into oblivion.
     const float spd = std::max(0.05f, GetScaledSpeed());
     const float freq = std::max(0.05f, GetScaledFrequency());
-    const float detail = std::max(0.05f, GetNormalizedDetail());
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float flow = std::clamp(flow_amount, 0.4f, 2.5f);
     const float motion = std::clamp((0.12f * spd + 0.05f * freq) * flow, 0.08f, 6.0f);
-    const float spatial_freq = std::clamp(1.1f + detail * 4.5f * size_m * GetNormalizedScale(), 0.6f, 9.0f);
     const float pulse_mix = std::clamp(spatial_amount, 0.0f, 1.0f);
-    const float contrast = std::clamp(pulse_contrast, 0.35f, 2.0f);
-    const float wobble = std::clamp(zoom_wobble_strength, 0.0f, 3.0f);
-    const float size_density = std::clamp(0.75f + 0.55f * size_m, 0.4f, 2.2f);
 
-    float val = 0.5f;
+    float val = 0.0f;
     float phase01 = 0.0f;
-    float master = 0.5f;
+    float master = 0.0f;
     if(volume_assist_.isAvailable())
     {
         const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
@@ -258,30 +253,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
         phase01 = std::clamp(samp.y(), 0.0f, 1.0f);
         master = std::clamp(samp.z(), 0.0f, 1.0f);
     }
-    else
-    {
-        float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-        PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-        const float beat = 0.5f + 0.5f * std::sin(time * motion * TWO_PI);
-        const float beat2 = 0.5f + 0.5f * std::sin(time * motion * 1.618f * TWO_PI + 1.2f);
-        master = std::clamp(0.65f * beat + 0.35f * beat2, 0.0f, 1.0f);
-        const float zw = 0.5f + 0.5f * std::sin(time * motion * 0.55f * TWO_PI);
-        const float zoom = 1.0f + zw * wobble * 0.35f;
-        const float xf = (nx - ox) * spatial_freq * zoom * size_density;
-        const float yf = (ny - oy) * spatial_freq * zoom * size_density;
-        const float zf = (nz - oz) * spatial_freq * zoom * size_density;
-        const float t1 = time * motion * TWO_PI;
-        const float t2 = time * motion * 0.73f * TWO_PI;
-        float field =
-            0.5f +
-            0.5f * (0.45f * std::sin(xf * TWO_PI + t1) + 0.30f * std::cos(yf * TWO_PI + t2) +
-                    0.25f * std::sin(zf * TWO_PI + t1 - t2));
-        field = std::clamp(field, 0.0f, 1.0f);
-        val = pulse_mix * (field * (0.35f + 0.65f * master)) + (1.0f - pulse_mix) * master;
-        val = std::pow(std::clamp(val, 0.0f, 1.0f), contrast);
-        val = std::clamp(0.12f + 0.88f * val, 0.0f, 1.0f);
-        phase01 = std::fmod(master * 0.5f + field * 0.35f + time * motion * 0.15f + 1.0f, 1.0f);
-    }
+
 
     if(UseEffectStripColormap())
     {

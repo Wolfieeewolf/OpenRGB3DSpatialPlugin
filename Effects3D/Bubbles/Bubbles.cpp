@@ -150,7 +150,7 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    Vector3D rp{x, y, z};
     float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -183,88 +183,7 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         if(strat_on)
             max_intensity = EffectStratumBlend::ApplyMotionToUnit01(max_intensity, stratum_mot01, 0.18f);
     }
-    else
-    {
-        // Slim CPU fallback — fewer bubbles, shared per-frame cache.
-        EffectGridAxisHalfExtents e_room = MakeEffectGridAxisHalfExtents(grid, 1.0f);
-        float h_scale = std::max({e_room.hw, e_room.hh, e_room.hd});
-        const float speed_scale = 0.006f + GetScaledSpeed() * 0.016f;
-        float detail = std::max(0.05f, GetScaledDetail());
-        int n_bub = std::max(4, std::min(24, max_bubbles));
-        float thick = std::max(0.02f, std::min(4.0f, bubble_thickness * h_scale)) / std::max(0.35f, detail);
-        if(strat_on)
-            thick /= std::max(0.25f, bb.tight_mul);
-        float rise = std::max(0.1f, std::min(4.0f, rise_speed)) * speed_scale * e_room.hh;
-        float interval = std::max(0.25f, std::min(2.5f, spawn_interval))
-                         / std::max(0.85f, 0.85f + 0.45f * GetNormalizedSpeed());
-        float max_r = std::max(0.5f, std::min(3.5f, max_radius)) * h_scale * size_m * 0.50f;
-        const float bias_x = std::clamp(origin.x - grid.center_x, -e_room.hw * 0.5f, e_room.hw * 0.5f);
-        const float bias_z = std::clamp(origin.z - grid.center_z, -e_room.hd * 0.5f, e_room.hd * 0.5f);
-        const float fill = std::clamp(horizontal_fill, 0.5f, 1.8f);
-        const float lateral_spread_x = e_room.hw * 0.5f * fill;
-        const float lateral_spread_z = e_room.hd * 0.5f * fill;
-        const float launch_jitter = std::clamp(launch_randomness, 0.0f, 1.0f);
-        constexpr float kGoldenAngle = 2.39996323f;
-        auto hash01 = [](unsigned int seed, unsigned int salt) -> float {
-            unsigned int v = seed * 73856093u ^ salt * 19349663u;
-            v = (v << 13u) ^ v;
-            v = v * (v * v * 15731u + 789221u) + 1376312589u;
-            return (v & 0xFFFFu) / 65535.0f;
-        };
 
-        if(bubble_centers_cached.size() != (size_t)n_bub || fabsf(time - bubble_cache_time) > 0.001f)
-        {
-            bubble_cache_time = time;
-            bubble_centers_cached.resize(n_bub);
-            for(int i = 0; i < n_bub; i++)
-            {
-                const unsigned int seed = (unsigned int)(i * 2654435761u + 1013904223u);
-                const float cycle_mul = (1.0f + 0.35f * launch_jitter) + (2.0f * launch_jitter) * hash01(seed, 11u);
-                const float active_frac =
-                    (0.52f - 0.26f * launch_jitter) + (0.06f + 0.22f * launch_jitter) * hash01(seed, 12u);
-                const float cycle_i = std::max(0.12f, interval * cycle_mul);
-                const float active_window = std::max(0.04f, cycle_i * active_frac);
-                const float offset_i = cycle_i * hash01(seed, 13u);
-                const float phase_i = fmodf(time * rise * 0.55f + offset_i, cycle_i);
-                if(phase_i > active_window)
-                {
-                    bubble_centers_cached[i] = {0.0f, 0.0f, 0.0f, -1.0f};
-                    continue;
-                }
-                const float radius_phase = phase_i / active_window;
-                float radius = (0.18f + 0.82f * radius_phase) * max_r * 0.55f;
-                float ring = sqrtf(((float)i + 0.5f) / (float)n_bub);
-                float cx = std::clamp(grid.center_x + bias_x + cosf((float)i * kGoldenAngle) * ring * lateral_spread_x,
-                                      grid.min_x, grid.max_x);
-                float cy = grid.min_y + radius_phase * std::max(1e-3f, grid.height);
-                float cz = std::clamp(grid.center_z + bias_z + sinf((float)i * kGoldenAngle) * ring * lateral_spread_z,
-                                      grid.min_z, grid.max_z);
-                bubble_centers_cached[i] = {cx, cy, cz, radius};
-            }
-        }
-
-        for(int i = 0; i < n_bub; i++)
-        {
-            const BubbleCenter3D& b = bubble_centers_cached[(size_t)i];
-            if(b.radius <= 0.0f)
-                continue;
-            float dx = x - b.cx, dy = y - b.cy, dz = z - b.cz;
-            float dist_sq = dx * dx + dy * dy + dz * dz;
-            float far = b.radius + thick * 4.0f;
-            if(dist_sq > far * far)
-                continue;
-            float dist = sqrtf(dist_sq);
-            float shallow = fabsf(dist - b.radius) / thick;
-            float value = 1.0f / (1.0f + shallow * shallow);
-            if(value > max_intensity)
-            {
-                max_intensity = value;
-                best_hue = fmodf((float)i * 40.0f + color_cycle, 360.0f);
-                if(best_hue < 0.0f)
-                    best_hue += 360.0f;
-            }
-        }
-    }
 
     if(max_intensity <= 1e-5f)
         return 0x00000000;

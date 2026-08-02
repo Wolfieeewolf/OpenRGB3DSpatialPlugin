@@ -149,7 +149,7 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
 
     float progress = CalculateProgress(time);
     float detail = std::max(0.05f, GetScaledDetail());
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     float lx = rot.x - origin.x, ly = rot.y - origin.y, lz = rot.z - origin.z;
 
     const float y_norm = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
@@ -167,7 +167,6 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
         ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
     float spd_mul = bb.speed_mul;
     float sz_mul = bb.tight_mul;
-    float ph_blend = bb.phase_deg;
 
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     if(room_mapped)
@@ -192,12 +191,8 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
         e.hd /= sz_mul;
     }
 
-    int pl = GetPlane();
-    const float dir = (direction == 0) ? 1.0f : -1.0f;
-    const float wrap = std::clamp(hue_repeats, 0.1f, 3.0f);
     float gpu_plane01 = 0.0f;
     bool have_gpu_plane = false;
-    const float freq_spin = time * GetScaledFrequency() * 0.12f * spd_mul;
     if(volume_assist_.isAvailable())
     {
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
@@ -214,62 +209,10 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     }
 
     float hue_plane = 0.0f;
-    if(have_gpu_plane)
-    {
-        hue_plane = gpu_plane01 * 360.0f;
-    }
-    else
-    {
-        float u = 0.0f;
-        float v = 0.0f;
-        if(pl == 0)
-        {
-            u = lx / e.hw;
-            v = lz / e.hd;
-        }
-        else if(pl == 1)
-        {
-            u = lx / e.hw;
-            v = ly / e.hh;
-        }
-        else
-        {
-            u = lz / e.hd;
-            v = ly / e.hh;
-        }
+    if(!have_gpu_plane)
+        return 0x00000000;
+    hue_plane = gpu_plane01 * 360.0f;
 
-        float angle = 0.0f;
-        if(hue_geometry_mode == 1)
-        {
-            const float spin = progress * TWO_PI * dir + freq_spin;
-            angle = (u * std::cos(spin) + v * std::sin(spin)) * 3.14159265f * wrap;
-        }
-        else if(hue_geometry_mode == 2)
-        {
-            const float rad = std::sqrt(u * u + v * v);
-            angle = rad * TWO_PI * wrap - progress * TWO_PI * dir - freq_spin;
-        }
-        else if(hue_geometry_mode == 3)
-        {
-            const float slices = std::max(2.0f, std::floor(wrap * 6.0f + 0.5f));
-            float a = std::atan2(v, u) - (progress * TWO_PI * dir + freq_spin);
-            const float sector = std::floor((a / TWO_PI + 1.0f) * slices);
-            angle = (sector + 0.5f) / slices * TWO_PI;
-        }
-        else
-        {
-            angle = std::atan2(v, u) * wrap;
-        }
-
-        // Rings animate via the progress term inside angle; adding the global spin
-        // for rings would cancel it exactly (speed would do nothing).
-        float hue_turns = angle / TWO_PI + freq_spin * 0.02f;
-        if(hue_geometry_mode != 2)
-            hue_turns += progress * dir;
-        hue_turns += EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
-        hue_turns += ph_blend / 360.0f;
-        hue_plane = std::fmod(hue_turns * 360.0f + 360.0f, 360.0f);
-    }
 
     SpatialLayerCore::Basis basis;
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);

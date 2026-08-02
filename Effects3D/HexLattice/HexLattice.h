@@ -28,11 +28,8 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-private slots:
 private:
     static RGBColor Hsv01ToBgr(float h, float s, float v);
-    void EvaluateHexFieldCpu(float nx, float ny, float nz, float flow_t, float hue_t,
-                             float detail_norm, float* out_v, float* out_h01) const;
 
     QSlider* breathing_amount_slider = nullptr;
     QSlider* pulse_amount_slider = nullptr;

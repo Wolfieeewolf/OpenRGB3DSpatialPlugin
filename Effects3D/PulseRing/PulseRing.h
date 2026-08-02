@@ -37,8 +37,6 @@ private:
     static const char* StyleName(int s);
     static const char* ShapeName(int s);
 
-    float EvaluatePulseCpu(float nx, float ny, float nz, float progress, float time_sec, float* out_color01) const;
-
     int ring_style = STYLE_PULSE;
     int pulse_shape = SHAPE_HEXAGON;
     float ring_thickness = 0.05f;

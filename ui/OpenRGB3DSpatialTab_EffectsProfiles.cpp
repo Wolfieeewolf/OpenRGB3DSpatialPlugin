@@ -8,7 +8,7 @@
 namespace
 {
 constexpr int kEffectProfileVersion = 9;
-constexpr int kMinSupportedEffectProfileVersion = 8;
+constexpr int kMinSupportedEffectProfileVersion = 9;
 }
 
 nlohmann::json OpenRGB3DSpatialTab::BuildEffectProfileJson() const
@@ -52,8 +52,8 @@ bool OpenRGB3DSpatialTab::ApplyEffectProfileJson(const nlohmann::json& profile_j
         const int version = profile_json["version"].get<int>();
         if(version < kMinSupportedEffectProfileVersion || version > kEffectProfileVersion)
         {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile unsupported version %d (need %d-%d)",
-                      version, kMinSupportedEffectProfileVersion, kEffectProfileVersion);
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile unsupported version %d (need %d)",
+                      version, kEffectProfileVersion);
             return false;
         }
         if(!profile_json.contains("stack") || !profile_json["stack"].is_array())

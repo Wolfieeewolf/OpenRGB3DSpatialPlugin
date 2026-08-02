@@ -34,10 +34,6 @@ private slots:
 private:
     static constexpr int kSpiralPatternCount = 6;
 
-    float EvaluateSpiralValueCpu(float spiral_angle, float norm_radius, float norm_twist,
-                                 float progress_e, float freq_scale_e, float detail_e,
-                                 float rot_rel_x, float rot_rel_z) const;
-
     QSlider*   arms_slider = nullptr;
     QComboBox* pattern_combo = nullptr;
     QSlider*   gap_slider = nullptr;

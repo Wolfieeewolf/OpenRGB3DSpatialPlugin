@@ -200,12 +200,10 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
-    const float ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
-    const float oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
 
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -231,20 +229,10 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
 
     const float spd = std::max(0.05f, GetScaledSpeed());
     const float freq = std::max(0.05f, GetScaledFrequency());
-    const float detail = std::max(0.05f, GetNormalizedDetail());
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float progress =
         std::fmod(time * spd * 0.11f * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f,
                   1.0f);
-
-    const int shape = std::clamp(helix_shape_mode, 0, SHAPE_COUNT - 1);
-    const float radius01 =
-        std::clamp((helix_radius_pct / 100.0f) * (0.55f + 0.55f * size_m) * GetNormalizedScale(), 0.08f, 0.85f);
-    const float twists =
-        std::clamp(twist_amount * (0.55f + 0.75f * detail) * (0.45f + 0.08f * freq), 0.4f, 8.0f) * bb.tight_mul;
-    const float thickness =
-        std::clamp((strand_thickness_pct / 100.0f) * (0.55f + 0.35f * size_m), 0.04f, 0.45f);
-    const float rung_amount = std::clamp(rung_amount_pct / 100.0f, 0.0f, 1.0f);
 
     float intensity = 0.0f;
     float palette01 = 0.0f;
@@ -256,65 +244,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
         palette01 = std::clamp(samp.y(), 0.0f, 1.0f);
         rung_hint = samp.z();
     }
-    else
-    {
-        const float lx = (nx - ox) * 2.0f;
-        const float ly = ny;
-        const float lz = (nz - oz) * 2.0f;
-        const float phase = ly * twists * TWO_PI + progress * TWO_PI;
-        const float c1 = std::cos(phase);
-        const float s1 = std::sin(phase);
-        const float hx1 = radius01 * c1;
-        const float hz1 = radius01 * s1;
-        const float hx2 = radius01 * (-c1);
-        const float hz2 = radius01 * (-s1);
-        const float d1 = std::sqrt((lx - hx1) * (lx - hx1) + (lz - hz1) * (lz - hz1));
-        const float d2 = std::sqrt((lx - hx2) * (lx - hx2) + (lz - hz2) * (lz - hz2));
-        const float d_strand = std::min(d1, d2);
-        const float core_w = thickness * ((shape == SHAPE_ROPE) ? 1.65f : 1.0f);
-        const float glow_w = core_w * ((shape == SHAPE_RIBBONS) ? 2.8f : 2.2f);
-        float strand = 1.0f - smoothstep(0.0f, core_w, d_strand);
-        float glow = (1.0f - smoothstep(core_w, glow_w, d_strand)) * 0.55f;
-        intensity = strand + glow;
 
-        if(shape == SHAPE_RIBBONS)
-        {
-            const float a = std::atan2(lz, lx);
-            auto ang_dist = [](float x) {
-                x = std::fmod(x + (float)M_PI, TWO_PI);
-                if(x < 0.0f)
-                    x += TWO_PI;
-                return std::fabs(x - (float)M_PI);
-            };
-            const float ang = std::min(ang_dist(a - phase), ang_dist(a - phase - (float)M_PI));
-            const float rad = std::sqrt(lx * lx + lz * lz);
-            const float ribbon =
-                (1.0f - smoothstep(0.0f, 0.55f + thickness, ang)) *
-                (1.0f - smoothstep(radius01 * 0.35f, radius01 * 1.35f, std::fabs(rad - radius01)));
-            intensity = std::max(intensity, ribbon);
-        }
-
-        float rung = 0.0f;
-        if(rung_amount > 0.02f)
-        {
-            const float rung_phase = std::fmod(ly * twists * 2.0f + progress * 0.5f + 1.0f, 1.0f);
-            const float rung_gate =
-                1.0f - smoothstep(0.0f, 0.12f + 0.08f * (1.0f - rung_amount), std::fabs(rung_phase - 0.5f));
-            const float rad = std::sqrt(lx * lx + lz * lz);
-            const float bridge = 1.0f - smoothstep(0.0f, thickness * 1.1f, std::fabs(rad - radius01 * 0.55f));
-            const float between = 1.0f - smoothstep(radius01 * 0.15f, radius01 * 1.05f, rad);
-            rung = bridge * between * rung_gate * rung_amount;
-            if(shape == SHAPE_LADDER)
-                rung *= 1.45f;
-            intensity = std::max(intensity, rung);
-        }
-
-        const float axis_glow =
-            0.10f * (1.0f - smoothstep(0.0f, radius01 * 1.4f, std::sqrt(lx * lx + lz * lz)));
-        intensity = std::clamp(intensity + axis_glow, 0.0f, 1.0f);
-        palette01 = std::fmod(ly * twists * 0.35f + progress + ((d1 < d2) ? 0.0f : 0.5f) + 1.0f, 1.0f);
-        rung_hint = (rung > strand * 0.45f) ? 1.0f : 0.0f;
-    }
 
     if(intensity < 0.01f)
         return 0x00000000;

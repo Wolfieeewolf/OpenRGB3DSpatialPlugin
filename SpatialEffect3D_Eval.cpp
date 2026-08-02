@@ -101,6 +101,8 @@ void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridCon
 
 void SpatialEffect3D::ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const
 {
+    // When SkipsSpatialSampleWarp is false, the render path applies this before
+    // CalculateColorGrid, so sample coords there are already effect-rotated.
     if(effect_rotation_yaw == 0.0f && effect_rotation_pitch == 0.0f && effect_rotation_roll == 0.0f)
     {
         return;

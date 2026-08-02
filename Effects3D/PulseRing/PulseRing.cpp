@@ -19,67 +19,6 @@ REGISTER_EFFECT_3D(PulseRing);
 
 namespace
 {
-float HexMetric(float x, float z)
-{
-    const float ax = std::fabs(x);
-    const float az = std::fabs(z);
-    return std::max(ax * 0.5f + az * 0.8660254f, ax);
-}
-
-float PolyMetric(float x, float z, float n)
-{
-    const float an = (float)(2.0 * M_PI) / n;
-    const float a = std::atan2(z, x);
-    const float r = std::hypot(x, z);
-    return std::cos(std::floor(0.5f + a / an) * an - a) * r;
-}
-
-float FootprintXZ(float lx, float lz, int shape)
-{
-    // shape: 0 Circle, 2 Hexagon, 3 Triangle, 4 Square (1 = Sphere uses 3D)
-    if(shape == 2)
-        return HexMetric(lx, lz) / 0.8660254f;
-    if(shape == 3)
-        return std::max(PolyMetric(lx, lz, 3.0f) / 0.5f, 0.0f);
-    if(shape == 4)
-        return std::max(std::fabs(lx), std::fabs(lz));
-    return std::hypot(lx, lz);
-}
-
-float ShapeDist01(float lx, float ly, float lz, int shape, float detail, float* height_mul)
-{
-    // Sphere only uses true 3D distance. Everything else is a FLAT extruded XZ
-    // prism (hard Y slab) so hex / triangle / square keep hard edges.
-    if(shape == 1)
-    {
-        *height_mul = 1.0f;
-        return std::sqrt(lx * lx + ly * ly + lz * lz);
-    }
-    const float d = std::clamp(detail, 0.05f, 1.0f);
-    const float y_half = 0.28f + (0.07f - 0.28f) * d;
-    const float ay = std::fabs(ly);
-    if(ay <= y_half)
-        *height_mul = 1.0f;
-    else if(ay >= y_half + 0.035f)
-        *height_mul = 0.0f;
-    else
-    {
-        const float t = (ay - y_half) / 0.035f;
-        *height_mul = 1.0f - t;
-    }
-    return FootprintXZ(lx, lz, shape);
-}
-
-float SharpBand(float dist_to_edge, float half_w)
-{
-    const float w = std::max(half_w, 0.008f);
-    const float a = std::fabs(dist_to_edge);
-    if(a >= w)
-        return 0.0f;
-    const float t = 1.0f - a / w;
-    return t * t;
-}
-
 // Keep hue drivers bounded — fmod(huge_time * rate, 360) loses precision and flashes.
 float HueScroll01(float time_sec, float scaled_freq)
 {
@@ -238,46 +177,6 @@ void PulseRing::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
 }
-
-float PulseRing::EvaluatePulseCpu(float nx, float ny, float nz, float progress, float time_sec, float* out_color01) const
-{
-    const float hole_r = std::clamp(hole_size, 0.0f, 0.75f);
-    const float sigma = std::max(ring_thickness, 0.015f);
-    const float amp = std::clamp(pulse_amplitude, 0.2f, 2.0f);
-    const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
-    const float size_scale = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.25f, 2.5f);
-    const int style = std::clamp(ring_style, 0, STYLE_COUNT - 1);
-    const int shape = std::clamp(pulse_shape, 0, SHAPE_COUNT - 1);
-    const float phase_offset = direction_deg / 360.0f;
-    const float hue_scroll = HueScroll01(time_sec, GetScaledFrequency());
-
-    const float lx = nx * 2.0f - 1.0f;
-    const float ly = ny * 2.0f - 1.0f;
-    const float lz = nz * 2.0f - 1.0f;
-    float height_mul = 1.0f;
-    const float d = ShapeDist01(lx, ly, lz, shape, detail, &height_mul) / std::max(size_scale, 0.25f);
-    const float usable = std::max(0.12f, 1.0f - hole_r);
-    const float az01 = std::fmod(std::atan2(lz, lx) / (float)(2.0 * M_PI) + 0.5f + hue_scroll + 2.0f, 1.0f);
-
-    if(style == STYLE_RADIAL_RAINBOW)
-    {
-        *out_color01 = az01;
-        const float fill = std::clamp((d - (hole_r - 0.02f)) / 0.03f, 0.0f, 1.0f);
-        const float outer = 1.0f - std::clamp((d - 1.02f) / 0.18f, 0.0f, 1.0f);
-        return std::clamp(fill * outer * height_mul, 0.0f, 1.0f);
-    }
-
-    *out_color01 = std::fmod(std::clamp((d - hole_r) / usable, 0.0f, 1.0f) * 0.85f + hue_scroll + 2.0f, 1.0f);
-
-    const float expand = std::fmod(progress + phase_offset + 10.0f, 1.0f);
-    const float center = hole_r + expand * usable;
-    const float half_w = std::max(0.010f, sigma * (0.55f + (0.18f - 0.55f) * detail));
-    float intensity = SharpBand(d - center, half_w) * height_mul;
-    intensity *= std::clamp((d - (hole_r - 0.03f)) / 0.04f, 0.0f, 1.0f);
-    intensity *= amp;
-    return std::clamp(intensity, 0.0f, 1.0f);
-}
-
 void PulseRing::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     // Faster expand: progress is fractional cycles (not raw CalculateProgress which grows forever).
@@ -318,7 +217,7 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
@@ -333,15 +232,6 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
         intensity = samp.x();
         color01 = samp.y();
-    }
-    else
-    {
-        float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-        PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-        const float lnx = std::clamp(nx - ox + 0.5f, 0.0f, 1.0f);
-        const float lny = std::clamp(ny - oy + 0.5f, 0.0f, 1.0f);
-        const float lnz = std::clamp(nz - oz + 0.5f, 0.0f, 1.0f);
-        intensity = EvaluatePulseCpu(lnx, lny, lnz, progress, time, &color01);
     }
     if(intensity <= 1e-5f)
         return 0x00000000;

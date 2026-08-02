@@ -467,7 +467,7 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     float coord_y01 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     SpatialLayerCore::MapperSettings strat_map_s;
     EffectStratumBlend::InitStratumBreaks(strat_map_s);
@@ -516,9 +516,10 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
                          SpatialPatternKernelCount() - 1);
 
     float k = 0.0f;
-    if(pat <= kSpatialStripGpuKernelMaxId && strip_assist_.isAvailable())
+    if(pat <= kSpatialStripGpuKernelMaxId)
     {
-        k = strip_assist_.sampleKernelSigned(s01);
+        if(strip_assist_.isAvailable())
+            k = strip_assist_.sampleKernelSigned(s01);
     }
     else
     {
@@ -545,8 +546,11 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
             shell_unfold = StripPatternSurface::UnfoldMode::RadialXZ;
         const float s_shell = StripPatternSurface::StripCoord01(rlx, rly, rlz, shell_unfold, dir_deg);
         float k_shell = 0.0f;
-        if(pat <= kSpatialStripGpuKernelMaxId && strip_assist_.isAvailable())
-            k_shell = strip_assist_.sampleKernelSigned(s_shell);
+        if(pat <= kSpatialStripGpuKernelMaxId)
+        {
+            if(strip_assist_.isAvailable())
+                k_shell = strip_assist_.sampleKernelSigned(s_shell);
+        }
         else
             k_shell = EvaluateKernel(s_shell, phase_drive, time, pat, reps);
         k = k_shell;
@@ -577,7 +581,6 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     else
     {
         // LED-cube style volume displays — sample room unit cube (matches GPU atlas).
-        const float sigma = std::max(surface_thickness, 0.02f);
         if(volume_assist_.isAvailable())
         {
             intensity = volume_assist_.sampleScalar01(nx, ny, nz);
@@ -588,7 +591,7 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
         }
         else
         {
-            intensity = EvaluateCubeDisplay(disp, rlx, rly, rlz, k, amp, progress_val, time, sigma);
+            intensity = 0.0f;
         }
         if(intensity <= 1e-4f)
             return 0x00000000;

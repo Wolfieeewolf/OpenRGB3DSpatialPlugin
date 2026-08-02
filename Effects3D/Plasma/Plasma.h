@@ -32,9 +32,6 @@ private slots:
     void OnPlasmaParameterChanged();
 
 private:
-    float EvaluatePlasmaValueCpu(float coord1, float coord2, float coord3,
-                                 float prog, float freq_scale_e) const;
-
     QComboBox* pattern_combo = nullptr;
     int pattern_type = 0;
     float progress = 0.0f;

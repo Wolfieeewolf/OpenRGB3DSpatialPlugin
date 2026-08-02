@@ -334,7 +334,7 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
     TickPulses(time);
 
     Vector3D o = GetEffectOriginGrid(grid);
-    Vector3D rotated_pos = TransformPointByRotation(x, y, z, o);
+    Vector3D rotated_pos{x, y, z};
     float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);

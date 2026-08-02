@@ -181,7 +181,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    Vector3D rot{x, y, z};
     float coord_y01 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     SpatialLayerCore::MapperSettings strat_map_s;
     EffectStratumBlend::InitStratumBreaks(strat_map_s);
@@ -217,10 +217,6 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     if(sh < 1e-5f) sh = 1.0f;
     if(sd < 1e-5f) sd = 1.0f;
 
-    float lx = (rot.x - origin.x) / sw;
-    float ly = (rot.y - origin.y) / sh;
-    float lz = (rot.z - origin.z) / sd;
-
     float intensity = 0.0f;
     float pos_norm = 0.5f;
     if(surface_volume_assist_.isAvailable())
@@ -240,47 +236,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         }
     }
     else
-    {
-        const float amp = std::max(0.2f, std::min(2.0f, wave_amplitude));
-        const float dir_rad = wave_direction_deg * (float)(M_PI / 180.0);
-        const int style = std::max(0, std::min(wave_style, STYLE_COUNT - 1));
-        const float sigma = std::max(surface_thickness, 0.02f);
-        float r = sqrtf(lx * lx + lz * lz);
-        float wave_pos = (float)(cos(dir_rad) * lx + sin(dir_rad) * lz);
-        float phase = progress_val * (float)(2.0 * M_PI);
-        float travel = phase + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb),
-                                                                         stratum_mot01, 0.45f);
-        float freq_e = std::max(0.2f, std::min(4.0f, wave_frequency * bb.tight_mul));
-        float surface_y;
-        switch(style)
-        {
-        case STYLE_RADIAL:
-            surface_y = amp * sinf(freq_e * r * 3.0f + travel);
-            break;
-        case STYLE_LINEAR:
-            surface_y = amp * sinf(freq_e * wave_pos * 4.0f + travel);
-            break;
-        case STYLE_OCEAN_DRIFT:
-            surface_y =
-                amp * (sinf(freq_e * r + travel) * 0.5f +
-                       sinf(phase * 0.7f + freq_e * r * 1.5f + travel * 1.2f) * 0.3f +
-                       sinf(phase * 0.5f + r * 2.0f + travel * 0.8f) * 0.2f);
-            break;
-        case STYLE_GRADIENT:
-            surface_y = amp * (0.5f + 0.5f * sinf(freq_e * r + wave_pos * 2.0f + travel));
-            break;
-        case STYLE_SINUS:
-        default:
-            surface_y = amp * sinf(freq_e * r + wave_pos * 2.0f + travel);
-            break;
-        }
-        float d = fabsf(ly - surface_y);
-        const float d_cutoff = 3.0f * sigma * std::max(1.0f, amp);
-        if(d > d_cutoff) return 0x00000000;
-        intensity = expf(-d * d / (sigma * sigma));
-        intensity = fminf(1.0f, intensity);
-        pos_norm = (surface_y / amp + 1.0f) * 0.5f;
-    }
+        return 0x00000000;
 
     float fade = std::clamp(surface_edge_fade / 100.0f, 0.0f, 1.0f);
     if(fade > 0.001f)

@@ -345,7 +345,7 @@ RGBColor AudioStripVisualizer::CalculateColorGrid(float x, float y, float z, flo
         last_push_time = time;
     }
 
-    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    Vector3D rotated_pos{x, y, z};
     float path01 = 0.0f;
     float disp01 = 0.0f;
     PathAndDisplayNorm(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, path01, disp01);
