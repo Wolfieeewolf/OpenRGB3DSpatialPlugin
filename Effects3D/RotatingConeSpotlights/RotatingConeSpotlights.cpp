@@ -564,8 +564,8 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     }
     if(surf == SURF_REF)
     {
-        // Pack ox and (oy,oz) — oy in integer band, oz in fraction.
-        vp[14] = ox;
+        /* Pack wander into integer band, ox in fraction; oy/oz in [15]. */
+        vp[14] = std::floor(wander * 100.0f + 0.5f) + std::clamp(ox, 0.0f, 0.999f);
         vp[15] = std::floor(std::clamp(oy, 0.0f, 1.0f) * 4095.0f + 0.5f) + std::clamp(oz, 0.0f, 0.999f);
     }
     else
@@ -694,7 +694,6 @@ nlohmann::json RotatingConeSpotlights::SaveSettings() const
     j["cone_spot_hue01"] = hue01;
     j["cone_spot_motion"] = motion_rate;
     j["cone_spot_count"] = cone_count;
-    j["cone_spot_placement"] = surface; // migrate: old key = surface
     j["cone_spot_surface"] = surface;
     j["cone_spot_motion_mode"] = motion_mode;
     j["cone_spot_layout"] = layout_preset;
@@ -717,8 +716,6 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
         cone_count = std::clamp(settings["cone_spot_count"].get<int>(), 1, kMaxCones);
     if(settings.contains("cone_spot_surface") && settings["cone_spot_surface"].is_number_integer())
         surface = std::clamp(settings["cone_spot_surface"].get<int>(), 0, SURF_COUNT - 1);
-    else if(settings.contains("cone_spot_placement") && settings["cone_spot_placement"].is_number_integer())
-        surface = std::clamp(settings["cone_spot_placement"].get<int>(), 0, SURF_COUNT - 1);
     if(settings.contains("cone_spot_motion_mode") && settings["cone_spot_motion_mode"].is_number_integer())
         motion_mode = std::clamp(settings["cone_spot_motion_mode"].get<int>(), 0, MOTION_COUNT - 1);
     if(settings.contains("cone_spot_layout") && settings["cone_spot_layout"].is_number_integer())
@@ -744,7 +741,6 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
         ApplyLayoutPreset(layout_preset == LAYOUT_CUSTOM ? LAYOUT_AUTO : layout_preset);
     }
 
-    // Fix Ref packing decode must match GLSL — update GLSL for packed oy/oz.
     if(cone_slider)
         cone_slider->setValue((int)std::lround(cone_scale * 1000.0f));
     if(hue_slider)

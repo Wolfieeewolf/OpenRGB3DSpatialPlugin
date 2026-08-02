@@ -81,9 +81,7 @@ const char* BreathingSphere::EdgeName(int e)
 
 int BreathingSphere::NormalizeEdgeProfile(int e)
 {
-    if(e == EDGE_LEGACY_FEATHERED || e == EDGE_SOFT)
-        return EDGE_SOFT;
-    if(e == EDGE_LEGACY_RING || e == EDGE_CRISP || e == 1)
+    if(e == EDGE_CRISP)
         return EDGE_CRISP;
     return EDGE_SOFT;
 }
@@ -232,10 +230,9 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     const float size_multiplier = GetNormalizedSize();
     const float base_scale = 0.45f;
     const float breath_t = breath_pulse_pct / 100.0f;
-    const float breath_amp = breath_t * 0.92f; // strong grow/shrink; 0 when slider is 0
+    const float breath_amp = breath_t * 0.92f;
     const float rate = GetScaledFrequency();
-    const float breath_phase = progress_v * rate * 0.2f;
-    /* R expands in shape-metric space — square breath stays a square pulse. */
+    float breath_phase = progress_v * rate * 0.2f;
     const float R_l = base_scale * size_multiplier * (1.0f + breath_amp * sinf(breath_phase));
     const int edge = NormalizeEdgeProfile(edge_profile);
     const int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
@@ -252,13 +249,28 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
         aspect_med = 1.0f;
     const float ax = std::clamp(grid.width / aspect_med, 0.15f, 1.0f);
     const float az = std::clamp(grid.depth / aspect_med, 0.15f, 1.0f);
-    const float pulse_strength = breath_t; // 0 when slider is 0
+    const float pulse_strength = breath_t;
+
+    /* Mid-band stratum bake — matches unstratified atlas; whole-room gets speed/tight in params. */
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float tm = std::max(0.25f, bb.tight_mul);
+    float detail_gpu = detail;
+    if(shape == SHAPE_WHOLE_ROOM)
+    {
+        breath_phase *= bb.speed_mul;
+        detail_gpu = detail / tm;
+    }
 
     const float vp[16] = {
         R_l,
         breath_phase,
         progress_v,
-        detail,
+        detail_gpu,
         (float)edge,
         center_hole_pct / 100.0f,
         ox,

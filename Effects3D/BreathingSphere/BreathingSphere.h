@@ -37,14 +37,11 @@ private:
         SHAPE_WHOLE_ROOM,
         SHAPE_COUNT
     };
-    /** Soft vs Crisp only (legacy Feathered→Soft, Crisp ring→Crisp on load). */
+    /** Soft vs Crisp only. */
     enum EdgeProfile {
         EDGE_SOFT = 0,
         EDGE_CRISP = 1,
-        EDGE_COUNT = 2,
-        /* Legacy saved IDs (not shown in UI): */
-        EDGE_LEGACY_FEATHERED = 2,
-        EDGE_LEGACY_RING = 3
+        EDGE_COUNT = 2
     };
     static const char* ShapeName(int s);
     static const char* EdgeName(int e);

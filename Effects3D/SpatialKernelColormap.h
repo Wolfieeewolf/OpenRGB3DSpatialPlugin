@@ -114,7 +114,6 @@ inline void StripColormapLoadCanonical(const nlohmann::json& settings,
         unfold = std::clamp(settings["strip_cmap_unfold"].get<int>(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("strip_cmap_dir") && settings["strip_cmap_dir"].is_number())
         dir = std::fmod(settings["strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
-    // Legacy strip_cmap_color_style ignored — Pattern always owns its palette.
 }
 
 #endif

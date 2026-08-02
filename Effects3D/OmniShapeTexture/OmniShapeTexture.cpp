@@ -650,6 +650,9 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
     if(!snap || snap->isNull())
     {
         volume_assist_.clearMediaTexture();
+        /* Rebuild atlas so GPU samples go black instead of a stale frame. */
+        float zp[16] = {};
+        volume_assist_.prepare(render_sequence, time_sec, zp, 16);
         return;
     }
 
@@ -736,7 +739,8 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
     /* Local half-extent coords: Size expands the crisp shape envelope (not a soft sphere). */
     const float R_local = std::clamp(0.16f + 1.15f * size_m, 0.12f, 1.65f) / tm;
     const float prop01 = ambience_propagation / 100.0f;
-    const float packed_wrap = tile_repeat_enabled ? (1.0f + prop01) : prop01;
+    /* wrap*2+prop keeps prop∈[0,1] from colliding with the wrap flag. */
+    const float packed_wrap = (tile_repeat_enabled ? 2.0f : 0.0f) + prop01;
 
     float vp[16] = {
         (float)std::clamp(base_shape, 0, kOmniShapeCount - 1),
@@ -840,7 +844,8 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
     const float prop01 = ambience_propagation / 100.0f;
     const float t_lag = prop01 * dist_n * 2.8f;
     const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
-    const float t_eff = freeze_gif_motion ? 0.0f : (time * bb.speed_mul - t_lag);
+    /* Match GLSL: (u_time - t_lag) * rate; spin_rate already includes speed_mul. */
+    const float t_eff = freeze_gif_motion ? 0.0f : (time - t_lag);
     const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
     const float spin_rate =
         freeze_gif_motion

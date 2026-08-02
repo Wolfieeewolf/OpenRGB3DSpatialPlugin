@@ -8,7 +8,8 @@
  *
  *  u_params: [0]=spin_t [1]=scale [2]=hue_static [3]=count [4]=motion_mode
  *            [5]=surface [6..13]=u0,v0..u3,v3
- *            [14]=wander (or ref_ox when surface==Ref)
+ *            [14]=wander (or floor(wander*100)+ox when surface==Ref)
+ *            [15]=elev (or floor(oy*4095)+oz when surface==Ref)
  *            [15]=elev_bias (or ref_oz when surface==Ref; elev derived in-shader)
  *  surface: 0 Center, 1 Ref, 2 Ceiling, 3 Floor, 4 Walls
  *  motion_mode: 0 Independent, 1 Opposite
@@ -93,13 +94,14 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     vec3 ref_o = vec3(0.5);
     if(surface == 1)
     {
-        // [14]=ox, [15]=floor(oy*4095)+oz  (matches PrepareGpuFields pack)
+        float packed_ox = u_params[14];
+        float wander_i = floor(packed_ox);
+        wander = clamp(wander_i / 100.0, 0.15, 2.0);
         float packed = u_params[15];
         float oy = clamp(floor(packed) / 4095.0, 0.0, 1.0);
         float oz = clamp(fract(packed), 0.0, 1.0);
-        ref_o = vec3(clamp(u_params[14], 0.0, 1.0), oy, oz);
+        ref_o = vec3(clamp(fract(packed_ox), 0.0, 1.0), oy, oz);
         elev_bias = 0.0;
-        wander = 1.0;
     }
     else
     {

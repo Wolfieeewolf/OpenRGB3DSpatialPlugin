@@ -239,16 +239,14 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    float coord1 = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
-    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
-    float coord3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
-    {
-        float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-        PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-        coord1 = std::clamp(coord1 - ox + 0.5f, 0.0f, 1.0f);
-        coord2 = std::clamp(coord2 - oy + 0.5f, 0.0f, 1.0f);
-        coord3 = std::clamp(coord3 - oz + 0.5f, 0.0f, 1.0f);
-    }
+    float n1 = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
+    float n2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    float n3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
+    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+    float coord1 = std::clamp(n1 - ox + 0.5f, 0.0f, 1.0f);
+    float coord2 = std::clamp(n2 - oy + 0.5f, 0.0f, 1.0f);
+    float coord3 = std::clamp(n3 - oz + 0.5f, 0.0f, 1.0f);
 
     SpatialLayerCore::MapperSettings strat_map;
     EffectStratumBlend::InitStratumBreaks(strat_map);
@@ -261,17 +259,21 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     const float prog = progress * bb.speed_mul;
     const float freq_scale_e = freq_scale * bb.tight_mul;
     const float pshift = EffectStratumBlend::PhaseShift01(bb);
-    coord1 = std::fmod(coord1 + pshift + 1.0f, 1.0f);
-    coord2 = std::fmod(coord2 + pshift + 1.0f, 1.0f);
-    coord3 = std::fmod(coord3 + pshift + 1.0f, 1.0f);
 
     float plasma_value;
     if(volume_assist_.isAvailable())
     {
-        plasma_value = volume_assist_.sampleScalar01(coord1, coord2, coord3);
+        /* GLSL already centers on origin — sample room 01 + stratum phase only. */
+        const float g1 = std::fmod(n1 + pshift + 1.0f, 1.0f);
+        const float g2 = std::fmod(n2 + pshift + 1.0f, 1.0f);
+        const float g3 = std::fmod(n3 + pshift + 1.0f, 1.0f);
+        plasma_value = volume_assist_.sampleScalar01(g1, g2, g3);
     }
     else
     {
+        coord1 = std::fmod(coord1 + pshift + 1.0f, 1.0f);
+        coord2 = std::fmod(coord2 + pshift + 1.0f, 1.0f);
+        coord3 = std::fmod(coord3 + pshift + 1.0f, 1.0f);
         plasma_value = EvaluatePlasmaValueCpu(coord1, coord2, coord3, prog, freq_scale_e);
     }
     plasma_value = EffectStratumBlend::ApplyMotionToUnit01(plasma_value, stratum_mot01, 0.28f);

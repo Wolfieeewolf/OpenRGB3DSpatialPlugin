@@ -61,9 +61,10 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         float dist_norm = clamp(length(l) * 0.5, 0.0, 1.5);
         float inhale = sin(breath_phase) * pulse_strength;
         float exhale = sin(breath_phase + 1.2) * pulse_strength;
+        /* Spatial coeffs match CPU (l = rel/med); detail is pre-scaled by 1/tight_mul. */
         float wave = sin(inhale * 3.14159265 * 1.15 - dist_norm * (9.0 + 5.0 * detail)) * pulse_strength;
-        float ripple = sin(breath_phase * 2.1 - dist_norm * 6.2831853 * 2.2 + l.y * 0.4 * detail) * pulse_strength;
-        float rush = sin(exhale * 1.7 + (l.x + l.z) * 0.35 * detail) * 0.4 * pulse_strength;
+        float ripple = sin(breath_phase * 2.1 - dist_norm * 6.2831853 * 2.2 + l.y * 0.02 * detail) * pulse_strength;
+        float rush = sin(exhale * 1.7 + (l.x + l.z) * 0.015 * detail) * 0.4 * pulse_strength;
         float air = 0.78 + 0.22 * (0.5 + 0.5 * sin(breath_phase * 1.05)) * (0.55 + 0.45 * pulse_strength);
         if(pulse_strength < 0.001)
             air = 0.85;

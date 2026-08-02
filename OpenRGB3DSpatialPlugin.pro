@@ -300,6 +300,7 @@ HEADERS += \
     Effects3D/RotatingConeSpotlights/RotatingConeVolumeFieldGlsl.h \
     Effects3D/Bubbles/BubblesVolumeFieldGlsl.h \
     Effects3D/BouncingBall/BouncingBallVolumeFieldGlsl.h \
+    Effects3D/Starfield/StarfieldVolumeFieldGlsl.h \
     Effects3D/TextureProjection/TextureProjectionVolumeFieldGlsl.h \
     Effects3D/OmniShapeTexture/OmniShapeTextureVolumeFieldGlsl.h \
     Effects3D/TravelingLight/TravelingLightVolumeFieldGlsl.h \

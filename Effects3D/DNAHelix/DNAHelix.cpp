@@ -386,12 +386,6 @@ void DNAHelix::LoadSettings(const nlohmann::json& settings)
         helix_shape_mode = std::clamp(settings["dna_helix_shape"].get<int>(), 0, SHAPE_COUNT - 1);
     if(settings.contains("dna_helix_radius_pct") && settings["dna_helix_radius_pct"].is_number())
         helix_radius_pct = std::clamp(settings["dna_helix_radius_pct"].get<float>(), 15.0f, 90.0f);
-    else if(settings.contains("helix_radius") && settings["helix_radius"].is_number())
-    {
-        // Legacy 20–200 slider → percent-ish.
-        const float hr = (float)settings["helix_radius"].get<int>();
-        helix_radius_pct = std::clamp(hr * 0.4f, 15.0f, 90.0f);
-    }
     if(settings.contains("dna_helix_twists") && settings["dna_helix_twists"].is_number())
         twist_amount = std::clamp(settings["dna_helix_twists"].get<float>(), 0.5f, 6.0f);
     if(settings.contains("dna_helix_thickness_pct") && settings["dna_helix_thickness_pct"].is_number())

@@ -71,15 +71,9 @@ GridExtents ResolveGridExtents(const ManualRoomSettings& settings,
                                float grid_scale_mm,
                                const GridDimensionDefaults& defaults);
 
-GridExtents BoundsToExtents(const GridBounds& bounds);
-
 GridBounds ComputeGridBounds(const ManualRoomSettings& settings,
                              float grid_scale_mm,
                              const std::vector<std::unique_ptr<ControllerTransform>>& transforms);
-
-GridBounds ComputeRoomAlignedBounds(const ManualRoomSettings& settings,
-                                    float grid_scale_mm,
-                                    const std::vector<std::unique_ptr<ControllerTransform>>& transforms);
 
 bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
                            bool room_aligned,

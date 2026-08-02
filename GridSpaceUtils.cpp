@@ -129,27 +129,11 @@ GridExtents ResolveGridExtents(const ManualRoomSettings& settings,
     return extents;
 }
 
-GridExtents BoundsToExtents(const GridBounds& bounds)
-{
-    GridExtents extents{};
-    extents.width_units  = std::max(0.0f, bounds.max_x - bounds.min_x);
-    extents.height_units = std::max(0.0f, bounds.max_y - bounds.min_y);
-    extents.depth_units  = std::max(0.0f, bounds.max_z - bounds.min_z);
-    return extents;
-}
-
 GridBounds ComputeGridBounds(const ManualRoomSettings& settings,
                              float grid_scale_mm,
                              const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
 {
     return ComputeBoundsInternal(settings, grid_scale_mm, transforms, BoundsSpace::World);
-}
-
-GridBounds ComputeRoomAlignedBounds(const ManualRoomSettings& settings,
-                                    float grid_scale_mm,
-                                    const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
-{
-    return ComputeBoundsInternal(settings, grid_scale_mm, transforms, BoundsSpace::RoomAligned);
 }
 
 bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,

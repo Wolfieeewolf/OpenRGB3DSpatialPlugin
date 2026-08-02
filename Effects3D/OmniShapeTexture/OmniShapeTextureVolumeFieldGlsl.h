@@ -7,7 +7,7 @@
  *  u_params: [0]=shape [1]=morph [2]=tile [3]=yaw_rate [4]=pitch_rate
  *            [5]=phase_mul [6]=amp [7]=detail
  *            [8]=ox [9]=oy [10]=oz [11]=fd [12]=curve [13]=edge
- *            [14]=R_local [15]=wrap+prop (wrap=0 → prop; wrap=1 → 1+prop)
+ *            [14]=R_local [15]=wrap*2+prop (wrap 0|1, prop 0..1)
  */
 inline const char* OmniShapeTextureVolumeFieldGlsl()
 {
@@ -160,8 +160,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float edge = clamp(u_params[13], 0.0, 1.0);
     float R = max(u_params[14], 0.05);
     float packed = u_params[15];
-    float wrap = step(0.999, packed);
-    float prop = (wrap > 0.5) ? (packed - 1.0) : packed;
+    float wrap = step(1.5, packed);
+    float prop = (wrap > 0.5) ? (packed - 2.0) : packed;
 
     vec3 l = (p01 - origin01) * 2.0;
     float dist_n = length(l) * 0.5 * 1.7320508;

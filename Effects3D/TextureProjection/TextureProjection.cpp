@@ -418,6 +418,8 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
     if(!snap || snap->isNull())
     {
         volume_assist_.clearMediaTexture();
+        float zp[16] = {};
+        volume_assist_.prepare(render_sequence, time_sec, zp, 16);
         return;
     }
 
