@@ -18,7 +18,7 @@
    <item>
     <widget class="QComboBox" name="sourceCombo">
      <property name="toolTip">
-      <string>Pattern kernel is a room-space color/palette modifier layered on top of base Colors.</string>
+      <string>Surface Look paints the lit parts of the effect. Effect Colors uses rainbow/stops. Pattern uses a kernel with its own colors and animation.</string>
      </property>
     </widget>
    </item>
@@ -38,47 +38,33 @@
        <number>0</number>
       </property>
       <item row="0" column="0">
-       <widget class="QLabel" name="colorSourceCaption">
+       <widget class="QLabel" name="kernelCaption">
         <property name="text">
-         <string>Kernel color source:</string>
+         <string>Pattern:</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1" colspan="2">
-       <widget class="QComboBox" name="colorStyleCombo">
-        <property name="toolTip">
-         <string>Pattern palette = each kernel's default colors. Color stops (from Colors) uses your color stops or rainbow toggle.</string>
-        </property>
-       </widget>
+       <widget class="QComboBox" name="kernelCombo"/>
       </item>
       <item row="1" column="0">
-       <widget class="QLabel" name="kernelCaption">
+       <widget class="QLabel" name="unfoldCaption">
         <property name="text">
-         <string>Pattern shape:</string>
+         <string>Map onto:</string>
         </property>
        </widget>
       </item>
       <item row="1" column="1" colspan="2">
-       <widget class="QComboBox" name="kernelCombo"/>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="unfoldCaption">
-        <property name="text">
-         <string>Pattern projection:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1" colspan="2">
        <widget class="QComboBox" name="unfoldCombo"/>
       </item>
-      <item row="3" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="repeatsCaption">
         <property name="text">
-         <string>Pattern density:</string>
+         <string>Density:</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="2" column="1">
        <widget class="QSlider" name="repeatsSlider">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -94,7 +80,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="2">
+      <item row="2" column="2">
        <widget class="QLabel" name="repeatsLabel">
         <property name="minimumSize">
          <size>
@@ -107,14 +93,14 @@
         </property>
        </widget>
       </item>
-      <item row="4" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="dirCaption">
         <property name="text">
-         <string>Projection angle:</string>
+         <string>Angle:</string>
         </property>
        </widget>
       </item>
-      <item row="4" column="1">
+      <item row="3" column="1">
        <widget class="QSlider" name="dirSlider">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -124,7 +110,7 @@
         </property>
        </widget>
       </item>
-      <item row="4" column="2">
+      <item row="3" column="2">
        <widget class="QLabel" name="dirLabel">
         <property name="minimumSize">
          <size>

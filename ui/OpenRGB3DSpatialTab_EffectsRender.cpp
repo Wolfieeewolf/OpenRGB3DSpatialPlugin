@@ -969,7 +969,30 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     const float shade_cache_quant = MMToGridUnits(24.0f, room_grid.grid_scale_mm);
     SpatialLightingSceneProvider::instance()->BeginAmbientShadeCacheFrame(shade_cache_quant);
 
-    if(viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0)
+    // Prepare GPU atlases against the same per-slot active grid used for LED eval
+    // (zone / target-bounds / world), not always the full room.
+    for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
+    {
+        SpatialEffect3D* effect = active_effects[effect_idx].effect;
+        if(!effect)
+        {
+            continue;
+        }
+        const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+        const bool use_world_bounds = effect->UseWorldGridBounds();
+        const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
+        const GridContext3D* local_grid =
+            ResolveActiveSlotGrid(grid_override, use_world_bounds);
+        const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
+        effect->PrepareGpuFields(effect_render_sequence, effect_time, active_grid);
+    }
+
+    // Room-grid overlay can be tens of thousands of voxels × every effect. While effects
+    // are running, refresh every other frame so LED output keeps CPU/GPU budget.
+    const bool refresh_room_grid_overlay =
+        viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0 &&
+        (!effect_running || (effect_render_sequence & 1ull) == 0ull);
+    if(refresh_room_grid_overlay)
     {
         SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(-1);
 

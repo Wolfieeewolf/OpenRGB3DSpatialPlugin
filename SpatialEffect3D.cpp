@@ -650,7 +650,6 @@ void SpatialEffect3D::OnEffectStripColormapChanged()
         effect_strip_cmap_rep = effect_strip_cmap_panel->kernelRepeats();
         effect_strip_cmap_unfold = effect_strip_cmap_panel->unfoldMode();
         effect_strip_cmap_dir = effect_strip_cmap_panel->directionDeg();
-        effect_strip_cmap_color_style = effect_strip_cmap_panel->colorStyle();
     }
     SyncColorControlVisibilityForPatternMode();
     emit ParametersChanged();
@@ -664,8 +663,7 @@ void SpatialEffect3D::SyncEffectStripColormapPanelFromModel()
                                                        effect_strip_cmap_kernel,
                                                        effect_strip_cmap_rep,
                                                        effect_strip_cmap_unfold,
-                                                       effect_strip_cmap_dir,
-                                                       effect_strip_cmap_color_style);
+                                                       effect_strip_cmap_dir);
     }
 }
 
@@ -676,15 +674,13 @@ void SpatialEffect3D::LoadEffectStripColormapSettings(const nlohmann::json& sett
     effect_strip_cmap_rep = 4.0f;
     effect_strip_cmap_unfold = 0;
     effect_strip_cmap_dir = 0.0f;
-    effect_strip_cmap_color_style = 0;
 
     StripColormapLoadCanonical(settings,
                                effect_strip_cmap_on,
                                effect_strip_cmap_kernel,
                                effect_strip_cmap_rep,
                                effect_strip_cmap_unfold,
-                               effect_strip_cmap_dir,
-                               effect_strip_cmap_color_style);
+                               effect_strip_cmap_dir);
 
     SyncEffectStripColormapPanelFromModel();
 }
@@ -696,7 +692,6 @@ void SpatialEffect3D::SaveEffectStripColormapSettings(nlohmann::json& j) const
     float rep = effect_strip_cmap_rep;
     int unfold = effect_strip_cmap_unfold;
     float dir = effect_strip_cmap_dir;
-    int color_style = effect_strip_cmap_color_style;
     if(effect_strip_cmap_panel)
     {
         on = effect_strip_cmap_panel->useStripColormap();
@@ -704,9 +699,8 @@ void SpatialEffect3D::SaveEffectStripColormapSettings(nlohmann::json& j) const
         rep = effect_strip_cmap_panel->kernelRepeats();
         unfold = effect_strip_cmap_panel->unfoldMode();
         dir = effect_strip_cmap_panel->directionDeg();
-        color_style = effect_strip_cmap_panel->colorStyle();
     }
-    StripColormapSaveCanonical(j, on, kern, rep, unfold, dir, color_style);
+    StripColormapSaveCanonical(j, on, kern, rep, unfold, dir);
 }
 
 void SpatialEffect3D::AddBandModulationWidget(QWidget* widget)
@@ -775,18 +769,18 @@ void SpatialEffect3D::SaveEffectStratumSettings(nlohmann::json& j) const
 
 void SpatialEffect3D::SyncColorControlVisibilityForPatternMode()
 {
-    const bool use_pattern_palette =
+    // Surface Look Pattern owns colors — hide effect rainbow/stops while Pattern is selected.
+    const bool use_pattern_look =
         shared_strip_cmap_panel &&
-        shared_strip_cmap_panel->useStripColormap() &&
-        shared_strip_cmap_panel->colorStyle() == 0;
+        shared_strip_cmap_panel->useStripColormap();
 
     if(rainbow_mode_check)
     {
-        rainbow_mode_check->setVisible(!use_pattern_palette);
+        rainbow_mode_check->setVisible(!use_pattern_look);
     }
     if(color_buttons_widget)
     {
-        color_buttons_widget->setVisible(!use_pattern_palette && !rainbow_mode);
+        color_buttons_widget->setVisible(!use_pattern_look && !rainbow_mode);
     }
 }
 

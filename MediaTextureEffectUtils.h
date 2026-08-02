@@ -35,17 +35,19 @@ inline float AmbienceGain(float dist_origin, float max_r, float d_face,
     if(max_r > 1e-4f)
     {
         const float t = std::min(1.0f, dist_origin / max_r);
-        const float dim_eff = std::clamp(fd + (1.0f - fd) * c * 0.70f, 0.0f, 1.0f);
-        if(dim_eff > 1e-4f)
+        /* Distance dim and curve each contribute — mid slider values are obvious. */
+        const float amount = std::clamp(fd * 0.95f + c * 0.55f, 0.0f, 1.0f);
+        if(amount > 1e-4f)
         {
-            const float linear = 1.0f - t * (0.03f + 0.97f * dim_eff);
-            const float exponent = 1.0f + 4.0f * c;
+            const float linear = 1.0f - t * (0.12f + 0.88f * amount);
+            const float exponent = 0.70f + 3.8f * c;
             g *= std::pow(std::clamp(linear, 0.0f, 1.0f), exponent);
         }
     }
     if(es > 1e-4f)
     {
-        const float feather = 0.10f + 0.78f * es;
+        /* Smaller feather → fade starts farther from the wall (stronger mid-range). */
+        const float feather = 0.035f + 0.55f * es;
         g *= Smoothstep(0.0f, feather, d_face);
     }
     return std::clamp(g, 0.0f, 1.0f);

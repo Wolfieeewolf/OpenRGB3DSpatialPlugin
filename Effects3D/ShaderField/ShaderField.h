@@ -5,7 +5,6 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
-#include "Audio/AudioInputManager.h"
 #include "Shaders/SpatialShaderEngine.h"
 
 #include <QImage>
@@ -14,8 +13,8 @@
 #include <vector>
 
 class QComboBox;
-class QCheckBox;
 class QLabel;
+class QSlider;
 
 class ShaderField : public SpatialEffect3D
 {
@@ -41,7 +40,6 @@ private slots:
     void OnCompileMessage(const QString& message);
     void OnPresetChanged(int index);
     void OnProjectionModeChanged(int index);
-    void OnUseAudioChanged(int state);
     void OnOpenShadersFolder();
 
 private:
@@ -55,14 +53,16 @@ private:
     SpatialShaderEngine* shader_engine = nullptr;
     QComboBox* preset_combo = nullptr;
     QComboBox* projection_combo = nullptr;
-    QCheckBox* use_audio_check = nullptr;
+    QSlider* contrast_slider = nullptr;
+    QSlider* hue_slider = nullptr;
     QLabel* compile_log_label = nullptr;
 
     std::vector<QString> preset_paths;
     int projection_mode = 0;
-    bool use_audio = true;
-    float audio_uniform[128] = {};
+    float contrast = 1.0f;
+    float hue_shift = 0.0f;
     uint64_t last_uniform_sequence = 0;
+    float last_uniform_time = -1.0f;
 
     mutable QMutex display_mutex;
     std::shared_ptr<QImage> display_frame;

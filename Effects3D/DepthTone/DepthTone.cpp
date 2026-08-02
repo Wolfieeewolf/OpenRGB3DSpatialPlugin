@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "DepthTone.h"
+#include "DepthToneVolumeFieldGlsl.h"
+#include "EffectHelpers.h"
 
 #include "SpatialKernelColormap.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <QColor>
+#include <QComboBox>
 #include "EffectUiRows.h"
 #include <algorithm>
 #include <cmath>
@@ -14,13 +17,6 @@ REGISTER_EFFECT_3D(DepthTone);
 
 namespace
 {
-inline float Phase01(float time_sec, float cycle_seconds, float speed_mul)
-{
-    if(cycle_seconds < 1e-4f)
-        return 0.f;
-    return std::fmod((time_sec * speed_mul) / cycle_seconds + 1000.f, 1.f);
-}
-
 inline RGBColor Hsv01ToBgr(float h, float s, float v)
 {
     h = std::fmod(h, 1.0f);
@@ -55,10 +51,35 @@ inline RGBColor Hsv01ToBgr(float h, float s, float v)
 }
 }
 
+const char* DepthTone::AxisName(int a)
+{
+    switch(a)
+    {
+    case AXIS_X: return "Width (X)";
+    case AXIS_Y: return "Height (Y)";
+    case AXIS_Z: return "Depth (Z)";
+    default: return "Depth (Z)";
+    }
+}
+
+const char* DepthTone::LayoutName(int L)
+{
+    switch(L)
+    {
+    case LAYOUT_LINEAR: return "Linear (axis)";
+    case LAYOUT_CENTER: return "From room center";
+    case LAYOUT_REF: return "From ref point";
+    default: return "Linear (axis)";
+    }
+}
+
 DepthTone::DepthTone(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     SetSpeed(45);
+    SetFrequency(30);
+    volume_assist_.setFragmentBody(QString::fromUtf8(DepthToneVolumeFieldGlsl()));
+    volume_assist_.setResolution(18);
 }
 
 DepthTone::~DepthTone() = default;
@@ -68,8 +89,8 @@ EffectInfo3D DepthTone::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Depth Tone";
     info.effect_description =
-        "Rotating hues along room depth (Z) with center dimming; choose how many tone steps span front to back, "
-        "optional spatial pattern palette for modulation.";
+        "Hue mapped along an axis or radiating from room center / ref point, with optional center dimming. "
+        "Speed scrolls hue; Frequency adds a second drift; Size zooms the gradient; Detail sharpens tone steps.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_DEPTH_TONE;
     info.is_reversible = true;
@@ -78,13 +99,14 @@ EffectInfo3D DepthTone::GetEffectInfo() const
     info.min_speed = 1;
     info.user_colors = 1;
     info.has_custom_settings = true;
-    info.needs_3d_origin = false;
-    info.needs_frequency = false;
-    info.default_speed_scale = 45.0f;
+    info.needs_3d_origin = true;
+    info.needs_frequency = true;
+    info.default_speed_scale = 18.0f;
+    info.default_frequency_scale = 14.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
-    info.show_frequency_control = false;
+    info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
@@ -98,6 +120,37 @@ void DepthTone::SetupCustomUI(QWidget* parent)
     QWidget* w = new QWidget();
     QVBoxLayout* layout = new QVBoxLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
+    const auto on_changed = [this]() { emit ParametersChanged(); };
+
+    EffectLabeledComboRow* axis_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Axis:"));
+    axis_row->setObjectName(QStringLiteral("axisRow"));
+    axis_combo = axis_row->combo();
+    for(int a = 0; a < AXIS_COUNT; a++)
+        axis_combo->addItem(QString::fromUtf8(AxisName(a)));
+    axis_combo->setCurrentIndex(std::clamp(depth_axis, 0, AXIS_COUNT - 1));
+    axis_combo->setToolTip(QStringLiteral("Which room axis carries the tone when Layout is Linear."));
+    axis_combo->setEnabled(depth_layout == LAYOUT_LINEAR);
+    connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        depth_axis = std::clamp(idx, 0, AXIS_COUNT - 1);
+        emit ParametersChanged();
+    });
+
+    EffectLabeledComboRow* layout_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Layout:"));
+    layout_row->setObjectName(QStringLiteral("layoutRow"));
+    layout_combo = layout_row->combo();
+    for(int L = 0; L < LAYOUT_COUNT; L++)
+        layout_combo->addItem(QString::fromUtf8(LayoutName(L)));
+    layout_combo->setCurrentIndex(std::clamp(depth_layout, 0, LAYOUT_COUNT - 1));
+    layout_combo->setToolTip(QStringLiteral(
+        "Linear: tones along the chosen axis.\n"
+        "From room center / ref point: tones radiate by distance (Axis is unused)."));
+    connect(layout_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        depth_layout = std::clamp(idx, 0, LAYOUT_COUNT - 1);
+        if(axis_combo)
+            axis_combo->setEnabled(depth_layout == LAYOUT_LINEAR);
+        emit ParametersChanged();
+    });
+
     EffectSliderRow* depth_tones_row = EffectUiRows::AppendSliderRow(
         layout,
         QStringLiteral("Depth tones:"),
@@ -105,16 +158,62 @@ void DepthTone::SetupCustomUI(QWidget* parent)
         32,
         std::clamp(depth_tone_count, 2, 32),
         QStringLiteral(
-            "How many tone steps span front to back (Z). 2 ~ complementary pair; higher = more hues across depth."));
+            "How many tone steps span the layout. 2 ~ complementary pair; higher = more hues across depth."));
     depth_tones_row->setObjectName(QStringLiteral("depthTonesRow"));
     depth_tones_slider = depth_tones_row->slider();
     depth_tones_row->bindValueChanged(
         this,
         [this](int v) { depth_tone_count = std::clamp(v, 2, 32); },
         [](int v) { return QString::number(v); },
-        [this]() { emit ParametersChanged(); });
+        on_changed);
+
+    EffectSliderRow* dim_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Center dim:"),
+        0,
+        100,
+        (int)std::lround(dim_amount * 100.0f),
+        QStringLiteral("Darkens toward the middle of the mapped range (0 = flat brightness)."));
+    dim_row->setObjectName(QStringLiteral("centerDimRow"));
+    dim_slider = dim_row->slider();
+    dim_row->bindValueChanged(
+        this,
+        [this](int v) { dim_amount = std::clamp(v / 100.0f, 0.0f, 1.0f); },
+        [](int v) { return QString::number(v) + QStringLiteral("%"); },
+        on_changed);
 
     AddWidgetToParent(w, parent);
+}
+
+void DepthTone::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    const float ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
+    const float oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
+    const float oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
+    const float spd = std::max(0.05f, GetScaledSpeed());
+    const float freq = std::max(0.05f, GetScaledFrequency());
+    const float pos = std::fmod(time_sec * spd * 0.085f + time_sec * freq * 0.028f + 1000.0f, 1.0f);
+    const int dc = std::clamp(depth_tone_count, 2, 32);
+    const float hue_span = (float)(dc - 1) / (float)dc;
+    const float percent_dim = std::clamp(dim_amount, 0.0f, 1.0f);
+    const int axis = std::clamp(depth_axis, 0, AXIS_COUNT - 1);
+    const int layout_i = std::clamp(depth_layout, 0, LAYOUT_COUNT - 1);
+    const float size_zoom = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.15f, 2.5f);
+    const float detail_norm = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
+    const float vp[10] = {
+        pos,
+        hue_span,
+        percent_dim,
+        (float)axis,
+        (float)layout_i,
+        size_zoom,
+        detail_norm,
+        ox,
+        oy,
+        oz
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 10);
 }
 
 RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -127,12 +226,17 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
-    float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
-    float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
+    const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+    const float ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
+    const float oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
+    const float oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
 
     SpatialLayerCore::Basis basis;
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
     SpatialLayerCore::MapperSettings map;
+    const float detail_norm = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
     SpatialLayerCore::SamplePoint sp{};
     sp.grid_x = x;
@@ -143,28 +247,73 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     sp.origin_z = origin.z;
     sp.y_norm = ny;
 
-    const float spd = std::max(0.08f, GetScaledSpeed() / 100.0f);
-    const float pos = Phase01(time, 10.0f, spd);
+    // Speed = primary hue scroll; Frequency = secondary drift (both clearly audible in motion).
+    const float spd = std::max(0.05f, GetScaledSpeed());
+    const float freq = std::max(0.05f, GetScaledFrequency());
+    const float pos = std::fmod(time * spd * 0.085f + time * freq * 0.028f + 1000.0f, 1.0f);
 
     const int dc = std::clamp(depth_tone_count, 2, 32);
     const float hue_span = (float)(dc - 1) / (float)dc;
-    float hue01 = std::fmod(pos + nz * hue_span + 1.0f, 1.0f);
+    const float percent_dim = std::clamp(dim_amount, 0.0f, 1.0f);
+    const int axis = std::clamp(depth_axis, 0, AXIS_COUNT - 1);
+    const int layout_i = std::clamp(depth_layout, 0, LAYOUT_COUNT - 1);
+    // Size zooms gradient; Scale widens/narrows soft influence slightly via size_zoom.
+    const float size_zoom = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.15f, 2.5f);
 
-    const float percent_dim = 0.7f;
+    float hue01 = 0.0f;
     float v = 1.0f;
-    if(nz < 0.5f)
-        v *= (1.0f - (nz * 2.0f * percent_dim));
+    if(volume_assist_.isAvailable())
+    {
+        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const float hue_rad = std::atan2(samp.y() * 2.0f - 1.0f, samp.x() * 2.0f - 1.0f);
+        hue01 = std::fmod(hue_rad / TWO_PI + 1.0f, 1.0f);
+        v = std::clamp(samp.z(), 0.0f, 1.0f);
+    }
     else
-        v *= ((1.0f - percent_dim) + ((nz - 0.5f) * (nz * 2.0f * percent_dim)));
-    v = std::clamp(v, 0.0f, 1.0f);
+    {
+        float linear01 = nz;
+        if(axis == AXIS_X)
+            linear01 = nx;
+        else if(axis == AXIS_Y)
+            linear01 = ny;
+
+        float d01 = linear01;
+        if(layout_i == LAYOUT_CENTER)
+        {
+            const float dx = nx - 0.5f;
+            const float dy = ny - 0.5f;
+            const float dz = nz - 0.5f;
+            d01 = std::clamp(std::sqrt(dx * dx + dy * dy + dz * dz) / 0.8660254f, 0.0f, 1.0f);
+        }
+        else if(layout_i == LAYOUT_REF)
+        {
+            const float dx = nx - ox;
+            const float dy = ny - oy;
+            const float dz = nz - oz;
+            d01 = std::clamp(std::sqrt(dx * dx + dy * dy + dz * dz) / 0.8660254f, 0.0f, 1.0f);
+        }
+
+        // Mirrors the GLSL: origin-anchored zoom for radial layouts, and phase
+        // (not distance) quantization so tone bands flow with Speed.
+        const float d_mapped = (layout_i == LAYOUT_LINEAR)
+                                   ? std::clamp((d01 - 0.5f) / size_zoom + 0.5f, 0.0f, 1.0f)
+                                   : std::clamp(d01 / size_zoom, 0.0f, 1.0f);
+        const float tones = std::max(2.0f, 2.0f + hue_span * 32.0f);
+        const float phase = pos + d_mapped * hue_span;
+        const float stepped = std::floor(phase * tones + 1e-4f) / tones;
+        const float phase_use = phase * (1.0f - 0.85f * detail_norm) + stepped * (0.85f * detail_norm);
+        hue01 = std::fmod(phase_use + 1.0f, 1.0f);
+        const float center = 1.0f - std::fabs(d_mapped - 0.5f) * 2.0f;
+        v = std::clamp(1.0f - percent_dim * center, 0.0f, 1.0f);
+    }
 
     const float size_m = std::max(0.2f, GetNormalizedSize());
-    const float rainbow_rate = spd * 12.0f;
+    const float rainbow_rate = spd * 0.35f + freq * 0.12f;
 
     if(UseEffectStripColormap())
     {
         const float ph01 =
-            std::fmod(pos * 0.45f + nz * (0.2f + 0.55f * hue_span) + time * rainbow_rate * 0.012f + 1.0f, 1.0f);
+            std::fmod(pos * 0.45f + hue01 * 0.55f + time * rainbow_rate * 0.01f + 1.f, 1.f);
         float pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
                                                  GetEffectStripColormapRepeats(),
                                                  GetEffectStripColormapUnfold(),
@@ -177,12 +326,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
                                                  rot);
         pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
         const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
-        RGBColor c = ResolveStripKernelFinalColor(*this,
-                                                  kid,
-                                                  std::clamp(pal01, 0.0f, 1.0f),
-                                                  GetEffectStripColormapColorStyle(),
-                                                  time,
-                                                  rainbow_rate * 0.02f);
+        RGBColor c = ResolveStripKernelFinalColor(kid, std::clamp(pal01, 0.0f, 1.0f), time);
         const int cr = (int)(c & 0xFF);
         const int cg = (int)((c >> 8) & 0xFF);
         const int cb = (int)((c >> 16) & 0xFF);
@@ -198,9 +342,10 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     if(GetRainbowMode())
     {
         float hue = hue01 * 360.0f;
-        hue = ApplySpatialRainbowHue(hue, nz, basis, sp, map, time, &grid);
+        hue = ApplySpatialRainbowHue(hue, hue01, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
-        if(p01 < 0.0f) p01 += 1.0f;
+        if(p01 < 0.0f)
+            p01 += 1.0f;
         return Hsv01ToBgr(p01, 1.0f, v);
     }
 
@@ -219,7 +364,10 @@ nlohmann::json DepthTone::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["depth_tone_count"] = depth_tone_count;
-return j;
+    j["depth_axis"] = depth_axis;
+    j["depth_layout"] = depth_layout;
+    j["depth_dim_amount"] = dim_amount;
+    return j;
 }
 
 void DepthTone::LoadSettings(const nlohmann::json& settings)
@@ -227,8 +375,21 @@ void DepthTone::LoadSettings(const nlohmann::json& settings)
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("depth_tone_count") && settings["depth_tone_count"].is_number_integer())
         depth_tone_count = std::clamp(settings["depth_tone_count"].get<int>(), 2, 32);
+    if(settings.contains("depth_axis") && settings["depth_axis"].is_number_integer())
+        depth_axis = std::clamp(settings["depth_axis"].get<int>(), 0, AXIS_COUNT - 1);
+    if(settings.contains("depth_layout") && settings["depth_layout"].is_number_integer())
+        depth_layout = std::clamp(settings["depth_layout"].get<int>(), 0, LAYOUT_COUNT - 1);
+    if(settings.contains("depth_dim_amount") && settings["depth_dim_amount"].is_number())
+        dim_amount = std::clamp(settings["depth_dim_amount"].get<float>(), 0.0f, 1.0f);
     if(depth_tones_slider)
-    {
         depth_tones_slider->setValue(depth_tone_count);
+    if(dim_slider)
+        dim_slider->setValue((int)std::lround(dim_amount * 100.0f));
+    if(axis_combo)
+    {
+        axis_combo->setCurrentIndex(std::clamp(depth_axis, 0, AXIS_COUNT - 1));
+        axis_combo->setEnabled(depth_layout == LAYOUT_LINEAR);
     }
+    if(layout_combo)
+        layout_combo->setCurrentIndex(std::clamp(depth_layout, 0, LAYOUT_COUNT - 1));
 }

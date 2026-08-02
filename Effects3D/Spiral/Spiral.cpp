@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Spiral.h"
+#include "SpiralVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
 #include "EffectStratumBlend.h"
 #include "SpatialLayerCore.h"
@@ -33,15 +34,134 @@ Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x0000FF00);
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
+    volume_assist_.setFragmentBody(QString::fromUtf8(SpiralVolumeFieldGlsl()));
+    volume_assist_.setResolution(18);
 }
 
 Spiral::~Spiral() = default;
+
+void Spiral::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    const float progress = CalculateProgress(time_sec);
+    const float detail = std::max(0.05f, GetScaledDetail());
+    const float size_multiplier = GetNormalizedSize();
+    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
+    const float vp[11] = {
+        progress,
+        detail * 0.15f / fmax(0.1f, size_multiplier),
+        (float)pattern_type,
+        (float)num_arms,
+        gap_size / 100.0f,
+        detail,
+        coil_amount / 100.0f,
+        height_coil_amount / 100.0f,
+        ox,
+        oy,
+        oz
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 11);
+}
+
+float Spiral::EvaluateSpiralValueCpu(float spiral_angle, float norm_radius, float norm_twist,
+                                     float progress_e, float freq_scale_e, float detail_e,
+                                     float rot_rel_x, float rot_rel_z) const
+{
+    float spiral_value;
+    float gap_factor = gap_size / 100.0f;
+
+    switch(pattern_type)
+    {
+        case 0:
+            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(norm_twist * freq_scale_e * 3.0f + progress_e * 0.7f));
+            spiral_value += 0.3f * cos(spiral_angle * 0.5f + norm_twist * freq_scale_e * 4.5f + progress_e * 1.2f);
+            spiral_value = (spiral_value + 1.5f) / 3.0f;
+            spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            break;
+        case 1:
+            {
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+                if(arm_angle < blade_width)
+                {
+                    float blade_position = arm_angle / blade_width;
+                    spiral_value = 0.5f + 0.5f * cos(blade_position * 3.14159f);
+                }
+                else
+                {
+                    spiral_value = 0.0f;
+                }
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
+                spiral_value = spiral_value * radial_fade + 0.1f * radial_fade;
+            }
+            break;
+        case 2:
+            {
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+                if(arm_angle < blade_width)
+                {
+                    float blade_position = fabs(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
+                    spiral_value = 1.0f - blade_position * blade_position;
+                }
+                else
+                {
+                    spiral_value = 0.0f;
+                }
+                float energy_pulse = 0.2f * sin(norm_radius * (detail_e * 1.2f) - progress_e * 2.0f);
+                spiral_value = fmax(0.0f, spiral_value + energy_pulse);
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
+                spiral_value *= radial_fade;
+            }
+            break;
+        case 3:
+            {
+                float circle_angle = atan2(rot_rel_z, rot_rel_x) + progress_e * 2.0f;
+                float ring_phase = norm_radius * (detail_e * 8.0f) * (float)num_arms - circle_angle * (float)num_arms;
+                spiral_value = 0.5f + 0.5f * sin(ring_phase) * (1.0f - norm_radius * 0.3f);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+        case 4:
+            {
+                float hyp_angle = atan2(rot_rel_z, rot_rel_x) - progress_e * 3.0f;
+                float hyp_radius = norm_radius * (detail_e * 4.0f);
+                spiral_value = 0.5f + 0.5f * sin(hyp_angle * 2.0f + hyp_radius - progress_e * 2.0f) * cos(norm_twist * freq_scale_e * 3.0f + progress_e);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+        case 5:
+            {
+                float period = 6.28318f / (float)num_arms;
+                float arm_angle = fmod(spiral_angle, period);
+                if(arm_angle < 0.0f) arm_angle += period;
+                float blade_width = 0.4f * period;
+                float blade_core = (arm_angle < blade_width) ? (1.0f - arm_angle / blade_width) : 0.0f;
+                float blade_glow = 0.0f;
+                if(arm_angle < blade_width * 1.5f)
+                {
+                    float glow_dist = fabsf(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
+                    blade_glow = 0.3f * (1.0f - glow_dist);
+                }
+                spiral_value = fmin(1.0f, blade_core + blade_glow);
+                float radial_fade = 0.35f + 0.65f * (1.0f - fmin(1.0f, norm_radius) * 0.6f);
+                spiral_value = spiral_value * radial_fade + 0.08f * radial_fade;
+            }
+            break;
+        default:
+            spiral_value = 0.5f;
+            break;
+    }
+    return spiral_value;
+}
 
 EffectInfo3D Spiral::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.effect_name = "Spiral";
-    info.effect_description = "Spiral pattern with arms/gap; optional per-height-band speed, tightness, and phase";
+    info.effect_description = "Spiral pattern with arms/gap; GPU volume assist when available; optional per-height-band speed, tightness, and phase";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_SPIRAL;
     info.is_reversible = true;
@@ -193,91 +313,17 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     spiral_angle += stratum_mot01 * 6.2831853f * 0.55f;
 
     float spiral_value;
-    float gap_factor = gap_size / 100.0f;
-
-    switch(pattern_type)
+    if(volume_assist_.isAvailable())
     {
-        case 0:
-            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(norm_twist * freq_scale_e * 3.0f + progress_e * 0.7f));
-            spiral_value += 0.3f * cos(spiral_angle * 0.5f + norm_twist * freq_scale_e * 4.5f + progress_e * 1.2f);
-            spiral_value = (spiral_value + 1.5f) / 3.0f;
-            spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
-            break;
-        case 1:
-            {
-                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
-                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
-                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
-                if(arm_angle < blade_width)
-                {
-                    float blade_position = arm_angle / blade_width;
-                    spiral_value = 0.5f + 0.5f * cos(blade_position * 3.14159f);
-                }
-                else
-                {
-                    spiral_value = 0.0f;
-                }
-                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
-                spiral_value = spiral_value * radial_fade + 0.1f * radial_fade;
-            }
-            break;
-        case 2:
-            {
-                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
-                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
-                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
-                if(arm_angle < blade_width)
-                {
-                    float blade_position = fabs(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
-                    spiral_value = 1.0f - blade_position * blade_position;
-                }
-                else
-                {
-                    spiral_value = 0.0f;
-                }
-                float energy_pulse = 0.2f * sin(norm_radius * (detail_e * 1.2f) - progress_e * 2.0f);
-                spiral_value = fmax(0.0f, spiral_value + energy_pulse);
-                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
-                spiral_value *= radial_fade;
-            }
-            break;
-        case 3:
-            {
-                float circle_angle = atan2(rot_rel_z, rot_rel_x) + progress_e * 2.0f;
-                float ring_phase = norm_radius * (detail_e * 8.0f) * (float)num_arms - circle_angle * (float)num_arms;
-                spiral_value = 0.5f + 0.5f * sin(ring_phase) * (1.0f - norm_radius * 0.3f);
-                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
-            }
-            break;
-        case 4:
-            {
-                float hyp_angle = atan2(rot_rel_z, rot_rel_x) - progress_e * 3.0f;
-                float hyp_radius = norm_radius * (detail_e * 4.0f);
-                spiral_value = 0.5f + 0.5f * sin(hyp_angle * 2.0f + hyp_radius - progress_e * 2.0f) * cos(norm_twist * freq_scale_e * 3.0f + progress_e);
-                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
-            }
-            break;
-        case 5:
-            {
-                float period = 6.28318f / (float)num_arms;
-                float arm_angle = fmod(spiral_angle, period);
-                if(arm_angle < 0.0f) arm_angle += period;
-                float blade_width = 0.4f * period;
-                float blade_core = (arm_angle < blade_width) ? (1.0f - arm_angle / blade_width) : 0.0f;
-                float blade_glow = 0.0f;
-                if(arm_angle < blade_width * 1.5f)
-                {
-                    float glow_dist = fabsf(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
-                    blade_glow = 0.3f * (1.0f - glow_dist);
-                }
-                spiral_value = fmin(1.0f, blade_core + blade_glow);
-                float radial_fade = 0.35f + 0.65f * (1.0f - fmin(1.0f, norm_radius) * 0.6f);
-                spiral_value = spiral_value * radial_fade + 0.08f * radial_fade;
-            }
-            break;
-        default:
-            spiral_value = 0.5f;
-            break;
+        const float c1 = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
+        const float c2 = norm_twist;
+        const float c3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
+        spiral_value = volume_assist_.sampleScalar01(c1, c2, c3);
+    }
+    else
+    {
+        spiral_value = EvaluateSpiralValueCpu(spiral_angle, norm_radius, norm_twist, progress_e,
+                                              freq_scale_e, detail_e, rot_rel_x, rot_rel_z);
     }
 
     const float phase01 =
@@ -322,8 +368,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     {
         float textured_p01 = std::fmod(strip_p01 + spiral_value * 0.35f + 1.0f, 1.0f);
         float p01v = textured_p01;
-        final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
-                                                   rate_e * 12.0f);
+        final_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), p01v, time);
     }
     else if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
     {

@@ -11,32 +11,14 @@
 #include <algorithm>
 #include <cmath>
 
-enum class StripKernelColorStyle : int
+/** Surface Look Pattern always uses the kernel's own animated palette. */
+inline RGBColor ResolveStripKernelFinalColor(int kernel_id, float palette01, float time_sec)
 {
-    PatternPalette = 0,
-    EffectColors = 1,
-};
-
-inline int StripKernelColorStyleClamp(int v)
-{
-    return std::clamp(v, 0, 1);
-}
-
-inline RGBColor ResolveStripKernelFinalColor(const SpatialEffect3D& effect,
-                                            int kernel_id,
-                                            float palette01,
-                                            int color_style,
-                                            float time_sec,
-                                            float )
-{
-    const int s = StripKernelColorStyleClamp(color_style);
     float p = std::fmod(palette01, 1.0f);
     if(p < 0.0f)
         p += 1.0f;
     kernel_id = SpatialPatternKernelClamp(kernel_id);
-    if(s == 0)
-        return SampleKernelPatternPalette(kernel_id, p, time_sec);
-    return effect.GetColorAtPosition(p);
+    return SampleKernelPatternPalette(kernel_id, p, time_sec);
 }
 
 inline float SampleStripKernelPalette01(int kernel_id,
@@ -106,15 +88,13 @@ inline void StripColormapSaveCanonical(nlohmann::json& j,
                                       int kern,
                                       float rep,
                                       int unfold,
-                                      float dir,
-                                      int color_style)
+                                      float dir)
 {
     j["strip_cmap_on"] = on;
     j["strip_cmap_kernel"] = kern;
     j["strip_cmap_rep"] = rep;
     j["strip_cmap_unfold"] = unfold;
     j["strip_cmap_dir"] = dir;
-    j["strip_cmap_color_style"] = std::clamp(color_style, 0, 2);
 }
 
 inline void StripColormapLoadCanonical(const nlohmann::json& settings,
@@ -122,8 +102,7 @@ inline void StripColormapLoadCanonical(const nlohmann::json& settings,
                                        int& kern,
                                        float& rep,
                                        int& unfold,
-                                       float& dir,
-                                       int& color_style)
+                                       float& dir)
 {
     if(settings.contains("strip_cmap_on") && settings["strip_cmap_on"].is_boolean())
         on = settings["strip_cmap_on"].get<bool>();
@@ -135,8 +114,7 @@ inline void StripColormapLoadCanonical(const nlohmann::json& settings,
         unfold = std::clamp(settings["strip_cmap_unfold"].get<int>(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("strip_cmap_dir") && settings["strip_cmap_dir"].is_number())
         dir = std::fmod(settings["strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
-    if(settings.contains("strip_cmap_color_style") && settings["strip_cmap_color_style"].is_number_integer())
-        color_style = std::clamp(settings["strip_cmap_color_style"].get<int>(), 0, 2);
+    // Legacy strip_cmap_color_style ignored — Pattern always owns its palette.
 }
 
 #endif

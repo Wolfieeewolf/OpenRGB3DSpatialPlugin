@@ -10,6 +10,8 @@ namespace SpatialShaderCatalog
 {
 
 std::vector<QString> ListPresetPaths();
+/** Friendly UI name for a preset path (falls back to filename). */
+QString PresetDisplayName(const QString& path);
 QString UserShadersFolderPath();
 bool EnsureUserShadersFolder();
 

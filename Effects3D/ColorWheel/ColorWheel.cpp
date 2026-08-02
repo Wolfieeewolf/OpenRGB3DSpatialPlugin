@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ColorWheel.h"
+#include "ColorWheelVolumeFieldGlsl.h"
 #include "EffectStratumBlend.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
@@ -16,13 +17,17 @@ REGISTER_EFFECT_3D(ColorWheel);
 ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
+    volume_assist_.setFragmentBody(QString::fromUtf8(ColorWheelVolumeFieldGlsl()));
+    volume_assist_.setResolution(18);
 }
 
 EffectInfo3D ColorWheel::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.effect_name = "Color Wheel";
-    info.effect_description = "Rotating rainbow from center; optional independent floor / mid / ceiling wheels";
+    info.effect_description =
+        "Rotating hue layouts (radial wheel, shear bands, concentric rings, pie slices) with GPU assist; "
+        "optional independent floor / mid / ceiling wheels";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
@@ -77,10 +82,15 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
     hue_geometry_row->setObjectName(QStringLiteral("hueGeometryRow"));
     QComboBox* geom_combo = hue_geometry_row->combo();
     geom_combo->addItem(tr("Radial (classic)"), 0);
-    geom_combo->addItem(tr("Shear (no focal point)"), 1);
+    geom_combo->addItem(tr("Shear (bands)"), 1);
+    geom_combo->addItem(tr("Rings (concentric)"), 2);
+    geom_combo->addItem(tr("Pie slices"), 3);
     geom_combo->setToolTip(tr(
-        "Radial: hue wraps around the effect origin (see Effect origin in the main tab).\n"
-        "Shear: moving rainbow bands from a rotating planar gradient—no single center, but still \"wheels\" in time."));
+        "How hue is laid out in the active plane.\n"
+        "Radial: classic wheel around the origin.\n"
+        "Shear: rotating planar bands (no single center).\n"
+        "Rings: concentric hue by distance from origin.\n"
+        "Pie: hard color wedges; Hue repeats sets slice count."));
     for(int i = 0; i < geom_combo->count(); i++)
     {
         if(geom_combo->itemData(i).toInt() == hue_geometry_mode)
@@ -90,11 +100,44 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
         }
     }
     connect(geom_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [geom_combo, this](int) {
-        hue_geometry_mode = std::clamp(geom_combo->currentData().toInt(), 0, 1);
+        hue_geometry_mode = std::clamp(geom_combo->currentData().toInt(), 0, 3);
         emit ParametersChanged();
     });
 
+    const auto on_changed = [this]() { emit ParametersChanged(); };
+    EffectSliderRow* hue_repeats_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Hue repeats:"),
+        10,
+        300,
+        (int)std::lround(hue_repeats * 100.0f),
+        QStringLiteral("How many times the rainbow wraps around one turn. 100% = one smooth wheel."));
+    hue_repeats_row->setObjectName(QStringLiteral("hueRepeatsRow"));
+    hue_repeats_row->bindValueChanged(
+        this,
+        [this](int v) { hue_repeats = std::clamp(v / 100.0f, 0.1f, 3.0f); },
+        [](int v) { return QString::number(v) + QStringLiteral("%"); },
+        on_changed);
+
     AddWidgetToParent(w, parent);
+}
+
+void ColorWheel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
+{
+    const float progress = CalculateProgress(time_sec);
+    const float dir = (direction == 0) ? 1.0f : -1.0f;
+    const float wrap = std::clamp(hue_repeats, 0.1f, 3.0f);
+    // Frame-global spin (stratum speed applied after sample).
+    const float freq_spin = time_sec * GetScaledFrequency() * 0.12f;
+    const float vp[6] = {
+        progress,
+        dir,
+        wrap,
+        (float)GetPlane(),
+        (float)hue_geometry_mode,
+        freq_spin
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 6);
 }
 
 RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -151,8 +194,31 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
 
     int pl = GetPlane();
     const float dir = (direction == 0) ? 1.0f : -1.0f;
-    float angle = 0.0f;
-    if(hue_geometry_mode == 1)
+    const float wrap = std::clamp(hue_repeats, 0.1f, 3.0f);
+    float gpu_plane01 = 0.0f;
+    bool have_gpu_plane = false;
+    const float freq_spin = time * GetScaledFrequency() * 0.12f * spd_mul;
+    if(volume_assist_.isAvailable())
+    {
+        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+        SampleCoordsOriginLocal01(rot.x, rot.y, rot.z, origin, e, &c1, &c2, &c3);
+        const QVector3D cs = volume_assist_.sample01(c1, c2, c3);
+        // Cos/sin atlas encoding (range-packed to 0..1 for the RGBA8 atlas) — avoids
+        // the rotating false seam from filtering wrapped hue.
+        float hue_rad = std::atan2(cs.y() * 2.0f - 1.0f, cs.x() * 2.0f - 1.0f);
+        gpu_plane01 = std::fmod(hue_rad / TWO_PI + 1.0f, 1.0f);
+        gpu_plane01 = std::fmod(gpu_plane01 + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01)
+                                    + time * GetScaledFrequency() * 0.02f * (spd_mul - 1.0f) + 1.0f,
+                                1.0f);
+        have_gpu_plane = true;
+    }
+
+    float hue_plane = 0.0f;
+    if(have_gpu_plane)
+    {
+        hue_plane = gpu_plane01 * 360.0f;
+    }
+    else
     {
         float u = 0.0f;
         float v = 0.0f;
@@ -171,24 +237,39 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
             u = lz / e.hd;
             v = ly / e.hh;
         }
-        const float spin = progress * 6.2831855f * dir + time * GetScaledFrequency() * 0.12f * spd_mul;
-        const float cu = std::cos(spin);
-        const float su = std::sin(spin);
-        angle = (u * cu + v * su) * 3.14159265f * (0.5f + 0.5f * detail);
-    }
-    else
-    {
-        if(pl == 0) angle = atan2f(lz / e.hd, lx / e.hw);
-        else if(pl == 1) angle = atan2f(lx / e.hw, ly / e.hh);
-        else angle = atan2f(lz / e.hd, ly / e.hh);
-    }
 
-    angle += stratum_mot01 * 6.2831853f * 0.55f;
-    angle += EffectStratumBlend::PhaseShiftRad(bb);
+        float angle = 0.0f;
+        if(hue_geometry_mode == 1)
+        {
+            const float spin = progress * TWO_PI * dir + freq_spin;
+            angle = (u * std::cos(spin) + v * std::sin(spin)) * 3.14159265f * wrap;
+        }
+        else if(hue_geometry_mode == 2)
+        {
+            const float rad = std::sqrt(u * u + v * v);
+            angle = rad * TWO_PI * wrap - progress * TWO_PI * dir - freq_spin;
+        }
+        else if(hue_geometry_mode == 3)
+        {
+            const float slices = std::max(2.0f, std::floor(wrap * 6.0f + 0.5f));
+            float a = std::atan2(v, u) - (progress * TWO_PI * dir + freq_spin);
+            const float sector = std::floor((a / TWO_PI + 1.0f) * slices);
+            angle = (sector + 0.5f) / slices * TWO_PI;
+        }
+        else
+        {
+            angle = std::atan2(v, u) * wrap;
+        }
 
-    float hue_plane = fmodf(angle * (180.0f / 3.14159265f) * (0.5f + 0.5f * detail) + progress * 360.0f * dir +
-                            time * GetScaledFrequency() * 12.0f * spd_mul + ph_blend,
-                        360.0f);
+        // Rings animate via the progress term inside angle; adding the global spin
+        // for rings would cancel it exactly (speed would do nothing).
+        float hue_turns = angle / TWO_PI + freq_spin * 0.02f;
+        if(hue_geometry_mode != 2)
+            hue_turns += progress * dir;
+        hue_turns += EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
+        hue_turns += ph_blend / 360.0f;
+        hue_plane = std::fmod(hue_turns * 360.0f + 360.0f, 360.0f);
+    }
 
     SpatialLayerCore::Basis basis;
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
@@ -227,12 +308,7 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     }
     if(UseEffectStripColormap())
     {
-        return ResolveStripKernelFinalColor(*this,
-                                            GetEffectStripColormapKernel(),
-                                            std::clamp(palette01, 0.0f, 1.0f),
-                                            GetEffectStripColormapColorStyle(),
-                                            time,
-                                            GetScaledFrequency() * 12.0f * spd_mul);
+        return ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), std::clamp(palette01, 0.0f, 1.0f), time);
     }
     return GetRainbowMode() ? GetRainbowColor(palette01 * 360.0f) : GetColorAtPosition(palette01);
 }
@@ -242,6 +318,7 @@ nlohmann::json ColorWheel::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["direction"] = direction;
     j["hue_geometry_mode"] = hue_geometry_mode;
+    j["hue_repeats"] = hue_repeats;
     return j;
 }
 
@@ -251,7 +328,9 @@ void ColorWheel::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("direction") && settings["direction"].is_number_integer())
         direction = std::max(0, std::min(1, settings["direction"].get<int>()));
     if(settings.contains("hue_geometry_mode") && settings["hue_geometry_mode"].is_number_integer())
-        hue_geometry_mode = std::clamp(settings["hue_geometry_mode"].get<int>(), 0, 1);
+        hue_geometry_mode = std::clamp(settings["hue_geometry_mode"].get<int>(), 0, 3);
+    if(settings.contains("hue_repeats") && settings["hue_repeats"].is_number())
+        hue_repeats = std::clamp(settings["hue_repeats"].get<float>(), 0.1f, 3.0f);
 
     if(QWidget* panel = CustomSettingsPanelWidget())
     {
@@ -259,6 +338,8 @@ void ColorWheel::LoadSettings(const nlohmann::json& settings)
         {
             EffectUiSync::setComboIndex(fx, "directionRow", direction);
             EffectUiSync::setComboIndex(fx, "hueGeometryRow", hue_geometry_mode);
+            const auto pct = [](int v) { return QString::number(v) + QStringLiteral("%"); };
+            EffectUiSync::setSliderValue(fx, "hueRepeatsRow", (int)std::lround(hue_repeats * 100.0f), pct);
         }
     }
 }

@@ -6,6 +6,7 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
+#include "Shaders/SpatialVolumeFieldAssist.h"
 #include <vector>
 
 struct CachedBall3D
@@ -27,6 +28,7 @@ public:
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
+    void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
     nlohmann::json SaveSettings() const override;
@@ -35,15 +37,18 @@ public:
 private slots:
     void OnBallParameterChanged();
 private:
+    static constexpr unsigned int kMaxGpuBalls = 32u;
+
     QSlider* count_slider = nullptr;
     unsigned int ball_count;
 
     float ball_cache_grid_hash = 0.0f;
     int ball_cache_phys_key = 0x7fffffff;
     std::vector<CachedBall3D> ball_positions_cached;
-    
+
     float ball_physics_sim_t = 0.f;
     float ball_last_integrated_wall_time = -1e9f;
+    SpatialVolumeFieldAssist volume_assist_;
 };
 
 #endif

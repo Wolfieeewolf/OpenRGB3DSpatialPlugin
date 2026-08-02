@@ -256,14 +256,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
                                                    GetNormalizedSize(),
                                                    p.origin,
                                                    p.rotated_pos);
-            return ResolveStripKernelFinalColor(*this,
-                                                GetEffectStripColormapKernel(),
-                                                p01,
-                                                GetEffectStripColormapColorStyle(),
-                                                p.time,
-                                                p.band_scalars
-                                                    ? GetScaledFrequency() * 12.0f * p.band_scalars->speed_mul
-                                                    : GetScaledFrequency() * 12.0f);
+            return ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), p01, p.time);
         }
         return GetPerBeatPulseColor(slot);
     }
@@ -305,12 +298,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
                                                GetNormalizedSize(),
                                                p.origin,
                                                p.rotated_pos);
-        spatial_color = ResolveStripKernelFinalColor(*this,
-                                                     GetEffectStripColormapKernel(),
-                                                     std::min(p01, 1.0f),
-                                                     GetEffectStripColormapColorStyle(),
-                                                     p.time,
-                                                     GetScaledFrequency() * 12.0f * bb.speed_mul);
+        spatial_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), std::min(p01, 1.0f), p.time);
     }
     else if(GetRainbowMode())
     {

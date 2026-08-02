@@ -38,8 +38,6 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent)
 
     connect(ui->sourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &StripKernelColormapPanel::onSourceChanged);
-    connect(ui->colorStyleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &StripKernelColormapPanel::onColorStyleChanged);
     connect(ui->kernelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &StripKernelColormapPanel::onKernelChanged);
     connect(ui->unfoldCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -57,12 +55,14 @@ StripKernelColormapPanel::~StripKernelColormapPanel()
 
 void StripKernelColormapPanel::populateCombos()
 {
-    ui->sourceCombo->addItem("Colors only (Rainbow/Stops)");
-    ui->sourceCombo->addItem("Colors + Pattern kernel");
-
-    ui->colorStyleCombo->addItem("Pattern palette");
-    ui->colorStyleCombo->addItem("Color stops (from Colors)");
-    ui->colorStyleCombo->setCurrentIndex(1);
+    ui->sourceCombo->addItem(QStringLiteral("Effect Colors"));
+    ui->sourceCombo->addItem(QStringLiteral("Pattern"));
+    ui->sourceCombo->setItemData(
+        0, QStringLiteral("Paint the effect with rainbow / color stops."), Qt::ToolTipRole);
+    ui->sourceCombo->setItemData(
+        1,
+        QStringLiteral("Stamp a pattern kernel onto the lit surface — pattern owns its colors and animation."),
+        Qt::ToolTipRole);
 
     for(int i = 0; i < SpatialPatternKernelCount(); i++)
     {
@@ -103,13 +103,7 @@ float StripKernelColormapPanel::directionDeg() const
     return (float)ui->dirSlider->value();
 }
 
-int StripKernelColormapPanel::colorStyle() const
-{
-    return std::clamp(ui->colorStyleCombo->currentIndex(), 0, 1);
-}
-
-void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg,
-                                                     int color_style)
+void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg)
 {
     if(!on)
     {
@@ -120,10 +114,6 @@ void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float 
     {
         QSignalBlocker b(ui->sourceCombo);
         ui->sourceCombo->setCurrentIndex(on ? 1 : 0);
-    }
-    {
-        QSignalBlocker b(ui->colorStyleCombo);
-        ui->colorStyleCombo->setCurrentIndex(std::clamp(color_style, 0, 1));
     }
     {
         QSignalBlocker b(ui->kernelCombo);
@@ -160,7 +150,7 @@ void StripKernelColormapPanel::refreshSecondaryEnabled()
         unfold_idx == (int)StripPatternSurface::UnfoldMode::DiagonalXYZ ||
         unfold_idx == (int)StripPatternSurface::UnfoldMode::Manhattan01;
 
-    ui->colorStyleCombo->setEnabled(on);
+    ui->secondaryPanel->setVisible(on);
     ui->kernelCombo->setEnabled(on);
     ui->unfoldCombo->setEnabled(on);
     ui->repeatsSlider->setEnabled(on);
@@ -175,9 +165,12 @@ void StripKernelColormapPanel::onSourceChanged(int)
     emit colormapChanged();
 }
 
-void StripKernelColormapPanel::onColorStyleChanged(int) { emit colormapChanged(); }
 void StripKernelColormapPanel::onKernelChanged(int) { emit colormapChanged(); }
-void StripKernelColormapPanel::onUnfoldChanged(int) { emit colormapChanged(); }
+void StripKernelColormapPanel::onUnfoldChanged(int)
+{
+    refreshSecondaryEnabled();
+    emit colormapChanged();
+}
 
 void StripKernelColormapPanel::onRepeatsChanged(int v)
 {

@@ -5,7 +5,6 @@
 #include "MediaTextureEffectUtils.h"
 
 #include <QVBoxLayout>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QFile>
@@ -25,9 +24,11 @@
 ShaderField::ShaderField(QWidget* parent)
     : SpatialEffect3D(parent)
 {
+    SetSpeed(45);
+    SetFrequency(25);
     shader_engine = new SpatialShaderEngine(this);
     shader_engine->setTargetFps(30);
-    shader_engine->setRenderSize(128, 72);
+    shader_engine->setRenderSize(160, 90);
     connect(shader_engine,
             &SpatialShaderEngine::frameReady,
             this,
@@ -66,7 +67,10 @@ EffectInfo3D ShaderField::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.effect_name = "Shader Field";
-    info.effect_description = "GPU field presets (spatialMain GLSL) sampled on the 3D layout.";
+    info.effect_description =
+        "Projects a 2D GPU shader pattern onto your room (like wrapping wallpaper around the LEDs). "
+        "Pick a Preset for the look, Projection for which plane it maps to. "
+        "Speed animates the shader, Frequency scrolls hue, Size zooms, Detail densifies the pattern.";
     info.category = "Spatial";
     info.is_reversible = false;
     info.supports_random = false;
@@ -75,10 +79,13 @@ EffectInfo3D ShaderField::GetEffectInfo() const
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
-    info.default_speed_scale = 10.0f;
+    info.needs_frequency = true;
+    info.default_speed_scale = 14.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
+    info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = false;
@@ -92,6 +99,18 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     QWidget* w = new QWidget();
     QVBoxLayout* layout = new QVBoxLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
+    const auto on_changed = [this]() { emit ParametersChanged(); };
+    const auto pct_format = [](int v) { return QString::number(v) + QStringLiteral("%"); };
+
+    QLabel* help = new QLabel(
+        QStringLiteral(
+            "Shader Field paints a moving 2D pattern, then samples it onto LEDs.\n"
+            "Presets are different patterns (waves vs plasma vs checker vs ember rings).\n"
+            "Add your own .fs files in the user shaders folder if you want custom looks."),
+        w);
+    help->setWordWrap(true);
+    help->setStyleSheet(QStringLiteral("color: palette(mid);"));
+    layout->addWidget(help);
 
     QVBoxLayout* shader_section = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Shader"));
     QVBoxLayout* shader_layout = shader_section ? shader_section : layout;
@@ -102,8 +121,9 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     preset_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     for(const QString& path : preset_paths)
     {
-        preset_combo->addItem(QFileInfo(path).fileName());
+        preset_combo->addItem(SpatialShaderCatalog::PresetDisplayName(path));
     }
+    preset_combo->setToolTip(QStringLiteral("Each preset is a different GLSL pattern. Switching reloads the shader."));
     connect(preset_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShaderField::OnPresetChanged);
 
     EffectLabeledComboRow* projection_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Projection:"));
@@ -114,19 +134,46 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     projection_combo->addItem(QStringLiteral("Side (Y-Z)"));
     projection_combo->addItem(QStringLiteral("Sphere"));
     projection_combo->setCurrentIndex(projection_mode);
+    projection_combo->setToolTip(QStringLiteral(
+        "Which room plane the 2D pattern is mapped onto.\n"
+        "Floor = looking down; Front/Side = walls; Sphere = wrap from the effect origin."));
     connect(projection_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ShaderField::OnProjectionModeChanged);
 
-    use_audio_check = new QCheckBox(QStringLiteral("Feed spectrum to u_audio"), w);
-    use_audio_check->setObjectName(QStringLiteral("useAudioCheck"));
-    use_audio_check->setChecked(use_audio);
-    shader_layout->addWidget(use_audio_check);
-    connect(use_audio_check, &QCheckBox::stateChanged, this, &ShaderField::OnUseAudioChanged);
+    EffectSliderRow* contrast_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Contrast:"),
+        35,
+        250,
+        (int)std::lround(contrast * 100.0f),
+        QStringLiteral("Sharpens or softens the pattern (works on every preset)."));
+    contrast_row->setObjectName(QStringLiteral("contrastRow"));
+    contrast_slider = contrast_row->slider();
+    contrast_row->bindValueChanged(
+        this,
+        [this](int v) { contrast = std::clamp(v / 100.0f, 0.35f, 2.5f); },
+        pct_format,
+        on_changed);
+
+    EffectSliderRow* hue_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Hue shift:"),
+        0,
+        1000,
+        (int)std::lround(hue_shift * 1000.0f),
+        QStringLiteral("Static color offset. Frequency also scrolls hue over time."));
+    hue_row->setObjectName(QStringLiteral("hueShiftRow"));
+    hue_slider = hue_row->slider();
+    hue_row->bindValueChanged(
+        this,
+        [this](int v) { hue_shift = std::clamp(v / 1000.0f, 0.0f, 1.0f); },
+        [this](int) { return QString::number(hue_shift, 'f', 3); },
+        on_changed);
 
     auto* open_folder_button = new QPushButton(QStringLiteral("Open user shaders folder"), w);
     open_folder_button->setObjectName(QStringLiteral("openFolderButton"));
     open_folder_button->setToolTip(QStringLiteral(
-        "Opens OpenRGB3DSpatialPlugin/spatial-shaders/ — add custom .fs fragment shaders for Shader Field"));
+        "Opens OpenRGB3DSpatialPlugin/spatial-shaders/ — drop custom .fs files that define spatialMain()."));
     shader_layout->addWidget(open_folder_button);
     connect(open_folder_button, &QPushButton::clicked, this, &ShaderField::OnOpenShadersFolder);
 
@@ -149,15 +196,40 @@ void ShaderField::LoadPresetAtIndex(int index)
 {
     if(!shader_engine || index < 0 || index >= (int)preset_paths.size())
     {
+        if(compile_log_label)
+        {
+            compile_log_label->setVisible(true);
+            compile_log_label->setText(QStringLiteral("No shader preset available."));
+        }
         return;
     }
     QFile file(preset_paths[(size_t)index]);
     if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
+        if(compile_log_label)
+        {
+            compile_log_label->setVisible(true);
+            compile_log_label->setText(QStringLiteral("Failed to open preset: %1").arg(QFileInfo(file).fileName()));
+        }
         return;
     }
     QTextStream in(&file);
-    shader_engine->setFragmentBody(in.readAll());
+    const QString body = in.readAll();
+    if(body.trimmed().isEmpty())
+    {
+        if(compile_log_label)
+        {
+            compile_log_label->setVisible(true);
+            compile_log_label->setText(QStringLiteral("Preset is empty: %1").arg(QFileInfo(file).fileName()));
+        }
+        return;
+    }
+    {
+        QMutexLocker lock(&display_mutex);
+        display_frame.reset();
+    }
+    shader_engine->setFragmentBody(body);
+    EnsureShaderEngineRunning();
 }
 
 void ShaderField::OnPresetChanged(int index)
@@ -169,12 +241,6 @@ void ShaderField::OnPresetChanged(int index)
 void ShaderField::OnProjectionModeChanged(int index)
 {
     projection_mode = std::clamp(index, 0, 3);
-    emit ParametersChanged();
-}
-
-void ShaderField::OnUseAudioChanged(int state)
-{
-    use_audio = (state == Qt::Checked);
     emit ParametersChanged();
 }
 
@@ -213,7 +279,7 @@ void ShaderField::SetSpeed(unsigned int speed)
     SpatialEffect3D::SetSpeed(speed);
     if(shader_engine)
     {
-        shader_engine->setTargetFps(std::clamp((int)speed, 10, 60));
+        shader_engine->setTargetFps(30);
     }
 }
 
@@ -225,29 +291,19 @@ void ShaderField::SyncUniforms(float time)
     }
     EnsureShaderEngineRunning();
     SpatialShaderUniforms u;
-    u.time_sec = time;
-    if(use_audio && AudioInputManager::instance()->isRunning())
-    {
-        AudioInputManager::SpectrumSnapshot snap = AudioInputManager::instance()->getSpectrumSnapshot(128);
-        const int n = (int)snap.bins.size();
-        for(int i = 0; i < 128; ++i)
-        {
-            float v = 0.0f;
-            if(n > 0)
-            {
-                const int idx = (i * n) / 128;
-                v = snap.bins[(size_t)std::clamp(idx, 0, n - 1)];
-            }
-            audio_uniform[i] = std::clamp(v, 0.0f, 1.0f);
-        }
-        u.audio_ptr = audio_uniform;
-        u.audio_count = 128;
-    }
-    else
-    {
-        u.audio_ptr = nullptr;
-        u.audio_count = 0;
-    }
+    u.time_sec = CalculateProgress(time);
+    // Size → zoom, Detail → density, Frequency → hue scroll, local contrast/hue.
+    const float zoom = std::clamp(GetNormalizedSize() * (0.55f + 0.9f * GetNormalizedScale()), 0.25f, 3.0f);
+    const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
+    const float freq_norm = std::clamp(GetNormalizedFrequency(), 0.0f, 1.0f);
+    const float hue = std::fmod(hue_shift + time * freq_norm * 0.08f + 1.0f, 1.0f);
+    u.params[0] = zoom;
+    u.params[1] = std::clamp(contrast, 0.35f, 2.5f);
+    u.params[2] = hue;
+    u.params[3] = detail;
+    u.param_count = 4;
+    u.audio_ptr = nullptr;
+    u.audio_count = 0;
     shader_engine->setUniforms(u);
 }
 
@@ -256,7 +312,8 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
     const float inv_w = 1.0f / std::max(1e-4f, grid.max_x - grid.min_x);
     const float inv_h = 1.0f / std::max(1e-4f, grid.max_y - grid.min_y);
     const float inv_d = 1.0f / std::max(1e-4f, grid.max_z - grid.min_z);
-    const float tile = std::max(0.25f, GetNormalizedSize());
+    // Size already feeds shader zoom via u_params; keep UV tiling gentle so projection stays readable.
+    const float tile = 1.0f;
 
     switch(projection_mode)
     {
@@ -316,9 +373,14 @@ RGBColor ShaderField::CalculateColorGrid(float x, float y, float z, float time, 
         return 0x00000000;
     }
 
-    if(grid.render_sequence != last_uniform_sequence)
+    const bool same_sequence =
+        (grid.render_sequence != 0 && grid.render_sequence == last_uniform_sequence);
+    const bool same_preview_time =
+        (grid.render_sequence == 0 && std::fabs(time - last_uniform_time) < 1e-4f);
+    if(!same_sequence && !same_preview_time)
     {
         last_uniform_sequence = grid.render_sequence;
+        last_uniform_time = time;
         SyncUniforms(time);
     }
 
@@ -334,7 +396,8 @@ nlohmann::json ShaderField::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["projection_mode"] = projection_mode;
-    j["use_audio"] = use_audio;
+    j["shader_contrast"] = contrast;
+    j["shader_hue_shift"] = hue_shift;
     if(preset_combo)
     {
         j["preset_index"] = preset_combo->currentIndex();
@@ -353,14 +416,14 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
             projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, 3));
         }
     }
-    if(settings.contains("use_audio"))
-    {
-        use_audio = settings["use_audio"].get<bool>();
-        if(use_audio_check)
-        {
-            use_audio_check->setChecked(use_audio);
-        }
-    }
+    if(settings.contains("shader_contrast") && settings["shader_contrast"].is_number())
+        contrast = std::clamp(settings["shader_contrast"].get<float>(), 0.35f, 2.5f);
+    if(settings.contains("shader_hue_shift") && settings["shader_hue_shift"].is_number())
+        hue_shift = std::clamp(settings["shader_hue_shift"].get<float>(), 0.0f, 1.0f);
+    if(contrast_slider)
+        contrast_slider->setValue((int)std::lround(contrast * 100.0f));
+    if(hue_slider)
+        hue_slider->setValue((int)std::lround(hue_shift * 1000.0f));
     if(settings.contains("preset_index") && preset_combo)
     {
         int idx = settings["preset_index"].get<int>();

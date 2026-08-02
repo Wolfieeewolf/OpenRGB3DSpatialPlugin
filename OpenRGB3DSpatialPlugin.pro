@@ -282,6 +282,30 @@ HEADERS += \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
     Shaders/SpatialShaderCatalog.h \
+    Shaders/SpatialFieldAssistBase.h \
+    Shaders/SpatialVolumeFieldEngine.h \
+    Shaders/SpatialVolumeFieldAssist.h \
+    Shaders/SpatialStripFieldEngine.h \
+    Shaders/SpatialStripFieldAssist.h \
+    Effects3D/Plasma/PlasmaVolumeFieldGlsl.h \
+    Effects3D/Spiral/SpiralVolumeFieldGlsl.h \
+    Effects3D/Wave/WaveSurfaceVolumeFieldGlsl.h \
+    Effects3D/HexLattice/HexLatticeVolumeFieldGlsl.h \
+    Effects3D/PulseRing/PulseRingVolumeFieldGlsl.h \
+    Effects3D/DepthTone/DepthToneVolumeFieldGlsl.h \
+    Effects3D/ColorWheel/ColorWheelVolumeFieldGlsl.h \
+    Effects3D/BreathingSphere/BreathingSphereVolumeFieldGlsl.h \
+    Effects3D/HarmonicPulse/HarmonicPulseVolumeFieldGlsl.h \
+    Effects3D/DNAHelix/DNAHelixVolumeFieldGlsl.h \
+    Effects3D/RotatingConeSpotlights/RotatingConeVolumeFieldGlsl.h \
+    Effects3D/Bubbles/BubblesVolumeFieldGlsl.h \
+    Effects3D/BouncingBall/BouncingBallVolumeFieldGlsl.h \
+    Effects3D/TextureProjection/TextureProjectionVolumeFieldGlsl.h \
+    Effects3D/OmniShapeTexture/OmniShapeTextureVolumeFieldGlsl.h \
+    Effects3D/TravelingLight/TravelingLightVolumeFieldGlsl.h \
+    Effects3D/SurfaceAmbient/SurfaceAmbientVolumeFieldGlsl.h \
+    Effects3D/ShellPattern/ShellPatternCubeVolumeFieldGlsl.h \
+    Effects3D/SpatialPatternKernels/SpatialStripKernelFieldGlsl.h \
     Effects3D/AudioReactiveUi.h \
     Effects3D/AudioLevel/AudioLevel.h \
     Effects3D/AudioPulse/AudioPulse.h \
@@ -463,6 +487,10 @@ SOURCES += \
     Effects3D/ShaderField/ShaderField.cpp \
     Shaders/SpatialShaderEngine.cpp \
     Shaders/SpatialShaderCatalog.cpp \
+    Shaders/SpatialVolumeFieldEngine.cpp \
+    Shaders/SpatialVolumeFieldAssist.cpp \
+    Shaders/SpatialStripFieldEngine.cpp \
+    Shaders/SpatialStripFieldAssist.cpp \
     Effects3D/AudioLevel/AudioLevel.cpp \
     Effects3D/AudioPulse/AudioPulse.cpp \
     Effects3D/PulseRing/PulseRing.cpp \

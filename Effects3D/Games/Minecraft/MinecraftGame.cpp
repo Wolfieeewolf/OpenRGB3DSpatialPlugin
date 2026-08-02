@@ -646,12 +646,12 @@ QWidget* CreateEffectWidget(QWidget* parent,
 
 static RGBColor ApplyDamageFlashChannel(RGBColor in_color,
                                         const GameTelemetryBridge::TelemetrySnapshot& t,
-                                        float grid_x,
-                                        float grid_y,
-                                        float grid_z,
-                                        float origin_x,
-                                        float origin_y,
-                                        float origin_z,
+                              float grid_x,
+                              float grid_y,
+                              float grid_z,
+                              float origin_x,
+                              float origin_y,
+                              float origin_z,
                                         const Settings& s)
 {
     if(!t.has_damage_event || t.damage_received_ms == 0)

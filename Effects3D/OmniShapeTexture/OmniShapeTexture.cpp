@@ -4,6 +4,7 @@
 
 #include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
+#include "OmniShapeTextureVolumeFieldGlsl.h"
 #include "SpatialLayerCore.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -22,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -29,6 +31,50 @@
 
 namespace
 {
+
+constexpr int kOmniShapeCount = 6;
+
+float Smstep(float e0, float e1, float x)
+{
+    float t = (x - e0) / std::max(e1 - e0, 1e-5f);
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+float HexMetric(float px, float pz)
+{
+    const float ax = std::fabs(px);
+    const float az = std::fabs(pz);
+    return std::max(ax * 0.5f + az * 0.8660254f, ax) / 0.8660254f;
+}
+
+float PolyRadial(float px, float pz, float n)
+{
+    const float an = (float)(2.0 * M_PI) / std::max(n, 3.0f);
+    const float a = std::atan2(pz, px);
+    const float r = std::sqrt(px * px + pz * pz);
+    return std::cos(std::floor(0.5f + a / an) * an - a) * r / std::cos((float)M_PI / n);
+}
+
+/** Iso-metric matching OmniShapeTextureVolumeFieldGlsl — cube stays a cube. */
+float ShapeMetric(float lx, float ly, float lz, int shape)
+{
+    switch(shape)
+    {
+    case 1:
+        return std::max(std::max(std::fabs(lx), std::fabs(ly)), std::fabs(lz));
+    case 2:
+        return (std::fabs(lx) + std::fabs(ly) + std::fabs(lz)) * 0.57735027f;
+    case 3:
+        return std::max(std::sqrt(lx * lx + lz * lz), std::fabs(ly));
+    case 4:
+        return std::max(HexMetric(lx, lz), std::fabs(ly));
+    case 5:
+        return std::max(PolyRadial(lx, lz, 3.0f), std::fabs(ly));
+    default:
+        return std::sqrt(lx * lx + ly * ly + lz * lz);
+    }
+}
 
 void RotateDir(float& dx, float& dy, float& dz, float yaw, float pitch)
 {
@@ -139,18 +185,41 @@ void DirToOctaUV(float dx, float dy, float dz, float& u, float& v)
     v = ny * 0.5f + 0.5f;
 }
 
+void DirToCylUV(float dx, float dy, float dz, float& u, float& v)
+{
+    u = std::atan2(dz, dx) / (float)(2.0 * M_PI) + 0.5f;
+    v = std::clamp(dy * 0.5f + 0.5f, 0.0f, 1.0f);
+}
+
+void DirToPrismUV(float dx, float dy, float dz, float n, float& u, float& v)
+{
+    u = std::atan2(dz, dx) / (float)(2.0 * M_PI) + 0.5f;
+    v = std::clamp(dy * 0.5f + 0.5f, 0.0f, 1.0f);
+    const float an = 1.0f / std::max(n, 3.0f);
+    u = std::floor(u / an) * an + an * 0.5f;
+}
+
 void ShapeToUV(int shape, float dx, float dy, float dz, float& u, float& v)
 {
-    switch(shape % 3)
+    switch(shape)
     {
-    case 0:
-        DirToSphereUV(dx, dy, dz, u, v);
-        break;
     case 1:
         DirToCubeUV(dx, dy, dz, u, v);
         break;
-    default:
+    case 2:
         DirToOctaUV(dx, dy, dz, u, v);
+        break;
+    case 3:
+        DirToCylUV(dx, dy, dz, u, v);
+        break;
+    case 4:
+        DirToPrismUV(dx, dy, dz, 6.0f, u, v);
+        break;
+    case 5:
+        DirToPrismUV(dx, dy, dz, 3.0f, u, v);
+        break;
+    default:
+        DirToSphereUV(dx, dy, dz, u, v);
         break;
     }
 }
@@ -185,6 +254,8 @@ OmniShapeTexture::OmniShapeTexture(QWidget* parent)
     connect(gif_frame_timer, &QTimer::timeout, this, &OmniShapeTexture::OnGifFrameTimerTimeout);
     SetRainbowMode(false);
     SetSpeed(30);
+    volume_assist_.setFragmentBody(QString::fromUtf8(OmniShapeTextureVolumeFieldGlsl()));
+    volume_assist_.setResolution(28);
 }
 
 OmniShapeTexture::~OmniShapeTexture()
@@ -197,13 +268,12 @@ EffectInfo3D OmniShapeTexture::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Omni shape texture";
     info.effect_description =
-        "Image or GIF mapped onto a virtual shape at the effect origin; LEDs sample by outward direction (360°). "
+        "Image or GIF mapped onto a crisp 3D shape envelope at the effect origin (sphere / cube / octahedron / "
+        "cylinder / hex / triangle). Size grows that silhouette; Scale tiles the texture. "
+        "Morph blends to the next shape. Spin rotates the mapping; Scroll / Warp / Phase drive strong UV motion. "
         "For GIFs, Speed is frames per second: 0 = frozen, 1 = 1 FPS, … up to 200 FPS. "
-        "Size zooms the texture on the shape; Scale still adds repeat. "
-        "Detail warps UV; Frequency drives warp phase. Motion tuning adds Scroll / Warp / Phase plus media Resolution "
-        "(combined with global Output shaping → Sampling); use Smoothing there for GIF frame blending. Morph / Spin as before. "
-        "Ambience: distance dim, falloff curve, edge fade, wave delay vs distance (multiplies the built-in radial rim). "
-        "Stratum bands (Y across the room after rotation) blend speed, tightness, and phase for spin, warp, and radial falloff.";
+        "Ambience: distance dim, falloff curve, edge fade, wave delay. "
+        "Stratum bands blend speed, tightness, and phase.";
     info.category = "Media";
     info.effect_type = SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE;
     info.is_reversible = false;
@@ -254,14 +324,23 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
     pick_row->addWidget(path_label);
     layout->addLayout(pick_row);
 
-    EffectLabeledComboRow* shape_row = EffectUiRows::AppendComboRow(layout, tr("Shape UV:"));
+    EffectLabeledComboRow* shape_row = EffectUiRows::AppendComboRow(layout, tr("Shape:"));
     shape_row->setObjectName(QStringLiteral("shapeRow"));
     shape_combo = shape_row->combo();
-    shape_combo->addItem(tr("Sphere (lat/long)"));
-    shape_combo->addItem(tr("Cube (6-face)"));
-    shape_combo->addItem(tr("Octahedron (8 triangles)"));
+    shape_combo->addItem(tr("Sphere"));
+    shape_combo->addItem(tr("Cube"));
+    shape_combo->addItem(tr("Octahedron"));
+    shape_combo->addItem(tr("Cylinder"));
+    shape_combo->addItem(tr("Hex prism"));
+    shape_combo->addItem(tr("Triangle prism"));
     shape_combo->setCurrentIndex(base_shape);
-    shape_combo->setToolTip(tr("Base mapping from direction to texture coordinates."));
+    shape_combo->setToolTip(tr("Crisp 3D envelope the texture lives on. Cube stays a cube — not a soft sphere blob."));
+    shape_combo->setItemData(0, tr("Round ball shell."), Qt::ToolTipRole);
+    shape_combo->setItemData(1, tr("Axis-aligned cube with hard faces."), Qt::ToolTipRole);
+    shape_combo->setItemData(2, tr("Diamond / octahedron."), Qt::ToolTipRole);
+    shape_combo->setItemData(3, tr("Vertical cylinder (flat top/bottom)."), Qt::ToolTipRole);
+    shape_combo->setItemData(4, tr("Hexagonal prism."), Qt::ToolTipRole);
+    shape_combo->setItemData(5, tr("Triangular prism."), Qt::ToolTipRole);
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OmniShapeTexture::OnShapeChanged);
 
     EffectSliderRow* morph_row = EffectUiRows::AppendSliderRow(
@@ -270,8 +349,8 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
         0,
         100,
         (int)morph_percent,
-        tr("Blend toward the next shape in the list: Sphere → Cube → Octahedron → Sphere."));
-    morph_row->setObjectName(QStringLiteral("morphRow"));
+        tr("Blend toward the next shape: Sphere → Cube → Octa → Cylinder → Hex → Triangle → Sphere."));
+    morph_row->setObjectName(QStringLiteral("morphProp"));
     morph_slider = morph_row->slider();
     morph_row->bindValueChanged(
         this,
@@ -281,7 +360,7 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
 
     EffectSliderRow* spin_row = EffectUiRows::AppendSliderRow(
         layout, tr("Spin:"), 0, 100, (int)spin_percent,
-        tr("How fast the virtual shape mapping rotates (yaw + pitch)."));
+        tr("Yaw/pitch rotation rate of the whole shape mapping. Works without Scroll."));
     spin_row->setObjectName(QStringLiteral("spinRow"));
     spin_slider = spin_row->slider();
     spin_row->bindValueChanged(
@@ -305,16 +384,16 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
     media->setObjectName(QStringLiteral("mediaBlock"));
     layout->addWidget(media);
     bind_u100(media->ambienceDistRow(), tr("Distance dim:"),
-              tr("Extra dimming by distance from the effect origin (multiplied with the shape rim falloff)."),
+              tr("Strong dimming by distance from the effect origin."),
               ambience_dist_falloff, ambience_dist_slider);
     bind_u100(media->ambienceCurveRow(), tr("Falloff curve:"),
-              tr("Shapes radial falloff; still has effect when Distance dim is 0. Combine with dim for a strong vignette."),
+              tr("Power curve for distance dim — still bites when Distance dim is low."),
               ambience_falloff_curve, ambience_curve_slider);
     bind_u100(media->ambienceEdgeRow(), tr("Edge fade:"),
-              tr("Strong fade toward the active grid bounds (reaches further in at high values)."),
+              tr("Fade toward room bounds and sharpen the shape silhouette."),
               ambience_edge_soft, ambience_edge_slider);
     bind_u100(media->ambiencePropRow(), tr("Wave delay:"),
-              tr("Strong propagation: spin / warp phase lags more with distance from the origin."),
+              tr("Spin / UV motion lags with distance from the origin."),
               ambience_propagation, ambience_prop_slider);
 
     const auto bind_motion = [&](EffectSliderRow* row, const QString& caption, const QString& tip,
@@ -328,11 +407,13 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
             int_format,
             on_changed);
     };
-    bind_motion(media->motionScrollRow(), tr("Scroll:"), tr("Shape spin/scroll intensity. 0 = off."),
+    bind_motion(media->motionScrollRow(), tr("Scroll:"),
+                tr("Texture scroll across the shape surface + spin boost. 0 = off."),
                 motion_scroll, motion_scroll_slider);
-    bind_motion(media->motionWarpRow(), tr("Warp:"), tr("UV distortion amount. 0 = off."), motion_warp,
+    bind_motion(media->motionWarpRow(), tr("Warp:"), tr("Strong UV distortion amount. 0 = off."), motion_warp,
                 motion_warp_slider);
-    bind_motion(media->motionPhaseRow(), tr("Phase:"), tr("Temporal phase rate for spin + warp oscillation. 0 = off."),
+    bind_motion(media->motionPhaseRow(), tr("Phase:"),
+                tr("Scroll/warp tempo. High values visibly race the texture. 0 = off."),
                 motion_phase, motion_phase_slider);
 
     tile_repeat_check = media->tileRepeatCheck();
@@ -360,7 +441,7 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
 
 void OmniShapeTexture::OnShapeChanged(int index)
 {
-    base_shape = std::max(0, std::min(2, index));
+    base_shape = std::max(0, std::min(kOmniShapeCount - 1, index));
     emit ParametersChanged();
 }
 
@@ -553,11 +634,147 @@ void OmniShapeTexture::OnBrowseMedia()
     LoadMediaFile(path);
 }
 
+void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    std::shared_ptr<QImage> snap;
+    std::shared_ptr<QImage> prev_snap;
+    qint64 step_ms = 0;
+    int step_interval_ms = 0;
+    {
+        QMutexLocker lock(&display_mutex);
+        snap = display_frame;
+        prev_snap = previous_display_frame;
+        step_ms = last_gif_step_ms;
+        step_interval_ms = gif_step_interval_ms;
+    }
+    if(!snap || snap->isNull())
+    {
+        volume_assist_.clearMediaTexture();
+        return;
+    }
+
+    QImage media = *snap;
+    constexpr int kGpuMediaEdge = SpatialVolumeFieldEngine::kMaxMediaEdge;
+    if(media.width() > kGpuMediaEdge || media.height() > kGpuMediaEdge)
+    {
+        media = media.scaled(kGpuMediaEdge, kGpuMediaEdge, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+    const unsigned int eff_res = CombineMediaSampling(media_resolution);
+    if(eff_res < 100u)
+    {
+        const float q = eff_res / 100.0f;
+        const int tw = std::max(8, (int)std::lround(4.0f + q * q * (float)(std::max(2, media.width()) - 4)));
+        const int th = std::max(8, (int)std::lround(4.0f + q * q * (float)(std::max(2, media.height()) - 4)));
+        media = media.scaled(tw, th, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+
+    const float smoothing = GetSmoothing() / 100.0f;
+    if(media_is_gif && prev_snap && !prev_snap->isNull() && smoothing > 0.0f && step_interval_ms > 0 && step_ms > 0)
+    {
+        const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+        const float elapsed_ms = (float)std::max<qint64>(0, now_ms - step_ms);
+        const float blend_window_ms = std::max(1.0f, (float)step_interval_ms * smoothing);
+        const float a = std::clamp(elapsed_ms / blend_window_ms, 0.0f, 1.0f);
+        if(a < 0.999f)
+        {
+            QImage cur = media.convertToFormat(QImage::Format_ARGB32);
+            QImage prev = prev_snap->scaled(cur.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                              .convertToFormat(QImage::Format_ARGB32);
+            for(int y = 0; y < cur.height(); ++y)
+            {
+                QRgb* dst = reinterpret_cast<QRgb*>(cur.scanLine(y));
+                const QRgb* src = reinterpret_cast<const QRgb*>(prev.constScanLine(y));
+                for(int x = 0; x < cur.width(); ++x)
+                {
+                    const RGBColor c = MediaTextureEffect::LerpRGB(
+                        ToRGBColor(qRed(src[x]), qGreen(src[x]), qBlue(src[x])),
+                        ToRGBColor(qRed(dst[x]), qGreen(dst[x]), qBlue(dst[x])), a);
+                    dst[x] = qRgba(RGBGetRValue(c), RGBGetGValue(c), RGBGetBValue(c), 255);
+                }
+            }
+            media = std::move(cur);
+        }
+    }
+
+    volume_assist_.setMediaTexture(media, tile_repeat_enabled);
+
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    float ox, oy, oz;
+    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float tm = std::max(0.25f, bb.tight_mul);
+
+    const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
+    const float scroll_mul = motion_scroll / 100.0f;
+    const float warp_mul = motion_warp / 100.0f;
+    const float phase_mul = motion_phase / 100.0f;
+    const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
+    /* Spin alone rotates; Scroll boosts spin and drives UV scroll via phase_drive. */
+    const float spin_rate =
+        freeze_gif_motion
+            ? 0.0f
+            : (0.25f + 2.6f * (spin_percent / 100.0f)) * (0.35f + 0.75f * speed_lin)
+                  * (0.55f + 1.35f * scroll_mul) * bb.speed_mul;
+    const float yaw_rate = spin_rate;
+    const float pitch_rate = spin_rate * 0.71f;
+    const float phase_drive =
+        freeze_gif_motion ? 0.0f : (phase_mul * 1.55f + scroll_mul * 0.95f);
+    const float size_m = std::max(0.08f, GetNormalizedSize());
+    const float repeat_from_scale = 0.35f + 1.75f * GetNormalizedScale();
+    const float size_zoom_div = std::clamp(0.55f + 0.28f * size_m, 0.40f, 2.0f);
+    const float tile = std::clamp(repeat_from_scale / size_zoom_div, 0.12f, 6.5f);
+    const float detail = std::max(0.05f, GetScaledDetail());
+    const float amp =
+        freeze_gif_motion ? 0.0f
+                          : warp_mul * (0.05f + 0.22f * std::min(1.0f, detail * 0.12f)) / tm;
+    /* Local half-extent coords: Size expands the crisp shape envelope (not a soft sphere). */
+    const float R_local = std::clamp(0.16f + 1.15f * size_m, 0.12f, 1.65f) / tm;
+    const float prop01 = ambience_propagation / 100.0f;
+    const float packed_wrap = tile_repeat_enabled ? (1.0f + prop01) : prop01;
+
+    float vp[16] = {
+        (float)std::clamp(base_shape, 0, kOmniShapeCount - 1),
+        morph_percent / 100.0f,
+        tile,
+        yaw_rate,
+        pitch_rate,
+        phase_drive,
+        amp,
+        detail,
+        ox,
+        oy,
+        oz,
+        ambience_dist_falloff / 100.0f,
+        ambience_falloff_curve / 100.0f,
+        ambience_edge_soft / 100.0f,
+        R_local,
+        packed_wrap
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 16);
+}
+
 RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
     {
         return 0x00000000;
+    }
+
+    if(volume_assist_.isAvailable())
+    {
+        const float nx = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
+        const float ny = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+        const float nz = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
+        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                          (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                          (int)(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));
     }
 
     const Vector3D o_strat = GetEffectOriginGrid(grid);
@@ -603,75 +820,104 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
     const float d_face = std::min(
         { (x - min_x) * inv_w, (max_x - x) * inv_w, (y - min_y) * inv_h, (max_y - y) * inv_h,
           (z - min_z) * inv_d, (max_z - z) * inv_d });
-    const float max_r = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
 
     const Vector3D o = o_strat;
-    float dx = x - o.x;
-    float dy = y - o.y;
-    float dz = z - o.z;
-    const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-    const float prop01 = ambience_propagation / 100.0f;
-    const float t_anim =
-        time * bb.speed_mul - prop01 * std::min(1.0f, dist / std::max(max_r, 1e-4f)) * 12.0f;
-    const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
-    const float anim_time = freeze_gif_motion ? 0.0f : t_anim;
+    /* Match GPU local space: l = (p01 - origin01) * 2 */
+    const float ox01 = NormalizeGridAxis01(o.x, min_x, max_x);
+    const float oy01 = NormalizeGridAxis01(o.y, min_y, max_y);
+    const float oz01 = NormalizeGridAxis01(o.z, min_z, max_z);
+    const float p01x = NormalizeGridAxis01(x, min_x, max_x);
+    const float p01y = NormalizeGridAxis01(y, min_y, max_y);
+    const float p01z = NormalizeGridAxis01(z, min_z, max_z);
+    float lx = (p01x - ox01) * 2.0f;
+    float ly = (p01y - oy01) * 2.0f;
+    float lz = (p01z - oz01) * 2.0f;
+    const float dist_n = std::sqrt(lx * lx + ly * ly + lz * lz) * 0.5f * 1.7320508f;
+
     const float scroll_mul = motion_scroll / 100.0f;
     const float warp_mul = motion_warp / 100.0f;
     const float phase_mul = motion_phase / 100.0f;
+    const float prop01 = ambience_propagation / 100.0f;
+    const float t_lag = prop01 * dist_n * 2.8f;
+    const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
+    const float t_eff = freeze_gif_motion ? 0.0f : (time * bb.speed_mul - t_lag);
+    const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
+    const float spin_rate =
+        freeze_gif_motion
+            ? 0.0f
+            : (0.25f + 2.6f * (spin_percent / 100.0f)) * (0.35f + 0.75f * speed_lin)
+                  * (0.55f + 1.35f * scroll_mul) * bb.speed_mul;
+    const float yaw = t_eff * spin_rate;
+    const float pitch = t_eff * spin_rate * 0.71f;
 
-    std::function<RGBColor(RGBColor, float)> apply_ambience = [&](RGBColor base, float dist_for_gain) -> RGBColor {
-        const float ag =
-            MediaTextureEffect::AmbienceGain(dist_for_gain, max_r, d_face, ambience_dist_falloff, ambience_falloff_curve,
-                                             ambience_edge_soft);
-        const float basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale());
-        const float r_core = std::max(1e-3f, basis * (0.12f + 0.55f * GetNormalizedSize())) / tm;
-        const float r_fade = r_core * 2.25f;
-        const float fall = 1.0f - MediaTextureEffect::Smoothstep(r_core * 0.35f, r_fade, dist_for_gain);
-        const float g = std::clamp(fall * ag, 0.0f, 1.0f);
-        return ToRGBColor((int)(RGBGetRValue(base) * g + 0.5f), (int)(RGBGetGValue(base) * g + 0.5f),
-                          (int)(RGBGetBValue(base) * g + 0.5f));
-    };
-
-    if(dist < 1e-5f)
+    float dx = lx;
+    float dy = ly;
+    float dz = lz;
+    const float llen = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if(llen < 1e-5f)
     {
-        return apply_ambience(MediaTextureEffect::SampleImageBilinear(frame, 0.5f, 0.5f), dist);
+        return 0x00000000;
     }
-    dx /= dist;
-    dy /= dist;
-    dz /= dist;
-
-    const float spin_w = (0.07f + 0.65f * (spin_percent / 100.0f)) * (0.35f + GetScaledSpeed() * 0.045f) * scroll_mul * bb.speed_mul;
-    const float yaw = anim_time * spin_w;
-    const float pitch = anim_time * spin_w * 0.71f;
+    dx /= llen;
+    dy /= llen;
+    dz /= llen;
     RotateDir(dx, dy, dz, yaw, pitch);
+    RotateDir(lx, ly, lz, yaw, pitch);
 
-    const int shape_a = std::clamp(base_shape, 0, 2);
-    const int shape_b = (shape_a + 1) % 3;
+    const int shape_a = std::clamp(base_shape, 0, kOmniShapeCount - 1);
+    const int shape_b = (shape_a + 1) % kOmniShapeCount;
     const float mt = morph_percent / 100.0f;
+    const float ma = ShapeMetric(lx, ly, lz, shape_a);
+    const float mb = ShapeMetric(lx, ly, lz, shape_b);
+    const float metric = ma * (1.0f - mt) + mb * mt;
+
+    const float size_m = std::max(0.08f, GetNormalizedSize());
+    const float R = std::clamp(0.16f + 1.15f * size_m, 0.12f, 1.65f) / tm;
+    const float detail = std::max(0.05f, GetScaledDetail());
+    const float band = 0.018f + 0.008f * (1.0f - std::clamp(detail * 0.08f, 0.0f, 1.0f));
+    if(metric > R + band)
+    {
+        return 0x00000000;
+    }
+    const float surface = 1.0f - Smstep(0.0f, band * 0.75f, std::fabs(metric - R));
+    const float fill = (metric <= R) ? 0.42f : 0.0f;
+    const float mask = 1.0f - Smstep(R - band * 0.1f, R + band * 0.7f, metric);
+    float shape_w = std::clamp(std::max(fill, surface * 1.25f), 0.0f, 1.0f) * mask;
 
     float ua, va, ub, vb;
     ShapeToUV(shape_a, dx, dy, dz, ua, va);
     ShapeToUV(shape_b, dx, dy, dz, ub, vb);
 
-    const float size_m = std::max(0.08f, GetNormalizedSize());
-    const float repeat_from_scale = 0.4f + 1.5f * GetNormalizedScale();
-    const float size_zoom_div = std::clamp(0.40f + 0.36f * size_m, 0.32f, 2.2f);
+    const float repeat_from_scale = 0.35f + 1.75f * GetNormalizedScale();
+    const float size_zoom_div = std::clamp(0.55f + 0.28f * size_m, 0.40f, 2.0f);
     const float tile = std::clamp(repeat_from_scale / size_zoom_div, 0.12f, 6.5f);
     ua = (ua - 0.5f) * tile + 0.5f;
     va = (va - 0.5f) * tile + 0.5f;
     ub = (ub - 0.5f) * tile + 0.5f;
     vb = (vb - 0.5f) * tile + 0.5f;
 
-    const float detail = std::max(0.05f, GetScaledDetail());
-    const float freq = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
-    const float phase = anim_time * freq * 0.12f * phase_mul + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb), stratum_mot01) * 0.12f;
-    const float amp = 0.017f * std::min(3.2f, detail * 0.2f) * warp_mul / tm;
-    ua += std::sin(phase + ua * 10.5f * detail * 0.07f + va * 6.5f * detail * 0.06f) * amp;
-    va += std::cos(phase * 0.89f + ua * 7.8f * detail * 0.06f - va * 9.0f * detail * 0.07f) * amp;
-    ub += std::sin(phase * 1.03f + ub * 10.0f * detail * 0.07f + vb * 6.8f * detail * 0.06f) * amp;
-    vb += std::cos(phase * 0.93f + ub * 8.0f * detail * 0.06f - vb * 8.5f * detail * 0.07f) * amp;
+    const float phase_drive = freeze_gif_motion ? 0.0f : (phase_mul * 1.55f + scroll_mul * 0.95f);
+    const float scroll_u = t_eff * (0.15f + 0.55f * phase_drive);
+    const float scroll_v = t_eff * (0.08f + 0.42f * phase_drive);
+    ua += scroll_u;
+    va += scroll_v;
+    ub += scroll_u;
+    vb += scroll_v;
 
-    if(tile_repeat_enabled)
+    const float amp =
+        freeze_gif_motion ? 0.0f
+                          : warp_mul * (0.05f + 0.22f * std::min(1.0f, detail * 0.12f)) / tm;
+    const float warp_ph = t_eff * (0.6f + 4.0f * phase_drive)
+                          + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb),
+                                                                     stratum_mot01)
+                                * 0.12f;
+    ua += std::sin(warp_ph + ua * 9.0f * detail * 0.1f + va * 6.0f * detail * 0.08f) * amp;
+    va += std::cos(warp_ph * 0.91f + ua * 7.0f * detail * 0.08f - va * 8.0f * detail * 0.1f) * amp;
+    ub += std::sin(warp_ph * 1.05f + ub * 9.0f * detail * 0.1f + vb * 6.0f * detail * 0.08f) * amp;
+    vb += std::cos(warp_ph * 0.94f + ub * 7.0f * detail * 0.08f - vb * 8.0f * detail * 0.1f) * amp;
+
+    bool do_wrap = tile_repeat_enabled || phase_drive > 0.02f || amp > 1e-4f;
+    if(do_wrap)
     {
         ua -= std::floor(ua);
         va -= std::floor(va);
@@ -713,7 +959,16 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
         out = MediaTextureEffect::LerpRGB(prev_out, out, a);
     }
 
-    return apply_ambience(out, dist);
+    const float dist_gain_ref = dist_n * EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
+    const float max_r = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
+    float ag = MediaTextureEffect::AmbienceGain(dist_gain_ref, max_r, d_face, ambience_dist_falloff,
+                                                ambience_falloff_curve, ambience_edge_soft);
+    const float edge01 = ambience_edge_soft / 100.0f;
+    const float edge_boost = 1.0f * (1.0f - std::clamp(edge01 * 1.2f, 0.0f, 1.0f))
+                             + (0.35f + 0.65f * surface) * std::clamp(edge01 * 1.2f, 0.0f, 1.0f);
+    const float g = std::clamp(shape_w * ag * edge_boost, 0.0f, 1.0f);
+    return ToRGBColor((int)(RGBGetRValue(out) * g + 0.5f), (int)(RGBGetGValue(out) * g + 0.5f),
+                      (int)(RGBGetBValue(out) * g + 0.5f));
 }
 
 nlohmann::json OmniShapeTexture::SaveSettings() const
@@ -740,7 +995,7 @@ void OmniShapeTexture::LoadSettings(const nlohmann::json& settings)
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("base_shape") && settings["base_shape"].is_number_integer())
     {
-        base_shape = std::max(0, std::min(2, settings["base_shape"].get<int>()));
+        base_shape = std::max(0, std::min(kOmniShapeCount - 1, settings["base_shape"].get<int>()));
         if(shape_combo)
         {
             shape_combo->setCurrentIndex(base_shape);

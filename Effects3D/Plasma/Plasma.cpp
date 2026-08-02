@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Plasma.h"
+#include "PlasmaVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 
@@ -31,15 +32,96 @@ Plasma::Plasma(QWidget* parent) : SpatialEffect3D(parent)
     }
     SetFrequency(60);
     SetRainbowMode(false);
+    volume_assist_.setFragmentBody(QString::fromUtf8(PlasmaVolumeFieldGlsl()));
+    volume_assist_.setResolution(18);
 }
 
 Plasma::~Plasma() = default;
+
+float Plasma::EvaluatePlasmaValueCpu(float coord1, float coord2, float coord3,
+                                     float prog, float freq_scale_e) const
+{
+    float plasma_value;
+    switch(pattern_type)
+    {
+        case 0:
+            plasma_value =
+                sin((coord1 + prog * 2.0f) * freq_scale_e * 10.0f) +
+                sin((coord2 + prog * 1.7f) * freq_scale_e * 8.0f) +
+                sin((coord1 + coord2 + prog * 1.3f) * freq_scale_e * 6.0f) +
+                cos((coord1 - coord2 + prog * 2.2f) * freq_scale_e * 7.0f) +
+                sin(sqrtf(coord1 * coord1 + coord2 * coord2) * freq_scale_e * 5.0f + prog * 1.5f) +
+                cos(coord3 * freq_scale_e * 4.0f + prog * 0.9f);
+            break;
+        case 1:
+        {
+            float angle = atan2(coord2 - 0.5f, coord1 - 0.5f);
+            float radius = sqrtf((coord1 - 0.5f) * (coord1 - 0.5f) + (coord2 - 0.5f) * (coord2 - 0.5f));
+            plasma_value =
+                sin(angle * 4.0f + radius * freq_scale_e * 8.0f + prog * 2.0f) +
+                sin(angle * 3.0f - radius * freq_scale_e * 6.0f + prog * 1.5f) +
+                cos(angle * 5.0f + radius * freq_scale_e * 4.0f - prog * 1.8f) +
+                sin(coord3 * freq_scale_e * 5.0f + prog) +
+                cos((angle * 2.0f + coord3 * freq_scale_e * 3.0f) + prog * 1.2f);
+            break;
+        }
+        case 2:
+        {
+            float dist_from_center = sqrtf((coord1 - 0.5f) * (coord1 - 0.5f) + (coord2 - 0.5f) * (coord2 - 0.5f));
+            plasma_value =
+                sin(dist_from_center * freq_scale_e * 10.0f - prog * 3.0f) +
+                sin(dist_from_center * freq_scale_e * 15.0f - prog * 2.3f) +
+                cos(dist_from_center * freq_scale_e * 8.0f + prog * 1.8f) +
+                sin((coord1 + coord2) * freq_scale_e * 6.0f + prog * 1.2f) +
+                cos(coord3 * freq_scale_e * 5.0f - prog * 0.7f);
+            break;
+        }
+        case 3:
+        {
+            float flow1 = sin(coord1 * freq_scale_e * 8.0f + sin(coord2 * freq_scale_e * 12.0f + prog) + prog * 0.5f);
+            float flow2 = cos(coord2 * freq_scale_e * 9.0f + cos(coord3 * freq_scale_e * 11.0f + prog * 1.3f));
+            float flow3 = sin(coord3 * freq_scale_e * 7.0f + sin(coord1 * freq_scale_e * 13.0f + prog * 0.7f));
+            float flow4 = cos((coord1 + coord2) * freq_scale_e * 6.0f + sin(prog * 1.5f));
+            float flow5 = sin((coord2 + coord3) * freq_scale_e * 5.0f + cos(prog * 1.8f));
+            plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
+            break;
+        }
+        case 4:
+        {
+            float n1 = sin((coord1 + prog * 0.5f) * freq_scale_e * 40.0f)
+                       * sin((coord2 + prog * 0.3f) * freq_scale_e * 52.0f)
+                       * sin((coord3 + prog * 0.7f) * freq_scale_e * 31.0f);
+            float n2 = sin((coord1 * 2.3f + coord2 + prog) * freq_scale_e * 20.0f)
+                       * cos((coord2 * 1.7f + coord3 + prog * 1.2f) * freq_scale_e * 25.0f);
+            float n3 = cos((coord1 + coord2 * 2.1f + coord3) * freq_scale_e * 15.0f + prog * 2.0f);
+            plasma_value = n1 * 0.5f + n2 * 0.35f + n3 * 0.15f;
+            break;
+        }
+        case 5:
+        {
+            float r = sqrtf((coord1 - 0.5f) * (coord1 - 0.5f) + (coord2 - 0.5f) * (coord2 - 0.5f)
+                            + (coord3 - 0.5f) * (coord3 - 0.5f));
+            plasma_value =
+                sin(r * freq_scale_e * 30.0f - prog * 2.0f) +
+                sin((coord1 + coord2) * freq_scale_e * 20.0f + prog * 1.5f) * 0.6f +
+                cos((coord2 + coord3) * freq_scale_e * 18.0f - prog * 1.2f) * 0.5f +
+                sin(coord3 * freq_scale_e * 25.0f + prog * 0.8f) * 0.4f;
+            break;
+        }
+        default:
+            plasma_value = 0.5f;
+            break;
+    }
+
+    plasma_value = (plasma_value + 6.0f) / 12.0f;
+    return fmax(0.0f, fmin(1.0f, plasma_value));
+}
 
 EffectInfo3D Plasma::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.effect_name = "Plasma";
-    info.effect_description = "Plasma field with optional floor/mid/ceiling band tuning; respects room mapper";
+    info.effect_description = "Plasma field with optional floor/mid/ceiling band tuning; GPU volume assist when available; respects room mapper";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_PLASMA;
     info.is_reversible = false;
@@ -121,6 +203,18 @@ void Plasma::OnPlasmaParameterChanged()
     emit ParametersChanged();
 }
 
+void Plasma::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    progress = CalculateProgress(time_sec);
+    const float detail = std::max(0.05f, GetScaledDetail());
+    const float size_multiplier = GetNormalizedSize();
+    const float freq_scale = std::min(8.0f, detail * 0.8f / fmax(0.1f, size_multiplier));
+    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
+    const float vp[6] = {progress, freq_scale, (float)pattern_type, ox, oy, oz};
+    volume_assist_.prepare(render_sequence, time_sec, vp, 6);
+}
+
 RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -138,7 +232,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     progress = CalculateProgress(time);
 
     float size_multiplier = GetNormalizedSize();
-    float freq_scale = detail * 0.8f / fmax(0.1f, size_multiplier);
+    float freq_scale = std::min(8.0f, detail * 0.8f / fmax(0.1f, size_multiplier));
 
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
@@ -148,6 +242,13 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float coord1 = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
     float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     float coord3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
+    {
+        float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+        PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+        coord1 = std::clamp(coord1 - ox + 0.5f, 0.0f, 1.0f);
+        coord2 = std::clamp(coord2 - oy + 0.5f, 0.0f, 1.0f);
+        coord3 = std::clamp(coord3 - oz + 0.5f, 0.0f, 1.0f);
+    }
 
     SpatialLayerCore::MapperSettings strat_map;
     EffectStratumBlend::InitStratumBreaks(strat_map);
@@ -165,75 +266,14 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     coord3 = std::fmod(coord3 + pshift + 1.0f, 1.0f);
 
     float plasma_value;
-    switch(pattern_type)
+    if(volume_assist_.isAvailable())
     {
-        case 0:
-            plasma_value =
-                sin((coord1 + prog * 2.0f) * freq_scale_e * 10.0f) +
-                sin((coord2 + prog * 1.7f) * freq_scale_e * 8.0f) +
-                sin((coord1 + coord2 + prog * 1.3f) * freq_scale_e * 6.0f) +
-                cos((coord1 - coord2 + prog * 2.2f) * freq_scale_e * 7.0f) +
-                sin(sqrtf(coord1*coord1 + coord2*coord2) * freq_scale_e * 5.0f + prog * 1.5f) +
-                cos(coord3 * freq_scale_e * 4.0f + prog * 0.9f);
-            break;
-        case 1:
-            {
-                float angle = atan2(coord2 - 0.5f, coord1 - 0.5f);
-                float radius = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
-                plasma_value =
-                    sin(angle * 4.0f + radius * freq_scale_e * 8.0f + prog * 2.0f) +
-                    sin(angle * 3.0f - radius * freq_scale_e * 6.0f + prog * 1.5f) +
-                    cos(angle * 5.0f + radius * freq_scale_e * 4.0f - prog * 1.8f) +
-                    sin(coord3 * freq_scale_e * 5.0f + prog) +
-                    cos((angle * 2.0f + coord3 * freq_scale_e * 3.0f) + prog * 1.2f);
-            }
-            break;
-        case 2:
-            {
-                float dist_from_center = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
-                plasma_value =
-                    sin(dist_from_center * freq_scale_e * 10.0f - prog * 3.0f) +
-                    sin(dist_from_center * freq_scale_e * 15.0f - prog * 2.3f) +
-                    cos(dist_from_center * freq_scale_e * 8.0f + prog * 1.8f) +
-                    sin((coord1 + coord2) * freq_scale_e * 6.0f + prog * 1.2f) +
-                    cos(coord3 * freq_scale_e * 5.0f - prog * 0.7f);
-            }
-            break;
-        case 3:
-            {
-                float flow1 = sin(coord1 * freq_scale_e * 8.0f + sin(coord2 * freq_scale_e * 12.0f + prog) + prog * 0.5f);
-                float flow2 = cos(coord2 * freq_scale_e * 9.0f + cos(coord3 * freq_scale_e * 11.0f + prog * 1.3f));
-                float flow3 = sin(coord3 * freq_scale_e * 7.0f + sin(coord1 * freq_scale_e * 13.0f + prog * 0.7f));
-                float flow4 = cos((coord1 + coord2) * freq_scale_e * 6.0f + sin(prog * 1.5f));
-                float flow5 = sin((coord2 + coord3) * freq_scale_e * 5.0f + cos(prog * 1.8f));
-                plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
-            }
-            break;
-        case 4:
-            {
-                float n1 = sin((coord1 + prog * 0.5f) * freq_scale_e * 40.0f) * sin((coord2 + prog * 0.3f) * freq_scale_e * 52.0f) * sin((coord3 + prog * 0.7f) * freq_scale_e * 31.0f);
-                float n2 = sin((coord1 * 2.3f + coord2 + prog) * freq_scale_e * 20.0f) * cos((coord2 * 1.7f + coord3 + prog * 1.2f) * freq_scale_e * 25.0f);
-                float n3 = cos((coord1 + coord2 * 2.1f + coord3) * freq_scale_e * 15.0f + prog * 2.0f);
-                plasma_value = n1 * 0.5f + n2 * 0.35f + n3 * 0.15f;
-            }
-            break;
-        case 5:
-            {
-                float r = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f) + (coord3 - 0.5f)*(coord3 - 0.5f));
-                plasma_value =
-                    sin(r * freq_scale_e * 30.0f - prog * 2.0f) +
-                    sin((coord1 + coord2) * freq_scale_e * 20.0f + prog * 1.5f) * 0.6f +
-                    cos((coord2 + coord3) * freq_scale_e * 18.0f - prog * 1.2f) * 0.5f +
-                    sin(coord3 * freq_scale_e * 25.0f + prog * 0.8f) * 0.4f;
-            }
-            break;
-        default:
-            plasma_value = 0.5f;
-            break;
+        plasma_value = volume_assist_.sampleScalar01(coord1, coord2, coord3);
     }
-
-    plasma_value = (plasma_value + 6.0f) / 12.0f;
-    plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
+    else
+    {
+        plasma_value = EvaluatePlasmaValueCpu(coord1, coord2, coord3, prog, freq_scale_e);
+    }
     plasma_value = EffectStratumBlend::ApplyMotionToUnit01(plasma_value, stratum_mot01, 0.28f);
 
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
@@ -282,8 +322,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     if(UseEffectStripColormap())
     {
         float p01v = strip_p01;
-        final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
-                                                   rate * 12.0f);
+        final_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), p01v, time);
     }
     else if(GetRainbowMode())
     {

@@ -171,6 +171,31 @@ inline float NormalizeGridAxis01(float value, float min_v, float max_v)
     return std::max(0.0f, std::min(1.0f, (value - min_v) / range));
 }
 
+/** Pack effect/reference origin into unit-cube UV for volume-field shaders. */
+inline void PackEffectOrigin01(const GridContext3D& grid, const Vector3D& origin,
+                               float* ox, float* oy, float* oz)
+{
+    *ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
+    *oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
+    *oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
+}
+
+/** Map a rotated world sample into origin-centered unit UV (0.5 = origin).
+ *  Matches GLSL of the form `l = p01 * 2.0 - 1.0` as local half-extent space.
+ */
+inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
+                                      const Vector3D& origin,
+                                      const EffectGridAxisHalfExtents& e,
+                                      float* c1, float* c2, float* c3)
+{
+    const float hw = std::max(e.hw, 1e-5f);
+    const float hh = std::max(e.hh, 1e-5f);
+    const float hd = std::max(e.hd, 1e-5f);
+    *c1 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_x - origin.x) / hw));
+    *c2 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_y - origin.y) / hh));
+    *c3 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_z - origin.z) / hd));
+}
+
 inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
 {
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
@@ -253,6 +278,9 @@ public:
     virtual EffectInfo3D GetEffectInfo() const = 0;
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
+
+    /** Once-per-frame GPU atlas/strip rebuild. Default no-op; LED samples only in CalculateColorGrid. */
+    virtual void PrepareGpuFields(std::uint64_t /*render_sequence*/, float /*time_sec*/, const GridContext3D& /*grid*/) {}
     RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
     static const SpatialEffect3D* GetEvaluatingEffect();
     virtual bool UsesSpatialSamplingQuantization() const { return true; }
@@ -327,7 +355,6 @@ public:
     float GetEffectStripColormapRepeats() const { return effect_strip_cmap_rep; }
     int GetEffectStripColormapUnfold() const { return effect_strip_cmap_unfold; }
     float GetEffectStripColormapDirectionDeg() const { return effect_strip_cmap_dir; }
-    int GetEffectStripColormapColorStyle() const { return effect_strip_cmap_color_style; }
 
     float GetRotationYaw() const { return effect_rotation_yaw; }
     float GetRotationPitch() const { return effect_rotation_pitch; }
@@ -393,12 +420,6 @@ protected:
     void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
 
     friend void MinecraftGame::ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
-    friend RGBColor ResolveStripKernelFinalColor(const SpatialEffect3D& effect,
-                                                 int kernel_id,
-                                                 float palette01,
-                                                 int color_style,
-                                                 float time_sec,
-                                                 float rainbow_time_hue_mul);
 
     QWidget*            effect_controls_group;
     QWidget*            custom_effect_settings_host;
@@ -581,7 +602,6 @@ protected:
     float effect_strip_cmap_rep = 4.0f;
     int effect_strip_cmap_unfold = 0;
     float effect_strip_cmap_dir = 0.0f;
-    int effect_strip_cmap_color_style = 0;
     StripKernelColormapPanel* effect_strip_cmap_panel = nullptr;
 
     Vector3D GetEffectOrigin() const;

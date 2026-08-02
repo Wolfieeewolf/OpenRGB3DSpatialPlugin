@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "HexLattice.h"
+#include "HexLatticeVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
@@ -72,16 +73,81 @@ HexLattice::HexLattice(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(true);
     SetSpeed(35);
     SetFrequency(12);
+    volume_assist_.setFragmentBody(QString::fromUtf8(HexLatticeVolumeFieldGlsl()));
+    // Higher atlas res than most effects: hex walls are sub-cell features and
+    // blur away at 18^3.
+    volume_assist_.setResolution(20); // was 28 — atlas cost is n³; 20 keeps hex edges readable
 }
 
 HexLattice::~HexLattice() = default;
+
+void HexLattice::EvaluateHexFieldCpu(float nx, float ny, float nz, float flow_t, float hue_t,
+                                     float detail_norm, float* out_v, float* out_h01) const
+{
+    // Mirrors HexLatticeVolumeFieldGlsl — keep the two in sync.
+    const auto mod_pos = [](float v, float m) {
+        float r = std::fmod(v, m);
+        if(r < 0.0f)
+            r += m;
+        return r;
+    };
+    const auto smstep = [](float e0, float e1, float x) {
+        const float t = std::clamp((x - e0) / std::max(e1 - e0, 1e-5f), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    };
+
+    const float base_scale = std::max(0.2f, GetNormalizedSize());
+    const float flow_mode_mul[3] = {0.68f, 1.0f, 1.55f};
+    const float flow_mul = flow_mode_mul[std::clamp(flow_mode, 0, 2)];
+    const float turbulence = std::clamp(turbulence_amount, 0.0f, 2.0f);
+    const float pulse_amt = std::clamp(pulse_amount, 0.0f, 2.0f);
+
+    const float breathe = 1.0f + (Wave01(flow_t * 0.30f) - 0.5f) * 0.35f * breathing_amount;
+    const float cells = std::min(12.0f, (5.0f + 7.0f * detail_norm) / base_scale * breathe);
+
+    float ux = nx + turbulence * 0.07f * std::sin(kTwoPi * (ny * 0.8f + flow_t * 0.11f));
+    float uy = nz + turbulence * 0.07f * std::cos(kTwoPi * (ny * 0.8f - flow_t * 0.09f));
+    ux = ux * cells + flow_t * flow_mul * 0.22f;
+    uy = uy * cells + flow_t * flow_mul * 0.31f;
+
+    const float ry = 1.7320508f;
+    const float ax = mod_pos(ux, 1.0f) - 0.5f;
+    const float ay = mod_pos(uy, ry) - ry * 0.5f;
+    const float bx = mod_pos(ux - 0.5f, 1.0f) - 0.5f;
+    const float by = mod_pos(uy - ry * 0.5f, ry) - ry * 0.5f;
+    float gx = ax;
+    float gy = ay;
+    if(ax * ax + ay * ay >= bx * bx + by * by)
+    {
+        gx = bx;
+        gy = by;
+    }
+    const float idx = ux - gx;
+    const float idy = uy - gy;
+
+    // Hex metric: 0 at cell centre, 0.5 on the wall.
+    const float hd = std::max(std::fabs(gx) * 0.5f + std::fabs(gy) * 0.8660254f, std::fabs(gx));
+    const float edge_w = 0.20f - 0.08f * detail_norm;
+    const float edge = smstep(0.5f - edge_w, 0.5f - edge_w * 0.15f, hd);
+
+    float hcell = std::sin(idx * 12.9898f + idy * 78.233f) * 43758.547f;
+    hcell -= std::floor(hcell);
+    const float pulse = Wave01(flow_t * (0.20f + 0.35f * hcell) * flow_mul + hcell);
+    const float cell_fill = (0.06f + 0.30f * pulse * pulse_amt) * (1.0f - edge);
+
+    *out_v = std::clamp(edge * (0.80f + 0.20f * pulse) + cell_fill, 0.0f, 1.0f);
+
+    float h = idx * 0.045f + idy * 0.030f + hcell * 0.18f + (ny - 0.5f) * 0.10f + hue_t;
+    *out_h01 = h - std::floor(h);
+}
 
 EffectInfo3D HexLattice::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.effect_name = "Hex Lattice";
     info.effect_description =
-        "Hex lattice 3D field. Blends sin/cos in XYZ with animated zoom and triangular hue shaping.";
+        "Honeycomb lattice of hex prisms: glowing cell walls with pulsing interiors. "
+        "Speed drives motion, Frequency cycles hue, Detail sets hex count, Size scales the cells.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_HEX_LATTICE;
     info.is_reversible = true;
@@ -160,6 +226,34 @@ void HexLattice::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
+void HexLattice::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    const float speed_norm = std::max(0.05f, GetNormalizedSpeed());
+    const float freq_norm = std::max(0.05f, GetNormalizedFrequency());
+    const float detail_norm = std::max(0.05f, GetNormalizedDetail());
+    const float flow_mode_mul[3] = {0.68f, 1.0f, 1.55f};
+    const float flow_mul = flow_mode_mul[std::clamp(flow_mode, 0, 2)];
+    // Speed drives lattice motion; Frequency drives hue cycling only.
+    const float flow_t = time_sec * (0.15f + speed_norm * 1.10f);
+    const float hue_t = time_sec * (0.04f + freq_norm * 0.45f);
+    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
+    const float vp[11] = {
+        flow_t,
+        hue_t,
+        detail_norm,
+        std::max(0.2f, GetNormalizedSize()),
+        breathing_amount,
+        pulse_amount,
+        turbulence_amount,
+        flow_mul,
+        ox,
+        oy,
+        oz
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 11);
+}
+
 RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -178,46 +272,28 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
     const float freq_norm = std::max(0.05f, GetNormalizedFrequency());
     const float detail_norm = std::max(0.05f, GetNormalizedDetail());
 
-    const float flow_mode_mul[3] = {0.68f, 1.0f, 1.55f};
-    const float flow_mul = flow_mode_mul[std::clamp(flow_mode, 0, 2)];
-    const float flow_rate = (0.15f + speed_norm * (0.90f + 1.20f * freq_norm)) * flow_mul;
-    const float flow_t = time * flow_rate;
+    const float flow_t = time * (0.15f + speed_norm * 1.10f);
+    const float hue_t = time * (0.04f + freq_norm * 0.45f);
 
-    const float base_scale = std::max(0.2f, GetNormalizedSize());
-    const float lattice_density = 2.4f + freq_norm * (3.0f + 4.0f * detail_norm);
-    const float breathe_base = Wave01(flow_t * (0.22f + 0.30f * speed_norm));
-    const float breathe = 1.0f + ((breathe_base - 0.5f) * 0.96f) * breathing_amount;
-    const float zoom = lattice_density * base_scale * breathe;
-
-    const float px = kTwoPi * (flow_t * (0.30f + 0.85f * detail_norm));
-    const float py = kTwoPi * (flow_t * (0.24f + 0.65f * freq_norm) + 0.17f);
-    const float pz = kTwoPi * (flow_t * (0.19f + 0.75f * speed_norm) + 0.41f);
-    const float drift_x = flow_t * (0.18f + 0.45f * freq_norm);
-    const float drift_y = flow_t * (0.14f + 0.35f * detail_norm);
-    const float drift_z = flow_t * (0.22f + 0.30f * speed_norm);
-
-    const float turbulence = std::clamp(turbulence_amount, 0.0f, 2.0f);
-    const float harmonic = 0.55f + 0.90f * detail_norm + 0.75f * turbulence;
-    const float swirl = turbulence * (0.07f + 0.11f * detail_norm);
-    float h = 0.0f;
-    h += std::sin((nx + drift_x + swirl * std::sin(py)) * zoom + px);
-    h += std::cos((ny - drift_y + swirl * std::cos(pz)) * (zoom * (0.95f + 0.35f * freq_norm)) + py);
-    h += std::sin((nz + drift_z + swirl * std::sin(px)) * (zoom * (1.05f + 0.40f * detail_norm)) + pz);
-    h += 0.65f * std::sin((nx + ny - nz) * (zoom * harmonic) + (px - py) * 0.6f);
-    h += 0.45f * std::cos((nx - ny + nz) * (zoom * (0.8f + 0.6f * detail_norm + 0.5f * turbulence)) + (py + pz) * 0.5f);
-    h /= 3.10f;
-
-    float v = Wave01(h * (1.0f + 0.9f * detail_norm) + flow_t * (0.04f + 0.10f * freq_norm));
-    const float contrast = 1.2f + detail_norm * 2.2f + pulse_amount * 0.8f;
-    v = std::pow(std::clamp(v, 0.0f, 1.0f), contrast);
-    const float glow = 0.20f + (0.28f + 0.34f * pulse_amount) * Wave01(flow_t * (0.35f + 0.45f * speed_norm));
-    v = std::clamp(v + glow * (0.10f + 0.16f * detail_norm + 0.16f * pulse_amount), 0.0f, 1.0f);
-
-    float hue_flow = flow_t * (0.03f + 0.10f * freq_norm);
-    h = Triangle01(h * (0.8f + 1.2f * detail_norm)) * 0.55f + hue_flow;
+    float v = 0.0f;
+    float h01 = 0.0f;
+    if(volume_assist_.isAvailable())
+    {
+        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        v = samp.x();
+        h01 = samp.y();
+    }
+    else
+    {
+        float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+        PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+        const float lnx = std::clamp(nx - ox + 0.5f, 0.0f, 1.0f);
+        const float lny = std::clamp(ny - oy + 0.5f, 0.0f, 1.0f);
+        const float lnz = std::clamp(nz - oz + 0.5f, 0.0f, 1.0f);
+        EvaluateHexFieldCpu(lnx, lny, lnz, flow_t, hue_t, detail_norm, &v, &h01);
+    }
 
     RGBColor c = 0x00000000;
-    const float h01 = h - std::floor(h);
     if(UseEffectStripColormap())
     {
         float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
@@ -230,16 +306,11 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
                                                GetNormalizedSize(),
                                                origin,
                                                rot);
-        c = ResolveStripKernelFinalColor(*this,
-                                         SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
-                                         p01,
-                                         GetEffectStripColormapColorStyle(),
-                                         time,
-                                         flow_rate * 6.0f);
+        c = ResolveStripKernelFinalColor(SpatialPatternKernelClamp(GetEffectStripColormapKernel()), p01, time);
     }
     else if(GetRainbowMode())
     {
-        c = Hsv01ToBgr(h, 1.0f, 1.0f);
+        c = Hsv01ToBgr(h01, 1.0f, 1.0f);
     }
     else
     {

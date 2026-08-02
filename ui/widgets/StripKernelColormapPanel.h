@@ -22,9 +22,8 @@ public:
     float kernelRepeats() const;
     int unfoldMode() const;
     float directionDeg() const;
-    int colorStyle() const;
 
-    void mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg, int color_style);
+    void mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg);
 
 signals:
     void colormapChanged();
@@ -35,7 +34,6 @@ private slots:
     void onUnfoldChanged(int);
     void onRepeatsChanged(int);
     void onDirChanged(int);
-    void onColorStyleChanged(int);
 
 private:
     static const char* UnfoldLabel(int m);

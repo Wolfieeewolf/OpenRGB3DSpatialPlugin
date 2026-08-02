@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BouncingBall.h"
+#include "BouncingBallVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "EffectHelpers.h"
@@ -35,22 +36,25 @@ void IntegrateBall(float& pos_x, float& pos_y, float& pos_z,
     pos_y += vel_y * dt;
     pos_z += vel_z * dt;
 
+    constexpr float k_horiz_damp = 0.992f;
+
     if(pos_x <= xmin)
     {
         pos_x = xmin;
-        vel_x = -vel_x * e;
+        vel_x = -vel_x * e * k_horiz_damp;
     }
     else if(pos_x >= xmax)
     {
         pos_x = xmax;
-        vel_x = -vel_x * e;
+        vel_x = -vel_x * e * k_horiz_damp;
     }
 
     if(pos_y <= ymin)
     {
         pos_y = ymin;
-        
-        vel_y = floor_bounce_vy_up;
+        // Prefer a strong hop: max of fixed bounce energy and elastic rebound.
+        const float rebound = -vel_y * e;
+        vel_y = fmaxf(floor_bounce_vy_up, rebound);
     }
     else if(pos_y >= ymax)
     {
@@ -61,24 +65,29 @@ void IntegrateBall(float& pos_x, float& pos_y, float& pos_z,
     if(pos_z <= zmin)
     {
         pos_z = zmin;
-        vel_z = -vel_z * e;
+        vel_z = -vel_z * e * k_horiz_damp;
     }
     else if(pos_z >= zmax)
     {
         pos_z = zmax;
-        vel_z = -vel_z * e;
+        vel_z = -vel_z * e * k_horiz_damp;
     }
 }
 
-void ClampBallSpeed(float& vx, float& vy, float& vz, float v_max)
+void ClampBallSpeed(float& vx, float& vy, float& vz, float v_max_horiz, float v_max_vert)
 {
-    const float s2 = vx * vx + vy * vy + vz * vz;
-    const float m2 = v_max * v_max;
-    if(s2 <= m2 || s2 < 1e-12f) return;
-    const float inv = v_max / sqrtf(s2);
-    vx *= inv;
-    vy *= inv;
-    vz *= inv;
+    const float h2 = vx * vx + vz * vz;
+    const float hm2 = v_max_horiz * v_max_horiz;
+    if(h2 > hm2 && h2 > 1e-12f)
+    {
+        const float inv = v_max_horiz / sqrtf(h2);
+        vx *= inv;
+        vz *= inv;
+    }
+    if(vy > v_max_vert)
+        vy = v_max_vert;
+    else if(vy < -v_max_vert)
+        vy = -v_max_vert;
 }
 
 void SeedBall(unsigned int k,
@@ -92,17 +101,18 @@ void SeedBall(unsigned int k,
     const float hz = HashFloat01(k * 919U);
 
     b.px = xmin + hx * span_x;
-    b.py = ymin + (0.08f + hy * 0.88f) * span_y;
+    b.py = ymin + (0.18f + hy * 0.72f) * span_y;
     b.pz = zmin + hz * span_z;
 
-    const float drop_h = fmaxf(span_y * (0.14f + 0.72f * HashFloat01(k * 419U + 11U)),
-                               radius_basis * 0.04f);
-    b.floor_bounce_vy = sqrtf(2.0f * gravity * drop_h) * 0.996f;
+    const float drop_h = fmaxf(span_y * (0.35f + 0.55f * HashFloat01(k * 419U + 11U)),
+                               radius_basis * 0.08f);
+    b.floor_bounce_vy = sqrtf(2.0f * gravity * drop_h) * 1.05f;
 
-    const float horiz = (0.30f + 1.20f * motion) * radius_basis;
+    // Keep horizontal drift secondary to vertical bounce.
+    const float horiz = (0.12f + 0.45f * motion) * radius_basis;
     b.vx = (HashFloat01(k * 733U) * 2.0f - 1.0f) * horiz;
     b.vz = (HashFloat01(k * 829U) * 2.0f - 1.0f) * horiz;
-    b.vy = (0.40f + HashFloat01(k * 577U) * 0.60f) * radius_basis * (0.50f + 1.05f * motion);
+    b.vy = (0.55f + HashFloat01(k * 577U) * 0.55f) * b.floor_bounce_vy;
 }
 
 }
@@ -110,8 +120,10 @@ void SeedBall(unsigned int k,
 BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
 {
     count_slider = nullptr;
-    ball_count = 1;
+    ball_count = 4;
     SetRainbowMode(true);
+    volume_assist_.setFragmentBody(QString::fromUtf8(BouncingBallVolumeFieldGlsl()));
+    volume_assist_.setResolution(16);
 }
 
 BouncingBall::~BouncingBall() = default;
@@ -121,7 +133,8 @@ EffectInfo3D BouncingBall::GetEffectInfo() const
     EffectInfo3D info;
     info.effect_name = "Bouncing Ball";
     info.effect_description =
-        "Independent balls bouncing in the room (no ball–ball physics). Physics runs forward without looping; use Speed for motion rate; optional floor/mid/ceiling band tuning";
+        "Independent balls bouncing in the room with GPU assist (no ball–ball collisions). "
+        "Speed sets motion rate; Frequency scrolls hue; Size sets ball radius.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
@@ -161,14 +174,14 @@ void BouncingBall::SetupCustomUI(QWidget* parent)
         layout,
         QStringLiteral("Balls:"),
         1,
-        50,
-        (int)ball_count,
-        QStringLiteral("Number of balls. Each follows its own path inside the room."));
+        (int)kMaxGpuBalls,
+        (int)std::clamp(ball_count, 1u, kMaxGpuBalls),
+        QStringLiteral("Number of balls (GPU atlas evaluates the full set once per frame)."));
     ball_count_row->setObjectName(QStringLiteral("ballCountRow"));
     count_slider = ball_count_row->slider();
     ball_count_row->bindValueChanged(
         this,
-        [this](int v) { ball_count = (unsigned int)v; },
+        [this](int v) { ball_count = (unsigned int)std::clamp(v, 1, (int)kMaxGpuBalls); },
         [](int v) { return QString::number(v); },
         [this]() { emit ParametersChanged(); });
 
@@ -178,8 +191,38 @@ void BouncingBall::SetupCustomUI(QWidget* parent)
 void BouncingBall::OnBallParameterChanged()
 {
     if(count_slider)
-        ball_count = (unsigned int)count_slider->value();
+        ball_count = (unsigned int)std::clamp(count_slider->value(), 1, (int)kMaxGpuBalls);
     emit ParametersChanged();
+}
+
+void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+
+    const float speed_lin = fmaxf(0.02f, fminf(1.0f, GetSpeed() / 200.0f));
+    const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
+    const float size_m = GetNormalizedSize();
+    const float detail = std::max(0.05f, GetScaledDetail());
+    // Unit-cube ball radius — Size scales glow footprint.
+    const float radius01 = std::clamp(0.035f + 0.10f * size_m * GetNormalizedScale(), 0.02f, 0.22f);
+    const float sim_phase_rate = 0.28f + motion * 2.35f;
+    const float sim_t = time_sec * sim_phase_rate;
+    const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.033f + 1000.0f, 1.0f);
+    const float vp[10] = {
+        sim_t,
+        (float)std::clamp(ball_count == 0 ? 1u : ball_count, 1u, kMaxGpuBalls),
+        radius01,
+        1.0f,
+        motion,
+        hue_scroll,
+        detail,
+        ox,
+        oy,
+        oz
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 10);
 }
 
 RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -200,15 +243,33 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     const float stratum_mot01 =
         ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
 
-    
+    const float size_m = GetNormalizedSize();
+    const float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
+    const float detail = std::max(0.05f, GetScaledDetail()) * std::max(0.25f, bb.tight_mul);
+
+    float max_intensity = 0.0f;
+    float hue_for_max = 120.0f;
+
+    if(volume_assist_.isAvailable())
+    {
+        const float nx = NormalizeGridAxis01(rp.x, grid.min_x, grid.max_x);
+        const float ny = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+        const float nz = NormalizeGridAxis01(rp.z, grid.min_z, grid.max_z);
+        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        max_intensity = samp.x();
+        hue_for_max = std::fmod(samp.y() * 360.0f + color_cycle * 0.25f
+                                    + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f
+                                    + 720.0f,
+                                360.0f);
+        if(GetStratumLayoutMode() == 1)
+            max_intensity = EffectStratumBlend::ApplyMotionToUnit01(max_intensity, stratum_mot01, 0.18f);
+    }
+    else
+    {
     const float speed_lin = fmaxf(0.02f, fminf(1.0f, GetSpeed() / 200.0f));
     const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
     constexpr float k_wall_e = 0.987f;
 
-    const float size_m = GetNormalizedSize();
-    const float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
-    const float tm = std::max(0.25f, bb.tight_mul);
-    const float detail = std::max(0.05f, GetScaledDetail()) * tm;
     const float radius_basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale());
     const float R = radius_basis * (0.04f + 0.24f) * size_m;
 
@@ -231,9 +292,9 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
         return 0x00000000;
     }
 
-    const float gravity = fmaxf(1e-5f, radius_basis * (0.092f + 0.070f * motion));
+    const float gravity = fmaxf(1e-5f, radius_basis * (0.125f + 0.085f * motion));
 
-    const unsigned int N = ball_count == 0 ? 1u : ball_count;
+    const unsigned int N = std::clamp(ball_count == 0 ? 1u : ball_count, 1u, kMaxGpuBalls);
 
     const float grid_hash = grid.min_x + grid.max_x * 31.0f + grid.min_y * 31.0f * 31.0f + grid.max_y * 31.0f * 31.0f * 31.0f;
     const int phys_key = (int)ball_count * 100000 + (int)(size_m * 500.f + 0.5f) + (int)(speed_lin * 2000.f + 0.5f);
@@ -246,7 +307,8 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
 
     const float sim_phase_rate = 0.28f + motion * 2.35f;
     const float target_sim_t = time * sim_phase_rate;
-    const float v_cap = radius_basis * (1.22f + 2.05f * motion);
+    const float v_cap_h = radius_basis * (0.55f + 0.95f * motion);
+    const float v_cap_v = radius_basis * (1.55f + 2.40f * motion);
     constexpr float k_sim_dt = 0.028f;
     constexpr float k_max_sim_advance = 6.0f;
 
@@ -300,7 +362,7 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
                 CachedBall3D& ball = ball_positions_cached[k];
                 IntegrateBall(ball.px, ball.py, ball.pz, ball.vx, ball.vy, ball.vz, h, gravity, k_wall_e, ball.floor_bounce_vy,
                               xmin, xmax, ymin, ymax, zmin, zmax);
-                ClampBallSpeed(ball.vx, ball.vy, ball.vz, v_cap);
+                ClampBallSpeed(ball.vx, ball.vy, ball.vz, v_cap_h, v_cap_v);
             }
             sim_remain -= h;
             safety++;
@@ -314,9 +376,6 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     const float glow_radius = R * 2.0f * rad_mul;
     const float glow_radius_sq = glow_radius * glow_radius;
     const float core_radius = R * 0.8f * rad_mul;
-
-    float max_intensity = 0.0f;
-    float hue_for_max = 120.0f;
 
     for(unsigned int k = 0; k < N; k++)
     {
@@ -351,6 +410,10 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
             if(hue_for_max < 0.0f) hue_for_max += 360.0f;
         }
     }
+    } // CPU fallback
+
+    if(max_intensity <= 1e-5f)
+        return 0x00000000;
 
     float strip_p01_bb = 0.f;
     if(UseEffectStripColormap())
@@ -391,9 +454,7 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     if(UseEffectStripColormap())
     {
         float p01v = strip_p01_bb;
-        const float rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
-        final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v,
-                                                   GetEffectStripColormapColorStyle(), time, rbow_mul);
+        final_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), p01v, time);
     }
     else if(GetRainbowMode())
     {
@@ -429,7 +490,8 @@ return j;
 void BouncingBall::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("ball_count")) ball_count = settings["ball_count"];
+    if(settings.contains("ball_count"))
+        ball_count = std::clamp(settings["ball_count"].get<unsigned int>(), 1u, kMaxGpuBalls);
     if(count_slider)
         count_slider->setValue((int)ball_count);
     ball_last_integrated_wall_time = -1e9f;

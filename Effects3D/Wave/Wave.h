@@ -6,10 +6,10 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
+#include "Shaders/SpatialVolumeFieldAssist.h"
 
 class QComboBox;
 class QSlider;
-class QLabel;
 
 class Wave : public SpatialEffect3D
 {
@@ -23,33 +23,17 @@ public:
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
+    void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-private slots:
-    void OnWaveParameterChanged();
-    void OnModeChanged();
 private:
-    enum Mode { MODE_LINE = 0, MODE_SURFACE, MODE_COUNT };
     enum WaveStyle { STYLE_SINUS = 0, STYLE_RADIAL, STYLE_LINEAR, STYLE_OCEAN_DRIFT, STYLE_GRADIENT, STYLE_COUNT };
-    static const char* ModeName(int m);
     static const char* WaveStyleName(int s);
 
     float smoothstep(float edge0, float edge1, float x) const;
-
-    int mode = MODE_LINE;
-    QComboBox* style_combo = nullptr;
-    QWidget* line_controls = nullptr;
-    QWidget* surface_controls = nullptr;
-
-    QComboBox* shape_combo = nullptr;
-    QComboBox* edge_shape_combo = nullptr;
-    QSlider* thickness_slider = nullptr;
-    int shape_type = 0;
-    int edge_shape = 0;
-    int wave_thickness = 30;
 
     QComboBox* surface_style_combo = nullptr;
     QSlider* surface_thick_slider = nullptr;
@@ -64,7 +48,7 @@ private:
     float wave_direction_deg = 0.0f;
     float surface_edge_fade = 18.0f;
 
-    float progress = 0.0f;
+    SpatialVolumeFieldAssist surface_volume_assist_;
 };
 
 #endif

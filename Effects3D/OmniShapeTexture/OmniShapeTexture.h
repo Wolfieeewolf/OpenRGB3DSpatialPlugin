@@ -6,11 +6,13 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
+#include "SpatialVolumeFieldAssist.h"
 
 #include <QImage>
 #include <QMutex>
 #include <QString>
 
+#include <cstdint>
 #include <memory>
 
 class QComboBox;
@@ -32,6 +34,7 @@ public:
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
+    void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool UsesSpatialSamplingQuantization() const override { return false; }
 
@@ -72,9 +75,9 @@ private:
     unsigned int ambience_falloff_curve = 0;
     unsigned int ambience_edge_soft = 0;
     unsigned int ambience_propagation = 0;
-    unsigned int motion_scroll = 0;
+    unsigned int motion_scroll = 40;
     unsigned int motion_warp = 0;
-    unsigned int motion_phase = 0;
+    unsigned int motion_phase = 35;
     unsigned int media_resolution = 100;
     bool tile_repeat_enabled = false;
 
@@ -92,6 +95,8 @@ private:
     int base_shape;
     unsigned int morph_percent;
     unsigned int spin_percent;
+
+    SpatialVolumeFieldAssist volume_assist_;
 };
 
 #endif

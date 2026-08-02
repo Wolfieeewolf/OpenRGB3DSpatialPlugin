@@ -4,6 +4,8 @@ docs/
 # Build directories
 build/
 build_apiv5/
+_gpu_build_check/
+_recovery/
 debug/
 release/
 dist/

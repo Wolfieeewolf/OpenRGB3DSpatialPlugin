@@ -5,6 +5,7 @@
 #include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
 #include "SpatialLayerCore.h"
+#include "TextureProjectionVolumeFieldGlsl.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -52,6 +53,8 @@ TextureProjection::TextureProjection(QWidget* parent)
     connect(gif_frame_timer, &QTimer::timeout, this, &TextureProjection::OnGifFrameTimerTimeout);
     SetRainbowMode(false);
     SetSpeed(30);
+    volume_assist_.setFragmentBody(QString::fromUtf8(TextureProjectionVolumeFieldGlsl()));
+    volume_assist_.setResolution(18);
 }
 
 TextureProjection::~TextureProjection()
@@ -64,13 +67,11 @@ EffectInfo3D TextureProjection::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Texture projection";
     info.effect_description =
-        "Map an image or GIF onto your 3D layout using planar or spherical UVs. For GIFs, Speed is frames per second: "
-        "0 = frozen, 1 = 1 FPS, 2 = 2 FPS, … up to 200 FPS. "
-        "Size zooms the texture (larger Size = bigger features, fewer repeats). Scale still adds overall repeat. "
-        "Detail warps UV; Frequency drives scroll and warp phase. Motion tuning adds Scroll / Warp / Phase plus media Resolution "
-        "(combined with global Output shaping → Sampling); use Smoothing there for GIF frame blending. "
-        "Ambience sliders: distance dim, falloff curve, edge fade (room bounds), wave delay (phase vs distance). "
-        "Stratum bands (Y across the room after rotation) blend speed, tightness, and phase for motion and UV warp.";
+        "Map an image or GIF onto your 3D layout (planar or spherical). "
+        "Scroll pans the texture in a continuous loop; Warp distorts UVs; Phase steers scroll direction and warp tempo. "
+        "Tile repeats the image across the room; motion still loops when Tile is off. "
+        "Ambience: distance dim, falloff curve, edge fade, and wave delay (motion lags with distance). "
+        "For GIFs, Speed is frames per second (0 = frozen). Size zooms; Scale adds repeats.";
     info.category = "Media";
     info.effect_type = SPATIAL_EFFECT_TEXTURE_PROJECTION;
     info.is_reversible = false;
@@ -149,16 +150,16 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
     media->setObjectName(QStringLiteral("mediaBlock"));
     layout->addWidget(media);
     bind_u100(media->ambienceDistRow(), tr("Distance dim:"),
-              tr("Darken LEDs farther from the effect origin (radial falloff)."), ambience_dist_falloff,
-              ambience_dist_slider);
+              tr("Darkens LEDs farther from the effect origin. Mid values already show a clear vignette."),
+              ambience_dist_falloff, ambience_dist_slider);
     bind_u100(media->ambienceCurveRow(), tr("Falloff curve:"),
-              tr("Shapes radial falloff (exponent). Still affects the map when Distance dim is 0; raise both for a strong vignette."),
+              tr("Shapes how fast the vignette drops (soft → hard). Also adds dimming on its own."),
               ambience_falloff_curve, ambience_curve_slider);
     bind_u100(media->ambienceEdgeRow(), tr("Edge fade:"),
-              tr("Strong fade toward the active grid bounds (reaches further in at high values)."),
+              tr("Fades toward room walls/floor/ceiling. Higher = stronger border fade."),
               ambience_edge_soft, ambience_edge_slider);
     bind_u100(media->ambiencePropRow(), tr("Wave delay:"),
-              tr("Strong propagation: UV scroll / warp phase lags more with distance from the origin."),
+              tr("Motion lags farther from the origin — scroll/warp travel as a wave across the room."),
               ambience_propagation, ambience_prop_slider);
 
     const auto bind_motion = [&](EffectSliderRow* row, const QString& caption, const QString& tip,
@@ -172,16 +173,20 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
             int_format,
             on_changed);
     };
-    bind_motion(media->motionScrollRow(), tr("Scroll:"), tr("UV scroll intensity. 0 = off."), motion_scroll,
-                motion_scroll_slider);
-    bind_motion(media->motionWarpRow(), tr("Warp:"), tr("UV distortion amount. 0 = off."), motion_warp,
-                motion_warp_slider);
-    bind_motion(media->motionPhaseRow(), tr("Phase:"), tr("Temporal phase rate for warp oscillation. 0 = off."),
+    bind_motion(media->motionScrollRow(), tr("Scroll:"),
+                tr("Pans the texture continuously (loops like a conveyor). Works without Tile. 0 = still."),
+                motion_scroll, motion_scroll_slider);
+    bind_motion(media->motionWarpRow(), tr("Warp:"),
+                tr("Waves the UV — visible distortion at mid values. 0 = off."),
+                motion_warp, motion_warp_slider);
+    bind_motion(media->motionPhaseRow(), tr("Phase:"),
+                tr("Steers scroll into V and speeds warp pulsing. Raise this to see diagonal drift + living warp."),
                 motion_phase, motion_phase_slider);
 
     tile_repeat_check = media->tileRepeatCheck();
     tile_repeat_check->setChecked(tile_repeat_enabled);
-    tile_repeat_check->setToolTip(tr("Off = single projected image (edge clamp). On = wrap/tile like a texture."));
+    tile_repeat_check->setToolTip(tr(
+        "On = tile/repeat the image across the projection. Off = one copy (still loops while Scroll/Warp moves)."));
     connect(tile_repeat_check, &QCheckBox::toggled, this, [this](bool on) {
         tile_repeat_enabled = on;
         emit ParametersChanged();
@@ -397,11 +402,139 @@ void TextureProjection::OnBrowseMedia()
     LoadMediaFile(path);
 }
 
+void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    std::shared_ptr<QImage> snap;
+    std::shared_ptr<QImage> prev_snap;
+    qint64 step_ms = 0;
+    int step_interval_ms = 0;
+    {
+        QMutexLocker lock(&display_mutex);
+        snap = display_frame;
+        prev_snap = previous_display_frame;
+        step_ms = last_gif_step_ms;
+        step_interval_ms = gif_step_interval_ms;
+    }
+    if(!snap || snap->isNull())
+    {
+        volume_assist_.clearMediaTexture();
+        return;
+    }
+
+    QImage media = *snap;
+    // Cap before optional GIF blend so per-frame work stays cheap.
+    constexpr int kGpuMediaEdge = SpatialVolumeFieldEngine::kMaxMediaEdge;
+    if(media.width() > kGpuMediaEdge || media.height() > kGpuMediaEdge)
+    {
+        media = media.scaled(kGpuMediaEdge, kGpuMediaEdge, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+    const float smoothing = GetSmoothing() / 100.0f;
+    if(media_is_gif && prev_snap && !prev_snap->isNull() && smoothing > 0.0f && step_interval_ms > 0 && step_ms > 0)
+    {
+        const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+        const float elapsed_ms = (float)std::max<qint64>(0, now_ms - step_ms);
+        const float blend_window_ms = std::max(1.0f, (float)step_interval_ms * smoothing);
+        const float a = std::clamp(elapsed_ms / blend_window_ms, 0.0f, 1.0f);
+        if(a < 0.999f)
+        {
+            QImage cur = media.convertToFormat(QImage::Format_ARGB32);
+            QImage prev = prev_snap->scaled(cur.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                              .convertToFormat(QImage::Format_ARGB32);
+            for(int y = 0; y < cur.height(); ++y)
+            {
+                QRgb* dst = reinterpret_cast<QRgb*>(cur.scanLine(y));
+                const QRgb* src = reinterpret_cast<const QRgb*>(prev.constScanLine(y));
+                for(int x = 0; x < cur.width(); ++x)
+                {
+                    const RGBColor c = MediaTextureEffect::LerpRGB(
+                        ToRGBColor(qRed(src[x]), qGreen(src[x]), qBlue(src[x])),
+                        ToRGBColor(qRed(dst[x]), qGreen(dst[x]), qBlue(dst[x])), a);
+                    dst[x] = qRgba(RGBGetRValue(c), RGBGetGValue(c), RGBGetBValue(c), 255);
+                }
+            }
+            media = std::move(cur);
+        }
+    }
+
+    volume_assist_.setMediaTexture(media, tile_repeat_enabled);
+
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    float ox, oy, oz;
+    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float tm = std::max(0.25f, bb.tight_mul);
+
+    const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
+    const float scroll_mul = motion_scroll / 100.0f;
+    const float warp_mul = motion_warp / 100.0f;
+    const float phase_mul = motion_phase / 100.0f;
+    const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
+    const float detail = std::max(0.05f, GetScaledDetail());
+    const float detail_s = detail * tm;
+    const float freq_n = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
+    /* Scroll rate in UV/sec — Scroll slider dominates; Speed/Frequency boost. */
+    const float scroll_rate =
+        freeze_gif_motion
+            ? 0.0f
+            : scroll_mul * (0.22f + 0.48f * speed_lin + 0.18f * freq_n) * bb.speed_mul;
+    const float size_m = std::max(0.08f, GetNormalizedSize());
+    const float repeat_from_scale = 0.35f + 1.75f * GetNormalizedScale();
+    const float size_zoom_div = std::clamp(0.40f + 0.36f * size_m, 0.32f, 2.2f);
+    const float tile = std::clamp(repeat_from_scale / size_zoom_div, 0.12f, 6.5f);
+    const float amp =
+        freeze_gif_motion ? 0.0f
+                          : warp_mul * (0.045f + 0.20f * std::min(1.0f, detail * 0.12f)) / tm;
+    const float prop01 = ambience_propagation / 100.0f;
+
+    const unsigned int eff_res = CombineMediaSampling(media_resolution);
+    const float q = eff_res / 100.0f;
+    const float steps_u = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, media.width()) - 4));
+    const float steps_v = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, media.height()) - 4));
+    const float packed_v = steps_v + ((eff_res < 100u) ? 1000.0f : 0.0f);
+
+    float vp[16] = {
+        (float)std::clamp(projection_mode, 0, 3),
+        tile,
+        scroll_rate,
+        phase_mul,
+        amp,
+        detail_s,
+        ox,
+        oy,
+        oz,
+        ambience_dist_falloff / 100.0f,
+        ambience_falloff_curve / 100.0f,
+        ambience_edge_soft / 100.0f,
+        prop01,
+        steps_u,
+        packed_v,
+        tile_repeat_enabled ? 1.0f : 0.0f
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 16);
+}
+
 RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
     {
         return 0x00000000;
+    }
+
+    if(volume_assist_.isAvailable())
+    {
+        const float nx = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
+        const float ny = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+        const float nz = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
+        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                          (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                          (int)(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));
     }
 
     const Vector3D origin_bb = GetEffectOriginGrid(grid);
@@ -455,11 +588,10 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
           (z - min_z) * inv_d, (max_z - z) * inv_d });
     const float max_r = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     const float prop01 = ambience_propagation / 100.0f;
-    const float t_anim =
-        time * bb.speed_mul
-        - prop01 * std::min(1.0f, dist_o / std::max(max_r, 1e-4f)) * 12.0f;
+    const float dist_n = std::min(1.0f, dist_o / std::max(max_r, 1e-4f));
+    const float t_eff =
+        time * bb.speed_mul - prop01 * dist_n * 3.2f;
     const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
-    const float anim_time = freeze_gif_motion ? 0.0f : t_anim;
     const float scroll_mul = motion_scroll / 100.0f;
     const float warp_mul = motion_warp / 100.0f;
     const float phase_mul = motion_phase / 100.0f;
@@ -467,9 +599,10 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
     const float detail = std::max(0.05f, GetScaledDetail());
     const float detail_s = detail * tm;
-    const float freq = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
-    const float scroll = anim_time * (0.022f + 0.07f * speed_lin + 0.09f * freq) * scroll_mul;
-    
+    const float freq_n = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
+    const float scroll_rate =
+        freeze_gif_motion ? 0.0f
+                          : scroll_mul * (0.22f + 0.48f * speed_lin + 0.18f * freq_n);
     const float size_m = std::max(0.08f, GetNormalizedSize());
     const float repeat_from_scale = 0.35f + 1.75f * GetNormalizedScale();
     const float size_zoom_div = std::clamp(0.40f + 0.36f * size_m, 0.32f, 2.2f);
@@ -517,16 +650,24 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
 
     u = (u - 0.5f) * tile + 0.5f;
     v = (v - 0.5f) * tile + 0.5f;
-    u += scroll;
-    v += scroll * 0.37f;
 
-    const float phase =
-        anim_time * freq * 0.14f * phase_mul + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb), stratum_mot01);
-    const float amp = 0.022f * std::min(3.2f, detail * 0.22f) * warp_mul / tm;
-    u += std::sin(phase + u * 11.5f * detail_s * 0.08f + v * 7.0f * detail_s * 0.07f) * amp;
-    v += std::cos(phase * 0.91f + u * 8.5f * detail_s * 0.07f - v * 10.0f * detail_s * 0.08f) * amp;
+    const float anim_time = freeze_gif_motion ? 0.0f : t_eff;
+    const float v_ratio = 0.12f + 0.88f * std::clamp(phase_mul, 0.0f, 1.0f);
+    u += anim_time * scroll_rate;
+    v += anim_time * scroll_rate * v_ratio;
 
-    if(tile_repeat_enabled)
+    const float amp =
+        freeze_gif_motion ? 0.0f
+                          : warp_mul * (0.045f + 0.20f * std::min(1.0f, detail * 0.12f)) / tm;
+    const float warp_ph =
+        anim_time * (0.55f + 3.8f * phase_mul)
+        + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb), stratum_mot01);
+    u += std::sin(warp_ph + u * 9.0f * detail_s * 0.1f + v * 6.0f * detail_s * 0.08f) * amp;
+    v += std::cos(warp_ph * 0.93f + u * 7.0f * detail_s * 0.08f - v * 8.5f * detail_s * 0.1f) * amp;
+
+    const bool do_wrap =
+        tile_repeat_enabled || scroll_rate > 1e-5f || amp > 1e-4f;
+    if(do_wrap)
     {
         u = MediaTextureEffect::Frac01(u);
         v = MediaTextureEffect::Frac01(v);

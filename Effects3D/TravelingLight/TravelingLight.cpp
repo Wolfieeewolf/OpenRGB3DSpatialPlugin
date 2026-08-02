@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "TravelingLight.h"
+#include "TravelingLightVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "../EffectHelpers.h"
 #include <QComboBox>
+#include <QVector3D>
+#include <QVBoxLayout>
 #include "EffectUiRows.h"
 #include "EffectUiSync.h"
 #include <cmath>
@@ -45,6 +48,7 @@ const char* TravelingLight::ModeName(int m)
     case MODE_MOVING_PANES: return "Moving Panes";
     case MODE_CROSSING:     return "Crossing Beams";
     case MODE_ROTATING:     return "Rotating Beam";
+    case MODE_WAVE_FRONTS:  return "Wave Fronts";
     default: return "Comet";
     }
 }
@@ -63,6 +67,50 @@ TravelingLight::TravelingLight(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x000000FF);
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
+    volume_assist_.setFragmentBody(QString::fromUtf8(TravelingLightVolumeFieldGlsl()));
+    volume_assist_.setResolution(22);
+}
+
+void TravelingLight::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+{
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    float ox, oy, oz;
+    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
+    float progress = CalculateProgress(time_sec) * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, 0.0f);
+    if(progress > 1.0f) progress = std::fmod(progress, 1.0f);
+    if(progress < 0.0f) progress = std::fmod(progress, 1.0f) + 1.0f;
+
+    const float size_scale = GetNormalizedSize() / 1.5f;
+    const float tight_inv = 1.0f / std::max(0.25f, bb.tight_mul);
+    const float freq_n = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
+
+    float vp[16] = {
+        (float)std::clamp(mode, 0, MODE_COUNT - 1),
+        progress,
+        size_scale,
+        tight_inv,
+        (float)GetPathAxis(),
+        (float)GetPlane(),
+        std::clamp(glow, 0.1f, 1.0f),
+        (float)std::clamp(wipe_edge_shape, 0, 2),
+        (float)std::clamp(num_divisions, 2, 16),
+        (float)std::clamp(front_shape, 0, 3),
+        (float)std::clamp(front_edge, 0, 2),
+        std::clamp(front_thickness, 5, 100) / 100.0f,
+        freq_n,
+        ox,
+        oy,
+        oz
+    };
+    volume_assist_.prepare(render_sequence, time_sec, vp, 16);
 }
 
 EffectInfo3D TravelingLight::GetEffectInfo() const
@@ -70,7 +118,8 @@ EffectInfo3D TravelingLight::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Traveling Light";
     info.effect_description =
-        "Comet, Chase, Marquee, ZigZag, KITT, Wipe, Moving Panes, Crossing Beams, or Rotating Beam; optional floor/mid/ceiling band tuning";
+        "Comet, Chase, Marquee, ZigZag, KITT, Wipe, Moving Panes, Crossing Beams, Rotating Beam, or Wave Fronts. "
+        "Wave Fronts are soft traveling rings/bands (Circles, Squares, Lines, Diagonal).";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_COMET;
     info.is_reversible = true;
@@ -113,7 +162,7 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
     }
     mode_combo->setCurrentIndex(std::max(0, std::min(this->mode, MODE_COUNT - 1)));
     mode_combo->setToolTip(QStringLiteral(
-        "How the light path moves through the grid. Wipe uses Wipe edge below; beams use Glow."));
+        "How the light path moves through the grid. Wipe uses Wipe edge; Wave Fronts uses Shape/Edge/Thickness; beams use Glow."));
     mode_combo->setItemData(0, QStringLiteral("Single bright head with tail."), Qt::ToolTipRole);
     mode_combo->setItemData(1, QStringLiteral("Several heads spaced along the path."), Qt::ToolTipRole);
     mode_combo->setItemData(2, QStringLiteral("Wide lit band that travels."), Qt::ToolTipRole);
@@ -123,10 +172,69 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
     mode_combo->setItemData(6, QStringLiteral("Multiple parallel sheets in motion."), Qt::ToolTipRole);
     mode_combo->setItemData(7, QStringLiteral("Two crossing beams with glow control."), Qt::ToolTipRole);
     mode_combo->setItemData(8, QStringLiteral("One beam rotating around the vertical axis."), Qt::ToolTipRole);
+    mode_combo->setItemData(9, QStringLiteral(
+        "Soft traveling bands: Circles/Squares expand from the origin; Lines/Diagonal sweep across the room."),
+        Qt::ToolTipRole);
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         this->mode = std::max(0, std::min(idx, MODE_COUNT - 1));
+        UpdateWaveFrontsControlsVisible();
         emit ParametersChanged();
     });
+
+    wave_fronts_panel = new QWidget();
+    wave_fronts_panel->setObjectName(QStringLiteral("waveFrontsPanel"));
+    QVBoxLayout* fronts_layout = new QVBoxLayout(wave_fronts_panel);
+    fronts_layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(wave_fronts_panel);
+
+    EffectLabeledComboRow* front_shape_row = EffectUiRows::AppendComboRow(fronts_layout, QStringLiteral("Front shape:"));
+    front_shape_row->setObjectName(QStringLiteral("frontShapeRow"));
+    front_shape_combo = front_shape_row->combo();
+    front_shape_combo->addItem(QStringLiteral("Circles"));
+    front_shape_combo->addItem(QStringLiteral("Squares"));
+    front_shape_combo->addItem(QStringLiteral("Lines"));
+    front_shape_combo->addItem(QStringLiteral("Diagonal"));
+    front_shape_combo->setCurrentIndex(std::clamp(front_shape, 0, 3));
+    front_shape_combo->setToolTip(QStringLiteral(
+        "Circles/Squares: expanding rings from the origin. Lines/Diagonal: soft bands sweeping across the room."));
+    front_shape_combo->setItemData(0, QStringLiteral("Expanding circular rings from the effect origin."), Qt::ToolTipRole);
+    front_shape_combo->setItemData(1, QStringLiteral("Expanding square rings (Chebyshev) from the origin."), Qt::ToolTipRole);
+    front_shape_combo->setItemData(2, QStringLiteral("Soft vertical band sweeping along X."), Qt::ToolTipRole);
+    front_shape_combo->setItemData(3, QStringLiteral("Soft band sweeping on the X+Z diagonal."), Qt::ToolTipRole);
+    connect(front_shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        front_shape = std::clamp(idx, 0, 3);
+        emit ParametersChanged();
+    });
+
+    EffectLabeledComboRow* front_edge_row = EffectUiRows::AppendComboRow(fronts_layout, QStringLiteral("Front edge:"));
+    front_edge_row->setObjectName(QStringLiteral("frontEdgeRow"));
+    front_edge_combo = front_edge_row->combo();
+    front_edge_combo->addItem(QStringLiteral("Round"));
+    front_edge_combo->addItem(QStringLiteral("Sharp"));
+    front_edge_combo->addItem(QStringLiteral("Square"));
+    front_edge_combo->setCurrentIndex(std::clamp(front_edge, 0, 2));
+    front_edge_combo->setToolTip(QStringLiteral("Cross-section of the traveling front band."));
+    front_edge_combo->setItemData(0, QStringLiteral("Soft cosine falloff at the band edges."), Qt::ToolTipRole);
+    front_edge_combo->setItemData(1, QStringLiteral("Hard edge—crisp on-off band."), Qt::ToolTipRole);
+    front_edge_combo->setItemData(2, QStringLiteral("Flat-top band with steep sides."), Qt::ToolTipRole);
+    connect(front_edge_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        front_edge = std::clamp(idx, 0, 2);
+        emit ParametersChanged();
+    });
+
+    EffectSliderRow* front_thickness_row = EffectUiRows::AppendSliderRow(
+        fronts_layout,
+        QStringLiteral("Front thickness:"),
+        5,
+        100,
+        front_thickness,
+        QStringLiteral("Traveling band thickness (higher = wider band)."));
+    front_thickness_row->setObjectName(QStringLiteral("frontThicknessRow"));
+    front_thickness_slider = front_thickness_row->slider();
+    front_thickness_row->bindValueChanged(
+        this, [this](int v) { front_thickness = v; }, [](int v) { return QString::number(v); }, on_changed);
+
+    UpdateWaveFrontsControlsVisible();
 
     EffectLabeledComboRow* wipe_edge_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Wipe edge:"));
     wipe_edge_row->setObjectName(QStringLiteral("wipeEdgeRow"));
@@ -167,6 +275,12 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
         this, [this](int v) { glow = v / 100.0f; }, pct_format, on_changed);
 
     AddWidgetToParent(w, parent);
+}
+
+void TravelingLight::UpdateWaveFrontsControlsVisible()
+{
+    if(wave_fronts_panel)
+        wave_fronts_panel->setVisible(mode == MODE_WAVE_FRONTS);
 }
 
 RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -213,11 +327,9 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
                                                   origin,
                                                   rotated);
     }
-    const float tl_rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
     auto tl_strip_rgb = [&](float p01_k) -> RGBColor {
         float pv = p01_k;
-        return ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), pv, GetEffectStripColormapColorStyle(), time,
-                                             tl_rbow_mul);
+        return ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), pv, time);
     };
     auto tl_rainbow = [&](float hue_deg) -> RGBColor {
         if(UseEffectStripColormap())
@@ -229,6 +341,79 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
             return tl_strip_rgb(tl_strip_p01);
         return GetColorAtPosition(p01);
     };
+
+    if(volume_assist_.isAvailable())
+    {
+        const float nx = NormalizeGridAxis01(rotated.x, grid.min_x, grid.max_x);
+        const float ny = NormalizeGridAxis01(rotated.y, grid.min_y, grid.max_y);
+        const float nz = NormalizeGridAxis01(rotated.z, grid.min_z, grid.max_z);
+        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const int m = std::max(0, std::min(this->mode, MODE_COUNT - 1));
+
+        if(m == MODE_MOVING_PANES)
+        {
+            const float s = samp.y();
+            const bool zone_id = samp.z() > 0.5f;
+            RGBColor c0, c1;
+            if(UseEffectStripColormap())
+            {
+                c0 = tl_strip_rgb(tl_strip_p01);
+                c1 = tl_strip_rgb(std::fmod(tl_strip_p01 + 0.5f, 1.0f));
+            }
+            else if(GetRainbowMode())
+            {
+                c0 = GetRainbowColor(progress * 60.0f + color_cycle);
+                c1 = GetRainbowColor(progress * 60.0f + 180.0f + color_cycle);
+            }
+            else
+            {
+                const std::vector<RGBColor>& cols = GetColors();
+                c0 = (cols.size() > 0) ? cols[0] : 0x000000FF;
+                c1 = (cols.size() > 1) ? cols[1] : 0x00FF0000;
+            }
+            return lerp_color(zone_id ? c1 : c0, zone_id ? c0 : c1, s);
+        }
+        if(m == MODE_CROSSING)
+        {
+            const float v1 = samp.x();
+            const float v2 = samp.y();
+            RGBColor c1, c2;
+            if(UseEffectStripColormap())
+            {
+                c1 = tl_strip_rgb(tl_strip_p01);
+                c2 = tl_strip_rgb(std::fmod(tl_strip_p01 + 0.5f, 1.0f));
+            }
+            else if(GetRainbowMode())
+            {
+                c1 = GetRainbowColor(progress * 120.0f + color_cycle);
+                c2 = GetRainbowColor(progress * 120.0f + 180.0f + color_cycle);
+            }
+            else
+            {
+                const std::vector<RGBColor>& cols = GetColors();
+                c1 = (cols.size() > 0) ? cols[0] : 0x000000FF;
+                c2 = (cols.size() > 1) ? cols[1] : 0x0000FF00;
+            }
+            unsigned char r1 = (unsigned char)((c1 & 0xFF) * v1);
+            unsigned char g1 = (unsigned char)(((c1 >> 8) & 0xFF) * v1);
+            unsigned char b1 = (unsigned char)(((c1 >> 16) & 0xFF) * v1);
+            unsigned char r2 = (unsigned char)((c2 & 0xFF) * v2);
+            unsigned char g2 = (unsigned char)(((c2 >> 8) & 0xFF) * v2);
+            unsigned char b2 = (unsigned char)(((c2 >> 16) & 0xFF) * v2);
+            return (RGBColor)((screen_blend(b1, b2) << 16) | (screen_blend(g1, g2) << 8) | screen_blend(r1, r2));
+        }
+
+        float intensity = samp.x();
+        if(intensity < 0.01f)
+            return 0x00000000;
+        const float driver = samp.y();
+        RGBColor c = GetRainbowMode() ? tl_rainbow(driver * 360.0f + color_cycle)
+                                      : tl_palette(driver);
+        unsigned char r = (unsigned char)((c & 0xFF) * intensity);
+        unsigned char g = (unsigned char)(((c >> 8) & 0xFF) * intensity);
+        unsigned char b = (unsigned char)(((c >> 16) & 0xFF) * intensity);
+        return (RGBColor)((b << 16) | (g << 8) | r);
+    }
 
     int m = std::max(0, std::min(this->mode, MODE_COUNT - 1));
     int ax = GetPathAxis();
@@ -433,6 +618,93 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         return (RGBColor)((b << 16) | (g << 8) | r);
     }
 
+    if(m == MODE_WAVE_FRONTS)
+    {
+        float rot_rel_x = rotated.x - origin.x;
+        float rot_rel_y = rotated.y - origin.y;
+        float rot_rel_z = rotated.z - origin.z;
+        float pos01 = 0.0f;
+        {
+            const float scale_eff = std::max(0.05f, GetNormalizedScale());
+            const float half_x = std::max(0.001f, (grid.max_x - grid.min_x) * 0.5f * scale_eff);
+            const float half_z = std::max(0.001f, (grid.max_z - grid.min_z) * 0.5f * scale_eff);
+            const float dx = rot_rel_x / half_x;
+            const float dz = rot_rel_z / half_z;
+            const int shape = std::clamp(front_shape, 0, 3);
+            if(shape == 0)
+                pos01 = std::clamp(std::sqrt(dx * dx + dz * dz) / 1.41421356f, 0.0f, 1.25f);
+            else if(shape == 1)
+                pos01 = std::clamp(std::max(std::fabs(dx), std::fabs(dz)), 0.0f, 1.25f);
+            else if(shape == 2)
+                pos01 = NormalizeGridAxis01(rotated.x, grid.min_x, grid.max_x);
+            else
+            {
+                const float nx = NormalizeGridAxis01(rotated.x, grid.min_x, grid.max_x);
+                const float nz = NormalizeGridAxis01(rotated.z, grid.min_z, grid.max_z);
+                pos01 = std::fmod(nx * 0.5f + nz * 0.5f + 1.0f, 1.0f);
+            }
+        }
+
+        const float freq_n = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
+        const float crests = std::clamp(1.0f + std::floor(freq_n * 0.85f + 0.35f), 1.0f, 4.0f);
+        const int shape = std::clamp(front_shape, 0, 3);
+        float d = 1.0f;
+        auto wrap_dist = [](float a, float b) {
+            const float x = std::fabs(a - b);
+            return std::min(x, 1.0f - x);
+        };
+        for(int r = 0; r < (int)crests; r++)
+        {
+            const float front = std::fmod(progress + (float)r / crests + 1.0f, 1.0f);
+            if(shape == 0 || shape == 1)
+            {
+                d = std::min(d, std::fabs(pos01 - front));
+                d = std::min(d, std::fabs(pos01 - (front - 1.0f)));
+                d = std::min(d, std::fabs(pos01 - (front + 1.0f)));
+            }
+            else
+            {
+                d = std::min(d, wrap_dist(pos01, front));
+            }
+        }
+
+        const float thick01 = std::clamp(front_thickness, 5, 100) / 100.0f;
+        const float sigma = 0.035f + 0.165f * thick01;
+        float intensity = 0.0f;
+        switch(std::clamp(front_edge, 0, 2))
+        {
+        case 1:
+            intensity = 1.0f - smoothstep(sigma * 0.35f, sigma * 0.55f, d);
+            break;
+        case 2:
+            intensity = 1.0f - smoothstep(sigma * 0.70f, sigma * 1.05f, d);
+            break;
+        default:
+        {
+            const float s = std::max(sigma, 0.02f);
+            intensity = std::exp(-(d * d) / (s * s));
+            break;
+        }
+        }
+
+        float radial_distance = std::sqrt(rot_rel_x * rot_rel_x + rot_rel_y * rot_rel_y + rot_rel_z * rot_rel_z);
+        float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
+        float depth_factor = 0.72f;
+        if(max_radius > 0.001f)
+            depth_factor = 0.72f + 0.28f * (1.0f - std::min(1.0f, radial_distance / max_radius) * 0.55f);
+
+        if(intensity < 0.01f)
+            return 0x00000000;
+
+        const float driver = std::fmod(pos01 * 0.35f + progress + 1.0f, 1.0f);
+        RGBColor final_color =
+            GetRainbowMode() ? tl_rainbow(driver * 360.0f + color_cycle) : tl_palette(driver);
+        unsigned char r = (unsigned char)((final_color & 0xFF) * depth_factor * intensity);
+        unsigned char g = (unsigned char)(((final_color >> 8) & 0xFF) * depth_factor * intensity);
+        unsigned char b = (unsigned char)(((final_color >> 16) & 0xFF) * depth_factor * intensity);
+        return (RGBColor)((b << 16) | (g << 8) | r);
+    }
+
     float axis_val = (ax == 0) ? rotated.x : (ax == 1) ? rotated.y : rotated.z;
     float axis_min = (ax == 0) ? grid.min_x : (ax == 1) ? grid.min_y : grid.min_z;
     float axis_max = (ax == 0) ? grid.max_x : (ax == 1) ? grid.max_y : grid.max_z;
@@ -561,7 +833,10 @@ nlohmann::json TravelingLight::SaveSettings() const
     j["glow"] = glow;
     j["wipe_edge_shape"] = wipe_edge_shape;
     j["num_divisions"] = num_divisions;
-return j;
+    j["front_shape"] = front_shape;
+    j["front_edge"] = front_edge;
+    j["front_thickness"] = front_thickness;
+    return j;
 }
 
 void TravelingLight::LoadSettings(const nlohmann::json& settings)
@@ -575,6 +850,12 @@ void TravelingLight::LoadSettings(const nlohmann::json& settings)
         wipe_edge_shape = std::clamp(settings["wipe_edge_shape"].get<int>(), 0, 2);
     if(settings.contains("num_divisions") && settings["num_divisions"].is_number_integer())
         num_divisions = std::max(2, std::min(16, settings["num_divisions"].get<int>()));
+    if(settings.contains("front_shape") && settings["front_shape"].is_number_integer())
+        front_shape = std::clamp(settings["front_shape"].get<int>(), 0, 3);
+    if(settings.contains("front_edge") && settings["front_edge"].is_number_integer())
+        front_edge = std::clamp(settings["front_edge"].get<int>(), 0, 2);
+    if(settings.contains("front_thickness") && settings["front_thickness"].is_number_integer())
+        front_thickness = std::clamp(settings["front_thickness"].get<int>(), 5, 100);
 
     if(QWidget* panel = CustomSettingsPanelWidget())
     {
@@ -585,8 +866,18 @@ void TravelingLight::LoadSettings(const nlohmann::json& settings)
             EffectUiSync::setSliderValue(fx, "panesDivisionsRow", num_divisions, [](int v) { return QString::number(v); });
             EffectUiSync::setSliderValue(fx, "glowRow", (int)(glow * 100.0f),
                                           [](int v) { return QString::number(v) + QStringLiteral("%"); });
+            EffectUiSync::setComboIndex(fx, "frontShapeRow", front_shape);
+            EffectUiSync::setComboIndex(fx, "frontEdgeRow", front_edge);
+            EffectUiSync::setSliderValue(fx, "frontThicknessRow", front_thickness, [](int v) { return QString::number(v); });
         }
     }
+    if(front_shape_combo)
+        front_shape_combo->setCurrentIndex(front_shape);
+    if(front_edge_combo)
+        front_edge_combo->setCurrentIndex(front_edge);
+    if(front_thickness_slider)
+        front_thickness_slider->setValue(front_thickness);
+    UpdateWaveFrontsControlsVisible();
 }
 
 REGISTER_EFFECT_3D(TravelingLight);

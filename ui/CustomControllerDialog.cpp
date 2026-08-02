@@ -119,7 +119,7 @@ void CustomControllerDialog::showEvent(QShowEvent* event)
         std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
         CustomControllerMapping::RebindAll(led_mappings, controllers);
         UpdateGridDisplay();
-        UpdateCellInfo();
+    UpdateCellInfo();
     }
 
     if(color_refresh_timer && !color_refresh_timer->isActive())
@@ -401,7 +401,7 @@ void CustomControllerDialog::dimensionChanged()
             }
             else
             {
-                ++it;
+                    ++it;
             }
         }
         return count;
