@@ -135,7 +135,7 @@ void Plasma::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, con
     progress = CalculateProgress(time_sec) * bb.speed_mul;
     const float detail = std::max(0.05f, GetScaledDetail()) * bb.tight_mul;
     const float size_multiplier = GetNormalizedSize();
-    const float freq_scale = std::min(8.0f, detail * 0.8f / fmax(0.1f, size_multiplier));
+    const float freq_scale = std::min(8.0f, detail * 0.8f / std::max(0.1f, size_multiplier));
     float ox = 0.5f, oy = 0.5f, oz = 0.5f;
     PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
     const float vp[6] = {progress, freq_scale, (float)pattern_type, ox, oy, oz};
