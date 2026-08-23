@@ -28,7 +28,9 @@ None of this is “done for everyone”—only a map of areas that have code:
 - **Effect stack** — spatial effects (wave, plasma, textures, audio bands, game bridges, …). Quality varies a lot by effect.
 - **Effect packs + Event Bindings** — timeline packs and Manual / OS / game-style triggers. Usable enough to author and fire things; still alpha (catalogs, UX, and edge cases in flux). Design notes: [Documentation/effect-event-maker.md](Documentation/effect-event-maker.md).
 - **OpenRGB profiles** — layout + effects round-trip through the host profile payload (current schema only; no legacy dual loaders).
-- **Minecraft bridge** — Room Ambilight over room-sample SHM plus UDP vitals/damage. Fabric mod under [`integrations/minecraft/`](integrations/minecraft/). Best-effort.
+- **Minecraft bridge** — Room Ambilight over room-sample SHM plus UDP vitals/damage. Fabric mod under `[integrations/minecraft/](integrations/minecraft/)`. Best-effort.
+
+
 
 ## What to expect (honest status)
 
@@ -44,8 +46,16 @@ Until you have tried a feature on **your** PC, treat it as **unproven** for you�
 
 ## Contributing / issues
 
-Source of truth and MRs: **GitLab** (see [CONTRIBUTING.md](CONTRIBUTING.md)). The GitHub copy is a mirror. Bug reports need versions and steps; “it doesn’t work” without that may get closed.
+Source of truth and PRs: **GitHub** (see [CONTRIBUTING.md](CONTRIBUTING.md)). The GitLab copy is a mirror/backup. Bug reports need versions and steps; “it doesn’t work” without that may get closed.
 
 ## License
 
 GPL-2.0-only — see [LICENSE](LICENSE).
+
+## Support
+
+This is still a for-me alpha. If you want to throw something in the tip jar anyway, I like **pizza** more than coffee:
+
+<a href="https://buymeacoffee.com/wolfieee"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20pizza&emoji=%F0%9F%8D%95&slug=wolfieee&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a pizza" /></a>
+
+[buymeacoffee.com/wolfieee](https://buymeacoffee.com/wolfieee)

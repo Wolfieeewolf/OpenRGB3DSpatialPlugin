@@ -2,52 +2,59 @@
 
 ## Repository and workflow
 
-This project follows the same model as [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) and the [Effects plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBEffectsPlugin):
+Day-to-day work is on **GitHub** (free Actions builds and releases). GitLab is a **mirror** so OpenRGB people can still find the project there, and as a backup if GitHub `main` is ever wrecked.
 
 | Role | Location |
 | ---- | -------- |
-| **Source of truth** | [gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin](https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin) |
-| **CI / releases / artifacts** | GitLab CI (`.gitlab-ci.yml`) |
-| **GitHub mirror** | [github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin) — updated automatically when `GITHUB_MIRROR_TOKEN` is set in GitLab CI variables |
+| **Source of truth** | [github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin) |
+| **CI / releases / artifacts** | GitHub Actions (`.github/workflows/release.yml`) on `v*` tags |
+| **GitLab mirror** | [gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin](https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin) — updated from GitHub when `GITLAB_MIRROR_TOKEN` is set |
 
-**Fork on GitLab**, branch from `main`, open a **merge request** on GitLab. Do not expect code review on GitHub pull requests (the mirror posts a redirect comment).
+**Fork on GitHub**, branch from `main`, open a **pull request** on GitHub. Do not push new work to GitLab `main`; that copy is overwritten by the mirror.
+
+If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can flip the arrow. Until then, GitHub is canonical.
 
 **Spatial layout (plugin):** mm, grid units, RoomGrid, viewport, effects, spacing — see local `docs/PluginSpatialMeasurement.md` if present on your machine (gitignored). Read before changing layout math, reference points, or LED placement.
 
 **Game bridge (Minecraft / telemetry):** RoomGrid → game world — see local `docs/SpatialMeasurement.md` if present. Read when changing SHM, scale publish, or mod mapping.
 
-### GitLab CI variables (maintainers)
+### GitHub secrets (maintainers)
+
+| Secret | Purpose |
+| ------ | ------- |
+| `GITLAB_MIRROR_TOKEN` | GitLab PAT with `write_repository` — Actions pushes `main` and tags to the GitLab mirror |
+
+### GitLab CI (optional backup)
 
 | Variable | Purpose |
 | -------- | ------- |
-| `GITHUB_MIRROR_TOKEN` | GitHub PAT with `contents: write` — pushes `main` and tags to the GitHub mirror |
-| `RUN_CI` | Set to `true` (pipeline variable) to auto-run Linux/Windows **build** jobs. Otherwise those jobs stay **manual** so shared-runner minutes are not spent on every push. Or use **Build → Pipelines → Run pipeline** (web) when you want a build. Primary packaged releases are GitHub Actions on `v*` tags (`.github/workflows/release.yml`). |
+| `RUN_CI` | Set to `true` (pipeline variable) to auto-run Linux/Windows **build** jobs. Otherwise those jobs stay **manual** so shared-runner minutes are not spent on every push. Or use **Build → Pipelines → Run pipeline** (web) when you want a build. Primary packaged releases stay on GitHub Actions. |
 
 Until the project namespace is finalized on `OpenRGBDevelopers`, the maintainer fork `wolfieeewolf1/OpenRGB3DSpatialPlugin` is also treated as upstream for automatic CI (see `.gitlab-ci.yml` rules).
 
-## Issues and merge requests
+## Issues and pull requests
 
-We use **GitLab issue templates** and **merge request templates** under `.gitlab/`.
+We use **GitHub issue templates** under `.github/ISSUE_TEMPLATE/` (GitLab copies under `.gitlab/` stay for the mirror).
 
 ### Which repository?
 
 | Topic | Open an issue in |
 | ----- | ---------------- |
-| Plugin bugs, effects, UI, screen mirror, game telemetry | **[OpenRGB3DSpatialPlugin on GitLab](https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin/-/issues)** |
+| Plugin bugs, effects, UI, screen mirror, game telemetry | **[OpenRGB3DSpatialPlugin on GitHub](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues)** |
 | Controller layout JSON files | **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)** |
 
-### Templates on GitLab (plugin)
+### Templates on GitHub (plugin)
 
 | Template | Use for |
 | -------- | ------- |
 | Bug Report | Crashes, wrong behavior, regressions |
 | Feature Request | New capabilities and UX improvements |
 
-Game-integration requests can use Feature Request with a clear game/telemetry section, or a dedicated issue description on GitLab.
+Game-integration requests can use Feature Request with a clear game/telemetry section.
 
 **Blank issues** may be disabled. Pick a template so triage has version info and reproduction steps.
 
-Direct link: [new issue](https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin/-/issues/new)
+Direct link: [new issue](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new)
 
 ### What makes a useful issue (common sense)
 

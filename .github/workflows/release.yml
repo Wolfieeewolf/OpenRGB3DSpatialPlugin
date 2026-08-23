@@ -1,7 +1,7 @@
 name: Release builds
 
 # Multi-platform Qt6 plugin builds for Windows, Linux, and macOS.
-# Primary release path while GitLab CI compute is unavailable.
+# Primary release path (GitHub is source of truth; GitLab CI is optional backup).
 #
 # Architecture coverage vs OpenRGB org CI (Effects / Visual Map plugins):
 #   Windows 64      -> windows-2022 (x64)          [.dll]
