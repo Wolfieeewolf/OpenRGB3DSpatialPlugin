@@ -175,9 +175,18 @@ inline float NormalizeGridAxis01(float value, float min_v, float max_v)
 inline void PackEffectOrigin01(const GridContext3D& grid, const Vector3D& origin,
                                float* ox, float* oy, float* oz)
 {
-    *ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
-    *oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
-    *oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
+    if(ox)
+    {
+        *ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
+    }
+    if(oy)
+    {
+        *oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
+    }
+    if(oz)
+    {
+        *oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
+    }
 }
 
 /** Map a rotated world sample into origin-centered unit UV (0.5 = origin).

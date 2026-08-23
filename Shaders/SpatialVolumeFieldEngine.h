@@ -20,7 +20,7 @@ class QOpenGLShaderProgram;
  *
  * User fragment body must define:
  *   void volumeMain(out vec4 out_color, in vec3 p01);
- * where p01 is in [0,1]^3. Engine supplies u_time, u_params[16], and optional
+ * where p01 is in [0,1]^3. Engine supplies u_time, u_params[kMaxParams], and optional
  * sampler2D u_media (media texture for TextureProjection / OmniShapeTexture).
  *
  * Sibling to SpatialShaderEngine (2D fullscreen). Does not use the viewport MeshBatch.

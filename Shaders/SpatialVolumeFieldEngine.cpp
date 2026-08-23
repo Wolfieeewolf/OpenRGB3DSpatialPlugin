@@ -30,8 +30,9 @@ QString BuildFragmentShader(const QString& user_body)
                "#version 110\n"
                "uniform float u_time;\n"
                "uniform float u_res;\n"
-               "uniform vec2 u_atlas;\n"
-               "uniform float u_params[16];\n"
+               "uniform vec2 u_atlas;\n")
+           + QStringLiteral("uniform float u_params[%1];\n").arg(SpatialVolumeFieldEngine::kMaxParams)
+           + QStringLiteral(
                "uniform sampler2D u_media;\n"
                "void volumeMain(out vec4 out_color, in vec3 p01);\n")
            + user_body

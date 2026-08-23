@@ -25,9 +25,9 @@ QString BuildStripFragmentShader(const QString& user_body)
     return QStringLiteral(
                "#version 110\n"
                "uniform float u_time;\n"
-               "uniform float u_width;\n"
-               "uniform float u_params[16];\n"
-               "void stripMain(out vec4 out_color, in float s01);\n")
+               "uniform float u_width;\n")
+           + QStringLiteral("uniform float u_params[%1];\n").arg(SpatialStripFieldEngine::kMaxParams)
+           + QStringLiteral("void stripMain(out vec4 out_color, in float s01);\n")
            + user_body
            + QStringLiteral(
                "\nvoid main() {\n"

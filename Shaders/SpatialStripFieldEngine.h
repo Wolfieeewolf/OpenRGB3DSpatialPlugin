@@ -13,7 +13,7 @@ class QOpenGLShaderProgram;
 /**
  * Offscreen OpenGL assist for 1D strip kernels: render a row atlas, sample on CPU.
  * User body: void stripMain(out vec4 out_color, in float s01);
- * Engine supplies u_time and u_params[16].
+ * Engine supplies u_time and u_params[kMaxParams].
  */
 class SpatialStripFieldEngine
 {
