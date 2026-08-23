@@ -201,15 +201,23 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     float ox = 0.5f, oy = 0.5f, oz = 0.5f;
     PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
 
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
     const float speed_lin = fmaxf(0.02f, fminf(1.0f, GetSpeed() / 200.0f));
     const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
     // Unit-cube ball radius — Size scales glow footprint.
     const float radius01 = std::clamp(0.035f + 0.10f * size_m * GetNormalizedScale(), 0.02f, 0.22f);
-    const float sim_phase_rate = 0.28f + motion * 2.35f;
+    const float sim_phase_rate = (0.28f + motion * 2.35f) * bb.speed_mul;
     const float sim_t = time_sec * sim_phase_rate;
-    const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.033f + 1000.0f, 1.0f);
+    const float hue_scroll =
+        std::fmod(time_sec * GetScaledFrequency() * 0.033f * bb.speed_mul + 1000.0f, 1.0f);
     const float vp[10] = {
         sim_t,
         (float)std::clamp(ball_count == 0 ? 1u : ball_count, 1u, kMaxGpuBalls),
@@ -233,7 +241,10 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     }
     Vector3D origin = GetEffectOriginGrid(grid);
     Vector3D rp{x, y, z};
-    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    const float coord2 =
+        std::clamp(NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];

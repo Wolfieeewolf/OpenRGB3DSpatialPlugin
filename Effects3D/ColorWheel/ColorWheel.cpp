@@ -122,13 +122,20 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
-void ColorWheel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
+void ColorWheel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
-    const float progress = CalculateProgress(time_sec);
+    (void)grid;
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
+    const float progress = CalculateProgress(time_sec) * bb.speed_mul;
     const float dir = (direction == 0) ? 1.0f : -1.0f;
     const float wrap = std::clamp(hue_repeats, 0.1f, 3.0f);
-    // Frame-global spin (stratum speed applied after sample).
-    const float freq_spin = time_sec * GetScaledFrequency() * 0.12f;
+    const float freq_spin = time_sec * GetScaledFrequency() * 0.12f * bb.speed_mul;
     const float vp[6] = {
         progress,
         dir,
@@ -152,7 +159,9 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     Vector3D rot{x, y, z};
     float lx = rot.x - origin.x, ly = rot.y - origin.y, lz = rot.z - origin.z;
 
-    const float y_norm = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    const float y_norm = std::clamp(NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
     SpatialLayerCore::MapperSettings map;
     EffectStratumBlend::InitStratumBreaks(map);
     map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);

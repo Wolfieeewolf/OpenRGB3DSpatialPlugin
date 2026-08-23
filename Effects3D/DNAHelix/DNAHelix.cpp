@@ -161,14 +161,21 @@ void DNAHelix::SetupCustomUI(QWidget* parent)
 void DNAHelix::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
-    const float ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
-    const float oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
-    const float oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
+    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
+
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
     const float spd = std::max(0.05f, GetScaledSpeed());
     const float freq = std::max(0.05f, GetScaledFrequency());
     const float detail = std::max(0.05f, GetNormalizedDetail());
     const float size_m = std::max(0.25f, GetNormalizedSize());
-    const float progress = std::fmod(time_sec * spd * 0.11f + 1.0f, 1.0f);
+    const float progress = std::fmod(time_sec * spd * 0.11f * bb.speed_mul + 1.0f, 1.0f);
     const int shape = std::clamp(helix_shape_mode, 0, SHAPE_COUNT - 1);
     const float radius01 =
         std::clamp((helix_radius_pct / 100.0f) * (0.55f + 0.55f * size_m) * GetNormalizedScale(), 0.08f, 0.85f);
@@ -205,10 +212,14 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
 
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    const float coord2 = std::clamp(ny - oy + 0.5f, 0.0f, 1.0f);
+
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
-    EffectStratumBlend::WeightsForYNorm(ny, strat_st, sw);
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
     const float stratum_mot01 =
@@ -225,7 +236,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     sp.origin_x = origin.x;
     sp.origin_y = origin.y;
     sp.origin_z = origin.z;
-    sp.y_norm = ny;
+    sp.y_norm = coord2;
 
     const float spd = std::max(0.05f, GetScaledSpeed());
     const float freq = std::max(0.05f, GetScaledFrequency());
@@ -241,6 +252,8 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     {
         const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
         intensity = std::clamp(samp.x(), 0.0f, 1.0f);
+        if(GetStratumLayoutMode() == 1)
+            intensity = EffectStratumBlend::ApplyMotionToUnit01(intensity, stratum_mot01, 0.28f);
         palette01 = std::clamp(samp.y(), 0.0f, 1.0f);
         rung_hint = samp.z();
     }

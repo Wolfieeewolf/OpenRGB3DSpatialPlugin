@@ -3,6 +3,7 @@
 #include "HexLattice.h"
 #include "HexLatticeVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
+#include "SpatialLayerCore.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <QComboBox>
@@ -233,7 +234,21 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
     }
     else if(GetRainbowMode())
     {
-        c = Hsv01ToBgr(h01, 1.0f, 1.0f);
+        SpatialLayerCore::Basis basis;
+        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+        SpatialLayerCore::MapperSettings map;
+        SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
+
+        SpatialLayerCore::SamplePoint sp{};
+        sp.grid_x = x;
+        sp.grid_y = y;
+        sp.grid_z = z;
+        sp.origin_x = origin.x;
+        sp.origin_y = origin.y;
+        sp.origin_z = origin.z;
+
+        float hue = ApplySpatialRainbowHue(h01 * 360.0f, h01, basis, sp, map, time, &grid);
+        c = GetRainbowColor(std::fmod(hue + 720.0f, 360.0f));
     }
     else
     {

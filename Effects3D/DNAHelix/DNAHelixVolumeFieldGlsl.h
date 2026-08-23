@@ -27,7 +27,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 
     // Axis through origin; XZ relative to that axis, Y along height.
     float lx = (p01.x - origin01.x) * 2.0;
-    float ly = p01.y;
+    float ly = p01.y - origin01.y + 0.5;
     float lz = (p01.z - origin01.z) * 2.0;
 
     float phase = ly * twists * 6.2831853 + progress * 6.2831853;

@@ -179,9 +179,16 @@ void PulseRing::SetupCustomUI(QWidget* parent)
 }
 void PulseRing::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
     // Faster expand: progress is fractional cycles (not raw CalculateProgress which grows forever).
     const float spd = std::max(0.05f, GetScaledSpeed());
-    const float progress = std::fmod(time_sec * spd * 0.085f + 1000.0f, 1.0f);
+    const float progress = std::fmod(time_sec * spd * 0.085f * bb.speed_mul + 1000.0f, 1.0f);
     const float hole_r = std::clamp(hole_size, 0.0f, 0.75f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float amp = std::clamp(pulse_amplitude, 0.2f, 2.0f);
@@ -189,7 +196,7 @@ void PulseRing::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
     const float phase_offset = direction_deg / 360.0f;
     const float size_scale = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.25f, 2.5f);
     // Bounded 0..1 scroll — never pass raw time*freq (float fmod flash).
-    const float hue_scroll01 = HueScroll01(time_sec, GetScaledFrequency());
+    const float hue_scroll01 = HueScroll01(time_sec, GetScaledFrequency() * bb.speed_mul);
     float ox = 0.5f, oy = 0.5f, oz = 0.5f;
     PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
     const float vp[13] = {
@@ -222,8 +229,24 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
 
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    const float coord2 = std::clamp(ny - oy + 0.5f, 0.0f, 1.0f);
+
     const float spd = std::max(0.05f, GetScaledSpeed());
-    const float progress = std::fmod(time * spd * 0.085f + 1000.0f, 1.0f);
+
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float stratum_w[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, stratum_w);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
+    const float progress =
+        std::fmod(time * spd * 0.085f * bb.speed_mul + 1000.0f, 1.0f);
+    const float phase01 =
+        std::fmod(progress + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
 
     float intensity = 0.0f;
     float color01 = 0.0f;
@@ -232,21 +255,28 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
         intensity = samp.x();
         color01 = samp.y();
+        if(GetStratumLayoutMode() == 1)
+            intensity = EffectStratumBlend::ApplyMotionToUnit01(intensity, stratum_mot01, 0.22f);
     }
     if(intensity <= 1e-5f)
         return 0x00000000;
 
-    // Light stratum phase only — avoid heavy SpatialLayerCore work on the hot path.
-    SpatialLayerCore::MapperSettings strat_st;
-    EffectStratumBlend::InitStratumBreaks(strat_st);
-    float stratum_w[3];
-    EffectStratumBlend::WeightsForYNorm(ny, strat_st, stratum_w);
-    const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
-    const float stratum_mot01 =
-        ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
-    const float phase01 =
-        std::fmod(progress + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    map.blend_softness = 0.12f;
+    map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+    map.directional_sharpness = 1.1f;
+
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
 
     RGBColor c;
     if(UseEffectStripColormap())
@@ -268,7 +298,8 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         // color01 already holds bounded azimuth+scroll (Radial) or radius+scroll (Pulse).
         // Never use wrapping expand progress — that caused the slow-then-flash reset.
         // Never accumulate unbounded time*freq into fmod (precision flash).
-        const float hue = std::fmod(color01 * 360.0f + direction_deg + 720.0f, 360.0f);
+        float hue = std::fmod(color01 * 360.0f + direction_deg + 720.0f, 360.0f);
+        hue = ApplySpatialRainbowHue(hue, color01, basis, sp, map, time, &grid);
         c = GetRainbowColor(hue);
     }
     else if(!colors.empty())
