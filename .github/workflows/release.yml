@@ -90,9 +90,11 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
+            qt_arch: linux_gcc_64
           - arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
+            qt_arch: linux_gcc_arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -100,10 +102,18 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           chmod +x scripts/ci/*.sh
           sudo bash scripts/ci/install-linux-deps.sh 6
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: ${{ matrix.qt_arch }}
+          cache: true
+          modules: ''
 
       - name: Build
         run: bash scripts/ci/build-linux.sh 6 release

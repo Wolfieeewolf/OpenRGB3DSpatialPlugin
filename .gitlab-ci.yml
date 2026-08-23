@@ -54,15 +54,20 @@ before_script:
   - echo "started by ${GITLAB_USER_NAME}"
 
 #-----------------------------------------------------------------------------
-# Linux — SaaS (ubuntu + apt) for personal fork — Qt6 only
+# Linux — SaaS (Debian Trixie + aqt Qt 6.8.3) for personal fork — Qt6 only
 #-----------------------------------------------------------------------------
 .hidden_linux_saas:
   stage: build
-  image: ubuntu:22.04
+  image: debian:trixie
   tags: [saas-linux-small-amd64]
+  variables:
+    QT_AQT_VERSION: "6.8.3"
+    QT_AQT_ARCH: "linux_gcc_64"
+    QT_BIN_DIR: "/opt/qt/6.8.3/gcc_64/bin"
   script:
     - chmod +x scripts/ci/*.sh
     - bash scripts/ci/install-linux-deps.sh ${QT_MAJOR}
+    - export PATH="${QT_BIN_DIR}:${PATH}"
     - bash scripts/ci/build-linux.sh ${QT_MAJOR} release
     - bash scripts/ci/package-linux.sh ${QT_MAJOR} amd64
   artifacts:

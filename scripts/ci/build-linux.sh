@@ -21,6 +21,9 @@ if [ "$BUILD_TYPE" = "release" ]; then
 fi
 
 QM="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
+if [ -z "$QM" ] && [ -n "${QT_BIN_DIR:-}" ] && [ -x "${QT_BIN_DIR}/qmake" ]; then
+  QM="${QT_BIN_DIR}/qmake"
+fi
 if [ -z "$QM" ] && [ -x /usr/lib/qt6/bin/qmake ]; then
   QM=/usr/lib/qt6/bin/qmake
 fi
