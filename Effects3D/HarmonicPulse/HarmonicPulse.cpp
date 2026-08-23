@@ -4,6 +4,7 @@
 #include "HarmonicPulseVolumeFieldGlsl.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
+#include "SpatialLayerCore.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <QColor>
@@ -274,8 +275,21 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
 
     if(GetRainbowMode())
     {
+        SpatialLayerCore::Basis basis;
+        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+        SpatialLayerCore::MapperSettings map;
+        EffectStratumBlend::InitStratumBreaks(map);
+        SpatialLayerCore::SamplePoint sp{};
+        sp.grid_x = x;
+        sp.grid_y = y;
+        sp.grid_z = z;
+        sp.origin_x = origin.x;
+        sp.origin_y = origin.y;
+        sp.origin_z = origin.z;
+        sp.y_norm = ny;
         float hh = std::fmod(phase01 + time * motion * 0.35f + 1.0f, 1.0f);
-        return Hsv01ToBgr(hh, 1.0f, val);
+        float hue_deg = ApplySpatialRainbowHue(hh * 360.0f, hh, basis, sp, map, time, &grid);
+        return Hsv01ToBgr(std::fmod(hue_deg / 360.0f + 1.0f, 1.0f), 1.0f, val);
     }
 
     const std::vector<RGBColor>& cols = GetColors();

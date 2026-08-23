@@ -785,7 +785,6 @@ bool OpenRGB3DSpatialTab::AppendLayoutControllerEntry(
     ctrl_transform->linked_reference_point_index =
         controller_json.value("linked_reference_point_index", -1);
 
-    const unsigned int display_color      = ctrl_transform->display_color;
     const int granularity                 = ctrl_transform->granularity;
     const int item_idx                    = ctrl_transform->item_idx;
     const size_t led_positions_size       = ctrl_transform->led_positions.size();

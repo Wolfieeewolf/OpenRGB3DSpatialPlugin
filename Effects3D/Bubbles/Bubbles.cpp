@@ -113,8 +113,16 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
     const float speed_scale = 0.006f + GetScaledSpeed() * 0.016f;
+
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
     const float rise_rate =
-        std::max(0.1f, std::min(4.0f, rise_speed)) * speed_scale * 2.2f;
+        std::max(0.1f, std::min(4.0f, rise_speed)) * speed_scale * 2.2f * bb.speed_mul;
     const float interval = std::max(0.25f, std::min(2.5f, spawn_interval))
                            / std::max(0.85f, 0.85f + 0.45f * GetNormalizedSpeed());
     // Unit-cube radius (fraction of room diagonal-ish).
@@ -122,7 +130,7 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
         std::clamp(std::max(0.5f, std::min(3.5f, max_radius)) * size_m * 0.18f, 0.04f, 0.55f);
     const float thick01 =
         std::clamp(std::max(0.02f, bubble_thickness) * 0.08f / std::max(0.35f, detail), 0.008f, 0.12f);
-    const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.022f + 1000.0f, 1.0f);
+    const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.022f * bb.speed_mul + 1000.0f, 1.0f);
     const float vp[12] = {
         time_sec,
         (float)std::clamp(max_bubbles, 4, kMaxGpuBubbles),
@@ -151,7 +159,9 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         return 0x00000000;
 
     Vector3D rp{x, y, z};
-    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    float coord2 = std::clamp(NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];

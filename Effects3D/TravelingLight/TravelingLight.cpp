@@ -291,7 +291,9 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float coord2 = NormalizeGridAxis01(rotated.y, grid.min_y, grid.max_y);
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    float coord2 = std::clamp(NormalizeGridAxis01(rotated.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -328,15 +330,29 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float pv = p01_k;
         return ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), pv, time);
     };
-    auto tl_rainbow = [&](float hue_deg) -> RGBColor {
-        if(UseEffectStripColormap())
-            return tl_strip_rgb(tl_strip_p01);
-        return GetRainbowColor(hue_deg);
-    };
     auto tl_palette = [&](float p01) -> RGBColor {
         if(UseEffectStripColormap())
             return tl_strip_rgb(tl_strip_p01);
         return GetColorAtPosition(p01);
+    };
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+    auto tl_rainbow_hue = [&](float hue_deg, float driver01) -> RGBColor {
+        if(UseEffectStripColormap())
+            return tl_strip_rgb(tl_strip_p01);
+        hue_deg = ApplySpatialRainbowHue(hue_deg, driver01, basis, sp, map, time, &grid);
+        return GetRainbowColor(hue_deg);
     };
 
     if(volume_assist_.isAvailable())
@@ -359,8 +375,8 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
             }
             else if(GetRainbowMode())
             {
-                c0 = GetRainbowColor(progress * 60.0f + color_cycle);
-                c1 = GetRainbowColor(progress * 60.0f + 180.0f + color_cycle);
+                c0 = tl_rainbow_hue(progress * 60.0f + color_cycle, progress);
+                c1 = tl_rainbow_hue(progress * 60.0f + 180.0f + color_cycle, std::fmod(progress + 0.5f, 1.0f));
             }
             else
             {
@@ -382,8 +398,8 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
             }
             else if(GetRainbowMode())
             {
-                c1 = GetRainbowColor(progress * 120.0f + color_cycle);
-                c2 = GetRainbowColor(progress * 120.0f + 180.0f + color_cycle);
+                c1 = tl_rainbow_hue(progress * 120.0f + color_cycle, progress);
+                c2 = tl_rainbow_hue(progress * 120.0f + 180.0f + color_cycle, std::fmod(progress + 0.5f, 1.0f));
             }
             else
             {
@@ -404,7 +420,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         if(intensity < 0.01f)
             return 0x00000000;
         const float driver = samp.y();
-        RGBColor c = GetRainbowMode() ? tl_rainbow(driver * 360.0f + color_cycle)
+        RGBColor c = GetRainbowMode() ? tl_rainbow_hue(driver * 360.0f + color_cycle, driver)
                                       : tl_palette(driver);
         unsigned char r = (unsigned char)((c & 0xFF) * intensity);
         unsigned char g = (unsigned char)(((c >> 8) & 0xFF) * intensity);

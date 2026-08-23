@@ -233,7 +233,9 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     float norm_radius = EffectGridHorizontalRadialNorm01(r_xz);
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
 
-    float norm_twist = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    float norm_twist = std::clamp(NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
 
     SpatialLayerCore::MapperSettings strat_map;
     EffectStratumBlend::InitStratumBreaks(strat_map);
@@ -265,6 +267,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
         const float c2 = norm_twist;
         const float c3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
         spiral_value = volume_assist_.sampleScalar01(c1, c2, c3);
+        spiral_value = EffectStratumBlend::ApplyMotionToUnit01(spiral_value, stratum_mot01, 0.28f);
     }
 
     const float phase01 =

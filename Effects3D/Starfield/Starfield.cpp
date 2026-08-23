@@ -207,6 +207,22 @@ RGBColor Starfield::ResolveSpaceColor(const EvalContext& ctx, float pos01, float
         float hue = std::fmod(hue_shift + ctx.color_cycle, 360.0f);
         if(hue < 0.0f)
             hue += 360.0f;
+        if(ctx.grid)
+        {
+            SpatialLayerCore::Basis basis;
+            SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+            SpatialLayerCore::MapperSettings map;
+            EffectStratumBlend::InitStratumBreaks(map);
+            SpatialLayerCore::SamplePoint sp{};
+            sp.grid_x = ctx.rp.x;
+            sp.grid_y = ctx.rp.y;
+            sp.grid_z = ctx.rp.z;
+            sp.origin_x = ctx.origin.x;
+            sp.origin_y = ctx.origin.y;
+            sp.origin_z = ctx.origin.z;
+            sp.y_norm = NormalizeGridAxis01(ctx.rp.y, ctx.grid->min_y, ctx.grid->max_y);
+            hue = ApplySpatialRainbowHue(hue, pos01, basis, sp, map, ctx.time, ctx.grid);
+        }
         return GetRainbowColor(hue);
     }
     return GetColorAtPosition(std::clamp(pos01, 0.0f, 1.0f));
@@ -249,9 +265,8 @@ RGBColor Starfield::FinishSample(const EvalContext& ctx, float intensity, float 
 void Starfield::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
-    const float ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
-    const float oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
-    const float oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
+    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
+    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
     const float progress = CalculateProgress(time_sec);
     const int mode_i = std::clamp(mode, 0, MODE_COUNT - 1);
     const int count = std::clamp(num_stars, 12, kMaxGpuParticles);
@@ -455,6 +470,20 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
     ctx.grid = &grid;
     ctx.particle_count = std::clamp(num_stars, 12, kMaxGpuParticles);
 
+    float oy = 0.5f;
+    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
+    const float norm_y = std::clamp(NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(norm_y, strat_st, sw);
+    ctx.strat_on = (GetStratumLayoutMode() == 1);
+    ctx.bb = EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    ctx.stratum_mot01 = ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+    if(ctx.strat_on)
+        ctx.color_cycle = ctx.color_cycle * ctx.bb.speed_mul
+                          + EffectStratumBlend::CombinedPhase01(ctx.bb, ctx.stratum_mot01) * 360.0f;
+
     if(UseEffectStripColormap())
     {
         const float sf_phase01 = std::fmod(ctx.color_cycle * (1.0f / 360.0f) + 1.0f, 1.0f);
@@ -478,7 +507,12 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
         const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
         return FinishSample(ctx, samp.x(), samp.y(), samp.z(), mode_i);
     }
-    return 0x00000000;
+
+    if(mode_i == MODE_BLACKHOLE)
+        return EvalBlackhole(ctx);
+    if(mode_i == MODE_WORMHOLE)
+        return EvalWormhole(ctx);
+    return AccumParticles(ctx, mode_i);
 }
 
 nlohmann::json Starfield::SaveSettings() const
