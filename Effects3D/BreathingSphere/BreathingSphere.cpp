@@ -77,7 +77,7 @@ EffectInfo3D BreathingSphere::GetEffectInfo() const
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
-    info.needs_3d_origin = false;
+    info.needs_3d_origin = true;
     info.needs_direction = false;
     info.needs_thickness = false;
     info.needs_arms = false;
@@ -190,17 +190,27 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     const float breath_t = breath_pulse_pct / 100.0f;
     const float breath_amp = breath_t * 0.92f;
     const float rate = GetScaledFrequency();
+
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
+    progress_v *= bb.speed_mul;
     float breath_phase = progress_v * rate * 0.2f;
     const float R_l = base_scale * size_multiplier * (1.0f + breath_amp * sinf(breath_phase));
     const int edge = NormalizeEdgeProfile(edge_profile);
     const int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
 
+    const EffectGridAxisHalfExtents he = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     float med = EffectGridMedianHalfExtent(grid, GetNormalizedScale());
     if(med < 1e-4f)
         med = 1.0f;
-    const float sx = std::max(0.25f, grid.width / med);
-    const float sy = std::max(0.25f, grid.height / med);
-    const float sz = std::max(0.25f, grid.depth / med);
+    const float sx = std::max(0.25f, 2.0f * he.hw / med);
+    const float sy = std::max(0.25f, 2.0f * he.hh / med);
+    const float sz = std::max(0.25f, 2.0f * he.hd / med);
 
     float aspect_med = std::max(grid.width, grid.depth);
     if(aspect_med < 1e-4f)
@@ -209,21 +219,10 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     const float az = std::clamp(grid.depth / aspect_med, 0.15f, 1.0f);
     const float pulse_strength = breath_t;
 
-    /* Mid-band stratum bake — matches unstratified atlas; whole-room gets speed/tight in params. */
-    SpatialLayerCore::MapperSettings strat_st;
-    EffectStratumBlend::InitStratumBreaks(strat_st);
-    float sw[3];
-    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
-    const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
     const float tm = std::max(0.25f, bb.tight_mul);
     float detail_gpu = detail;
     if(shape == SHAPE_WHOLE_ROOM)
-    {
-        breath_phase *= bb.speed_mul;
-        progress_v *= bb.speed_mul;
         detail_gpu = detail / tm;
-    }
 
     const float vp[16] = {
         R_l,
@@ -304,8 +303,21 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
                 c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), strip_p01, time);
             else if(GetRainbowMode())
             {
+                SpatialLayerCore::Basis basis;
+                SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+                SpatialLayerCore::MapperSettings map;
+                EffectStratumBlend::InitStratumBreaks(map);
+                SpatialLayerCore::SamplePoint sp{};
+                sp.grid_x = x;
+                sp.grid_y = y;
+                sp.grid_z = z;
+                sp.origin_x = origin.x;
+                sp.origin_y = origin.y;
+                sp.origin_z = origin.z;
+                sp.y_norm = coord2;
                 float hue = pos * 360.0f + time * rate * 12.0f * bb.speed_mul
                             + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
+                hue = ApplySpatialRainbowHue(hue, pos, basis, sp, map, time, &grid);
                 c = GetRainbowColor(hue);
             }
             else
@@ -332,7 +344,21 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         final_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), strip_p01, time);
     else if(GetRainbowMode())
     {
-        float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f + time * rate * 12.0f * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
+        SpatialLayerCore::Basis basis;
+        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+        SpatialLayerCore::MapperSettings map;
+        EffectStratumBlend::InitStratumBreaks(map);
+        SpatialLayerCore::SamplePoint sp{};
+        sp.grid_x = x;
+        sp.grid_y = y;
+        sp.grid_z = z;
+        sp.origin_x = origin.x;
+        sp.origin_y = origin.y;
+        sp.origin_z = origin.z;
+        sp.y_norm = coord2;
+        float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f
+                    + time * rate * 12.0f * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
+        hue = ApplySpatialRainbowHue(hue, norm_in_shell, basis, sp, map, time, &grid);
         final_color = GetRainbowColor(hue);
     }
     else

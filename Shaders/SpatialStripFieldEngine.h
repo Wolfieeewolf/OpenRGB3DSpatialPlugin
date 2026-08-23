@@ -18,7 +18,7 @@ class QOpenGLShaderProgram;
 class SpatialStripFieldEngine
 {
 public:
-    static constexpr int kMaxParams = 16;
+    static constexpr int kMaxParams = 24;
     static constexpr int kMinWidth = 64;
     static constexpr int kMaxWidth = 512;
 

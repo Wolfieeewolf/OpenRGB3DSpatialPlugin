@@ -30,7 +30,7 @@ class QOpenGLShaderProgram;
 class SpatialVolumeFieldEngine
 {
 public:
-    static constexpr int kMaxParams = 16;
+    static constexpr int kMaxParams = 24;
     static constexpr int kMinResolution = 8;
     static constexpr int kMaxResolution = 32;
     static constexpr int kMaxMediaEdge = 512;

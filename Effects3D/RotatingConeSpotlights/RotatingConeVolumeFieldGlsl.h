@@ -2,18 +2,14 @@
 #pragma once
 
 /** Rotating cone spotlights: R=sat, G=val, B=base_hue01 (Frequency scroll on CPU).
- *  Static per-cone apex from surface + U/V; aim wanders on a full sphere.
- *  Opposite motion locks cone i to pair-leader (i/2*2) at +pi yaw / mirrored pitch.
- *  When count==3, cone 2 stays independent even in Opposite mode.
+ *  Apex positions are origin-relative in room UV — all surfaces honor PackEffectOrigin01.
+ *  Aim wanders on a full sphere; Opposite motion locks pairs 180° apart.
  *
- *  GLSL 110 constraints honored here:
- *   - uniform float u_params[] only indexed with constant expressions
- *   - no inout parameters / no bool (use int flags)
- *
- *  u_params: [0]=spin_t [1]=scale [2]=hue_static [3]=count [4]=motion_mode
- *            [5]=surface [6..13]=u0,v0..u3,v3
- *            [14]=wander (or floor(wander*100)+ox when surface==Ref)
- *            [15]=elev_bias (or floor(oy*4095)+oz when surface==Ref)
+ *  u_params: [0]=spin_t [1]=scale [2]=hue_static [3]=count [4]=motion_mode [5]=surface
+ *            [6]=ox [7]=oy [8]=oz  (effect origin in unit UV)
+ *            [9]=wander [10]=elev_bias
+ *            [11]=hw01 [12]=hh01 [13]=hd01  (half-extents as grid UV fractions)
+ *            [14..21]=u0,v0..u3,v3
  *  surface: 0 Center, 1 Ref, 2 Ceiling, 3 Floor, 4 Walls
  *  motion_mode: 0 Independent, 1 Opposite
  */
@@ -33,25 +29,25 @@ vec3 coneLocal(vec3 p, vec3 aim)
     vec3 y = cross(z, x);
     return vec3(dot(p, x), dot(p, y), dot(p, z));
 }
-vec3 resolveApex(int surface, float u, float v, vec3 ref_o)
+vec3 resolveApex(int surface, float u, float v, vec3 origin01, float hw, float hh, float hd)
 {
     float uu = clamp(u, 0.0, 1.0);
     float vv = clamp(v, 0.0, 1.0);
-    if(surface == 0)
-        return vec3(mix(0.12, 0.88, uu), 0.5, mix(0.12, 0.88, vv));
-    if(surface == 1)
-    {
-        vec3 o = clamp(ref_o, 0.05, 0.95);
-        float dx = (uu - 0.5) * 0.70;
-        float dz = (vv - 0.5) * 0.70;
-        return clamp(vec3(o.x + dx, o.y, o.z + dz), 0.05, 0.95);
-    }
+    float dx = (uu - 0.5) * 2.0 * hw;
+    float dz = (vv - 0.5) * 2.0 * hd;
+
+    if(surface == 0 || surface == 1)
+        return clamp(origin01 + vec3(dx, 0.0, dz), 0.02, 0.98);
     if(surface == 2)
-        return vec3(mix(0.10, 0.90, uu), 0.92, mix(0.10, 0.90, vv));
+        return clamp(vec3(origin01.x + dx, origin01.y + hh, origin01.z + dz), 0.02, 0.98);
     if(surface == 3)
-        return vec3(mix(0.10, 0.90, uu), 0.08, mix(0.10, 0.90, vv));
+        return clamp(vec3(origin01.x + dx, origin01.y - hh, origin01.z + dz), 0.02, 0.98);
+
     float ang = uu * 6.2831853;
-    return vec3(0.5 + 0.46 * cos(ang), mix(0.12, 0.88, vv), 0.5 + 0.46 * sin(ang));
+    float wall_r = hd * 0.92;
+    return clamp(vec3(origin01.x + wall_r * cos(ang),
+                     origin01.y + (vv - 0.5) * 2.0 * hh,
+                     origin01.z + wall_r * sin(ang)), 0.02, 0.98);
 }
 vec3 aimWander(int i, int count, int motion_mode, float spin_t, float wander, float elev_bias)
 {
@@ -90,21 +86,22 @@ vec3 aimWander(int i, int count, int motion_mode, float spin_t, float wander, fl
     float cp = cos(pitch);
     return normalize(vec3(cos(yaw) * cp, sin(pitch), sin(yaw) * cp));
 }
-/* Returns vec3(sat, val, hue). sat==0 means this cone contributes nothing. */
 vec3 evalCone(int i, int count, int motion_mode, int surface,
-              float u, float v, vec3 ref_o,
+              float u, float v, vec3 origin01, float hw, float hh, float hd,
               float spin_t, float wander, float elev_bias, float scale, float hue_static,
               vec3 p01)
 {
     if(i >= count)
         return vec3(0.0);
 
-    vec3 apex = resolveApex(surface, u, v, ref_o);
+    vec3 apex = resolveApex(surface, u, v, origin01, hw, hh, hd);
     vec3 aim = aimWander(i, count, motion_mode, spin_t, wander, elev_bias);
 
     if(surface == 4)
     {
-        vec3 inward = normalize(vec3(0.5, 0.5, 0.5) - apex);
+        vec3 inward = normalize(origin01 - apex);
+        if(length(inward) < 1e-5)
+            inward = vec3(0.0, 0.0, -1.0);
         aim = normalize(mix(inward, aim, 0.65));
     }
     else if(surface == 2)
@@ -133,37 +130,28 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int motion_mode = int(clamp(u_params[4], 0.0, 1.0) + 0.5);
     int surface = int(clamp(u_params[5], 0.0, 4.0) + 0.5);
 
-    float wander = 1.0;
-    float elev_bias = 0.0;
-    vec3 ref_o = vec3(0.5);
-    if(surface == 1)
-    {
-        float packed_ox = u_params[14];
-        float wander_i = floor(packed_ox);
-        wander = clamp(wander_i / 100.0, 0.15, 2.0);
-        float packed_oyoz = u_params[15];
-        float oy = clamp(floor(packed_oyoz) / 4095.0, 0.0, 1.0);
-        float oz = clamp(fract(packed_oyoz), 0.0, 1.0);
-        ref_o = vec3(clamp(fract(packed_ox), 0.0, 1.0), oy, oz);
+    vec3 origin01 = clamp(vec3(u_params[6], u_params[7], u_params[8]), 0.0, 1.0);
+    float wander = clamp(u_params[9], 0.15, 2.0);
+    float elev_bias = clamp(u_params[10], -1.2, 1.2);
+    float hw = max(u_params[11], 0.02);
+    float hh = max(u_params[12], 0.02);
+    float hd = max(u_params[13], 0.02);
+
+    if(surface == 2)
+        elev_bias = -0.55;
+    else if(surface == 3)
+        elev_bias = 0.55;
+    else if(surface == 4)
         elev_bias = 0.0;
-    }
-    else
-    {
-        wander = clamp(u_params[14], 0.15, 2.0);
-        elev_bias = clamp(u_params[15], -1.2, 1.2);
-    }
-    if(surface == 2) elev_bias = -0.55;
-    else if(surface == 3) elev_bias = 0.55;
-    else if(surface == 4) elev_bias = 0.0;
 
     vec3 best = vec3(0.0);
-    vec3 c0 = evalCone(0, count, motion_mode, surface, u_params[6],  u_params[7],  ref_o,
+    vec3 c0 = evalCone(0, count, motion_mode, surface, u_params[14], u_params[15], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
-    vec3 c1 = evalCone(1, count, motion_mode, surface, u_params[8],  u_params[9],  ref_o,
+    vec3 c1 = evalCone(1, count, motion_mode, surface, u_params[16], u_params[17], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
-    vec3 c2 = evalCone(2, count, motion_mode, surface, u_params[10], u_params[11], ref_o,
+    vec3 c2 = evalCone(2, count, motion_mode, surface, u_params[18], u_params[19], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
-    vec3 c3 = evalCone(3, count, motion_mode, surface, u_params[12], u_params[13], ref_o,
+    vec3 c3 = evalCone(3, count, motion_mode, surface, u_params[20], u_params[21], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
     if(c0.x > best.x) best = c0;
     if(c1.x > best.x) best = c1;

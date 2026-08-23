@@ -4,6 +4,7 @@
 #include "RotatingConeVolumeFieldGlsl.h"
 #include "PluginLog.h"
 #include "SpatialKernelColormap.h"
+#include "SpatialLayerCore.h"
 #include <QByteArray>
 #include <QColor>
 #include <QComboBox>
@@ -272,6 +273,7 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
     info.supports_strip_colormap = true;
     return info;
 }
@@ -306,7 +308,8 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
         surface_combo->addItem(QString::fromUtf8(SurfaceName(s)));
     surface_combo->setCurrentIndex(std::clamp(surface, 0, SURF_COUNT - 1));
     surface_combo->setToolTip(QStringLiteral(
-        "Where cone apexes sit. Floor/Ceiling use X/Z; Walls use angle + height; Ref offsets around the reference point."));
+        "Where cone apexes sit relative to the stack origin. Floor/Ceiling offset vertically; "
+        "Walls use angle + height; Ref uses X/Z offsets around the origin."));
     connect(surface_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, on_changed](int idx) {
         surface = std::clamp(idx, 0, SURF_COUNT - 1);
         UpdateConeSliderLabels();
@@ -453,6 +456,14 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     float ox, oy, oz;
     PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
 
+    const EffectGridAxisHalfExtents he = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    const float gw = std::max(grid.width, 1e-5f);
+    const float gh = std::max(grid.height, 1e-5f);
+    const float gd = std::max(grid.depth, 1e-5f);
+    const float hw01 = std::clamp(he.hw / gw, 0.05f, 0.5f);
+    const float hh01 = std::clamp(he.hh / gh, 0.05f, 0.5f);
+    const float hd01 = std::clamp(he.hd / gd, 0.05f, 0.5f);
+
     const float speed_norm = std::clamp(GetNormalizedSpeed(), 0.05f, 1.0f);
     const float wander = std::clamp(wander_amt, 0.15f, 2.0f);
     const float spin_t = time_sec * motion_rate * (0.10f + 0.55f * speed_norm) * (0.55f + 0.45f * wander);
@@ -462,30 +473,27 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     const int mot = std::clamp(motion_mode, 0, MOTION_COUNT - 1);
     const float elev = ElevBiasForSurface(surf);
 
-    float vp[16] = {};
+    float vp[22] = {};
     vp[0] = spin_t;
     vp[1] = scale;
     vp[2] = hue01;
     vp[3] = (float)count;
     vp[4] = (float)mot;
     vp[5] = (float)surf;
+    vp[6] = ox;
+    vp[7] = oy;
+    vp[8] = oz;
+    vp[9] = wander;
+    vp[10] = elev;
+    vp[11] = hw01;
+    vp[12] = hh01;
+    vp[13] = hd01;
     for(int i = 0; i < kMaxCones; i++)
     {
-        vp[6 + i * 2] = std::clamp(apex_u[i], 0.0f, 1.0f);
-        vp[7 + i * 2] = std::clamp(apex_v[i], 0.0f, 1.0f);
+        vp[14 + i * 2] = std::clamp(apex_u[i], 0.0f, 1.0f);
+        vp[15 + i * 2] = std::clamp(apex_v[i], 0.0f, 1.0f);
     }
-    if(surf == SURF_REF)
-    {
-        /* Pack wander into integer band, ox in fraction; oy/oz in [15]. */
-        vp[14] = std::floor(wander * 100.0f + 0.5f) + std::clamp(ox, 0.0f, 0.999f);
-        vp[15] = std::floor(std::clamp(oy, 0.0f, 1.0f) * 4095.0f + 0.5f) + std::clamp(oz, 0.0f, 0.999f);
-    }
-    else
-    {
-        vp[14] = wander;
-        vp[15] = elev;
-    }
-    if(!volume_assist_.prepare(render_sequence, time_sec, vp, 16))
+    if(!volume_assist_.prepare(render_sequence, time_sec, vp, 22))
     {
         static bool logged_once = false;
         if(!logged_once)
@@ -511,8 +519,17 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
     const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
 
+    SpatialLayerCore::MapperSettings strat_map;
+    EffectStratumBlend::InitStratumBreaks(strat_map);
+    float stratum_w[3];
+    EffectStratumBlend::WeightsForYNorm(ny, strat_map, stratum_w);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
+
     const float freq_norm = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
-    const float hue_scroll = time * freq_norm * 0.12f;
+    const float hue_scroll = time * freq_norm * 0.12f * bb.speed_mul;
 
     float sat = 0.0f;
     float val = 0.0f;
@@ -528,7 +545,20 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
     if(sat <= 1e-5f)
         return 0x00000000;
 
-    float h = std::fmod(h_base + hue_scroll + 1.0f, 1.0f);
+    float h = std::fmod(h_base + hue_scroll + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = ny;
 
     if(UseEffectStripColormap())
     {
@@ -546,14 +576,17 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
         RGBColor c = ResolveStripKernelFinalColor(SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                                   std::clamp(pal01, 0.0f, 1.0f), time);
         QColor qc = QColor::fromRgb((int)(c & 0xFF), (int)((c >> 8) & 0xFF), (int)((c >> 16) & 0xFF)).toHsv();
-        const float ch = static_cast<float>(qc.hueF());
         const float cv = static_cast<float>(qc.valueF());
-        h = (ch >= 0.0f) ? std::fmod(ch + hue01 + hue_scroll + 1.0f, 1.0f) : h;
+        h = std::fmod(h + hue01 + 1.0f, 1.0f);
         return Hsv01ToBgr(h, sat, std::clamp(val * cv, 0.0f, 1.0f));
     }
 
     if(GetRainbowMode())
-        h = std::fmod(h_base + hue_scroll + (nx - 0.5f) * 0.08f + 1.0f, 1.0f);
+    {
+        float hue_deg = h * 360.0f;
+        hue_deg = ApplySpatialRainbowHue(hue_deg, h, basis, sp, map, time, &grid);
+        h = std::fmod(hue_deg / 360.0f + 1.0f, 1.0f);
+    }
 
     return Hsv01ToBgr(h, sat, val);
 }
