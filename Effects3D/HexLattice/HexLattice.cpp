@@ -168,6 +168,7 @@ void HexLattice::SetupCustomUI(QWidget* parent)
 
 void HexLattice::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    (void)grid;
     const float speed_norm = std::max(0.05f, GetNormalizedSpeed());
     const float freq_norm = std::max(0.05f, GetNormalizedFrequency());
     const float detail_norm = std::max(0.05f, GetNormalizedDetail());
@@ -176,9 +177,7 @@ void HexLattice::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     // Speed drives lattice motion; Frequency drives hue cycling only.
     const float flow_t = time_sec * (0.15f + speed_norm * 1.10f);
     const float hue_t = time_sec * (0.04f + freq_norm * 0.45f);
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
-    const float vp[11] = {
+    const float vp[8] = {
         flow_t,
         hue_t,
         detail_norm,
@@ -186,12 +185,9 @@ void HexLattice::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
         breathing_amount,
         pulse_amount,
         turbulence_amount,
-        flow_mul,
-        ox,
-        oy,
-        oz
+        flow_mul
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 11);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 8);
 }
 
 RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -204,15 +200,14 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
-    const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
-    const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
 
     float v = 0.0f;
     float h01 = 0.0f;
     if(volume_assist_.isAvailable())
     {
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         v = samp.x();
         h01 = samp.y();
     }

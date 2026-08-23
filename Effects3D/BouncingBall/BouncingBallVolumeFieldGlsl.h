@@ -42,9 +42,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float motion = clamp(u_params[4], 0.02, 1.0);
     float hue_scroll = fract(u_params[5]);
     float detail = clamp(u_params[6], 0.05, 1.0);
-    vec3 origin01 = clamp(vec3(u_params[7], u_params[8], u_params[9]), 0.0, 1.0);
 
-    // Playfield inset by ball radius around the effect origin's room.
     float lo = radius;
     float hi = 1.0 - radius;
     float g = (0.35 + 0.55 * motion) * 1.8;
@@ -78,8 +76,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         float px = bounce1D(x0, vx, t, lo, hi);
         float pz = bounce1D(z0, vz, t, lo, hi);
         float py = hopY(t, phase, v0, g, lo, hi);
-        // Soft bias toward effect origin so ref points matter.
-        vec3 c = mix(vec3(px, py, pz), origin01, 0.08);
+        vec3 c = mix(vec3(px, py, pz), vec3(0.5), 0.08);
 
         float d = length(p01 - c);
         if(d > glow_r)

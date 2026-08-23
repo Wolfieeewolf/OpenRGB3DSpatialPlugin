@@ -30,13 +30,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float pulse_amount = clamp(u_params[5], 0.0, 2.0);
     float turbulence = clamp(u_params[6], 0.0, 2.0);
     float flow_mul = max(u_params[7], 0.15);
-    vec3 origin01 = clamp(vec3(u_params[8], u_params[9], u_params[10]), 0.0, 1.0);
-
     float breathe = 1.0 + (wave01(flow_t * 0.30) - 0.5) * 0.35 * breathing_amount;
     // Soft-cap cell density so Detail=200 does not explode shader cost / aliasing.
     float cells = min(12.0, (5.0 + 7.0 * detail_norm) / base_scale * breathe);
 
-    vec3 local01 = clamp(p01 - origin01 + 0.5, 0.0, 1.0);
+    vec3 local01 = p01;
     vec2 uv = vec2(local01.x, local01.z);
     uv += turbulence * 0.07 * vec2(sin(6.2831853 * (local01.y * 0.8 + flow_t * 0.11)),
                                    cos(6.2831853 * (local01.y * 0.8 - flow_t * 0.09)));

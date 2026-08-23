@@ -468,7 +468,7 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    float coord_y01 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    float coord_y01 = SampleStratumYNorm01(rot.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_map_s;
     EffectStratumBlend::InitStratumBreaks(strat_map_s);
     float swt[3];
@@ -496,15 +496,11 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     float ly = (rot.y - origin.y) / sh;
     float lz = (rot.z - origin.z) / sd;
 
-    /* Room-centered unit coords for radial shell + cube displays (fills whole room). */
-    const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
-    const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
-    const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
-    float ox01 = 0.5f, oy01 = 0.5f, oz01 = 0.5f;
-    PackEffectOrigin01(grid, origin, &ox01, &oy01, &oz01);
-    const float rlx = (nx - ox01) * 2.0f;
-    const float rly = (ny - oy01) * 2.0f;
-    const float rlz = (nz - oz01) * 2.0f;
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    const float rlx = (c1 - 0.5f) * 2.0f;
+    const float rly = (c2 - 0.5f) * 2.0f;
+    const float rlz = (c3 - 0.5f) * 2.0f;
 
     const int unfold_i = UseEffectStripColormap() ? GetEffectStripColormapUnfold() : unfold_mode;
     const float dir_deg = UseEffectStripColormap() ? GetEffectStripColormapDirectionDeg() : direction_deg;
@@ -580,10 +576,10 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     }
     else
     {
-        // LED-cube style volume displays — sample room unit cube (matches GPU atlas).
+        // LED-cube volume displays — origin-local atlas (matches GPU GLSL).
         if(volume_assist_.isAvailable())
         {
-            intensity = volume_assist_.sampleScalar01(nx, ny, nz);
+            intensity = volume_assist_.sampleScalar01(c1, c2, c3);
             if(disp == DISP_BARS || disp == DISP_RIPPLES)
             {
                 intensity = std::clamp(intensity * (0.82f + 0.18f * (0.5f + 0.5f * k)), 0.0f, 1.0f);

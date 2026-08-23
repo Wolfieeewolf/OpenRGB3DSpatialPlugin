@@ -42,6 +42,7 @@ Spiral::~Spiral() = default;
 
 void Spiral::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    (void)grid;
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -52,9 +53,7 @@ void Spiral::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, con
     const float progress = CalculateProgress(time_sec) * bb.speed_mul;
     const float detail = std::max(0.05f, GetScaledDetail()) * bb.tight_mul;
     const float size_multiplier = GetNormalizedSize();
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
-    const float vp[11] = {
+    const float vp[8] = {
         progress,
         detail * 0.15f / std::fmax(0.1f, size_multiplier),
         (float)pattern_type,
@@ -62,12 +61,9 @@ void Spiral::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, con
         gap_size / 100.0f,
         detail,
         coil_amount / 100.0f,
-        height_coil_amount / 100.0f,
-        ox,
-        oy,
-        oz
+        height_coil_amount / 100.0f
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 11);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 8);
 }
 EffectInfo3D Spiral::GetEffectInfo() const
 {
@@ -233,9 +229,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     float norm_radius = EffectGridHorizontalRadialNorm01(r_xz);
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
 
-    float oy = 0.5f;
-    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
-    float norm_twist = std::clamp(NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+    const float norm_twist = SampleStratumYNorm01(rotated_pos.y, grid, origin);
 
     SpatialLayerCore::MapperSettings strat_map;
     EffectStratumBlend::InitStratumBreaks(strat_map);
@@ -263,9 +257,9 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     float spiral_value = 0.0f;
     if(volume_assist_.isAvailable())
     {
-        const float c1 = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
-        const float c2 = norm_twist;
-        const float c3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
+        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+        SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
+                                     GetNormalizedScale(), &c1, &c2, &c3);
         spiral_value = volume_assist_.sampleScalar01(c1, c2, c3);
         spiral_value = EffectStratumBlend::ApplyMotionToUnit01(spiral_value, stratum_mot01, 0.28f);
     }

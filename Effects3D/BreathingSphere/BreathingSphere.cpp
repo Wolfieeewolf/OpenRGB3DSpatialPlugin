@@ -179,10 +179,6 @@ void BreathingSphere::SetupCustomUI(QWidget* parent)
 
 void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
-    Vector3D origin = GetEffectOriginGrid(grid);
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-
     float progress_v = CalculateProgress(time_sec);
     const float detail = std::max(0.05f, GetScaledDetail());
     const float size_multiplier = GetNormalizedSize();
@@ -231,9 +227,9 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
         detail_gpu,
         (float)edge,
         center_hole_pct / 100.0f,
-        ox,
-        oy,
-        oz,
+        0.5f,
+        0.5f,
+        0.5f,
         (float)shape,
         ax,
         az,
@@ -256,7 +252,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    float coord2 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    float coord2 = SampleStratumYNorm01(rot.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -287,12 +283,14 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
     float breath_phase = progress * rate * 0.2f;
 
-    float c1 = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
-    float c2 = coord2;
-    float c3 = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
 
     if(shape == SHAPE_WHOLE_ROOM)
     {
+        c1 = SampleRoomAxis01(rot.x, grid.min_x, grid.max_x);
+        c2 = SampleRoomAxis01(rot.y, grid.min_y, grid.max_y);
+        c3 = SampleRoomAxis01(rot.z, grid.min_z, grid.max_z);
         if(volume_assist_.isAvailable())
         {
             const QVector3D samp = volume_assist_.sample01(c1, c2, c3);

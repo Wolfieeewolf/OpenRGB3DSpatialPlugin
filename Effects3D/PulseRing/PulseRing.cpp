@@ -179,6 +179,7 @@ void PulseRing::SetupCustomUI(QWidget* parent)
 }
 void PulseRing::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    (void)grid;
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -197,9 +198,7 @@ void PulseRing::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
     const float size_scale = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.25f, 2.5f);
     // Bounded 0..1 scroll — never pass raw time*freq (float fmod flash).
     const float hue_scroll01 = HueScroll01(time_sec, GetScaledFrequency() * bb.speed_mul);
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
-    const float vp[13] = {
+    const float vp[10] = {
         progress,
         hole_r,
         sigma,
@@ -209,12 +208,9 @@ void PulseRing::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
         phase_offset,
         (float)std::clamp(pulse_shape, 0, SHAPE_COUNT - 1),
         size_scale,
-        hue_scroll01,
-        ox,
-        oy,
-        oz
+        hue_scroll01
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 13);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 10);
 }
 
 RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -225,13 +221,9 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
-    const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
-    const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
-
-    float oy = 0.5f;
-    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
-    const float coord2 = std::clamp(ny - oy + 0.5f, 0.0f, 1.0f);
+    const float coord2 = SampleStratumYNorm01(rot.y, grid, origin);
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
 
     const float spd = std::max(0.05f, GetScaledSpeed());
 
@@ -252,7 +244,7 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     float color01 = 0.0f;
     if(volume_assist_.isAvailable())
     {
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         intensity = samp.x();
         color01 = samp.y();
         if(GetStratumLayoutMode() == 1)

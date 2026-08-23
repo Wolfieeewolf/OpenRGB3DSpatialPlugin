@@ -26,10 +26,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float fill = clamp(u_params[6], 0.5, 1.8);
     float launch_jitter = clamp(u_params[7], 0.0, 1.0);
     float hue_scroll = fract(u_params[8]);
-    vec3 origin01 = clamp(vec3(u_params[9], u_params[10], u_params[11]), 0.0, 1.0);
 
-    // Local space around effect/ref origin; Y spans the room height for rise.
-    vec3 local = p01 - origin01;
+    vec3 local = p01 - vec3(0.5);
     float intensity = 0.0;
     float hue01 = hue_scroll;
     const float golden = 2.39996323;
@@ -55,9 +53,9 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         float ang = fi * golden;
         // Centers in origin-local UV: XZ spread by fill, Y rises 0→1 of room.
         vec3 c;
-        c.x = origin01.x + cos(ang) * ring * 0.50 * fill;
-        c.y = radius_phase; // rise through unit height
-        c.z = origin01.z + sin(ang) * ring * 0.50 * fill;
+        c.x = 0.5 + cos(ang) * ring * 0.50 * fill;
+        c.y = radius_phase;
+        c.z = 0.5 + sin(ang) * ring * 0.50 * fill;
         c = clamp(c, vec3(0.0), vec3(1.0));
 
         float d = length(p01 - c);

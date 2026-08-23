@@ -182,7 +182,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    float coord_y01 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    float coord_y01 = SampleStratumYNorm01(rot.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_map_s;
     EffectStratumBlend::InitStratumBreaks(strat_map_s);
     float swt[3];
@@ -209,24 +209,12 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
                                                     origin,
                                                     rot);
     }
-    float scale_eff = std::max(0.05f, GetNormalizedScale());
-    float sw = grid.width * 0.5f * scale_eff;
-    float sh = grid.height * 0.5f * scale_eff;
-    float sd = grid.depth * 0.5f * scale_eff;
-    if(sw < 1e-5f) sw = 1.0f;
-    if(sh < 1e-5f) sh = 1.0f;
-    if(sd < 1e-5f) sd = 1.0f;
-
     float intensity = 0.0f;
     float pos_norm = 0.5f;
     if(surface_volume_assist_.isAvailable())
     {
-        EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-        e.hw = sw;
-        e.hh = sh;
-        e.hd = sd;
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleCoordsOriginLocal01(rot.x, rot.y, rot.z, origin, e, &c1, &c2, &c3);
+        SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
         const QVector3D samp = surface_volume_assist_.sample01(c1, c2, c3);
         intensity = samp.x();
         pos_norm = EffectStratumBlend::ApplyMotionToUnit01(samp.y(), stratum_mot01, 0.28f);

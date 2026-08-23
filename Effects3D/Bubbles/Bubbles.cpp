@@ -104,12 +104,8 @@ void Bubbles::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
-void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
-    Vector3D origin = GetEffectOriginGrid(grid);
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
     const float speed_scale = 0.006f + GetScaledSpeed() * 0.016f;
@@ -131,7 +127,7 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
     const float thick01 =
         std::clamp(std::max(0.02f, bubble_thickness) * 0.08f / std::max(0.35f, detail), 0.008f, 0.12f);
     const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.022f * bb.speed_mul + 1000.0f, 1.0f);
-    const float vp[12] = {
+    const float vp[9] = {
         time_sec,
         (float)std::clamp(max_bubbles, 4, kMaxGpuBubbles),
         thick01,
@@ -140,12 +136,9 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
         max_r01,
         std::clamp(horizontal_fill, 0.5f, 1.8f),
         std::clamp(launch_randomness, 0.0f, 1.0f),
-        hue_scroll,
-        ox,
-        oy,
-        oz
+        hue_scroll
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 12);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 9);
 }
 
 RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -159,9 +152,7 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         return 0x00000000;
 
     Vector3D rp{x, y, z};
-    float oy = 0.5f;
-    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
-    float coord2 = std::clamp(NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+    float coord2 = SampleStratumYNorm01(rp.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -184,10 +175,9 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
 
     if(volume_assist_.isAvailable())
     {
-        const float nx = NormalizeGridAxis01(rp.x, grid.min_x, grid.max_x);
-        const float ny = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
-        const float nz = NormalizeGridAxis01(rp.z, grid.min_z, grid.max_z);
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+        SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         max_intensity = samp.x();
         best_hue = std::fmod(samp.y() * 360.0f + color_cycle * 0.15f + 720.0f, 360.0f);
         if(strat_on)

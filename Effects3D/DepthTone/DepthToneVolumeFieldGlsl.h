@@ -20,7 +20,6 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int layout = int(clamp(u_params[4], 0.0, 2.0) + 0.5);
     float size_zoom = max(u_params[5], 0.15);
     float detail = clamp(u_params[6], 0.05, 1.0);
-    vec3 origin01 = clamp(vec3(u_params[7], u_params[8], u_params[9]), 0.0, 1.0);
 
     float linear01 = p01.z;
     if(axis == 0) linear01 = p01.x;
@@ -34,7 +33,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     }
     else if(layout == 2)
     {
-        vec3 c = p01 - origin01;
+        vec3 c = p01 - vec3(0.5);
         d01 = clamp(length(c) / 0.8660254, 0.0, 1.0);
     }
 

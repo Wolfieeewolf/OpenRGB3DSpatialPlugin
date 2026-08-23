@@ -23,12 +23,9 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float thickness = clamp(u_params[3], 0.03, 0.45);
     float rung_amount = clamp(u_params[4], 0.0, 1.0);
     int shape = int(clamp(u_params[5], 0.0, 3.0) + 0.5);
-    vec3 origin01 = clamp(vec3(u_params[6], u_params[7], u_params[8]), 0.0, 1.0);
-
-    // Axis through origin; XZ relative to that axis, Y along height.
-    float lx = (p01.x - origin01.x) * 2.0;
-    float ly = p01.y - origin01.y + 0.5;
-    float lz = (p01.z - origin01.z) * 2.0;
+    float lx = p01.x * 2.0 - 1.0;
+    float ly = p01.y;
+    float lz = p01.z * 2.0 - 1.0;
 
     float phase = ly * twists * 6.2831853 + progress * 6.2831853;
     float c1 = cos(phase);

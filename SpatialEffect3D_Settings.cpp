@@ -277,6 +277,7 @@ unsigned int SpatialEffect3D::GetDetail() const
 void SpatialEffect3D::SetReferenceMode(ReferenceMode mode)
 {
     reference_mode = mode;
+    use_custom_reference = (mode == REF_MODE_CUSTOM_POINT);
     SyncRoomCoordinateModeFromReference();
 }
 

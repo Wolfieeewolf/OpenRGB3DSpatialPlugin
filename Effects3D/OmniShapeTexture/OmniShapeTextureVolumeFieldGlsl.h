@@ -154,16 +154,15 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float phase_mul = clamp(u_params[5], 0.0, 2.0);
     float amp = u_params[6];
     float detail = max(u_params[7], 0.05);
-    vec3 origin01 = clamp(vec3(u_params[8], u_params[9], u_params[10]), 0.0, 1.0);
-    float fd = clamp(u_params[11], 0.0, 1.0);
-    float curve = clamp(u_params[12], 0.0, 1.0);
-    float edge = clamp(u_params[13], 0.0, 1.0);
-    float R = max(u_params[14], 0.05);
-    float packed = u_params[15];
+    float fd = clamp(u_params[8], 0.0, 1.0);
+    float curve = clamp(u_params[9], 0.0, 1.0);
+    float edge = clamp(u_params[10], 0.0, 1.0);
+    float R = max(u_params[11], 0.05);
+    float packed = u_params[12];
     float wrap = step(1.5, packed);
     float prop = (wrap > 0.5) ? (packed - 2.0) : packed;
 
-    vec3 l = (p01 - origin01) * 2.0;
+    vec3 l = (p01 - vec3(0.5)) * 2.0;
     float dist_n = length(l) * 0.5 * 1.7320508;
 
     float yaw = u_time * yaw_rate;

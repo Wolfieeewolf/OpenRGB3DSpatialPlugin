@@ -38,10 +38,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float drift = clamp(u_params[7], 0.0, 1.0);
     float twinkle = clamp(u_params[8], 0.0, 1.0);
     float hue_scroll = u_params[9];
-    vec3 origin01 = clamp(vec3(u_params[10], u_params[11], u_params[12]), 0.0, 1.0);
-
-    // View space: origin-centered, FOV scaled.
-    vec3 led = (p01 - origin01) * (2.0 / max(fill, 0.4));
+    vec3 led = (p01 - vec3(0.5)) * (2.0 / max(fill, 0.4));
     float sway = drift * 0.18;
     float sway_c = cos(time_sec * 0.35 * sway * 6.0 + 0.4);
     float sway_s = sin(time_sec * 0.28 * sway * 6.0);

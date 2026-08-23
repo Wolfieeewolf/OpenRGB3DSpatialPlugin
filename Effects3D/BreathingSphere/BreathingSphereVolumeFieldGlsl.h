@@ -46,15 +46,14 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float detail = max(u_params[3], 0.05);
     int edge = int(clamp(u_params[4], 0.0, 1.0) + 0.5);
     float hole_frac = clamp(u_params[5], 0.0, 0.95);
-    vec3 origin01 = clamp(vec3(u_params[6], u_params[7], u_params[8]), 0.0, 1.0);
     int shape = int(clamp(u_params[9], 0.0, 5.0) + 0.5);
     float ax = clamp(u_params[10], 0.15, 1.0);
     float az = clamp(u_params[11], 0.15, 1.0);
     float pulse_strength = clamp(u_params[12], 0.0, 1.0);
     vec3 s = max(vec3(u_params[13], u_params[14], u_params[15]), vec3(0.25));
 
-    /* World-isotropic local: equal steps ≈ equal world distance via median scale. */
-    vec3 l = (p01 - origin01) * s;
+    /* p01 is origin-local (0.5 = Spatial Anchor). Keep world-isotropic scale via s. */
+    vec3 l = (p01 - vec3(0.5)) * s;
 
     if(shape == 5)
     {

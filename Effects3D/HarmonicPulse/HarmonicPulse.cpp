@@ -207,6 +207,7 @@ void HarmonicPulse::SetupCustomUI(QWidget* parent)
 
 void HarmonicPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    (void)grid;
     const float spd = std::max(0.05f, GetScaledSpeed());
     const float freq = std::max(0.05f, GetScaledFrequency());
     const float detail = std::max(0.05f, GetNormalizedDetail());
@@ -218,10 +219,8 @@ void HarmonicPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_s
     const float contrast = std::clamp(pulse_contrast, 0.35f, 2.0f);
     const float wobble = std::clamp(zoom_wobble_strength, 0.0f, 3.0f);
     const float size_density = std::clamp(0.75f + 0.55f * size_m, 0.4f, 2.2f);
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
-    const float vp[9] = {motion, spatial_freq, wobble, contrast, size_density, pulse_mix, ox, oy, oz};
-    volume_assist_.prepare(render_sequence, time_sec, vp, 9);
+    const float vp[6] = {motion, spatial_freq, wobble, contrast, size_density, pulse_mix};
+    volume_assist_.prepare(render_sequence, time_sec, vp, 6);
 }
 
 RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -232,9 +231,8 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
-    float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
-    float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
 
     // Real motion — do not divide ScaledSpeed into oblivion.
     const float spd = std::max(0.05f, GetScaledSpeed());
@@ -249,7 +247,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
     float master = 0.0f;
     if(volume_assist_.isAvailable())
     {
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         val = std::clamp(samp.x(), 0.0f, 1.0f);
         phase01 = std::clamp(samp.y(), 0.0f, 1.0f);
         master = std::clamp(samp.z(), 0.0f, 1.0f);
@@ -286,7 +284,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
         sp.origin_x = origin.x;
         sp.origin_y = origin.y;
         sp.origin_z = origin.z;
-        sp.y_norm = ny;
+        sp.y_norm = SampleStratumYNorm01(rot.y, grid, origin);
         float hh = std::fmod(phase01 + time * motion * 0.35f + 1.0f, 1.0f);
         float hue_deg = ApplySpatialRainbowHue(hh * 360.0f, hh, basis, sp, map, time, &grid);
         return Hsv01ToBgr(std::fmod(hue_deg / 360.0f + 1.0f, 1.0f), 1.0f, val);

@@ -195,12 +195,8 @@ void BouncingBall::OnBallParameterChanged()
     emit ParametersChanged();
 }
 
-void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
-    Vector3D origin = GetEffectOriginGrid(grid);
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -218,19 +214,16 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     const float sim_t = time_sec * sim_phase_rate;
     const float hue_scroll =
         std::fmod(time_sec * GetScaledFrequency() * 0.033f * bb.speed_mul + 1000.0f, 1.0f);
-    const float vp[10] = {
+    const float vp[7] = {
         sim_t,
         (float)std::clamp(ball_count == 0 ? 1u : ball_count, 1u, kMaxGpuBalls),
         radius01,
         1.0f,
         motion,
         hue_scroll,
-        detail,
-        ox,
-        oy,
-        oz
+        detail
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 10);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 7);
 }
 
 RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -241,10 +234,7 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     }
     Vector3D origin = GetEffectOriginGrid(grid);
     Vector3D rp{x, y, z};
-    float oy = 0.5f;
-    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
-    const float coord2 =
-        std::clamp(NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+    const float coord2 = SampleStratumYNorm01(rp.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -263,10 +253,9 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
 
     if(volume_assist_.isAvailable())
     {
-        const float nx = NormalizeGridAxis01(rp.x, grid.min_x, grid.max_x);
-        const float ny = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
-        const float nz = NormalizeGridAxis01(rp.z, grid.min_z, grid.max_z);
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+        SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         max_intensity = samp.x();
         hue_for_max = std::fmod(samp.y() * 360.0f + color_cycle * 0.25f
                                     + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f

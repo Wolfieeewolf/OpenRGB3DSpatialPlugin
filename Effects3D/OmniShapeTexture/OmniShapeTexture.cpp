@@ -636,6 +636,7 @@ void OmniShapeTexture::OnBrowseMedia()
 
 void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    (void)grid;
     std::shared_ptr<QImage> snap;
     std::shared_ptr<QImage> prev_snap;
     qint64 step_ms = 0;
@@ -651,8 +652,8 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
     {
         volume_assist_.clearMediaTexture();
         /* Rebuild atlas so GPU samples go black instead of a stale frame. */
-        float zp[16] = {};
-        volume_assist_.prepare(render_sequence, time_sec, zp, 16);
+        float zp[13] = {};
+        volume_assist_.prepare(render_sequence, time_sec, zp, 13);
         return;
     }
 
@@ -701,10 +702,6 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
 
     volume_assist_.setMediaTexture(media, tile_repeat_enabled);
 
-    const Vector3D origin = GetEffectOriginGrid(grid);
-    float ox, oy, oz;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -742,7 +739,7 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
     /* wrap*2+prop keeps prop∈[0,1] from colliding with the wrap flag. */
     const float packed_wrap = (tile_repeat_enabled ? 2.0f : 0.0f) + prop01;
 
-    float vp[16] = {
+    float vp[13] = {
         (float)std::clamp(base_shape, 0, kOmniShapeCount - 1),
         morph_percent / 100.0f,
         tile,
@@ -751,16 +748,13 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
         phase_drive,
         amp,
         detail,
-        ox,
-        oy,
-        oz,
         ambience_dist_falloff / 100.0f,
         ambience_falloff_curve / 100.0f,
         ambience_edge_soft / 100.0f,
         R_local,
         packed_wrap
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 16);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 13);
 }
 
 RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -773,10 +767,10 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
 
     if(volume_assist_.isAvailable())
     {
-        const float nx = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
-        const float ny = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
-        const float nz = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const Vector3D origin = GetEffectOriginGrid(grid);
+        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+        SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));

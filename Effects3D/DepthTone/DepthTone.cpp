@@ -185,12 +185,8 @@ void DepthTone::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
-void DepthTone::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+void DepthTone::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
-    Vector3D origin = GetEffectOriginGrid(grid);
-    const float ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
-    const float oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
-    const float oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
     const float spd = std::max(0.05f, GetScaledSpeed());
     const float freq = std::max(0.05f, GetScaledFrequency());
     const float pos = std::fmod(time_sec * spd * 0.085f + time_sec * freq * 0.028f + 1000.0f, 1.0f);
@@ -201,19 +197,16 @@ void DepthTone::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
     const int layout_i = std::clamp(depth_layout, 0, LAYOUT_COUNT - 1);
     const float size_zoom = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.15f, 2.5f);
     const float detail_norm = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
-    const float vp[10] = {
+    const float vp[7] = {
         pos,
         hue_span,
         percent_dim,
         (float)axis,
         (float)layout_i,
         size_zoom,
-        detail_norm,
-        ox,
-        oy,
-        oz
+        detail_norm
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 10);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 7);
 }
 
 RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -226,9 +219,8 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
-    const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
-    const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
 
     SpatialLayerCore::Basis basis;
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
@@ -241,7 +233,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     sp.origin_x = origin.x;
     sp.origin_y = origin.y;
     sp.origin_z = origin.z;
-    sp.y_norm = ny;
+    sp.y_norm = SampleStratumYNorm01(rot.y, grid, origin);
 
     // Speed = primary hue scroll; Frequency = secondary drift (both clearly audible in motion).
     const float spd = std::max(0.05f, GetScaledSpeed());
@@ -252,7 +244,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     float v = 1.0f;
     if(volume_assist_.isAvailable())
     {
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         const float hue_rad = std::atan2(samp.y() * 2.0f - 1.0f, samp.x() * 2.0f - 1.0f);
         hue01 = std::fmod(hue_rad / TWO_PI + 1.0f, 1.0f);
         v = std::clamp(samp.z(), 0.0f, 1.0f);

@@ -66,9 +66,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int front_edge = int(clamp(u_params[10], 0.0, 2.0) + 0.5);
     float front_thick = clamp(u_params[11], 0.05, 1.0);
     float freq_n = max(u_params[12], 0.02);
-    vec3 origin01 = clamp(vec3(u_params[13], u_params[14], u_params[15]), 0.0, 1.0);
 
-    vec3 l = (p01 - origin01) * 2.0;
+    vec3 l = p01 * 2.0 - 1.0;
     float intensity = 0.0;
     float driver = progress;
     float aux = 0.0;
@@ -125,12 +124,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         // Crossing Beams — smooth glow falloff
         float sine_x = sin(progress * 3.14159265);
         float sine_y = sin(progress * 3.14159265 * 1.3);
-        float bias_x = clamp(origin01.x - 0.5, -0.125, 0.125);
-        float bias_y = clamp(origin01.y - 0.5, -0.125, 0.125);
-        float spread_w = 0.5 - abs(bias_x);
-        float spread_h = 0.5 - abs(bias_y);
-        float xp = 0.5 + bias_x + sine_x * spread_w;
-        float yp = 0.5 + bias_y + sine_y * spread_h;
+        float xp = 0.5 + sine_x * 0.5;
+        float yp = 0.5 + sine_y * 0.5;
         float thick = clamp(0.08 * size_scale, 0.02, 0.2) * tight_inv;
         float soft = mix(0.08, 0.35, glow);
         float v1 = softBand(abs(p01.x - xp), thick * (0.55 + soft));

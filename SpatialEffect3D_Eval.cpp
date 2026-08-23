@@ -54,15 +54,6 @@ bool SpatialEffect3D::EffectGridSampleOutsideVolume(float x, float y, float z, c
     return !IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid);
 }
 
-void SpatialEffect3D::ApplyGridSampleCoordinateAdjustment(float& x, float& y, float& z, const GridContext3D& grid) const
-{
-    Vector3D origin_grid = GetEffectOriginGrid(grid);
-    Vector3D effect_origin = GetEffectOrigin();
-    x = x - origin_grid.x + effect_origin.x;
-    y = y - origin_grid.y + effect_origin.y;
-    z = z - origin_grid.z + effect_origin.z;
-}
-
 void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const
 {
     if(effect_scale_x == 100 && effect_scale_y == 100 && effect_scale_z == 100)
@@ -333,11 +324,6 @@ bool SpatialEffect3D::SkipsSpatialSampleWarp() const
 
 Vector3D SpatialEffect3D::GetEffectOrigin() const
 {
-    if(use_custom_reference)
-    {
-        return custom_reference_point;
-    }
-
     switch(reference_mode)
     {
         case REF_MODE_USER_POSITION:
@@ -355,10 +341,6 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
 
 Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
 {
-    if(use_custom_reference)
-    {
-        return custom_reference_point;
-    }
     switch(reference_mode)
     {
         case REF_MODE_USER_POSITION:

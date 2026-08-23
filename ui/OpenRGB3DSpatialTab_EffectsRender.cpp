@@ -556,7 +556,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             }
             else if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && reference_points[ref_idx])
             {
-                stack_origin_mode = REF_MODE_USER_POSITION;
+                stack_origin_mode = REF_MODE_CUSTOM_POINT;
                 stack_ref_origin = reference_points[ref_idx]->GetPosition();
             }
         }
@@ -703,6 +703,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         if(active_effects[idx].effect)
         {
             active_effects[idx].effect->SetGlobalReferencePoint(stack_ref_origin);
+            active_effects[idx].effect->SetCustomReferencePoint(stack_ref_origin);
             active_effects[idx].effect->SetReferenceMode(stack_origin_mode);
         }
     }

@@ -404,6 +404,7 @@ void TextureProjection::OnBrowseMedia()
 
 void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    (void)grid;
     std::shared_ptr<QImage> snap;
     std::shared_ptr<QImage> prev_snap;
     qint64 step_ms = 0;
@@ -418,8 +419,8 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
     if(!snap || snap->isNull())
     {
         volume_assist_.clearMediaTexture();
-        float zp[16] = {};
-        volume_assist_.prepare(render_sequence, time_sec, zp, 16);
+        float zp[13] = {};
+        volume_assist_.prepare(render_sequence, time_sec, zp, 13);
         return;
     }
 
@@ -460,10 +461,6 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
 
     volume_assist_.setMediaTexture(media, tile_repeat_enabled);
 
-    const Vector3D origin = GetEffectOriginGrid(grid);
-    float ox, oy, oz;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -500,16 +497,13 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
     const float steps_v = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, media.height()) - 4));
     const float packed_v = steps_v + ((eff_res < 100u) ? 1000.0f : 0.0f);
 
-    float vp[16] = {
+    float vp[13] = {
         (float)std::clamp(projection_mode, 0, 3),
         tile,
         scroll_rate,
         phase_mul,
         amp,
         detail_s,
-        ox,
-        oy,
-        oz,
         ambience_dist_falloff / 100.0f,
         ambience_falloff_curve / 100.0f,
         ambience_edge_soft / 100.0f,
@@ -518,7 +512,7 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
         packed_v,
         tile_repeat_enabled ? 1.0f : 0.0f
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 16);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 13);
 }
 
 RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -531,10 +525,10 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
 
     if(volume_assist_.isAvailable())
     {
-        const float nx = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
-        const float ny = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
-        const float nz = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const Vector3D origin = GetEffectOriginGrid(grid);
+        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+        SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));

@@ -47,16 +47,15 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float phase_mul = clamp(u_params[3], 0.0, 2.0);
     float amp = u_params[4];
     float detail_s = max(u_params[5], 0.05);
-    vec3 origin01 = clamp(vec3(u_params[6], u_params[7], u_params[8]), 0.0, 1.0);
-    float fd = clamp(u_params[9], 0.0, 1.0);
-    float curve = clamp(u_params[10], 0.0, 1.0);
-    float edge = clamp(u_params[11], 0.0, 1.0);
-    float prop = clamp(u_params[12], 0.0, 1.0);
-    float steps_u = max(u_params[13], 2.0);
-    float packed_v = u_params[14];
+    float fd = clamp(u_params[6], 0.0, 1.0);
+    float curve = clamp(u_params[7], 0.0, 1.0);
+    float edge = clamp(u_params[8], 0.0, 1.0);
+    float prop = clamp(u_params[9], 0.0, 1.0);
+    float steps_u = max(u_params[10], 2.0);
+    float packed_v = u_params[11];
     float steps_v = max(mod(packed_v, 1000.0), 2.0);
     float use_q = step(500.0, packed_v);
-    float wrap_mode = u_params[15];
+    float wrap_mode = u_params[12];
 
     float u = 0.5;
     float v = 0.5;
@@ -77,7 +76,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     }
     else
     {
-        vec3 d = p01 - origin01;
+        vec3 d = p01 - vec3(0.5);
         float len = length(d);
         if(len < 1e-5)
         {
@@ -95,7 +94,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     u = (u - 0.5) * tile + 0.5;
     v = (v - 0.5) * tile + 0.5;
 
-    float dist_n = length(p01 - origin01) * 1.7320508;
+    float dist_n = length(p01 - vec3(0.5)) * 1.7320508;
     float t_eff = u_time - prop * dist_n * 3.2;
     float v_ratio = 0.12 + 0.88 * clamp(phase_mul, 0.0, 1.0);
     float su = t_eff * scroll_rate;

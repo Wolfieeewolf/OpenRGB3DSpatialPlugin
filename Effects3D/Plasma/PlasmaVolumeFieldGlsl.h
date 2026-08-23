@@ -21,11 +21,9 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float prog = u_params[0];
     float freq_scale_e = max(u_params[1], 0.05);
     int pattern_type = int(u_params[2] + 0.5);
-    vec3 origin01 = clamp(vec3(u_params[3], u_params[4], u_params[5]), 0.0, 1.0);
-    // Shift so the effect/ref origin sits at 0.5.
-    float coord1 = clamp(p01.x - origin01.x + 0.5, 0.0, 1.0);
-    float coord2 = clamp(p01.y - origin01.y + 0.5, 0.0, 1.0);
-    float coord3 = clamp(p01.z - origin01.z + 0.5, 0.0, 1.0);
+    float coord1 = p01.x;
+    float coord2 = p01.y;
+    float coord3 = p01.z;
     float plasma_value = 0.5;
 
     if(pattern_type == 0)

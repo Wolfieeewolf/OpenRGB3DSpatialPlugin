@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-/** Spiral/spin scalar in R. p01 = unit room sample.
+/** Spiral/spin scalar in R. p01 = origin-local unit UV (0.5 = Spatial Anchor hub).
+ *  Sample with SampleCoordsOriginLocal01. GLSL: l = p01 * 2 - 1.
  *  u_params: [0]=progress [1]=freq_scale [2]=pattern [3]=num_arms
  *            [4]=gap01 [5]=detail [6]=coil01 [7]=height_coil01
- *            [8]=ox [9]=oy [10]=oz (effect/ref origin — spiral hub)
+ *            [8]=ox [9]=oy [10]=oz (unused; hub is p01 0.5)
  *  coil01=0 → pure spin (straight radial arms). Higher → tighter spiral bend.
  */
 inline const char* SpiralVolumeFieldGlsl()
@@ -20,11 +21,10 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float detail_e = max(u_params[5], 0.05);
     float coil01 = clamp(u_params[6], 0.0, 1.0);
     float height01 = clamp(u_params[7], 0.0, 1.0);
-    vec3 origin01 = clamp(vec3(u_params[8], u_params[9], u_params[10]), 0.0, 1.0);
 
-    float lx = (p01.x - origin01.x) * 2.0;
-    float ly = clamp(p01.y - origin01.y + 0.5, 0.0, 1.0);
-    float lz = (p01.z - origin01.z) * 2.0;
+    float lx = p01.x * 2.0 - 1.0;
+    float ly = clamp(p01.y, 0.0, 1.0);
+    float lz = p01.z * 2.0 - 1.0;
     float angle = atan(lz, lx);
     float norm_radius = clamp(length(vec2(lx, lz)), 0.0, 1.0);
     float norm_twist = ly;

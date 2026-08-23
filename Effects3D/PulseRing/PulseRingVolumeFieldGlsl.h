@@ -52,9 +52,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int shape = int(clamp(u_params[7], 0.0, 4.0) + 0.5);
     float size_scale = clamp(u_params[8], 0.25, 2.5);
     float hue_scroll = fract(u_params[9]);
-    vec3 origin01 = clamp(vec3(u_params[10], u_params[11], u_params[12]), 0.0, 1.0);
-
-    vec3 p = (p01 - origin01) * 2.0;
+    vec3 p = p01 * 2.0 - 1.0;
     float inv_size = 1.0 / max(size_scale, 0.25);
     float usable = max(0.12, 1.0 - hole_r);
 

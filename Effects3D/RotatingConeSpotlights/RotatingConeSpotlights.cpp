@@ -453,9 +453,6 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
-    float ox, oy, oz;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-
     const EffectGridAxisHalfExtents he = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     const float gw = std::max(grid.width, 1e-5f);
     const float gh = std::max(grid.height, 1e-5f);
@@ -480,9 +477,9 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     vp[3] = (float)count;
     vp[4] = (float)mot;
     vp[5] = (float)surf;
-    vp[6] = ox;
-    vp[7] = oy;
-    vp[8] = oz;
+    vp[6] = 0.5f;
+    vp[7] = 0.5f;
+    vp[8] = 0.5f;
     vp[9] = wander;
     vp[10] = elev;
     vp[11] = hw01;
@@ -515,12 +512,12 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
         return 0x00000000;
 
     Vector3D rot{x, y, z};
-    const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
-    const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
-    const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
 
     SpatialLayerCore::MapperSettings strat_map;
     EffectStratumBlend::InitStratumBreaks(strat_map);
+    const float ny = SampleStratumYNorm01(rot.y, grid, origin);
     float stratum_w[3];
     EffectStratumBlend::WeightsForYNorm(ny, strat_map, stratum_w);
     const EffectStratumBlend::BandBlendScalars bb =
@@ -536,7 +533,7 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
     float h_base = 0.0f;
     if(volume_assist_.isAvailable())
     {
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         sat = samp.x();
         val = samp.y();
         h_base = samp.z();

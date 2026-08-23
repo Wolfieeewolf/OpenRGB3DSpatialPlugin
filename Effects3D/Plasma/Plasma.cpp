@@ -125,6 +125,7 @@ void Plasma::OnPlasmaParameterChanged()
 
 void Plasma::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
+    (void)grid;
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -136,10 +137,8 @@ void Plasma::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, con
     const float detail = std::max(0.05f, GetScaledDetail()) * bb.tight_mul;
     const float size_multiplier = GetNormalizedSize();
     const float freq_scale = std::min(8.0f, detail * 0.8f / std::fmax(0.1f, size_multiplier));
-    float ox = 0.5f, oy = 0.5f, oz = 0.5f;
-    PackEffectOrigin01(grid, GetEffectOriginGrid(grid), &ox, &oy, &oz);
-    const float vp[6] = {progress, freq_scale, (float)pattern_type, ox, oy, oz};
-    volume_assist_.prepare(render_sequence, time_sec, vp, 6);
+    const float vp[3] = {progress, freq_scale, (float)pattern_type};
+    volume_assist_.prepare(render_sequence, time_sec, vp, 3);
 }
 
 RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -165,15 +164,10 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    float n1 = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
-    float n2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
-    float n3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
-    float oy = 0.5f;
-    {
-        float ox = 0.5f, oz = 0.5f;
-        PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-    }
-    float coord2 = std::clamp(n2 - oy + 0.5f, 0.0f, 1.0f);
+    float n1 = 0.5f, n2 = 0.5f, n3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
+                               GetNormalizedScale(), &n1, &n2, &n3);
+    const float coord2 = SampleStratumYNorm01(rotated_pos.y, grid, origin);
 
     SpatialLayerCore::MapperSettings strat_map;
     EffectStratumBlend::InitStratumBreaks(strat_map);
@@ -189,11 +183,8 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float plasma_value = 0.0f;
     if(volume_assist_.isAvailable())
     {
-        /* GLSL already centers on origin — sample room 01 + stratum phase only. */
-        const float g1 = std::fmod(n1 + pshift + 1.0f, 1.0f);
-        const float g2 = std::fmod(n2 + pshift + 1.0f, 1.0f);
-        const float g3 = std::fmod(n3 + pshift + 1.0f, 1.0f);
-        plasma_value = volume_assist_.sampleScalar01(g1, g2, g3);
+        /* Origin-local atlas; stratum phase only on sample coords when needed. */
+        plasma_value = volume_assist_.sampleScalar01(n1, n2, n3);
     }
     plasma_value = EffectStratumBlend::ApplyMotionToUnit01(plasma_value, stratum_mot01, 0.28f);
 

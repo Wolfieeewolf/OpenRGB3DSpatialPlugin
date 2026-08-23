@@ -161,6 +161,23 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
     return std::clamp(std::max(tx, tz), 0.0f, 1.0f);
 }
 
+/* --- Spatial coordinate contract (single source of truth) ---
+ *
+ * ROOM UV — NormalizeGridAxis01 / SampleRoomAxis01:
+ *   Maps world position into the active GridContext3D AABB [0,1]^3 (floor y=0, ceiling y=1).
+ *   Use for room-fixed surfaces (walls/floor/ceiling), edge fade, and audio strip layouts.
+ *
+ * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
+ *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
+ *   Use for all GPU volume atlases. Do not also subtract packed origin01 in GLSL.
+ *
+ * STRATUM Y — SampleStratumYNorm01:
+ *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).
+ *
+ * Anchor resolution: GetEffectOriginGrid(grid) only. Target zone bounds change grid, not a
+ * second origin path. PackEffectOrigin01 is legacy room-UV packing — do not use for GPU volumes.
+ */
+
 inline float NormalizeGridAxis01(float value, float min_v, float max_v)
 {
     float range = max_v - min_v;
@@ -171,27 +188,49 @@ inline float NormalizeGridAxis01(float value, float min_v, float max_v)
     return std::max(0.0f, std::min(1.0f, (value - min_v) / range));
 }
 
-/** Pack effect/reference origin into unit-cube UV for volume-field shaders. */
+/** Room AABB axis UV [0,1]. Alias keeps call sites readable vs origin-local sampling. */
+inline float SampleRoomAxis01(float value, float min_v, float max_v)
+{
+    return NormalizeGridAxis01(value, min_v, max_v);
+}
+
+/** Unit UV along a grid axis; not clamped — anchors may sit outside the LED AABB. */
+inline float GridAxisToUnitUnclamped(float value, float min_v, float max_v)
+{
+    float range = max_v - min_v;
+    if(range <= 1e-5f)
+    {
+        return 0.5f;
+    }
+    return (value - min_v) / range;
+}
+
+/** @deprecated Legacy room-UV origin pack for old GLSL `(p01 - origin01)` shaders. Prefer origin-local sampling. */
 inline void PackEffectOrigin01(const GridContext3D& grid, const Vector3D& origin,
                                float* ox, float* oy, float* oz)
 {
     if(ox)
     {
-        *ox = NormalizeGridAxis01(origin.x, grid.min_x, grid.max_x);
+        *ox = GridAxisToUnitUnclamped(origin.x, grid.min_x, grid.max_x);
     }
     if(oy)
     {
-        *oy = NormalizeGridAxis01(origin.y, grid.min_y, grid.max_y);
+        *oy = GridAxisToUnitUnclamped(origin.y, grid.min_y, grid.max_y);
     }
     if(oz)
     {
-        *oz = NormalizeGridAxis01(origin.z, grid.min_z, grid.max_z);
+        *oz = GridAxisToUnitUnclamped(origin.z, grid.min_z, grid.max_z);
     }
 }
 
-/** Map a rotated world sample into origin-centered unit UV (0.5 = origin).
- *  Matches GLSL of the form `l = p01 * 2.0 - 1.0` as local half-extent space.
- */
+/** Stratum band Y: room height with Spatial Anchor at 0.5. */
+inline float SampleStratumYNorm01(float y, const GridContext3D& grid, const Vector3D& origin)
+{
+    const float oy = GridAxisToUnitUnclamped(origin.y, grid.min_y, grid.max_y);
+    return std::clamp(SampleRoomAxis01(y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+}
+
+/** Map world sample into origin-local unit UV (0.5 = Spatial Anchor). */
 inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
                                       const Vector3D& origin,
                                       const EffectGridAxisHalfExtents& e,
@@ -203,6 +242,17 @@ inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
     *c1 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_x - origin.x) / hw));
     *c2 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_y - origin.y) / hh));
     *c3 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_z - origin.z) / hd));
+}
+
+/** Canonical GPU volume atlas lookup. Pair with GLSL `l = p01 * 2.0 - 1.0`. */
+inline void SampleGpuVolumeOriginLocal01(float x, float y, float z,
+                                         const GridContext3D& grid,
+                                         const Vector3D& origin,
+                                         float normalized_scale,
+                                         float* c1, float* c2, float* c3)
+{
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
+    SampleCoordsOriginLocal01(x, y, z, origin, e, c1, c2, c3);
 }
 
 inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
@@ -295,7 +345,6 @@ public:
     virtual bool UsesSpatialSamplingQuantization() const { return true; }
 
     bool EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const;
-    void ApplyGridSampleCoordinateAdjustment(float& x, float& y, float& z, const GridContext3D& grid) const;
 
     virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
     void MountSettingsUi(QWidget* parent, SpatialEffectSettingsLayout layout);

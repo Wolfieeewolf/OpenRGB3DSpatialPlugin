@@ -17,7 +17,6 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float contrast = clamp(u_params[3], 0.35, 2.5);
     float size_density = max(u_params[4], 0.2);
     float pulse_mix = clamp(u_params[5], 0.0, 1.0);
-    vec3 origin01 = clamp(vec3(u_params[6], u_params[7], u_params[8]), 0.0, 1.0);
     const float TWO_PI = 6.2831853;
 
     float beat = 0.5 + 0.5 * sin(u_time * motion * TWO_PI);
@@ -27,9 +26,9 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float zw = 0.5 + 0.5 * sin(u_time * motion * 0.55 * TWO_PI);
     float zoom = 1.0 + zw * wobble * 0.35;
 
-    float xf = (p01.x - origin01.x) * spatial_freq * zoom * size_density;
-    float yf = (p01.y - origin01.y) * spatial_freq * zoom * size_density;
-    float zf = (p01.z - origin01.z) * spatial_freq * zoom * size_density;
+    float xf = (p01.x - 0.5) * spatial_freq * zoom * size_density;
+    float yf = (p01.y - 0.5) * spatial_freq * zoom * size_density;
+    float zf = (p01.z - 0.5) * spatial_freq * zoom * size_density;
 
     float t1 = u_time * motion * TWO_PI;
     float t2 = u_time * motion * 0.73 * TWO_PI;

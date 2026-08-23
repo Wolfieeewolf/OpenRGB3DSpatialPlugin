@@ -35,33 +35,12 @@ private:
         MODE_COUNT
     };
     static constexpr int kMaxGpuParticles = 48;
-    static constexpr int kMaxCpuParticles = 36;
     static const char* ModeName(int m);
-
-    struct ViewSample
-    {
-        float vx = 0.0f;
-        float vy = 0.0f;
-        float vz = 0.0f;
-        float radial = 0.0f;
-        float ang = 0.0f;
-    };
 
     struct EvalContext
     {
         Vector3D origin{};
         Vector3D rp{};
-        ViewSample view{};
-        EffectGridAxisHalfExtents e{};
-        float h_scale = 1.0f;
-        float progress = 0.0f;
-        float speed = 1.0f;
-        float size_m = 1.0f;
-        float detail = 1.0f;
-        float fill = 1.0f;
-        float thickness = 0.08f;
-        float drift = 0.15f;
-        float twinkle = 0.25f;
         float color_cycle = 0.0f;
         float strip_p01 = 0.0f;
         bool strat_on = false;
@@ -69,15 +48,10 @@ private:
         float stratum_mot01 = 0.0f;
         float time = 0.0f;
         const GridContext3D* grid = nullptr;
-        int particle_count = 32;
     };
 
-    ViewSample MakeViewSample(const Vector3D& rp, const Vector3D& origin, const EffectGridAxisHalfExtents& e, float fill) const;
     RGBColor ResolveSpaceColor(const EvalContext& ctx, float pos01, float hue_shift) const;
     RGBColor FinishSample(const EvalContext& ctx, float intensity, float palette01, float hotness, int mode_i) const;
-    RGBColor AccumParticles(const EvalContext& ctx, int mode_i) const;
-    RGBColor EvalBlackhole(const EvalContext& ctx) const;
-    RGBColor EvalWormhole(const EvalContext& ctx) const;
 
     int mode = MODE_STARS;
     int num_stars = 32;

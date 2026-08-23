@@ -2,7 +2,7 @@
 #pragma once
 
 /** Rotating cone spotlights: R=sat, G=val, B=base_hue01 (Frequency scroll on CPU).
- *  Apex positions are origin-relative in room UV — all surfaces honor PackEffectOrigin01.
+ *  Apex positions are origin-local (hub 0.5). Aim wanders on a full sphere.
  *  Aim wanders on a full sphere; Opposite motion locks pairs 180° apart.
  *
  *  u_params: [0]=spin_t [1]=scale [2]=hue_static [3]=count [4]=motion_mode [5]=surface
@@ -130,7 +130,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int motion_mode = int(clamp(u_params[4], 0.0, 1.0) + 0.5);
     int surface = int(clamp(u_params[5], 0.0, 4.0) + 0.5);
 
-    vec3 origin01 = clamp(vec3(u_params[6], u_params[7], u_params[8]), 0.0, 1.0);
+    vec3 origin01 = vec3(0.5);
     float wander = clamp(u_params[9], 0.15, 2.0);
     float elev_bias = clamp(u_params[10], -1.2, 1.2);
     float hw = max(u_params[11], 0.02);

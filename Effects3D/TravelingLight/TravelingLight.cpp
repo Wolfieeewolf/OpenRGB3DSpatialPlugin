@@ -71,12 +71,8 @@ TravelingLight::TravelingLight(QWidget* parent) : SpatialEffect3D(parent)
     volume_assist_.setResolution(22);
 }
 
-void TravelingLight::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+void TravelingLight::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
-    const Vector3D origin = GetEffectOriginGrid(grid);
-    float ox, oy, oz;
-    PackEffectOrigin01(grid, origin, &ox, &oy, &oz);
-
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -92,7 +88,7 @@ void TravelingLight::PrepareGpuFields(std::uint64_t render_sequence, float time_
     const float tight_inv = 1.0f / std::max(0.25f, bb.tight_mul);
     const float freq_n = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
 
-    float vp[16] = {
+    float vp[13] = {
         (float)std::clamp(mode, 0, MODE_COUNT - 1),
         progress,
         size_scale,
@@ -105,12 +101,9 @@ void TravelingLight::PrepareGpuFields(std::uint64_t render_sequence, float time_
         (float)std::clamp(front_shape, 0, 3),
         (float)std::clamp(front_edge, 0, 2),
         std::clamp(front_thickness, 5, 100) / 100.0f,
-        freq_n,
-        ox,
-        oy,
-        oz
+        freq_n
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 16);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 13);
 }
 
 EffectInfo3D TravelingLight::GetEffectInfo() const
@@ -291,9 +284,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float oy = 0.5f;
-    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
-    float coord2 = std::clamp(NormalizeGridAxis01(rotated.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+    float coord2 = SampleStratumYNorm01(rotated.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -357,10 +348,9 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
 
     if(volume_assist_.isAvailable())
     {
-        const float nx = NormalizeGridAxis01(rotated.x, grid.min_x, grid.max_x);
-        const float ny = NormalizeGridAxis01(rotated.y, grid.min_y, grid.max_y);
-        const float nz = NormalizeGridAxis01(rotated.z, grid.min_z, grid.max_z);
-        const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+        SampleGpuVolumeOriginLocal01(rotated.x, rotated.y, rotated.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         const int m = std::max(0, std::min(this->mode, MODE_COUNT - 1));
 
         if(m == MODE_MOVING_PANES)

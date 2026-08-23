@@ -159,9 +159,7 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     Vector3D rot{x, y, z};
     float lx = rot.x - origin.x, ly = rot.y - origin.y, lz = rot.z - origin.z;
 
-    float oy = 0.5f;
-    PackEffectOrigin01(grid, origin, nullptr, &oy, nullptr);
-    const float y_norm = std::clamp(NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+    const float y_norm = SampleStratumYNorm01(rot.y, grid, origin);
     SpatialLayerCore::MapperSettings map;
     EffectStratumBlend::InitStratumBreaks(map);
     map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
