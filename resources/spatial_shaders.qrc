@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/spatial_shaders">
+        <file>spatial_shaders/room_plasma.fs</file>
+        <file>spatial_shaders/slow_waves.fs</file>
+        <file>spatial_shaders/spectrum_glow.fs</file>
+        <file>spatial_shaders/ember_field.fs</file>
+    </qresource>
+</RCC>

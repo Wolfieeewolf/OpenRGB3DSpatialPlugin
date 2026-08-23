@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "openrgb-minecraft-sender",
+  "version": "${version}",
+  "name": "OpenRGB Minecraft Sender",
+  "description": "Telemetry for OpenRGB 3D Spatial: UDP vitals/damage plus Room Ambilight cubemap samples over shared memory. Configure in-game via Mod Menu when installed.",
+  "authors": ["wolfi"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["me.wolfi.openrgb.OpenRGBSenderMod"],
+    "modmenu": ["me.wolfi.openrgb.ModMenuIntegration"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  },
+  "mixins": [
+    "openrgb-sender.mixins.json"
+  ]
+}

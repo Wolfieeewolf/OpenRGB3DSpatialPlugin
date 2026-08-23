@@ -1,0 +1,25 @@
+name: PR Opened
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  pr_greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Redirect to GitLab
+        run: gh pr comment "$NUMBER" --body "$BODY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          BODY: >
+            This GitHub repository is a **read-only mirror** of the main project on GitLab.
+
+            Please fork https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin
+            and open a merge request there instead.
+
+            CI, releases, and nightly builds run on GitLab only.

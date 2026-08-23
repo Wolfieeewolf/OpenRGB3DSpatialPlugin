@@ -1,0 +1,25 @@
+name: Issue Opened
+
+on:
+  issues:
+    types: [opened, reopened]
+
+jobs:
+  issue_greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Redirect to GitLab
+        run: gh issue comment "$NUMBER" --body "$BODY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          BODY: >
+            This GitHub repository is a **read-only mirror** of the main project on GitLab.
+
+            For new bugs, features, and game-integration requests please use:
+            https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin/-/issues
+
+            CI and release downloads are also published from GitLab.

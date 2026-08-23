@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report bugs and features on GitLab (primary)
+    url: https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin/-/issues/new
+    about: This GitHub repo is a read-only mirror. All issues and merge requests belong on GitLab.
+  - name: Controller preset JSON (separate repo)
+    url: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues/new
+    about: Layout JSON files only — not plugin source code
+  - name: OpenRGB upstream
+    url: https://gitlab.com/CalcProgrammer1/OpenRGB/-/issues
+    about: Core OpenRGB — device detection, drivers, host application

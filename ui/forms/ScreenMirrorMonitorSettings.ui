@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ScreenMirrorMonitorSettings</class>
+ <widget class="QWidget" name="ScreenMirrorMonitorSettings">
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin">
+    <number>8</number>
+   </property>
+   <property name="topMargin">
+    <number>4</number>
+   </property>
+   <property name="rightMargin">
+    <number>8</number>
+   </property>
+   <property name="bottomMargin">
+    <number>4</number>
+   </property>
+   <property name="spacing">
+    <number>8</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="reachGroup">
+     <property name="title">
+      <string>Reach &amp; Falloff</string>
+     </property>
+     <layout class="QFormLayout" name="reachForm">
+      <property name="leftMargin">
+       <number>8</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>8</number>
+      </property>
+      <property name="bottomMargin">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="scaleCaption">
+        <property name="text">
+         <string>Global Reach:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="EffectSliderRow" name="scaleRow" native="true"/>
+      </item>
+      <item row="1" column="0" colspan="2">
+       <widget class="QCheckBox" name="scaleInvertCheck">
+        <property name="text">
+         <string>Invert Scale Falloff</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="falloffCurveCaption">
+        <property name="text">
+         <string>Falloff curve:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="EffectSliderRow" name="falloffCurveRow" native="true"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="refPointCaption">
+        <property name="text">
+         <string>Reference:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QComboBox" name="refPointCombo"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="softnessCaption">
+        <property name="text">
+         <string>Softness:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="EffectSliderRow" name="softnessRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="brightnessGroup">
+     <property name="title">
+      <string>Brightness</string>
+     </property>
+     <property name="objectName">
+      <string>ScreenMirror_BrightnessGroup</string>
+     </property>
+     <layout class="QFormLayout" name="brightnessForm">
+      <property name="leftMargin">
+       <number>8</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>8</number>
+      </property>
+      <property name="bottomMargin">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="brightnessCaption">
+        <property name="text">
+         <string>Brightness:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="EffectSliderRow" name="brightnessRow" native="true"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="brightnessThresholdCaption">
+        <property name="text">
+         <string>Brightness Threshold:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="EffectSliderRow" name="brightnessThresholdRow" native="true"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="whiteRolloffCaption">
+        <property name="text">
+         <string>White rolloff:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="EffectSliderRow" name="whiteRolloffRow" native="true"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="vibranceCaption">
+        <property name="text">
+         <string>Vibrance:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="EffectSliderRow" name="vibranceRow" native="true"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="ledTrimCaption">
+        <property name="text">
+         <string>LED output trim:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QWidget" name="ledTrimHost" native="true">
+        <property name="objectName">
+         <string>ledTrimHost</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="blackBarsGroup">
+     <property name="title">
+      <string>Black Bars (Crop)</string>
+     </property>
+     <layout class="QFormLayout" name="blackBarsForm">
+      <property name="leftMargin">
+       <number>8</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>8</number>
+      </property>
+      <property name="bottomMargin">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="letterboxCaption">
+        <property name="text">
+         <string>Letterbox (top/bottom):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="EffectSliderRow" name="letterboxRow" native="true"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="pillarboxCaption">
+        <property name="text">
+         <string>Pillarbox (left/right):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="EffectSliderRow" name="pillarboxRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="radialCornerGroup">
+     <property name="title">
+      <string>Radial corner mapping</string>
+     </property>
+     <layout class="QVBoxLayout" name="radialCornerLayout">
+      <item>
+       <widget class="QLabel" name="radialCornerInfo">
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Per-display UV tweak after radial sampling. Directional mapping is calibrated in geometry (panel basis vs. capture); Map roll is only extra twist. Corner sliders 0–100%: 0% = tuned baseline; 50% ≈ neutral warp.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="screenMapRollRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="radialExpansionRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="radialBiasTlRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="radialBiasTrRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="radialBiasBlRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="radialBiasBrRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="cornerBlendGroup">
+     <property name="title">
+      <string>Corner blend (sampling)</string>
+     </property>
+     <layout class="QVBoxLayout" name="cornerBlendLayout">
+      <item>
+       <widget class="EffectSliderRow" name="cornerStrengthRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="cornerZoneRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="blendGroup">
+     <property name="title">
+      <string>Blend &amp; Smoothing</string>
+     </property>
+     <layout class="QFormLayout" name="blendForm">
+      <property name="leftMargin">
+       <number>8</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>8</number>
+      </property>
+      <property name="bottomMargin">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="smoothingCaption">
+        <property name="text">
+         <string>Smoothing:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="EffectSliderRow" name="smoothingRow" native="true"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="blendCaption">
+        <property name="text">
+         <string>Blend:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="EffectSliderRow" name="blendRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="previewGroup">
+     <property name="title">
+      <string>Preview &amp; Calibration</string>
+     </property>
+     <layout class="QFormLayout" name="previewForm">
+      <property name="leftMargin">
+       <number>8</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>8</number>
+      </property>
+      <property name="bottomMargin">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="calibrationCaption">
+        <property name="text">
+         <string>Calibration pattern:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QCheckBox" name="calibrationPatternCheck">
+        <property name="text">
+         <string>Show calibration pattern</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="screenPreviewCaption">
+        <property name="text">
+         <string>Screen Preview:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QCheckBox" name="screenPreviewCheck">
+        <property name="text">
+         <string>Show Screen Preview</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="captureZonesHost" native="true"/>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectSliderRow</class>
+   <extends>QWidget</extends>
+   <header>EffectSliderRow.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

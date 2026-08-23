@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AudioInputPanel</class>
+ <widget class="QGroupBox" name="AudioInputPanel">
+  <property name="title">
+   <string>Audio Input</string>
+  </property>
+  <property name="visible">
+   <bool>false</bool>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <layout class="QHBoxLayout" name="topControlsRow">
+     <item>
+      <widget class="QPushButton" name="startButton">
+       <property name="text">
+        <string>Start Listening</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="stopButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Stop</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="topControlsSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="advancedSettingsButton">
+       <property name="text">
+        <string>Advanced…</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="restoreDefaultsButton">
+       <property name="text">
+        <string>Restore defaults</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="levelCaption">
+     <property name="text">
+      <string>Level:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QProgressBar" name="levelBar">
+     <property name="maximum">
+      <number>1000</number>
+     </property>
+     <property name="textVisible">
+      <bool>false</bool>
+     </property>
+     <property name="value">
+      <number>0</number>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="bmhRow">
+     <item>
+      <widget class="QLabel" name="bassCaption">
+       <property name="text">
+        <string>Bass:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="bassBar">
+       <property name="maximum">
+        <number>1000</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="midCaption">
+       <property name="text">
+        <string>Mid:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="midBar">
+       <property name="maximum">
+        <number>1000</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="highCaption">
+       <property name="text">
+        <string>High:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="highBar">
+       <property name="maximum">
+        <number>1000</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="stemRow">
+     <item>
+      <widget class="QLabel" name="kickCaption">
+       <property name="text">
+        <string>Kick:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="kickStemBar">
+       <property name="maximum">
+        <number>1000</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="snareCaption">
+       <property name="text">
+        <string>Snare:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="snareStemBar">
+       <property name="maximum">
+        <number>1000</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="hatCaption">
+       <property name="text">
+        <string>Hat:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="hihatStemBar">
+       <property name="maximum">
+        <number>1000</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="bassStemCaption">
+       <property name="text">
+        <string>Bass:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="bassStemBar">
+       <property name="maximum">
+        <number>1000</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="spectrumCaption">
+     <property name="text">
+      <string>Spectrum:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="spectrumLabel">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>280</width>
+       <height>48</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>48</height>
+      </size>
+     </property>
+     <property name="scaledContents">
+      <bool>false</bool>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="text">
+      <string>Start listening to see spectrum</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectLabeledComboRow" name="deviceRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="gainRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="clarityRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="isolationRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectLabeledComboRow" name="mixPresetRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectLabeledComboRow" name="bandsRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectLabeledComboRow" name="fftRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSectionHeading" name="eqHeading" native="true"/>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="eqScroll">
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>110</height>
+      </size>
+     </property>
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAsNeeded</enum>
+     </property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="eqResetButton">
+     <property name="text">
+      <string>Reset EQ</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="helpLabel" native="true"/>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectSliderRow</class>
+   <extends>QWidget</extends>
+   <header>EffectSliderRow.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectLabeledComboRow</class>
+   <extends>QWidget</extends>
+   <header>EffectLabeledComboRow.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectSectionHeading</class>
+   <extends>QWidget</extends>
+   <header>EffectSectionHeading.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

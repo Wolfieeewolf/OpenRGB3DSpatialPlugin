@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CaptureZonesWidget</class>
+ <widget class="QWidget" name="CaptureZonesWidget">
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="directionGroup">
+     <property name="title">
+      <string>Wall / Direction Focus</string>
+     </property>
+     <layout class="QFormLayout" name="directionForm">
+      <property name="leftMargin">
+       <number>8</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>8</number>
+      </property>
+      <property name="bottomMargin">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="frontBackCaption">
+        <property name="text">
+         <string>Front/Back:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QWidget" name="frontBackRow" native="true">
+        <layout class="QHBoxLayout" name="frontBackLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSlider" name="frontBackBalanceSlider">
+           <property name="minimum">
+            <number>-100</number>
+           </property>
+           <property name="maximum">
+            <number>100</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="toolTip">
+            <string>Favor front (+) or back (-) LEDs. 0 = even.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="frontBackBalanceLabel">
+           <property name="minimumSize">
+            <size>
+             <width>40</width>
+             <height>0</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="leftRightCaption">
+        <property name="text">
+         <string>Left/Right:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QWidget" name="leftRightRow" native="true">
+        <layout class="QHBoxLayout" name="leftRightLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSlider" name="leftRightBalanceSlider">
+           <property name="minimum">
+            <number>-100</number>
+           </property>
+           <property name="maximum">
+            <number>100</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="toolTip">
+            <string>Favor right (+) or left (-) LEDs. 0 = even.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="leftRightBalanceLabel">
+           <property name="minimumSize">
+            <size>
+             <width>40</width>
+             <height>0</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="topBottomCaption">
+        <property name="text">
+         <string>Top/Bottom:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QWidget" name="topBottomRow" native="true">
+        <layout class="QHBoxLayout" name="topBottomLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSlider" name="topBottomBalanceSlider">
+           <property name="minimum">
+            <number>-100</number>
+           </property>
+           <property name="maximum">
+            <number>100</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="toolTip">
+            <string>Favor top (+) or bottom (-) LEDs. 0 = even.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="topBottomBalanceLabel">
+           <property name="minimumSize">
+            <size>
+             <width>40</width>
+             <height>0</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="waveGroup">
+     <property name="title">
+      <string>Wave</string>
+     </property>
+     <layout class="QFormLayout" name="waveForm">
+      <property name="leftMargin">
+       <number>8</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>8</number>
+      </property>
+      <property name="bottomMargin">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="propagationCaption">
+        <property name="text">
+         <string>Wave Intensity:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QWidget" name="propagationRow" native="true">
+        <layout class="QHBoxLayout" name="propagationLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSlider" name="propagationSpeedSlider">
+           <property name="maximum">
+            <number>100</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="tickInterval">
+            <number>10</number>
+           </property>
+           <property name="tickPosition">
+            <enum>QSlider::TicksBelow</enum>
+           </property>
+           <property name="toolTip">
+            <string>Wave / trail (5-100% enables delayed sampling along distance). 0-4%: instant mirror (no wave). Higher % = slower wave = more latency for far LEDs.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="propagationSpeedLabel">
+           <property name="minimumSize">
+            <size>
+             <width>45</width>
+             <height>0</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="waveDecayCaption">
+        <property name="text">
+         <string>Wave Decay:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QWidget" name="waveDecayRow" native="true">
+        <layout class="QHBoxLayout" name="waveDecayLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSlider" name="waveDecaySlider">
+           <property name="maximum">
+            <number>3000</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="tickInterval">
+            <number>300</number>
+           </property>
+           <property name="tickPosition">
+            <enum>QSlider::TicksBelow</enum>
+           </property>
+           <property name="toolTip">
+            <string>Wave tail length (0-3000ms). 0 = no tail, ~500-1500ms = visible trail.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="waveDecayLabel">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>0</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="waveTimeCaption">
+        <property name="text">
+         <string>Time to edge (s):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QWidget" name="waveTimeRow" native="true">
+        <layout class="QHBoxLayout" name="waveTimeLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSlider" name="waveTimeToEdgeSlider">
+           <property name="maximum">
+            <number>100</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="tickInterval">
+            <number>10</number>
+           </property>
+           <property name="tickPosition">
+            <enum>QSlider::TicksBelow</enum>
+           </property>
+           <property name="toolTip">
+            <string>Seconds for the wave to cross the layout (replaces Wave Intensity when &gt;0.4s). Large values add visible latency; use Off for real-time mirror.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="waveTimeToEdgeLabel">
+           <property name="minimumSize">
+            <size>
+             <width>45</width>
+             <height>0</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="zonesGroup">
+     <property name="title">
+      <string>Capture Zones</string>
+     </property>
+     <layout class="QVBoxLayout" name="zonesLayout">
+      <item>
+       <widget class="QPushButton" name="addZoneButton">
+        <property name="text">
+         <string>Add Capture Zone</string>
+        </property>
+        <property name="toolTip">
+         <string>Add a new capture zone that can be positioned anywhere on the screen.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="captureAreaCaption">
+        <property name="text">
+         <string>Capture area (zones):</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="previewHost" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

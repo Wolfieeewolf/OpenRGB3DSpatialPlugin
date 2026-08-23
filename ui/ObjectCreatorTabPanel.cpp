@@ -1,0 +1,248 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "ObjectCreatorTabPanel.h"
+
+#include "EffectPackPanel.h"
+#include "EventBindingsPanel.h"
+#include "OpenRGB3DSpatialTab.h"
+#include "PluginUiUtils.h"
+#include "ZonesPanel.h"
+#include "ui_ObjectCreatorTabPanel.h"
+
+#include <QComboBox>
+#include <QFont>
+#include <QListWidget>
+#include <QPushButton>
+#include <QString>
+#include <Qt>
+
+ObjectCreatorTabPanel::ObjectCreatorTabPanel(QWidget* parent)
+    : QWidget(parent)
+    , ui(new Ui::ObjectCreatorTabPanel)
+{
+    ui->setupUi(this);
+    ui->contentStack->setCurrentWidget(ui->emptyPage);
+    applyVisualStyles();
+}
+
+ObjectCreatorTabPanel::~ObjectCreatorTabPanel()
+{
+    delete ui;
+}
+
+void ObjectCreatorTabPanel::applyVisualStyles()
+{
+    QFont bold = ui->objectTypeLabel->font();
+    bold.setBold(true);
+    ui->objectTypeLabel->setFont(bold);
+
+    ui->customListLabel->setFont(bold);
+    ui->refListLabel->setFont(bold);
+    ui->displayListLabel->setFont(bold);
+
+    ui->emptyHelpLabel->setText(QStringLiteral(
+        "Choose Custom Controller, Reference Point, Display Plane, Zone, Effect Pack, or Event Bindings above."));
+    PluginUiApplyMutedSecondaryLabel(ui->emptyHelpLabel->label());
+    QFont empty_font = ui->emptyHelpLabel->label()->font();
+    empty_font.setItalic(true);
+    ui->emptyHelpLabel->label()->setFont(empty_font);
+
+    PluginUiApplyMutedSecondaryLabel(ui->customSubtitleLabel->label());
+    PluginUiApplyItalicSecondaryLabel(ui->customControllersEmptyLabel->label());
+    ui->customControllersEmptyLabel->label()->setAlignment(Qt::AlignHCenter);
+
+    PluginUiApplyMutedSecondaryLabel(ui->refSubtitleLabel->label());
+    PluginUiApplyItalicSecondaryLabel(ui->refPointsEmptyLabel->label());
+    ui->refPointsEmptyLabel->label()->setAlignment(Qt::AlignHCenter);
+
+    PluginUiApplyMutedSecondaryLabel(ui->displaySubtitleLabel->label());
+    PluginUiApplyItalicSecondaryLabel(ui->displayPlanesEmptyLabel->label());
+    ui->displayPlanesEmptyLabel->label()->setAlignment(Qt::AlignHCenter);
+    PluginUiApplyMutedSecondaryLabel(ui->refHelpLabel->label());
+}
+
+void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
+{
+    if(!tab || bound_)
+    {
+        return;
+    }
+
+    host_tab_ = tab;
+    bound_ = true;
+
+    ui->importCustomControllerButton->setToolTip(
+        tr("Copy portable preset .json files into the controllers folder (see OpenRGB3DSpatialPresets on GitHub). "
+           "Use controller_name = OpenRGB device name and controller_location \"1:1\"."));
+    ui->exportCustomControllerButton->setToolTip(
+        tr("Export selected layout as a portable preset JSON (OpenRGB device names, location \"1:1\", "
+           "brand/model) for sharing or the presets repo"));
+    ui->editCustomControllerButton->setToolTip("Edit selected custom controller");
+    ui->deleteCustomControllerButton->setToolTip(
+        "Remove selected custom controller from library (remove from 3D scene first if in use)");
+    ui->editReferencePointButton->setToolTip("Edit selected reference point");
+    ui->removeRefPointButton->setToolTip("Delete selected reference point");
+    ui->editDisplayPlaneButton->setToolTip("Edit selected display plane");
+    ui->removeDisplayPlaneButton->setToolTip("Delete selected display plane");
+
+    connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::customControllerSelectionChanged);
+    connect(ui->createCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::createCustomControllerClicked);
+    connect(ui->importCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::importCustomControllerClicked);
+    connect(ui->exportCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::exportCustomControllerClicked);
+    connect(ui->editCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::editCustomControllerClicked);
+    connect(ui->deleteCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::deleteCustomControllerClicked);
+
+    connect(ui->referencePointsList, &QListWidget::currentRowChanged, this,
+            &ObjectCreatorTabPanel::onReferencePointListRowChanged);
+    connect(ui->referencePointsList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::referencePointsListSelectionChanged);
+    connect(ui->createReferencePointButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::addRefPointClicked);
+    connect(ui->editReferencePointButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::editReferencePointClicked);
+    connect(ui->removeRefPointButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::removeRefPointClicked);
+
+    connect(ui->displayPlanesList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::displayPlaneSelected);
+    connect(ui->displayPlanesList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::displayPlanesListSelectionChanged);
+    connect(ui->createDisplayPlaneButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::addDisplayPlaneClicked);
+    connect(ui->editDisplayPlaneButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::editDisplayPlaneClicked);
+    connect(ui->removeDisplayPlaneButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::removeDisplayPlaneClicked);
+
+    if(ui->zonesPanel)
+    {
+        ui->zonesPanel->bindTab(tab);
+    }
+    if(ui->effectPackPanel)
+    {
+        ui->effectPackPanel->bindTab(tab);
+    }
+    if(ui->eventBindingsPanel)
+    {
+        ui->eventBindingsPanel->bindTab(tab);
+    }
+
+    connect(ui->objectTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &ObjectCreatorTabPanel::onObjectTypeChanged);
+
+    ui->objectTypeCombo->setCurrentIndex(ObjectTypeSelect);
+}
+
+void ObjectCreatorTabPanel::onObjectTypeChanged(int index)
+{
+    if(!host_tab_)
+    {
+        return;
+    }
+
+    switch(index)
+    {
+        case ObjectTypeCustomController:
+            ui->contentStack->setCurrentWidget(ui->customPage);
+            break;
+        case ObjectTypeReferencePoint:
+            ui->contentStack->setCurrentWidget(ui->referencePage);
+            break;
+        case ObjectTypeDisplayPlane:
+            ui->contentStack->setCurrentWidget(ui->displayPage);
+            host_tab_->UpdateDisplayPlanesList();
+            host_tab_->RefreshDisplayPlaneDetails();
+            break;
+        case ObjectTypeZone:
+            ui->contentStack->setCurrentWidget(ui->zonePage);
+            host_tab_->UpdateZonesList();
+            break;
+        case ObjectTypeEffectPack:
+            ui->contentStack->setCurrentWidget(ui->effectPackPage);
+            break;
+        case ObjectTypeEventBindings:
+            ui->contentStack->setCurrentWidget(ui->eventBindingsPage);
+            break;
+        case ObjectTypeSelect:
+        default:
+            ui->contentStack->setCurrentWidget(ui->emptyPage);
+            break;
+    }
+}
+
+void ObjectCreatorTabPanel::setObjectTypeIndex(int index)
+{
+    if(ui->objectTypeCombo->currentIndex() != index)
+    {
+        ui->objectTypeCombo->setCurrentIndex(index);
+    }
+    else
+    {
+        onObjectTypeChanged(index);
+    }
+}
+
+void ObjectCreatorTabPanel::showCustomControllerSection()
+{
+    setObjectTypeIndex(ObjectTypeCustomController);
+}
+
+void ObjectCreatorTabPanel::showReferencePointSection()
+{
+    setObjectTypeIndex(ObjectTypeReferencePoint);
+}
+
+void ObjectCreatorTabPanel::showDisplayPlaneSection()
+{
+    setObjectTypeIndex(ObjectTypeDisplayPlane);
+}
+
+void ObjectCreatorTabPanel::showZoneSection()
+{
+    setObjectTypeIndex(ObjectTypeZone);
+}
+
+void ObjectCreatorTabPanel::showEffectPackSection()
+{
+    setObjectTypeIndex(ObjectTypeEffectPack);
+}
+
+void ObjectCreatorTabPanel::showEventBindingsSection()
+{
+    setObjectTypeIndex(ObjectTypeEventBindings);
+}
+
+void ObjectCreatorTabPanel::onReferencePointListRowChanged(int list_row)
+{
+    if(!host_tab_)
+    {
+        return;
+    }
+    host_tab_->refPointSelected(host_tab_->ReferencePointIndexFromListRow(list_row));
+}
+
+QLabel* ObjectCreatorTabPanel::statusLabel() const { return ui->statusLabel; }
+QListWidget* ObjectCreatorTabPanel::customControllersList() const { return ui->customControllersList; }
+QWidget* ObjectCreatorTabPanel::customControllersEmptyLabel() const { return ui->customControllersEmptyLabel; }
+QPushButton* ObjectCreatorTabPanel::exportCustomControllerButton() const { return ui->exportCustomControllerButton; }
+QPushButton* ObjectCreatorTabPanel::editCustomControllerButton() const { return ui->editCustomControllerButton; }
+QPushButton* ObjectCreatorTabPanel::deleteCustomControllerButton() const { return ui->deleteCustomControllerButton; }
+QListWidget* ObjectCreatorTabPanel::referencePointsList() const { return ui->referencePointsList; }
+QWidget* ObjectCreatorTabPanel::refPointsEmptyLabel() const { return ui->refPointsEmptyLabel; }
+QPushButton* ObjectCreatorTabPanel::createReferencePointButton() const { return ui->createReferencePointButton; }
+QPushButton* ObjectCreatorTabPanel::editReferencePointButton() const { return ui->editReferencePointButton; }
+QPushButton* ObjectCreatorTabPanel::removeRefPointButton() const { return ui->removeRefPointButton; }
+QListWidget* ObjectCreatorTabPanel::displayPlanesList() const { return ui->displayPlanesList; }
+QWidget* ObjectCreatorTabPanel::displayPlanesEmptyLabel() const { return ui->displayPlanesEmptyLabel; }
+QPushButton* ObjectCreatorTabPanel::createDisplayPlaneButton() const { return ui->createDisplayPlaneButton; }
+QPushButton* ObjectCreatorTabPanel::editDisplayPlaneButton() const { return ui->editDisplayPlaneButton; }
+QPushButton* ObjectCreatorTabPanel::removeDisplayPlaneButton() const { return ui->removeDisplayPlaneButton; }
+ZonesPanel* ObjectCreatorTabPanel::zonesPanel() const { return ui->zonesPanel; }
+EffectPackPanel* ObjectCreatorTabPanel::effectPackPanel() const { return ui->effectPackPanel; }
+EventBindingsPanel* ObjectCreatorTabPanel::eventBindingsPanel() const { return ui->eventBindingsPanel; }
