@@ -21,8 +21,8 @@ Bubbles::Bubbles(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(true);
     SetFrequency(50);
     volume_assist_.setFragmentBody(QString::fromUtf8(BubblesVolumeFieldGlsl()));
-    // Particle loop lives in the shader — keep atlas lean like Starfield.
-    volume_assist_.setResolution(16);
+    // Thin shells need enough atlas cells or rings vanish between voxels.
+    volume_assist_.setResolution(20);
 }
 
 EffectInfo3D Bubbles::GetEffectInfo() const
@@ -94,7 +94,7 @@ void Bubbles::SetupCustomUI(QWidget* parent)
              QStringLiteral("How widely bubble centers spread across X/Z."),
              [this](int v) { horizontal_fill = v / 100.0f; }, pct_format);
     bind_int("minSpacingRow", QStringLiteral("Min spacing:"), 10, 100, (int)(overlap_spacing * 100.0f),
-             QStringLiteral("Minimum separation hint (CPU fallback; GPU uses golden-angle spacing)."),
+             QStringLiteral("How far bubble centers push apart across the volume (GPU golden-angle spread)."),
              [this](int v) { overlap_spacing = v / 100.0f; }, pct_format);
     bind_int("launchRandomnessRow", QStringLiteral("Launch randomness:"), 0, 100,
              (int)std::lround(launch_randomness * 100.0f),
@@ -125,9 +125,9 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
     const float max_r01 =
         std::clamp(std::max(0.5f, std::min(3.5f, max_radius)) * size_m * 0.18f, 0.04f, 0.55f);
     const float thick01 =
-        std::clamp(std::max(0.02f, bubble_thickness) * 0.08f / std::max(0.35f, detail), 0.008f, 0.12f);
+        std::clamp(std::max(0.02f, bubble_thickness) * 0.11f / std::max(0.35f, detail), 0.014f, 0.14f);
     const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.022f * bb.speed_mul + 1000.0f, 1.0f);
-    const float vp[9] = {
+    const float vp[10] = {
         time_sec,
         (float)std::clamp(max_bubbles, 4, kMaxGpuBubbles),
         thick01,
@@ -136,9 +136,10 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
         max_r01,
         std::clamp(horizontal_fill, 0.5f, 1.8f),
         std::clamp(launch_randomness, 0.0f, 1.0f),
-        hue_scroll
+        hue_scroll,
+        std::clamp(overlap_spacing, 0.10f, 1.0f)
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 9);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 10);
 }
 
 RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -173,16 +174,16 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
     float max_intensity = 0.0f;
     float best_hue = 0.0f;
 
-    if(volume_assist_.isAvailable())
-    {
-        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
-        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
-        max_intensity = samp.x();
-        best_hue = std::fmod(samp.y() * 360.0f + color_cycle * 0.15f + 720.0f, 360.0f);
-        if(strat_on)
-            max_intensity = EffectStratumBlend::ApplyMotionToUnit01(max_intensity, stratum_mot01, 0.18f);
-    }
+    if(!volume_assist_.isAvailable())
+        return 0x00000000;
+
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
+    max_intensity = samp.x();
+    best_hue = std::fmod(samp.y() * 360.0f + color_cycle * 0.15f + 720.0f, 360.0f);
+    if(strat_on)
+        max_intensity = EffectStratumBlend::ApplyMotionToUnit01(max_intensity, stratum_mot01, 0.18f);
 
 
     if(max_intensity <= 1e-5f)

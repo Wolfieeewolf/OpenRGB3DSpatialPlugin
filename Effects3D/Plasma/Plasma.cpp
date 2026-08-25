@@ -181,11 +181,11 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     const float pshift = EffectStratumBlend::PhaseShift01(bb);
 
     float plasma_value = 0.0f;
-    if(volume_assist_.isAvailable())
-    {
-        /* Origin-local atlas; stratum phase only on sample coords when needed. */
-        plasma_value = volume_assist_.sampleScalar01(n1, n2, n3);
-    }
+    if(!volume_assist_.isAvailable())
+        return 0x00000000;
+
+    /* Origin-local atlas; stratum phase only on sample coords when needed. */
+    plasma_value = volume_assist_.sampleScalar01(n1, n2, n3);
     plasma_value = EffectStratumBlend::ApplyMotionToUnit01(plasma_value, stratum_mot01, 0.28f);
 
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);

@@ -164,8 +164,10 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
 /* --- Spatial coordinate contract (single source of truth) ---
  *
  * ROOM UV — NormalizeGridAxis01 / SampleRoomAxis01:
- *   Maps world position into the active GridContext3D AABB [0,1]^3 (floor y=0, ceiling y=1).
+ *   Maps world position into the active GridContext3D AABB [0,1]^3
+ *   (front-left floor = 0,0,0 → right / ceiling / back = 1,1,1).
  *   Use for room-fixed surfaces (walls/floor/ceiling), edge fade, and audio strip layouts.
+ *   Sample GPU room-field atlases with sample01(nx, ny, nz) — no axis flips.
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.

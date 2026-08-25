@@ -3,10 +3,10 @@
 
 /** Bubbles volume: R=intensity, G=hue01.
  *  Rising expanding shells evaluated once per atlas voxel (not per LED).
- *  Overlap push is skipped on GPU (golden-angle spacing is enough at room scale).
+ *  Sample coords are origin-local (Spatial Anchor at 0.5).
  *  u_params: [0]=time [1]=count [2]=thick01 [3]=rise_rate
  *            [4]=interval [5]=max_r01 [6]=fill [7]=launch_jitter
- *            [8]=hue_scroll01 [9]=ox [10]=oy [11]=oz
+ *            [8]=hue_scroll01 [9]=overlap_spacing
  */
 inline const char* BubblesVolumeFieldGlsl()
 {
@@ -19,15 +19,15 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 {
     float time_sec = u_params[0];
     int count = int(clamp(u_params[1], 4.0, 48.0) + 0.5);
-    float thick = max(u_params[2], 0.008);
+    float thick = max(u_params[2], 0.014);
     float rise_rate = max(u_params[3], 0.01);
     float interval = max(u_params[4], 0.12);
     float max_r = max(u_params[5], 0.04);
     float fill = clamp(u_params[6], 0.5, 1.8);
     float launch_jitter = clamp(u_params[7], 0.0, 1.0);
     float hue_scroll = fract(u_params[8]);
+    float spacing = clamp(u_params[9], 0.10, 1.0);
 
-    vec3 local = p01 - vec3(0.5);
     float intensity = 0.0;
     float hue01 = hue_scroll;
     const float golden = 2.39996323;
@@ -51,11 +51,12 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         float radius = (0.18 + 0.82 * radius_phase) * max_r * 0.55;
         float ring = sqrt((fi + 0.5) / float(count));
         float ang = fi * golden;
-        // Centers in origin-local UV: XZ spread by fill, Y rises 0→1 of room.
+        // Centers in origin-local UV: XZ spread by fill + spacing, Y rises 0→1 of room.
+        float spread = 0.50 * fill * (0.55 + 0.45 * spacing);
         vec3 c;
-        c.x = 0.5 + cos(ang) * ring * 0.50 * fill;
+        c.x = 0.5 + cos(ang) * ring * spread;
         c.y = radius_phase;
-        c.z = 0.5 + sin(ang) * ring * 0.50 * fill;
+        c.z = 0.5 + sin(ang) * ring * spread;
         c = clamp(c, vec3(0.0), vec3(1.0));
 
         float d = length(p01 - c);

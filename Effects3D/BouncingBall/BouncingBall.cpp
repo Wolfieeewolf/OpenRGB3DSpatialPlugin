@@ -123,7 +123,7 @@ BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
     ball_count = 4;
     SetRainbowMode(true);
     volume_assist_.setFragmentBody(QString::fromUtf8(BouncingBallVolumeFieldGlsl()));
-    volume_assist_.setResolution(16);
+    volume_assist_.setResolution(20);
 }
 
 BouncingBall::~BouncingBall() = default;
@@ -208,8 +208,8 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
-    // Unit-cube ball radius — Size scales glow footprint.
-    const float radius01 = std::clamp(0.035f + 0.10f * size_m * GetNormalizedScale(), 0.02f, 0.22f);
+    // Unit-cube ball radius — Size scales glow footprint; floor keeps sparse LEDs lit.
+    const float radius01 = std::clamp(0.045f + 0.12f * size_m * GetNormalizedScale(), 0.03f, 0.26f);
     const float sim_phase_rate = (0.28f + motion * 2.35f) * bb.speed_mul;
     const float sim_t = time_sec * sim_phase_rate;
     const float hue_scroll =
@@ -251,19 +251,19 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     float max_intensity = 0.0f;
     float hue_for_max = 120.0f;
 
-    if(volume_assist_.isAvailable())
-    {
-        float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
-        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
-        max_intensity = samp.x();
-        hue_for_max = std::fmod(samp.y() * 360.0f + color_cycle * 0.25f
-                                    + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f
-                                    + 720.0f,
-                                360.0f);
-        if(GetStratumLayoutMode() == 1)
-            max_intensity = EffectStratumBlend::ApplyMotionToUnit01(max_intensity, stratum_mot01, 0.18f);
-    }
+    if(!volume_assist_.isAvailable())
+        return 0x00000000;
+
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
+    max_intensity = samp.x();
+    hue_for_max = std::fmod(samp.y() * 360.0f + color_cycle * 0.25f
+                                + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f
+                                + 720.0f,
+                            360.0f);
+    if(GetStratumLayoutMode() == 1)
+        max_intensity = EffectStratumBlend::ApplyMotionToUnit01(max_intensity, stratum_mot01, 0.18f);
 
     if(max_intensity <= 1e-5f)
         return 0x00000000;

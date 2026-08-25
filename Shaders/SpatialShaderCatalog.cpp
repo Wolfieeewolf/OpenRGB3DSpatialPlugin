@@ -47,6 +47,26 @@ std::vector<QString> ListPresetPaths()
         paths.push_back(bundled.next());
     }
 
+    // Fallback if the qrc iterator misses aliases (flat :/spatial_shaders/*.fs).
+    if(paths.empty())
+    {
+        static const char* kBundled[] = {
+            "slow_waves.fs",
+            "room_plasma.fs",
+            "spectrum_glow.fs",
+            "ember_field.fs",
+            "soft_aurora.fs",
+            "soft_ripples.fs",
+            "hex_drift.fs",
+        };
+        for(const char* name : kBundled)
+        {
+            const QString path = QStringLiteral(":/spatial_shaders/") + QString::fromUtf8(name);
+            if(QFileInfo::exists(path))
+                paths.push_back(path);
+        }
+    }
+
     const QString custom_root = UserShadersFolderPath();
     if(!custom_root.isEmpty())
     {
@@ -77,7 +97,13 @@ std::vector<QString> ListPresetPaths()
             return 2;
         if(name.contains(QStringLiteral("ember")))
             return 3;
-        return 4;
+        if(name.contains(QStringLiteral("aurora")))
+            return 4;
+        if(name.contains(QStringLiteral("ripple")))
+            return 5;
+        if(name.contains(QStringLiteral("hex")))
+            return 6;
+        return 7;
     };
     std::stable_sort(paths.begin(), paths.end(), [&](const QString& a, const QString& b) {
         return prefer(a) < prefer(b);
@@ -96,6 +122,12 @@ QString PresetDisplayName(const QString& path)
         return QStringLiteral("Checker Drift — moving lattice");
     if(stem == QStringLiteral("ember_field"))
         return QStringLiteral("Ripple Ember — fire rings");
+    if(stem == QStringLiteral("soft_aurora"))
+        return QStringLiteral("Soft Aurora — curtain bands");
+    if(stem == QStringLiteral("soft_ripples"))
+        return QStringLiteral("Soft Ripples — expanding rings");
+    if(stem == QStringLiteral("hex_drift"))
+        return QStringLiteral("Hex Drift — lattice wash");
     return QFileInfo(path).fileName();
 }
 

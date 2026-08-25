@@ -77,7 +77,7 @@ HexLattice::HexLattice(QWidget* parent) : SpatialEffect3D(parent)
     volume_assist_.setFragmentBody(QString::fromUtf8(HexLatticeVolumeFieldGlsl()));
     // Higher atlas res than most effects: hex walls are sub-cell features and
     // blur away at 18^3.
-    volume_assist_.setResolution(20); // was 28 — atlas cost is n³; 20 keeps hex edges readable
+    volume_assist_.setResolution(22); // was 28 — atlas cost is n³; 22 keeps hex edges readable
 }
 
 HexLattice::~HexLattice() = default;
@@ -205,12 +205,12 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
 
     float v = 0.0f;
     float h01 = 0.0f;
-    if(volume_assist_.isAvailable())
-    {
-        const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
-        v = samp.x();
-        h01 = samp.y();
-    }
+    if(!volume_assist_.isAvailable())
+        return 0x00000000;
+
+    const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
+    v = samp.x();
+    h01 = samp.y();
 
     RGBColor c = 0x00000000;
     if(UseEffectStripColormap())

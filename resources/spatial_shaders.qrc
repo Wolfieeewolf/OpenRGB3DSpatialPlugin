@@ -1,8 +1,11 @@
 <RCC>
     <qresource prefix="/spatial_shaders">
-        <file>spatial_shaders/room_plasma.fs</file>
-        <file>spatial_shaders/slow_waves.fs</file>
-        <file>spatial_shaders/spectrum_glow.fs</file>
-        <file>spatial_shaders/ember_field.fs</file>
+        <file alias="room_plasma.fs">spatial_shaders/room_plasma.fs</file>
+        <file alias="slow_waves.fs">spatial_shaders/slow_waves.fs</file>
+        <file alias="spectrum_glow.fs">spatial_shaders/spectrum_glow.fs</file>
+        <file alias="ember_field.fs">spatial_shaders/ember_field.fs</file>
+        <file alias="soft_aurora.fs">spatial_shaders/soft_aurora.fs</file>
+        <file alias="soft_ripples.fs">spatial_shaders/soft_ripples.fs</file>
+        <file alias="hex_drift.fs">spatial_shaders/hex_drift.fs</file>
     </qresource>
 </RCC>

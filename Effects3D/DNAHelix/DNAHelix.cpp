@@ -43,7 +43,7 @@ DNAHelix::DNAHelix(QWidget* parent) : SpatialEffect3D(parent)
     SetSpeed(35);
     SetRainbowMode(false);
     volume_assist_.setFragmentBody(QString::fromUtf8(DNAHelixVolumeFieldGlsl()));
-    volume_assist_.setResolution(20);
+    volume_assist_.setResolution(24);
 }
 
 DNAHelix::~DNAHelix() = default;
@@ -178,7 +178,7 @@ void DNAHelix::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, c
     const float twists =
         std::clamp(twist_amount * (0.55f + 0.75f * detail) * (0.45f + 0.08f * freq), 0.4f, 8.0f);
     const float thickness =
-        std::clamp((strand_thickness_pct / 100.0f) * (0.55f + 0.35f * size_m), 0.04f, 0.45f);
+        std::clamp((strand_thickness_pct / 100.0f) * (0.65f + 0.40f * size_m), 0.055f, 0.48f);
     const float rung_amount = std::clamp(rung_amount_pct / 100.0f, 0.0f, 1.0f);
     const float vp[6] = {
         progress,

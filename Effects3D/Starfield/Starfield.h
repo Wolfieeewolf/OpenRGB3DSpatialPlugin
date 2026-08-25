@@ -54,8 +54,8 @@ private:
     RGBColor FinishSample(const EvalContext& ctx, float intensity, float palette01, float hotness, int mode_i) const;
 
     int mode = MODE_STARS;
-    int num_stars = 32;
-    float star_size = 0.10f;
+    int num_stars = 40;
+    float star_size = 0.20f;
     float drift_amount = 0.12f;
     float twinkle_speed = 0.45f;
     float fill_amount = 1.0f;

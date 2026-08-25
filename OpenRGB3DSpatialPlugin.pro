@@ -279,9 +279,11 @@ HEADERS += \
     Effects3D/SpectrumBars/SpectrumBars.h \
     Effects3D/AudioStripVisualizer/AudioStripVisualizer.h \
     Effects3D/ShaderField/ShaderField.h \
+    Effects3D/ShaderField/ShaderFieldPresets.h \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
     Shaders/SpatialShaderCatalog.h \
+    Shaders/GlslUniformArray.h \
     Shaders/SpatialFieldAssistBase.h \
     Shaders/SpatialVolumeFieldEngine.h \
     Shaders/SpatialOffscreenGlPool.h \
@@ -306,8 +308,10 @@ HEADERS += \
     Effects3D/OmniShapeTexture/OmniShapeTextureVolumeFieldGlsl.h \
     Effects3D/TravelingLight/TravelingLightVolumeFieldGlsl.h \
     Effects3D/SurfaceAmbient/SurfaceAmbientVolumeFieldGlsl.h \
-    Effects3D/ShellPattern/ShellPatternCubeVolumeFieldGlsl.h \
+    Effects3D/ShellPattern/ShellPatternVolumeFieldGlsl.h \
+    Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h \
     Effects3D/SpatialPatternKernels/SpatialStripKernelFieldGlsl.h \
+    Effects3D/SpatialPatternKernels/StripUnfoldFieldGlsl.h \
     Effects3D/AudioReactiveUi.h \
     Effects3D/AudioLevel/AudioLevel.h \
     Effects3D/AudioPulse/AudioPulse.h \

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ShaderField.h"
+#include "ShaderFieldPresets.h"
 #include "Shaders/SpatialShaderCatalog.h"
-#include "Shaders/SpatialOffscreenGlPool.h"
 #include "MediaTextureEffectUtils.h"
 
 #include <QVBoxLayout>
@@ -29,7 +29,7 @@ ShaderField::ShaderField(QWidget* parent)
     SetFrequency(25);
     shader_engine = new SpatialShaderEngine(this);
     shader_engine->setTargetFps(30);
-    shader_engine->setRenderSize(160, 90);
+    shader_engine->setRenderSize(256, 144);
     connect(shader_engine,
             &SpatialShaderEngine::frameReady,
             this,
@@ -41,11 +41,15 @@ ShaderField::ShaderField(QWidget* parent)
             &ShaderField::OnCompileMessage,
             Qt::QueuedConnection);
 
+    // Always install a working body first so Size/Contrast/Hue respond even if qrc presets miss.
+    shader_engine->setFragmentBody(QString::fromUtf8(ShaderFieldPresets::kBundled[0].source));
     RebuildPresetList();
-    if(!preset_paths.empty())
-    {
-        LoadPresetAtIndex(0);
-    }
+    LoadPresetAtIndex(0);
+
+    connect(this, &SpatialEffect3D::ParametersChanged, this, [this]() {
+        last_uniform_sequence = 0;
+        last_uniform_time = -1.0f;
+    });
 }
 
 ShaderField::~ShaderField()
@@ -58,13 +62,34 @@ ShaderField::~ShaderField()
 
 void ShaderField::EnsureShaderEngineRunning()
 {
-    if(!SpatialOffscreenGlPool::hostContextReady())
+    if(shader_engine)
+    {
+        shader_engine->start();
+    }
+}
+
+void ShaderField::PrepareGpuFields(std::uint64_t /*render_sequence*/, float time_sec, const GridContext3D& /*grid*/)
+{
+    if(!shader_engine)
     {
         return;
     }
-    if(shader_engine && !shader_engine->isRunning())
+    shader_engine->start();
+    SyncUniforms(time_sec);
+    if(!shader_engine->ensureReady())
     {
-        shader_engine->start();
+        if(compile_log_label && !shader_engine->lastError().isEmpty())
+        {
+            compile_log_label->setVisible(true);
+            compile_log_label->setText(shader_engine->lastError().left(280));
+        }
+        return;
+    }
+    const QImage img = shader_engine->latestFrame();
+    if(!img.isNull())
+    {
+        QMutexLocker lock(&display_mutex);
+        display_frame = std::make_shared<QImage>(img);
     }
 }
 
@@ -107,11 +132,16 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     const auto on_changed = [this]() { emit ParametersChanged(); };
     const auto pct_format = [](int v) { return QString::number(v) + QStringLiteral("%"); };
 
+    // Refresh list when the panel opens (ctor may have run before resources were ready).
+    RebuildPresetList();
+
     QLabel* help = new QLabel(
         QStringLiteral(
             "Shader Field paints a moving 2D pattern, then samples it onto LEDs.\n"
-            "Presets are different patterns (waves vs plasma vs checker vs ember rings).\n"
-            "Add your own .fs files in the user shaders folder if you want custom looks."),
+            "Presets are bundled patterns (waves, plasma, checker, ember, aurora…). "
+            "\"Open user shaders folder\" is only for your own .fs files — bundled presets "
+            "live inside the plugin, not that folder.\n"
+            "Projection picks which room plane is mapped; Size/Detail/Contrast/Hue drive the shader."),
         w);
     help->setWordWrap(true);
     help->setStyleSheet(QStringLiteral("color: palette(mid);"));
@@ -124,10 +154,20 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     preset_row->setObjectName(QStringLiteral("presetRow"));
     preset_combo = preset_row->combo();
     preset_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    for(const QString& path : preset_paths)
+    preset_combo->clear();
+    for(const QString& id : preset_ids)
     {
-        preset_combo->addItem(SpatialShaderCatalog::PresetDisplayName(path));
+        const ShaderFieldPresets::Bundled* b = ShaderFieldPresets::Find(id);
+        preset_combo->addItem(b ? QString::fromUtf8(b->title) : id, id);
     }
+    if(preset_ids.empty())
+    {
+        preset_combo->addItem(QStringLiteral("Slow Waves — soft blue bands"), QStringLiteral("slow_waves"));
+        preset_ids.push_back(QStringLiteral("slow_waves"));
+    }
+    preset_combo->setEnabled(true);
+    preset_combo->setCurrentIndex(0);
+    LoadPresetAtIndex(0);
     preset_combo->setToolTip(QStringLiteral("Each preset is a different GLSL pattern. Switching reloads the shader."));
     connect(preset_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShaderField::OnPresetChanged);
 
@@ -156,7 +196,10 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     contrast_slider = contrast_row->slider();
     contrast_row->bindValueChanged(
         this,
-        [this](int v) { contrast = std::clamp(v / 100.0f, 0.35f, 2.5f); },
+        [this](int v) {
+            contrast = std::clamp(v / 100.0f, 0.35f, 2.5f);
+            last_uniform_sequence = 0;
+        },
         pct_format,
         on_changed);
 
@@ -171,7 +214,10 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     hue_slider = hue_row->slider();
     hue_row->bindValueChanged(
         this,
-        [this](int v) { hue_shift = std::clamp(v / 1000.0f, 0.0f, 1.0f); },
+        [this](int v) {
+            hue_shift = std::clamp(v / 1000.0f, 0.0f, 1.0f);
+            last_uniform_sequence = 0;
+        },
         [this](int) { return QString::number(hue_shift, 'f', 3); },
         on_changed);
 
@@ -193,48 +239,65 @@ void ShaderField::SetupCustomUI(QWidget* parent)
 
 void ShaderField::RebuildPresetList()
 {
-    preset_paths = SpatialShaderCatalog::ListPresetPaths();
+    preset_ids.clear();
+    for(int i = 0; i < ShaderFieldPresets::kBundledCount; ++i)
+    {
+        preset_ids.push_back(QString::fromUtf8(ShaderFieldPresets::kBundled[i].id));
+    }
     SpatialShaderCatalog::EnsureUserShadersFolder();
 }
 
 void ShaderField::LoadPresetAtIndex(int index)
 {
-    if(!shader_engine || index < 0 || index >= (int)preset_paths.size())
+    if(!shader_engine)
     {
-        if(compile_log_label)
-        {
-            compile_log_label->setVisible(true);
-            compile_log_label->setText(QStringLiteral("No shader preset available."));
-        }
         return;
     }
-    QFile file(preset_paths[(size_t)index]);
-    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    if(preset_ids.empty())
     {
-        if(compile_log_label)
-        {
-            compile_log_label->setVisible(true);
-            compile_log_label->setText(QStringLiteral("Failed to open preset: %1").arg(QFileInfo(file).fileName()));
-        }
-        return;
+        RebuildPresetList();
     }
-    QTextStream in(&file);
-    const QString body = in.readAll();
+    if(index < 0 || index >= (int)preset_ids.size())
+    {
+        index = 0;
+    }
+    active_preset_index = index;
+
+    QString body;
+    QString label;
+    const ShaderFieldPresets::Bundled* b = ShaderFieldPresets::Find(preset_ids[(size_t)index]);
+    if(b)
+    {
+        body = QString::fromUtf8(b->source);
+        label = QString::fromUtf8(b->title);
+    }
+    else
+    {
+        QFile file(preset_ids[(size_t)index]);
+        if(file.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+            body = QTextStream(&file).readAll();
+            label = QFileInfo(file).fileName();
+        }
+    }
     if(body.trimmed().isEmpty())
     {
-        if(compile_log_label)
-        {
-            compile_log_label->setVisible(true);
-            compile_log_label->setText(QStringLiteral("Preset is empty: %1").arg(QFileInfo(file).fileName()));
-        }
-        return;
+        body = QString::fromUtf8(ShaderFieldPresets::kBundled[0].source);
+        label = QStringLiteral("Slow Waves (fallback)");
+        active_preset_index = 0;
     }
     {
         QMutexLocker lock(&display_mutex);
         display_frame.reset();
     }
+    last_uniform_sequence = 0;
     shader_engine->setFragmentBody(body);
     EnsureShaderEngineRunning();
+    if(compile_log_label)
+    {
+        compile_log_label->setVisible(true);
+        compile_log_label->setText(QStringLiteral("Loaded: %1").arg(label));
+    }
 }
 
 void ShaderField::OnPresetChanged(int index)
@@ -296,12 +359,14 @@ void ShaderField::SyncUniforms(float time)
     }
     EnsureShaderEngineRunning();
     SpatialShaderUniforms u;
-    u.time_sec = CalculateProgress(time);
+    // Drive animation from wall-clock effect time scaled by Speed (not progress wrap alone).
+    const float spd = std::max(0.05f, GetScaledSpeed());
+    u.time_sec = time * spd * 0.35f;
     // Size → zoom, Detail → density, Frequency → hue scroll, local contrast/hue.
     const float zoom = std::clamp(GetNormalizedSize() * (0.55f + 0.9f * GetNormalizedScale()), 0.25f, 3.0f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float freq_norm = std::clamp(GetNormalizedFrequency(), 0.0f, 1.0f);
-    const float hue = std::fmod(hue_shift + time * freq_norm * 0.08f + 1.0f, 1.0f);
+    const float hue = std::fmod(hue_shift + time * freq_norm * 0.08f * spd + 1.0f, 1.0f);
     u.params[0] = zoom;
     u.params[1] = std::clamp(contrast, 0.35f, 2.5f);
     u.params[2] = hue;
@@ -401,10 +466,7 @@ nlohmann::json ShaderField::SaveSettings() const
     j["projection_mode"] = projection_mode;
     j["shader_contrast"] = contrast;
     j["shader_hue_shift"] = hue_shift;
-    if(preset_combo)
-    {
-        j["preset_index"] = preset_combo->currentIndex();
-    }
+    j["preset_index"] = active_preset_index;
     return j;
 }
 
@@ -427,15 +489,30 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
         contrast_slider->setValue((int)std::lround(contrast * 100.0f));
     if(hue_slider)
         hue_slider->setValue((int)std::lround(hue_shift * 1000.0f));
-    if(settings.contains("preset_index") && preset_combo)
+
+    /* Renderer instances have no preset_combo — still must swap the GLSL body.
+       UI + render effect are separate objects; ParametersChanged copies settings
+       from the UI effect onto the renderer. */
+    if(preset_ids.empty())
     {
-        int idx = settings["preset_index"].get<int>();
-        if(idx >= 0 && idx < preset_combo->count())
-        {
-            preset_combo->setCurrentIndex(idx);
-            LoadPresetAtIndex(idx);
-        }
+        RebuildPresetList();
     }
+    int idx = active_preset_index;
+    if(settings.contains("preset_index") && settings["preset_index"].is_number_integer())
+    {
+        idx = settings["preset_index"].get<int>();
+    }
+    if(idx < 0 || idx >= (int)preset_ids.size())
+    {
+        idx = 0;
+    }
+    if(preset_combo)
+    {
+        preset_combo->blockSignals(true);
+        preset_combo->setCurrentIndex(idx);
+        preset_combo->blockSignals(false);
+    }
+    LoadPresetAtIndex(idx);
 }
 
 REGISTER_EFFECT_3D(ShaderField)

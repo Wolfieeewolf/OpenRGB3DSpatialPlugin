@@ -6,7 +6,6 @@
  *  LED×ball loops. Evaluated once per atlas voxel.
  *  u_params: [0]=sim_t [1]=count [2]=radius01 [3]=glow_mul
  *            [4]=motion [5]=hue_scroll01 [6]=detail
- *            [7]=ox [8]=oy [9]=oz
  */
 inline const char* BouncingBallVolumeFieldGlsl()
 {
@@ -37,8 +36,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 {
     float sim_t = u_params[0];
     int count = int(clamp(u_params[1], 1.0, 32.0) + 0.5);
-    float radius = max(u_params[2], 0.02);
-    float glow_mul = max(u_params[3], 1.0);
+    float radius = max(u_params[2], 0.03);
+    float glow_mul = max(u_params[3], 1.15);
     float motion = clamp(u_params[4], 0.02, 1.0);
     float hue_scroll = fract(u_params[5]);
     float detail = clamp(u_params[6], 0.05, 1.0);

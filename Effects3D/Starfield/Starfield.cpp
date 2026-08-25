@@ -58,7 +58,8 @@ Starfield::Starfield(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(true);
     SetSpeed(45);
     volume_assist_.setFragmentBody(QString::fromUtf8(StarfieldVolumeFieldGlsl()));
-    volume_assist_.setResolution(16);
+    // Sparse particles need more atlas cells than soft fills (Plasma) or they vanish on LEDs/viewport.
+    volume_assist_.setResolution(22);
 }
 
 EffectInfo3D Starfield::GetEffectInfo() const
@@ -189,7 +190,7 @@ RGBColor Starfield::ResolveSpaceColor(const EvalContext& ctx, float pos01, float
 RGBColor Starfield::FinishSample(const EvalContext& ctx, float intensity, float palette01, float hotness,
                                  int mode_i) const
 {
-    if(intensity < 0.015f)
+    if(intensity < 0.008f)
         return 0x00000000;
 
     float cr, cg, cb;

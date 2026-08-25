@@ -27,6 +27,7 @@ public:
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
+    void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
 
@@ -57,7 +58,8 @@ private:
     QSlider* hue_slider = nullptr;
     QLabel* compile_log_label = nullptr;
 
-    std::vector<QString> preset_paths;
+    std::vector<QString> preset_ids;
+    int active_preset_index = 0;
     int projection_mode = 0;
     float contrast = 1.0f;
     float hue_shift = 0.0f;

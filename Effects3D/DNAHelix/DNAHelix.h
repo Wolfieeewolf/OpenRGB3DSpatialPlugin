@@ -44,7 +44,7 @@ private:
     int helix_shape_mode = SHAPE_HELIX;
     float helix_radius_pct = 55.0f;
     float twist_amount = 2.4f;
-    float strand_thickness_pct = 28.0f;
+    float strand_thickness_pct = 36.0f;
     float rung_amount_pct = 55.0f;
 
     QComboBox* shape_combo = nullptr;

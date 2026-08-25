@@ -2,6 +2,7 @@
 
 #include "SpatialVolumeFieldEngine.h"
 #include "SpatialOffscreenGlPool.h"
+#include "GlslUniformArray.h"
 
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
@@ -52,15 +53,21 @@ QString BuildFragmentShader(const QString& user_body)
 
 void ConvertRgbaAtlasToRgb(const unsigned char* rgba, int n, std::vector<float>& out_rgb)
 {
+    /* glReadPixels packs FBO rows bottom-to-top: buffer row 0 = FBO y = 0.
+       The volume fragment shader maps the same FBO y to
+         slice = floor(y / n), ly = y - slice * n
+         p01 = (x/n, ly/n, slice/n)
+       so atlas[x,y,z] must read buffer row (z * n + y) with NO vertical flip.
+       Flipping here inverted room Y and Z for every volume effect (and forced
+       per-effect 1-y workarounds in Surface Ambient / Shell Pattern). */
     const int atlas_w = n;
-    const int atlas_h = n * n;
     const float inv255 = 1.0f / 255.0f;
     out_rgb.assign((size_t)n * (size_t)n * (size_t)n * 3u, 0.0f);
     for(int slice = 0; slice < n; ++slice)
     {
         for(int y = 0; y < n; ++y)
         {
-            const int src_row = (atlas_h - 1 - (slice * n + y));
+            const int src_row = slice * n + y;
             const unsigned char* src_row_ptr = rgba + ((size_t)src_row * (size_t)atlas_w) * 4u;
             float* dst_row = out_rgb.data() + (((size_t)slice * (size_t)n + (size_t)y) * (size_t)n) * 3u;
             for(int x = 0; x < n; ++x)
@@ -470,7 +477,7 @@ bool SpatialVolumeFieldEngine::renderAtlas()
     program_->setUniformValue("u_time", params_.time_sec);
     program_->setUniformValue("u_res", (float)n);
     program_->setUniformValue("u_atlas", QVector2D((float)n, (float)(n * n)));
-    program_->setUniformValueArray("u_params", param_bins, kMaxParams, 1);
+    SetGlslFloatUniformArray(*program_, glf, "u_params", param_bins, kMaxParams);
 
     glf->glActiveTexture(GL_TEXTURE0);
     glf->glBindTexture(GL_TEXTURE_2D, media_tex_id_);

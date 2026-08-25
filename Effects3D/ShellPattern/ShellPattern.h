@@ -8,7 +8,6 @@
 #include "EffectStratumBlend.h"
 #include "Game/StripPatternSurface.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
-#include "Shaders/SpatialStripFieldAssist.h"
 #include "Shaders/SpatialVolumeFieldAssist.h"
 
 class QComboBox;
@@ -53,18 +52,13 @@ private:
     static const char* UnfoldModeLabel(int m);
     static const char* DisplayModeLabel(int d);
 
-    float EvaluateKernel(float s01, float phase01, float time_sec, int pattern, float repeats) const;
-    /** Spatial LED-cube style intensity for the newer display modes (0..1). */
-    float EvaluateCubeDisplay(int disp, float lx, float ly, float lz, float k, float amp,
-                              float progress, float time_sec, float sigma) const;
-
     int unfold_mode = 0;
-    int display_mode = DISP_SHELL_Y;
+    int display_mode = DISP_FILL_STRIP;
     int pattern_id = 0;
     float direction_deg = 0.0f;
-    float surface_thickness = 0.0f;
-    float strip_repeats = 1.0f;
-    float wave_amplitude = 0.2f;
+    float surface_thickness = 0.14f;
+    float strip_repeats = 2.0f;
+    float wave_amplitude = 0.85f;
     float edge_fade_pct = 0.0f;
 
     QComboBox* display_combo = nullptr;
@@ -75,7 +69,6 @@ private:
     QSlider*   edge_slider   = nullptr;
     QSlider*   direction_slider = nullptr;
     QSlider*   repeats_slider = nullptr;
-    SpatialStripFieldAssist strip_assist_;
     SpatialVolumeFieldAssist volume_assist_;
 };
 

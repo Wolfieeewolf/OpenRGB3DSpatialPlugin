@@ -255,7 +255,9 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     spiral_angle += stratum_mot01 * 6.2831853f * 0.55f;
 
     float spiral_value = 0.0f;
-    if(volume_assist_.isAvailable())
+    if(!volume_assist_.isAvailable())
+        return 0x00000000;
+
     {
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
         SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,

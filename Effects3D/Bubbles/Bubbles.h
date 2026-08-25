@@ -7,12 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 #include "Shaders/SpatialVolumeFieldAssist.h"
-#include <vector>
-
-struct BubbleCenter3D
-{
-    float cx, cy, cz, radius;
-};
 
 class Bubbles : public SpatialEffect3D
 {
@@ -35,15 +29,13 @@ private:
     static constexpr int kMaxGpuBubbles = 48;
 
     int max_bubbles = 24;
-    float bubble_thickness = 0.55f;
+    float bubble_thickness = 0.65f;
     float rise_speed = 1.4f;
     float spawn_interval = 0.95f;
     float max_radius = 1.9f;
     float horizontal_fill = 1.35f;
     float overlap_spacing = 0.65f;
     float launch_randomness = 0.55f;
-    float bubble_cache_time = -1e9f;
-    std::vector<BubbleCenter3D> bubble_centers_cached;
     SpatialVolumeFieldAssist volume_assist_;
 };
 

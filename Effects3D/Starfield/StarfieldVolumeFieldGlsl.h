@@ -3,10 +3,10 @@
 
 /** Space / Starfield volume: R=intensity, G=palette01, B=hotness.
  *  Particle modes loop a capped star set once per atlas voxel (GPU), not per LED.
+ *  Sample coords are origin-local (Spatial Anchor at 0.5); do not subtract packed origin.
  *  u_params: [0]=progress [1]=time [2]=mode [3]=count
  *            [4]=thickness [5]=size_m [6]=fill [7]=drift
  *            [8]=twinkle [9]=hue_scroll
- *            [10]=ox [11]=oy [12]=oz
  *  mode: 0 Stars, 1 Twinkle, 2 Warp, 3 Hyperdrive, 4 Blackhole, 5 Wormhole
  */
 inline const char* StarfieldVolumeFieldGlsl()
@@ -99,7 +99,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     else
     {
         // Particle field — capped loop (atlas, not per-LED).
-        float base_thick = max(0.012, thickness * 0.40 * size_m);
+        // Keep kernels wide enough to survive ~22³ atlas + coarse room-grid preview.
+        float base_thick = max(0.022, thickness * 0.62 * size_m);
         float sum_i = 0.0;
         float sum_p = 0.0;
         float sum_h = 0.0;
@@ -199,7 +200,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
                              * pow(max(0.0, sin(time_sec * (2.0 + twinkle * 4.0) + fi)), 10.0);
                 contrib = max(contrib, crossv * 1.2);
             }
-            if(contrib < 0.02)
+            if(contrib < 0.01)
                 continue;
 
             float hot = 0.0;

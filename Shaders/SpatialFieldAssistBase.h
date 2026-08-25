@@ -22,12 +22,15 @@ class SpatialFieldAssistBase
 public:
     void setFragmentBody(const QString& glsl_body)
     {
-        if(body_set_ && body_ == glsl_body)
+        const bool same = body_set_ && body_ == glsl_body;
+        if(same && !unavailable_)
         {
             return;
         }
         body_ = glsl_body;
         body_set_ = true;
+        // Allow a fresh prepare after the body changes (or after a prior compile latch).
+        unavailable_ = false;
         if(engine_)
         {
             engine_->setFragmentBody(body_);
@@ -85,6 +88,11 @@ public:
 
         if(!engine_->ensureReady())
         {
+            const QString err = engine_->lastError();
+            if(err.contains(QStringLiteral("Host GL")) || err.contains(QStringLiteral("makeCurrent")))
+            {
+                return false;
+            }
             unavailable_ = true;
             return false;
         }

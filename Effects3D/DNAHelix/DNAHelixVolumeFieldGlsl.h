@@ -5,7 +5,6 @@
  *  Proper double-helix SDF in unit cube (axis = Y), origin/ref via sample remap on CPU.
  *  u_params: [0]=progress [1]=twists [2]=radius01 [3]=thickness
  *            [4]=rung_amount [5]=shape(0=helix,1=rope,2=ribbons,3=ladder)
- *            [6]=ox [7]=oy [8]=oz (axis origin in 01)
  */
 inline const char* DNAHelixVolumeFieldGlsl()
 {
@@ -20,7 +19,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float progress = u_params[0];
     float twists = max(u_params[1], 0.35);
     float radius01 = clamp(u_params[2], 0.06, 0.85);
-    float thickness = clamp(u_params[3], 0.03, 0.45);
+    float thickness = clamp(u_params[3], 0.04, 0.48);
     float rung_amount = clamp(u_params[4], 0.0, 1.0);
     int shape = int(clamp(u_params[5], 0.0, 3.0) + 0.5);
     float lx = p01.x * 2.0 - 1.0;
@@ -78,7 +77,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     }
 
     // Soft axis glow so sparse grids still read motion.
-    float axis_glow = 0.10 * (1.0 - smstep(0.0, radius01 * 1.4, length(vec2(lx, lz))));
+    float axis_glow = 0.14 * (1.0 - smstep(0.0, radius01 * 1.55, length(vec2(lx, lz))));
     intensity = clamp(intensity + axis_glow, 0.0, 1.0);
 
     float palette01 = fract(ly * twists * 0.35 + progress + (d1 < d2 ? 0.0 : 0.5));
