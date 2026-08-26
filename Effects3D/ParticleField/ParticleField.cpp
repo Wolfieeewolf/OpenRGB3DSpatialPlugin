@@ -26,6 +26,8 @@ const char* ParticleField::ModeName(int m)
     case MODE_EMBERS: return "Embers";
     case MODE_SPARKLE: return "Sparkle";
     case MODE_ATTRACT: return "Attract";
+    case MODE_RAIN: return "Rain";
+    case MODE_FIREWORKS: return "Fireworks";
     default: return "Float / Fuzzy";
     }
 }
@@ -44,7 +46,7 @@ EffectInfo3D ParticleField::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Particle Field";
     info.effect_description =
-        "Room-fill organic particles (float, snow, embers, sparkle, attract). "
+        "Room-fill organic particles (float, snow, embers, sparkle, attract, rain, fireworks). "
         "GPU volume field — Spatial Anchor is the hub for Attract mode.";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
@@ -83,7 +85,8 @@ void ParticleField::SetupCustomUI(QWidget* parent)
         mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::clamp(mode, 0, MODE_COUNT - 1));
     mode_combo->setToolTip(QStringLiteral(
-        "Float = fuzzy soup; Snow falls; Embers rise; Sparkle flashes; Attract pulls toward the Spatial Anchor."));
+        "Float = fuzzy soup; Snow falls; Embers rise; Sparkle flashes; Attract pulls toward the "
+        "Spatial Anchor; Rain streaks; Fireworks burst."));
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         mode = std::clamp(idx, 0, MODE_COUNT - 1);
         emit ParametersChanged();
@@ -100,14 +103,14 @@ void ParticleField::SetupCustomUI(QWidget* parent)
                                 [](int v) { return QString::number(v); }, on_changed);
 
     EffectSliderRow* size_row = EffectUiRows::AppendSliderRow(
-        layout, QStringLiteral("Particle size:"), 15, 120, (int)std::lround(particle_size * 100.0f),
+        layout, QStringLiteral("Particle size:"), 15, 140, (int)std::lround(particle_size * 100.0f),
         QStringLiteral("Soft kernel radius of each particle."));
     size_row->setObjectName(QStringLiteral("sizeRow"));
     size_row->bindValueChanged(this, [this](int v) { particle_size = v / 100.0f; }, pct, on_changed);
 
     EffectSliderRow* thick_row = EffectUiRows::AppendSliderRow(
-        layout, QStringLiteral("Softness:"), 20, 120, (int)std::lround(thickness * 100.0f),
-        QStringLiteral("Falloff softness — higher = fluffier blobs."));
+        layout, QStringLiteral("Softness:"), 20, 140, (int)std::lround(thickness * 100.0f),
+        QStringLiteral("Falloff softness — higher = fluffier blobs (fills empty rooms better)."));
     thick_row->setObjectName(QStringLiteral("thickRow"));
     thick_row->bindValueChanged(this, [this](int v) { thickness = v / 100.0f; }, pct, on_changed);
 
@@ -146,9 +149,9 @@ void ParticleField::PrepareGpuFields(std::uint64_t render_sequence, float time_s
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
     const float size01 =
-        std::clamp(std::max(0.15f, particle_size) * size_m * 0.22f, 0.03f, 0.28f);
+        std::clamp(std::max(0.15f, particle_size) * size_m * 0.26f, 0.04f, 0.34f);
     const float thick01 =
-        std::clamp(std::max(0.20f, thickness) * 0.10f, 0.018f, 0.16f);
+        std::clamp(std::max(0.20f, thickness) * 0.125f, 0.022f, 0.20f);
     const float hue_scroll =
         std::fmod(time_sec * GetScaledFrequency() * 0.020f * bb.speed_mul + 1000.0f, 1.0f);
 
@@ -205,7 +208,7 @@ RGBColor ParticleField::CalculateColorGrid(float x, float y, float z, float time
     if(strat_on)
         max_intensity = EffectStratumBlend::ApplyMotionToUnit01(max_intensity, stratum_mot01, 0.18f);
 
-    if(max_intensity < 0.008f)
+    if(max_intensity < 0.005f)
         return 0x00000000;
 
     SpatialLayerCore::Basis basis;
@@ -288,9 +291,9 @@ void ParticleField::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("pf_count") && settings["pf_count"].is_number_integer())
         particle_count = std::clamp(settings["pf_count"].get<int>(), 4, kMaxGpuParticles);
     if(settings.contains("pf_size") && settings["pf_size"].is_number())
-        particle_size = std::clamp(settings["pf_size"].get<float>(), 0.15f, 1.2f);
+        particle_size = std::clamp(settings["pf_size"].get<float>(), 0.15f, 1.4f);
     if(settings.contains("pf_thickness") && settings["pf_thickness"].is_number())
-        thickness = std::clamp(settings["pf_thickness"].get<float>(), 0.20f, 1.2f);
+        thickness = std::clamp(settings["pf_thickness"].get<float>(), 0.20f, 1.4f);
     if(settings.contains("pf_motion") && settings["pf_motion"].is_number())
         motion_amount = std::clamp(settings["pf_motion"].get<float>(), 0.10f, 2.5f);
     if(settings.contains("pf_noise") && settings["pf_noise"].is_number())

@@ -32,6 +32,8 @@ public:
         MODE_EMBERS = 2,
         MODE_SPARKLE = 3,
         MODE_ATTRACT = 4,
+        MODE_RAIN = 5,
+        MODE_FIREWORKS = 6,
         MODE_COUNT
     };
 
@@ -41,12 +43,12 @@ private:
     static constexpr int kMaxGpuParticles = 48;
 
     int mode = MODE_FLOAT;
-    int particle_count = 28;
-    float particle_size = 0.55f;
-    float thickness = 0.70f;
+    int particle_count = 36;
+    float particle_size = 0.72f;
+    float thickness = 0.95f;
     float motion_amount = 1.0f;
     float noise_amount = 0.55f;
-    float fill_amount = 1.0f;
+    float fill_amount = 1.15f;
     SpatialVolumeFieldAssist volume_assist_;
 };
 
