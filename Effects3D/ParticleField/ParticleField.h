@@ -40,6 +40,9 @@ public:
     static const char* ModeName(int m);
 
 private:
+    void ApplyModeDefaults(int mode_id);
+    void SyncCustomUiFromModel();
+
     static constexpr int kMaxGpuParticles = 48;
 
     int mode = MODE_FLOAT;

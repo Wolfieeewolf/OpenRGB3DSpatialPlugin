@@ -32,6 +32,89 @@ const char* ParticleField::ModeName(int m)
     }
 }
 
+void ParticleField::ApplyModeDefaults(int mode_id)
+{
+    switch(std::clamp(mode_id, 0, MODE_COUNT - 1))
+    {
+    case MODE_SNOW:
+        particle_count = 40;
+        particle_size = 0.48f;
+        thickness = 0.78f;
+        motion_amount = 0.95f;
+        noise_amount = 0.40f;
+        fill_amount = 1.25f;
+        break;
+    case MODE_EMBERS:
+        particle_count = 32;
+        particle_size = 0.58f;
+        thickness = 0.88f;
+        motion_amount = 1.15f;
+        noise_amount = 0.35f;
+        fill_amount = 1.05f;
+        break;
+    case MODE_SPARKLE:
+        particle_count = 30;
+        particle_size = 0.38f;
+        thickness = 0.68f;
+        motion_amount = 1.25f;
+        noise_amount = 0.20f;
+        fill_amount = 1.30f;
+        break;
+    case MODE_ATTRACT:
+        particle_count = 36;
+        particle_size = 0.82f;
+        thickness = 1.05f;
+        motion_amount = 1.00f;
+        noise_amount = 0.60f;
+        fill_amount = 1.00f;
+        break;
+    case MODE_RAIN:
+        particle_count = 44;
+        particle_size = 0.40f;
+        thickness = 0.72f;
+        motion_amount = 1.35f;
+        noise_amount = 0.25f;
+        fill_amount = 1.35f;
+        break;
+    case MODE_FIREWORKS:
+        particle_count = 36;
+        particle_size = 0.58f;
+        thickness = 0.88f;
+        motion_amount = 1.20f;
+        noise_amount = 0.30f;
+        fill_amount = 1.15f;
+        break;
+    case MODE_FLOAT:
+    default:
+        particle_count = 36;
+        particle_size = 0.72f;
+        thickness = 0.95f;
+        motion_amount = 1.00f;
+        noise_amount = 0.55f;
+        fill_amount = 1.15f;
+        break;
+    }
+}
+
+void ParticleField::SyncCustomUiFromModel()
+{
+    QWidget* panel = CustomSettingsPanelWidget();
+    if(!panel)
+        return;
+    QWidget* fx = EffectUiSync::effectPanel(panel, "ParticleFieldEffectSettings");
+    if(!fx)
+        return;
+    const auto pct = [](int v) { return QString::number(v) + QStringLiteral("%"); };
+    EffectUiSync::setComboIndex(fx, "modeRow", mode);
+    EffectUiSync::setSliderValue(fx, "countRow", particle_count, [](int v) { return QString::number(v); });
+    EffectUiSync::setSliderValue(fx, "sizeRow", (int)std::lround(particle_size * 100.0f), pct);
+    EffectUiSync::setSliderValue(fx, "thickRow", (int)std::lround(thickness * 100.0f), pct);
+    EffectUiSync::setSliderValue(fx, "motionRow", (int)std::lround(motion_amount * 100.0f),
+                                  [this](int) { return QString::number(motion_amount, 'f', 2); });
+    EffectUiSync::setSliderValue(fx, "noiseRow", (int)std::lround(noise_amount * 100.0f), pct);
+    EffectUiSync::setSliderValue(fx, "fillRow", (int)std::lround(fill_amount * 100.0f), pct);
+}
+
 ParticleField::ParticleField(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
@@ -86,9 +169,12 @@ void ParticleField::SetupCustomUI(QWidget* parent)
     mode_combo->setCurrentIndex(std::clamp(mode, 0, MODE_COUNT - 1));
     mode_combo->setToolTip(QStringLiteral(
         "Float = fuzzy soup; Snow falls; Embers rise; Sparkle flashes; Attract pulls toward the "
-        "Spatial Anchor; Rain streaks; Fireworks burst."));
+        "Spatial Anchor; Rain streaks; Fireworks burst.\n"
+        "Changing mode applies Softness / Size / Count presets for that look (you can still tweak after)."));
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         mode = std::clamp(idx, 0, MODE_COUNT - 1);
+        ApplyModeDefaults(mode);
+        SyncCustomUiFromModel();
         emit ParametersChanged();
     });
 
@@ -301,19 +387,5 @@ void ParticleField::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("pf_fill") && settings["pf_fill"].is_number())
         fill_amount = std::clamp(settings["pf_fill"].get<float>(), 0.35f, 1.6f);
 
-    if(QWidget* panel = CustomSettingsPanelWidget())
-    {
-        if(QWidget* fx = EffectUiSync::effectPanel(panel, "ParticleFieldEffectSettings"))
-        {
-            const auto pct = [](int v) { return QString::number(v) + QStringLiteral("%"); };
-            EffectUiSync::setComboIndex(fx, "modeRow", mode);
-            EffectUiSync::setSliderValue(fx, "countRow", particle_count, [](int v) { return QString::number(v); });
-            EffectUiSync::setSliderValue(fx, "sizeRow", (int)std::lround(particle_size * 100.0f), pct);
-            EffectUiSync::setSliderValue(fx, "thickRow", (int)std::lround(thickness * 100.0f), pct);
-            EffectUiSync::setSliderValue(fx, "motionRow", (int)std::lround(motion_amount * 100.0f),
-                                          [this](int) { return QString::number(motion_amount, 'f', 2); });
-            EffectUiSync::setSliderValue(fx, "noiseRow", (int)std::lround(noise_amount * 100.0f), pct);
-            EffectUiSync::setSliderValue(fx, "fillRow", (int)std::lround(fill_amount * 100.0f), pct);
-        }
-    }
+    SyncCustomUiFromModel();
 }
