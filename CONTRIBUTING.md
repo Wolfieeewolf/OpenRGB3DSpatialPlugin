@@ -123,6 +123,8 @@ When changing plugin behavior—especially anything that touches devices, colors
 
 **GPU volume/strip field assists:** when an effect uses `SpatialVolumeFieldAssist` / `SpatialStripFieldAssist`, the atlas is the source of truth. Do not keep parallel CPU formula fallbacks. Sample coords reaching `CalculateColorGrid` are already axis-scaled and rotated by the render path (`ApplyEffectRotation`) unless `SkipsSpatialSampleWarp()` is true. Single-atlas height bands bake mid-band stratum scalars at `PrepareGpuFields` — full per-LED multi-atlas stratum is out of scope until designed deliberately.
 
+**Shell Pattern / Surface Ambient:** both are volume-atlas SoT (`ShellPatternVolumeFieldGlsl` / `SurfaceAmbientVolumeFieldGlsl`). Shell composes shared `evalStripKernelSigned` + `stripUnfoldKernelInputs` (unfold 0–8). Palette / stratum / edge-fade finish stays on CPU. Do not reintroduce `EvaluateCubeDisplay`, strip-assist dual path, or a CPU `kernel_on_wall` wall loop.
+
 When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
 - Comments should be minimal and explain non-obvious intent only.

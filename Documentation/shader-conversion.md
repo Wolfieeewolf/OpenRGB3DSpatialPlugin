@@ -6,7 +6,7 @@ Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cube
 
 | Lane | Entry point | Engine |
 |------|-------------|--------|
-| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Strip assist + volume GLSL ([SpatialStripKernelEvalGlsl.h](../Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h)) |
+| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Strip assist + volume GLSL ([SpatialStripKernelEvalGlsl.h](../Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h)); unfold via `stripUnfoldKernelInputs` ([StripUnfoldFieldGlsl.h](../Effects3D/SpatialPatternKernels/StripUnfoldFieldGlsl.h)) — Shell Pattern composes both into `volumeMain` |
 | **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field |
 | **3D** | `volumeMain(out, p01)` soft field | `SpatialVolumeFieldAssist` |
 
@@ -25,6 +25,21 @@ Reject: `iChannel`, `iMouse`, raymarch, audio/webcam. Prefer soft plasma / noise
 **2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G).
 
 **Strip → 1D:** reduce to `s01` + time; add CPU + GLSL kernel in sync; bump `kSpatialStripGpuKernelMaxId`.
+
+## Curated batch (first ports)
+
+Bundled Shader Field presets (also under `resources/spatial_shaders/`):
+
+| Id | Source dump | Notes |
+|----|-------------|--------|
+| `lobe_plasma` | AnotherPlasma | Multi-lobe product plasma |
+| `noise_contour` | 2dNoiseContour | Gradient-noise topo bands |
+| `corner_waves` | 4RadialWave | Four-corner interference |
+| `aurora_ridge` | AnotherAuroraBorealis | Horizon ridge (vs Soft Aurora curtains) |
+| `neon_warp` | 003Warpy | Clamped neon tunnels |
+| `soft_blobs` | 002Blobby | Clamped neon blobs |
+
+Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a clean 1D kernel; kernels 0–43 already cover chase/comet/fire), heavy multipass / mouse dumps from triage reject lane.
 
 ## GPU vs CPU
 

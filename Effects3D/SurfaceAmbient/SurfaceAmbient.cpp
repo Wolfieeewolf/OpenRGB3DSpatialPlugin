@@ -2,7 +2,6 @@
 
 #include "SurfaceAmbient.h"
 #include "SurfaceAmbientVolumeFieldGlsl.h"
-#include "EffectHelpers.h"
 #include "PluginLog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"

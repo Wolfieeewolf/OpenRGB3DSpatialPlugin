@@ -6,7 +6,6 @@
 #include "SpatialPatternKernels/StripUnfoldFieldGlsl.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
-#include "EffectHelpers.h"
 #include "PluginLog.h"
 #include <QByteArray>
 #include <QComboBox>

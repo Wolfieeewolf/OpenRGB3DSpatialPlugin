@@ -58,6 +58,12 @@ std::vector<QString> ListPresetPaths()
             "soft_aurora.fs",
             "soft_ripples.fs",
             "hex_drift.fs",
+            "lobe_plasma.fs",
+            "noise_contour.fs",
+            "corner_waves.fs",
+            "aurora_ridge.fs",
+            "neon_warp.fs",
+            "soft_blobs.fs",
         };
         for(const char* name : kBundled)
         {
@@ -128,6 +134,18 @@ QString PresetDisplayName(const QString& path)
         return QStringLiteral("Soft Ripples — expanding rings");
     if(stem == QStringLiteral("hex_drift"))
         return QStringLiteral("Hex Drift — lattice wash");
+    if(stem == QStringLiteral("lobe_plasma"))
+        return QStringLiteral("Lobe Plasma — multi-center swirl");
+    if(stem == QStringLiteral("noise_contour"))
+        return QStringLiteral("Noise Contour — topo bands");
+    if(stem == QStringLiteral("corner_waves"))
+        return QStringLiteral("Corner Waves — four-corner rings");
+    if(stem == QStringLiteral("aurora_ridge"))
+        return QStringLiteral("Aurora Ridge — horizon curtain");
+    if(stem == QStringLiteral("neon_warp"))
+        return QStringLiteral("Neon Warp — tunnel glow");
+    if(stem == QStringLiteral("soft_blobs"))
+        return QStringLiteral("Soft Blobs — neon metaballs");
     return QFileInfo(path).fileName();
 }
 

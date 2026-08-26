@@ -137,8 +137,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float intensity = 0.0;
     float k = 0.0;
 
-    float s01 = stripUnfoldCoord01(l.x, l.y, l.z, unfold_mode, dir_deg);
-    k = evalStripKernelSigned(kid, s01, phase01, repeats, anim_t);
+    vec3 uf = stripUnfoldKernelInputs(l.x, l.y, l.z, unfold_mode, dir_deg, phase01, anim_t);
+    float s01 = uf.x;
+    float phase_use = uf.y;
+    float time_use = uf.z;
+    k = evalStripKernelSigned(kid, s01, phase_use, repeats, time_use);
 
     if(disp == 0)
     {
@@ -154,8 +157,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         int shell_unfold = unfold_mode;
         if(shell_unfold != 1)
             shell_unfold = 4;
-        float s_shell = stripUnfoldCoord01(l.x, l.y, l.z, shell_unfold, dir_deg);
-        k = evalStripKernelSigned(kid, s_shell, phase01, repeats, anim_t);
+        vec3 uf_shell = stripUnfoldKernelInputs(l.x, l.y, l.z, shell_unfold, dir_deg, phase01, anim_t);
+        k = evalStripKernelSigned(kid, uf_shell.x, uf_shell.y, repeats, uf_shell.z);
         float k01 = clamp((k + 1.0) * 0.5, 0.0, 1.0);
         float r_span = (0.65 + 0.55 * clamp(amp, 0.2, 2.5) / 2.0) * size_m;
         float surface_r = (0.15 + 0.85 * k01) * r_span;

@@ -172,6 +172,182 @@ void spatialMain(out vec4 out_color, in vec2 frag_coord)
     out_color = vec4(mix(vec3(1.0), rgb, 0.7) * (0.12 + 0.88 * v), 1.0);
 }
 )"},
+    {"lobe_plasma", "Lobe Plasma — multi-center swirl", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (1.35 * zoom);
+    float t = u_time;
+    float n_its = 3.0 + floor(2.0 * detail + 0.5);
+    float n_d_prod = 1.0;
+    float i0 = 0.0;
+    n_d_prod += sin(length(p - vec2(sin(0.0), cos(0.0)) * sin(t * 0.2 + 0.0)) * (8.0 + 4.0 * detail));
+    i0 = 1.0 / n_its;
+    n_d_prod += sin(length(p - vec2(sin(6.2831 * i0), cos(6.2831 * i0)) * sin(t * 0.2 + i0)) * (8.0 + 4.0 * detail));
+    i0 = 2.0 / n_its;
+    n_d_prod += sin(length(p - vec2(sin(6.2831 * i0), cos(6.2831 * i0)) * sin(t * 0.2 + i0)) * (8.0 + 4.0 * detail));
+    i0 = 3.0 / n_its;
+    n_d_prod += sin(length(p - vec2(sin(6.2831 * i0), cos(6.2831 * i0)) * sin(t * 0.2 + i0)) * (8.0 + 4.0 * detail));
+    i0 = 4.0 / n_its;
+    n_d_prod += sin(length(p - vec2(sin(6.2831 * i0), cos(6.2831 * i0)) * sin(t * 0.2 + i0)) * (8.0 + 4.0 * detail));
+    float n1 = 0.5 + 0.5 * sin(n_d_prod * 4.0 + t * 2.2);
+    float n2 = 0.5 + 0.5 * sin(n_d_prod * 2.0 + t * 2.2);
+    float n3 = 0.5 + 0.5 * sin(n_d_prod * 1.0 + t * 2.2);
+    float v = pow(clamp((n1 + n2 + n3) / 3.0, 0.0, 1.0), contrast);
+    float h = fract(hue + n1 * 0.2 + t * 0.03);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = rgb * rgb * (3.0 - 2.0 * rgb);
+    vec3 col = mix(vec3(n1, n2, n3), rgb, 0.55) * (0.25 + 0.75 * v);
+    out_color = vec4(clamp(col, 0.0, 1.0), 1.0);
+}
+)"},
+    {"noise_contour", "Noise Contour — topo bands", R"(
+float ncHash11(float t){return fract(sin(t*56789.0)*56789.0);}
+float ncHash21(vec2 uv){return ncHash11(ncHash11(uv.x)+2.0*ncHash11(uv.y));}
+vec2 ncGrad(vec2 uv){float t=ncHash21(uv);return vec2(cos(6.2831853*t),sin(6.2831853*t));}
+float ncNoise(vec2 uv,float r){
+    float ca=cos(r);float sa=sin(r);vec2 uvi=floor(uv);vec2 uvf=uv-uvi;
+    vec2 g00=ncGrad(uvi);vec2 g10=ncGrad(uvi+vec2(1.0,0.0));
+    vec2 g01=ncGrad(uvi+vec2(0.0,1.0));vec2 g11=ncGrad(uvi+vec2(1.0,1.0));
+    g00=vec2(ca*g00.x-sa*g00.y,sa*g00.x+ca*g00.y);g10=vec2(ca*g10.x-sa*g10.y,sa*g10.x+ca*g10.y);
+    g01=vec2(ca*g01.x-sa*g01.y,sa*g01.x+ca*g01.y);g11=vec2(ca*g11.x-sa*g11.y,sa*g11.x+ca*g11.y);
+    float f00=dot(g00,uvf);float f10=dot(g10,uvf-vec2(1.0,0.0));
+    float f01=dot(g01,uvf-vec2(0.0,1.0));float f11=dot(g11,uvf-vec2(1.0,1.0));
+    float sx=uvf.x*uvf.x*(3.0-2.0*uvf.x);float sy=uvf.y*uvf.y*(3.0-2.0*uvf.y);
+    return ((mix(mix(f00,f10,sx),mix(f01,f11,sx),sy)/0.7)+1.0)*0.5;
+}
+float ncFbm(vec2 uv,float r){return (ncNoise(uv,r)+ncNoise(uv*2.0,r)*0.5)/1.5;}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.4 * zoom * (0.7 + detail));
+    float noise_fac = ncFbm(p * (2.0 + 2.5 * detail), u_time * 0.55);
+    float contour = 0.5 * (1.0 - cos((18.0 + 28.0 * detail) * 3.14159265 * noise_fac));
+    float clip = smoothstep(0.55, mix(0.85, 0.98, contrast / 2.5), contour);
+    float h = fract(hue + noise_fac * 0.35 + u_time * 0.02);
+    vec3 rgb = mix(vec3(0.85, 0.05, 0.75), vec3(0.05, 0.85, 0.90), noise_fac);
+    vec3 tint = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(rgb, tint, 0.35) * clip * (0.35 + 0.65 * contour), 1.0);
+}
+)"},
+    {"corner_waves", "Corner Waves — four-corner rings", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * zoom + 0.5;
+    float vel = 1.6 + 2.2 * detail;
+    float len = mix(18.0, 8.0, detail);
+    float t = u_time * vel;
+    float aspect = u_resolution.x / max(u_resolution.y, 1.0);
+    vec2 q = (p - 0.5) * vec2(aspect, 1.0) + 0.5;
+    float d0 = length((q - vec2(0.0, 0.0)) * u_resolution.xy / max(u_resolution.y, 1.0));
+    float d1 = length((q - vec2(1.0, 0.0)) * u_resolution.xy / max(u_resolution.y, 1.0));
+    float d2 = length((q - vec2(0.0, 1.0)) * u_resolution.xy / max(u_resolution.y, 1.0));
+    float d3 = length((q - vec2(1.0, 1.0)) * u_resolution.xy / max(u_resolution.y, 1.0));
+    float w = sin(d0 / len - t) + sin(d1 / len - t) + sin(d2 / len - t) + sin(d3 / len - t);
+    float v = pow(clamp(0.5 + 0.25 * w, 0.0, 1.0), contrast);
+    float h = fract(hue + 0.08 * w + u_time * 0.02);
+    vec3 crest = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    crest = crest * crest * (3.0 - 2.0 * crest);
+    out_color = vec4(mix(vec3(0.02, 0.05, 0.14), crest, v), 1.0);
+}
+)"},
+    {"aurora_ridge", "Aurora Ridge — horizon curtain", R"(
+float arRnd(vec2 p,float n){return fract(abs(sin(p.x*123.4+p.y*432.1)*(p.x*3.7+p.x*p.y*4.5+256.7+n*654.3)+n*321.1));}
+float arEase(float x){return x<0.5?2.0*x*x:1.0-pow(-2.0*x+2.0,2.0)/2.0;}
+float arH(float x,float dx,float n,float div){return 0.5+(arRnd(vec2(floor(x*div)/div+dx/div,0.0),n)-0.5)/5.0;}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * zoom + 0.5;
+    float div = 18.0 + 28.0 * detail;
+    float t = u_time * 0.45;
+    float n = floor(t);
+    t = fract(t);
+    float fx = fract(p.x * div);
+    float v = mix(mix(arH(p.x,0.0,n,div),arH(p.x,1.0,n,div),arEase(fx)),
+                  mix(arH(p.x,0.0,n+1.0,div),arH(p.x,1.0,n+1.0,div),arEase(fx)),t);
+    float glow = pow(clamp(1.0 - abs(p.y - v) * mix(6.0, 14.0, contrast / 2.5), 0.0, 1.0), mix(1.6, 0.8, contrast / 2.5));
+    vec3 base = mix(vec3(0.15, 0.75, 0.35 + 0.45 * p.y), vec3(0.75, 0.18, 0.85 * (1.0 - p.y)), clamp(abs(p.y - v) * 2.0, 0.0, 1.0));
+    float h = fract(hue + glow * 0.08 + u_time * 0.015);
+    vec3 tint = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(base, tint, 0.25) * (0.25 + 0.85 * glow), 1.0);
+}
+)"},
+    {"neon_warp", "Neon Warp — tunnel glow", R"(
+vec3 nwPalette(float t){vec3 a=vec3(0.960,0.260,0.580);vec3 b=vec3(0.900,0.138,0.450);vec3 c=vec3(0.520,0.200,0.520);vec3 d=vec3(-0.60,-0.90,-0.09);return a+b*cos(6.28318*(c*t+d));}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (1.8 * zoom);
+    vec2 p0 = p;
+    vec3 final_color = vec3(0.0);
+    float dens = 3.5 + 3.0 * detail;
+    vec2 u = p - 0.5; u *= sin(0.0 - length(u));
+    float d = abs(sin(length(u) * exp(-length(p0)) * dens + u_time * 0.3) * 0.6);
+    d = clamp(pow(0.03 / max(d, 0.02), mix(0.85, 1.25, contrast / 2.5)), 0.0, 2.5);
+    final_color += nwPalette(length(p0) - u_time * 0.25 + 10.0 + hue) * d;
+    u = p; u.x = -u.x; u = u - 0.5 + 1.0; u *= sin(1.0 - length(u));
+    d = abs(sin(length(u) * exp(-length(p0)) * dens + u_time * 0.3) * 0.6);
+    d = clamp(pow(0.03 / max(d, 0.02), mix(0.85, 1.25, contrast / 2.5)), 0.0, 2.5);
+    final_color += nwPalette(length(p0) - u_time * 0.25 + 10.0 + hue) * d;
+    u = p - 0.5 + 2.0; u *= sin(2.0 - length(u));
+    d = abs(sin(length(u) * exp(-length(p0)) * dens + u_time * 0.3) * 0.6);
+    d = clamp(pow(0.03 / max(d, 0.02), mix(0.85, 1.25, contrast / 2.5)), 0.0, 2.5);
+    final_color += nwPalette(length(p0) - u_time * 0.25 + 10.0 + hue) * d;
+    final_color *= clamp(0.55 / max(length(p0), 0.35), 0.0, 1.35);
+    out_color = vec4(clamp(final_color, 0.0, 1.0), 1.0);
+}
+)"},
+    {"soft_blobs", "Soft Blobs — neon metaballs", R"(
+vec3 sbPalette(float t){vec3 a=vec3(0.660,0.560,0.680);vec3 b=vec3(0.718,0.438,0.720);vec3 c=vec3(0.520,0.100,0.520);vec3 d=vec3(-0.60,-0.30,-0.09);return a+b*cos(6.28318*(c*t+d));}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (1.7 * zoom);
+    vec2 p0 = p;
+    vec3 final_color = vec3(0.0);
+    float dens = 6.0 + 6.0 * detail;
+    vec2 u = p - 0.5; u *= sin(0.0 - length(p0));
+    float d = abs(sin(length(u) * exp(-length(p0)) * dens + u_time * 0.25) * 0.5);
+    d = clamp(pow(0.03 / max(d, 0.02), mix(1.0, 1.45, contrast / 2.5)), 0.0, 2.2);
+    final_color += sbPalette(length(p0) - u_time * 0.25 + hue) * d;
+    u = p - 0.5 + 1.0; u *= sin(5.0 - length(p0));
+    d = abs(sin(length(u) * exp(-length(p0)) * dens + u_time * 0.25) * 0.5);
+    d = clamp(pow(0.03 / max(d, 0.02), mix(1.0, 1.45, contrast / 2.5)), 0.0, 2.2);
+    final_color += sbPalette(length(p0) - u_time * 0.25 + hue) * d;
+    u = p - 0.5 + 2.0; u *= sin(10.0 - length(p0));
+    d = abs(sin(length(u) * exp(-length(p0)) * dens + u_time * 0.25) * 0.5);
+    d = clamp(pow(0.03 / max(d, 0.02), mix(1.0, 1.45, contrast / 2.5)), 0.0, 2.2);
+    final_color += sbPalette(length(p0) - u_time * 0.25 + hue) * d;
+    final_color *= clamp(1.0 / max(length(p0), 0.4), 0.0, 1.4);
+    out_color = vec4(clamp(final_color, 0.0, 1.0), 1.0);
+}
+)"},
 };
 
 inline constexpr int kBundledCount = int(sizeof(kBundled) / sizeof(kBundled[0]));
