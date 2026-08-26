@@ -306,6 +306,7 @@ HEADERS += \
     Effects3D/Bubbles/BubblesVolumeFieldGlsl.h \
     Effects3D/BouncingBall/BouncingBallVolumeFieldGlsl.h \
     Effects3D/Starfield/StarfieldVolumeFieldGlsl.h \
+    Effects3D/ParticleField/ParticleFieldVolumeFieldGlsl.h \
     Effects3D/TextureProjection/TextureProjectionVolumeFieldGlsl.h \
     Effects3D/OmniShapeTexture/OmniShapeTextureVolumeFieldGlsl.h \
     Effects3D/TravelingLight/TravelingLightVolumeFieldGlsl.h \
@@ -333,6 +334,7 @@ HEADERS += \
     Effects3D/PulseRing/PulseRing.h \
     Effects3D/SurfaceAmbient/SurfaceAmbient.h \
     Effects3D/Starfield/Starfield.h \
+    Effects3D/ParticleField/ParticleField.h \
     Effects3D/Bubbles/Bubbles.h \
     Effects3D/ColorWheel/ColorWheel.h \
     Effects3D/ScreenMirror/ScreenMirror.h \
@@ -512,6 +514,7 @@ SOURCES += \
     Effects3D/PulseRing/PulseRing.cpp \
     Effects3D/SurfaceAmbient/SurfaceAmbient.cpp \
     Effects3D/Starfield/Starfield.cpp \
+    Effects3D/ParticleField/ParticleField.cpp \
     Effects3D/Bubbles/Bubbles.cpp \
     Effects3D/ColorWheel/ColorWheel.cpp \
     Effects3D/ScreenMirror/ScreenMirror.cpp \
