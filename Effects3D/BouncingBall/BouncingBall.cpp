@@ -225,7 +225,7 @@ nlohmann::json BouncingBall::SaveSettings() const
 void BouncingBall::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("ball_count"))
+    if(settings.contains("ball_count") && settings["ball_count"].is_number_integer())
         ball_count = std::clamp(settings["ball_count"].get<unsigned int>(), 1u, kMaxGpuBalls);
     if(count_slider)
         count_slider->setValue((int)ball_count);

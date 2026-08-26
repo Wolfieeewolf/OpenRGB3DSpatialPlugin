@@ -543,7 +543,6 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
                                                   std::clamp(pal01, 0.0f, 1.0f), time);
         QColor qc = QColor::fromRgb((int)(c & 0xFF), (int)((c >> 8) & 0xFF), (int)((c >> 16) & 0xFF)).toHsv();
         const float cv = static_cast<float>(qc.valueF());
-        h = std::fmod(h + hue01 + 1.0f, 1.0f);
         return EffectHsv01ToBgr(h, sat, std::clamp(val * cv, 0.0f, 1.0f));
     }
 
