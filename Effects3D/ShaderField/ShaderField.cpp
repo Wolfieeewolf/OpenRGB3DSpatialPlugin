@@ -4,6 +4,7 @@
 #include "ShaderFieldPresets.h"
 #include "Shaders/SpatialShaderCatalog.h"
 #include "MediaTextureEffectUtils.h"
+#include "PluginUiUtils.h"
 
 #include <QVBoxLayout>
 #include <QComboBox>
@@ -145,7 +146,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
             "Projection picks which room plane is mapped; Size/Detail/Contrast/Hue drive the shader."),
         w);
     help->setWordWrap(true);
-    help->setStyleSheet(QStringLiteral("color: palette(mid);"));
+    PluginUiApplyMutedSecondaryLabel(help);
     layout->addWidget(help);
 
     QVBoxLayout* shader_section = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Shader"));

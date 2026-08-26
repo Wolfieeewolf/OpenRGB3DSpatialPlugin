@@ -248,6 +248,7 @@ HEADERS += \
     ui/PluginUiUtils.h \
     Effects3D/EffectStratumBlend.h \
     Effects3D/EffectHelpers.h \
+    Effects3D/EffectColorUtils.h \
     Effects3D/EffectUiSync.h \
     Effects3D/AudioReactiveCommon.h \
     Effects3D/SpatialKernelColormap.h \

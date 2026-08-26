@@ -31,7 +31,7 @@ public:
 private slots:
 private:
     enum Axis { AXIS_X = 0, AXIS_Y, AXIS_Z, AXIS_COUNT };
-    enum Layout { LAYOUT_LINEAR = 0, LAYOUT_CENTER, LAYOUT_REF, LAYOUT_COUNT };
+    enum Layout { LAYOUT_LINEAR = 0, LAYOUT_CENTER, LAYOUT_COUNT };
 
     static const char* AxisName(int a);
     static const char* LayoutName(int L);

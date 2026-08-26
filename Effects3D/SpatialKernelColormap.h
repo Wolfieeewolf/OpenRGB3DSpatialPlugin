@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <cmath>
 
-/** Surface Look Pattern always uses the kernel's own animated palette. */
 inline RGBColor ResolveStripKernelFinalColor(int kernel_id, float palette01, float time_sec)
 {
     float p = std::fmod(palette01, 1.0f);
@@ -21,7 +20,7 @@ inline RGBColor ResolveStripKernelFinalColor(int kernel_id, float palette01, flo
     return SampleKernelPatternPalette(kernel_id, p, time_sec);
 }
 
-/** Freq/detail scaling shared by CPU Eval and GPU strip-colormap prepare. */
+/** Freq/detail scaling for strip-colormap prepare. */
 inline void StripColormapClockScale(float freq_norm,
                                     float detail_norm,
                                     float kernel_rep,
@@ -36,7 +35,6 @@ inline void StripColormapClockScale(float freq_norm,
     time_eff = time_sec * (0.55f + 0.90f * freq_norm);
 }
 
-/** Unfold to s01 (+ optional freeze of phase/time for StaticRoomPlane). */
 inline float StripColormapComputeS01(int unfold_mode,
                                      float dir_deg,
                                      float phase_eff,
@@ -93,46 +91,6 @@ inline void StripColormapLocalAxes(const GridContext3D& grid,
     lx = (rot.x - origin.x) / sw;
     ly = (rot.y - origin.y) / sh;
     lz = (rot.z - origin.z) / sd;
-}
-
-/** Full 44-kernel CPU twin (EvalSpatialPatternKernel). Effects use
- *  SpatialEffect3D::SampleEffectStripColormap01 (GPU 8-family atlas) instead. */
-inline float SampleStripKernelPalette01(int kernel_id,
-                                        float kernel_rep,
-                                        int unfold_mode,
-                                        float dir_deg,
-                                        float phase01,
-                                        float time_sec,
-                                        const GridContext3D& grid,
-                                        float normalized_scale,
-                                        const Vector3D& origin,
-                                        const Vector3D& rot)
-{
-    const SpatialEffect3D* effect = SpatialEffect3D::GetEvaluatingEffect();
-    float freq_norm = 1.0f;
-    float detail_norm = 1.0f;
-    if(effect)
-    {
-        freq_norm = std::clamp(effect->GetScaledFrequency() / 10.0f, 0.25f, 2.5f);
-        detail_norm = std::clamp(effect->GetScaledDetail() / 10.0f, 0.25f, 2.5f);
-    }
-
-    float phase_eff = 0.0f;
-    float time_eff = 0.0f;
-    float kernel_rep_eff = 1.0f;
-    StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, time_sec,
-                            phase_eff, time_eff, kernel_rep_eff);
-
-    float lx = 0.0f, ly = 0.0f, lz = 0.0f;
-    StripColormapLocalAxes(grid, normalized_scale, origin, rot, lx, ly, lz);
-
-    float phase_use = phase_eff;
-    float time_use = time_eff;
-    const float s01 = StripColormapComputeS01(unfold_mode, dir_deg, phase_eff, time_eff,
-                                              lx, ly, lz, phase_use, time_use);
-
-    float k = EvalSpatialPatternKernel(kernel_id, s01, phase_use, kernel_rep_eff, time_use);
-    return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
 }
 
 inline void StripColormapSaveCanonical(nlohmann::json& j,

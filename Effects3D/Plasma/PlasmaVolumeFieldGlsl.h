@@ -2,8 +2,7 @@
 #pragma once
 
 /** GLSL body for SpatialVolumeFieldEngine: plasma scalar in R (0..1).
- *  u_params[0] = progress, [1] = freq_scale, [2] = pattern (0..7),
- *  [3..5] = effect/ref origin in unit UV (centers radial modes).
+ *  u_params: [0]=progress [1]=freq_scale [2]=pattern (0..7)
  */
 inline const char* PlasmaVolumeFieldGlsl()
 {

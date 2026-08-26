@@ -2,13 +2,11 @@
 #pragma once
 
 /** Pulse ring: R=intensity, G=color_driver01.
- *  Sphere = 3D shell. Circle/Hex/Triangle/Square = FLAT extruded XZ rings
- *  (hard Y slab) so the pulse keeps the footprint — never length(xz,y).
- *  For Radial Rainbow, G stores continuous azimuth hue (no expand-progress).
+ *  Sphere = 3D shell. Circle/Hex/Triangle/Square = flat extruded XZ rings.
+ *  Radial Rainbow stores continuous azimuth hue in G.
  *  u_params: [0]=progress [1]=hole [2]=sigma [3]=amp [4]=detail
  *            [5]=style(0=pulse,1=radial) [6]=phase_offset [7]=shape
  *            [8]=size_scale [9]=hue_scroll01
- *            [10]=ox [11]=oy [12]=oz  (effect/ref origin in unit UV)
  */
 inline const char* PulseRingVolumeFieldGlsl()
 {

@@ -242,18 +242,11 @@ void AudioLevel::LoadSettings(const nlohmann::json& settings)
     AudioReactiveLoadFromJson(audio_settings, settings);
     if(settings.contains("wave_amount"))
     {
-        float w = settings["wave_amount"].get<float>();
-        /* Legacy UI wrote 0–100; normalize to 0–0.5. */
-        if(w > 1.0f)
-            w *= 0.01f;
-        wave_amount = std::clamp(w, 0.0f, 0.5f);
+        wave_amount = std::clamp(settings["wave_amount"].get<float>(), 0.0f, 0.5f);
     }
     if(settings.contains("edge_soft"))
     {
-        float e = settings["edge_soft"].get<float>();
-        if(e > 1.0f)
-            e *= 0.01f;
-        edge_soft = std::clamp(e, 0.02f, 0.5f);
+        edge_soft = std::clamp(settings["edge_soft"].get<float>(), 0.02f, 0.5f);
     }
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();

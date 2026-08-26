@@ -4,118 +4,9 @@
 #include "BouncingBallVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
-#include "EffectHelpers.h"
 #include "EffectUiRows.h"
 #include <cmath>
-#include <vector>
 #include <algorithm>
-
-namespace
-{
-
-float HashFloat01(unsigned int seed)
-{
-    unsigned int value = seed ^ 0x27D4EB2D;
-    value = (value ^ 61U) ^ (value >> 16U);
-    value = value + (value << 3U);
-    value = value ^ (value >> 4U);
-    value = value * 0x27D4EB2D;
-    value = value ^ (value >> 15U);
-    return (value & 0xFFFFU) / 65535.0f;
-}
-
-void IntegrateBall(float& pos_x, float& pos_y, float& pos_z,
-                   float& vel_x, float& vel_y, float& vel_z,
-                   float dt, float gravity, float e,
-                   float floor_bounce_vy_up,
-                   float xmin, float xmax, float ymin, float ymax, float zmin, float zmax)
-{
-    vel_y -= gravity * dt;
-
-    pos_x += vel_x * dt;
-    pos_y += vel_y * dt;
-    pos_z += vel_z * dt;
-
-    constexpr float k_horiz_damp = 0.992f;
-
-    if(pos_x <= xmin)
-    {
-        pos_x = xmin;
-        vel_x = -vel_x * e * k_horiz_damp;
-    }
-    else if(pos_x >= xmax)
-    {
-        pos_x = xmax;
-        vel_x = -vel_x * e * k_horiz_damp;
-    }
-
-    if(pos_y <= ymin)
-    {
-        pos_y = ymin;
-        // Prefer a strong hop: max of fixed bounce energy and elastic rebound.
-        const float rebound = -vel_y * e;
-        vel_y = fmaxf(floor_bounce_vy_up, rebound);
-    }
-    else if(pos_y >= ymax)
-    {
-        pos_y = ymax;
-        vel_y = -vel_y * e;
-    }
-
-    if(pos_z <= zmin)
-    {
-        pos_z = zmin;
-        vel_z = -vel_z * e * k_horiz_damp;
-    }
-    else if(pos_z >= zmax)
-    {
-        pos_z = zmax;
-        vel_z = -vel_z * e * k_horiz_damp;
-    }
-}
-
-void ClampBallSpeed(float& vx, float& vy, float& vz, float v_max_horiz, float v_max_vert)
-{
-    const float h2 = vx * vx + vz * vz;
-    const float hm2 = v_max_horiz * v_max_horiz;
-    if(h2 > hm2 && h2 > 1e-12f)
-    {
-        const float inv = v_max_horiz / sqrtf(h2);
-        vx *= inv;
-        vz *= inv;
-    }
-    if(vy > v_max_vert)
-        vy = v_max_vert;
-    else if(vy < -v_max_vert)
-        vy = -v_max_vert;
-}
-
-void SeedBall(unsigned int k,
-              float xmin, float ymin, float zmin,
-              float span_x, float span_y, float span_z,
-              float motion, float gravity, float radius_basis,
-              CachedBall3D& b)
-{
-    const float hy = HashFloat01(k * 313U + 5U);
-    const float hx = HashFloat01(k * 131U);
-    const float hz = HashFloat01(k * 919U);
-
-    b.px = xmin + hx * span_x;
-    b.py = ymin + (0.18f + hy * 0.72f) * span_y;
-    b.pz = zmin + hz * span_z;
-
-    const float drop_h = fmaxf(span_y * (0.35f + 0.55f * HashFloat01(k * 419U + 11U)),
-                               radius_basis * 0.08f);
-    b.floor_bounce_vy = sqrtf(2.0f * gravity * drop_h) * 1.05f;
-
-    // Keep horizontal drift secondary to vertical bounce.
-    const float horiz = (0.12f + 0.45f * motion) * radius_basis;
-    b.vx = (HashFloat01(k * 733U) * 2.0f - 1.0f) * horiz;
-    b.vz = (HashFloat01(k * 829U) * 2.0f - 1.0f) * horiz;
-    b.vy = (0.55f + HashFloat01(k * 577U) * 0.55f) * b.floor_bounce_vy;
-}
-
-}
 
 BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -188,13 +79,6 @@ void BouncingBall::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
-void BouncingBall::OnBallParameterChanged()
-{
-    if(count_slider)
-        ball_count = (unsigned int)std::clamp(count_slider->value(), 1, (int)kMaxGpuBalls);
-    emit ParametersChanged();
-}
-
 void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
     SpatialLayerCore::MapperSettings strat_st;
@@ -208,7 +92,6 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
-    // Unit-cube ball radius — Size scales glow footprint; floor keeps sparse LEDs lit.
     const float radius01 = std::clamp(0.045f + 0.12f * size_m * GetNormalizedScale(), 0.03f, 0.26f);
     const float sim_phase_rate = (0.28f + motion * 2.35f) * bb.speed_mul;
     const float sim_t = time_sec * sim_phase_rate;
@@ -336,7 +219,7 @@ nlohmann::json BouncingBall::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["ball_count"] = ball_count;
-return j;
+    return j;
 }
 
 void BouncingBall::LoadSettings(const nlohmann::json& settings)
@@ -346,7 +229,6 @@ void BouncingBall::LoadSettings(const nlohmann::json& settings)
         ball_count = std::clamp(settings["ball_count"].get<unsigned int>(), 1u, kMaxGpuBalls);
     if(count_slider)
         count_slider->setValue((int)ball_count);
-    ball_last_integrated_wall_time = -1e9f;
 }
 
 REGISTER_EFFECT_3D(BouncingBall);

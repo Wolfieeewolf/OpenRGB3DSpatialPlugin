@@ -31,7 +31,6 @@
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
     effect_enabled = false;
-    effect_running = false;
     effect_speed = 1;
     effect_brightness = 100;
     effect_frequency = 1;
@@ -931,22 +930,6 @@ void SpatialEffect3D::OnColorButtonClicked()
 
         emit ParametersChanged();
     }
-}
-
-void SpatialEffect3D::OnStartEffectClicked()
-{
-    effect_running = true;
-    start_effect_button->setEnabled(false);
-    stop_effect_button->setEnabled(true);
-    emit ParametersChanged();
-}
-
-void SpatialEffect3D::OnStopEffectClicked()
-{
-    effect_running = false;
-    start_effect_button->setEnabled(true);
-    stop_effect_button->setEnabled(false);
-    emit ParametersChanged();
 }
 
 void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)

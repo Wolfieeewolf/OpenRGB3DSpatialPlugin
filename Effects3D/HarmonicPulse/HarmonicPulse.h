@@ -39,9 +39,7 @@ private:
     };
 
     static const char* ColorModeName(int m);
-    static RGBColor Hsv01ToBgr(float h, float s, float v);
     static RGBColor ScaleColor(RGBColor c, float bright);
-    static RGBColor LerpColor(RGBColor a, RGBColor b, float t);
 
     int color_mode = COLOR_DUO_SNAP;
     float zoom_wobble_strength = 0.55f;

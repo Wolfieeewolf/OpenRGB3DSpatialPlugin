@@ -85,7 +85,7 @@ vec2 saEvalPreset(int style, int role, float alongA, float alongB, float up01,
     }
     else if(style == 1)
     {
-        /* Water — bigger slosh, stronger streaks, faster pour. */
+        /* Water */
         if(role == 0)
         {
             float r = length(vec2(alongA - 0.5, alongB - 0.5));
@@ -161,7 +161,7 @@ vec2 saEvalPreset(int style, int role, float alongA, float alongB, float up01,
     }
     else if(style == 4)
     {
-        /* Embers — low fire bed + licking wisps and rising sparks (~35% of full Fire). */
+        /* Embers */
         if(role == 0)
         {
             float bed = saFbm(vec2(alongA, alongB) * (2.0 * f) + vec2(t * 0.28, -t * 0.16));
@@ -389,7 +389,6 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         if(preset > 6) preset = 6;
         vec2 ps = saEvalPreset(preset, best_role, best_a, best_b, best_up, time_e, freq, speed, feature);
         plasma = clamp(ps.x, 0.0, 1.0);
-        /* Structure must live in brightness — hue-only tongues read as a flat wash on LEDs. */
         intensity = clamp(best_i * ps.y * mix(0.12, 1.0, plasma), 0.0, 1.0);
     }
     out_color = vec4(intensity, plasma, 0.0, 1.0);

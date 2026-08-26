@@ -164,7 +164,7 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
 
 /* --- Spatial coordinate contract (single source of truth) ---
  *
- * ROOM UV — NormalizeGridAxis01 / SampleRoomAxis01:
+ * ROOM UV — NormalizeGridAxis01:
  *   Maps world position into the active GridContext3D AABB [0,1]^3
  *   (front-left floor = 0,0,0 → right / ceiling / back = 1,1,1).
  *   Use for room-fixed surfaces (walls/floor/ceiling), edge fade, and audio strip layouts.
@@ -191,12 +191,6 @@ inline float NormalizeGridAxis01(float value, float min_v, float max_v)
     return std::max(0.0f, std::min(1.0f, (value - min_v) / range));
 }
 
-/** Room AABB axis UV [0,1]. Alias keeps call sites readable vs origin-local sampling. */
-inline float SampleRoomAxis01(float value, float min_v, float max_v)
-{
-    return NormalizeGridAxis01(value, min_v, max_v);
-}
-
 /** Unit UV along a grid axis; not clamped — anchors may sit outside the LED AABB. */
 inline float GridAxisToUnitUnclamped(float value, float min_v, float max_v)
 {
@@ -212,7 +206,7 @@ inline float GridAxisToUnitUnclamped(float value, float min_v, float max_v)
 inline float SampleStratumYNorm01(float y, const GridContext3D& grid, const Vector3D& origin)
 {
     const float oy = GridAxisToUnitUnclamped(origin.y, grid.min_y, grid.max_y);
-    return std::clamp(SampleRoomAxis01(y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+    return std::clamp(NormalizeGridAxis01(y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
 }
 
 /** Map world sample into origin-local unit UV (0.5 = Spatial Anchor). */
@@ -556,7 +550,6 @@ protected:
     QPushButton*        stop_effect_button;
 
     bool                effect_enabled;
-    bool                effect_running;
     unsigned int        effect_speed;
     unsigned int        effect_brightness;
     unsigned int        effect_frequency;
@@ -709,8 +702,6 @@ private slots:
     void OnAddColorClicked();
     void OnRemoveColorClicked();
     void OnColorButtonClicked();
-    void OnStartEffectClicked();
-    void OnStopEffectClicked();
     void OnRotationChanged();
     void OnRotationResetClicked();
     void OnAxisScaleResetClicked();

@@ -2,9 +2,9 @@
 
 #include "TravelingLight.h"
 #include "TravelingLightVolumeFieldGlsl.h"
+#include "EffectColorUtils.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
-#include "../EffectHelpers.h"
 #include <QComboBox>
 #include <QVector3D>
 #include <QVBoxLayout>
@@ -22,20 +22,6 @@ static unsigned char screen_blend(unsigned char a, unsigned char b)
     return (unsigned char)(255 - ((255 - a) * (255 - b) / 255));
 }
 
-static RGBColor lerp_color(RGBColor a, RGBColor b, float t)
-{
-    t = std::max(0.0f, std::min(1.0f, t));
-    int ar = a & 0xFF, ag = (a >> 8) & 0xFF, ab = (a >> 16) & 0xFF;
-    int br = b & 0xFF, bg = (b >> 8) & 0xFF, bb = (b >> 16) & 0xFF;
-    int r = (int)(ar + (br - ar) * t);
-    int g = (int)(ag + (bg - ag) * t);
-    int b_ = (int)(ab + (bb - ab) * t);
-    r = std::max(0, std::min(255, r));
-    g = std::max(0, std::min(255, g));
-    b_ = std::max(0, std::min(255, b_));
-    return (RGBColor)((b_ << 16) | (g << 8) | r);
-}
-
 const char* TravelingLight::ModeName(int m)
 {
     switch(m) {
@@ -51,13 +37,6 @@ const char* TravelingLight::ModeName(int m)
     case MODE_WAVE_FRONTS:  return "Wave Fronts";
     default: return "Comet";
     }
-}
-
-float TravelingLight::smoothstep(float edge0, float edge1, float x) const
-{
-    float t = (x - edge0) / (std::max(0.0001f, edge1 - edge0));
-    t = std::clamp(t, 0.0f, 1.0f);
-    return t * t * (3.0f - 2.0f * t);
 }
 
 TravelingLight::TravelingLight(QWidget* parent) : SpatialEffect3D(parent)
@@ -373,7 +352,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
                 c0 = (cols.size() > 0) ? cols[0] : 0x000000FF;
                 c1 = (cols.size() > 1) ? cols[1] : 0x00FF0000;
             }
-            return lerp_color(zone_id ? c1 : c0, zone_id ? c0 : c1, s);
+            return EffectLerpColor(zone_id ? c1 : c0, zone_id ? c0 : c1, s);
         }
         if(m == MODE_CROSSING)
         {

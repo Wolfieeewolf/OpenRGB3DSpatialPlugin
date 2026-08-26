@@ -343,8 +343,6 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
 nlohmann::json SurfaceAmbient::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["sa_preset_v2"] = true;
-    j["sa_use_scale_depth"] = true;
     j["style"] = style;
     j["motion"] = motion;
     j["thickness"] = thickness;
@@ -356,31 +354,11 @@ void SurfaceAmbient::LoadSettings(const nlohmann::json& settings)
     SpatialEffect3D::LoadSettings(settings);
 
     if(settings.contains("style") && settings["style"].is_number_integer())
-    {
-        int s = settings["style"].get<int>();
-        /* v1: 0=Fire..6=Steam. v2: 0=None, 1=Fire..7=Steam. */
-        if(!settings.contains("sa_preset_v2") || !settings["sa_preset_v2"].get<bool>())
-            s = s + 1;
-        style = std::clamp(s, 0, STYLE_COUNT - 1);
-    }
+        style = std::clamp(settings["style"].get<int>(), 0, STYLE_COUNT - 1);
     if(settings.contains("motion") && settings["motion"].is_number_integer())
         motion = std::clamp(settings["motion"].get<int>(), 0, MOTION_COUNT - 1);
     if(settings.contains("thickness") && settings["thickness"].is_number())
         thickness = std::max(0.02f, std::min(0.5f, settings["thickness"].get<float>()));
-
-    /* Migrate old Height slider → Scale once (Scale now owns shell depth). */
-    if(settings.contains("height_pct") && settings["height_pct"].is_number() &&
-       (!settings.contains("sa_use_scale_depth") || !settings["sa_use_scale_depth"].get<bool>()))
-    {
-        const float h = std::max(0.05f, std::min(1.0f, settings["height_pct"].get<float>()));
-        /* Invert h ≈ 0.12 + 0.40 * scale_n  →  scale_n = (h - 0.12) / 0.40 */
-        float scale_n = std::clamp((h - 0.12f) / 0.40f, 0.2f, 1.75f);
-        if(scale_n <= 1.0f)
-            effect_scale = (unsigned int)std::lround(scale_n * 200.0f);
-        else
-            effect_scale = (unsigned int)std::lround(200.0f + (scale_n - 1.0f) * 100.0f);
-        effect_scale = std::min(300u, std::max(1u, effect_scale));
-    }
 
     if(QWidget* panel = CustomSettingsPanelWidget())
     {

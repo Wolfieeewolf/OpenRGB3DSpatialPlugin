@@ -29,8 +29,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
-    static RGBColor Hsv01ToBgr(float h, float s, float v);
-
     QSlider* breathing_amount_slider = nullptr;
     QSlider* pulse_amount_slider = nullptr;
     QComboBox* flow_mode_combo = nullptr;

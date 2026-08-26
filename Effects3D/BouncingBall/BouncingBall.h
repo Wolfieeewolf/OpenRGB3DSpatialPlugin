@@ -7,14 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 #include "Shaders/SpatialVolumeFieldAssist.h"
-#include <vector>
-
-struct CachedBall3D
-{
-    float px, py, pz;
-    float vx, vy, vz;
-    float floor_bounce_vy;
-};
 
 class BouncingBall : public SpatialEffect3D
 {
@@ -34,20 +26,11 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-private slots:
-    void OnBallParameterChanged();
 private:
     static constexpr unsigned int kMaxGpuBalls = 32u;
 
     QSlider* count_slider = nullptr;
     unsigned int ball_count;
-
-    float ball_cache_grid_hash = 0.0f;
-    int ball_cache_phys_key = 0x7fffffff;
-    std::vector<CachedBall3D> ball_positions_cached;
-
-    float ball_physics_sim_t = 0.f;
-    float ball_last_integrated_wall_time = -1e9f;
     SpatialVolumeFieldAssist volume_assist_;
 };
 

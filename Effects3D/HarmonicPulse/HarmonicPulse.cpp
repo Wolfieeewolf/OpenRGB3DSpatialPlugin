@@ -2,7 +2,7 @@
 
 #include "HarmonicPulse.h"
 #include "HarmonicPulseVolumeFieldGlsl.h"
-#include "EffectHelpers.h"
+#include "EffectColorUtils.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
@@ -27,33 +27,6 @@ const char* HarmonicPulse::ColorModeName(int m)
     }
 }
 
-RGBColor HarmonicPulse::Hsv01ToBgr(float h, float s, float v)
-{
-    h = std::fmod(h, 1.0f);
-    if(h < 0.0f)
-        h += 1.0f;
-    s = std::clamp(s, 0.0f, 1.0f);
-    v = std::clamp(v, 0.0f, 1.0f);
-    float r = 0, g = 0, b = 0;
-    int i = (int)(h * 6.0f);
-    float f = h * 6.0f - (float)i;
-    float p = v * (1.0f - s);
-    float q = v * (1.0f - f * s);
-    float t = v * (1.0f - (1.0f - f) * s);
-    switch(i % 6)
-    {
-    case 0: r = v; g = t; b = p; break;
-    case 1: r = q; g = v; b = p; break;
-    case 2: r = p; g = v; b = t; break;
-    case 3: r = p; g = q; b = v; break;
-    case 4: r = t; g = p; b = v; break;
-    default: r = v; g = p; b = q; break;
-    }
-    return (RGBColor)((std::clamp((int)std::lround(b * 255.0f), 0, 255) << 16) |
-                      (std::clamp((int)std::lround(g * 255.0f), 0, 255) << 8) |
-                      std::clamp((int)std::lround(r * 255.0f), 0, 255));
-}
-
 RGBColor HarmonicPulse::ScaleColor(RGBColor c, float bright)
 {
     bright = std::clamp(bright, 0.0f, 1.0f);
@@ -63,25 +36,14 @@ RGBColor HarmonicPulse::ScaleColor(RGBColor c, float bright)
     return (RGBColor)((b << 16) | (g << 8) | r);
 }
 
-RGBColor HarmonicPulse::LerpColor(RGBColor a, RGBColor b, float t)
-{
-    t = std::clamp(t, 0.0f, 1.0f);
-    int ar = a & 0xFF, ag = (a >> 8) & 0xFF, ab = (a >> 16) & 0xFF;
-    int br = b & 0xFF, bg = (b >> 8) & 0xFF, bb = (b >> 16) & 0xFF;
-    int r = (int)((float)ar + ((float)br - (float)ar) * t);
-    int g = (int)((float)ag + ((float)bg - (float)ag) * t);
-    int bl = (int)((float)ab + ((float)bb - (float)ab) * t);
-    return (RGBColor)((std::clamp(bl, 0, 255) << 16) | (std::clamp(g, 0, 255) << 8) | std::clamp(r, 0, 255));
-}
-
 HarmonicPulse::HarmonicPulse(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetFrequency(50);
     SetSpeed(45);
     SetRainbowMode(false);
     std::vector<RGBColor> cols = {
-        0x000000FF, // red
-        0x00FF0000  // blue
+        0x000000FF,
+        0x00FF0000
     };
     if(GetColors().empty())
         SetColors(cols);
@@ -286,7 +248,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
         sp.y_norm = SampleStratumYNorm01(rot.y, grid, origin);
         float hh = std::fmod(phase01 + time * motion * 0.35f + 1.0f, 1.0f);
         float hue_deg = ApplySpatialRainbowHue(hh * 360.0f, hh, basis, sp, map, time, &grid);
-        return Hsv01ToBgr(std::fmod(hue_deg / 360.0f + 1.0f, 1.0f), 1.0f, val);
+        return EffectHsv01ToBgr(std::fmod(hue_deg / 360.0f + 1.0f, 1.0f), 1.0f, val);
     }
 
     const std::vector<RGBColor>& cols = GetColors();
@@ -310,7 +272,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
             // Keep some brightness motion so snap isn't a flat cut.
             return ScaleColor(pick, 0.35f + 0.65f * val);
         }
-        return ScaleColor(LerpColor(a, b, drive), 0.40f + 0.60f * val);
+        return ScaleColor(EffectLerpColor(a, b, drive), 0.40f + 0.60f * val);
     }
 
     // Multi chase through palette.
@@ -319,7 +281,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
     int i0 = std::clamp((int)std::floor(u), 0, n - 1);
     int i1 = (i0 + 1) % n;
     float frac = u - std::floor(u);
-    return ScaleColor(LerpColor(cols[(size_t)i0], cols[(size_t)i1], frac), val);
+    return ScaleColor(EffectLerpColor(cols[(size_t)i0], cols[(size_t)i1], frac), val);
 }
 
 nlohmann::json HarmonicPulse::SaveSettings() const

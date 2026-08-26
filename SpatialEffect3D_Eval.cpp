@@ -238,8 +238,12 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
         return GetRainbowColor(std::clamp(hue01, 0.0f, 1.0f) * 360.0f);
     }
 
-    if(static_cast<int>(mode) == 3) /* legacy AudioGradient */
+    if(mode != AudioPulseColorMode::PerBeatCycle
+       && mode != AudioPulseColorMode::Uniform
+       && mode != AudioPulseColorMode::SpatialAlongRing)
+    {
         mode = AudioPulseColorMode::SpatialAlongRing;
+    }
 
     uint32_t slot = p.beat_color_slot;
     if(mode == AudioPulseColorMode::Uniform)

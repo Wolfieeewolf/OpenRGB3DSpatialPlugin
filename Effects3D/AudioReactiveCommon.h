@@ -14,7 +14,7 @@
 enum class AudioDriveMode : int
 {
     Sustained = 0,
-    Beat = 2, /* keep value 2 for saved JSON */
+    Beat = 2,
 };
 
 /** Low = kick/bass; Mid = voice/melody; High = sparkle/notes; Mixed = overview. */
@@ -31,7 +31,7 @@ enum class AudioPulseColorMode : int
     PerBeatCycle = 0,
     Uniform = 1,
     SpatialAlongRing = 2,
-    FollowNotes = 4, /* keep value 4 for saved JSON (3 was removed AudioGradient) */
+    FollowNotes = 4,
 };
 
 enum class AudioBeatWaveMode : int
@@ -222,9 +222,6 @@ inline void NormalizeAudioReactiveSettings(AudioReactiveSettings3D& cfg)
     {
         cfg.peak_boost = 5.0f;
     }
-    /* Legacy Transient=1 / BandOnset=3 → Beat. */
-    if(cfg.drive_mode == 1 || cfg.drive_mode == 3)
-        cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
     if(cfg.drive_mode != static_cast<int>(AudioDriveMode::Sustained)
        && cfg.drive_mode != static_cast<int>(AudioDriveMode::Beat))
     {
@@ -243,9 +240,6 @@ inline void NormalizeAudioReactiveSettings(AudioReactiveSettings3D& cfg)
     {
         cfg.register_role = static_cast<int>(AudioRegisterRole::Mixed);
     }
-    /* Legacy AudioGradient=3 → SpatialAlongRing. */
-    if(cfg.pulse_color_mode == 3)
-        cfg.pulse_color_mode = static_cast<int>(AudioPulseColorMode::SpatialAlongRing);
     if(cfg.pulse_color_mode != static_cast<int>(AudioPulseColorMode::PerBeatCycle)
        && cfg.pulse_color_mode != static_cast<int>(AudioPulseColorMode::Uniform)
        && cfg.pulse_color_mode != static_cast<int>(AudioPulseColorMode::SpatialAlongRing)

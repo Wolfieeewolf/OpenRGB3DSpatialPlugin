@@ -11,7 +11,6 @@ REGISTER_EFFECT_3D(BreathingSphere);
 #include "EffectUiRows.h"
 #include "EffectUiSync.h"
 #include <algorithm>
-#include "../EffectHelpers.h"
 
 const char* BreathingSphere::ShapeName(int s)
 {
@@ -220,16 +219,13 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     if(shape == SHAPE_WHOLE_ROOM)
         detail_gpu = detail / tm;
 
-    const float vp[16] = {
+    const float vp[13] = {
         R_l,
         breath_phase,
         progress_v,
         detail_gpu,
         (float)edge,
         center_hole_pct / 100.0f,
-        0.5f,
-        0.5f,
-        0.5f,
         (float)shape,
         ax,
         az,
@@ -238,7 +234,7 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
         sy,
         sz
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 16);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 13);
 }
 
 RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

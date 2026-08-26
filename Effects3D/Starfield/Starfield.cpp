@@ -3,7 +3,6 @@
 #include "Starfield.h"
 #include "StarfieldVolumeFieldGlsl.h"
 #include "SpatialKernelColormap.h"
-#include "EffectHelpers.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>

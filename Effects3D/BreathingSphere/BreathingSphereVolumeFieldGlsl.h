@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-/** Breathing shell / whole-room wave: R=intensity, G=color_driver01.
- *  Shapes use true iso-metrics (sphere / cube / box / polygonal prism) —
- *  not revolved footprints that bloom into spheres.
- *  u_params: [0]=R_l [1]=breath_phase [2]=progress [3]=detail [4]=edge(0 soft,1 crisp)
- *            [5]=hole_frac [6]=ox [7]=oy [8]=oz
- *            [9]=shape [10]=ax [11]=az [12]=pulse_strength
- *            [13]=sx [14]=sy [15]=sz  (room-extent / median — world-isotropic local)
+/* R=intensity G=color_driver01
+ * u_params: [0]=R_l [1]=breath_phase [2]=progress [3]=detail [4]=edge
+ *           [5]=hole_frac [6]=shape [7]=ax [8]=az [9]=pulse
+ *           [10]=sx [11]=sy [12]=sz
  */
 inline const char* BreathingSphereVolumeFieldGlsl()
 {
@@ -46,11 +43,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float detail = max(u_params[3], 0.05);
     int edge = int(clamp(u_params[4], 0.0, 1.0) + 0.5);
     float hole_frac = clamp(u_params[5], 0.0, 0.95);
-    int shape = int(clamp(u_params[9], 0.0, 5.0) + 0.5);
-    float ax = clamp(u_params[10], 0.15, 1.0);
-    float az = clamp(u_params[11], 0.15, 1.0);
-    float pulse_strength = clamp(u_params[12], 0.0, 1.0);
-    vec3 s = max(vec3(u_params[13], u_params[14], u_params[15]), vec3(0.25));
+    int shape = int(clamp(u_params[6], 0.0, 5.0) + 0.5);
+    float ax = clamp(u_params[7], 0.15, 1.0);
+    float az = clamp(u_params[8], 0.15, 1.0);
+    float pulse_strength = clamp(u_params[9], 0.0, 1.0);
+    vec3 s = max(vec3(u_params[10], u_params[11], u_params[12]), vec3(0.25));
 
     /* p01 is origin-local (0.5 = Spatial Anchor). Keep world-isotropic scale via s. */
     vec3 l = (p01 - vec3(0.5)) * s;
@@ -76,7 +73,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float sphere_intensity = 0.0;
     float norm_in_shell = 0.0;
 
-    /* Soft = wider falloff; Crisp = razor silhouette — cube pulse stays a cube. */
+    /* Soft = wider falloff; Crisp = tight silhouette. */
     float band = (edge == 1) ? 0.018 : 0.16;
     band = max(band * (0.7 + 0.3 / max(detail, 0.2)), (edge == 1) ? 0.012 : 0.02);
 

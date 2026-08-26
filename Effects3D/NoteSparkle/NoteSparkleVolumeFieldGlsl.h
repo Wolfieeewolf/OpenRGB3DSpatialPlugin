@@ -2,13 +2,11 @@
 #pragma once
 
 /** Note Sparkle volume field: R=energy, G=note hue01, B=radial gradient.
- *  Dual layer — soft hull + hash particle cloud (FBO/particle aesthetic for LEDs).
- *  p01 = room UV [0,1]^3 (works strip / zone / full room via stack bounds).
  *  u_params: [0]=drive [1]=particle01 [2]=turbulence [3]=hull_size
  *            [4]=low01 [5]=mid01 [6]=high01 [7]=falloff
  *            [8]=size_m [9]=detail [10]=tight_mul [11]=speed_mul
  *            [12..19]=note pairs (hue01, amp) × 4
- *            [20]=note_count [21]=time_e [22]=unused [23]=unused
+ *            [20]=note_count [21]=time_e
  */
 inline const char* NoteSparkleVolumeFieldGlsl()
 {

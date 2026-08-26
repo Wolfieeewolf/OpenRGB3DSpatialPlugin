@@ -3,6 +3,7 @@
 #include "DepthTone.h"
 #include "DepthToneVolumeFieldGlsl.h"
 #include "EffectHelpers.h"
+#include "EffectColorUtils.h"
 
 #include "SpatialKernelColormap.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
@@ -14,42 +15,6 @@
 #include <cmath>
 
 REGISTER_EFFECT_3D(DepthTone);
-
-namespace
-{
-inline RGBColor Hsv01ToBgr(float h, float s, float v)
-{
-    h = std::fmod(h, 1.0f);
-    if(h < 0.0f)
-        h += 1.0f;
-    s = std::clamp(s, 0.0f, 1.0f);
-    v = std::clamp(v, 0.0f, 1.0f);
-
-    float r = 0.0f;
-    float g = 0.0f;
-    float b = 0.0f;
-    const float hf = h * 6.0f;
-    const int i = (int)std::floor(hf) % 6;
-    const float f = hf - std::floor(hf);
-    const float p = v * (1.0f - s);
-    const float q = v * (1.0f - f * s);
-    const float t = v * (1.0f - (1.0f - f) * s);
-    switch(i)
-    {
-    case 0: r = v; g = t; b = p; break;
-    case 1: r = q; g = v; b = p; break;
-    case 2: r = p; g = v; b = t; break;
-    case 3: r = p; g = q; b = v; break;
-    case 4: r = t; g = p; b = v; break;
-    default: r = v; g = p; b = q; break;
-    }
-
-    const int ri = std::clamp((int)std::lround(r * 255.0f), 0, 255);
-    const int gi = std::clamp((int)std::lround(g * 255.0f), 0, 255);
-    const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
-    return (RGBColor)((bi << 16) | (gi << 8) | ri);
-}
-}
 
 const char* DepthTone::AxisName(int a)
 {
@@ -68,7 +33,6 @@ const char* DepthTone::LayoutName(int L)
     {
     case LAYOUT_LINEAR: return "Linear (axis)";
     case LAYOUT_CENTER: return "From room center";
-    case LAYOUT_REF: return "From ref point";
     default: return "Linear (axis)";
     }
 }
@@ -89,7 +53,7 @@ EffectInfo3D DepthTone::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Depth Tone";
     info.effect_description =
-        "Hue mapped along an axis or radiating from room center / ref point, with optional center dimming. "
+        "Hue mapped along an axis or radiating from room center, with optional center dimming. "
         "Speed scrolls hue; Frequency adds a second drift; Size zooms the gradient; Detail sharpens tone steps.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_DEPTH_TONE;
@@ -280,7 +244,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
         const float cs = static_cast<float>(hsv.saturationF());
         const float cv = static_cast<float>(hsv.valueF());
         const float h_use = (ch >= 0.0f) ? std::fmod(ch + 1.0f, 1.0f) : hue01;
-        return Hsv01ToBgr(h_use, cs, std::clamp(v * cv, 0.0f, 1.0f));
+        return EffectHsv01ToBgr(h_use, cs, std::clamp(v * cv, 0.0f, 1.0f));
     }
 
     if(GetRainbowMode())
@@ -290,7 +254,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)
             p01 += 1.0f;
-        return Hsv01ToBgr(p01, 1.0f, v);
+        return EffectHsv01ToBgr(p01, 1.0f, v);
     }
 
     float p = ApplySpatialPalette01(hue01, basis, sp, map, time, &grid);

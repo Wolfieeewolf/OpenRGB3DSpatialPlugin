@@ -2,11 +2,9 @@
 #pragma once
 
 /** Spiral/spin scalar in R. p01 = origin-local unit UV (0.5 = Spatial Anchor hub).
- *  Sample with SampleCoordsOriginLocal01. GLSL: l = p01 * 2 - 1.
  *  u_params: [0]=progress [1]=freq_scale [2]=pattern [3]=num_arms
  *            [4]=gap01 [5]=detail [6]=coil01 [7]=height_coil01
- *            [8]=ox [9]=oy [10]=oz (unused; hub is p01 0.5)
- *  coil01=0 → pure spin (straight radial arms). Higher → tighter spiral bend.
+ *  coil01=0 → pure spin; higher → tighter spiral bend.
  */
 inline const char* SpiralVolumeFieldGlsl()
 {
@@ -29,7 +27,6 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float norm_radius = clamp(length(vec2(lx, lz)), 0.0, 1.0);
     float norm_twist = ly;
     float two_pi = 6.2831853;
-    // Radial coil: 0 = straight spin blades, 1 ≈ ~3.5 turns center→edge.
     float radial_coil = norm_radius * coil01 * two_pi * (2.2 + 1.4 * clamp(detail_e / 20.0, 0.0, 1.5));
     float z_twist = norm_twist * height01 * two_pi * (1.0 + 0.75 * clamp(detail_e / 20.0, 0.0, 1.5));
     float spiral_angle = angle * num_arms + radial_coil + z_twist - progress_e * 1.35;

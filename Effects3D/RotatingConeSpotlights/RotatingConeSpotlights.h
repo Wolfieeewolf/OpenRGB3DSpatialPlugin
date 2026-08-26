@@ -63,7 +63,6 @@ private:
     static const char* SurfaceName(int s);
     static const char* MotionName(int m);
     static const char* LayoutName(int l);
-    static RGBColor Hsv01ToBgr(float h, float s, float v);
 
     void ApplyLayoutPreset(int preset);
     void UpdateConeSliderVisibility();

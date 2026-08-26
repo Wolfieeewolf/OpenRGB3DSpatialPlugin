@@ -46,7 +46,6 @@ private:
         MODE_COUNT
     };
     static const char* ModeName(int m);
-    float smoothstep(float edge0, float edge1, float x) const;
     void UpdateWaveFrontsControlsVisible();
 
     int mode = MODE_COMET;
@@ -54,10 +53,9 @@ private:
     int wipe_edge_shape = 0;
     int num_divisions = 4;
 
-    // Wave Fronts (ported from old Wave Line)
-    int front_shape = 0;       // Circles / Squares / Lines / Diagonal
-    int front_edge = 0;        // Round / Sharp / Square
-    int front_thickness = 30;  // 5–100
+    int front_shape = 0;
+    int front_edge = 0;
+    int front_thickness = 30;
     QWidget* wave_fronts_panel = nullptr;
     QComboBox* front_shape_combo = nullptr;
     QComboBox* front_edge_combo = nullptr;

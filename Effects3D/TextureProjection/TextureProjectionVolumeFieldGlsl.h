@@ -3,10 +3,8 @@
 
 /** Texture projection: atlas stores final RGB (media + ambience).
  *  u_params: [0]=mode [1]=tile [2]=scroll_rate [3]=phase_mul [4]=amp [5]=detail_s
- *            [6]=ox [7]=oy [8]=oz [9]=fd [10]=curve [11]=edge
- *            [12]=prop [13]=steps_u [14]=steps_v_and_q (v + use_q*1000)
- *            [15]=wrap_mode (0=clamp when idle, 1=always tile)
- *  Motion uses u_time so scroll loops the single image; propagation lags by distance.
+ *            [6]=fd [7]=curve [8]=edge [9]=prop [10]=steps_u
+ *            [11]=steps_v_and_q (v + use_q*1000) [12]=wrap_mode
  *  sampler2D u_media — V flipped to match CPU SampleImageBilinear.
  */
 inline const char* TextureProjectionVolumeFieldGlsl()

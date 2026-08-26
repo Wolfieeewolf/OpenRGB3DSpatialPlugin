@@ -13,71 +13,13 @@
 
 REGISTER_EFFECT_3D(HexLattice);
 
-namespace
-{
-constexpr float kTwoPi = 6.28318530717958647692f;
-
-inline float Phase01(float time_sec, float cycle_seconds, float speed_mul)
-{
-    if(cycle_seconds < 1e-4f)
-        return 0.f;
-    return std::fmod((time_sec * speed_mul) / cycle_seconds + 1000.f, 1.f);
-}
-
-inline float Wave01(float x01)
-{
-    return 0.5f + 0.5f * std::sin(kTwoPi * x01);
-}
-
-inline float Triangle01(float x01)
-{
-    const float f = x01 - std::floor(x01);
-    return 1.0f - std::fabs(2.0f * f - 1.0f);
-}
-}
-
-RGBColor HexLattice::Hsv01ToBgr(float h, float s, float v)
-{
-    h = std::fmod(h, 1.0f);
-    if(h < 0.0f)
-        h += 1.0f;
-    s = std::clamp(s, 0.0f, 1.0f);
-    v = std::clamp(v, 0.0f, 1.0f);
-
-    float r = 0.0f;
-    float g = 0.0f;
-    float b = 0.0f;
-    const float hf = h * 6.0f;
-    const int i = (int)std::floor(hf) % 6;
-    const float f = hf - std::floor(hf);
-    const float p = v * (1.0f - s);
-    const float q = v * (1.0f - f * s);
-    const float t = v * (1.0f - (1.0f - f) * s);
-    switch(i)
-    {
-    case 0: r = v; g = t; b = p; break;
-    case 1: r = q; g = v; b = p; break;
-    case 2: r = p; g = v; b = t; break;
-    case 3: r = p; g = q; b = v; break;
-    case 4: r = t; g = p; b = v; break;
-    default: r = v; g = p; b = q; break;
-    }
-
-    const int ri = std::clamp((int)std::lround(r * 255.0f), 0, 255);
-    const int gi = std::clamp((int)std::lround(g * 255.0f), 0, 255);
-    const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
-    return (RGBColor)((bi << 16) | (gi << 8) | ri);
-}
-
 HexLattice::HexLattice(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     SetSpeed(35);
     SetFrequency(12);
     volume_assist_.setFragmentBody(QString::fromUtf8(HexLatticeVolumeFieldGlsl()));
-    // Higher atlas res than most effects: hex walls are sub-cell features and
-    // blur away at 18^3.
-    volume_assist_.setResolution(22); // was 28 — atlas cost is n³; 22 keeps hex edges readable
+    volume_assist_.setResolution(22);
 }
 
 HexLattice::~HexLattice() = default;

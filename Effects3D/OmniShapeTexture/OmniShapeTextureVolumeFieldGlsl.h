@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-/** Omni shape texture: media on a crisp 3D shape envelope (not a spherical blob).
+/** Omni shape texture: media on a 3D shape envelope.
  *  Shapes: 0 sphere, 1 cube, 2 octahedron, 3 cylinder, 4 hex prism, 5 triangle prism.
- *  Morph blends spatial metric + UV toward the next shape.
  *  u_params: [0]=shape [1]=morph [2]=tile [3]=yaw_rate [4]=pitch_rate
- *            [5]=phase_mul [6]=amp [7]=detail
- *            [8]=ox [9]=oy [10]=oz [11]=fd [12]=curve [13]=edge
- *            [14]=R_local [15]=wrap*2+prop (wrap 0|1, prop 0..1)
+ *            [5]=phase_mul [6]=amp [7]=detail [8]=fd [9]=curve [10]=edge
+ *            [11]=R_local [12]=wrap*2+prop (wrap 0|1, prop 0..1)
  */
 inline const char* OmniShapeTextureVolumeFieldGlsl()
 {

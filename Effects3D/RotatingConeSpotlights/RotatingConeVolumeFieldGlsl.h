@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-/** Rotating cone spotlights: R=sat, G=val, B=base_hue01 (Frequency scroll on CPU).
- *  Apex positions are origin-local (hub 0.5). Aim wanders on a full sphere.
- *  Aim wanders on a full sphere; Opposite motion locks pairs 180° apart.
- *
- *  u_params: [0]=spin_t [1]=scale [2]=hue_static [3]=count [4]=motion_mode [5]=surface
- *            [6]=ox [7]=oy [8]=oz  (effect origin in unit UV)
- *            [9]=wander [10]=elev_bias
- *            [11]=hw01 [12]=hh01 [13]=hd01  (half-extents as grid UV fractions)
- *            [14..21]=u0,v0..u3,v3
- *  surface: 0 Center, 1 Ref, 2 Ceiling, 3 Floor, 4 Walls
- *  motion_mode: 0 Independent, 1 Opposite
+/* R=sat G=val B=base_hue01. Hub at origin-local 0.5.
+ * u_params: [0]=spin_t [1]=scale [2]=hue [3]=count [4]=motion [5]=surface
+ *           [6]=wander [7]=elev [8]=hw [9]=hh [10]=hd
+ *           [11..18]=u0,v0..u3,v3
  */
 inline const char* RotatingConeVolumeFieldGlsl()
 {
@@ -131,11 +124,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int surface = int(clamp(u_params[5], 0.0, 4.0) + 0.5);
 
     vec3 origin01 = vec3(0.5);
-    float wander = clamp(u_params[9], 0.15, 2.0);
-    float elev_bias = clamp(u_params[10], -1.2, 1.2);
-    float hw = max(u_params[11], 0.02);
-    float hh = max(u_params[12], 0.02);
-    float hd = max(u_params[13], 0.02);
+    float wander = clamp(u_params[6], 0.15, 2.0);
+    float elev_bias = clamp(u_params[7], -1.2, 1.2);
+    float hw = max(u_params[8], 0.02);
+    float hh = max(u_params[9], 0.02);
+    float hd = max(u_params[10], 0.02);
 
     if(surface == 2)
         elev_bias = -0.55;
@@ -145,13 +138,13 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         elev_bias = 0.0;
 
     vec3 best = vec3(0.0);
-    vec3 c0 = evalCone(0, count, motion_mode, surface, u_params[14], u_params[15], origin01, hw, hh, hd,
+    vec3 c0 = evalCone(0, count, motion_mode, surface, u_params[11], u_params[12], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
-    vec3 c1 = evalCone(1, count, motion_mode, surface, u_params[16], u_params[17], origin01, hw, hh, hd,
+    vec3 c1 = evalCone(1, count, motion_mode, surface, u_params[13], u_params[14], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
-    vec3 c2 = evalCone(2, count, motion_mode, surface, u_params[18], u_params[19], origin01, hw, hh, hd,
+    vec3 c2 = evalCone(2, count, motion_mode, surface, u_params[15], u_params[16], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
-    vec3 c3 = evalCone(3, count, motion_mode, surface, u_params[20], u_params[21], origin01, hw, hh, hd,
+    vec3 c3 = evalCone(3, count, motion_mode, surface, u_params[17], u_params[18], origin01, hw, hh, hd,
                        spin_t, wander, elev_bias, scale, hue_static, p01);
     if(c0.x > best.x) best = c0;
     if(c1.x > best.x) best = c1;

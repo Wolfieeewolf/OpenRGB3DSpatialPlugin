@@ -3,6 +3,7 @@
 #include "RotatingConeSpotlights.h"
 #include "RotatingConeVolumeFieldGlsl.h"
 #include "PluginLog.h"
+#include "EffectColorUtils.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include <QByteArray>
@@ -68,34 +69,6 @@ const char* RotatingConeSpotlights::LayoutName(int l)
     case LAYOUT_CUSTOM: return "Custom";
     default: return "Auto (by count)";
     }
-}
-
-RGBColor RotatingConeSpotlights::Hsv01ToBgr(float h, float s, float v)
-{
-    h = std::fmod(h, 1.0f);
-    if(h < 0.0f)
-        h += 1.0f;
-    s = std::clamp(s, 0.0f, 1.0f);
-    v = std::clamp(v, 0.0f, 1.0f);
-    float r = 0, g = 0, b = 0;
-    int i = (int)(h * 6.0f);
-    float f = h * 6.0f - (float)i;
-    float p = v * (1.0f - s);
-    float q = v * (1.0f - f * s);
-    float t = v * (1.0f - (1.0f - f) * s);
-    switch(i % 6)
-    {
-    case 0: r = v; g = t; b = p; break;
-    case 1: r = q; g = v; b = p; break;
-    case 2: r = p; g = v; b = t; break;
-    case 3: r = p; g = q; b = v; break;
-    case 4: r = t; g = p; b = v; break;
-    default: r = v; g = p; b = q; break;
-    }
-    int ri = std::clamp((int)std::lround(r * 255.0f), 0, 255);
-    int gi = std::clamp((int)std::lround(g * 255.0f), 0, 255);
-    int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
-    return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
 
 void RotatingConeSpotlights::ApplyLayoutPreset(int preset)
@@ -470,27 +443,24 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     const int mot = std::clamp(motion_mode, 0, MOTION_COUNT - 1);
     const float elev = ElevBiasForSurface(surf);
 
-    float vp[22] = {};
+    float vp[19] = {};
     vp[0] = spin_t;
     vp[1] = scale;
     vp[2] = hue01;
     vp[3] = (float)count;
     vp[4] = (float)mot;
     vp[5] = (float)surf;
-    vp[6] = 0.5f;
-    vp[7] = 0.5f;
-    vp[8] = 0.5f;
-    vp[9] = wander;
-    vp[10] = elev;
-    vp[11] = hw01;
-    vp[12] = hh01;
-    vp[13] = hd01;
+    vp[6] = wander;
+    vp[7] = elev;
+    vp[8] = hw01;
+    vp[9] = hh01;
+    vp[10] = hd01;
     for(int i = 0; i < kMaxCones; i++)
     {
-        vp[14 + i * 2] = std::clamp(apex_u[i], 0.0f, 1.0f);
-        vp[15 + i * 2] = std::clamp(apex_v[i], 0.0f, 1.0f);
+        vp[11 + i * 2] = std::clamp(apex_u[i], 0.0f, 1.0f);
+        vp[12 + i * 2] = std::clamp(apex_v[i], 0.0f, 1.0f);
     }
-    if(!volume_assist_.prepare(render_sequence, time_sec, vp, 22))
+    if(!volume_assist_.prepare(render_sequence, time_sec, vp, 19))
     {
         static bool logged_once = false;
         if(!logged_once)
@@ -574,7 +544,7 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
         QColor qc = QColor::fromRgb((int)(c & 0xFF), (int)((c >> 8) & 0xFF), (int)((c >> 16) & 0xFF)).toHsv();
         const float cv = static_cast<float>(qc.valueF());
         h = std::fmod(h + hue01 + 1.0f, 1.0f);
-        return Hsv01ToBgr(h, sat, std::clamp(val * cv, 0.0f, 1.0f));
+        return EffectHsv01ToBgr(h, sat, std::clamp(val * cv, 0.0f, 1.0f));
     }
 
     if(GetRainbowMode())
@@ -584,7 +554,7 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
         h = std::fmod(hue_deg / 360.0f + 1.0f, 1.0f);
     }
 
-    return Hsv01ToBgr(h, sat, val);
+    return EffectHsv01ToBgr(h, sat, val);
 }
 
 nlohmann::json RotatingConeSpotlights::SaveSettings() const

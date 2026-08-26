@@ -2,7 +2,6 @@
 #pragma once
 
 /** Particle Field volume: R=intensity, G=hue01.
- *  Room-fill organic particles (WLED PS–inspired looks, not a firmware port).
  *  Sample coords are origin-local (Spatial Anchor at 0.5).
  *  u_params: [0]=time [1]=mode [2]=count [3]=size01 [4]=thick01
  *            [5]=motion [6]=noise [7]=fill [8]=hue_scroll01 [9]=speed
