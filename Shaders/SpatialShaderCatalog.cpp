@@ -64,6 +64,13 @@ std::vector<QString> ListPresetPaths()
             "aurora_ridge.fs",
             "neon_warp.fs",
             "soft_blobs.fs",
+            "atom_plasma.fs",
+            "cell_bloom.fs",
+            "voronoi_wash.fs",
+            "gyroid_mist.fs",
+            "vortex_swirl.fs",
+            "wave_mesh.fs",
+            "melt_petals.fs",
         };
         for(const char* name : kBundled)
         {
@@ -146,6 +153,20 @@ QString PresetDisplayName(const QString& path)
         return QStringLiteral("Neon Warp — tunnel glow");
     if(stem == QStringLiteral("soft_blobs"))
         return QStringLiteral("Soft Blobs — neon metaballs");
+    if(stem == QStringLiteral("atom_plasma"))
+        return QStringLiteral("Atom Plasma — compact lobes");
+    if(stem == QStringLiteral("cell_bloom"))
+        return QStringLiteral("Cell Bloom — organic cells");
+    if(stem == QStringLiteral("voronoi_wash"))
+        return QStringLiteral("Voronoi Wash — soft cells");
+    if(stem == QStringLiteral("gyroid_mist"))
+        return QStringLiteral("Gyroid Mist — soft SDF wash");
+    if(stem == QStringLiteral("vortex_swirl"))
+        return QStringLiteral("Vortex Swirl — spiral field");
+    if(stem == QStringLiteral("wave_mesh"))
+        return QStringLiteral("Wave Mesh — interference lattice");
+    if(stem == QStringLiteral("melt_petals"))
+        return QStringLiteral("Melt Petals — soft floral wash");
     return QFileInfo(path).fileName();
 }
 

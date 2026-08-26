@@ -14,5 +14,12 @@
         <file alias="aurora_ridge.fs">spatial_shaders/aurora_ridge.fs</file>
         <file alias="neon_warp.fs">spatial_shaders/neon_warp.fs</file>
         <file alias="soft_blobs.fs">spatial_shaders/soft_blobs.fs</file>
+        <file alias="atom_plasma.fs">spatial_shaders/atom_plasma.fs</file>
+        <file alias="cell_bloom.fs">spatial_shaders/cell_bloom.fs</file>
+        <file alias="voronoi_wash.fs">spatial_shaders/voronoi_wash.fs</file>
+        <file alias="gyroid_mist.fs">spatial_shaders/gyroid_mist.fs</file>
+        <file alias="vortex_swirl.fs">spatial_shaders/vortex_swirl.fs</file>
+        <file alias="wave_mesh.fs">spatial_shaders/wave_mesh.fs</file>
+        <file alias="melt_petals.fs">spatial_shaders/melt_petals.fs</file>
     </qresource>
 </RCC>

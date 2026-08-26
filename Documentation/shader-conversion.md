@@ -39,6 +39,18 @@ Bundled Shader Field presets (also under `resources/spatial_shaders/`):
 | `neon_warp` | 003Warpy | Clamped neon tunnels |
 | `soft_blobs` | 002Blobby | Clamped neon blobs |
 
+### Second curated batch
+
+| Id | Theme | Notes |
+|----|--------|--------|
+| `atom_plasma` | Compact multi-lobe plasma | Distinct from lobe_plasma / room_plasma |
+| `cell_bloom` | Organic cells | AlienCells-style |
+| `voronoi_wash` | Soft Voronoi lattice | ≠ hex_drift |
+| `gyroid_mist` | Soft SDF / gyroid wash | Misty fill |
+| `vortex_swirl` | Spiral vortex | Room-plane swirl |
+| `wave_mesh` | Wave interference lattice | ≠ corner_waves |
+| `melt_petals` | Soft melt / petal wash | Not 70sStripes |
+
 Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a clean 1D kernel; kernels 0–43 already cover chase/comet/fire), heavy multipass / mouse dumps from triage reject lane.
 
 ## GPU vs CPU
