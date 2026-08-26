@@ -21,6 +21,82 @@ inline RGBColor ResolveStripKernelFinalColor(int kernel_id, float palette01, flo
     return SampleKernelPatternPalette(kernel_id, p, time_sec);
 }
 
+/** Freq/detail scaling shared by CPU Eval and GPU strip-colormap prepare. */
+inline void StripColormapClockScale(float freq_norm,
+                                    float detail_norm,
+                                    float kernel_rep,
+                                    float phase01,
+                                    float time_sec,
+                                    float& phase_eff,
+                                    float& time_eff,
+                                    float& kernel_rep_eff)
+{
+    kernel_rep_eff = std::max(1.0f, kernel_rep * (0.65f + 0.70f * detail_norm));
+    phase_eff = phase01 * (0.70f + 0.55f * freq_norm);
+    time_eff = time_sec * (0.55f + 0.90f * freq_norm);
+}
+
+/** Unfold to s01 (+ optional freeze of phase/time for StaticRoomPlane). */
+inline float StripColormapComputeS01(int unfold_mode,
+                                     float dir_deg,
+                                     float phase_eff,
+                                     float time_eff,
+                                     float lx,
+                                     float ly,
+                                     float lz,
+                                     float& phase_out,
+                                     float& time_out)
+{
+    auto mode = static_cast<StripPatternSurface::UnfoldMode>(
+        std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
+    phase_out = phase_eff;
+    time_out = time_eff;
+    float s01;
+    if(mode == StripPatternSurface::UnfoldMode::EffectPhaseOnly)
+    {
+        s01 = std::fmod(phase_eff + time_eff * 0.12f, 1.0f);
+        if(s01 < 0.0f)
+            s01 += 1.0f;
+        s01 = std::clamp(s01, 0.0f, 1.0f);
+    }
+    else if(mode == StripPatternSurface::UnfoldMode::StaticRoomPlane)
+    {
+        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, StripPatternSurface::UnfoldMode::PlaneXZ, dir_deg);
+        phase_out = 0.0f;
+        time_out = 0.0f;
+    }
+    else
+    {
+        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, mode, dir_deg);
+    }
+    return s01;
+}
+
+inline void StripColormapLocalAxes(const GridContext3D& grid,
+                                   float normalized_scale,
+                                   const Vector3D& origin,
+                                   const Vector3D& rot,
+                                   float& lx,
+                                   float& ly,
+                                   float& lz)
+{
+    float scale_eff = std::max(0.05f, normalized_scale);
+    float sw = grid.width * 0.5f * scale_eff;
+    float sh = grid.height * 0.5f * scale_eff;
+    float sd = grid.depth * 0.5f * scale_eff;
+    if(sw < 1e-5f)
+        sw = 1.0f;
+    if(sh < 1e-5f)
+        sh = 1.0f;
+    if(sd < 1e-5f)
+        sd = 1.0f;
+    lx = (rot.x - origin.x) / sw;
+    ly = (rot.y - origin.y) / sh;
+    lz = (rot.z - origin.z) / sd;
+}
+
+/** Full 44-kernel CPU twin (EvalSpatialPatternKernel). Effects use
+ *  SpatialEffect3D::SampleEffectStripColormap01 (GPU 8-family atlas) instead. */
 inline float SampleStripKernelPalette01(int kernel_id,
                                         float kernel_rep,
                                         int unfold_mode,
@@ -41,45 +117,21 @@ inline float SampleStripKernelPalette01(int kernel_id,
         detail_norm = std::clamp(effect->GetScaledDetail() / 10.0f, 0.25f, 2.5f);
     }
 
-    const float kernel_rep_eff = std::max(1.0f, kernel_rep * (0.65f + 0.70f * detail_norm));
-    float scale_eff = std::max(0.05f, normalized_scale);
-    float sw = grid.width * 0.5f * scale_eff;
-    float sh = grid.height * 0.5f * scale_eff;
-    float sd = grid.depth * 0.5f * scale_eff;
-    if(sw < 1e-5f)
-        sw = 1.0f;
-    if(sh < 1e-5f)
-        sh = 1.0f;
-    if(sd < 1e-5f)
-        sd = 1.0f;
-    float lx = (rot.x - origin.x) / sw;
-    float ly = (rot.y - origin.y) / sh;
-    float lz = (rot.z - origin.z) / sd;
-    auto mode = static_cast<StripPatternSurface::UnfoldMode>(
-        std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
-    float phase_eff = phase01 * (0.70f + 0.55f * freq_norm);
-    float time_eff = time_sec * (0.55f + 0.90f * freq_norm);
-    float s01;
-    if(mode == StripPatternSurface::UnfoldMode::EffectPhaseOnly)
-    {
-        s01 = std::fmod(phase_eff + time_eff * 0.12f, 1.0f);
-        if(s01 < 0.0f)
-        {
-            s01 += 1.0f;
-        }
-        s01 = std::clamp(s01, 0.0f, 1.0f);
-    }
-    else if(mode == StripPatternSurface::UnfoldMode::StaticRoomPlane)
-    {
-        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, StripPatternSurface::UnfoldMode::PlaneXZ, dir_deg);
-        phase_eff = 0.0f;
-        time_eff = 0.0f;
-    }
-    else
-    {
-        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, mode, dir_deg);
-    }
-    float k = EvalSpatialPatternKernel(kernel_id, s01, phase_eff, kernel_rep_eff, time_eff);
+    float phase_eff = 0.0f;
+    float time_eff = 0.0f;
+    float kernel_rep_eff = 1.0f;
+    StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, time_sec,
+                            phase_eff, time_eff, kernel_rep_eff);
+
+    float lx = 0.0f, ly = 0.0f, lz = 0.0f;
+    StripColormapLocalAxes(grid, normalized_scale, origin, rot, lx, ly, lz);
+
+    float phase_use = phase_eff;
+    float time_use = time_eff;
+    const float s01 = StripColormapComputeS01(unfold_mode, dir_deg, phase_eff, time_eff,
+                                              lx, ly, lz, phase_use, time_use);
+
+    float k = EvalSpatialPatternKernel(kernel_id, s01, phase_use, kernel_rep_eff, time_use);
     return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
 }
 

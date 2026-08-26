@@ -257,8 +257,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
     if(UseEffectStripColormap())
     {
         const float ph01 = std::fmod(phase01 + master * 0.25f + 1.f, 1.f);
-        float pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                 GetEffectStripColormapRepeats(),
+        float pal01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                  GetEffectStripColormapUnfold(),
                                                  GetEffectStripColormapDirectionDeg(),
                                                  ph01,

@@ -198,16 +198,15 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     float strip_surf_p01 = 0.0f;
     if(UseEffectStripColormap())
     {
-        strip_surf_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                    GetEffectStripColormapRepeats(),
-                                                    GetEffectStripColormapUnfold(),
-                                                    GetEffectStripColormapDirectionDeg(),
-                                                    surf_phase01,
-                                                    time,
-                                                    grid,
-                                                    GetNormalizedScale(),
-                                                    origin,
-                                                    rot);
+        strip_surf_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                      GetEffectStripColormapUnfold(),
+                                                      GetEffectStripColormapDirectionDeg(),
+                                                      surf_phase01,
+                                                      time,
+                                                      grid,
+                                                      GetNormalizedScale(),
+                                                      origin,
+                                                      rot);
     }
     float intensity = 0.0f;
     float pos_norm = 0.5f;

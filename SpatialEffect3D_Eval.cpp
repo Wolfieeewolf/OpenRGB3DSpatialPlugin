@@ -253,8 +253,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
         {
             const size_t n = std::max(GetColors().size(), size_t(1));
             const float ph01 = std::fmod((float)slot / (float)n, 1.0f);
-            float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                   GetEffectStripColormapRepeats(),
+            float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                    GetEffectStripColormapUnfold(),
                                                    GetEffectStripColormapDirectionDeg(),
                                                    ph01,
@@ -296,8 +295,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
         float ph01 = std::fmod(gradient_pos + CalculateProgress(p.time) * 0.25f
                                    + p.time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.0f / 360.0f) + 1.0f,
                                1.0f);
-        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                               GetEffectStripColormapRepeats(),
+        float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                GetEffectStripColormapUnfold(),
                                                GetEffectStripColormapDirectionDeg(),
                                                ph01,

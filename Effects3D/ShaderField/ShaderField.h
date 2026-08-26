@@ -51,6 +51,22 @@ private:
     void SampleUv(float x, float y, float z, const GridContext3D& grid, const Vector3D& origin, float& u, float& v) const;
     RGBColor SampleField(float u, float v) const;
 
+    enum ProjectionMode : int
+    {
+        PROJ_FLOOR = 0,
+        PROJ_FRONT = 1,
+        PROJ_SIDE_LEFT = 2,
+        PROJ_SPHERE = 3,
+        PROJ_CEILING = 4,
+        PROJ_BACK = 5,
+        PROJ_SIDE_RIGHT = 6,
+        PROJ_CYLINDER_Y = 7,
+        PROJ_RADIAL_XZ = 8,
+        PROJ_TRIPLANAR = 9,
+        PROJ_CUBE_FACE = 10,
+        PROJ_COUNT
+    };
+
     SpatialShaderEngine* shader_engine = nullptr;
     QComboBox* preset_combo = nullptr;
     QComboBox* projection_combo = nullptr;

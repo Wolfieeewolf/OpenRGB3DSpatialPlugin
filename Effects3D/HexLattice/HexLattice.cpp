@@ -215,8 +215,7 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
     RGBColor c = 0x00000000;
     if(UseEffectStripColormap())
     {
-        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                               GetEffectStripColormapRepeats(),
+        float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                GetEffectStripColormapUnfold(),
                                                GetEffectStripColormapDirectionDeg(),
                                                h01,

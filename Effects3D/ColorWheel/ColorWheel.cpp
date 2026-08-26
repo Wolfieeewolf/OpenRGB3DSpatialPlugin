@@ -245,16 +245,15 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     {
         const float size_m = GetNormalizedSize();
         const float ph01 = std::fmod(plane01 + progress * 0.17f + time * GetScaledFrequency() * 0.05f + 1.f, 1.f);
-        palette01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                               GetEffectStripColormapRepeats(),
-                                               GetEffectStripColormapUnfold(),
-                                               GetEffectStripColormapDirectionDeg(),
-                                               ph01,
-                                               time,
-                                               grid,
-                                               size_m,
-                                               origin,
-                                               rot);
+        palette01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
+                                                 ph01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rot);
     }
     if(UseEffectStripColormap())
     {

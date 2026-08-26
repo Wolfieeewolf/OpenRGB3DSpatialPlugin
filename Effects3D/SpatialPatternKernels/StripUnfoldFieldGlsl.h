@@ -2,7 +2,7 @@
 #pragma once
 
 /** Room unfold + Y-shell helpers matching Game/StripPatternSurface.h +
- *  SpatialKernelColormap SampleStripKernelPalette01 (modes 0-8).
+ *  SpatialEffect3D::SampleEffectStripColormap01 / StripColormapComputeS01 (modes 0-8).
  */
 inline const char* StripUnfoldFieldGlsl()
 {
@@ -55,7 +55,7 @@ float stripUnfoldCoord01(float lx, float ly, float lz, int unfold_mode, float di
     return s;
 }
 
-/* Matches SampleStripKernelPalette01 unfold/phase/time handling.
+/* Matches StripColormapComputeS01 / SampleEffectStripColormap01 unfold/phase/time.
  * Returns vec3(s01, phase_eff, time_eff). */
 vec3 stripUnfoldKernelInputs(float lx, float ly, float lz, int unfold_mode, float dir_deg,
                              float phase01, float time_sec)

@@ -273,8 +273,7 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     {
         const float ph01 =
             std::fmod(color_cycle * (1.f / 360.f) + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.f, 1.f);
-        strip_p01_bb = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                  GetEffectStripColormapRepeats(),
+        strip_p01_bb = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                   GetEffectStripColormapUnfold(),
                                                   GetEffectStripColormapDirectionDeg(),
                                                   ph01,

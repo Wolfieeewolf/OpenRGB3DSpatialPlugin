@@ -259,16 +259,15 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     {
         const float ph01 =
             std::fmod(pos * 0.45f + hue01 * 0.55f + time * rainbow_rate * 0.01f + 1.f, 1.f);
-        float pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                 GetEffectStripColormapRepeats(),
-                                                 GetEffectStripColormapUnfold(),
-                                                 GetEffectStripColormapDirectionDeg(),
-                                                 ph01,
-                                                 time,
-                                                 grid,
-                                                 size_m,
-                                                 origin,
-                                                 rot);
+        float pal01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                   GetEffectStripColormapUnfold(),
+                                                   GetEffectStripColormapDirectionDeg(),
+                                                   ph01,
+                                                   time,
+                                                   grid,
+                                                   size_m,
+                                                   origin,
+                                                   rot);
         pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
         const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
         RGBColor c = ResolveStripKernelFinalColor(kid, std::clamp(pal01, 0.0f, 1.0f), time);

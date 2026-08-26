@@ -560,16 +560,15 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
     if(UseEffectStripColormap())
     {
         const float ph01 = std::fmod(h + 1.0f, 1.0f);
-        float pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                 GetEffectStripColormapRepeats(),
-                                                 GetEffectStripColormapUnfold(),
-                                                 GetEffectStripColormapDirectionDeg(),
-                                                 ph01,
-                                                 time,
-                                                 grid,
-                                                 GetNormalizedSize(),
-                                                 origin,
-                                                 rot);
+        float pal01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                   GetEffectStripColormapUnfold(),
+                                                   GetEffectStripColormapDirectionDeg(),
+                                                   ph01,
+                                                   time,
+                                                   grid,
+                                                   GetNormalizedSize(),
+                                                   origin,
+                                                   rot);
         RGBColor c = ResolveStripKernelFinalColor(SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                                   std::clamp(pal01, 0.0f, 1.0f), time);
         QColor qc = QColor::fromRgb((int)(c & 0xFF), (int)((c >> 8) & 0xFF), (int)((c >> 16) & 0xFF)).toHsv();

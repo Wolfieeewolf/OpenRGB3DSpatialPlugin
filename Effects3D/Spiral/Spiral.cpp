@@ -271,16 +271,15 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     float strip_p01 = 0.0f;
     if(UseEffectStripColormap())
     {
-        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                               GetEffectStripColormapRepeats(),
-                                               GetEffectStripColormapUnfold(),
-                                               GetEffectStripColormapDirectionDeg(),
-                                               phase01,
-                                               time,
-                                               grid,
-                                               size_multiplier,
-                                               origin,
-                                               rotated_pos);
+        strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
+                                                 phase01,
+                                                 time,
+                                                 grid,
+                                                 size_multiplier,
+                                                 origin,
+                                                 rotated_pos);
     }
 
     SpatialLayerCore::Basis compass_basis;

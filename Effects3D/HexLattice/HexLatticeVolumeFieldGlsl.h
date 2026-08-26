@@ -7,7 +7,7 @@
  *  u_params: [0]=flow_t (Speed only) [1]=hue_t (Frequency only)
  *            [2]=detail_n [3]=size [4]=breathing [5]=pulse [6]=turbulence
  *            [7]=flow_mul (Calm/Active/Aggressive)
- *            [8]=ox [9]=oy [10]=oz (effect/ref origin in unit UV)
+ *  p01 is origin-local unit UV (0.5 = Spatial Anchor); pair with SampleGpuVolumeOriginLocal01.
  */
 inline const char* HexLatticeVolumeFieldGlsl()
 {

@@ -7,8 +7,8 @@
  *
  *  u_params: [0]=mode [1]=progress [2]=size_scale [3]=tight_inv [4]=axis [5]=plane
  *            [6]=glow [7]=wipe_edge [8]=ndiv [9]=front_shape [10]=front_edge [11]=front_thick01
- *            [12]=freq_n [13]=ox [14]=oy [15]=oz
- *  p01 = grid-normalized rotated sample.
+ *            [12]=freq_n
+ *  p01 is origin-local unit UV (0.5 = Spatial Anchor); pair with SampleGpuVolumeOriginLocal01.
  */
 inline const char* TravelingLightVolumeFieldGlsl()
 {

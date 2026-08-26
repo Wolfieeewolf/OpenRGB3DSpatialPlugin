@@ -99,8 +99,9 @@ EffectInfo3D ShaderField::GetEffectInfo() const
     info.effect_name = "Shader Field";
     info.effect_description =
         "Projects a 2D GPU shader pattern onto your room (like wrapping wallpaper around the LEDs). "
-        "Pick a Preset for the look, Projection for which plane it maps to. "
-        "Speed animates the shader, Frequency scrolls hue, Size zooms, Detail densifies the pattern.";
+        "Pick a Preset for the look, Projection for how it maps (planes, sphere, cylinder, triplanar, …). "
+        "Speed animates the shader, Frequency scrolls hue, Size zooms, Detail densifies the pattern. "
+        "Use Contrast and Hue with the common controls.";
     info.category = "Spatial";
     info.is_reversible = false;
     info.supports_random = false;
@@ -174,14 +175,24 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     EffectLabeledComboRow* projection_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Projection:"));
     projection_row->setObjectName(QStringLiteral("projectionRow"));
     projection_combo = projection_row->combo();
-    projection_combo->addItem(QStringLiteral("Floor (X-Z)"));
-    projection_combo->addItem(QStringLiteral("Front (X-Y)"));
-    projection_combo->addItem(QStringLiteral("Side (Y-Z)"));
-    projection_combo->addItem(QStringLiteral("Sphere"));
-    projection_combo->setCurrentIndex(projection_mode);
+    projection_combo->addItem(QStringLiteral("Floor (X–Z)"));
+    projection_combo->addItem(QStringLiteral("Front wall (X–Y)"));
+    projection_combo->addItem(QStringLiteral("Left wall (Y–Z)"));
+    projection_combo->addItem(QStringLiteral("Sphere (from origin)"));
+    projection_combo->addItem(QStringLiteral("Ceiling (X–Z)"));
+    projection_combo->addItem(QStringLiteral("Back wall (X–Y)"));
+    projection_combo->addItem(QStringLiteral("Right wall (Y–Z)"));
+    projection_combo->addItem(QStringLiteral("Cylinder around Y"));
+    projection_combo->addItem(QStringLiteral("Radial floor (polar XZ)"));
+    projection_combo->addItem(QStringLiteral("Triplanar blend"));
+    projection_combo->addItem(QStringLiteral("Nearest cube face"));
+    projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
     projection_combo->setToolTip(QStringLiteral(
-        "Which room plane the 2D pattern is mapped onto.\n"
-        "Floor = looking down; Front/Side = walls; Sphere = wrap from the effect origin."));
+        "How the 2D shader pattern maps onto the room.\n"
+        "Planes = wallpaper on floor/ceiling/walls.\n"
+        "Sphere / Cylinder / Radial = wrap from the Spatial Anchor.\n"
+        "Triplanar = blend the three planes by surface dominance.\n"
+        "Nearest cube face = pick the strongest axis like a box unwrap."));
     connect(projection_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ShaderField::OnProjectionModeChanged);
 
@@ -308,7 +319,7 @@ void ShaderField::OnPresetChanged(int index)
 
 void ShaderField::OnProjectionModeChanged(int index)
 {
-    projection_mode = std::clamp(index, 0, 3);
+    projection_mode = std::clamp(index, 0, PROJ_COUNT - 1);
     emit ParametersChanged();
 }
 
@@ -380,23 +391,92 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
     const float inv_w = 1.0f / std::max(1e-4f, grid.max_x - grid.min_x);
     const float inv_h = 1.0f / std::max(1e-4f, grid.max_y - grid.min_y);
     const float inv_d = 1.0f / std::max(1e-4f, grid.max_z - grid.min_z);
-    // Size already feeds shader zoom via u_params; keep UV tiling gentle so projection stays readable.
+    const float nx = (x - grid.min_x) * inv_w;
+    const float ny = (y - grid.min_y) * inv_h;
+    const float nz = (z - grid.min_z) * inv_d;
     const float tile = 1.0f;
 
-    switch(projection_mode)
+    const int mode = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
+    switch(mode)
     {
-    case 0:
-        u = (x - grid.min_x) * inv_w;
-        v = (z - grid.min_z) * inv_d;
+    case PROJ_FLOOR:
+        u = nx;
+        v = nz;
         break;
-    case 1:
-        u = (x - grid.min_x) * inv_w;
-        v = (y - grid.min_y) * inv_h;
+    case PROJ_FRONT:
+        u = nx;
+        v = ny;
         break;
-    case 2:
-        u = (y - grid.min_y) * inv_h;
-        v = (z - grid.min_z) * inv_d;
+    case PROJ_SIDE_LEFT:
+        u = ny;
+        v = nz;
         break;
+    case PROJ_CEILING:
+        u = nx;
+        v = 1.0f - nz;
+        break;
+    case PROJ_BACK:
+        u = 1.0f - nx;
+        v = ny;
+        break;
+    case PROJ_SIDE_RIGHT:
+        u = 1.0f - ny;
+        v = nz;
+        break;
+    case PROJ_CYLINDER_Y:
+    {
+        const float rx = x - origin.x;
+        const float rz = z - origin.z;
+        u = std::atan2(rz, rx) / (float)(2.0 * M_PI) + 0.5f;
+        v = ny;
+        break;
+    }
+    case PROJ_RADIAL_XZ:
+    {
+        const float rx = x - origin.x;
+        const float rz = z - origin.z;
+        const float span = 0.5f * std::max(grid.width, grid.depth);
+        const float r = std::sqrt(rx * rx + rz * rz) / std::max(1e-4f, span);
+        u = std::atan2(rz, rx) / (float)(2.0 * M_PI) + 0.5f;
+        v = std::clamp(r, 0.0f, 1.0f);
+        break;
+    }
+    case PROJ_TRIPLANAR:
+    {
+        const float wx = std::fabs(nx - 0.5f);
+        const float wy = std::fabs(ny - 0.5f);
+        const float wz = std::fabs(nz - 0.5f);
+        const float wsum = std::max(1e-4f, wx + wy + wz);
+        const float u_yz = ny * (wy / wsum) + nz * (wz / wsum);
+        const float u_xz = nx * (wx / wsum) + nz * (wz / wsum);
+        const float u_xy = nx * (wx / wsum) + ny * (wy / wsum);
+        u = MediaTextureEffect::Frac01(u_yz + u_xz + u_xy);
+        v = MediaTextureEffect::Frac01(nx * (wx / wsum) + ny * (wy / wsum) + nz * (wz / wsum));
+        break;
+    }
+    case PROJ_CUBE_FACE:
+    {
+        const float ax = std::fabs(nx - 0.5f);
+        const float ay = std::fabs(ny - 0.5f);
+        const float az = std::fabs(nz - 0.5f);
+        if(ax >= ay && ax >= az)
+        {
+            u = (nx >= 0.5f) ? (1.0f - ny) : ny;
+            v = nz;
+        }
+        else if(ay >= ax && ay >= az)
+        {
+            u = nx;
+            v = (ny >= 0.5f) ? (1.0f - nz) : nz;
+        }
+        else
+        {
+            u = (nz >= 0.5f) ? (1.0f - nx) : nx;
+            v = ny;
+        }
+        break;
+    }
+    case PROJ_SPHERE:
     default:
     {
         float rx = x - origin.x;
@@ -475,10 +555,10 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("projection_mode"))
     {
-        projection_mode = settings["projection_mode"].get<int>();
+        projection_mode = std::clamp(settings["projection_mode"].get<int>(), 0, PROJ_COUNT - 1);
         if(projection_combo)
         {
-            projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, 3));
+            projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
         }
     }
     if(settings.contains("shader_contrast") && settings["shader_contrast"].is_number())

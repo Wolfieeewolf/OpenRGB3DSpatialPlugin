@@ -255,16 +255,15 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     float strip_p01 = 0.0f;
     if(UseEffectStripColormap())
     {
-        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                               GetEffectStripColormapRepeats(),
-                                               GetEffectStripColormapUnfold(),
-                                               GetEffectStripColormapDirectionDeg(),
-                                               std::fmod(progress + 1.0f, 1.0f),
-                                               time,
-                                               grid,
-                                               size_m,
-                                               origin,
-                                               rot);
+        strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
+                                                 std::fmod(progress + 1.0f, 1.0f),
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rot);
         strip_p01 = ApplySpatialPalette01(strip_p01, basis, sp, map, time, &grid);
     }
 

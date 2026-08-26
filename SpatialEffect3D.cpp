@@ -17,7 +17,11 @@
 #include "EffectStratumBlend.h"
 #include "SpatialKernelColormap.h"
 #include "PluginUiUtils.h"
+#include "PluginLog.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
+#include "Effects3D/SpatialPatternKernels/SpatialStripKernelFieldGlsl.h"
+#include "Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h"
+#include "Game/StripPatternSurface.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
 #include <algorithm>
@@ -1253,4 +1257,90 @@ void SpatialEffect3D::OnAxisScaleRotationResetClicked()
     }
 
     emit ParametersChanged();
+}
+
+void SpatialEffect3D::PrepareStripColormapAssist(std::uint64_t render_sequence, float time_sec)
+{
+    if(!UseEffectStripColormap())
+        return;
+
+    if(!strip_cmap_body_ready_)
+    {
+        strip_cmap_assist_.setFragmentBody(SpatialStripKernelFieldGlsl());
+        strip_cmap_assist_.setWidth(256);
+        strip_cmap_body_ready_ = true;
+    }
+
+    const float freq_norm = std::clamp(GetScaledFrequency() / 10.0f, 0.25f, 2.5f);
+    const float detail_norm = std::clamp(GetScaledDetail() / 10.0f, 0.25f, 2.5f);
+    float phase_eff = 0.0f;
+    float time_eff = 0.0f;
+    float kernel_rep_eff = 1.0f;
+    /* Frame clock — per-LED phase still drives unfold s01 in SampleEffectStripColormap01. */
+    const float phase01_frame = std::fmod(time_sec * (0.12f + 0.18f * freq_norm) + 1000.0f, 1.0f);
+    StripColormapClockScale(freq_norm, detail_norm, GetEffectStripColormapRepeats(),
+                            phase01_frame, time_sec, phase_eff, time_eff, kernel_rep_eff);
+
+    if(GetEffectStripColormapUnfold() == (int)StripPatternSurface::UnfoldMode::StaticRoomPlane)
+    {
+        phase_eff = 0.0f;
+        time_eff = 0.0f;
+    }
+
+    const float vp[4] = {
+        (float)std::clamp(GetEffectStripColormapKernel(), 0, kSpatialStripGpuKernelMaxId),
+        phase_eff,
+        kernel_rep_eff,
+        time_eff
+    };
+    if(!strip_cmap_assist_.prepare(render_sequence, time_sec, vp, 4))
+    {
+        static bool logged_once = false;
+        if(!logged_once)
+        {
+            logged_once = true;
+            const QString err = strip_cmap_assist_.lastError();
+            const QByteArray err_bytes = err.isEmpty() ? QByteArray("ensureReady failed") : err.toUtf8();
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Strip colormap assist unavailable: %s",
+                        err_bytes.constData());
+        }
+    }
+}
+
+float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
+                                                   int unfold_mode,
+                                                   float dir_deg,
+                                                   float phase01,
+                                                   float time_sec,
+                                                   const GridContext3D& grid,
+                                                   float normalized_scale,
+                                                   const Vector3D& origin,
+                                                   const Vector3D& rot) const
+{
+    if(!UseEffectStripColormap())
+        return 0.0f;
+
+    const float freq_norm = std::clamp(GetScaledFrequency() / 10.0f, 0.25f, 2.5f);
+    const float detail_norm = std::clamp(GetScaledDetail() / 10.0f, 0.25f, 2.5f);
+    float phase_eff = 0.0f;
+    float time_eff = 0.0f;
+    float kernel_rep_eff = 1.0f;
+    StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, time_sec,
+                            phase_eff, time_eff, kernel_rep_eff);
+
+    float lx = 0.0f, ly = 0.0f, lz = 0.0f;
+    StripColormapLocalAxes(grid, normalized_scale, origin, rot, lx, ly, lz);
+
+    float phase_use = phase_eff;
+    float time_use = time_eff;
+    const float s01 = StripColormapComputeS01(unfold_mode, dir_deg, phase_eff, time_eff,
+                                              lx, ly, lz, phase_use, time_use);
+
+    if(strip_cmap_assist_.isAvailable())
+        return std::clamp(strip_cmap_assist_.sample01(s01), 0.0f, 1.0f);
+
+    /* Assist failed — full CPU twin for this pass only. */
+    float k = EvalSpatialPatternKernel(GetEffectStripColormapKernel(), s01, phase_use,
+                                       kernel_rep_eff, time_use);
+    return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
 }

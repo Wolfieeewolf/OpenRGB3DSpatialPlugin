@@ -280,16 +280,15 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
     if(UseEffectStripColormap())
     {
         const float sf_phase01 = std::fmod(ctx.color_cycle * (1.0f / 360.0f) + 1.0f, 1.0f);
-        ctx.strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                   GetEffectStripColormapRepeats(),
-                                                   GetEffectStripColormapUnfold(),
-                                                   GetEffectStripColormapDirectionDeg(),
-                                                   sf_phase01,
-                                                   time,
-                                                   grid,
-                                                   GetNormalizedSize(),
-                                                   origin,
-                                                   rp);
+        ctx.strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                     GetEffectStripColormapUnfold(),
+                                                     GetEffectStripColormapDirectionDeg(),
+                                                     sf_phase01,
+                                                     time,
+                                                     grid,
+                                                     GetNormalizedSize(),
+                                                     origin,
+                                                     rp);
     }
 
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;

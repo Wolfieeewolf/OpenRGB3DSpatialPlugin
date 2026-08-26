@@ -4,7 +4,7 @@
 /** Harmonic pulse: R=intensity val, G=phase01 (color driver).
  *  u_params: [0]=beat_hz-ish motion [1]=spatial_freq [2]=wobble
  *            [3]=contrast [4]=size_density [5]=pulse_mix (0=global beat .. 1=spatial)
- *            [6]=ox [7]=oy [8]=oz (effect/ref origin in unit UV)
+ *  p01 is origin-local unit UV (0.5 = Spatial Anchor); pair with SampleGpuVolumeOriginLocal01.
  */
 inline const char* HarmonicPulseVolumeFieldGlsl()
 {

@@ -31,6 +31,7 @@
 #include "SpatialLayerCore.h"
 #include "EffectStratumBlend.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "Shaders/SpatialStripFieldAssist.h"
 #include <nlohmann/json.hpp>
 #include <cstdint>
 
@@ -177,7 +178,7 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).
  *
  * Anchor resolution: GetEffectOriginGrid(grid) only. Target zone bounds change grid, not a
- * second origin path. PackEffectOrigin01 is legacy room-UV packing — do not use for GPU volumes.
+ * second origin path. Do not reintroduce room-UV origin packing for GPU volumes.
  */
 
 inline float NormalizeGridAxis01(float value, float min_v, float max_v)
@@ -205,24 +206,6 @@ inline float GridAxisToUnitUnclamped(float value, float min_v, float max_v)
         return 0.5f;
     }
     return (value - min_v) / range;
-}
-
-/** @deprecated Legacy room-UV origin pack for old GLSL `(p01 - origin01)` shaders. Prefer origin-local sampling. */
-inline void PackEffectOrigin01(const GridContext3D& grid, const Vector3D& origin,
-                               float* ox, float* oy, float* oz)
-{
-    if(ox)
-    {
-        *ox = GridAxisToUnitUnclamped(origin.x, grid.min_x, grid.max_x);
-    }
-    if(oy)
-    {
-        *oy = GridAxisToUnitUnclamped(origin.y, grid.min_y, grid.max_y);
-    }
-    if(oz)
-    {
-        *oz = GridAxisToUnitUnclamped(origin.z, grid.min_z, grid.max_z);
-    }
 }
 
 /** Stratum band Y: room height with Spatial Anchor at 0.5. */
@@ -415,6 +398,20 @@ public:
     float GetEffectStripColormapRepeats() const { return effect_strip_cmap_rep; }
     int GetEffectStripColormapUnfold() const { return effect_strip_cmap_unfold; }
     float GetEffectStripColormapDirectionDeg() const { return effect_strip_cmap_dir; }
+
+    /** Once-per-frame: rebuild 1D strip-colormap atlas when Surface Look Pattern is on. */
+    void PrepareStripColormapAssist(std::uint64_t render_sequence, float time_sec);
+
+    /** GPU 8-family strip sample (CPU unfold); falls back to full CPU Eval if assist unavailable. */
+    float SampleEffectStripColormap01(float kernel_rep,
+                                      int unfold_mode,
+                                      float dir_deg,
+                                      float phase01,
+                                      float time_sec,
+                                      const GridContext3D& grid,
+                                      float normalized_scale,
+                                      const Vector3D& origin,
+                                      const Vector3D& rot) const;
 
     float GetRotationYaw() const { return effect_rotation_yaw; }
     float GetRotationPitch() const { return effect_rotation_pitch; }
@@ -663,6 +660,8 @@ protected:
     int effect_strip_cmap_unfold = 0;
     float effect_strip_cmap_dir = 0.0f;
     StripKernelColormapPanel* effect_strip_cmap_panel = nullptr;
+    SpatialStripFieldAssist strip_cmap_assist_;
+    bool strip_cmap_body_ready_ = false;
 
     Vector3D GetEffectOrigin() const;
     RGBColor GetRainbowColor(float hue) const;

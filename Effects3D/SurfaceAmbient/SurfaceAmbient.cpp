@@ -264,7 +264,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         return 0x00000000;
 
     Vector3D rp{x, y, z};
-    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    float coord2 = SampleStratumYNorm01(rp.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -305,16 +305,15 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
             const float ph01 = std::fmod(time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) +
                                              phase01 + best_plasma * 0.08f + 1.f,
                                          1.f);
-            palette_driver = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                        GetEffectStripColormapRepeats(),
-                                                        GetEffectStripColormapUnfold(),
-                                                        GetEffectStripColormapDirectionDeg(),
-                                                        ph01,
-                                                        time,
-                                                        grid,
-                                                        size_m,
-                                                        origin,
-                                                        rp);
+            palette_driver = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                         GetEffectStripColormapUnfold(),
+                                                         GetEffectStripColormapDirectionDeg(),
+                                                         ph01,
+                                                         time,
+                                                         grid,
+                                                         size_m,
+                                                         origin,
+                                                         rp);
             c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(),
                                              std::clamp(palette_driver, 0.0f, 1.0f),
                                              time);

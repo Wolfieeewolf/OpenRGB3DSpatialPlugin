@@ -269,64 +269,20 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     float strip_p01 = 0.0f;
     if(UseEffectStripColormap())
     {
-        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                               GetEffectStripColormapRepeats(),
-                                               GetEffectStripColormapUnfold(),
-                                               GetEffectStripColormapDirectionDeg(),
-                                               cmap_phase01,
-                                               time,
-                                               grid,
-                                               GetNormalizedSize(),
-                                               origin,
-                                               rot);
+        strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
+                                                 cmap_phase01,
+                                                 time,
+                                                 grid,
+                                                 GetNormalizedSize(),
+                                                 origin,
+                                                 rot);
     }
-    int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
     float breath_phase = progress * rate * 0.2f;
 
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
     SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
-
-    if(shape == SHAPE_WHOLE_ROOM)
-    {
-        c1 = SampleRoomAxis01(rot.x, grid.min_x, grid.max_x);
-        c2 = SampleRoomAxis01(rot.y, grid.min_y, grid.max_y);
-        c3 = SampleRoomAxis01(rot.z, grid.min_z, grid.max_z);
-        if(volume_assist_.isAvailable())
-        {
-            const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
-            float air = samp.x();
-            float pos = samp.y();
-            RGBColor c;
-            if(UseEffectStripColormap())
-                c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), strip_p01, time);
-            else if(GetRainbowMode())
-            {
-                SpatialLayerCore::Basis basis;
-                SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
-                SpatialLayerCore::MapperSettings map;
-                EffectStratumBlend::InitStratumBreaks(map);
-                SpatialLayerCore::SamplePoint sp{};
-                sp.grid_x = x;
-                sp.grid_y = y;
-                sp.grid_z = z;
-                sp.origin_x = origin.x;
-                sp.origin_y = origin.y;
-                sp.origin_z = origin.z;
-                sp.y_norm = coord2;
-                float hue = pos * 360.0f + time * rate * 12.0f * bb.speed_mul
-                            + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
-                hue = ApplySpatialRainbowHue(hue, pos, basis, sp, map, time, &grid);
-                c = GetRainbowColor(hue);
-            }
-            else
-                c = GetColorAtPosition(std::fmod(pos + progress * 0.04f + 1.0f, 1.0f));
-            unsigned char r = (unsigned char)fminf(255.0f, fmaxf(0.0f, (c & 0xFF) * air));
-            unsigned char g = (unsigned char)fminf(255.0f, fmaxf(0.0f, ((c >> 8) & 0xFF) * air));
-            unsigned char b = (unsigned char)fminf(255.0f, fmaxf(0.0f, ((c >> 16) & 0xFF) * air));
-            return (RGBColor)((b << 16) | (g << 8) | r);
-        }
-        return 0x00000000;
-    }
 
     float sphere_intensity = 0.0f;
     float norm_in_shell = 0.0f;

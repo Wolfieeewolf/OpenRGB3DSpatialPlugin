@@ -986,6 +986,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             ResolveActiveSlotGrid(grid_override, use_world_bounds);
         const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
         effect->PrepareGpuFields(effect_render_sequence, effect_time, active_grid);
+        effect->PrepareStripColormapAssist(effect_render_sequence, effect_time);
     }
 
     // Room-grid overlay can be tens of thousands of voxels × every effect. While effects

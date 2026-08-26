@@ -273,8 +273,7 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     RGBColor c;
     if(UseEffectStripColormap())
     {
-        const float strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                           GetEffectStripColormapRepeats(),
+        const float strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                            GetEffectStripColormapUnfold(),
                                                            GetEffectStripColormapDirectionDeg(),
                                                            phase01,

@@ -195,7 +195,7 @@ RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time,
         return 0x00000000;
 
     Vector3D rotated_pos{x, y, z};
-    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    float coord2 = SampleStratumYNorm01(rotated_pos.y, grid, origin);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];

@@ -6,7 +6,7 @@ Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cube
 
 | Lane | Entry point | Engine |
 |------|-------------|--------|
-| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Strip assist + volume GLSL ([SpatialStripKernelEvalGlsl.h](../Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h)); unfold via `stripUnfoldKernelInputs` ([StripUnfoldFieldGlsl.h](../Effects3D/SpatialPatternKernels/StripUnfoldFieldGlsl.h)) — Shell Pattern composes both into `volumeMain` |
+| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Strip assist + volume GLSL ([SpatialStripKernelEvalGlsl.h](../Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h)); unfold via `stripUnfoldKernelInputs` ([StripUnfoldFieldGlsl.h](../Effects3D/SpatialPatternKernels/StripUnfoldFieldGlsl.h)). Shell Pattern composes both into `volumeMain`. Surface Look Pattern uses `SpatialEffect3D::PrepareStripColormapAssist` + `SampleEffectStripColormap01` (8-family GPU SoT; full CPU kernel table is fallback only). |
 | **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field |
 | **3D** | `volumeMain(out, p01)` soft field | `SpatialVolumeFieldAssist` |
 

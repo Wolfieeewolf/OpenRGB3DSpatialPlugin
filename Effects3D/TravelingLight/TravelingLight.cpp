@@ -306,16 +306,15 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     float tl_strip_p01 = 0.f;
     if(UseEffectStripColormap())
     {
-        tl_strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                  GetEffectStripColormapRepeats(),
-                                                  GetEffectStripColormapUnfold(),
-                                                  GetEffectStripColormapDirectionDeg(),
-                                                  tl_phase01,
-                                                  time,
-                                                  grid,
-                                                  size_m_tl,
-                                                  origin,
-                                                  rotated);
+        tl_strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                    GetEffectStripColormapUnfold(),
+                                                    GetEffectStripColormapDirectionDeg(),
+                                                    tl_phase01,
+                                                    time,
+                                                    grid,
+                                                    size_m_tl,
+                                                    origin,
+                                                    rotated);
     }
     auto tl_strip_rgb = [&](float p01_k) -> RGBColor {
         float pv = p01_k;

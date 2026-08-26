@@ -219,8 +219,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float strip_p01 = 0.0f;
     if(UseEffectStripColormap())
     {
-        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
-                                                 GetEffectStripColormapRepeats(),
+        strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                  GetEffectStripColormapUnfold(),
                                                  GetEffectStripColormapDirectionDeg(),
                                                  phase01,

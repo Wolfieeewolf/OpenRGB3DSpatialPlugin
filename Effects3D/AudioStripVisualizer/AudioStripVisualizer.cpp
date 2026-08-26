@@ -319,7 +319,7 @@ RGBColor AudioStripVisualizer::ComposeStripColor(float path01, float energy, flo
     color_params.grid = &grid;
     color_params.origin = origin;
     color_params.rotated_pos = rotated_pos;
-    color_params.y_norm01 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    color_params.y_norm01 = SampleStratumYNorm01(rotated_pos.y, grid, origin);
     color_params.stratum_mot01 = stratum_phase01;
     color_params.band_scalars = &bb;
     RGBColor color = ResolveAudioReactiveColor(audio_settings, color_params);
@@ -344,7 +344,7 @@ RGBColor AudioStripVisualizer::CalculateColorGrid(float x, float y, float z, flo
     EffectStratumBlend::BandBlendScalars bb{1.0f, 1.0f};
     if(UseSpatialRoomTint())
     {
-        float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+        float coord2 = SampleStratumYNorm01(rotated_pos.y, grid, origin);
         SpatialLayerCore::MapperSettings strat_st;
         EffectStratumBlend::InitStratumBreaks(strat_st);
         float sw[3];
