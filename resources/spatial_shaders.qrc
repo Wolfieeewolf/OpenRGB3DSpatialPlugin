@@ -21,5 +21,12 @@
         <file alias="vortex_swirl.fs">spatial_shaders/vortex_swirl.fs</file>
         <file alias="wave_mesh.fs">spatial_shaders/wave_mesh.fs</file>
         <file alias="melt_petals.fs">spatial_shaders/melt_petals.fs</file>
+        <file alias="oozy_flow.fs">spatial_shaders/oozy_flow.fs</file>
+        <file alias="plasmic_ribbons.fs">spatial_shaders/plasmic_ribbons.fs</file>
+        <file alias="dense_chroma.fs">spatial_shaders/dense_chroma.fs</file>
+        <file alias="rainbow_drip.fs">spatial_shaders/rainbow_drip.fs</file>
+        <file alias="neon_space.fs">spatial_shaders/neon_space.fs</file>
+        <file alias="fluid_swirl.fs">spatial_shaders/fluid_swirl.fs</file>
+        <file alias="psyche_grid.fs">spatial_shaders/psyche_grid.fs</file>
     </qresource>
 </RCC>
