@@ -58,11 +58,6 @@ SpatialShaderEngine::~SpatialShaderEngine()
     }
 }
 
-void SpatialShaderEngine::setTargetFps(int fps)
-{
-    target_fps_ = std::clamp(fps, 8, 60);
-}
-
 void SpatialShaderEngine::setRenderSize(int width, int height)
 {
     std::lock_guard<std::mutex> lock(mutex_);

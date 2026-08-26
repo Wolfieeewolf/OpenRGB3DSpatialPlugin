@@ -113,7 +113,7 @@ When changing plugin behavior—especially anything that touches devices, colors
 |------|------------------|-------------|
 | OpenRGB profile payload | Plugin payload **version 1** with required `layout` and `effects` objects | Standalone layout/effect profiles, auto-load, quick-save, or parallel session files |
 | Layout data | Write `OpenRGB3DSpatialLayout` **version 7**; load **7 only**. Camera is not written and is ignored if present | Defaults for missing required sections/fields; standalone file profiles; layout version 6 |
-| Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** — `spacing_mm_x/y/z` required | Alternate spacing key names; `Normalize*` / `TryRead*` import helpers |
+| Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** — `spacing_mm_x/y/z`, `column_widths_mm`, `row_heights_mm`, `layer_depths_mm`, `layer_names`, `leds_per_cluster` required | Alternate spacing key names; optional array fallbacks; `Normalize*` / `TryRead*` import helpers |
 | Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings`; write embedded effects **version 9**, load **9 only**. Room output role is `Direct` (0) or `EmitterRelay` (1) | Versions outside 9; obsolete room output role ints; renamed-key migration |
 | Effect UI | `EffectUiRows` + shared `ui/forms/Effect*.ui` panels | Per-effect legacy-only `.ui` trees or duplicate control paths “for old layouts” |
 | Presets / scripts | Export/import uses current schema only | One-off `convert_*.py` migration tools in the repo |

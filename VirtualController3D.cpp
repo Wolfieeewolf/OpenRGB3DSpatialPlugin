@@ -27,7 +27,19 @@ void ValidateCustomControllerDocument(const json& j)
     }
 
     static const char* kRequiredKeys[] = {
-        "name", "width", "height", "depth", "spacing_mm_x", "spacing_mm_y", "spacing_mm_z", "mappings"};
+        "name",
+        "width",
+        "height",
+        "depth",
+        "spacing_mm_x",
+        "spacing_mm_y",
+        "spacing_mm_z",
+        "column_widths_mm",
+        "row_heights_mm",
+        "layer_depths_mm",
+        "layer_names",
+        "leds_per_cluster",
+        "mappings"};
     for(const char* key : kRequiredKeys)
     {
         if(!j.contains(key))
@@ -38,6 +50,15 @@ void ValidateCustomControllerDocument(const json& j)
     if(!j["mappings"].is_array())
     {
         throw std::runtime_error("custom controller JSON: mappings must be an array");
+    }
+    if(!j["column_widths_mm"].is_array() || !j["row_heights_mm"].is_array()
+       || !j["layer_depths_mm"].is_array() || !j["layer_names"].is_array())
+    {
+        throw std::runtime_error("custom controller JSON: grid size/name fields must be arrays");
+    }
+    if(!j["leds_per_cluster"].is_number_integer())
+    {
+        throw std::runtime_error("custom controller JSON: leds_per_cluster must be an integer");
     }
 }
 
@@ -658,27 +679,12 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
     std::vector<float> column_widths;
     std::vector<float> row_heights;
     std::vector<float> layer_depths;
-    if(j.contains("column_widths_mm") && j["column_widths_mm"].is_array())
-    {
-        for(const json& value_json : j["column_widths_mm"])
-        {
-            column_widths.push_back(value_json.get<float>());
-        }
-    }
-    if(j.contains("row_heights_mm") && j["row_heights_mm"].is_array())
-    {
-        for(const json& value_json : j["row_heights_mm"])
-        {
-            row_heights.push_back(value_json.get<float>());
-        }
-    }
-    if(j.contains("layer_depths_mm") && j["layer_depths_mm"].is_array())
-    {
-        for(const json& value_json : j["layer_depths_mm"])
-        {
-            layer_depths.push_back(value_json.get<float>());
-        }
-    }
+    for(const json& value_json : j["column_widths_mm"])
+        column_widths.push_back(value_json.get<float>());
+    for(const json& value_json : j["row_heights_mm"])
+        row_heights.push_back(value_json.get<float>());
+    for(const json& value_json : j["layer_depths_mm"])
+        layer_depths.push_back(value_json.get<float>());
 
     const std::string name = j["name"].get<std::string>();
     const json&         mappings_json = j["mappings"];
@@ -725,19 +731,10 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
     }
 
     std::vector<std::string> layer_names;
-    if(j.contains("layer_names") && j["layer_names"].is_array())
-    {
-        for(const json& name_json : j["layer_names"])
-        {
-            layer_names.push_back(name_json.get<std::string>());
-        }
-    }
+    for(const json& name_json : j["layer_names"])
+        layer_names.push_back(name_json.get<std::string>());
 
-    int leds_per_cluster = 1;
-    if(j.contains("leds_per_cluster"))
-    {
-        leds_per_cluster = (j["leds_per_cluster"].get<int>() > 1) ? 3 : 1;
-    }
+    const int leds_per_cluster = (j["leds_per_cluster"].get<int>() > 1) ? 3 : 1;
 
     return std::make_unique<VirtualController3D>(name,
                                                width,

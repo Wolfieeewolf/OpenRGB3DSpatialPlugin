@@ -10,6 +10,7 @@
 #include "PluginLog.h"
 #include "TransformJson.h"
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -213,7 +214,6 @@ nlohmann::json OpenRGB3DSpatialTab::BuildLayoutJson() const
     layout_json["grid"]["snap_enabled"] = (viewport && viewport->IsGridSnapEnabled());
     layout_json["grid"]["scale_mm"] = grid_scale_mm;
 
-    layout_json["room"]["use_manual_size"] = true;
     layout_json["room"]["width"] = manual_room_width;
     layout_json["room"]["depth"] = manual_room_depth;
     layout_json["room"]["height"] = manual_room_height;
@@ -345,7 +345,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
 
     const nlohmann::json& room_json = layout_json["room"];
-    use_manual_room_size            = true;
     manual_room_width               = room_json["width"].get<float>();
     manual_room_depth               = room_json["depth"].get<float>();
     manual_room_height              = room_json["height"].get<float>();
@@ -688,35 +687,38 @@ bool OpenRGB3DSpatialTab::AppendLayoutControllerEntry(
     else
     {
         const nlohmann::json& led_mappings_array = controller_json["led_mappings"];
+        const std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
+            controller, custom_grid_x, custom_grid_y,
+            ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
+            grid_scale_mm);
+
+        std::unordered_map<std::uint64_t, size_t> position_by_zone_led;
+        position_by_zone_led.reserve(all_positions.size());
+        for(size_t k = 0; k < all_positions.size(); ++k)
+        {
+            const std::uint64_t key =
+                (static_cast<std::uint64_t>(all_positions[k].zone_idx) << 32)
+                | static_cast<std::uint64_t>(all_positions[k].led_idx);
+            position_by_zone_led.emplace(key, k);
+        }
+
+        ctrl_transform->led_positions.reserve(led_mappings_array.size());
         for(size_t j = 0; j < led_mappings_array.size(); j++)
         {
             const nlohmann::json& led_mapping = led_mappings_array[j];
-            unsigned int zone_idx = led_mapping["zone_index"].get<unsigned int>();
-            unsigned int led_idx  = led_mapping["led_index"].get<unsigned int>();
-
-            std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
-                controller, custom_grid_x, custom_grid_y,
-                ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
-                grid_scale_mm);
-
-            for(unsigned int k = 0; k < all_positions.size(); k++)
-            {
-                if(all_positions[k].zone_idx == zone_idx && all_positions[k].led_idx == led_idx)
-                {
-                    ctrl_transform->led_positions.push_back(all_positions[k]);
-                    break;
-                }
-            }
+            const unsigned int zone_idx = led_mapping["zone_index"].get<unsigned int>();
+            const unsigned int led_idx  = led_mapping["led_index"].get<unsigned int>();
+            const std::uint64_t key =
+                (static_cast<std::uint64_t>(zone_idx) << 32) | static_cast<std::uint64_t>(led_idx);
+            const auto it = position_by_zone_led.find(key);
+            if(it != position_by_zone_led.end())
+                ctrl_transform->led_positions.push_back(all_positions[it->second]);
         }
 
         if(!ctrl_transform->led_positions.empty())
         {
             const int original_granularity = ctrl_transform->granularity;
-
-            std::vector<LEDPosition3D> all_leds = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
-                controller, custom_grid_x, custom_grid_y,
-                ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
-                grid_scale_mm);
+            const std::vector<LEDPosition3D>& all_leds = all_positions;
 
             if(ctrl_transform->led_positions.size() == all_leds.size())
             {

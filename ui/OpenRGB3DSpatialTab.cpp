@@ -225,7 +225,6 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     viewport->SetReferencePoints(&reference_points);
     viewport->SetDisplayPlanes(&display_planes);
     viewport->SetGridScaleMM(grid_scale_mm);
-    use_manual_room_size = true;
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, true);
     viewport->SetScreenPreviewTickCallback({});
     viewport->ResetCameraToDefault();

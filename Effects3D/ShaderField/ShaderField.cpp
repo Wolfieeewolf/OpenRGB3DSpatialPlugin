@@ -30,7 +30,6 @@ ShaderField::ShaderField(QWidget* parent)
     SetSpeed(45);
     SetFrequency(25);
     shader_engine = new SpatialShaderEngine(this);
-    shader_engine->setTargetFps(30);
     shader_engine->setRenderSize(256, 144);
     connect(shader_engine,
             &SpatialShaderEngine::compileMessage,
@@ -363,15 +362,6 @@ void ShaderField::OnCompileMessage(const QString& message)
         const bool show = !message.isEmpty();
         compile_log_label->setVisible(show);
         compile_log_label->setText(message.left(280));
-    }
-}
-
-void ShaderField::SetSpeed(unsigned int speed)
-{
-    SpatialEffect3D::SetSpeed(speed);
-    if(shader_engine)
-    {
-        shader_engine->setTargetFps(30);
     }
 }
 

@@ -34,8 +34,6 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-    void SetSpeed(unsigned int speed) override;
-
 private slots:
     void OnCompileMessage(const QString& message);
     void OnPresetChanged(int index);

@@ -57,8 +57,6 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     selection_font.setBold(true);
     ui->selectionInfoLabel->setFont(selection_font);
 
-    tab->use_manual_room_size = true;
-
     auto setup_room_spin = [](QDoubleSpinBox* spin, double value, const QString& tooltip) {
         spin->setRange(100.0, 50000.0);
         spin->setSingleStep(10.0);
@@ -263,8 +261,7 @@ void GridSettingsPanel::onRoomWidthChanged(double value)
     {
         return;
     }
-    host_tab_->use_manual_room_size = true;
-    host_tab_->manual_room_width    = value;
+    host_tab_->manual_room_width = value;
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
@@ -280,8 +277,7 @@ void GridSettingsPanel::onRoomHeightChanged(double value)
     {
         return;
     }
-    host_tab_->use_manual_room_size = true;
-    host_tab_->manual_room_height   = value;
+    host_tab_->manual_room_height = value;
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
@@ -297,8 +293,7 @@ void GridSettingsPanel::onRoomDepthChanged(double value)
     {
         return;
     }
-    host_tab_->use_manual_room_size = true;
-    host_tab_->manual_room_depth    = value;
+    host_tab_->manual_room_depth = value;
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,

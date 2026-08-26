@@ -29,7 +29,6 @@ public:
     void stop();
     bool isRunning() const { return running_.load(); }
 
-    void setTargetFps(int fps);
     void setRenderSize(int width, int height);
     void setFragmentBody(const QString& glsl_body);
     void setUniforms(const SpatialShaderUniforms& uniforms);
@@ -49,7 +48,6 @@ private:
 
     QString fragment_body_;
     SpatialShaderUniforms uniform_values_;
-    int target_fps_ = 30;
     int render_width_ = 128;
     int render_height_ = 72;
 

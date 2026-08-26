@@ -487,7 +487,6 @@ private:
     float                       manual_room_width = 1000.0f;
     float                       manual_room_depth = 1000.0f;
     float                       manual_room_height = 1000.0f;
-    bool                        use_manual_room_size = true;
 
     /** Default LED spacing (mm) applied when a physical device is first added; edit per object after. */
     float                       default_led_spacing_x_ = 10.0f;
