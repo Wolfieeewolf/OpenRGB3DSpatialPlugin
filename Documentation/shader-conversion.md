@@ -51,6 +51,18 @@ Bundled Shader Field presets (also under `resources/spatial_shaders/`):
 | `wave_mesh` | Wave interference lattice | ≠ corner_waves |
 | `melt_petals` | Soft melt / petal wash | Not 70sStripes |
 
+### Third curated batch
+
+| Id | Theme | Notes |
+|----|--------|--------|
+| `oozy_flow` | Soft molten wash | 005Oozy-inspired |
+| `plasmic_ribbons` | Flowing plasma bands | 004Plasmic-inspired |
+| `dense_chroma` | Packed color plasma | 576ColorsPlasma-inspired |
+| `rainbow_drip` | Falling color streaks | 2dRainbowRain-inspired |
+| `neon_space` | Soft star haze | 2dNeonSpace-inspired (no dFdx) |
+| `fluid_swirl` | Soft current | 2dFluidKinda-inspired |
+| `psyche_grid` | Soft 60s lattice | 60sPsychedelicWallpaper-inspired |
+
 Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a clean 1D kernel; kernels 0–43 already cover chase/comet/fire), heavy multipass / mouse dumps from triage reject lane.
 
 ## GPU vs CPU

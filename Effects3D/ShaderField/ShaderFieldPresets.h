@@ -526,6 +526,158 @@ void spatialMain(out vec4 out_color, in vec2 frag_coord)
     out_color = vec4(mix(vec3(0.05, 0.03, 0.06), rgb, v), 1.0);
 }
 )"},
+    {"oozy_flow", "Oozy Flow — soft molten wash", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (1.9 * zoom);
+    float t = u_time * 0.45;
+    float dens = 2.0 + 4.5 * detail;
+    float v = 0.0;
+    for(int i = 0; i < 5; i++)
+    {
+        float fi = float(i);
+        vec2 q = p + vec2(sin(t * 0.7 + fi * 1.3), cos(t * 0.55 + fi * 0.9)) * (0.15 + 0.05 * fi);
+        v += sin(q.x * dens + t + fi) * cos(q.y * dens * 0.85 - t * 0.8 + fi);
+    }
+    v = pow(clamp(v * 0.28 + 0.5, 0.0, 1.0), mix(1.7, 0.75, contrast / 2.5));
+    float h = fract(hue + v * 0.18 + t * 0.02);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = mix(vec3(0.85, 0.35, 0.15), rgb, 0.55);
+    out_color = vec4(mix(vec3(0.06, 0.03, 0.02), rgb, v), 1.0);
+}
+)"},
+    {"plasmic_ribbons", "Plasmic Ribbons — flowing bands", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.1 * zoom);
+    float t = u_time * 0.7;
+    float dens = 2.5 + 6.0 * detail;
+    float ribbon = sin(p.x * dens + sin(p.y * 2.2 + t) * 1.8 + t)
+                 + sin(p.y * dens * 0.8 - cos(p.x * 1.6 - t) * 1.4 - t * 0.9);
+    float v = pow(clamp(ribbon * 0.35 + 0.5, 0.0, 1.0), mix(1.8, 0.8, contrast / 2.5));
+    float h = fract(hue + ribbon * 0.08 + t * 0.03);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = rgb * rgb * (3.0 - 2.0 * rgb);
+    out_color = vec4(mix(vec3(1.0), rgb, 0.8) * (0.2 + 0.8 * v), 1.0);
+}
+)"},
+    {"dense_chroma", "Dense Chroma — packed color plasma", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.4 * zoom);
+    float t = u_time * 0.95;
+    float dens = 3.5 + 8.0 * detail;
+    float v = sin(p.x * dens + t) + sin(p.y * dens * 1.1 - t)
+            + sin((p.x + p.y) * dens * 0.55 + t * 1.3)
+            + cos(length(p) * dens * 0.9 - t * 0.8)
+            + sin(dot(p, vec2(0.7, -0.5)) * dens + t * 0.6);
+    v = pow(clamp(v * 0.18 + 0.5, 0.0, 1.0), mix(1.6, 0.7, contrast / 2.5));
+    float h = fract(v * 1.4 + hue + t * 0.04);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(vec3(1.0), rgb, 0.9) * (0.25 + 0.75 * v), 1.0);
+}
+)"},
+    {"rainbow_drip", "Rainbow Drip — falling color streaks", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.0 * zoom);
+    float t = u_time * 0.8;
+    float cols = 4.0 + 10.0 * detail;
+    float x = p.x * cols;
+    float id = floor(x);
+    float f = fract(x) - 0.5;
+    float drip = fract(p.y * (1.2 + 0.8 * detail) - t * (0.6 + 0.5 * fract(sin(id * 12.9898) * 43758.5)) + id * 0.17);
+    float streak = exp(-abs(f) * mix(8.0, 18.0, contrast / 2.5)) * pow(1.0 - abs(drip * 2.0 - 1.0), 2.2);
+    float v = clamp(streak, 0.0, 1.0);
+    float h = fract(hue + id * 0.07 + drip * 0.1);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(vec3(0.02, 0.02, 0.05), rgb, v), 1.0);
+}
+)"},
+    {"neon_space", "Neon Space — soft star haze", R"(
+float nsHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.6 * zoom * (0.8 + detail));
+    p += 0.1 * vec2(sin(u_time * 0.2), cos(u_time * 0.17));
+    vec2 g = floor(p);
+    vec2 f = fract(p) - 0.5;
+    float h0 = nsHash(g);
+    float tw = 0.5 + 0.5 * sin(u_time * (2.0 + 4.0 * h0) + h0 * 20.0);
+    float star = exp(-dot(f, f) * mix(18.0, 40.0, contrast / 2.5)) * step(0.72, h0) * tw;
+    float haze = 0.15 + 0.25 * sin(length(p) * 2.0 - u_time * 0.4);
+    float v = clamp(star + haze * 0.35, 0.0, 1.0);
+    float hh = fract(hue + h0 * 0.3 + u_time * 0.02);
+    vec3 rgb = clamp(abs(mod(hh * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(vec3(0.01, 0.02, 0.06), rgb, v), 1.0);
+}
+)"},
+    {"fluid_swirl", "Fluid Swirl — soft current", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.0 * zoom);
+    float t = u_time * 0.5;
+    vec2 q = p;
+    q.x += 0.35 * sin(q.y * (2.0 + 3.0 * detail) + t);
+    q.y += 0.35 * cos(q.x * (2.0 + 3.0 * detail) - t * 0.9);
+    float v = sin(q.x * (3.0 + 5.0 * detail) + t) * cos(q.y * (3.0 + 4.0 * detail) - t);
+    v = pow(clamp(v * 0.5 + 0.5, 0.0, 1.0), mix(1.7, 0.8, contrast / 2.5));
+    float h = fract(hue + length(q) * 0.08 + t * 0.02);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = mix(vec3(0.2, 0.55, 0.85), rgb, 0.65);
+    out_color = vec4(mix(vec3(0.03, 0.05, 0.1), rgb, v), 1.0);
+}
+)"},
+    {"psyche_grid", "Psyche Grid — soft 60s lattice", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.3 * zoom);
+    float t = u_time * 0.35;
+    float cells = 3.0 + 7.0 * detail;
+    vec2 g = abs(fract(p * cells + vec2(t * 0.2, -t * 0.15)) - 0.5);
+    float grid = 1.0 - smoothstep(0.38, 0.48, max(g.x, g.y));
+    float swirl = 0.5 + 0.5 * sin((p.x + p.y) * cells * 0.5 + t * 2.0);
+    float v = pow(clamp(mix(swirl * 0.55, 1.0, grid), 0.0, 1.0), mix(1.5, 0.75, contrast / 2.5));
+    float h = fract(hue + floor(p.x * cells) * 0.08 + floor(p.y * cells) * 0.05 + t * 0.03);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(vec3(0.08, 0.02, 0.1), rgb, v), 1.0);
+}
+)"},
 };
 
 inline constexpr int kBundledCount = int(sizeof(kBundled) / sizeof(kBundled[0]));

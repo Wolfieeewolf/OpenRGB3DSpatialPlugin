@@ -71,6 +71,13 @@ std::vector<QString> ListPresetPaths()
             "vortex_swirl.fs",
             "wave_mesh.fs",
             "melt_petals.fs",
+            "oozy_flow.fs",
+            "plasmic_ribbons.fs",
+            "dense_chroma.fs",
+            "rainbow_drip.fs",
+            "neon_space.fs",
+            "fluid_swirl.fs",
+            "psyche_grid.fs",
         };
         for(const char* name : kBundled)
         {
@@ -167,6 +174,20 @@ QString PresetDisplayName(const QString& path)
         return QStringLiteral("Wave Mesh — interference lattice");
     if(stem == QStringLiteral("melt_petals"))
         return QStringLiteral("Melt Petals — soft floral wash");
+    if(stem == QStringLiteral("oozy_flow"))
+        return QStringLiteral("Oozy Flow — soft molten wash");
+    if(stem == QStringLiteral("plasmic_ribbons"))
+        return QStringLiteral("Plasmic Ribbons — flowing bands");
+    if(stem == QStringLiteral("dense_chroma"))
+        return QStringLiteral("Dense Chroma — packed color plasma");
+    if(stem == QStringLiteral("rainbow_drip"))
+        return QStringLiteral("Rainbow Drip — falling color streaks");
+    if(stem == QStringLiteral("neon_space"))
+        return QStringLiteral("Neon Space — soft star haze");
+    if(stem == QStringLiteral("fluid_swirl"))
+        return QStringLiteral("Fluid Swirl — soft current");
+    if(stem == QStringLiteral("psyche_grid"))
+        return QStringLiteral("Psyche Grid — soft 60s lattice");
     return QFileInfo(path).fileName();
 }
 
