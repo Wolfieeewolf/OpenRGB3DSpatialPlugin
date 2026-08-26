@@ -63,6 +63,18 @@ Bundled Shader Field presets (also under `resources/spatial_shaders/`):
 | `fluid_swirl` | Soft current | 2dFluidKinda-inspired |
 | `psyche_grid` | Soft 60s lattice | 60sPsychedelicWallpaper-inspired |
 
+### Fourth curated batch
+
+| Id | Theme | Notes |
+|----|--------|--------|
+| `blau_waves` | Soft blue bands | BlauWaves-inspired |
+| `oil_slick` | Iridescent layers | 3Oils-inspired |
+| `jewel_scatter` | Soft sparkle dots | 2dRainbowDribblingJewels-inspired |
+| `potential_rings` | Soft EM field rings | 2dElectromagneticPotential-inspired |
+| `fog_drift` | Soft rolling haze | BambiFog-inspired |
+| `arc_static` | Soft electric wash | BasicArclightningNoise-inspired |
+| `petal_spin` | Rotating soft petals | 70sPetals-inspired (≠ melt_petals) |
+
 Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a clean 1D kernel; kernels 0–43 already cover chase/comet/fire), heavy multipass / mouse dumps from triage reject lane.
 
 ## GPU vs CPU

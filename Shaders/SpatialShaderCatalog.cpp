@@ -78,6 +78,13 @@ std::vector<QString> ListPresetPaths()
             "neon_space.fs",
             "fluid_swirl.fs",
             "psyche_grid.fs",
+            "blau_waves.fs",
+            "oil_slick.fs",
+            "jewel_scatter.fs",
+            "potential_rings.fs",
+            "fog_drift.fs",
+            "arc_static.fs",
+            "petal_spin.fs",
         };
         for(const char* name : kBundled)
         {
@@ -188,6 +195,20 @@ QString PresetDisplayName(const QString& path)
         return QStringLiteral("Fluid Swirl — soft current");
     if(stem == QStringLiteral("psyche_grid"))
         return QStringLiteral("Psyche Grid — soft 60s lattice");
+    if(stem == QStringLiteral("blau_waves"))
+        return QStringLiteral("Blau Waves — soft blue bands");
+    if(stem == QStringLiteral("oil_slick"))
+        return QStringLiteral("Oil Slick — iridescent layers");
+    if(stem == QStringLiteral("jewel_scatter"))
+        return QStringLiteral("Jewel Scatter — soft sparkle dots");
+    if(stem == QStringLiteral("potential_rings"))
+        return QStringLiteral("Potential Rings — soft EM field");
+    if(stem == QStringLiteral("fog_drift"))
+        return QStringLiteral("Fog Drift — soft rolling haze");
+    if(stem == QStringLiteral("arc_static"))
+        return QStringLiteral("Arc Static — soft electric wash");
+    if(stem == QStringLiteral("petal_spin"))
+        return QStringLiteral("Petal Spin — rotating soft petals");
     return QFileInfo(path).fileName();
 }
 

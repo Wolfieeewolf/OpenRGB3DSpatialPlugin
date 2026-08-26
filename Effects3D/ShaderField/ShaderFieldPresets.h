@@ -678,6 +678,182 @@ void spatialMain(out vec4 out_color, in vec2 frag_coord)
     out_color = vec4(mix(vec3(0.08, 0.02, 0.1), rgb, v), 1.0);
 }
 )"},
+    {"blau_waves", "Blau Waves — soft blue bands", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (1.8 * zoom);
+    float t = u_time * 0.55;
+    float dens = 3.5 + 8.0 * detail;
+    float w = sin(p.y * dens + t) + 0.55 * sin(p.x * dens * 0.45 - t * 0.7)
+            + 0.35 * sin((p.x + p.y) * dens * 0.35 + t * 1.1);
+    float v = pow(clamp(w * 0.4 + 0.5, 0.0, 1.0), mix(1.8, 0.8, contrast / 2.5));
+    float h = fract(0.58 + hue * 0.15 + v * 0.08 + t * 0.015);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = mix(vec3(0.15, 0.35, 0.85), rgb, 0.45);
+    out_color = vec4(mix(vec3(0.02, 0.04, 0.12), rgb, v), 1.0);
+}
+)"},
+    {"oil_slick", "Oil Slick — iridescent layers", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.0 * zoom);
+    float t = u_time * 0.4;
+    float dens = 2.2 + 5.0 * detail;
+    float a = sin(p.x * dens + t) * cos(p.y * dens * 0.9 - t);
+    float b = sin((p.x - p.y) * dens * 0.7 - t * 0.8);
+    float c = cos(length(p) * dens * 1.1 + t * 0.6);
+    float v = pow(clamp((a + b + c) * 0.28 + 0.5, 0.0, 1.0), mix(1.6, 0.75, contrast / 2.5));
+    float h = fract(hue + a * 0.12 + b * 0.08 + t * 0.02);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = rgb * rgb * (3.0 - 2.0 * rgb);
+    out_color = vec4(mix(vec3(0.05, 0.06, 0.04), rgb, v), 1.0);
+}
+)"},
+    {"jewel_scatter", "Jewel Scatter — soft sparkle dots", R"(
+float jsHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (3.0 * zoom * (0.75 + detail));
+    p += vec2(u_time * 0.12, -u_time * 0.08);
+    vec2 g = floor(p);
+    vec2 f = fract(p) - 0.5;
+    float h0 = jsHash(g);
+    float tw = 0.45 + 0.55 * sin(u_time * (3.0 + 5.0 * h0) + h0 * 30.0);
+    float jewel = exp(-dot(f, f) * mix(14.0, 32.0, contrast / 2.5)) * step(0.62, h0) * tw;
+    float trail = exp(-abs(f.y) * 10.0) * exp(-abs(f.x) * 4.0) * step(0.78, h0) * 0.45;
+    float v = clamp(jewel + trail, 0.0, 1.0);
+    float hh = fract(hue + h0 * 0.55 + u_time * 0.025);
+    vec3 rgb = clamp(abs(mod(hh * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(vec3(0.02, 0.02, 0.05), rgb, v), 1.0);
+}
+)"},
+    {"potential_rings", "Potential Rings — soft EM field", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.1 * zoom);
+    float t = u_time * 0.65;
+    vec2 c0 = vec2(sin(t * 0.4), cos(t * 0.35)) * 0.35;
+    vec2 c1 = vec2(cos(t * 0.3), sin(t * 0.45)) * 0.4;
+    float pot = 1.0 / max(length(p - c0), 0.08) - 1.0 / max(length(p - c1), 0.08);
+    float rings = sin(pot * (2.5 + 5.0 * detail) - t);
+    float v = pow(clamp(0.5 + 0.5 * rings, 0.0, 1.0), mix(1.9, 0.85, contrast / 2.5));
+    v *= exp(-length(p) * 0.4);
+    float h = fract(hue + pot * 0.05 + t * 0.02);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    out_color = vec4(mix(vec3(0.03, 0.04, 0.08), rgb, v), 1.0);
+}
+)"},
+    {"fog_drift", "Fog Drift — soft rolling haze", R"(
+float fdHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float fdNoise(vec2 p)
+{
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float a = fdHash(i);
+    float b = fdHash(i + vec2(1.0, 0.0));
+    float c = fdHash(i + vec2(0.0, 1.0));
+    float d = fdHash(i + vec2(1.0, 1.0));
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (1.7 * zoom);
+    float t = u_time * 0.25;
+    float n = 0.0;
+    float amp = 0.55;
+    vec2 q = p * (1.5 + 2.5 * detail) + vec2(t, -t * 0.6);
+    for(int i = 0; i < 4; i++)
+    {
+        n += fdNoise(q) * amp;
+        q *= 2.05;
+        amp *= 0.5;
+    }
+    float v = pow(clamp(n, 0.0, 1.0), mix(1.5, 0.7, contrast / 2.5));
+    float h = fract(0.62 + hue * 0.2 + n * 0.1 + t * 0.02);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = mix(vec3(0.45, 0.55, 0.7), rgb, 0.4);
+    out_color = vec4(mix(vec3(0.06, 0.07, 0.1), rgb, v), 1.0);
+}
+)"},
+    {"arc_static", "Arc Static — soft electric wash", R"(
+float asHash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (2.2 * zoom);
+    float t = u_time * 1.1;
+    float bolts = 0.0;
+    for(int i = 0; i < 5; i++)
+    {
+        float fi = float(i);
+        float ang = fi * 1.2566 + t * 0.15;
+        vec2 dir = vec2(cos(ang), sin(ang));
+        float along = dot(p, dir);
+        float across = abs(dot(p, vec2(-dir.y, dir.x)));
+        float jag = asHash(vec2(floor(along * (4.0 + 6.0 * detail) + t * 3.0), fi));
+        float w = exp(-across * mix(10.0, 22.0, contrast / 2.5) / (0.35 + jag));
+        bolts += w * (0.35 + 0.65 * jag);
+    }
+    float v = clamp(bolts * 0.55, 0.0, 1.0);
+    float h = fract(0.55 + hue * 0.25 + v * 0.1 + t * 0.03);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = mix(vec3(0.55, 0.75, 1.0), rgb, 0.35);
+    out_color = vec4(mix(vec3(0.02, 0.03, 0.08), rgb, v), 1.0);
+}
+)"},
+    {"petal_spin", "Petal Spin — rotating soft petals", R"(
+void spatialMain(out vec4 out_color, in vec2 frag_coord)
+{
+    vec2 uv = frag_coord / u_resolution;
+    float zoom = max(u_params[0], 0.25);
+    float contrast = clamp(u_params[1], 0.35, 2.5);
+    float hue = fract(u_params[2]);
+    float detail = clamp(u_params[3], 0.05, 1.0);
+    vec2 p = (uv - 0.5) * vec2(u_resolution.x / max(u_resolution.y, 1.0), 1.0) * (1.9 * zoom);
+    float t = u_time * 0.4;
+    float r = length(p);
+    float a = atan(p.y, p.x) + t;
+    float petals = 4.0 + floor(6.0 * detail + 0.5);
+    float flower = 0.5 + 0.5 * cos(a * petals);
+    float ring = sin(r * (5.0 + 7.0 * detail) - t * 1.5);
+    float v = pow(clamp(0.5 + 0.45 * flower * ring, 0.0, 1.0), mix(1.7, 0.8, contrast / 2.5));
+    v *= exp(-r * 0.5);
+    float h = fract(hue + flower * 0.1 + t * 0.02);
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rgb = mix(vec3(0.9, 0.4, 0.65), rgb, 0.55);
+    out_color = vec4(mix(vec3(0.05, 0.02, 0.06), rgb, v), 1.0);
+}
+)"},
 };
 
 inline constexpr int kBundledCount = int(sizeof(kBundled) / sizeof(kBundled[0]));
