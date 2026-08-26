@@ -28,5 +28,12 @@
         <file alias="neon_space.fs">spatial_shaders/neon_space.fs</file>
         <file alias="fluid_swirl.fs">spatial_shaders/fluid_swirl.fs</file>
         <file alias="psyche_grid.fs">spatial_shaders/psyche_grid.fs</file>
+        <file alias="blau_waves.fs">spatial_shaders/blau_waves.fs</file>
+        <file alias="oil_slick.fs">spatial_shaders/oil_slick.fs</file>
+        <file alias="jewel_scatter.fs">spatial_shaders/jewel_scatter.fs</file>
+        <file alias="potential_rings.fs">spatial_shaders/potential_rings.fs</file>
+        <file alias="fog_drift.fs">spatial_shaders/fog_drift.fs</file>
+        <file alias="arc_static.fs">spatial_shaders/arc_static.fs</file>
+        <file alias="petal_spin.fs">spatial_shaders/petal_spin.fs</file>
     </qresource>
 </RCC>
