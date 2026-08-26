@@ -84,8 +84,6 @@ class OpenRGB3DSpatialTab : public QWidget
     friend class ZonesPanel;
     friend class EffectGlobalSettingsPanel;
     friend class AudioInputPanel;
-    friend class AudioAdvancedSettingsDialog;
-    friend class EffectControlsHostPanel;
     friend class SceneObjectEditHostPanel;
     friend class SceneObjectSpacingPanel;
     friend class PositionAxisDragController;
@@ -430,24 +428,11 @@ private:
 
     QComboBox*      audioDeviceCombo() const;
     QSlider*        audioGainSlider() const;
-    QSlider*        audioClaritySlider() const;
-    QLabel*         audioClarityValueLabel() const;
-    QSlider*        audioIsolationSlider() const;
-    QLabel*         audioIsolationValueLabel() const;
-    QComboBox*      audioMixPresetCombo() const;
+    QSlider*        audioDecaySlider() const;
     QProgressBar*   audioLevelBar() const;
-    QProgressBar*   audioBassBar() const;
-    QProgressBar*   audioMidBar() const;
-    QProgressBar*   audioHighBar() const;
-    QProgressBar*   audioKickStemBar() const;
-    QProgressBar*   audioSnareStemBar() const;
-    QProgressBar*   audioHihatStemBar() const;
-    QProgressBar*   audioBassStemBar() const;
     QPushButton*    audioStartButton() const;
     QPushButton*    audioStopButton() const;
     QLabel*         audioGainValueLabel() const;
-    QComboBox*      audioBandsCombo() const;
-    QComboBox*      audioFftCombo() const;
     QLabel*         audioSpectrumLabel() const;
     QLabel*         audioEqCaption() const;
     QScrollArea*    audioEqScroll() const;
@@ -534,15 +519,10 @@ private:
 private slots:
     void audioDeviceChanged(int index);
     void audioGainChanged(int value);
-    void audioClarityChanged(int value);
-    void audioIsolationChanged(int value);
-    void audioMixPresetChanged(int index);
     void sync_audio_eq_sliders_from_manager();
     void audioStartClicked();
     void audioStopClicked();
     void audioLevelUpdated(float level);
-    void audioBandsChanged(int index);
-    void audioFftChanged(int index);
     void audioRestoreDefaultsClicked();
     void audioEqChanged(int band_index);
 

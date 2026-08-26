@@ -1961,69 +1961,14 @@ QSlider* OpenRGB3DSpatialTab::audioGainSlider() const
     return ui && ui->audioInputPanel ? ui->audioInputPanel->gainSlider() : nullptr;
 }
 
-QSlider* OpenRGB3DSpatialTab::audioClaritySlider() const
+QSlider* OpenRGB3DSpatialTab::audioDecaySlider() const
 {
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->claritySlider() : nullptr;
-}
-
-QLabel* OpenRGB3DSpatialTab::audioClarityValueLabel() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->clarityValueLabel() : nullptr;
-}
-
-QSlider* OpenRGB3DSpatialTab::audioIsolationSlider() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->isolationSlider() : nullptr;
-}
-
-QLabel* OpenRGB3DSpatialTab::audioIsolationValueLabel() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->isolationValueLabel() : nullptr;
-}
-
-QComboBox* OpenRGB3DSpatialTab::audioMixPresetCombo() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->mixPresetCombo() : nullptr;
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->decaySlider() : nullptr;
 }
 
 QProgressBar* OpenRGB3DSpatialTab::audioLevelBar() const
 {
     return ui && ui->audioInputPanel ? ui->audioInputPanel->levelBar() : nullptr;
-}
-
-QProgressBar* OpenRGB3DSpatialTab::audioBassBar() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->bassBar() : nullptr;
-}
-
-QProgressBar* OpenRGB3DSpatialTab::audioMidBar() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->midBar() : nullptr;
-}
-
-QProgressBar* OpenRGB3DSpatialTab::audioHighBar() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->highBar() : nullptr;
-}
-
-QProgressBar* OpenRGB3DSpatialTab::audioKickStemBar() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->kickStemBar() : nullptr;
-}
-
-QProgressBar* OpenRGB3DSpatialTab::audioSnareStemBar() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->snareStemBar() : nullptr;
-}
-
-QProgressBar* OpenRGB3DSpatialTab::audioHihatStemBar() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->hihatStemBar() : nullptr;
-}
-
-QProgressBar* OpenRGB3DSpatialTab::audioBassStemBar() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->bassStemBar() : nullptr;
 }
 
 QPushButton* OpenRGB3DSpatialTab::audioStartButton() const
@@ -2039,16 +1984,6 @@ QPushButton* OpenRGB3DSpatialTab::audioStopButton() const
 QLabel* OpenRGB3DSpatialTab::audioGainValueLabel() const
 {
     return ui && ui->audioInputPanel ? ui->audioInputPanel->gainValueLabel() : nullptr;
-}
-
-QComboBox* OpenRGB3DSpatialTab::audioBandsCombo() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->bandsCombo() : nullptr;
-}
-
-QComboBox* OpenRGB3DSpatialTab::audioFftCombo() const
-{
-    return ui && ui->audioInputPanel ? ui->audioInputPanel->fftCombo() : nullptr;
 }
 
 QLabel* OpenRGB3DSpatialTab::audioSpectrumLabel() const

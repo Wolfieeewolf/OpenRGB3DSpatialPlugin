@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
-#include "AudioAdvancedSettingsDialog.h"
+#include "AudioAnalyzerSettings.h"
 #include "AudioEqBandColumn.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
@@ -14,40 +14,6 @@
 #include <QSignalBlocker>
 #include <QScrollArea>
 #include <cmath>
-
-namespace {
-
-float JsonToGain(const nlohmann::json& v)
-{
-    if(v.is_number_float() || v.is_number_integer() || v.is_number_unsigned())
-    {
-        return std::clamp(v.get<float>(), 0.0f, 2.0f);
-    }
-    return 1.0f;
-}
-
-float ResampleSavedEqGain(const nlohmann::json& arr, int band_index, int bands_count)
-{
-    if(!arr.is_array() || arr.empty() || bands_count <= 0 || band_index < 0 || band_index >= bands_count)
-    {
-        return 1.0f;
-    }
-    const int n = static_cast<int>(arr.size());
-    if(n == bands_count)
-    {
-        return JsonToGain(arr[band_index]);
-    }
-    const float t = ((float)band_index + 0.5f) / (float)bands_count;
-    const float ri = t * (float)n - 0.5f;
-    const int i0 = std::clamp((int)std::floor(ri), 0, n - 1);
-    const int i1 = std::min(i0 + 1, n - 1);
-    const float frac = std::clamp(ri - (float)i0, 0.0f, 1.0f);
-    const float g0 = JsonToGain(arr[i0]);
-    const float g1 = JsonToGain(arr[i1]);
-    return std::clamp(g0 * (1.0f - frac) + g1 * frac, 0.0f, 2.0f);
-}
-
-} // namespace
 
 void OpenRGB3DSpatialTab::rebuildAudioEqSliders(bool persist_settings)
 {
@@ -80,8 +46,7 @@ void OpenRGB3DSpatialTab::rebuildAudioEqSliders(bool persist_settings)
 
     if(audioEqCaption())
     {
-        audioEqCaption()->setText(
-            QStringLiteral("Equalizer (%1 log-spaced bands — one slider per analyzer band):").arg(bands));
+        audioEqCaption()->setText(QStringLiteral("Equalizer"));
     }
 
     nlohmann::json settings = GetPluginSettings();
@@ -125,7 +90,8 @@ void OpenRGB3DSpatialTab::rebuildAudioEqSliders(bool persist_settings)
                                       .arg((int)std::round(center)));
         band_col->applyCaptionStyle();
 
-        float g = saved_eq ? ResampleSavedEqGain(*saved_eq, b, bands) : audio->getEqGain(b);
+        float g = saved_eq ? AudioAnalyzerSettings::resampleSavedEqGain(*saved_eq, b, bands)
+                           : audio->getEqGain(b);
         audio->setEqGain(b, g);
 
         QSlider* eq_slider = band_col->gainSlider();
@@ -177,9 +143,6 @@ void OpenRGB3DSpatialTab::audioStopClicked()
         audioSpectrumLabel()->setPixmap(QPixmap());
         audioSpectrumLabel()->setText("Start listening to see spectrum");
     }
-    if(audioBassBar()) audioBassBar()->setValue(0);
-    if(audioMidBar())  audioMidBar()->setValue(0);
-    if(audioHighBar()) audioHighBar()->setValue(0);
 }
 
 void OpenRGB3DSpatialTab::audioRestoreDefaultsClicked()
@@ -198,57 +161,19 @@ void OpenRGB3DSpatialTab::audioRestoreDefaultsClicked()
         audioGainSlider()->blockSignals(restore_signals);
         audioGainChanged(100);
     }
-    if(audioBandsCombo())
-    {
-        int idx = audioBandsCombo()->findText("16");
-        if(idx >= 0)
-        {
-            bool restore_signals = audioBandsCombo()->blockSignals(true);
-            audioBandsCombo()->setCurrentIndex(idx);
-            audioBandsCombo()->blockSignals(restore_signals);
-            audioBandsChanged(idx);
-        }
-    }
-    if(audioFftCombo())
-    {
-        int idx = audioFftCombo()->findText("512");
-        if(idx >= 0)
-        {
-            bool restore_signals = audioFftCombo()->blockSignals(true);
-            audioFftCombo()->setCurrentIndex(idx);
-            audioFftCombo()->blockSignals(restore_signals);
-            audioFftChanged(idx);
-        }
-    }
     AudioInputManager::instance()->resetEq();
-    AudioAdvancedSettingsDialog::resetToFactoryDefaults();
+    AudioAnalyzerSettings::resetToFactoryDefaults();
     nlohmann::json settings = GetPluginSettings();
     settings["AudioDeviceIndex"] = 0;
     settings["AudioGain"] = 100;
-    settings["AudioMixClarity"] = 60;
-    if(audioClaritySlider())
+    settings["AudioSmoothingPct"] = 80;
+    if(audioDecaySlider())
     {
-        QSignalBlocker block(*audioClaritySlider());
-        audioClaritySlider()->setValue(60);
-        audioClarityChanged(60);
+        QSignalBlocker block(*audioDecaySlider());
+        audioDecaySlider()->setValue(80);
+        AudioInputManager::instance()->setSmoothing(0.80f);
     }
-    settings["AudioBandIsolation"] = 62;
-    if(audioIsolationSlider())
-    {
-        QSignalBlocker block(*audioIsolationSlider());
-        audioIsolationSlider()->setValue(62);
-        audioIsolationChanged(62);
-    }
-    settings["AudioEqMixPreset"] = 8;
-    if(audioMixPresetCombo())
-    {
-        QSignalBlocker block(*audioMixPresetCombo());
-        audioMixPresetCombo()->setCurrentIndex(8);
-        audioMixPresetChanged(8);
-    }
-    settings["AudioBands"] = 16;
-    settings["AudioFFTSize"] = 512;
-    AudioAdvancedSettingsDialog::writeToPluginSettings(settings);
+    AudioAnalyzerSettings::writeToPluginSettings(settings);
     sync_audio_eq_sliders_from_manager();
     SetPluginSettings(settings);
 }
@@ -290,34 +215,6 @@ void OpenRGB3DSpatialTab::audioLevelUpdated(float level)
     {
         int v = (int)(level * 1000.0f);
         audioLevelBar()->setValue(v);
-    }
-    if(AudioInputManager::instance()->isRunning())
-    {
-        if(audioBassBar())
-            audioBassBar()->setValue((int)(AudioInputManager::instance()->getBassLevel() * 1000.0f));
-        if(audioMidBar())
-            audioMidBar()->setValue((int)(AudioInputManager::instance()->getMidLevel() * 1000.0f));
-        if(audioHighBar())
-            audioHighBar()->setValue((int)(AudioInputManager::instance()->getTrebleLevel() * 1000.0f));
-        const AudioInputManager::StreamStemLevels stems = AudioInputManager::instance()->getStreamStemLevels();
-        if(audioKickStemBar())
-            audioKickStemBar()->setValue((int)(stems.kick * 1000.0f));
-        if(audioSnareStemBar())
-            audioSnareStemBar()->setValue((int)(stems.snare * 1000.0f));
-        if(audioHihatStemBar())
-            audioHihatStemBar()->setValue((int)(stems.hihat * 1000.0f));
-        if(audioBassStemBar())
-            audioBassStemBar()->setValue((int)(stems.bass * 1000.0f));
-    }
-    else
-    {
-        if(audioBassBar()) audioBassBar()->setValue(0);
-        if(audioMidBar())  audioMidBar()->setValue(0);
-        if(audioHighBar()) audioHighBar()->setValue(0);
-        if(audioKickStemBar()) audioKickStemBar()->setValue(0);
-        if(audioSnareStemBar()) audioSnareStemBar()->setValue(0);
-        if(audioHihatStemBar()) audioHihatStemBar()->setValue(0);
-        if(audioBassStemBar()) audioBassStemBar()->setValue(0);
     }
     if(audioSpectrumLabel() && !audio_eq_rebuilding && AudioInputManager::instance()->isRunning())
     {
@@ -377,72 +274,6 @@ void OpenRGB3DSpatialTab::audioGainChanged(int value)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::audioClarityChanged(int value)
-{
-    value = std::max(0, std::min(100, value));
-    AudioInputManager::instance()->setMixClarity(value / 100.0f);
-
-    if(audioClarityValueLabel())
-    {
-        audioClarityValueLabel()->setText(QStringLiteral("%1%").arg(value));
-    }
-
-    nlohmann::json settings = GetPluginSettings();
-    settings["AudioMixClarity"] = value;
-    SetPluginSettings(settings);
-}
-
-void OpenRGB3DSpatialTab::audioBandsChanged(int index)
-{
-    if(!audioBandsCombo() || index < 0 || index >= audioBandsCombo()->count())
-    {
-        return;
-    }
-
-    int bands = audioBandsCombo()->itemText(index).toInt();
-    if(bands <= 0)
-    {
-        return;
-    }
-    AudioInputManager::instance()->setBandsCount(bands);
-    rebuildAudioEqSliders();
-
-    nlohmann::json settings = GetPluginSettings();
-    settings["AudioBands"] = bands;
-    SetPluginSettings(settings);
-}
-
-void OpenRGB3DSpatialTab::audioFftChanged(int)
-{
-    if(!audioFftCombo())
-    {
-        return;
-    }
-
-    int n = audioFftCombo()->currentText().toInt();
-    AudioInputManager::instance()->setFFTSize(n);
-    rebuildAudioEqSliders();
-
-    nlohmann::json settings = GetPluginSettings();
-    settings["AudioFFTSize"] = n;
-    SetPluginSettings(settings);
-}
-
-void OpenRGB3DSpatialTab::audioIsolationChanged(int value)
-{
-    value = std::max(0, std::min(100, value));
-    AudioInputManager::instance()->setBandIsolation(value / 100.0f);
-
-    if(audioIsolationValueLabel())
-    {
-        audioIsolationValueLabel()->setText(QStringLiteral("%1%").arg(value));
-    }
-
-    nlohmann::json settings = GetPluginSettings();
-    settings["AudioBandIsolation"] = value;
-    SetPluginSettings(settings);
-}
-
 void OpenRGB3DSpatialTab::sync_audio_eq_sliders_from_manager()
 {
     if(audio_eq_rebuilding)
@@ -477,22 +308,6 @@ void OpenRGB3DSpatialTab::sync_audio_eq_sliders_from_manager()
     {
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore audio EQ gains: %s", e.what());
     }
-}
-
-void OpenRGB3DSpatialTab::audioMixPresetChanged(int index)
-{
-    if(!audioMixPresetCombo() || index < 0 || index >= audioMixPresetCombo()->count())
-    {
-        return;
-    }
-
-    const int preset = audioMixPresetCombo()->itemData(index).toInt();
-    AudioInputManager::instance()->applyEqMixPreset(preset);
-    sync_audio_eq_sliders_from_manager();
-
-    nlohmann::json settings = GetPluginSettings();
-    settings["AudioEqMixPreset"] = preset;
-    SetPluginSettings(settings);
 }
 
 void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility()

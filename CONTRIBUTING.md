@@ -182,11 +182,11 @@ Do **not** duplicate strip colormap or floor/mid/ceiling band controls in `Setup
 
 Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`EffectUiRows`** (`AppendComboRow`, `AppendSliderRow`, …). Give each row a stable `objectName` when `LoadSettings` must resync after profile load (`EffectUiSync`). Prefer caching widget pointers (sliders/combos) when the effect already holds them; use `EffectUiSync` on the nested `NewEffectPanel` when controls live only inside that panel.
 
-**Audio effects:** same reuse rule as above. Each algorithm is its own stack layer. Prefer **strip-first** effects (e.g. **Audio Strip Visualizer**) with **zone / single-controller** targeting for floor, wall, and ceiling strips; use full-room 3D audio effects when one layer should cover everything. Shared audio helpers live in `Effects3D/AudioReactiveUi.h` (`AppendStandardFrequencyBandSection`, `AppendStandardDriveSection`, `AppendStandardResponseSection`, `AppendStandardBeatWaveSection`). Global **16-band EQ** is on the **Audio Input** panel. Show that panel when any audio layer is on the stack.
+**Audio effects:** same reuse rule as above. Each algorithm is its own stack layer. Prefer **strip-first** effects (e.g. **Audio Strip Visualizer**) with **zone / single-controller** targeting for floor, wall, and ceiling strips; use full-room 3D audio effects when one layer should cover everything. Shared audio helpers live in `Effects3D/AudioReactiveUi.h` (`AppendStandardFrequencyBandSection`, `AppendStandardResponseSection`, `AppendStandardBeatWaveSection`). Global **16-band EQ** is on the **Audio Input** panel. Show that panel when any audio layer is on the stack.
 
-- **Spectrum bin effects** (Spectrum Bars, Audio Strip Visualizer) use frequency band + response only—no drive-mode row; they sample raw FFT bins in the Hz range.
-- **Level-driven effects** (Audio Level) use frequency band + drive + response.
-- **Audio Pulse** uses the full beat-wave section for beat-triggered shockwaves from the origin.
+- **Spectrum bin effects** (Spectrum Bars, Audio Strip Visualizer) use frequency band + response only; they sample raw FFT bins in the Hz range.
+- **Level-driven effects** (Audio Level) use Role / Hz band + Feel (smoothing, sensitivity, falloff) + Color mode.
+- **Audio Pulse** (and Bass Punch) use the full beat-wave section for beat-triggered shockwaves from the origin.
 
 Optional local notes may live in a gitignored **`docs/`** folder on your machine; they are not part of the published repo.
 

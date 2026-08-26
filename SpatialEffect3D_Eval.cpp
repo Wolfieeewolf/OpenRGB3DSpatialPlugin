@@ -10,6 +10,7 @@
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "Audio/AudioInputManager.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include <algorithm>
 #include <cmath>
@@ -198,9 +199,10 @@ RGBColor SpatialEffect3D::GetPerBeatPulseColor(uint32_t color_slot) const
 {
     if(GetRainbowMode())
     {
-        const size_t n = std::max(colors.size(), size_t(1));
-        const float hue_step = (n >= 2) ? (360.0f / (float)n) : 32.0f;
-        const float hue = std::fmod((float)color_slot * hue_step, 360.0f);
+        /* Fixed hue step — do not divide 360 by the user stop count (default 2
+           stops previously forced red + aqua only). */
+        constexpr float kRainbowHueStepDeg = 30.0f;
+        const float hue = std::fmod((float)color_slot * kRainbowHueStepDeg + 360.0f, 360.0f);
         return GetRainbowColor(hue);
     }
 
@@ -219,13 +221,25 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
                                                     const AudioReactiveColorParams& p) const
 {
     const float gradient_pos = std::clamp(p.gradient_pos01, 0.0f, 1.0f);
-    const float intensity = std::clamp(p.intensity, 0.0f, 1.0f);
-    const auto mode = static_cast<AudioPulseColorMode>(cfg.pulse_color_mode);
+    auto mode = static_cast<AudioPulseColorMode>(cfg.pulse_color_mode);
 
-    if(mode == AudioPulseColorMode::AudioGradient)
+    if(GetRainbowMode()
+       && mode != AudioPulseColorMode::PerBeatCycle
+       && mode != AudioPulseColorMode::Uniform)
     {
-        return ComposeAudioGradientColor(cfg, gradient_pos, intensity);
+        mode = AudioPulseColorMode::SpatialAlongRing;
     }
+
+    if(mode == AudioPulseColorMode::FollowNotes)
+    {
+        float hue01 = 0.0f;
+        if(AudioInputManager* audio = AudioInputManager::instance())
+            hue01 = audio->getDominantNoteHue01();
+        return GetRainbowColor(std::clamp(hue01, 0.0f, 1.0f) * 360.0f);
+    }
+
+    if(static_cast<int>(mode) == 3) /* legacy AudioGradient */
+        mode = AudioPulseColorMode::SpatialAlongRing;
 
     uint32_t slot = p.beat_color_slot;
     if(mode == AudioPulseColorMode::Uniform)
@@ -256,8 +270,9 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
 
     if(!p.grid || !p.band_scalars)
     {
-        RGBColor base = ComposeAudioGradientColor(cfg, gradient_pos, intensity);
-        return ModulateRGBColors(base, GetPerBeatPulseColor(slot));
+        if(GetRainbowMode() || colors.size() <= 2)
+            return GetRainbowColor(gradient_pos * 360.0f);
+        return GetPerBeatPulseColor(slot);
     }
 
     const EffectStratumBlend::BandBlendScalars& bb = *p.band_scalars;
@@ -309,11 +324,19 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
     else
     {
         float pal = ApplySpatialPalette01(gradient_pos, basis, sp, map, p.time, p.grid);
-        spatial_color = GetColorAtPosition(std::min(pal, 1.0f));
+        /* Default effect colors are red+blue — RGB lerp midtones as purple.
+           With ≤2 stops, use HSV spectrum so audio effects have real color range. */
+        if(colors.size() <= 2)
+        {
+            spatial_color = GetRainbowColor(std::clamp(pal, 0.0f, 1.0f) * 360.0f);
+        }
+        else
+        {
+            spatial_color = GetColorAtPosition(std::min(pal, 1.0f));
+        }
     }
 
-    RGBColor base = ComposeAudioGradientColor(cfg, gradient_pos, intensity);
-    return ModulateRGBColors(base, spatial_color);
+    return spatial_color;
 }
 
 bool SpatialEffect3D::SkipsSpatialSampleWarp() const

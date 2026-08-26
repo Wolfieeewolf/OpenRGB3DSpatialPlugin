@@ -28,4 +28,4 @@ Reject: `iChannel`, `iMouse`, raymarch, audio/webcam. Prefer soft plasma / noise
 
 ## GPU vs CPU
 
-GPU for room fields. CPU for audio, screen capture, Minecraft, and cheap color finish after atlas sample.
+GPU for room fields — including **audio visual fields** (Audio Level, Spectrum Bars, Strip Viz, Pulse) via `SpatialVolumeFieldAssist` + optional `u_media`. CPU keeps **analysis** (FFT / bands / onset in `AudioInputManager`), screen capture, Minecraft, and cheap color finish after atlas sample.

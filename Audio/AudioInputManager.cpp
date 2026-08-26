@@ -86,15 +86,6 @@ private:
         }
         const int channels = mix->nChannels;
         manager->setSampleRate((int)mix->nSamplesPerSec);
-        manager->channel_count = channels;
-        manager->channel_levels.assign(channels, 0.0f);
-        manager->channel_names.clear();
-        static const char* defaultNames[8] = {"FL","FR","FC","LFE","BL","BR","SL","SR"};
-        for(int ci=0; ci<channels; ++ci)
-        {
-            if(ci < 8) manager->channel_names << defaultNames[ci];
-            else manager->channel_names << QString("Ch%1").arg(ci+1);
-        }
 
         while(!stopping)
         {
@@ -111,11 +102,6 @@ private:
             if(FAILED(hr)) break;
             std::vector<int16_t> mono;
             mono.resize(frames);
-            std::vector<double> channel_accum;
-            if(channels > 0)
-            {
-                channel_accum.assign(channels, 0.0);
-            }
             if(isFloat)
             {
                 const float* f = reinterpret_cast<const float*>(data);
@@ -123,14 +109,7 @@ private:
                 {
                     double sum = 0.0;
                     for(int c=0;c<channels;c++)
-                    {
-                        double sample = f[i*channels + c];
-                        sum += sample;
-                        if(c < (int)channel_accum.size())
-                        {
-                            channel_accum[c] += sample * sample;
-                        }
-                    }
+                        sum += f[i*channels + c];
                     double acc = (channels > 0) ? (sum / (double)channels) : sum;
                     if(acc > 1.0) acc = 1.0; if(acc < -1.0) acc = -1.0;
                     mono[i] = (int16_t)(acc * 32767.0);
@@ -143,18 +122,8 @@ private:
                 {
                     long long sum = 0;
                     for(int c=0;c<channels;c++)
-                    {
-                        int16_t sample16 = s[i*channels + c];
-                        sum += sample16;
-                        if(c < (int)channel_accum.size())
-                        {
-                            double sample = sample16 / 32768.0;
-                            channel_accum[c] += sample * sample;
-                        }
-                    }
-                    int divisor = std::max(1, channels);
-                    int16_t v = (int16_t)(sum / divisor);
-                    mono[i] = v;
+                        sum += s[i*channels + c];
+                    mono[i] = (int16_t)(sum / std::max(1, channels));
                 }
             }
             else if(isPCM && bitsPerSample >= 24)
@@ -164,15 +133,7 @@ private:
                 {
                     long long sum = 0;
                     for(int c=0;c<channels;c++)
-                    {
-                        int32_t sample32 = s32[i*channels + c];
-                        sum += sample32;
-                        if(c < (int)channel_accum.size())
-                        {
-                            double sample = (double)sample32 / 2147483648.0;
-                            channel_accum[c] += sample * sample;
-                        }
-                    }
+                        sum += s32[i*channels + c];
                     double acc = (double)sum / (double)std::max(1, channels);
                     int v = (int)(acc / 2147483648.0 * 32767.0);
                     if(v > 32767) v = 32767; if(v < -32768) v = -32768;
@@ -186,38 +147,11 @@ private:
                 {
                     long long sum = 0;
                     for(int c=0;c<channels;c++)
-                    {
-                        int16_t sample16 = s[i*channels + c];
-                        sum += sample16;
-                        if(c < (int)channel_accum.size())
-                        {
-                            double sample = sample16 / 32768.0;
-                            channel_accum[c] += sample * sample;
-                        }
-                    }
-                    int divisor = std::max(1, channels);
-                    mono[i] = (int16_t)(sum / divisor);
-                }
-            }
-            std::vector<float> channel_levels_local;
-            if(!channel_accum.empty() && frames > 0)
-            {
-                channel_levels_local.resize(channel_accum.size());
-                for(size_t ci = 0; ci < channel_accum.size(); ++ci)
-                {
-                    double avg = channel_accum[ci] / (double)frames;
-                    if(avg < 0.0)
-                    {
-                        avg = 0.0;
-                    }
-                    channel_levels_local[ci] = (avg > 0.0) ? (float)std::sqrt(avg) : 0.0f;
+                        sum += s[i*channels + c];
+                    mono[i] = (int16_t)(sum / std::max(1, channels));
                 }
             }
             manager->FeedPCM16(mono.data(), (int)mono.size());
-            if(!channel_levels_local.empty())
-            {
-                manager->updateChannelLevels(channel_levels_local);
-            }
             capture->ReleaseBuffer(frames);
         }
 
@@ -337,12 +271,6 @@ QStringList AudioInputManager::listInputDevices()
     return names;
 }
 
-int AudioInputManager::defaultDeviceIndex() const
-{
-    QMutexLocker lock(&mutex);
-    return 0;
-}
-
 void AudioInputManager::setDeviceByIndex(int index)
 {
     bool was_running = false;
@@ -405,7 +333,12 @@ void AudioInputManager::stop()
     {
         QMutexLocker bl(&bands_mutex);
         std::fill(bands16.begin(), bands16.end(), 0.0f);
-        bass_level = mid_level = treble_level = 0.0f;
+        note_peak_count = 0;
+        note_drive = 0.0f;
+        for(int i = 0; i < kMaxNotePeaks; ++i)
+            note_peaks[i] = {};
+        if((int)chroma12.size() == kChromaBins)
+            std::fill(chroma12.begin(), chroma12.end(), 0.0f);
     }
 }
 
@@ -446,49 +379,6 @@ void AudioInputManager::setSmoothing(float s)
     ema_smoothing = s;
 }
 
-namespace
-{
-float clampDecay(float d, float lo, float hi)
-{
-    return std::clamp(d, lo, hi);
-}
-} // namespace
-
-void AudioInputManager::setBandPeakDecay(float d)
-{
-    band_peak_decay = clampDecay(d, 0.90f, 0.9999f);
-}
-
-void AudioInputManager::setBassPeakDecay(float d)
-{
-    bass_peak_decay = clampDecay(d, 0.90f, 0.9999f);
-}
-
-void AudioInputManager::setActivityPeakDecay(float d)
-{
-    activity_peak_decay = clampDecay(d, 0.90f, 0.9999f);
-}
-
-void AudioInputManager::setVisualizerPeakDecay(float d)
-{
-    visualizer_peak_decay = clampDecay(d, 0.80f, 0.995f);
-}
-
-void AudioInputManager::setVisualizerFloor(float f)
-{
-    visualizer_floor = std::clamp(f, 1e-6f, 0.01f);
-}
-
-void AudioInputManager::setAutoLevelPeakDecay(float d)
-{
-    auto_level_peak_decay = clampDecay(d, 0.90f, 0.9999f);
-}
-
-void AudioInputManager::setAutoLevelFloorDecay(float d)
-{
-    auto_level_floor_decay = clampDecay(d, 0.90f, 0.9999f);
-}
-
 void AudioInputManager::resetAnalyzerTuning()
 {
     ema_smoothing = 0.8f;
@@ -501,26 +391,6 @@ void AudioInputManager::resetAnalyzerTuning()
     auto_level_peak_decay = 0.995f;
     auto_level_floor_decay = 0.9995f;
     resetAutoLevel();
-}
-
-void AudioInputManager::setMixClarity(float clarity_0_to_1)
-{
-    mix_clarity = std::clamp(clarity_0_to_1, 0.0f, 1.0f);
-}
-
-float AudioInputManager::getMixClarity() const
-{
-    return mix_clarity;
-}
-
-void AudioInputManager::setBandIsolation(float isolation_0_to_1)
-{
-    band_isolation = std::clamp(isolation_0_to_1, 0.0f, 1.0f);
-}
-
-float AudioInputManager::getBandIsolation() const
-{
-    return band_isolation;
 }
 
 int AudioInputManager::getEqBandCount() const
@@ -548,28 +418,6 @@ void AudioInputManager::ensureEqGainSizeLocked()
         }
     }
 }
-
-namespace {
-
-void SampleReferenceEqCurve(const float* ref, int ref_count, int bands_count, std::vector<float>& out)
-{
-    out.assign(bands_count, 1.0f);
-    if(ref_count <= 0 || bands_count <= 0 || !ref)
-    {
-        return;
-    }
-    for(int b = 0; b < bands_count; ++b)
-    {
-        const float t = ((float)b + 0.5f) / (float)bands_count;
-        const float ri = t * (float)ref_count - 0.5f;
-        const int i0 = std::clamp((int)std::floor(ri), 0, ref_count - 1);
-        const int i1 = std::min(i0 + 1, ref_count - 1);
-        const float frac = std::clamp(ri - (float)i0, 0.0f, 1.0f);
-        out[(size_t)b] = ref[i0] * (1.0f - frac) + ref[i1] * frac;
-    }
-}
-
-} // namespace
 
 float AudioInputManager::AnalysisBandCenterHz(int band_index, int bands_count, int sample_rate_hz, int fft_size_local)
 {
@@ -606,77 +454,6 @@ void AudioInputManager::AnalysisBandHzRange(int band_index,
     const float t1 = (float)(band_index + 1) / (float)bands_count;
     low_hz = f_min * std::pow(ratio, t0);
     high_hz = f_min * std::pow(ratio, t1);
-}
-
-void AudioInputManager::applyEqMixPreset(int preset_id)
-{
-    static const float kFlat[REFERENCE_EQ_BANDS] = {
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    };
-    static const float kKick[REFERENCE_EQ_BANDS] = {
-        0.05f, 0.12f, 0.35f, 2.0f, 2.0f, 1.35f, 0.12f, 0.08f, 0.06f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f,
-    };
-    static const float kSnare[REFERENCE_EQ_BANDS] = {
-        0.05f, 0.08f, 0.12f, 0.25f, 0.45f, 2.0f, 2.0f, 1.65f, 1.2f, 0.55f, 0.25f, 0.15f, 0.12f, 0.10f, 0.10f, 0.10f,
-    };
-    static const float kHiHat[REFERENCE_EQ_BANDS] = {
-        0.05f, 0.05f, 0.05f, 0.06f, 0.08f, 0.10f, 0.12f, 0.18f, 0.28f, 0.55f, 1.35f, 2.0f, 2.0f, 1.65f, 1.2f, 0.9f,
-    };
-    static const float kBassNoHum[REFERENCE_EQ_BANDS] = {
-        0.02f, 0.05f, 0.18f, 0.55f, 1.35f, 1.65f, 1.2f, 0.85f, 0.55f, 0.35f, 0.22f, 0.15f, 0.12f, 0.10f, 0.10f, 0.10f,
-    };
-    static const float kDrumKit[REFERENCE_EQ_BANDS] = {
-        0.08f, 0.15f, 0.45f, 1.85f, 1.65f, 1.45f, 1.55f, 1.25f, 0.75f, 0.55f, 1.15f, 1.65f, 1.45f, 1.1f, 0.85f, 0.7f,
-    };
-    static const float kMudCut[REFERENCE_EQ_BANDS] = {
-        0.55f, 0.65f, 0.85f, 1.1f, 0.35f, 0.25f, 0.22f, 0.35f, 0.75f, 1.0f, 1.1f, 1.0f, 0.95f, 0.9f, 0.85f, 0.8f,
-    };
-    static const float kVocalReduce[REFERENCE_EQ_BANDS] = {
-        0.85f, 0.9f, 1.0f, 0.75f, 0.45f, 0.35f, 0.32f, 0.35f, 0.42f, 0.55f, 0.75f, 1.0f, 1.1f, 1.15f, 1.1f, 1.0f,
-    };
-    static const float kStreaming[REFERENCE_EQ_BANDS] = {
-        0.06f, 0.12f, 0.55f, 1.75f, 1.55f, 1.45f, 1.65f, 1.35f, 0.85f, 0.65f, 1.25f, 1.75f, 1.55f, 1.25f, 0.95f, 0.75f,
-    };
-
-    const float* table = kFlat;
-    switch(preset_id)
-    {
-    case 1:
-        table = kKick;
-        break;
-    case 2:
-        table = kSnare;
-        break;
-    case 3:
-        table = kHiHat;
-        break;
-    case 4:
-        table = kBassNoHum;
-        break;
-    case 5:
-        table = kDrumKit;
-        break;
-    case 6:
-        table = kMudCut;
-        break;
-    case 7:
-        table = kVocalReduce;
-        break;
-    case 8:
-        table = kStreaming;
-        break;
-    default:
-        table = kFlat;
-        break;
-    }
-
-    QMutexLocker bl(&bands_mutex);
-    ensureEqGainSizeLocked();
-    SampleReferenceEqCurve(table, REFERENCE_EQ_BANDS, bands_count, eq_gain);
-    for(float& g : eq_gain)
-    {
-        g = std::clamp(g, 0.0f, 2.0f);
-    }
 }
 
 void AudioInputManager::setBandsCount(int bands)
@@ -743,14 +520,6 @@ void AudioInputManager::setFFTSize(int n)
     band_transient.assign(bands_count, 0.0f);
     band_noise_floor.assign(bands_count, 0.0f);
     band_peak_activity.assign(bands_count, 0.05f);
-}
-
-void AudioInputManager::setCrossovers(float bass_upper_hz, float mid_upper_hz)
-{
-    if(bass_upper_hz < 20.0f) bass_upper_hz = 20.0f;
-    if(mid_upper_hz <= bass_upper_hz) mid_upper_hz = bass_upper_hz + 1.0f;
-    xover_bass_upper = bass_upper_hz;
-    xover_mid_upper  = mid_upper_hz;
 }
 
 int AudioInputManager::getBandsCount() const
@@ -860,54 +629,6 @@ void AudioInputManager::processBuffer(const char* data, int bytes)
             sample_buffer.erase(sample_buffer.begin(), sample_buffer.end() - keep);
         }
     }
-}
-
-void AudioInputManager::updateChannelLevels(const std::vector<float>& levels)
-{
-#ifdef _WIN32
-    if(levels.empty())
-    {
-        return;
-    }
-    QMutexLocker lock(&mutex);
-    if(channel_levels.size() != levels.size())
-    {
-        channel_levels.assign(levels.size(), 0.0f);
-    }
-    float range = auto_level_peak - auto_level_floor;
-    if(range < auto_level_min_range)
-    {
-        range = auto_level_min_range;
-    }
-    for(size_t i = 0; i < levels.size(); ++i)
-    {
-        if(i >= channel_levels.size())
-        {
-            break;
-        }
-        double value = (double)levels[i] * (double)gain;
-        double normalized = (value - auto_level_floor) / (double)range;
-        if(normalized < 0.0)
-        {
-            normalized = 0.0;
-        }
-        else if(normalized > 1.0)
-        {
-            normalized = 1.0;
-        }
-        channel_levels[i] = 0.7f * channel_levels[i] + 0.3f * (float)normalized;
-    }
-    if(levels.size() >= 2)
-    {
-        const float left = channel_levels[0];
-        const float right = channel_levels[1];
-        const float mono = left + right + 1e-4f;
-        const float width = std::abs(left - right) / mono;
-        stereo_width = 0.88f * stereo_width + 0.12f * std::clamp(width, 0.0f, 1.0f);
-    }
-#else
-    (void)levels;
-#endif
 }
 
 void AudioInputManager::onLevelTick()
@@ -1021,7 +742,7 @@ void AudioInputManager::computeSpectrum()
     {
         band_peak_smoothed.assign(bands_count, 0.1f);
     }
-    const float clarity = mix_clarity;
+    const float clarity = 0.60f;
     for(int band_index = 0; band_index < (int)newBands.size(); band_index++)
     {
         float v = newBands[band_index];
@@ -1089,61 +810,6 @@ void AudioInputManager::computeSpectrum()
             prev_band_frame[b] = frame;
             bands16[b] = ema_smoothing * bands16[b] + (1.0f - ema_smoothing) * frame;
         }
-        float log_ratio = std::log(f_max / f_min);
-        float bass_norm = 0.0f;
-        if(std::abs(log_ratio) > 1e-6f)
-        {
-            bass_norm = std::log(xover_bass_upper / f_min) / log_ratio;
-        }
-        int b_end = (int)std::floor(bass_norm * bands_count);
-        if(b_end < 0) b_end = 0;
-        if(b_end > bands_count) b_end = bands_count;
-
-        float mid_norm = 0.0f;
-        if(std::abs(log_ratio) > 1e-6f)
-        {
-            mid_norm = std::log(xover_mid_upper / f_min) / log_ratio;
-        }
-        int m_end = (int)std::floor(mid_norm * bands_count);
-        if(m_end < 0) m_end = 0;
-        if(m_end > bands_count) m_end = bands_count;
-
-        if(b_end < 1) b_end = 1;
-        if(m_end <= b_end) m_end = b_end + 1;
-        if(m_end > bands_count) m_end = bands_count;
-        float bsum=0, msum=0, tsum=0;
-        float bslow=0, mslow=0, tslow=0;
-        int bc=0, mc=0, tc=0;
-        for(int i=0;i<bands_count;i++)
-        {
-            if(i < b_end)
-            {
-                bsum += bands16[i];
-                bslow += band_slow[i];
-                bc++;
-            }
-            else if(i < m_end)
-            {
-                msum += bands16[i];
-                mslow += band_slow[i];
-                mc++;
-            }
-            else
-            {
-                tsum += bands16[i];
-                tslow += band_slow[i];
-                tc++;
-            }
-        }
-        float bass_now = (bc ? bsum / bc : 0.0f);
-        float mid_now  = (mc ? msum / mc : 0.0f);
-        float treb_now = (tc ? tsum / tc : 0.0f);
-        float bass_sl  = (bc ? bslow / bc : 0.0f);
-        float mid_sl   = (mc ? mslow / mc : 0.0f);
-        float treb_sl  = (tc ? tslow / tc : 0.0f);
-        bass_level   = (1.0f - clarity) * bass_now + clarity * bass_sl;
-        mid_level    = (1.0f - clarity) * mid_now  + clarity * mid_sl;
-        treble_level = (1.0f - clarity) * treb_now + clarity * treb_sl;
 
         updateVisualizerBuckets(mags, f_min, f_max);
 
@@ -1155,16 +821,226 @@ void AudioInputManager::computeSpectrum()
             if(diff > 0) flux += diff;
         }
         prev_mags = mags;
-        double nf = std::log10(1.0 + 9.0 * flux);
-        onset_level = (float)(0.6 * onset_level + 0.4 * std::min(1.0, nf));
-        updateStreamStemsLocked();
-    }
-}
+        const double nf = std::log10(1.0 + 9.0 * flux);
+        onset_flux_mean = (float)(0.92 * (double)onset_flux_mean + 0.08 * nf);
+        const double onset_floor = std::max(0.06, (double)onset_flux_mean * 1.12);
+        const double excess = std::max(0.0, nf - onset_floor);
+        const double adaptive = std::min(1.0, excess / std::max(0.07, (double)onset_flux_mean));
+        onset_level = (float)(0.55 * (double)onset_level + 0.45 * adaptive);
 
-std::vector<float> AudioInputManager::getBands() const
-{
-    QMutexLocker bl(&bands_mutex);
-    return bands16;
+        /* Pitch-class fold + ColorChord-lite peak notes.
+           Vocal-range weight (~200–4000 Hz) so melody/voice win over kick bleed. */
+        if((int)chroma12.size() != kChromaBins)
+            chroma12.assign(kChromaBins, 0.0f);
+        float chroma_acc[kChromaBins] = {};
+        const int n2 = (int)mags.size();
+        auto vocal_chroma_weight = [](float hz) -> float {
+            if(hz < 80.0f)
+                return 0.04f;
+            if(hz < 200.0f)
+                return 0.20f + 0.55f * ((hz - 80.0f) / 120.0f);
+            if(hz <= 800.0f)
+                return 0.85f + 0.15f * ((hz - 200.0f) / 600.0f);
+            if(hz <= 2500.0f)
+                return 1.0f;
+            if(hz <= 4000.0f)
+                return 1.0f - 0.30f * ((hz - 2500.0f) / 1500.0f);
+            if(hz <= 5000.0f)
+                return 0.55f * (1.0f - (hz - 4000.0f) / 1000.0f);
+            return 0.0f;
+        };
+        for(int i = 1; i < n2; ++i)
+        {
+            const float hz = (float)i * f_max / (float)n2;
+            if(hz < 55.0f || hz > 5000.0f)
+                continue;
+            const float vocal_w = vocal_chroma_weight(hz);
+            if(vocal_w < 1e-4f)
+                continue;
+            const float midi = 69.0f + 12.0f * std::log2(std::max(1.0f, hz / 440.0f));
+            int pc = (int)std::floor(midi);
+            pc = ((pc % 12) + 12) % 12;
+            /* Soft triangular weight toward bin center reduces octave smearing. */
+            const float frac = midi - std::floor(midi);
+            const float w = 1.0f - std::fabs(frac - 0.5f) * 0.35f;
+            chroma_acc[pc] += mags[i] * w * vocal_w;
+        }
+
+        /* Neighbor blend (ColorChord octave filter, lite). */
+        float filtered[kChromaBins] = {};
+        constexpr float kNeighbor = 0.35f;
+        for(int c = 0; c < kChromaBins; ++c)
+        {
+            const float prev = chroma_acc[(c + kChromaBins - 1) % kChromaBins];
+            const float next = chroma_acc[(c + 1) % kChromaBins];
+            filtered[c] = (1.0f - kNeighbor) * chroma_acc[c] + 0.5f * kNeighbor * (prev + next);
+        }
+
+        float peak = 1e-6f;
+        for(int c = 0; c < kChromaBins; ++c)
+            peak = std::max(peak, filtered[c]);
+        chroma_peak = 0.85f * chroma_peak + 0.15f * peak;
+        const float norm = std::max(chroma_peak, 1e-5f);
+        constexpr float kChromaEma = 0.55f;
+        float hist[kChromaBins] = {};
+        for(int c = 0; c < kChromaBins; ++c)
+        {
+            const float v = std::min(1.0f, filtered[c] / norm);
+            chroma12[c] = kChromaEma * chroma12[c] + (1.0f - kChromaEma) * v;
+            hist[c] = chroma12[c];
+        }
+
+        /* Peak pick with neighbor interpolation (ColorChord DecomposeHistogram lite). */
+        struct RawPeak
+        {
+            float mean = 0.0f;
+            float amp = 0.0f;
+        };
+        RawPeak raw_peaks[kMaxNotePeaks];
+        int raw_count = 0;
+        const float peak_amp_floor = std::max(0.08f, note_drive * 0.35f);
+        for(int c = 0; c < kChromaBins && raw_count < kMaxNotePeaks; ++c)
+        {
+            const float prev = hist[(c + kChromaBins - 1) % kChromaBins];
+            const float cur = hist[c];
+            const float next = hist[(c + 1) % kChromaBins];
+            if(prev >= cur || next > cur)
+                continue;
+            if(cur < peak_amp_floor)
+                continue;
+            const float totaldiff = (cur - prev) + (cur - next);
+            float offset = 0.0f;
+            if(totaldiff > 1e-6f)
+            {
+                const float porp_p = (cur - prev) / totaldiff;
+                const float porp_n = (cur - next) / totaldiff;
+                offset = (porp_p < porp_n) ? -(0.5f - porp_p) : (0.5f - porp_n);
+            }
+            raw_peaks[raw_count].mean = (float)c + offset;
+            raw_peaks[raw_count].amp = std::min(1.0f, cur * 1.15f);
+            ++raw_count;
+        }
+
+        /* Attach / IIR merge into tracked note slots. */
+        const float attach_freq = 0.32f;
+        const float attach_amp = 0.42f;
+        const float influence = 1.65f;
+        bool used[kMaxNotePeaks] = {};
+        NotePeak next_slots[kMaxNotePeaks]{};
+        int next_count = 0;
+
+        for(int p = 0; p < raw_count; ++p)
+        {
+            int best = -1;
+            float best_d = influence;
+            for(int s = 0; s < note_peak_count; ++s)
+            {
+                if(used[s] || note_peaks[s].amp < 1e-4f)
+                    continue;
+                float d = std::fabs(raw_peaks[p].mean - note_peaks[s].mean);
+                if(d > 6.0f)
+                    d = 12.0f - d;
+                if(d < best_d)
+                {
+                    best_d = d;
+                    best = s;
+                }
+            }
+
+            NotePeak out;
+            if(best >= 0)
+            {
+                used[best] = true;
+                float mean = note_peaks[best].mean;
+                float delta = raw_peaks[p].mean - mean;
+                if(delta > 6.0f)
+                    delta -= 12.0f;
+                if(delta < -6.0f)
+                    delta += 12.0f;
+                mean = mean + attach_freq * delta;
+                if(mean < 0.0f)
+                    mean += 12.0f;
+                if(mean >= 12.0f)
+                    mean -= 12.0f;
+                out.mean = mean;
+                out.amp = attach_amp * note_peaks[best].amp
+                          + (1.0f - attach_amp) * raw_peaks[p].amp;
+            }
+            else if(next_count < kMaxNotePeaks)
+            {
+                out.mean = raw_peaks[p].mean;
+                if(out.mean < 0.0f)
+                    out.mean += 12.0f;
+                if(out.mean >= 12.0f)
+                    out.mean -= 12.0f;
+                out.amp = raw_peaks[p].amp;
+            }
+            else
+            {
+                continue;
+            }
+            next_slots[next_count++] = out;
+        }
+
+        /* Decay unmatched tracked notes. */
+        for(int s = 0; s < note_peak_count && next_count < kMaxNotePeaks; ++s)
+        {
+            if(used[s])
+                continue;
+            NotePeak decayed = note_peaks[s];
+            decayed.amp *= 0.72f;
+            if(decayed.amp < 0.04f)
+                continue;
+            next_slots[next_count++] = decayed;
+        }
+
+        /* Keep strongest peaks. */
+        for(int i = 0; i < next_count; ++i)
+        {
+            for(int j = i + 1; j < next_count; ++j)
+            {
+                if(next_slots[j].amp > next_slots[i].amp)
+                    std::swap(next_slots[i], next_slots[j]);
+            }
+        }
+        note_peak_count = std::min(next_count, kMaxNotePeaks);
+        float drive = 0.0f;
+        float best_amp = 0.0f;
+        float best_mean = dominant_note_hue01 * 12.0f;
+        for(int i = 0; i < note_peak_count; ++i)
+        {
+            note_peaks[i] = next_slots[i];
+            drive = std::max(drive, note_peaks[i].amp);
+            if(note_peaks[i].amp > best_amp)
+            {
+                best_amp = note_peaks[i].amp;
+                best_mean = note_peaks[i].mean;
+            }
+        }
+        for(int i = note_peak_count; i < kMaxNotePeaks; ++i)
+            note_peaks[i] = {};
+        note_drive = 0.70f * note_drive + 0.30f * std::clamp(drive, 0.0f, 1.0f);
+        if(best_amp > 0.04f)
+        {
+            float hue = best_mean / 12.0f;
+            float dh = hue - dominant_note_hue01;
+            if(dh > 0.5f)
+                dh -= 1.0f;
+            if(dh < -0.5f)
+                dh += 1.0f;
+            /* Snappier ColorChord hue so notes actually move the palette. */
+            dominant_note_hue01 = dominant_note_hue01 + 0.55f * dh;
+            if(dominant_note_hue01 < 0.0f)
+                dominant_note_hue01 += 1.0f;
+            if(dominant_note_hue01 >= 1.0f)
+                dominant_note_hue01 -= 1.0f;
+        }
+        else if(note_drive < 0.08f)
+        {
+            /* Quiet: drift hue so we don't freeze on last magenta pitch class. */
+            dominant_note_hue01 = std::fmod(dominant_note_hue01 + 0.0025f, 1.0f);
+        }
+    }
 }
 
 void AudioInputManager::getBands(std::vector<float>& out) const
@@ -1173,31 +1049,83 @@ void AudioInputManager::getBands(std::vector<float>& out) const
     out = bands16;
 }
 
-float AudioInputManager::getBassLevel() const
-{
-    QMutexLocker bl(&bands_mutex);
-    return bass_level;
-}
-
-float AudioInputManager::getMidLevel() const
-{
-    QMutexLocker bl(&bands_mutex);
-    return mid_level;
-}
-
-float AudioInputManager::getTrebleLevel() const
-{
-    QMutexLocker bl(&bands_mutex);
-    return treble_level;
-}
-
 float AudioInputManager::getOnsetLevel() const
 {
     QMutexLocker bl(&bands_mutex);
     return onset_level;
 }
 
+std::vector<AudioInputManager::NotePeak> AudioInputManager::getActiveNotes() const
+{
+    QMutexLocker bl(&bands_mutex);
+    std::vector<NotePeak> out;
+    out.reserve((size_t)note_peak_count);
+    for(int i = 0; i < note_peak_count; ++i)
+    {
+        if(note_peaks[i].amp >= 0.04f)
+            out.push_back(note_peaks[i]);
+    }
+    return out;
+}
+
+float AudioInputManager::getDominantNoteHue01() const
+{
+    QMutexLocker bl(&bands_mutex);
+    return dominant_note_hue01;
+}
+
+float AudioInputManager::getNoteDrive01() const
+{
+    QMutexLocker bl(&bands_mutex);
+    return note_drive;
+}
+
 namespace {
+
+float NoteEnergyInRangeLocked(const std::vector<float>& chroma12,
+                              const AudioInputManager::NotePeak* peaks,
+                              int peak_count,
+                              float low_hz,
+                              float high_hz)
+{
+    if((int)chroma12.size() != AudioInputManager::kChromaBins)
+        return 0.0f;
+    float lo = std::min(low_hz, high_hz);
+    float hi = std::max(low_hz, high_hz);
+    float best = 0.0f;
+    for(int c = 0; c < AudioInputManager::kChromaBins; ++c)
+    {
+        for(int oct = 1; oct <= 8; ++oct)
+        {
+            const int midi = 12 * oct + c;
+            const float hz = 440.0f * std::pow(2.0f, ((float)midi - 69.0f) / 12.0f);
+            if(hz >= lo && hz <= hi)
+                best = std::max(best, chroma12[(size_t)c]);
+        }
+    }
+    if(peaks && peak_count > 0)
+    {
+        for(int i = 0; i < peak_count; ++i)
+        {
+            const float mean = peaks[i].mean;
+            for(int oct = 1; oct <= 8; ++oct)
+            {
+                const float midi = 12.0f * (float)oct + mean;
+                const float hz = 440.0f * std::pow(2.0f, (midi - 69.0f) / 12.0f);
+                if(hz >= lo && hz <= hi)
+                    best = std::max(best, peaks[i].amp);
+            }
+        }
+    }
+    return std::clamp(best, 0.0f, 1.0f);
+}
+
+float BlendBandWithNote(float band, float note)
+{
+    if(note <= 1e-4f)
+        return band;
+    return std::min(1.0f, 0.72f * band + 0.28f * note);
+}
 
 void BandIndexRangeForHz(int bands_count,
                          int sample_rate_hz,
@@ -1260,9 +1188,9 @@ void BandIndexRangeForHz(int bands_count,
     if(i1 == i0) i1 = std::min(i0 + 1, bands_count - 1);
 }
 
-float EffectiveIsolation(float global_isolation, float /*extra_isolation*/)
+float EffectiveIsolation()
 {
-    return std::clamp(global_isolation, 0.0f, 1.0f);
+    return 0.55f;
 }
 
 float IsolatedBandMeasure(const std::vector<float>& values, int i0, int i1, float isolation)
@@ -1337,62 +1265,13 @@ float IsolatedBandMeasure(const std::vector<float>& values, int i0, int i1, floa
 
 } // namespace
 
-void AudioInputManager::updateStreamStemsLocked()
-{
-    const float iso = band_isolation;
-    auto query_trans = [&](float low_hz, float high_hz) {
-        int i0 = 0;
-        int i1 = 0;
-        BandIndexRangeForHz(bands_count, sample_rate_hz, fft_size, low_hz, high_hz, i0, i1);
-        return IsolatedBandMeasure(band_transient, i0, i1, iso);
-    };
-    auto query_slow = [&](float low_hz, float high_hz) {
-        int i0 = 0;
-        int i1 = 0;
-        BandIndexRangeForHz(bands_count, sample_rate_hz, fft_size, low_hz, high_hz, i0, i1);
-        return IsolatedBandMeasure(band_slow, i0, i1, iso * 0.85f);
-    };
-
-    const float kick_trans = query_trans(48.0f, 118.0f);
-    const float kick_slow = query_slow(48.0f, 118.0f);
-    float kick = std::max(0.0f, kick_trans - 0.78f * kick_slow);
-
-    float bass = query_slow(62.0f, 260.0f);
-    bass = std::max(0.0f, bass - kick * 0.42f);
-
-    float snare = query_trans(165.0f, 980.0f);
-    snare = std::max(0.0f, snare - kick * 0.38f - bass * 0.18f);
-
-    float hihat = query_trans(2600.0f, 14500.0f);
-    const float side_mul = 0.55f + 0.65f * stereo_width;
-    hihat *= side_mul;
-    hihat = std::max(0.0f, hihat - snare * 0.22f);
-
-    const float smooth = 0.82f + 0.1f * (1.0f - mix_clarity);
-    stream_kick = smooth * stream_kick + (1.0f - smooth) * std::min(1.0f, kick * 1.12f);
-    stream_snare = smooth * stream_snare + (1.0f - smooth) * std::min(1.0f, snare * 1.08f);
-    stream_hihat = smooth * stream_hihat + (1.0f - smooth) * std::min(1.0f, hihat * 1.10f);
-    stream_bass = smooth * stream_bass + (1.0f - smooth) * std::min(1.0f, bass * 1.05f);
-}
-
-AudioInputManager::StreamStemLevels AudioInputManager::getStreamStemLevels() const
+float AudioInputManager::getNoteEnergyInHz(float low_hz, float high_hz) const
 {
     QMutexLocker bl(&bands_mutex);
-    StreamStemLevels s;
-    s.kick = stream_kick;
-    s.snare = stream_snare;
-    s.hihat = stream_hihat;
-    s.bass = stream_bass;
-    return s;
+    return NoteEnergyInRangeLocked(chroma12, note_peaks, note_peak_count, low_hz, high_hz);
 }
 
-float AudioInputManager::getStereoWidth() const
-{
-    QMutexLocker bl(&bands_mutex);
-    return stereo_width;
-}
-
-float AudioInputManager::getBandOnsetLevel(float low_hz, float high_hz, float extra_isolation) const
+float AudioInputManager::getBandOnsetLevel(float low_hz, float high_hz) const
 {
     QMutexLocker bl(&bands_mutex);
     if(band_flux.empty())
@@ -1402,13 +1281,17 @@ float AudioInputManager::getBandOnsetLevel(float low_hz, float high_hz, float ex
     int i0 = 0;
     int i1 = 0;
     BandIndexRangeForHz(bands_count, sample_rate_hz, fft_size, low_hz, high_hz, i0, i1);
-    const float iso = EffectiveIsolation(band_isolation, extra_isolation);
+    const float iso = EffectiveIsolation();
     float flux = IsolatedBandMeasure(band_flux, i0, i1, iso);
     double nf = std::log10(1.0 + 9.0 * (double)flux);
-    return (float)std::min(1.0, nf);
+    const double floor = std::max(0.05, (double)onset_flux_mean * 0.85);
+    const double excess = std::max(0.0, nf - floor);
+    const float adaptive = (float)std::min(1.0, excess / std::max(0.06, (double)onset_flux_mean));
+    const float note = NoteEnergyInRangeLocked(chroma12, note_peaks, note_peak_count, low_hz, high_hz);
+    return std::min(1.0f, std::max(adaptive, note * 0.55f));
 }
 
-float AudioInputManager::getBandTransientEnergyHz(float low_hz, float high_hz, float extra_isolation) const
+float AudioInputManager::getBandTransientEnergyHz(float low_hz, float high_hz) const
 {
     QMutexLocker bl(&bands_mutex);
     if(band_transient.empty())
@@ -1418,11 +1301,12 @@ float AudioInputManager::getBandTransientEnergyHz(float low_hz, float high_hz, f
     int i0 = 0;
     int i1 = 0;
     BandIndexRangeForHz(bands_count, sample_rate_hz, fft_size, low_hz, high_hz, i0, i1);
-    const float iso = EffectiveIsolation(band_isolation, extra_isolation);
-    return std::min(1.0f, IsolatedBandMeasure(band_transient, i0, i1, iso));
+    const float iso = EffectiveIsolation();
+    const float band = std::min(1.0f, IsolatedBandMeasure(band_transient, i0, i1, iso));
+    return BlendBandWithNote(band, NoteEnergyInRangeLocked(chroma12, note_peaks, note_peak_count, low_hz, high_hz));
 }
 
-float AudioInputManager::getBandSlowEnergyHz(float low_hz, float high_hz, float extra_isolation) const
+float AudioInputManager::getBandSlowEnergyHz(float low_hz, float high_hz) const
 {
     QMutexLocker bl(&bands_mutex);
     if(band_slow.empty())
@@ -1432,74 +1316,9 @@ float AudioInputManager::getBandSlowEnergyHz(float low_hz, float high_hz, float 
     int i0 = 0;
     int i1 = 0;
     BandIndexRangeForHz(bands_count, sample_rate_hz, fft_size, low_hz, high_hz, i0, i1);
-    const float iso = EffectiveIsolation(band_isolation, extra_isolation);
-    return std::min(1.0f, IsolatedBandMeasure(band_slow, i0, i1, iso));
-}
-
-float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz, float extra_isolation) const
-{
-    QMutexLocker bl(&bands_mutex);
-    if(bands16.empty() || sample_rate_hz <= 0)
-    {
-        return 0.0f;
-    }
-    int i0 = 0;
-    int i1 = 0;
-    BandIndexRangeForHz(bands_count, sample_rate_hz, fft_size, low_hz, high_hz, i0, i1);
-    const float iso = EffectiveIsolation(band_isolation, extra_isolation);
-    return std::min(1.0f, IsolatedBandMeasure(bands16, i0, i1, iso));
-}
-
-float AudioInputManager::getBandEnergyHzWithGain(float low_hz, float high_hz, const float* band_gain_16) const
-{
-    QMutexLocker bl(&bands_mutex);
-    if(bands16.empty() || sample_rate_hz <= 0)
-    {
-        return 0.0f;
-    }
-    float fs = (float)sample_rate_hz;
-    if(fft_size <= 0 || fs <= 0.0f) return 0.0f;
-    float bin_min = fs / (float)fft_size;
-    float f_min = std::max(1.0f, bin_min);
-    float f_max = fs * 0.5f;
-    if(f_max <= f_min || f_max < 0.001f) return 0.0f;
-    if(high_hz <= low_hz) high_hz = low_hz + 1.0f;
-    float clamped_low = low_hz;
-    if(clamped_low < f_min) clamped_low = f_min;
-    if(clamped_low > f_max) clamped_low = f_max;
-    float log_ratio = std::log(f_max / f_min);
-    float low_norm = (std::abs(log_ratio) > 1e-6f) ? (std::log(clamped_low / f_min) / log_ratio) : 0.0f;
-    int i0 = (int)std::floor(low_norm * (int)bands16.size());
-    if(i0 < 0) i0 = 0;
-    if(i0 > (int)bands16.size() - 1) i0 = (int)bands16.size() - 1;
-    float clamped_high = high_hz;
-    if(clamped_high < f_min) clamped_high = f_min;
-    if(clamped_high > f_max) clamped_high = f_max;
-    float high_norm = (std::abs(log_ratio) > 1e-6f) ? (std::log(clamped_high / f_min) / log_ratio) : 0.0f;
-    int i1 = (int)std::floor(high_norm * (int)bands16.size());
-    if(i1 < 0) i1 = 0;
-    if(i1 > (int)bands16.size() - 1) i1 = (int)bands16.size() - 1;
-    if(i1 < i0) std::swap(i0, i1);
-    if(i1 == i0) i1 = std::min(i0 + 1, (int)bands16.size() - 1);
-    float sum = 0.0f;
-    int cnt = 0;
-    for(int i = i0; i <= i1; ++i)
-    {
-        float gv = 1.0f;
-        if(band_gain_16)
-        {
-            const int gain_count = (int)bands16.size();
-            const int gi = std::clamp(i, 0, gain_count > 0 ? gain_count - 1 : 0);
-            gv = band_gain_16[gi];
-        }
-        else if(i >= 0 && i < (int)eq_gain.size())
-        {
-            gv = eq_gain[(size_t)i];
-        }
-        sum += bands16[i] * std::max(0.0f, gv);
-        cnt++;
-    }
-    return (cnt > 0) ? std::min(1.0f, sum / (float)cnt) : 0.0f;
+    const float iso = EffectiveIsolation();
+    const float band = std::min(1.0f, IsolatedBandMeasure(band_slow, i0, i1, iso));
+    return BlendBandWithNote(band, NoteEnergyInRangeLocked(chroma12, note_peaks, note_peak_count, low_hz, high_hz));
 }
 
 void AudioInputManager::setEqGain(int band_index, float gain)

@@ -42,13 +42,6 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="advancedSettingsButton">
-       <property name="text">
-        <string>Advanced…</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="restoreDefaultsButton">
        <property name="text">
         <string>Restore defaults</string>
@@ -76,133 +69,6 @@
       <number>0</number>
      </property>
     </widget>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="bmhRow">
-     <item>
-      <widget class="QLabel" name="bassCaption">
-       <property name="text">
-        <string>Bass:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QProgressBar" name="bassBar">
-       <property name="maximum">
-        <number>1000</number>
-       </property>
-       <property name="textVisible">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="midCaption">
-       <property name="text">
-        <string>Mid:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QProgressBar" name="midBar">
-       <property name="maximum">
-        <number>1000</number>
-       </property>
-       <property name="textVisible">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="highCaption">
-       <property name="text">
-        <string>High:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QProgressBar" name="highBar">
-       <property name="maximum">
-        <number>1000</number>
-       </property>
-       <property name="textVisible">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="stemRow">
-     <item>
-      <widget class="QLabel" name="kickCaption">
-       <property name="text">
-        <string>Kick:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QProgressBar" name="kickStemBar">
-       <property name="maximum">
-        <number>1000</number>
-       </property>
-       <property name="textVisible">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="snareCaption">
-       <property name="text">
-        <string>Snare:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QProgressBar" name="snareStemBar">
-       <property name="maximum">
-        <number>1000</number>
-       </property>
-       <property name="textVisible">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="hatCaption">
-       <property name="text">
-        <string>Hat:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QProgressBar" name="hihatStemBar">
-       <property name="maximum">
-        <number>1000</number>
-       </property>
-       <property name="textVisible">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="bassStemCaption">
-       <property name="text">
-        <string>Bass:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QProgressBar" name="bassStemBar">
-       <property name="maximum">
-        <number>1000</number>
-       </property>
-       <property name="textVisible">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-    </layout>
    </item>
    <item>
     <widget class="QLabel" name="spectrumCaption">
@@ -252,19 +118,7 @@
     <widget class="EffectSliderRow" name="gainRow" native="true"/>
    </item>
    <item>
-    <widget class="EffectSliderRow" name="clarityRow" native="true"/>
-   </item>
-   <item>
-    <widget class="EffectSliderRow" name="isolationRow" native="true"/>
-   </item>
-   <item>
-    <widget class="EffectLabeledComboRow" name="mixPresetRow" native="true"/>
-   </item>
-   <item>
-    <widget class="EffectLabeledComboRow" name="bandsRow" native="true"/>
-   </item>
-   <item>
-    <widget class="EffectLabeledComboRow" name="fftRow" native="true"/>
+    <widget class="EffectSliderRow" name="decayRow" native="true"/>
    </item>
    <item>
     <widget class="EffectSectionHeading" name="eqHeading" native="true"/>

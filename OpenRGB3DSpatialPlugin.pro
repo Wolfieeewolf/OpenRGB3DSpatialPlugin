@@ -205,7 +205,7 @@ HEADERS += \
     ui/ZonesPanel.h \
     ui/EffectGlobalSettingsPanel.h \
     ui/AudioInputPanel.h \
-    ui/AudioAdvancedSettingsDialog.h \
+    ui/AudioAnalyzerSettings.h \
     ui/EffectControlsHostPanel.h \
     ui/OpenRGB3DSpatialTab.h \
     ui/SpatialTabLedHelpers.h \
@@ -277,7 +277,9 @@ HEADERS += \
     ui/widgets/AudioEqBandColumn.h \
     ui/widgets/EffectControlsRoot.h \
     Effects3D/SpectrumBars/SpectrumBars.h \
+    Effects3D/SpectrumBars/SpectrumBarsVolumeFieldGlsl.h \
     Effects3D/AudioStripVisualizer/AudioStripVisualizer.h \
+    Effects3D/AudioStripVisualizer/AudioStripVisualizerVolumeFieldGlsl.h \
     Effects3D/ShaderField/ShaderField.h \
     Effects3D/ShaderField/ShaderFieldPresets.h \
     Shaders/SpatialShaderEngine.h \
@@ -314,7 +316,12 @@ HEADERS += \
     Effects3D/SpatialPatternKernels/StripUnfoldFieldGlsl.h \
     Effects3D/AudioReactiveUi.h \
     Effects3D/AudioLevel/AudioLevel.h \
+    Effects3D/AudioLevel/AudioLevelVolumeFieldGlsl.h \
     Effects3D/AudioPulse/AudioPulse.h \
+    Effects3D/AudioPulse/AudioPulseVolumeFieldGlsl.h \
+    Effects3D/BassPunch/BassPunch.h \
+    Effects3D/NoteSparkle/NoteSparkle.h \
+    Effects3D/NoteSparkle/NoteSparkleVolumeFieldGlsl.h \
     Audio/AudioInputManager.h \
     Effects3D/Plasma/Plasma.h \
     Effects3D/Spiral/Spiral.h \
@@ -422,7 +429,7 @@ SOURCES += \
     ui/ZonesPanel.cpp \
     ui/EffectGlobalSettingsPanel.cpp \
     ui/AudioInputPanel.cpp \
-    ui/AudioAdvancedSettingsDialog.cpp \
+    ui/AudioAnalyzerSettings.cpp \
     ui/EffectControlsHostPanel.cpp \
     ui/OpenRGB3DSpatialTab.cpp \
     ui/OpenRGB3DSpatialTab_Audio.cpp \
@@ -500,6 +507,8 @@ SOURCES += \
     Shaders/SpatialStripFieldAssist.cpp \
     Effects3D/AudioLevel/AudioLevel.cpp \
     Effects3D/AudioPulse/AudioPulse.cpp \
+    Effects3D/BassPunch/BassPunch.cpp \
+    Effects3D/NoteSparkle/NoteSparkle.cpp \
     Effects3D/PulseRing/PulseRing.cpp \
     Effects3D/SurfaceAmbient/SurfaceAmbient.cpp \
     Effects3D/Starfield/Starfield.cpp \
@@ -571,7 +580,6 @@ FORMS += \
     ui/forms/ZonesPanel.ui \
     ui/forms/EffectGlobalSettingsPanel.ui \
     ui/forms/AudioInputPanel.ui \
-    ui/forms/AudioAdvancedSettingsDialog.ui \
     ui/forms/EffectLayerBanner.ui \
     ui/forms/EffectMotionPanel.ui \
     ui/forms/EffectOutputPanel.ui \

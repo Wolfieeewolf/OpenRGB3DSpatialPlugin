@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioStripVisualizer.h"
+#include "AudioStripVisualizerVolumeFieldGlsl.h"
 #include "AudioReactiveUi.h"
-#include "SpatialKernelColormap.h"
+#include "PluginLog.h"
 #include "SpatialLayerCore.h"
 #include <QComboBox>
 #include <QCheckBox>
 #include <QVBoxLayout>
-#include <QComboBox>
-#include <QCheckBox>
+#include <QByteArray>
+#include <QImage>
+#include <QVector3D>
 #include "EffectUiRows.h"
 #include "EffectUiSync.h"
 #include <algorithm>
@@ -36,6 +38,8 @@ inline int MapHzToColumn(float hz, int columns, float f_min, float f_max)
 AudioStripVisualizer::AudioStripVisualizer(QWidget* parent)
     : SpatialEffect3D(parent)
 {
+    volume_assist_.setFragmentBody(QString::fromUtf8(AudioStripVisualizerVolumeFieldGlsl()));
+    volume_assist_.setResolution(22);
     RefreshSpectrumColumns();
 }
 
@@ -44,7 +48,8 @@ EffectInfo3D AudioStripVisualizer::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Audio Strip Visualizer";
     info.effect_description =
-        "Strip-first spectrum bars or scrolling spectrogram; use Path axis and zone targeting for floor, wall, or ceiling strips";
+        "Strip-first spectrum bars or scrolling spectrogram (GPU). Best on a single strip or narrow zone "
+        "via stack targeting; Role/Hz + Rainbow for musical color.";
     info.category = "Audio";
     info.is_reversible = true;
     info.supports_random = false;
@@ -139,6 +144,8 @@ void AudioStripVisualizer::SetupCustomUI(QWidget* parent)
     response_opts.peak_boost_tooltip =
         QStringLiteral("Boosts quiet input so bars and spectrogram read clearly on strips.");
     AudioReactiveUi::AppendStandardResponseSection(layout, audio_settings, this, on_changed, response_opts);
+    AudioReactiveUi::AppendAudioSectionBody(layout, QStringLiteral("Color"));
+    AudioReactiveUi::AppendAudioPulseColorModeRow(layout, audio_settings, this, on_changed);
 
     AddWidgetToParent(w, parent);
 }
@@ -207,149 +214,132 @@ void AudioStripVisualizer::PushSpectrogramHistory()
     spectrogram_write_index++;
 }
 
-void AudioStripVisualizer::PathAndDisplayNorm(float rx, float ry, float rz, const GridContext3D& grid, float& path01,
-                                            float& disp01) const
+void AudioStripVisualizer::UploadMediaTexture()
 {
-    float ax = NormalizeGridAxis01(rx, grid.min_x, grid.max_x);
-    float ay = NormalizeGridAxis01(ry, grid.min_y, grid.max_y);
-    float az = NormalizeGridAxis01(rz, grid.min_z, grid.max_z);
-    const int path_axis = GetPathAxis();
-    if(path_axis == 1)
+    if(display_mode == MODE_SPECTROGRAM)
     {
-        path01 = ay;
-        disp01 = ax;
+        QImage img(kSpectrogramCols, kSpectrogramRows, QImage::Format_RGBA8888);
+        const int rows = kSpectrogramRows;
+        const int newest = (spectrogram_write_index > 0) ? ((spectrogram_write_index - 1) % rows) : 0;
+        for(int age = 0; age < rows; ++age)
+        {
+            const int src_row = (newest - age + rows) % rows;
+            const std::vector<float>& row =
+                (src_row >= 0 && src_row < (int)spectrogram_history.size())
+                    ? spectrogram_history[src_row]
+                    : column_smoothed;
+            for(int c = 0; c < kSpectrogramCols; ++c)
+            {
+                float v = 0.0f;
+                if(c < (int)row.size())
+                    v = std::clamp(row[c], 0.0f, 1.0f);
+                const int g = (int)std::lround(v * 255.0f);
+                img.setPixel(c, age, qRgba(g, g, g, 255));
+            }
+        }
+        volume_assist_.setMediaTexture(img, false);
+        return;
     }
-    else if(path_axis == 2)
+
+    QImage img(kSpectrogramCols, 1, QImage::Format_RGBA8888);
+    for(int c = 0; c < kSpectrogramCols; ++c)
     {
-        path01 = az;
-        disp01 = ay;
+        const float v = (c < (int)column_smoothed.size()) ? std::clamp(column_smoothed[c], 0.0f, 1.0f) : 0.0f;
+        const int g = (int)std::lround(v * 255.0f);
+        img.setPixel(c, 0, qRgba(g, g, g, 255));
     }
-    else
-    {
-        path01 = ax;
-        disp01 = ay;
-    }
-    if(mirror_bars && display_mode == MODE_BARS)
-    {
-        path01 = std::fabs(path01 * 2.0f - 1.0f);
-    }
-    path01 = std::clamp(path01, 0.0f, 1.0f);
-    disp01 = std::clamp(disp01, 0.0f, 1.0f);
+    volume_assist_.setMediaTexture(img, false);
 }
 
-float AudioStripVisualizer::SampleSpectrumEnergy(float path01) const
+void AudioStripVisualizer::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
-    if(column_smoothed.empty())
+    const float epsilon = 1.0f / 60.0f;
+    if(last_push_time == std::numeric_limits<float>::lowest() || (time_sec - last_push_time) >= epsilon)
     {
-        return 0.0f;
-    }
-    const int count = static_cast<int>(column_smoothed.size());
-    float scaled = path01 * (float)(count - 1);
-    int i0 = std::clamp(static_cast<int>(std::floor(scaled)), 0, count - 1);
-    int i1 = std::min(i0 + 1, count - 1);
-    float frac = scaled - std::floor(scaled);
-    float v = column_smoothed[i0] + (column_smoothed[i1] - column_smoothed[i0]) * frac;
-    return ApplyAudioPulseIntensity(std::clamp(v, 0.0f, 1.0f), audio_settings);
-}
-
-float AudioStripVisualizer::SampleSpectrogramEnergy(float path01, float disp01, float time) const
-{
-    if(spectrogram_history.empty())
-    {
-        return 0.0f;
+        PushSpectrogramHistory();
+        last_push_time = time_sec;
     }
 
-    const int rows = static_cast<int>(spectrogram_history.size());
-    const int cols = kSpectrogramCols;
-    const int newest = (spectrogram_write_index > 0) ? ((spectrogram_write_index - 1) % rows) : 0;
-    float scroll_offset = std::fmod(time * scroll_speed, 1.0f);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
+    UploadMediaTexture();
+
+    float scroll_offset = std::fmod(time_sec * scroll_speed, 1.0f);
     if(scroll_offset < 0.0f)
-    {
         scroll_offset += 1.0f;
-    }
-    float age01 = std::clamp(1.0f - disp01 + scroll_offset * 0.15f, 0.0f, 1.0f);
-    int age_rows = static_cast<int>(age01 * (float)(rows - 1));
-    int row_idx = (newest - age_rows + rows) % rows;
 
-    const std::vector<float>& row = spectrogram_history[row_idx];
-    if(row.empty())
+    const float size_m = std::max(0.2f, GetNormalizedSize());
+    const float bar_edge = std::max(0.02f, audio_settings.falloff * 0.0015f);
+    const float peak_boost = std::clamp(audio_settings.peak_boost, 0.0f, 4.0f);
+
+    float vp[10] = {
+        (float)std::clamp(display_mode, 0, 1),
+        (float)std::clamp(GetPathAxis(), 0, 2),
+        mirror_bars ? 1.0f : 0.0f,
+        size_m,
+        bar_edge,
+        scroll_offset,
+        peak_boost,
+        (float)kSpectrogramCols,
+        (float)kSpectrogramRows,
+        std::max(0.15f, bb.speed_mul)
+    };
+    if(!volume_assist_.prepare(render_sequence, time_sec, vp, 10))
     {
-        return 0.0f;
+        static bool logged_once = false;
+        if(!logged_once)
+        {
+            logged_once = true;
+            const QString err = volume_assist_.lastError();
+            const QByteArray err_bytes = err.isEmpty() ? QByteArray("ensureReady failed") : err.toUtf8();
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] AudioStripVisualizer volume assist unavailable: %s",
+                        err_bytes.constData());
+        }
     }
-
-    float scaled = path01 * (float)(cols - 1);
-    int c0 = std::clamp(static_cast<int>(std::floor(scaled)), 0, cols - 1);
-    int c1 = std::min(c0 + 1, cols - 1);
-    float frac = scaled - std::floor(scaled);
-    float v = row[c0] + (row[c1] - row[c0]) * frac;
-    return ApplyAudioPulseIntensity(std::clamp(v, 0.0f, 1.0f), audio_settings);
 }
 
-RGBColor AudioStripVisualizer::ComposeStripColor(float path01, float energy, float time, const GridContext3D& grid, float x,
-                                                 float y, float z, const Vector3D& origin, const Vector3D& rotated_pos,
-                                                 float stratum_phase01,
+RGBColor AudioStripVisualizer::ComposeStripColor(float path01, float energy, float time, const GridContext3D& grid,
+                                                 float x, float y, float z, const Vector3D& origin,
+                                                 const Vector3D& rotated_pos, float stratum_phase01,
                                                  const EffectStratumBlend::BandBlendScalars& bb)
 {
-  RGBColor base = ComposeAudioGradientColor(audio_settings, path01, energy);
-  base = BrightenAudioEffectColor(base, energy);
-
-  SpatialLayerCore::Basis basis;
-  SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
-  SpatialLayerCore::MapperSettings map;
-  SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
-  SpatialLayerCore::SamplePoint sp{};
-  sp.grid_x = x;
-  sp.grid_y = y;
-  sp.grid_z = z;
-  sp.origin_x = origin.x;
-  sp.origin_y = origin.y;
-  sp.origin_z = origin.z;
-  sp.y_norm = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
-
-  AudioReactiveColorParams color_params;
-  color_params.gradient_pos01 = path01;
-  color_params.intensity = energy;
-  color_params.beat_color_slot = (uint32_t)std::floor(time * 2.5f);
-  color_params.time = time;
-  color_params.grid_x = x;
-  color_params.grid_y = y;
-  color_params.grid_z = z;
-  color_params.grid = &grid;
-  color_params.origin = origin;
-  color_params.rotated_pos = rotated_pos;
-  color_params.y_norm01 = sp.y_norm;
-  color_params.stratum_mot01 = stratum_phase01;
-  color_params.band_scalars = &bb;
-  RGBColor user_color = ResolveAudioReactiveColor(audio_settings, color_params);
-  return ModulateRGBColors(base, user_color);
+    AudioReactiveColorParams color_params;
+    color_params.gradient_pos01 = path01;
+    color_params.intensity = energy;
+    color_params.beat_color_slot = (uint32_t)std::floor(time * 2.5f);
+    color_params.time = time;
+    color_params.grid_x = x;
+    color_params.grid_y = y;
+    color_params.grid_z = z;
+    color_params.grid = &grid;
+    color_params.origin = origin;
+    color_params.rotated_pos = rotated_pos;
+    color_params.y_norm01 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    color_params.stratum_mot01 = stratum_phase01;
+    color_params.band_scalars = &bb;
+    RGBColor color = ResolveAudioReactiveColor(audio_settings, color_params);
+    return BrightenAudioEffectColor(color, energy);
 }
 
 RGBColor AudioStripVisualizer::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
-    {
         return 0x00000000;
-    }
 
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
-    {
         return 0x00000000;
-    }
 
-    const float epsilon = 1.0f / 60.0f;
-    if(last_push_time == std::numeric_limits<float>::lowest() || (time - last_push_time) >= epsilon)
-    {
-        PushSpectrogramHistory();
-        last_push_time = time;
-    }
+    if(!volume_assist_.isAvailable())
+        return 0x00000000;
 
     Vector3D rotated_pos{x, y, z};
-    float path01 = 0.0f;
-    float disp01 = 0.0f;
-    PathAndDisplayNorm(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, path01, disp01);
-
     float stratum_mot01 = 0.0f;
     EffectStratumBlend::BandBlendScalars bb{1.0f, 1.0f};
     if(UseSpatialRoomTint())
@@ -363,24 +353,15 @@ RGBColor AudioStripVisualizer::CalculateColorGrid(float x, float y, float z, flo
         stratum_mot01 = ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
     }
 
-    float energy = 0.0f;
-    if(display_mode == MODE_SPECTROGRAM)
-    {
-        energy = SampleSpectrogramEnergy(path01, disp01, time);
-    }
-    else
-    {
-        float level = SampleSpectrumEnergy(path01);
-        float size_m = std::max(0.2f, GetNormalizedSize());
-        float bar_edge = std::max(0.02f, audio_settings.falloff * 0.0015f) / size_m;
-        float bar = std::clamp((level - disp01) / bar_edge + 0.5f, 0.0f, 1.0f);
-        energy = level * bar;
-    }
-
+    const float nx = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
+    const float ny = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    const float nz = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
+    const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+    float energy = samp.x();
+    float path01 = samp.y();
+    energy = ApplyAudioVisualIntensity(std::clamp(energy, 0.0f, 1.0f), audio_settings);
     if(energy <= 0.001f)
-    {
         return 0x00000000;
-    }
 
     return ComposeStripColor(path01, energy, time, grid, x, y, z, origin, rotated_pos, stratum_mot01, bb);
 }
@@ -400,21 +381,15 @@ void AudioStripVisualizer::LoadSettings(const nlohmann::json& settings)
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
     if(settings.contains("display_mode"))
-    {
         display_mode = std::clamp(settings["display_mode"].get<int>(), 0, 1);
-    }
     if(settings.contains("scroll_speed"))
-    {
         scroll_speed = settings["scroll_speed"].get<float>();
-    }
     if(settings.contains("mirror_bars"))
-    {
         mirror_bars = settings["mirror_bars"].get<bool>();
-    }
     RefreshSpectrumColumns();
     last_push_time = std::numeric_limits<float>::lowest();
 
-    AudioReactiveUi::SyncSettingsToHost(GetCustomSettingsHost(), audio_settings, this);
+    AudioReactiveUi::SyncSettingsToHost(GetCustomSettingsHost(), audio_settings);
     if(QWidget* panel = CustomSettingsPanelWidget())
     {
         if(QWidget* fx = EffectUiSync::effectPanel(panel, "AudioStripVisualizerEffectSettings"))

@@ -31,24 +31,11 @@ public:
     QPushButton*   startButton() const;
     QPushButton*   stopButton() const;
     QProgressBar*  levelBar() const;
-    QProgressBar*  bassBar() const;
-    QProgressBar*  midBar() const;
-    QProgressBar*  highBar() const;
-    QProgressBar*  kickStemBar() const;
-    QProgressBar*  snareStemBar() const;
-    QProgressBar*  hihatStemBar() const;
-    QProgressBar*  bassStemBar() const;
     QLabel*        spectrumLabel() const;
     QComboBox*     deviceCombo() const;
     QSlider*       gainSlider() const;
     QLabel*        gainValueLabel() const;
-    QSlider*       claritySlider() const;
-    QLabel*        clarityValueLabel() const;
-    QSlider*       isolationSlider() const;
-    QLabel*        isolationValueLabel() const;
-    QComboBox*     mixPresetCombo() const;
-    QComboBox*     bandsCombo() const;
-    QComboBox*     fftCombo() const;
+    QSlider*       decaySlider() const;
     QLabel*        eqCaption() const;
     QScrollArea*   eqScroll() const;
 

@@ -112,7 +112,7 @@ inline void AppendAudioPeakBoostRow(QVBoxLayout* layout,
                             : tooltip;
     AppendSliderHBoxRow(layout,
                         QStringLiteral("Effect sensitivity:"),
-                        50,
+                        25,
                         500,
                         (int)(cfg.peak_boost * 100.0f),
                         tip,
@@ -208,217 +208,166 @@ inline void AppendFrequencyBandRows(QVBoxLayout* layout,
     }
 }
 
-inline void AppendAudioDriveModeRow(QVBoxLayout* layout,
-                                    AudioReactiveSettings3D& cfg,
-                                    QObject* owner,
-                                    const std::function<void()>& on_changed,
-                                    QComboBox** out_drive_combo = nullptr)
+inline void AppendRegisterRoleRow(QVBoxLayout* layout,
+                                  AudioReactiveSettings3D& cfg,
+                                  QObject* owner,
+                                  QSlider* low_slider,
+                                  QSlider* high_slider,
+                                  const std::function<void()>& on_changed)
 {
     if(!layout || !owner)
     {
         return;
     }
 
-    EffectLabeledComboRow* labeled_row = AppendLabeledComboHBoxRow(layout, QStringLiteral("Drive:"));
+    EffectLabeledComboRow* labeled_row = AppendLabeledComboHBoxRow(layout, QStringLiteral("Role:"));
     if(!labeled_row)
     {
         return;
     }
     QComboBox* combo = labeled_row->combo();
-    combo->addItem(QStringLiteral("Sustained (level)"),
-                   static_cast<int>(AudioDriveMode::Sustained));
-    combo->addItem(QStringLiteral("Transient (attacks)"),
-                   static_cast<int>(AudioDriveMode::Transient));
-    combo->addItem(QStringLiteral("Beat (kick vs bass)"),
-                   static_cast<int>(AudioDriveMode::Beat));
-    combo->addItem(QStringLiteral("Band onset (flux)"),
-                   static_cast<int>(AudioDriveMode::BandOnset));
-    int idx = combo->findData(cfg.drive_mode);
-    if(idx < 0) idx = 0;
-    combo->setCurrentIndex(idx);
+    combo->addItem(QStringLiteral("Low — kick / bass punch"),
+                   static_cast<int>(AudioRegisterRole::Low));
+    combo->addItem(QStringLiteral("Mid — voice / melody"),
+                   static_cast<int>(AudioRegisterRole::Mid));
+    combo->addItem(QStringLiteral("High — sparkle / notes"),
+                   static_cast<int>(AudioRegisterRole::High));
+    combo->addItem(QStringLiteral("Mixed — full overview"),
+                   static_cast<int>(AudioRegisterRole::Mixed));
+    combo->setToolTip(QStringLiteral(
+        "What this effect listens for. Sets drive feel and a starting Hz band — "
+        "you can still refine Low/High Hz below."));
+    int idx = combo->findData(cfg.register_role);
+    if(idx < 0)
+    {
+        idx = combo->findData(static_cast<int>(AudioRegisterRole::Mixed));
+    }
+    combo->setCurrentIndex(std::max(0, idx));
 
     QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), owner,
-                     [&cfg, combo, on_changed](int) {
-                         cfg.drive_mode = combo->currentData().toInt();
+                     [&cfg, combo, low_slider, high_slider, on_changed](int) {
+                         cfg.register_role = combo->currentData().toInt();
+                         ApplyAudioRegisterRole(cfg);
                          NormalizeAudioReactiveSettings(cfg);
+                         if(low_slider)
+                         {
+                             low_slider->setValue(cfg.low_hz);
+                         }
+                         if(high_slider)
+                         {
+                             high_slider->setValue(cfg.high_hz);
+                         }
                          if(on_changed)
                          {
                              on_changed();
                          }
                      });
-
-    if(out_drive_combo)
-    {
-        *out_drive_combo = combo;
-    }
 }
 
-inline void AppendSustainRejectRow(QVBoxLayout* layout,
-                                   AudioReactiveSettings3D& cfg,
-                                   QObject* owner,
-                                   const std::function<void()>& on_changed)
+struct AudioFrequencyBandUiOptions
 {
-    AppendSliderHBoxRow(layout,
-                        QStringLiteral("Sustain reject:"),
-                        0,
-                        100,
-                        (int)(cfg.sustain_reject * 100.0f),
-                        QStringLiteral(
-                            "Beat mode only: subtract this much sustained energy in the band "
-                            "(higher = ignore bass guitar / synth drones)."),
-                        40,
-                        owner,
-                        [](int v) { return QString::number(v) + QStringLiteral("%"); },
-                        [&cfg](int v) { cfg.sustain_reject = v / 100.0f; },
-                        on_changed);
-}
+    bool include_hz_sliders = true;
+    bool include_role = true;
+};
 
-inline void AppendBandPresetRow(QVBoxLayout* layout,
-                                AudioReactiveSettings3D& cfg,
-                                QObject* owner,
-                                QSlider* low_slider,
-                                QSlider* high_slider,
-                                const std::function<void()>& on_changed)
+struct AudioFrequencyBandContext
 {
-    if(!layout || !owner)
+    QSlider* low_hz_slider = nullptr;
+    QSlider* high_hz_slider = nullptr;
+};
+
+inline AudioFrequencyBandContext AppendStandardFrequencyBandSection(
+    QVBoxLayout* layout,
+    AudioReactiveSettings3D& cfg,
+    QObject* owner,
+    const std::function<void()>& on_changed,
+    const AudioFrequencyBandUiOptions& opts = {})
+{
+    AudioFrequencyBandContext ctx;
+    AppendAudioSectionBody(layout, QStringLiteral("Listen"));
+    QWidget* hz_box = new QWidget();
+    QVBoxLayout* hz_layout = new QVBoxLayout(hz_box);
+    hz_layout->setContentsMargins(0, 0, 0, 0);
+    hz_layout->setSpacing(0);
+    if(opts.include_hz_sliders)
     {
-        return;
+        AppendFrequencyBandRows(hz_layout,
+                                cfg,
+                                owner,
+                                on_changed,
+                                &ctx.low_hz_slider,
+                                &ctx.high_hz_slider);
     }
-
-    EffectLabeledComboRow* labeled_row = AppendLabeledComboHBoxRow(layout, QStringLiteral("Preset:"));
-    if(!labeled_row)
+    if(opts.include_role)
     {
-        return;
+        AppendRegisterRoleRow(layout, cfg, owner, ctx.low_hz_slider, ctx.high_hz_slider, on_changed);
     }
-    QComboBox* combo = labeled_row->combo();
-    combo->addItem(QStringLiteral("Custom"), 0);
-    combo->addItem(QStringLiteral("Kick drum (55–110 Hz)"), 1);
-    combo->addItem(QStringLiteral("Tight kick (45–95 Hz)"), 2);
-    combo->addItem(QStringLiteral("Bass / synth (90–250 Hz)"), 3);
-    combo->addItem(QStringLiteral("Low beat mix (40–180 Hz)"), 4);
-    combo->addItem(QStringLiteral("Snare body (150–400 Hz)"), 5);
-    combo->addItem(QStringLiteral("Snare crack (180–900 Hz)"), 6);
-    combo->addItem(QStringLiteral("Hi-hat / cymbals (3–14 kHz)"), 7);
-    combo->addItem(QStringLiteral("Tom / floor (80–220 Hz)"), 8);
-    combo->addItem(QStringLiteral("Sub kick only (35–90 Hz)"), 9);
-    combo->addItem(QStringLiteral("Ride / shimmer (5–16 kHz)"), 10);
-    combo->addItem(QStringLiteral("— streaming split —"), 11);
-    combo->addItem(QStringLiteral("Stream: kick"), 12);
-    combo->addItem(QStringLiteral("Stream: snare"), 13);
-    combo->addItem(QStringLiteral("Stream: hi-hat"), 14);
-    combo->addItem(QStringLiteral("Stream: bass line"), 15);
-
-    auto apply_preset = [owner, &cfg, low_slider, high_slider, on_changed](int preset) {
-        switch(preset)
-        {
-        case 1:
-            cfg.low_hz = 55;
-            cfg.high_hz = 110;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
-            cfg.sustain_reject = 0.72f;
-            cfg.stem_target = static_cast<int>(AudioStemTarget::CustomHz);
-            break;
-        case 2:
-            cfg.low_hz = 45;
-            cfg.high_hz = 95;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
-            cfg.sustain_reject = 0.78f;
-            cfg.stem_target = static_cast<int>(AudioStemTarget::CustomHz);
-            break;
-        case 3:
-            cfg.low_hz = 90;
-            cfg.high_hz = 250;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Transient);
-            cfg.stem_target = static_cast<int>(AudioStemTarget::CustomHz);
-            break;
-        case 4:
-            cfg.low_hz = 40;
-            cfg.high_hz = 180;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
-            cfg.sustain_reject = 0.60f;
-            cfg.stem_target = static_cast<int>(AudioStemTarget::CustomHz);
-            break;
-        case 5:
-            cfg.low_hz = 150;
-            cfg.high_hz = 400;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Transient);
-            break;
-        case 6:
-            cfg.low_hz = 180;
-            cfg.high_hz = 900;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Transient);
-            break;
-        case 7:
-            cfg.low_hz = 3000;
-            cfg.high_hz = 14000;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Transient);
-            break;
-        case 8:
-            cfg.low_hz = 80;
-            cfg.high_hz = 220;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
-            cfg.sustain_reject = 0.65f;
-            break;
-        case 9:
-            cfg.low_hz = 35;
-            cfg.high_hz = 90;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
-            cfg.sustain_reject = 0.80f;
-            break;
-        case 10:
-            cfg.low_hz = 5000;
-            cfg.high_hz = 16000;
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Transient);
-            cfg.stem_target = static_cast<int>(AudioStemTarget::CustomHz);
-            break;
-        case 11:
-            return;
-        case 12:
-            cfg.stem_target = static_cast<int>(AudioStemTarget::StreamKick);
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
-            break;
-        case 13:
-            cfg.stem_target = static_cast<int>(AudioStemTarget::StreamSnare);
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Transient);
-            break;
-        case 14:
-            cfg.stem_target = static_cast<int>(AudioStemTarget::StreamHihat);
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Transient);
-            break;
-        case 15:
-            cfg.stem_target = static_cast<int>(AudioStemTarget::StreamBass);
-            cfg.drive_mode = static_cast<int>(AudioDriveMode::Sustained);
-            break;
-        default:
-            return;
-        }
-        NormalizeAudioReactiveSettings(cfg);
-        if(low_slider)
-        {
-            low_slider->setValue(cfg.low_hz);
-        }
-        if(high_slider)
-        {
-            high_slider->setValue(cfg.high_hz);
-        }
-        if(owner)
-        {
-            if(QWidget* sustain_box = owner->property("audio_sustain_row").value<QWidget*>())
-            {
-                sustain_box->setVisible(static_cast<AudioDriveMode>(cfg.drive_mode) == AudioDriveMode::Beat);
-            }
-        }
-        if(on_changed)
-        {
-            on_changed();
-        }
-    };
-
-    QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), owner,
-                     [combo, apply_preset](int) {
-                         apply_preset(combo->currentData().toInt());
-                     });
+    if(opts.include_hz_sliders)
+    {
+        layout->addWidget(hz_box);
+    }
+    return ctx;
 }
+
+struct AudioResponseUiOptions
+{
+    bool use_onset_smoothing_label = false;
+    bool include_smoothing = true;
+    bool include_falloff = false;
+    bool include_peak_boost = true;
+    QString falloff_label = QStringLiteral("Edge / thickness:");
+    int falloff_slider_min = 20;
+    int falloff_slider_max = 800;
+    QString falloff_tooltip;
+    QString peak_boost_tooltip;
+};
+
+inline void AppendStandardResponseSection(QVBoxLayout* layout,
+                                          AudioReactiveSettings3D& cfg,
+                                          QObject* owner,
+                                          const std::function<void()>& on_changed,
+                                          const AudioResponseUiOptions& opts = {})
+{
+    AppendAudioSectionBody(layout, QStringLiteral("Feel"));
+    if(opts.include_smoothing)
+    {
+        const QString smooth_label =
+            opts.use_onset_smoothing_label ? QStringLiteral("Trigger lag:")
+                                           : QStringLiteral("Motion lag:");
+        const QString smooth_tip =
+            opts.use_onset_smoothing_label
+                ? QStringLiteral(
+                      "How sticky the beat detector is (higher = fewer false triggers). "
+                      "Different from Decay on the Audio Input panel.")
+                : QStringLiteral(
+                      "How quickly this effect follows the band (higher = calmer). "
+                      "Different from Decay on the Audio Input panel.");
+        AppendAudioSmoothingRow(layout, cfg, owner, on_changed, smooth_label, smooth_tip, 99);
+    }
+    if(opts.include_falloff)
+    {
+        AppendAudioFalloffRow(layout,
+                              cfg,
+                              owner,
+                              on_changed,
+                              opts.falloff_label,
+                              opts.falloff_slider_min,
+                              opts.falloff_slider_max,
+                              opts.falloff_tooltip);
+    }
+    if(opts.include_peak_boost)
+    {
+        AppendAudioPeakBoostRow(layout, cfg, owner, on_changed, opts.peak_boost_tooltip);
+    }
+}
+
+struct AudioBeatUiOptions
+{
+    bool include_pulse_color = true;
+    bool include_shell_falloff = false;
+    bool include_spread_fade = true;
+    QString shell_falloff_tooltip;
+};
 
 inline void AppendBeatWaveMotionRows(QVBoxLayout* layout,
                                      AudioReactiveSettings3D& cfg,
@@ -509,9 +458,9 @@ inline void AppendAudioBeatWaveModeRow(QVBoxLayout* layout,
 }
 
 inline void AppendAudioPulseColorModeRow(QVBoxLayout* layout,
-                                        AudioReactiveSettings3D& cfg,
-                                        QObject* owner,
-                                        const std::function<void()>& on_changed)
+                                         AudioReactiveSettings3D& cfg,
+                                         QObject* owner,
+                                         const std::function<void()>& on_changed)
 {
     if(!layout || !owner)
     {
@@ -524,17 +473,17 @@ inline void AppendAudioPulseColorModeRow(QVBoxLayout* layout,
         return;
     }
     QComboBox* combo = labeled_row->combo();
-    combo->addItem(QStringLiteral("Cycle per beat (red/blue/…)"),
+    combo->addItem(QStringLiteral("Cycle per beat"),
                    static_cast<int>(AudioPulseColorMode::PerBeatCycle));
     combo->addItem(QStringLiteral("Same color every pulse"),
                    static_cast<int>(AudioPulseColorMode::Uniform));
     combo->addItem(QStringLiteral("Hue along ring / position"),
                    static_cast<int>(AudioPulseColorMode::SpatialAlongRing));
-    combo->addItem(QStringLiteral("Audio gradient only"),
-                   static_cast<int>(AudioPulseColorMode::AudioGradient));
+    combo->addItem(QStringLiteral("Follow notes (ColorChord)"),
+                   static_cast<int>(AudioPulseColorMode::FollowNotes));
     combo->setToolTip(QStringLiteral(
-        "How colors are chosen: alternate swatches per beat, one fixed color, "
-        "rainbow/gradient that changes along the wave, or the audio EQ gradient only."));
+        "How colors are chosen. Enable the effect Rainbow checkbox for a full spatial rainbow. "
+        "Follow notes maps pitch-classes to HSV hue (ColorChord)."));
     int idx = combo->findData(cfg.pulse_color_mode);
     if(idx < 0)
     {
@@ -553,121 +502,18 @@ inline void AppendAudioPulseColorModeRow(QVBoxLayout* layout,
                      });
 }
 
-struct AudioFrequencyBandContext
-{
-    QSlider* low_hz_slider = nullptr;
-    QSlider* high_hz_slider = nullptr;
-};
-
-inline AudioFrequencyBandContext AppendStandardFrequencyBandSection(
-    QVBoxLayout* layout,
-    AudioReactiveSettings3D& cfg,
-    QObject* owner,
-    const std::function<void()>& on_changed)
-{
-    AudioFrequencyBandContext ctx;
-    AppendAudioSectionBody(layout, QStringLiteral("Frequency band"));
-    AppendFrequencyBandRows(layout,
-                            cfg,
-                            owner,
-                            on_changed,
-                            &ctx.low_hz_slider,
-                            &ctx.high_hz_slider);
-    AppendBandPresetRow(layout, cfg, owner, ctx.low_hz_slider, ctx.high_hz_slider, on_changed);
-    return ctx;
-}
-
-inline void AppendStandardDriveSection(QVBoxLayout* layout,
-                                       AudioReactiveSettings3D& cfg,
-                                       QObject* owner,
-                                       const std::function<void()>& on_changed)
-{
-    AppendAudioSectionBody(layout, QStringLiteral("Drive"));
-    QComboBox* drive_combo = nullptr;
-    AppendAudioDriveModeRow(layout, cfg, owner, on_changed, &drive_combo);
-
-    QWidget* sustain_box = new QWidget();
-    QVBoxLayout* sustain_layout = new QVBoxLayout(sustain_box);
-    sustain_layout->setContentsMargins(0, 0, 0, 0);
-    sustain_layout->setSpacing(0);
-    AppendSustainRejectRow(sustain_layout, cfg, owner, on_changed);
-    layout->addWidget(sustain_box);
-    if(owner)
-    {
-        owner->setProperty("audio_sustain_row", QVariant::fromValue(sustain_box));
-    }
-
-    const auto update_sustain_visibility = [sustain_box, &cfg]() {
-        sustain_box->setVisible(static_cast<AudioDriveMode>(cfg.drive_mode) == AudioDriveMode::Beat);
-    };
-    update_sustain_visibility();
-    if(drive_combo)
-    {
-        QObject::connect(drive_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), owner,
-                         [update_sustain_visibility](int) { update_sustain_visibility(); });
-    }
-}
-
-struct AudioResponseUiOptions
-{
-    bool use_onset_smoothing_label = false;
-    bool include_falloff = false;
-    bool include_peak_boost = true;
-    QString falloff_label = QStringLiteral("Falloff:");
-    int falloff_slider_min = 20;
-    int falloff_slider_max = 800;
-    QString falloff_tooltip;
-    QString peak_boost_tooltip;
-};
-
-inline void AppendStandardResponseSection(QVBoxLayout* layout,
-                                          AudioReactiveSettings3D& cfg,
-                                          QObject* owner,
-                                          const std::function<void()>& on_changed,
-                                          const AudioResponseUiOptions& opts = {})
-{
-    AppendAudioSectionBody(layout, QStringLiteral("Response"));
-    const QString smooth_label =
-        opts.use_onset_smoothing_label ? QStringLiteral("Onset smoothing:")
-                                       : QStringLiteral("Level smoothing:");
-    const QString smooth_tip =
-        opts.use_onset_smoothing_label
-            ? QStringLiteral("Smooths the beat/onset detector (higher = fewer false triggers).")
-            : QStringLiteral("Smooths band energy before mapping to visuals (higher = calmer movement).");
-    AppendAudioSmoothingRow(layout, cfg, owner, on_changed, smooth_label, smooth_tip, 99);
-    if(opts.include_falloff)
-    {
-        AppendAudioFalloffRow(layout,
-                              cfg,
-                              owner,
-                              on_changed,
-                              opts.falloff_label,
-                              opts.falloff_slider_min,
-                              opts.falloff_slider_max,
-                              opts.falloff_tooltip);
-    }
-    if(opts.include_peak_boost)
-    {
-        AppendAudioPeakBoostRow(layout, cfg, owner, on_changed, opts.peak_boost_tooltip);
-    }
-}
-
-struct AudioBeatUiOptions
-{
-    bool include_pulse_color = true;
-    bool include_shell_falloff = false;
-    QString shell_falloff_tooltip;
-};
-
 inline void AppendStandardBeatWaveSection(QVBoxLayout* layout,
                                           AudioReactiveSettings3D& cfg,
                                           QObject* owner,
                                           const std::function<void()>& on_changed,
                                           const AudioBeatUiOptions& opts = {})
 {
-    AppendAudioSectionBody(layout, QStringLiteral("Beat waves"));
+    AppendAudioSectionBody(layout, QStringLiteral("Wave"));
     AppendAudioBeatWaveModeRow(layout, cfg, owner, on_changed);
-    AppendBeatWaveMotionRows(layout, cfg, owner, on_changed);
+    if(opts.include_spread_fade)
+    {
+        AppendBeatWaveMotionRows(layout, cfg, owner, on_changed);
+    }
     if(opts.include_pulse_color)
     {
         AppendAudioPulseColorModeRow(layout, cfg, owner, on_changed);
@@ -699,15 +545,15 @@ inline void AppendBeatSensitivityRow(QVBoxLayout* layout,
                             threshold,
                             owner,
                             on_changed,
-                            QStringLiteral("Beat sensitivity:"),
-                            QStringLiteral("Higher = fewer, stronger beat triggers."),
+                            QStringLiteral("Beat trigger:"),
+                            QStringLiteral(
+                                "How loud a hit must be to spawn a pulse (higher = fewer triggers). "
+                                "Not the same as Effect sensitivity."),
                             5,
                             92);
 }
 
-inline void SyncSettingsToHost(QWidget* host,
-                               AudioReactiveSettings3D& cfg,
-                               QObject* owner = nullptr)
+inline void SyncSettingsToHost(QWidget* host, AudioReactiveSettings3D& cfg)
 {
     if(!host)
     {
@@ -725,12 +571,10 @@ inline void SyncSettingsToHost(QWidget* host,
 
     EffectUiSync::setSliderByCaption(host, QStringLiteral("Low Hz:"), cfg.low_hz, hz_label);
     EffectUiSync::setSliderByCaption(host, QStringLiteral("High Hz:"), cfg.high_hz, hz_label);
-    EffectUiSync::setSliderByCaption(host, QStringLiteral("Level smoothing:"),
+    EffectUiSync::setSliderByCaption(host, QStringLiteral("Motion lag:"),
                                      (int)(cfg.smoothing * 100.0f), smooth_label);
-    EffectUiSync::setSliderByCaption(host, QStringLiteral("Onset smoothing:"),
+    EffectUiSync::setSliderByCaption(host, QStringLiteral("Trigger lag:"),
                                      (int)(cfg.smoothing * 100.0f), smooth_label);
-    EffectUiSync::setSliderByCaption(host, QStringLiteral("Sustain reject:"),
-                                     (int)(cfg.sustain_reject * 100.0f), pct_label);
     EffectUiSync::setSliderByCaption(host, QStringLiteral("Effect sensitivity:"),
                                      (int)(cfg.peak_boost * 100.0f), boost_label);
     EffectUiSync::setSliderByCaption(host, QStringLiteral("Wave spread:"),
@@ -738,7 +582,7 @@ inline void SyncSettingsToHost(QWidget* host,
     EffectUiSync::setSliderByCaption(host, QStringLiteral("Wave fade:"),
                                      (int)(cfg.wave_decay * 100.0f), pct_label);
 
-    EffectUiSync::setComboDataByCaption(host, QStringLiteral("Drive:"), cfg.drive_mode);
+    EffectUiSync::setComboDataByCaption(host, QStringLiteral("Role:"), cfg.register_role);
     EffectUiSync::setComboDataByCaption(host, QStringLiteral("Beat wave:"), cfg.beat_wave_mode);
     EffectUiSync::setComboDataByCaption(host, QStringLiteral("Pulse color:"), cfg.pulse_color_mode);
 
@@ -750,18 +594,14 @@ inline void SyncSettingsToHost(QWidget* host,
             continue;
         }
         const QString cap = row->captionText();
-        if(cap.startsWith(QStringLiteral("Falloff:")) || cap == QStringLiteral("Shell thickness:"))
+        if(cap.startsWith(QStringLiteral("Falloff:"))
+           || cap.startsWith(QStringLiteral("Edge"))
+           || cap.startsWith(QStringLiteral("Fill edge:"))
+           || cap.startsWith(QStringLiteral("Bar edge:"))
+           || cap == QStringLiteral("Shell thickness:"))
         {
             row->syncSliderValue((int)(cfg.falloff * 100.0f),
                                  [](int v) { return QString::number(v / 100.0f, 'f', 1); });
-        }
-    }
-
-    if(owner)
-    {
-        if(QWidget* sustain_box = owner->property("audio_sustain_row").value<QWidget*>())
-        {
-            sustain_box->setVisible(static_cast<AudioDriveMode>(cfg.drive_mode) == AudioDriveMode::Beat);
         }
     }
 }

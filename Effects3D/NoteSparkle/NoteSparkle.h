@@ -1,24 +1,26 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef SPECTRUMBARS_H
-#define SPECTRUMBARS_H
+#ifndef NOTESPARKLE_H
+#define NOTESPARKLE_H
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "Effects3D/AudioReactiveCommon.h"
 #include "EffectStratumBlend.h"
 #include "SpatialVolumeFieldAssist.h"
-#include <vector>
+#include <cstdint>
 #include <limits>
 
-class SpectrumBars : public SpatialEffect3D
+/** High/note particle cloud — ColorChord hues; strip, zone, or room via stack bounds. */
+class NoteSparkle : public SpatialEffect3D
 {
     Q_OBJECT
-public:
-    explicit SpectrumBars(QWidget* parent = nullptr);
-    ~SpectrumBars() override;
 
-    EFFECT_REGISTERER_3D("SpectrumBars", "Spectrum Bars", "Audio", [](){ return new SpectrumBars; });
+public:
+    explicit NoteSparkle(QWidget* parent = nullptr);
+    ~NoteSparkle() override = default;
+
+    EFFECT_REGISTERER_3D("NoteSparkle", "Note Sparkle", "Audio", []() { return new NoteSparkle; })
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
@@ -29,20 +31,16 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-private:
-    void RefreshBandRange();
-    void EnsureSpectrumCache(float time);
-    void UpdateSmoothedBands(const std::vector<float>& spectrum, float delta_time);
-    void UploadBandsMedia();
+protected:
+    float EvaluateDrive(float amplitude, float time);
 
-    AudioReactiveSettings3D audio_settings = MakeDefaultSpectrumAudioReactiveSettings3D();
-    float roll_speed = 0.0f;
-    int band_start = 0;
-    int band_end = -1;
+    AudioReactiveSettings3D audio_settings = MakeDefaultHighSparkleAudioReactiveSettings3D();
+    float smoothed = 0.0f;
+    float last_intensity_time = std::numeric_limits<float>::lowest();
 
-    std::vector<float> smoothed_bands;
-    std::vector<float> bands_cache;
-    float last_sample_time = std::numeric_limits<float>::lowest();
+    float particle_amount = 0.72f; /* 0..1 */
+    float turbulence = 0.45f;      /* 0..1 */
+    float hull_size = 0.32f;       /* relative shell radius */
 
     SpatialVolumeFieldAssist volume_assist_;
 };
