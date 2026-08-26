@@ -69,7 +69,7 @@ EffectInfo3D Starfield::GetEffectInfo() const
         "Cockpit-window space field (GPU volume): stars, warp streaks, blackhole, and wormhole. "
         "Spatial Anchor is the viewpoint; rotate to aim into the room.";
     info.category = "Spatial";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_STARFIELD;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

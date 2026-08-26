@@ -32,7 +32,7 @@ EffectInfo3D Bubbles::GetEffectInfo() const
     info.effect_description =
         "Rising expanding bubble shells with GPU assist; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_BUBBLES;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 100;

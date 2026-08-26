@@ -19,6 +19,7 @@ EffectInfo3D BassPunch::GetEffectInfo() const
 {
     EffectInfo3D info = AudioPulse::GetEffectInfo();
     info.effect_name = "Bass Punch";
+    info.effect_type = SPATIAL_EFFECT_BASS_PUNCH;
     info.effect_description =
         "Kick / bass shockwaves. Defaults to Low listen role — change Role/Hz on the effect, "
         "and assign controllers/zones on the stack. Pair under Note Sparkle for melody.";

@@ -12,6 +12,7 @@ MinecraftDamageEffect3D::MinecraftDamageEffect3D(QWidget* parent)
 EffectInfo3D MinecraftDamageEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
+    info.effect_type = SPATIAL_EFFECT_MC_DAMAGE;
     info.effect_description = "Directional damage flash from Fabric UDP. Stack per controller.";
     return info;
 }

@@ -12,6 +12,7 @@ MinecraftHungerEffect3D::MinecraftHungerEffect3D(QWidget* parent)
 EffectInfo3D MinecraftHungerEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
+    info.effect_type = SPATIAL_EFFECT_MC_HUNGER;
     info.effect_description = "Hunger gradient from Fabric UDP. Stack per controller.";
     return info;
 }

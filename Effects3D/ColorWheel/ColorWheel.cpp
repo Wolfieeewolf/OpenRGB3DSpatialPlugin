@@ -29,7 +29,7 @@ EffectInfo3D ColorWheel::GetEffectInfo() const
         "Rotating hue layouts (radial wheel, shear bands, concentric rings, pie slices) with GPU assist; "
         "optional independent floor / mid / ceiling wheels";
     info.category = "Spatial";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_COLOR_WHEEL;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 200;

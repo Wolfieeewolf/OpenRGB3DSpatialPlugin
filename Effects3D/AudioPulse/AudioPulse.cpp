@@ -77,7 +77,7 @@ EffectInfo3D AudioPulse::GetEffectInfo() const
         "Beat-triggered shockwaves from the origin (GPU volume field). Use Role + Hz to pick lows/mids/highs; "
         "enable Rainbow for full color range. Wave spread/fade control how far and how fast shells travel.";
     info.category = "Audio";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_AUDIO_PULSE;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

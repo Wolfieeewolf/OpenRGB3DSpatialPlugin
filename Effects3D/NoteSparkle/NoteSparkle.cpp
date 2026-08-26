@@ -50,7 +50,7 @@ EffectInfo3D NoteSparkle::GetEffectInfo() const
         "ColorChord note particle cloud (hull + sparks). Defaults to High listen role — change Role/Hz "
         "freely. Assign strip, zone, or room on the stack. Pair with Bass Punch on lows.";
     info.category = "Audio";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_NOTE_SPARKLE;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

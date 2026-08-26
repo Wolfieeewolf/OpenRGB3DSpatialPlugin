@@ -51,6 +51,7 @@ EffectInfo3D AudioStripVisualizer::GetEffectInfo() const
         "Strip-first spectrum bars or scrolling spectrogram (GPU). Best on a single strip or narrow zone "
         "via stack targeting; Role/Hz + Rainbow for musical color.";
     info.category = "Audio";
+    info.effect_type = SPATIAL_EFFECT_AUDIO_STRIP_VISUALIZER;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 200;

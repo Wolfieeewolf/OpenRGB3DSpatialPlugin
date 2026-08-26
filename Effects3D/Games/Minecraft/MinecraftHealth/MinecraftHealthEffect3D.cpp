@@ -12,6 +12,7 @@ MinecraftHealthEffect3D::MinecraftHealthEffect3D(QWidget* parent)
 EffectInfo3D MinecraftHealthEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
+    info.effect_type = SPATIAL_EFFECT_MC_HEALTH;
     info.effect_description =
         "Health from Fabric UDP (127.0.0.1:9876): gradient or per-heart strip. Stack per controller.";
     return info;

@@ -43,7 +43,7 @@ EffectInfo3D AudioLevel::GetEffectInfo() const
         "Rising fill surface driven by your Listen Role / Hz band (GPU volume field). "
         "Turn on Rainbow for spatial spectrum color; Follow notes uses ColorChord HSV hues.";
     info.category = "Audio";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_AUDIO_LEVEL;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

@@ -132,7 +132,7 @@ EffectInfo3D ParticleField::GetEffectInfo() const
         "Room-fill organic particles (float, snow, embers, sparkle, attract, rain, fireworks). "
         "GPU volume field — Spatial Anchor is the hub for Attract mode.";
     info.category = "Spatial";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_PARTICLE_FIELD;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

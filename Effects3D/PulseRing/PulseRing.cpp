@@ -69,7 +69,7 @@ EffectInfo3D PulseRing::GetEffectInfo() const
         "Speed drives expansion, Frequency scrolls rainbow hue, Size scales the shell, "
         "Detail sharpens the band and flattens non-sphere shapes.";
     info.category = "Spatial";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_PULSE_RING;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

@@ -62,7 +62,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.effect_description =
         "Maps screen content onto LEDs in 3D space. Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
     info.category               = "Ambilight";
-    info.effect_type            = SPATIAL_EFFECT_WAVE;
+    info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;
     info.supports_random        = false;
     info.max_speed              = 100;

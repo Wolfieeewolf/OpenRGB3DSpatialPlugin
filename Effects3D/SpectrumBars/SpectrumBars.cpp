@@ -48,7 +48,7 @@ EffectInfo3D SpectrumBars::GetEffectInfo() const
         "Spectrum bar graph in the zone (GPU volume field). Role/Hz set which part of the mix feeds the bars; "
         "Rainbow or Hue-along-position for full color range.";
     info.category = "Audio";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_SPECTRUM_BARS;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 200;

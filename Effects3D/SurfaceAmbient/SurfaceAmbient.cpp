@@ -126,7 +126,7 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo() const
         "to drive Motion with your Colors / Patterns. Use Speed / Size / Scale / Detail / Frequency "
         "in Motion controls — only Thickness is effect-specific.";
     info.category = "Spatial";
-    info.effect_type = (SpatialEffectType)0;
+    info.effect_type = SPATIAL_EFFECT_SURFACE_AMBIENT;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

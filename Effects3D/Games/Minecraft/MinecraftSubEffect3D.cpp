@@ -20,7 +20,6 @@ EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const
     info.effect_name = effect_title_;
     info.effect_description = "";
     info.category = "Game";
-    info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;

@@ -17,6 +17,7 @@ MinecraftRoomAmbilightEffect3D::MinecraftRoomAmbilightEffect3D(QWidget* parent)
 EffectInfo3D MinecraftRoomAmbilightEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
+    info.effect_type = SPATIAL_EFFECT_MC_ROOM_AMBILIGHT;
     info.effect_description =
         "Room LEDs mirror what you see in-game (line-of-sight). "
         "Place a reference point at eye height and set this effect's 3D origin there. "

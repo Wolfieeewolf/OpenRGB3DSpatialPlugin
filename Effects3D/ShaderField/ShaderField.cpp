@@ -99,6 +99,7 @@ EffectInfo3D ShaderField::GetEffectInfo() const
         "Speed animates the shader, Frequency scrolls hue, Size zooms, Detail densifies the pattern. "
         "Use Contrast and Hue with the common controls.";
     info.category = "Spatial";
+    info.effect_type = SPATIAL_EFFECT_SHADER_FIELD;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;
