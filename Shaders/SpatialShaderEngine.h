@@ -41,7 +41,6 @@ public:
     QString lastError() const;
 
 signals:
-    void frameReady(const QImage& image);
     void compileMessage(const QString& message);
 
 private:

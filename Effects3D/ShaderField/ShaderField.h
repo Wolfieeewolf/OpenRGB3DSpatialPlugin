@@ -37,7 +37,6 @@ public:
     void SetSpeed(unsigned int speed) override;
 
 private slots:
-    void OnFrameReady(const QImage& image);
     void OnCompileMessage(const QString& message);
     void OnPresetChanged(int index);
     void OnProjectionModeChanged(int index);

@@ -131,14 +131,9 @@ SpatialOffscreenGlPool::Session::Session()
     if(!warmUpUnlocked(&err))
     {
         ok_ = false;
-        g_pool_mutex.unlock();
         return;
     }
     ok_ = g_context && g_context->makeCurrent(g_surface.get());
-    if(!ok_)
-    {
-        g_pool_mutex.unlock();
-    }
 }
 
 SpatialOffscreenGlPool::Session::~Session()

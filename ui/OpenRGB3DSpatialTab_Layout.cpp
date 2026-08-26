@@ -39,7 +39,7 @@ std::string ValidateLayoutDocument(const nlohmann::json& j)
         return "layout version must be 7";
     }
 
-    /* Camera may still appear in older saves; it is ignored and no longer required. */
+    /* Required sections for layout version 7. */
     static const char* kSections[] = {
         "grid", "room", "controllers", "reference_points", "display_planes", "zones"};
     for(const char* section : kSections)
@@ -67,7 +67,7 @@ bool LayoutSavedLocationMatches(const std::string& saved_location, RGBController
 
     if(saved_location.rfind("HID: ", 0) == 0)
     {
-        return true;
+        return live_location.rfind("HID: ", 0) == 0;
     }
 
     if(saved_location.rfind("I2C: ", 0) == 0)

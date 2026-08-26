@@ -9,6 +9,7 @@
 #include <QVBoxLayout>
 #include <QComboBox>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFile>
 #include <QLabel>
 #include <QPushButton>
@@ -31,11 +32,6 @@ ShaderField::ShaderField(QWidget* parent)
     shader_engine = new SpatialShaderEngine(this);
     shader_engine->setTargetFps(30);
     shader_engine->setRenderSize(256, 144);
-    connect(shader_engine,
-            &SpatialShaderEngine::frameReady,
-            this,
-            &ShaderField::OnFrameReady,
-            Qt::QueuedConnection);
     connect(shader_engine,
             &SpatialShaderEngine::compileMessage,
             this,
@@ -185,15 +181,14 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     projection_combo->addItem(QStringLiteral("Right wall (Y–Z)"));
     projection_combo->addItem(QStringLiteral("Cylinder around Y"));
     projection_combo->addItem(QStringLiteral("Radial floor (polar XZ)"));
-    projection_combo->addItem(QStringLiteral("Triplanar blend"));
+    projection_combo->addItem(QStringLiteral("Triplanar (dominant face)"));
     projection_combo->addItem(QStringLiteral("Nearest cube face"));
     projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
     projection_combo->setToolTip(QStringLiteral(
         "How the 2D shader pattern maps onto the room.\n"
         "Planes = wallpaper on floor/ceiling/walls.\n"
         "Sphere / Cylinder / Radial = wrap from the Spatial Anchor.\n"
-        "Triplanar = blend the three planes by surface dominance.\n"
-        "Nearest cube face = pick the strongest axis like a box unwrap."));
+        "Triplanar / Nearest cube face = pick the strongest axis like a box unwrap."));
     connect(projection_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ShaderField::OnProjectionModeChanged);
 
@@ -253,10 +248,49 @@ void ShaderField::RebuildPresetList()
 {
     preset_ids.clear();
     for(int i = 0; i < ShaderFieldPresets::kBundledCount; ++i)
-    {
         preset_ids.push_back(QString::fromUtf8(ShaderFieldPresets::kBundled[i].id));
-    }
+
     SpatialShaderCatalog::EnsureUserShadersFolder();
+    const QString custom_root = SpatialShaderCatalog::UserShadersFolderPath();
+    if(!custom_root.isEmpty())
+    {
+        QDir custom_dir(custom_root);
+        if(custom_dir.exists())
+        {
+            const QFileInfoList files =
+                custom_dir.entryInfoList(QStringList() << QStringLiteral("*.fs"), QDir::Files, QDir::Name);
+            for(const QFileInfo& fi : files)
+                preset_ids.push_back(fi.absoluteFilePath());
+        }
+    }
+
+    if(!preset_combo)
+        return;
+
+    const QString prev =
+        (active_preset_index >= 0 && active_preset_index < (int)preset_ids.size())
+            ? preset_ids[(size_t)active_preset_index]
+            : QString();
+    preset_combo->blockSignals(true);
+    preset_combo->clear();
+    for(const QString& id : preset_ids)
+    {
+        const ShaderFieldPresets::Bundled* b = ShaderFieldPresets::Find(id);
+        if(b)
+            preset_combo->addItem(QString::fromUtf8(b->title), id);
+        else
+            preset_combo->addItem(QFileInfo(id).fileName(), id);
+    }
+    int idx = 0;
+    if(!prev.isEmpty())
+    {
+        const auto it = std::find(preset_ids.begin(), preset_ids.end(), prev);
+        if(it != preset_ids.end())
+            idx = (int)std::distance(preset_ids.begin(), it);
+    }
+    preset_combo->setCurrentIndex(idx);
+    preset_combo->blockSignals(false);
+    active_preset_index = idx;
 }
 
 void ShaderField::LoadPresetAtIndex(int index)
@@ -276,26 +310,20 @@ void ShaderField::LoadPresetAtIndex(int index)
     active_preset_index = index;
 
     QString body;
-    QString label;
     const ShaderFieldPresets::Bundled* b = ShaderFieldPresets::Find(preset_ids[(size_t)index]);
     if(b)
     {
         body = QString::fromUtf8(b->source);
-        label = QString::fromUtf8(b->title);
     }
     else
     {
         QFile file(preset_ids[(size_t)index]);
         if(file.open(QIODevice::ReadOnly | QIODevice::Text))
-        {
             body = QTextStream(&file).readAll();
-            label = QFileInfo(file).fileName();
-        }
     }
     if(body.trimmed().isEmpty())
     {
         body = QString::fromUtf8(ShaderFieldPresets::kBundled[0].source);
-        label = QStringLiteral("Slow Waves (fallback)");
         active_preset_index = 0;
     }
     {
@@ -305,11 +333,6 @@ void ShaderField::LoadPresetAtIndex(int index)
     last_uniform_sequence = 0;
     shader_engine->setFragmentBody(body);
     EnsureShaderEngineRunning();
-    if(compile_log_label)
-    {
-        compile_log_label->setVisible(true);
-        compile_log_label->setText(QStringLiteral("Loaded: %1").arg(label));
-    }
 }
 
 void ShaderField::OnPresetChanged(int index)
@@ -329,19 +352,8 @@ void ShaderField::OnOpenShadersFolder()
     SpatialShaderCatalog::EnsureUserShadersFolder();
     const QString path = SpatialShaderCatalog::UserShadersFolderPath();
     if(!path.isEmpty())
-    {
         QDesktopServices::openUrl(QUrl::fromLocalFile(path));
-    }
-}
-
-void ShaderField::OnFrameReady(const QImage& image)
-{
-    if(image.isNull())
-    {
-        return;
-    }
-    QMutexLocker lock(&display_mutex);
-    display_frame = std::make_shared<QImage>(image.convertToFormat(QImage::Format_RGB32));
+    RebuildPresetList();
 }
 
 void ShaderField::OnCompileMessage(const QString& message)
@@ -395,7 +407,6 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
     const float nx = (x - grid.min_x) * inv_w;
     const float ny = (y - grid.min_y) * inv_h;
     const float nz = (z - grid.min_z) * inv_d;
-    const float tile = 1.0f;
 
     const int mode = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
     switch(mode)
@@ -443,18 +454,6 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
         break;
     }
     case PROJ_TRIPLANAR:
-    {
-        const float wx = std::fabs(nx - 0.5f);
-        const float wy = std::fabs(ny - 0.5f);
-        const float wz = std::fabs(nz - 0.5f);
-        const float wsum = std::max(1e-4f, wx + wy + wz);
-        const float u_yz = ny * (wy / wsum) + nz * (wz / wsum);
-        const float u_xz = nx * (wx / wsum) + nz * (wz / wsum);
-        const float u_xy = nx * (wx / wsum) + ny * (wy / wsum);
-        u = MediaTextureEffect::Frac01(u_yz + u_xz + u_xy);
-        v = MediaTextureEffect::Frac01(nx * (wx / wsum) + ny * (wy / wsum) + nz * (wz / wsum));
-        break;
-    }
     case PROJ_CUBE_FACE:
     {
         const float ax = std::fabs(nx - 0.5f);
@@ -478,7 +477,6 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
         break;
     }
     case PROJ_SPHERE:
-    default:
     {
         float rx = x - origin.x;
         float ry = y - origin.y;
@@ -499,10 +497,16 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
         }
         break;
     }
+    default:
+    {
+        u = 0.5f;
+        v = 0.5f;
+        break;
+    }
     }
 
-    u = MediaTextureEffect::Frac01((u - 0.5f) * tile + 0.5f);
-    v = MediaTextureEffect::Frac01((v - 0.5f) * tile + 0.5f);
+    u = MediaTextureEffect::Frac01(u);
+    v = MediaTextureEffect::Frac01(v);
 }
 
 RGBColor ShaderField::SampleField(float u, float v) const
@@ -547,20 +551,19 @@ nlohmann::json ShaderField::SaveSettings() const
     j["projection_mode"] = projection_mode;
     j["shader_contrast"] = contrast;
     j["shader_hue_shift"] = hue_shift;
-    j["preset_index"] = active_preset_index;
+    if(active_preset_index >= 0 && active_preset_index < (int)preset_ids.size())
+        j["preset_id"] = preset_ids[(size_t)active_preset_index].toStdString();
     return j;
 }
 
 void ShaderField::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("projection_mode"))
+    if(settings.contains("projection_mode") && settings["projection_mode"].is_number_integer())
     {
         projection_mode = std::clamp(settings["projection_mode"].get<int>(), 0, PROJ_COUNT - 1);
         if(projection_combo)
-        {
             projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
-        }
     }
     if(settings.contains("shader_contrast") && settings["shader_contrast"].is_number())
         contrast = std::clamp(settings["shader_contrast"].get<float>(), 0.35f, 2.5f);
@@ -571,21 +574,25 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
     if(hue_slider)
         hue_slider->setValue((int)std::lround(hue_shift * 1000.0f));
 
-    /* Renderer instances have no preset_combo — still must swap the GLSL body.
-       UI + render effect are separate objects; ParametersChanged copies settings
-       from the UI effect onto the renderer. */
-    if(preset_ids.empty())
+    RebuildPresetList();
+    int idx = 0;
+    if(settings.contains("preset_id") && settings["preset_id"].is_string())
     {
-        RebuildPresetList();
-    }
-    int idx = active_preset_index;
-    if(settings.contains("preset_index") && settings["preset_index"].is_number_integer())
-    {
-        idx = settings["preset_index"].get<int>();
-    }
-    if(idx < 0 || idx >= (int)preset_ids.size())
-    {
-        idx = 0;
+        const QString want = QString::fromStdString(settings["preset_id"].get<std::string>());
+        const auto it = std::find(preset_ids.begin(), preset_ids.end(), want);
+        if(it != preset_ids.end())
+            idx = (int)std::distance(preset_ids.begin(), it);
+        else
+        {
+            for(size_t i = 0; i < preset_ids.size(); ++i)
+            {
+                if(QFileInfo(preset_ids[i]).fileName() == QFileInfo(want).fileName())
+                {
+                    idx = (int)i;
+                    break;
+                }
+            }
+        }
     }
     if(preset_combo)
     {
