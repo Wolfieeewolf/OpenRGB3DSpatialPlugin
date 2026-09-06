@@ -510,7 +510,9 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
         h_base = samp.z();
     }
 
-    if(sat <= 1e-5f)
+    // Pixelblaze hsv(x, 1-dist, (1+dist)^4): the axis is a white core (sat≈0, val≈1).
+    // Cull on value, not saturation, or the cores go black.
+    if(val <= 1e-5f)
         return 0x00000000;
 
     float h = std::fmod(h_base + hue_scroll + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
