@@ -132,8 +132,11 @@ vec3 evalCone(int i, int count, int mirror, int surface,
     vec3 aim = coneAim(i, clock, wander, restAim(surface, u));
     vec3 r = toAimFrame(p01 - apex, aim);
     r = rcRotate(r, vec3(0.0, 0.0, 1.0), coneAngle(i, clock));
+    float hypotv = sqrt(r.x * r.x / scale + r.y * r.y / scale);
     float axial = (mirror > 0) ? abs(r.z) : r.z;
-    float dist = axial - sqrt(r.x * r.x / scale + r.y * r.y / scale);
+    float dist = axial - hypotv;
+    if(mirror == 0 && r.z < 0.0)
+        dist = -1.0;
     float h = fract(hue_static + (p01.x - 0.5) * 0.35 + float(i) / max(float(count), 1.0));
     return vec3(dist, h, 1.0);
 }
