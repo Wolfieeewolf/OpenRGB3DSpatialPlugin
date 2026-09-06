@@ -63,7 +63,7 @@ EffectInfo3D HarmonicPulse::GetEffectInfo() const
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
@@ -171,7 +171,7 @@ void HarmonicPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_s
     const float detail = std::max(0.05f, GetNormalizedDetail());
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float flow = std::clamp(flow_amount, 0.4f, 2.5f);
-    const float motion = std::clamp(GetMotionHz() * flow, 0.02f, 2.5f);
+    const float motion = std::clamp(GetMotionHz() * flow, 0.0f, 2.5f);
     const float spatial_freq = std::clamp(1.1f + detail * 4.5f * size_m, 0.6f, 9.0f);
     const float pulse_mix = std::clamp(spatial_amount, 0.0f, 1.0f);
     const float contrast = std::clamp(pulse_contrast, 0.35f, 2.0f);
@@ -195,7 +195,7 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
 
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float flow = std::clamp(flow_amount, 0.4f, 2.5f);
-    const float motion = std::clamp(GetMotionHz() * flow, 0.02f, 2.5f);
+    const float motion = std::clamp(GetMotionHz() * flow, 0.0f, 2.5f);
     const float pulse_mix = std::clamp(spatial_amount, 0.0f, 1.0f);
 
     float val = 0.0f;

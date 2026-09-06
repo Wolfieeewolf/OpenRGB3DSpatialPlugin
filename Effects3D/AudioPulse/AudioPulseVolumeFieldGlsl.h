@@ -163,7 +163,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float size_m = clamp(u_params[1], 0.2, 2.0);
     float detail = max(u_params[2], 0.05);
     float falloff = max(u_params[3], 0.25);
-    float pulse_speed = max(u_params[4], 0.01);
+    float pulse_speed = max(u_params[4], 0.0);
     float radius_basis = max(u_params[5], 1e-3);
     float half_w = max(u_params[6], 1e-4);
     float max_travel = max(u_params[7], 1e-3);

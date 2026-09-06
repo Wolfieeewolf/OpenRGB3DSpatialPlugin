@@ -431,17 +431,8 @@ float SpatialEffect3D::GetNormalizedSize() const
 
 float SpatialEffect3D::GetNormalizedScale() const
 {
-    /* Occupancy in the room/layout. 200 = fill the grid from the Spatial Anchor. */
-    float normalized;
-
-    if(effect_scale <= 200)
-    {
-        normalized = effect_scale / 200.0f;
-    }
-    else
-    {
-        normalized = 1.0f + ((effect_scale - 200) / 100.0f);
-    }
+    /* Occupancy in the room/layout. 100 = fill the grid from the Spatial Anchor. */
+    float normalized = effect_scale / 100.0f;
 
     if(scale_inverted)
     {
@@ -673,6 +664,10 @@ float SpatialEffect3D::GetScaledSpeed() const
 
 float SpatialEffect3D::GetScaledFrequency() const
 {
+    if(effect_frequency == 0)
+    {
+        return 0.0f;
+    }
     /* Legacy spatial-density driver. Mid slider ≈ 3. Hue scroll should use GetColorCycleHz. */
     return std::max(0.05f, GetNormalizedFrequency()) * 8.0f;
 }

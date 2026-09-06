@@ -134,7 +134,7 @@ EffectInfo3D ParticleField::GetEffectInfo() const
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
@@ -223,7 +223,7 @@ void ParticleField::SetupCustomUI(QWidget* parent)
 void ParticleField::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
     const float size_m = GetNormalizedSize();
-    const float speed_scale = 0.35f + GetNormalizedSpeed();
+    const float speed_scale = GetNormalizedSpeed();
 
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);

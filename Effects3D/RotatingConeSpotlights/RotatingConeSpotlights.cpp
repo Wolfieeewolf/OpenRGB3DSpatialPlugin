@@ -227,7 +227,7 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
@@ -429,9 +429,9 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     const float hh01 = 0.5f;
     const float hd01 = 0.5f;
 
-    const float speed_norm = std::clamp(GetNormalizedSpeed(), 0.05f, 1.0f);
+    const float speed_norm = GetNormalizedSpeed();
     const float wander = std::clamp(wander_amt, 0.15f, 2.0f);
-    const float spin_t = time_sec * motion_rate * (0.10f + 0.55f * speed_norm) * (0.55f + 0.45f * wander);
+    const float spin_t = time_sec * motion_rate * 0.65f * speed_norm * (0.55f + 0.45f * wander);
     const float scale = std::max(1e-5f, cone_scale * (0.5f + 0.5f * GetNormalizedSize()));
     const int count = std::clamp(cone_count, 1, kMaxCones);
     const int surf = std::clamp(surface, 0, SURF_COUNT - 1);

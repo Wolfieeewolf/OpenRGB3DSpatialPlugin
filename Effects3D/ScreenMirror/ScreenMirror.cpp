@@ -66,7 +66,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.is_reversible          = false;
     info.supports_random        = false;
     info.max_speed = 200;
-    info.min_speed              = 1;
+    info.min_speed              = 0;
     info.user_colors            = 0;
     info.has_custom_settings    = true;
     info.needs_3d_origin        = false;

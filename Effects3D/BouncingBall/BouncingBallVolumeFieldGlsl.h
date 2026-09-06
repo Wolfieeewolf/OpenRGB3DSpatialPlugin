@@ -38,7 +38,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int count = int(clamp(u_params[1], 1.0, 32.0) + 0.5);
     float radius = max(u_params[2], 0.03);
     float glow_mul = max(u_params[3], 1.15);
-    float motion = clamp(u_params[4], 0.02, 1.0);
+    float motion = clamp(u_params[4], 0.0, 1.0);
     float hue_scroll = fract(u_params[5]);
     float detail = clamp(u_params[6], 0.05, 1.0);
 

@@ -180,14 +180,14 @@ void AudioPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     if(wave_mode == AudioBeatWaveMode::ClassicWave)
     {
         /* Classic wave: scale speed once; slot [7] = burst phase cap. */
-        pulse_speed = BeatWaveScaledSpeed((0.55f + GetNormalizedSpeed()) * bb.speed_mul, audio_settings);
+        pulse_speed = BeatWaveScaledSpeed(GetNormalizedSpeed() * bb.speed_mul, audio_settings);
         decay = BeatWaveShellDecay(audio_settings, 2.0f);
         max_travel_or_burst = BeatWaveBurstPhaseCap(audio_settings);
     }
     else
     {
         pulse_speed =
-            BeatWaveScaledSpeed((0.35f + GetNormalizedSpeed() * 0.75f) * bb.speed_mul, audio_settings);
+            BeatWaveScaledSpeed(GetNormalizedSpeed() * bb.speed_mul, audio_settings);
     }
 
     EffectGridAxisHalfExtents extents = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());

@@ -39,7 +39,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Animation rate. 100 is a calm ~0.3 Hz on every effect; 200 is ~0.85 Hz. 0 stops motion.</string>
+        <string>Animation rate. Default 0 = still (no flashing). 100 is a calm ~0.3 Hz on every effect; 200 is ~0.85 Hz.</string>
        </property>
       </widget>
      </item>
@@ -113,7 +113,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Hue/palette scroll and spatial density. 100 is a calm cycle on every effect. Compass mapping also uses this for palette scrolling.</string>
+        <string>Hue/palette scroll and spatial density. Default 0 = no cycling. 100 is a calm cycle on every effect. Compass mapping also uses this for palette scrolling.</string>
        </property>
       </widget>
      </item>
@@ -187,7 +187,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Pattern feature size (ring width, zoom, blob radius). 100 is the default size. Scale (occupancy) is a separate slider.</string>
+        <string>Pattern feature size (ring width, zoom, blob radius). 100 = 100% default size. Scale (occupancy) is a separate slider.</string>
        </property>
       </widget>
      </item>
@@ -224,7 +224,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Effect occupancy in the room (not pattern size). 200 = fill the grid from the Spatial Anchor. Size is a separate slider for ring width / zoom.</string>
+        <string>Effect occupancy in the room (not pattern size). 100 = 100% fill from the Spatial Anchor. Size is a separate slider for ring width / zoom.</string>
        </property>
       </widget>
      </item>

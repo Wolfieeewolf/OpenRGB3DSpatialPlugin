@@ -196,8 +196,8 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
- *   Half-extents are origin → farthest *active grid* face, multiplied by Scale
- *   (occupancy in the room). Scale < 1 makes the effect smaller inside the layout;
+   *   Half-extents are origin → farthest *active grid* face, multiplied by Scale
+ *   (occupancy in the room; 100% Scale = 1.0). Scale < 1 makes the effect smaller inside the layout;
  *   samples outside that box are unlit — do not clamp UV onto atlas faces
  *   (that is the four-quadrant artifact). Size is feature size (ring width, etc.)
  *   via u_params, not atlas coverage. Reconstruct world distance with
@@ -211,14 +211,16 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  * second origin path. Do not reintroduce room-UV origin packing for GPU volumes.
  *
  * --- Slider feel (shared by every effect) ---
- * Speed 0–200: GetMotionHz(). 100 ≈ 0.33 Hz, 200 ≈ 0.85 Hz. CalculateProgress(t)
- *   is elapsed cycles (t * GetMotionHz). Do not multiply by extra 0.08-style
- *   fudge factors or per-effect default_speed_scale.
+ * Defaults: Speed / Frequency / Detail = 0 (no motion, no flashing).
+ *   Size 100 = 100% feature size. Scale 100 = 100% occupancy.
+ * Speed 0–200: GetMotionHz(). 0 stops all time-based motion. 100 ≈ 0.33 Hz,
+ *   200 ≈ 0.85 Hz. CalculateProgress(t) is elapsed cycles (t * GetMotionHz).
+ *   Do not add constant floors (0.02/0.05/0.35) that keep animating at Speed 0.
  * Frequency 0–200: GetColorCycleHz() for hue/palette scroll (~0.11 Hz at 100).
- *   GetNormalizedFrequency() for spatial density. GetScaledFrequency() is
- *   8 * normalized (mid ≈ 3) for legacy spatial drivers.
+ *   Frequency 0 stops hue cycling. GetNormalizedFrequency() for spatial density.
  * Size 0–200: GetNormalizedSize() is 1.0 at 100 (feature size, not occupancy).
- * Scale 0–300: occupancy only. Never mix Scale into Size/zoom/tile math.
+ * Scale 0–300: occupancy only. 100 = fill the grid from the Spatial Anchor.
+ *   Never mix Scale into Size/zoom/tile math.
  */
 
 inline float NormalizeGridAxis01(float value, float min_v, float max_v)

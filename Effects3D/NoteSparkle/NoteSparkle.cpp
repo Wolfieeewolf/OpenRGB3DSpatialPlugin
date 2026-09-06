@@ -195,7 +195,7 @@ void NoteSparkle::PrepareGpuFields(std::uint64_t render_sequence, float time_sec
 
     const float size_m = std::max(0.35f, GetNormalizedSize());
     const float detail = std::max(0.05f, GetScaledDetail());
-    const float time_e = time_sec * bb.speed_mul * (0.35f + GetNormalizedSpeed());
+    const float time_e = time_sec * bb.speed_mul * GetNormalizedSpeed();
 
     float vp[24] = {};
     vp[0] = drive;

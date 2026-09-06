@@ -31,12 +31,12 @@
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
     effect_enabled = false;
-    effect_speed = 100;
+    effect_speed = 0;
     effect_brightness = 100;
-    effect_frequency = 80;
-    effect_detail = 100;
+    effect_frequency = 0;
+    effect_detail = 0;
     effect_size = 100;
-    effect_scale = 200;
+    effect_scale = 100;
     scale_inverted = false;
     effect_bounds_mode = (int)BOUNDS_MODE_GLOBAL;
     effect_fps = 30;

@@ -31,7 +31,7 @@ EffectInfo3D BouncingBall::GetEffectInfo() const
     info.is_reversible = false;
     info.supports_random = true;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
@@ -91,8 +91,8 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
     const float radius01 = std::clamp(0.045f + 0.12f * size_m, 0.03f, 0.26f);
-    const float motion = std::clamp(GetNormalizedSpeed(), 0.02f, 1.0f);
-    const float sim_phase_rate = std::max(0.05f, GetMotionHz() * 3.5f) * bb.speed_mul;
+    const float motion = GetNormalizedSpeed();
+    const float sim_phase_rate = GetMotionHz() * 3.5f * bb.speed_mul;
     const float sim_t = time_sec * sim_phase_rate;
     const float hue_scroll =
         std::fmod(time_sec * GetColorCycleHz() * bb.speed_mul + 1000.0f, 1.0f);

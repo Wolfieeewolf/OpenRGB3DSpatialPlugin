@@ -52,8 +52,7 @@ TextureProjection::TextureProjection(QWidget* parent)
     gif_frame_timer->setTimerType(Qt::PreciseTimer);
     connect(gif_frame_timer, &QTimer::timeout, this, &TextureProjection::OnGifFrameTimerTimeout);
     SetRainbowMode(false);
-    /* Speed is GIF frames/sec for this effect (not GetMotionHz). 30 fps is a calm default. */
-    SetSpeed(30);
+    /* Speed is GIF frames/sec. Default 0 = paused (no flashing). */
     volume_assist_.setFragmentBody(QString::fromUtf8(TextureProjectionVolumeFieldGlsl()));
     volume_assist_.setResolution(18);
 }
@@ -470,7 +469,7 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
     const float tm = std::max(0.25f, bb.tight_mul);
 
-    const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
+    const bool freeze_motion = GetSpeed() == 0;
     const float scroll_mul = motion_scroll / 100.0f;
     const float warp_mul = motion_warp / 100.0f;
     const float phase_mul = motion_phase / 100.0f;
@@ -480,7 +479,7 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
     const float freq_n = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
     /* Scroll rate in UV/sec — Scroll slider dominates; Speed/Frequency boost. */
     const float scroll_rate =
-        freeze_gif_motion
+        freeze_motion
             ? 0.0f
             : scroll_mul * (0.22f + 0.48f * speed_lin + 0.18f * freq_n) * bb.speed_mul;
     const float size_m = std::max(0.08f, GetNormalizedSize());
@@ -488,7 +487,7 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
     const float size_zoom_div = std::clamp(0.40f + 0.36f * size_m, 0.32f, 2.2f);
     const float tile = std::clamp(repeat_from_freq / size_zoom_div, 0.12f, 6.5f);
     const float amp =
-        freeze_gif_motion ? 0.0f
+        freeze_motion ? 0.0f
                           : warp_mul * (0.045f + 0.20f * std::min(1.0f, detail * 0.12f)) / tm;
     const float prop01 = ambience_propagation / 100.0f;
 

@@ -253,8 +253,7 @@ OmniShapeTexture::OmniShapeTexture(QWidget* parent)
     gif_frame_timer->setTimerType(Qt::PreciseTimer);
     connect(gif_frame_timer, &QTimer::timeout, this, &OmniShapeTexture::OnGifFrameTimerTimeout);
     SetRainbowMode(false);
-    /* Speed is GIF frames/sec for this effect (not GetMotionHz). 30 fps is a calm default. */
-    SetSpeed(30);
+    /* Speed is GIF frames/sec. Default 0 = paused (no flashing). */
     volume_assist_.setFragmentBody(QString::fromUtf8(OmniShapeTextureVolumeFieldGlsl()));
     volume_assist_.setResolution(28);
 }
@@ -711,28 +710,28 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
     const float tm = std::max(0.25f, bb.tight_mul);
 
-    const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
+    const bool freeze_motion = GetSpeed() == 0;
     const float scroll_mul = motion_scroll / 100.0f;
     const float warp_mul = motion_warp / 100.0f;
     const float phase_mul = motion_phase / 100.0f;
     const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
     /* Spin alone rotates; Scroll boosts spin and drives UV scroll via phase_drive. */
     const float spin_rate =
-        freeze_gif_motion
+        freeze_motion
             ? 0.0f
             : (0.25f + 2.6f * (spin_percent / 100.0f)) * (0.35f + 0.75f * speed_lin)
                   * (0.55f + 1.35f * scroll_mul) * bb.speed_mul;
     const float yaw_rate = spin_rate;
     const float pitch_rate = spin_rate * 0.71f;
     const float phase_drive =
-        freeze_gif_motion ? 0.0f : (phase_mul * 1.55f + scroll_mul * 0.95f);
+        freeze_motion ? 0.0f : (phase_mul * 1.55f + scroll_mul * 0.95f);
     const float size_m = std::max(0.08f, GetNormalizedSize());
     const float repeat_from_freq = 0.55f + 1.65f * GetNormalizedFrequency();
     const float size_zoom_div = std::clamp(0.55f + 0.28f * size_m, 0.40f, 2.0f);
     const float tile = std::clamp(repeat_from_freq / size_zoom_div, 0.12f, 6.5f);
     const float detail = std::max(0.05f, GetScaledDetail());
     const float amp =
-        freeze_gif_motion ? 0.0f
+        freeze_motion ? 0.0f
                           : warp_mul * (0.05f + 0.22f * std::min(1.0f, detail * 0.12f)) / tm;
     /* Local half-extent coords: Size expands the crisp shape envelope (not a soft sphere). */
     const float R_local = std::clamp(0.16f + 1.15f * size_m, 0.12f, 1.65f) / tm;

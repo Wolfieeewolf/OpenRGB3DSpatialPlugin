@@ -29,7 +29,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float noise_amt = clamp(u_params[6], 0.0, 1.5);
     float fill = clamp(u_params[7], 0.35, 1.6);
     float hue_scroll = fract(u_params[8]);
-    float speed = max(u_params[9], 0.05);
+    float speed = max(u_params[9], 0.0);
 
     float intensity = 0.0;
     float hue01 = hue_scroll;

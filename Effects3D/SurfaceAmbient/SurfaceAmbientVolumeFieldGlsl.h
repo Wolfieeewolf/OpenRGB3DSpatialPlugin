@@ -337,11 +337,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float h_pct = max(0.05, u_params[3]);
     float sigma = max(0.02, u_params[4]);
     float freq = max(0.05, u_params[5]);
-    float speed = max(0.15, u_params[6]);
-    float band_mul = max(0.15, u_params[7]);
+    float speed = max(0.0, u_params[6]);
+    float band_mul = max(0.0, u_params[7]);
     float feature = max(0.45, u_params[8]);
-    /* Always advance from engine clock — absolute time in a param can stall/desync. */
-    float time_e = u_time * band_mul;
+    /* Speed 0 freezes the field (photosensitivity). */
+    float time_e = u_time * speed * band_mul;
 
     float nx = p01.x;
     float ny = p01.y;

@@ -148,7 +148,7 @@ void AudioLevel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     const float size_m = std::max(0.35f, GetNormalizedSize());
     const float detail = std::max(0.05f, GetScaledDetail());
     const float wave_freq = std::max(0.2f, 0.35f + GetNormalizedFrequency() * 2.2f * bb.tight_mul);
-    const float time_e = time_sec * bb.speed_mul;
+    const float time_e = time_sec * GetNormalizedSpeed() * bb.speed_mul;
 
     float vp[10] = {
         fill_level,

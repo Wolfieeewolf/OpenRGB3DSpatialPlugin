@@ -58,7 +58,7 @@ EffectInfo3D DepthTone::GetEffectInfo() const
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;

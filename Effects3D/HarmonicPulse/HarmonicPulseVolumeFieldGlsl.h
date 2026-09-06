@@ -11,7 +11,7 @@ inline const char* HarmonicPulseVolumeFieldGlsl()
     return R"(
 void volumeMain(out vec4 out_color, in vec3 p01)
 {
-    float motion = max(u_params[0], 0.02);
+    float motion = max(u_params[0], 0.0);
     float spatial_freq = max(u_params[1], 0.5);
     float wobble = clamp(u_params[2], 0.0, 3.0);
     float contrast = clamp(u_params[3], 0.35, 2.5);

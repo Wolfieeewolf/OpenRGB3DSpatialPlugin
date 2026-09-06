@@ -64,9 +64,6 @@ QString ShellPatternFullVolumeBody()
 
 ShellPattern::ShellPattern(QWidget* parent) : SpatialEffect3D(parent)
 {
-    SetDetail(90);
-    effect_size = 130;
-    effect_scale = 200;
     SetRainbowMode(false);
     std::vector<RGBColor> default_colors;
     default_colors.push_back(0x000000FF);
@@ -91,7 +88,7 @@ EffectInfo3D ShellPattern::GetEffectInfo() const
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;

@@ -44,10 +44,6 @@ const char* SurfaceAmbient::MotionName(int m)
 
 SurfaceAmbient::SurfaceAmbient(QWidget* parent) : SpatialEffect3D(parent)
 {
-    /* Sensible mid defaults so Speed / Frequency / Size actually move the look. */
-    SetDetail(90);
-    effect_size = 120;
-    effect_scale = 200;
     volume_assist_.setFragmentBody(QString::fromUtf8(SurfaceAmbientVolumeFieldGlsl()));
     volume_assist_.setResolution(28);
 }
@@ -80,7 +76,7 @@ void SurfaceAmbient::PrepareGpuFields(std::uint64_t render_sequence, float time_
     const float detail = std::max(0.05f, GetScaledDetail()) * tm;
     const float freq = std::clamp(0.28f + detail * 0.22f, 0.22f, 3.0f);
     const float feature = std::clamp(GetNormalizedSize(), 0.45f, 3.0f);
-    const float speed = std::max(0.02f, GetMotionHz());
+    const float speed = GetMotionHz();
     const float band_mul = std::max(0.15f, bb.speed_mul);
 
     int mask = GetSurfaceMask();
@@ -128,7 +124,7 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo() const
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
@@ -220,7 +216,7 @@ RGBColor SurfaceAmbient::PresetColor(float plasma01, float time, float speed_mul
     /* Frequency widens the palette; slight shimmer keeps color alive without a full rainbow wash. */
     const float spread = std::clamp(0.9f + GetNormalizedFrequency() * 0.9f, 0.9f, 2.6f);
     const float shimmer =
-        std::sin(time * std::max(0.02f, GetColorCycleHz()) * 6.2831853f * speed_mul + p * 6.28318f) *
+        std::sin(time * GetColorCycleHz() * 6.2831853f * speed_mul + p * 6.28318f) *
         (5.0f + 9.0f * p);
 
     if(style == STYLE_STEAM)

@@ -72,7 +72,7 @@ EffectInfo3D Starfield::GetEffectInfo() const
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;
-    info.min_speed = 1;
+    info.min_speed = 0;
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
@@ -227,10 +227,11 @@ void Starfield::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
     const float thickness = std::max(0.02f, star_size);
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float fill = std::clamp(fill_amount, 0.4f, 1.0f);
-    const float hue_scroll = std::fmod(time_sec * GetColorCycleHz() + 1.0f, 1.0f);
+    const float anim_t = (GetSpeed() == 0) ? 0.0f : time_sec;
+    const float hue_scroll = std::fmod(anim_t * GetColorCycleHz() + 1.0f, 1.0f);
     const float vp[10] = {
         progress,
-        time_sec,
+        anim_t,
         (float)mode_i,
         (float)count,
         thickness,

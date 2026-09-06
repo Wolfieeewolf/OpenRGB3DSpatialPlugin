@@ -57,7 +57,7 @@ private:
     int num_stars = 40;
     float star_size = 0.20f;
     float drift_amount = 0.12f;
-    float twinkle_speed = 0.45f;
+    float twinkle_speed = 0.0f;
     float fill_amount = 1.0f;
     SpatialVolumeFieldAssist volume_assist_;
 };

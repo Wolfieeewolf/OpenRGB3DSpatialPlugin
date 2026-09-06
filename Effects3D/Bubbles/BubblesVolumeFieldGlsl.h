@@ -20,7 +20,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float time_sec = u_params[0];
     int count = int(clamp(u_params[1], 4.0, 48.0) + 0.5);
     float thick = max(u_params[2], 0.014);
-    float rise_rate = max(u_params[3], 0.01);
+    float rise_rate = max(u_params[3], 0.0);
     float interval = max(u_params[4], 0.12);
     float max_r = max(u_params[5], 0.04);
     float fill = clamp(u_params[6], 0.5, 1.8);
