@@ -82,7 +82,7 @@ void RotatingConeSpotlights::ApplyLayoutPreset(int preset)
         else if(count == 4 && surface == SURF_WALLS)
             use = LAYOUT_WALLS;
         else if(count == 4)
-            use = LAYOUT_ROW;
+            use = LAYOUT_CORNERS;
         else
             use = LAYOUT_ROW;
     }
@@ -114,7 +114,7 @@ void RotatingConeSpotlights::ApplyLayoutPreset(int preset)
         // U = wall angle (0, 0.25, 0.5, 0.75); V = mid height
         for(int i = 0; i < kMaxCones; i++)
         {
-            apex_u[i] = (float)i / 4.0f;
+            apex_u[i] = ((float)i + 0.5f) / 4.0f;
             apex_v[i] = 0.5f;
         }
         break;
@@ -220,8 +220,8 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Rotating Cone Spotlights";
     info.effect_description =
-        "One to four single-beam spotlights with static placement (presets + per-cone sliders) and "
-        "360° aim wander. Opposite mode locks pairs 180° apart. Speed + Motion drive aim; Frequency scrolls hue.";
+        "One to four rotating double-cone beams through occupancy (Pixelblaze-style rotate + cone). "
+        "Surface / layout place each apex; Speed + Motion spin the frame; Frequency scrolls hue.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
     info.is_reversible = true;
@@ -279,8 +279,9 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
         surface_combo->addItem(QString::fromUtf8(SurfaceName(s)));
     surface_combo->setCurrentIndex(std::clamp(surface, 0, SURF_COUNT - 1));
     surface_combo->setToolTip(QStringLiteral(
-        "Where cone apexes sit relative to the stack origin. Floor/Ceiling offset vertically; "
-        "Walls use angle + height; Ref uses X/Z offsets around the origin."));
+        "Where each cone's apex sits in occupancy (Scale box from the Spatial Anchor).\n"
+        "Center = mid-height XZ; Ref = tighter offsets around the Anchor; Floor / Ceiling = occupancy faces;\n"
+        "Walls = around the four occupancy walls (Angle + Height)."));
     connect(surface_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, on_changed](int idx) {
         surface = std::clamp(idx, 0, SURF_COUNT - 1);
         UpdateConeSliderLabels();
@@ -296,7 +297,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
         motion_combo->addItem(QString::fromUtf8(MotionName(m)));
     motion_combo->setCurrentIndex(std::clamp(motion_mode, 0, MOTION_COUNT - 1));
     motion_combo->setToolTip(QStringLiteral(
-        "Independent: each cone wanders freely on a sphere. Opposite: pairs lock 180° apart (1 ignored; 3 keeps cone 3 free)."));
+        "Independent: each cone tumbles on its own triangle-wave axis. Opposite: pairs lock 180° apart (1 ignored; 3 keeps cone 3 free)."));
     connect(motion_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, on_changed](int idx) {
         motion_mode = std::clamp(idx, 0, MOTION_COUNT - 1);
         on_changed();
@@ -371,7 +372,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     EffectSliderRow* cone_scale_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Cone scale:"), 5, 500,
         (int)std::lround(cone_scale * 1000.0f),
-        QStringLiteral("Beam width. Lower = tighter spotlight, higher = wider wash."));
+        QStringLiteral("Beam width (same 1/π² scale as the Pixelblaze mock-up). Lower = tighter, higher = wider wash."));
     cone_scale_row->setObjectName(QStringLiteral("coneScaleRow"));
     cone_slider = cone_scale_row->slider();
     cone_scale_row->bindValueChanged(
@@ -395,7 +396,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     EffectSliderRow* motion_rate_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Motion rate:"), 20, 300,
         (int)std::lround(motion_rate * 100.0f),
-        QStringLiteral("How fast aims wander (multiplies Speed). Does not affect hue."));
+        QStringLiteral("How fast the cone frame rotates (multiplies Speed). Does not affect hue."));
     motion_rate_row->setObjectName(QStringLiteral("motionRow"));
     motion_slider = motion_rate_row->slider();
     motion_rate_row->bindValueChanged(
@@ -407,7 +408,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     EffectSliderRow* wander_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Path wander:"), 15, 200,
         (int)std::lround(wander_amt * 100.0f),
-        QStringLiteral("How irregular the spherical aim path is. Higher = more chaotic sweep."));
+        QStringLiteral("How much the rotation axis tumbles (Pixelblaze-style). Higher = more sweep, not faster."));
     wander_row->setObjectName(QStringLiteral("wanderRow"));
     wander_slider = wander_row->slider();
     wander_row->bindValueChanged(
@@ -424,14 +425,19 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     (void)grid;
-    /* Occupancy UV is origin-local [0,1]; 0.5 half-extents reach the scaled box faces. */
     const float hw01 = 0.5f;
     const float hh01 = 0.5f;
     const float hd01 = 0.5f;
 
-    const float speed_norm = GetNormalizedSpeed();
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
     const float wander = std::clamp(wander_amt, 0.15f, 2.0f);
-    const float spin_t = time_sec * motion_rate * 0.65f * speed_norm * (0.55f + 0.45f * wander);
+    const float clock = time_sec * GetMotionHz() * bb.speed_mul * std::max(0.2f, motion_rate);
     const float scale = std::max(1e-5f, cone_scale * (0.5f + 0.5f * GetNormalizedSize()));
     const int count = std::clamp(cone_count, 1, kMaxCones);
     const int surf = std::clamp(surface, 0, SURF_COUNT - 1);
@@ -439,7 +445,7 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     const float elev = ElevBiasForSurface(surf);
 
     float vp[19] = {};
-    vp[0] = spin_t;
+    vp[0] = clock;
     vp[1] = scale;
     vp[2] = hue01;
     vp[3] = (float)count;
@@ -531,7 +537,7 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
                                                    ph01,
                                                    time,
                                                    grid,
-                                                   GetNormalizedSize(),
+                                                   GetNormalizedScale(),
                                                    origin,
                                                    rot);
         RGBColor c = ResolveStripKernelFinalColor(SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
