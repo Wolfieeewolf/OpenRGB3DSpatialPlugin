@@ -149,18 +149,12 @@ inline EffectGridAxisHalfExtents MakeEffectGridOriginLocalHalfExtents(const Grid
     return {hw, hh, hd};
 }
 
-/** Atlas coverage follows the active grid. Scale below 1 must not shrink UV (four-quadrant clamp). */
-inline float EffectGpuAtlasCoverageScale(float normalized_scale)
-{
-    return std::max(1.0f, normalized_scale);
-}
-
-/** Half-extents used by origin-local GPU UV and matching GLSL world reconstruction. */
+/** Half-extents for origin-local GPU UV. Scale shrinks/grows this domain (effect occupancy). */
 inline EffectGridAxisHalfExtents MakeEffectGpuAtlasHalfExtents(const GridContext3D& grid,
                                                               const Vector3D& origin,
                                                               float normalized_scale)
 {
-    return MakeEffectGridOriginLocalHalfExtents(grid, origin, EffectGpuAtlasCoverageScale(normalized_scale));
+    return MakeEffectGridOriginLocalHalfExtents(grid, origin, std::max(0.05f, normalized_scale));
 }
 
 inline float EffectGridBoundingRadius(const GridContext3D& grid, float normalized_scale)
@@ -201,13 +195,12 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
- *   Half-extents are origin → farthest *active grid* face (room / zone / layout
- *   AABB in GridContext3D), never a room-half box centered on the origin.
- *   Coverage scale is max(1, Scale): the atlas always covers the current grid
- *   from any anchor (layout size is read every sample). Scale > 1 zooms in.
- *   Use for all origin-local GPU volume atlases. Reconstruct world distance
- *   with the same MakeEffectGpuAtlasHalfExtents as the UV lookup.
- *   Do not shrink this UV domain by Size / Scale<1 / stratum tightness.
+ *   Half-extents are origin → farthest *active grid* face, multiplied by Scale
+ *   (occupancy in the room). Scale < 1 makes the effect smaller inside the layout;
+ *   samples outside that box are unlit — do not clamp UV onto atlas faces
+ *   (that is the four-quadrant artifact). Size is feature size (ring width, etc.)
+ *   via u_params, not atlas coverage. Reconstruct world distance with
+ *   MakeEffectGpuAtlasHalfExtents (same extents as the UV lookup).
  *
  * STRATUM Y — SampleStratumYNorm01:
  *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).
@@ -244,7 +237,8 @@ inline float SampleStratumYNorm01(float y, const GridContext3D& grid, const Vect
     return std::clamp(NormalizeGridAxis01(y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
 }
 
-/** Map world sample into origin-local unit UV (0.5 = Spatial Anchor). */
+/** In-box origin-local UV with face clamp. Occupancy lookups must use
+ *  SampleGpuVolumeOriginLocal01 so samples outside the scaled box stay unlit. */
 inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
                                       const Vector3D& origin,
                                       const EffectGridAxisHalfExtents& e,
@@ -258,15 +252,31 @@ inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
     *c3 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_z - origin.z) / hd));
 }
 
-/** Canonical GPU volume atlas lookup. Pair with GLSL `l = p01 * 2.0 - 1.0`. */
-inline void SampleGpuVolumeOriginLocal01(float x, float y, float z,
+/** Canonical GPU volume atlas lookup. Pair with GLSL `l = p01 * 2.0 - 1.0`.
+ *  Returns false when the sample is outside the scaled effect box — caller must
+ *  leave the LED unlit. Never clamp those samples onto the atlas faces. */
+inline bool SampleGpuVolumeOriginLocal01(float x, float y, float z,
                                          const GridContext3D& grid,
                                          const Vector3D& origin,
                                          float normalized_scale,
                                          float* c1, float* c2, float* c3)
 {
     EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, normalized_scale);
-    SampleCoordsOriginLocal01(x, y, z, origin, e, c1, c2, c3);
+    const float hw = std::max(e.hw, 1e-5f);
+    const float hh = std::max(e.hh, 1e-5f);
+    const float hd = std::max(e.hd, 1e-5f);
+    const float u = 0.5f + 0.5f * (x - origin.x) / hw;
+    const float v = 0.5f + 0.5f * (y - origin.y) / hh;
+    const float w = 0.5f + 0.5f * (z - origin.z) / hd;
+    constexpr float kEps = 1e-4f;
+    if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
+    {
+        return false;
+    }
+    *c1 = std::max(0.0f, std::min(1.0f, u));
+    *c2 = std::max(0.0f, std::min(1.0f, v));
+    *c3 = std::max(0.0f, std::min(1.0f, w));
+    return true;
 }
 
 /** Room-fixed GPU atlas lookup (front-left floor = 0). Pair with GLSL that reads p01 as room UV. */

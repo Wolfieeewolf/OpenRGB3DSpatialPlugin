@@ -143,7 +143,8 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
 
     Vector3D rot{x, y, z};
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+        return 0x00000000;
 
     float v = 0.0f;
     float h01 = 0.0f;

@@ -340,7 +340,8 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
         ComputeStratumMotion01(swt, grid, x, y, z, origin, time);
 
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+        return 0x00000000;
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float intensity = samp.x();
     float k = samp.y() * 2.0f - 1.0f;

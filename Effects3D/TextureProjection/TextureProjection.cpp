@@ -527,7 +527,8 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     {
         const Vector3D origin = GetEffectOriginGrid(grid);
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+        if(!SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+            return 0x00000000;
         const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),

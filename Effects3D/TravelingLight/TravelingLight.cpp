@@ -327,7 +327,8 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     if(volume_assist_.isAvailable())
     {
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleGpuVolumeOriginLocal01(rotated.x, rotated.y, rotated.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+        if(!SampleGpuVolumeOriginLocal01(rotated.x, rotated.y, rotated.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+            return 0x00000000;
         const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         const int m = std::max(0, std::min(this->mode, MODE_COUNT - 1));
 

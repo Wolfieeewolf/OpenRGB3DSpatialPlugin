@@ -278,7 +278,8 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     float breath_phase = progress * rate * 0.2f;
 
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+        return 0x00000000;
 
     float sphere_intensity = 0.0f;
     float norm_in_shell = 0.0f;

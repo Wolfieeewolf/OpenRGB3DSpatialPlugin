@@ -424,11 +424,13 @@ float SpatialEffect3D::GetNormalizedDetail() const
 
 float SpatialEffect3D::GetNormalizedSize() const
 {
+    /* Feature size inside the effect (ring width, blob radius, shader zoom). Not occupancy. */
     return (effect_size / 200.0f) * 3.0f;
 }
 
 float SpatialEffect3D::GetNormalizedScale() const
 {
+    /* Occupancy in the room/layout. 200 = fill the grid from the Spatial Anchor. */
     float normalized;
 
     if(effect_scale <= 200)

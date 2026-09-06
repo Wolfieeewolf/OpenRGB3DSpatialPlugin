@@ -287,7 +287,8 @@ RGBColor ParticleField::CalculateColorGrid(float x, float y, float z, float time
     }
 
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-    SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    if(!SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+        return 0x00000000;
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float max_intensity = samp.x();
     float best_hue = std::fmod(samp.y() * 360.0f + color_cycle * 0.15f + 720.0f, 360.0f);

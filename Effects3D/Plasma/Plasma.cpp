@@ -165,8 +165,11 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float rot_rel_z = rotated_pos.z - origin.z;
 
     float n1 = 0.5f, n2 = 0.5f, n3 = 0.5f;
-    SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
-                               GetNormalizedScale(), &n1, &n2, &n3);
+    if(!SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
+                                    GetNormalizedScale(), &n1, &n2, &n3))
+    {
+        return 0x00000000;
+    }
     const float coord2 = SampleStratumYNorm01(rotated_pos.y, grid, origin);
 
     SpatialLayerCore::MapperSettings strat_map;

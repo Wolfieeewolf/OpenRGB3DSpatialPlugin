@@ -260,8 +260,11 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
 
     {
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
-                                     GetNormalizedScale(), &c1, &c2, &c3);
+        if(!SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
+                                        GetNormalizedScale(), &c1, &c2, &c3))
+        {
+            return 0x00000000;
+        }
         spiral_value = volume_assist_.sampleScalar01(c1, c2, c3);
         spiral_value = EffectStratumBlend::ApplyMotionToUnit01(spiral_value, stratum_mot01, 0.28f);
     }

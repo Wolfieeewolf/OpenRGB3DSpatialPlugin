@@ -483,7 +483,8 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
 
     Vector3D rot{x, y, z};
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-    SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+        return 0x00000000;
 
     SpatialLayerCore::MapperSettings strat_map;
     EffectStratumBlend::InitStratumBreaks(strat_map);

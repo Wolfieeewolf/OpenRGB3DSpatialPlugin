@@ -138,7 +138,8 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
         return 0x00000000;
 
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-    SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3);
+    if(!SampleGpuVolumeOriginLocal01(rp.x, rp.y, rp.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
+        return 0x00000000;
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     max_intensity = samp.x();
     hue_for_max = std::fmod(samp.y() * 360.0f + color_cycle * 0.25f

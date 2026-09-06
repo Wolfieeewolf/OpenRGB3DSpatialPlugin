@@ -183,8 +183,11 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     if(volume_assist_.isAvailable())
     {
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(),
-                                    &c1, &c2, &c3);
+        if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(),
+                                         &c1, &c2, &c3))
+        {
+            return 0x00000000;
+        }
         const QVector3D cs = volume_assist_.sample01(c1, c2, c3);
         // Cos/sin atlas encoding (range-packed to 0..1 for the RGBA8 atlas) — avoids
         // the rotating false seam from filtering wrapped hue.
