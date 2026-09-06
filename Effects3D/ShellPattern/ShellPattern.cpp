@@ -81,8 +81,8 @@ EffectInfo3D ShellPattern::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Shell Pattern";
     info.effect_description =
-        "Shell / contour / extrude and LED-cube displays (bars, ripples, droplets, fireworks, explosion, rain) "
-        "driven by a 1D pattern on a GPU volume atlas. Spatial Anchor at volume center.";
+        "Shell / contour / extrude and LED-cube displays driven by Display + Unfold + Pattern "
+        "on the occupancy atlas (Spatial Anchor at center). Speed scrolls; cube looks overlap instead of looping.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_SHELL_PATTERN;
     info.is_reversible = true;
@@ -129,11 +129,12 @@ void ShellPattern::SetupCustomUI(QWidget* parent)
     }
     display_combo->setCurrentIndex(std::clamp(display_mode, 0, DISP_COUNT - 1));
     display_combo->setToolTip(QStringLiteral(
-        "How the pattern is drawn in the room.\n"
-        "Shell (wave height) = horizontal surface.\n"
-        "Shell (radial XZ) = vertical cylinder filling the room (angle pattern; Along Y = lathe).\n"
-        "Ripples = flowing water rings across the mid plane.\n"
-        "Bars / Droplets / Fireworks / Explosion / Rain = LED-cube volume looks."));
+        "How the 1D pattern is drawn inside the occupancy box (Scale from the Spatial Anchor).\n"
+        "Shell (wave height) = surface vs occupancy Y; Unfold paints the wave along XZ / chosen axis.\n"
+        "Extrude = solid fill from the unfold coordinate.\n"
+        "Shell (radial XZ) = cylinder around the anchor; Unfold still drives the 1D pattern.\n"
+        "Contour = bands where the pattern crosses zero.\n"
+        "Bars / Ripples / Droplets / Fireworks / Explosion / Rain = overlapping cube looks (no global reset)."));
     connect(display_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShellPattern::OnParameterChanged);
 
     EffectLabeledComboRow* unfold_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Unfold:"));
@@ -145,7 +146,8 @@ void ShellPattern::SetupCustomUI(QWidget* parent)
     }
     unfold_combo->setCurrentIndex(std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
     unfold_combo->setToolTip(QStringLiteral(
-        "How 3D position maps to the 1D pattern coordinate. Used when Strip colormap is off."));
+        "How occupancy-local position (Spatial Anchor at the box center) maps to the 1D pattern.\n"
+        "Along X/Y/Z, Plane XZ, Radial, Diagonal, and Manhattan follow the grid. Used when Strip colormap is off."));
     connect(unfold_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShellPattern::OnParameterChanged);
 
     EffectLabeledComboRow* pattern_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Pattern:"));
@@ -210,8 +212,8 @@ void ShellPattern::SetupCustomUI(QWidget* parent)
         200,
         (int)(wave_amplitude * 100.0f),
         QStringLiteral(
-            "Wave / fill strength. Global Size also scales amplitude and cube features.\n"
-            "Speed / Frequency drive animation rate."));
+            "Wave / fill strength. Global Size scales feature size inside occupancy.\n"
+            "Speed scrolls the field (0 freezes). Frequency is spatial density / hue, not a second clock."));
     shell_amplitude_row->setObjectName(QStringLiteral("shellAmplitudeRow"));
     amp_slider = shell_amplitude_row->slider();
     shell_amplitude_row->bindValueChanged(
@@ -244,15 +246,6 @@ void ShellPattern::OnParameterChanged()
     emit ParametersChanged();
 }
 
-namespace
-{
-float BoundedProgress01(float time_sec, float cycles_per_sec)
-{
-    /* Keep phase in 0..1 — raw time*speed loses float precision and stutters. */
-    return std::fmod(time_sec * std::max(0.0f, cycles_per_sec) + 1000.0f, 1.0f);
-}
-} // namespace
-
 void ShellPattern::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
     const int pat = std::clamp(UseEffectStripColormap() ? GetEffectStripColormapKernel() : pattern_id, 0,
@@ -269,28 +262,26 @@ void ShellPattern::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
-    const float size_m = std::clamp(GetNormalizedSize() * 1.15f, 0.35f, 3.0f);
-    /* Size also fatten shells/bars so the global Size slider is obvious. */
+    const float size_m = std::clamp(GetNormalizedSize(), 0.08f, 3.0f);
     const float size_boost = std::clamp(0.75f + 0.45f * size_m, 0.75f, 2.2f);
     const float amp = std::clamp(wave_amplitude * bb.tight_mul * size_boost, 0.25f, 2.5f);
     const float sigma = std::clamp(std::max(surface_thickness, 0.03f) * (0.85f + 0.35f * size_m),
                                    0.03f, 0.85f);
-    const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
-    const float freq_n = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
+    const float detail = std::clamp(GetNormalizedDetail(), 0.0f, 1.0f);
+    const float freq_n = std::clamp(GetNormalizedFrequency(), 0.0f, 1.0f);
     const float anim_hz = std::max(0.0f, GetMotionHz() * bb.speed_mul);
-    const float progress_val = BoundedProgress01(time_sec, anim_hz);
-    const float phase01 = std::fmod(time_sec * anim_hz * (0.45f + 0.55f * freq_n) + 1000.0f, 1.0f);
+    const float motion_clock = time_sec * anim_hz;
 
     const float vp[12] = {
         (float)disp,
         amp,
-        progress_val,
+        motion_clock,
         sigma,
         detail,
         size_m,
         freq_n,
         (float)std::clamp(pat, 0, kSpatialStripGpuKernelMaxId),
-        phase01,
+        motion_clock,
         std::max(1.0f, reps),
         (float)std::clamp(unfold_i, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1),
         dir_deg

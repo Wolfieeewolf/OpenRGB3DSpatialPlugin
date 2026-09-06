@@ -34,7 +34,6 @@ inline float StripCoord01(float lx, float ly, float lz, UnfoldMode mode, float d
     switch(mode)
     {
     case UnfoldMode::AlongX:
-        
         s = 0.5f + 0.5f * std::tanh(lx);
         break;
     case UnfoldMode::AlongY:
@@ -47,7 +46,7 @@ inline float StripCoord01(float lx, float ly, float lz, UnfoldMode mode, float d
     {
         float r = dir_deg * (Pi() / 180.0f);
         float w = std::cos(r) * lx + std::sin(r) * lz;
-        s = std::fmod(0.35f * w + 0.5f + 1000.0f, 1.0f);
+        s = std::clamp(0.5f + 0.35f * w, 0.0f, 1.0f);
         break;
     }
     case UnfoldMode::RadialXZ:
@@ -56,25 +55,24 @@ inline float StripCoord01(float lx, float ly, float lz, UnfoldMode mode, float d
         if(ang < 0.0f)
             ang += 2.0f * Pi();
         s = ang / (2.0f * Pi());
-        break;
+        if(s >= 1.0f)
+            s -= 1.0f;
+        if(s < 0.0f)
+            s += 1.0f;
+        return s;
     }
     case UnfoldMode::DiagonalXYZ:
         s = 0.5f + 0.5f * std::tanh((lx + ly + lz) / 3.0f);
         break;
     case UnfoldMode::Manhattan01:
-    {
-        float m = (std::fabs(lx) + std::fabs(ly) + std::fabs(lz)) * 0.5f;
-        s = std::fmod(m + 0.5f, 1.0f);
+        s = std::clamp((std::fabs(lx) + std::fabs(ly) + std::fabs(lz)) / 3.0f, 0.0f, 1.0f);
+        break;
+    case UnfoldMode::EffectPhaseOnly:
+    case UnfoldMode::StaticRoomPlane:
+    case UnfoldMode::COUNT:
         break;
     }
-    default:
-        break;
-    }
-    if(s < 0.0f)
-        s += 1.0f;
-    if(s >= 1.0f)
-        s = std::fmod(s, 1.0f);
-    return s;
+    return std::clamp(s, 0.0f, 1.0f);
 }
 
 inline float ShellIntensityGaussianY(float ly, float surface_y, float sigma, float amp)

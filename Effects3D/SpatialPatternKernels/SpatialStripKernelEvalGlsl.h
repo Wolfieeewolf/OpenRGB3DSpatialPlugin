@@ -26,8 +26,7 @@ float satTanh(float x)
 }
 float evalStripKernelSigned(int kid, float s01, float phase01, float repeats, float time_sec)
 {
-    if(abs(time_sec) < 1e-8)
-        time_sec = u_time;
+    /* Keep time_sec as packed. 0 freezes Speed / Static room; do not fall back to u_time. */
     float rep = max(repeats, 1.0);
     float tsec = time_sec * 0.35;
     float ph = fractf(phase01 * 0.35 + time_sec * 0.08);

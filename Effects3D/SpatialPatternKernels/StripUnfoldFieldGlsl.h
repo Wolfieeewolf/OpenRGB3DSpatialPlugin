@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-/** Room unfold + Y-shell helpers matching Game/StripPatternSurface.h +
+/** Occupancy-local unfold + Y-shell helpers matching Game/StripPatternSurface.h +
  *  SpatialEffect3D::SampleEffectStripColormap01 / StripColormapComputeS01 (modes 0-8).
+ *  lx,ly,lz are origin-local atlas coords in [-1,1] (0 = Spatial Anchor).
  */
 inline const char* StripUnfoldFieldGlsl()
 {
@@ -31,7 +32,7 @@ float stripUnfoldCoord01(float lx, float ly, float lz, int unfold_mode, float di
         /* 3 = PlaneXZ; 8 = StaticRoomPlane (same spatial map; phase freeze is elsewhere). */
         float r = dir_deg * (STRIP_PI / 180.0);
         float w = cos(r) * lx + sin(r) * lz;
-        s = fractf(0.35 * w + 0.5 + 1000.0);
+        s = clamp(0.5 + 0.35 * w, 0.0, 1.0);
     }
     else if(unfold_mode == 4)
     {
@@ -39,20 +40,21 @@ float stripUnfoldCoord01(float lx, float ly, float lz, int unfold_mode, float di
         if(ang < 0.0)
             ang += STRIP_TWO_PI;
         s = ang / STRIP_TWO_PI;
+        if(s >= 1.0)
+            s -= 1.0;
+        if(s < 0.0)
+            s += 1.0;
+        return s;
     }
     else if(unfold_mode == 5)
         s = 0.5 + 0.5 * stripSatTanh((lx + ly + lz) / 3.0);
     else if(unfold_mode == 6)
-        s = fractf((abs(lx) + abs(ly) + abs(lz)) * 0.5 + 0.5);
+        s = clamp((abs(lx) + abs(ly) + abs(lz)) / 3.0, 0.0, 1.0);
     else
         /* 7 EffectPhaseOnly needs phase/time — use stripUnfoldKernelInputs. */
         s = 0.5;
 
-    if(s < 0.0)
-        s += 1.0;
-    if(s >= 1.0)
-        s = fractf(s);
-    return s;
+    return clamp(s, 0.0, 1.0);
 }
 
 /* Matches StripColormapComputeS01 / SampleEffectStripColormap01 unfold/phase/time.
