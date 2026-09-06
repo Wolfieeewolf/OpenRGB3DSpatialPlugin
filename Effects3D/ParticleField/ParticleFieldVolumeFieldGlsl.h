@@ -126,8 +126,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         {
             float cycle = 1.6 + 1.8 * pfHash(seed, 12.0);
             ph = fract(clock * (0.55 * motion) / cycle + pfHash(seed, 13.0));
-            float env = pfSmstep(0.0, 0.08, ph) * (1.0 - pfSmstep(0.18, 0.36, ph));
-            float alive = step(0.58 - 0.20 * freq_n, pfHash(seed, 14.0));
+            float env = pfSmstep(0.0, 0.04, ph) * (1.0 - pfSmstep(0.09, 0.18, ph));
+            float alive = step(0.70 - 0.18 * freq_n, pfHash(seed, 14.0));
             life = env * alive;
             c = base;
             c.y = 0.15 + 0.70 * pfHash(seed, 15.0);
