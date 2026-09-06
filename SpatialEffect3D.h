@@ -149,6 +149,20 @@ inline EffectGridAxisHalfExtents MakeEffectGridOriginLocalHalfExtents(const Grid
     return {hw, hh, hd};
 }
 
+/** Atlas coverage follows the active grid. Scale below 1 must not shrink UV (four-quadrant clamp). */
+inline float EffectGpuAtlasCoverageScale(float normalized_scale)
+{
+    return std::max(1.0f, normalized_scale);
+}
+
+/** Half-extents used by origin-local GPU UV and matching GLSL world reconstruction. */
+inline EffectGridAxisHalfExtents MakeEffectGpuAtlasHalfExtents(const GridContext3D& grid,
+                                                              const Vector3D& origin,
+                                                              float normalized_scale)
+{
+    return MakeEffectGridOriginLocalHalfExtents(grid, origin, EffectGpuAtlasCoverageScale(normalized_scale));
+}
+
 inline float EffectGridBoundingRadius(const GridContext3D& grid, float normalized_scale)
 {
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
@@ -183,15 +197,17 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   Maps world position into the active GridContext3D AABB [0,1]^3
  *   (front-left floor = 0,0,0 → right / ceiling / back = 1,1,1).
  *   Use for room-fixed surfaces (walls/floor/ceiling), edge fade, and audio strip layouts.
- *   Sample GPU room-field atlases with sample01(nx, ny, nz) — no axis flips.
+ *   Sample GPU room-field atlases with SampleGpuRoomVolume01 — no axis flips.
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
- *   Half-extents are origin → farthest grid face on each axis (not room-half
- *   centered on the origin) so scale=1 covers the whole grid from any anchor.
- *   Use for all GPU volume atlases. Do not also subtract packed origin01 in GLSL.
- *   Do not shrink this UV domain by Size / stratum tightness — pass those as
- *   u_params so the pattern scales without clamping the atlas to a small box.
+ *   Half-extents are origin → farthest *active grid* face (room / zone / layout
+ *   AABB in GridContext3D), never a room-half box centered on the origin.
+ *   Coverage scale is max(1, Scale): the atlas always covers the current grid
+ *   from any anchor (layout size is read every sample). Scale > 1 zooms in.
+ *   Use for all origin-local GPU volume atlases. Reconstruct world distance
+ *   with the same MakeEffectGpuAtlasHalfExtents as the UV lookup.
+ *   Do not shrink this UV domain by Size / Scale<1 / stratum tightness.
  *
  * STRATUM Y — SampleStratumYNorm01:
  *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).
@@ -249,19 +265,40 @@ inline void SampleGpuVolumeOriginLocal01(float x, float y, float z,
                                          float normalized_scale,
                                          float* c1, float* c2, float* c3)
 {
-    EffectGridAxisHalfExtents e = MakeEffectGridOriginLocalHalfExtents(grid, origin, normalized_scale);
+    EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, normalized_scale);
     SampleCoordsOriginLocal01(x, y, z, origin, e, c1, c2, c3);
 }
 
-inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
+/** Room-fixed GPU atlas lookup (front-left floor = 0). Pair with GLSL that reads p01 as room UV. */
+inline void SampleGpuRoomVolume01(float x, float y, float z,
+                                  const GridContext3D& grid,
+                                  float* c1, float* c2, float* c3)
 {
-    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
+    *c1 = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
+    *c2 = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+    *c3 = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
+}
+
+inline float EffectGridMedianOfHalfExtents(const EffectGridAxisHalfExtents& e)
+{
     float extents[3] = {e.hw, e.hh, e.hd};
     std::sort(extents, extents + 3);
     const float med = extents[1];
     const float max_e = extents[2];
     constexpr float kDominantAxisFraction = 0.2f;
     return std::max(med, kDominantAxisFraction * max_e);
+}
+
+inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
+{
+    return EffectGridMedianOfHalfExtents(MakeEffectGridAxisHalfExtents(grid, normalized_scale));
+}
+
+inline float EffectGridGpuAtlasMedianHalfExtent(const GridContext3D& grid,
+                                               const Vector3D& origin,
+                                               float normalized_scale)
+{
+    return EffectGridMedianOfHalfExtents(MakeEffectGpuAtlasHalfExtents(grid, origin, normalized_scale));
 }
 
 struct EffectInfo3D

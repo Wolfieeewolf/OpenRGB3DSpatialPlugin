@@ -166,9 +166,10 @@ void AudioPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     const float detail = std::max(0.05f, GetScaledDetail());
     const float tm = std::clamp(bb.tight_mul, 0.25f, 4.0f);
 
+    Vector3D origin = GetEffectOriginGrid(grid);
     constexpr float kExplosionGridFill = 3.0f;
     float radius_basis =
-        EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f * kExplosionGridFill;
+        EffectGridGpuAtlasMedianHalfExtent(grid, origin, GetNormalizedScale()) * 1.7320508f * kExplosionGridFill;
     radius_basis = std::max(radius_basis, 1e-3f);
 
     float pulse_speed = 0.0f;
@@ -189,7 +190,7 @@ void AudioPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
             BeatWaveScaledSpeed((0.42f + GetScaledSpeed() * 0.10f) * bb.speed_mul, audio_settings);
     }
 
-    EffectGridAxisHalfExtents extents = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    EffectGridAxisHalfExtents extents = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
 
     float vp[24] = {};
     vp[0] = (float)audio_settings.beat_wave_mode;

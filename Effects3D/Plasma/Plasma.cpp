@@ -189,7 +189,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     plasma_value = EffectStratumBlend::ApplyMotionToUnit01(plasma_value, stratum_mot01, 0.28f);
 
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-    float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
+    float max_radius = EffectGridGpuAtlasMedianHalfExtent(grid, origin, GetNormalizedScale()) * 1.7320508f;
     float depth_factor = 1.0f;
     if(max_radius > 0.001f)
     {

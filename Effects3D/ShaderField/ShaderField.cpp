@@ -438,7 +438,8 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
     {
         const float rx = x - origin.x;
         const float rz = z - origin.z;
-        const float span = 0.5f * std::max(grid.width, grid.depth);
+        const EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, 1.0f);
+        const float span = std::sqrt(e.hw * e.hw + e.hd * e.hd);
         const float r = std::sqrt(rx * rx + rz * rz) / std::max(1e-4f, span);
         u = std::atan2(rz, rx) / (float)(2.0 * M_PI) + 0.5f;
         v = std::clamp(r, 0.0f, 1.0f);

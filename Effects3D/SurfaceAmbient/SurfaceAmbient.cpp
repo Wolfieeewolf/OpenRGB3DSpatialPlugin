@@ -277,10 +277,9 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     if(!volume_assist_.isAvailable())
         return 0x00000000;
 
-    const float nx = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
-    const float ny = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
-    const float nz = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
-    const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+    float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
+    SampleGpuRoomVolume01(x, y, z, grid, &c1, &c2, &c3);
+    const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float best_intensity = samp.x();
     float best_plasma = samp.y();
     if(GetStratumLayoutMode() == 1)

@@ -224,7 +224,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     float rot_rel_z = rotated_pos.z - origin.z;
 
     float angle = atan2(rot_rel_z, rot_rel_x);
-    EffectGridAxisHalfExtents ex = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    EffectGridAxisHalfExtents ex = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
     float r_xz = EffectGridHorizontalRadialNormXZ(rot_rel_x, rot_rel_z, ex.hw, ex.hd);
     float norm_radius = EffectGridHorizontalRadialNorm01(r_xz);
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));

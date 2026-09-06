@@ -354,10 +354,9 @@ RGBColor AudioStripVisualizer::CalculateColorGrid(float x, float y, float z, flo
         stratum_mot01 = ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
     }
 
-    const float nx = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
-    const float ny = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
-    const float nz = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
-    const QVector3D samp = volume_assist_.sample01(nx, ny, nz);
+    float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
+    SampleGpuRoomVolume01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, &c1, &c2, &c3);
+    const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float energy = samp.x();
     float path01 = samp.y();
     energy = ApplyAudioVisualIntensity(std::clamp(energy, 0.0f, 1.0f), audio_settings);
