@@ -28,6 +28,7 @@ const char* ParticleField::ModeName(int m)
     case MODE_ATTRACT: return "Attract";
     case MODE_RAIN: return "Rain";
     case MODE_FIREWORKS: return "Fireworks";
+    case MODE_COUNT: return "Float / Fuzzy";
     default: return "Float / Fuzzy";
     }
 }
@@ -40,58 +41,58 @@ void ParticleField::ApplyModeDefaults(int mode_id)
         particle_count = 40;
         particle_size = 0.48f;
         thickness = 0.78f;
-        motion_amount = 0.95f;
-        noise_amount = 0.40f;
-        fill_amount = 1.25f;
+        motion_amount = 0.85f;
+        noise_amount = 0.32f;
+        fill_amount = 1.05f;
         break;
     case MODE_EMBERS:
         particle_count = 32;
         particle_size = 0.58f;
         thickness = 0.88f;
-        motion_amount = 1.15f;
-        noise_amount = 0.35f;
-        fill_amount = 1.05f;
+        motion_amount = 0.90f;
+        noise_amount = 0.28f;
+        fill_amount = 0.95f;
         break;
     case MODE_SPARKLE:
-        particle_count = 30;
-        particle_size = 0.38f;
-        thickness = 0.68f;
-        motion_amount = 1.25f;
-        noise_amount = 0.20f;
-        fill_amount = 1.30f;
+        particle_count = 26;
+        particle_size = 0.36f;
+        thickness = 0.64f;
+        motion_amount = 0.80f;
+        noise_amount = 0.12f;
+        fill_amount = 1.00f;
         break;
     case MODE_ATTRACT:
         particle_count = 36;
-        particle_size = 0.82f;
-        thickness = 1.05f;
-        motion_amount = 1.00f;
-        noise_amount = 0.60f;
-        fill_amount = 1.00f;
+        particle_size = 0.78f;
+        thickness = 1.00f;
+        motion_amount = 0.90f;
+        noise_amount = 0.45f;
+        fill_amount = 0.90f;
         break;
     case MODE_RAIN:
         particle_count = 44;
         particle_size = 0.40f;
         thickness = 0.72f;
-        motion_amount = 1.35f;
-        noise_amount = 0.25f;
-        fill_amount = 1.35f;
+        motion_amount = 1.10f;
+        noise_amount = 0.18f;
+        fill_amount = 1.10f;
         break;
     case MODE_FIREWORKS:
         particle_count = 36;
         particle_size = 0.58f;
         thickness = 0.88f;
-        motion_amount = 1.20f;
-        noise_amount = 0.30f;
-        fill_amount = 1.15f;
+        motion_amount = 0.95f;
+        noise_amount = 0.22f;
+        fill_amount = 0.95f;
         break;
     case MODE_FLOAT:
     default:
-        particle_count = 36;
-        particle_size = 0.72f;
-        thickness = 0.95f;
-        motion_amount = 1.00f;
-        noise_amount = 0.55f;
-        fill_amount = 1.15f;
+        particle_count = 28;
+        particle_size = 0.82f;
+        thickness = 1.08f;
+        motion_amount = 0.70f;
+        noise_amount = 0.30f;
+        fill_amount = 0.90f;
         break;
     }
 }
@@ -127,8 +128,8 @@ EffectInfo3D ParticleField::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Particle Field";
     info.effect_description =
-        "Room-fill organic particles (float, snow, embers, sparkle, attract, rain, fireworks). "
-        "GPU volume field — Spatial Anchor is the hub for Attract mode.";
+        "Occupancy-local particles (float, snow, embers, sparkle, attract, rain, fireworks). "
+        "Spatial Anchor is the hub; Scale is occupancy; Size is particle radius.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_PARTICLE_FIELD;
     info.is_reversible = false;
@@ -166,9 +167,11 @@ void ParticleField::SetupCustomUI(QWidget* parent)
         mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::clamp(mode, 0, MODE_COUNT - 1));
     mode_combo->setToolTip(QStringLiteral(
-        "Float = fuzzy soup; Snow falls; Embers rise; Sparkle flashes; Attract pulls toward the "
-        "Spatial Anchor; Rain streaks; Fireworks burst.\n"
-        "Changing mode applies Softness / Size / Count presets for that look (you can still tweak after)."));
+        "How particles move inside the occupancy box (Scale from the Spatial Anchor).\n"
+        "Float / Fuzzy = slow drifting blobs (not a strobe).\n"
+        "Snow falls, Embers rise, Rain streaks, Sparkle twinkles, Attract orbits the Anchor, "
+        "Fireworks burst.\n"
+        "Changing mode applies Size / Count / Softness presets (you can still tweak after)."));
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         mode = std::clamp(idx, 0, MODE_COUNT - 1);
         ApplyModeDefaults(mode);
@@ -200,20 +203,20 @@ void ParticleField::SetupCustomUI(QWidget* parent)
 
     EffectSliderRow* motion_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Motion:"), 10, 250, (int)std::lround(motion_amount * 100.0f),
-        QStringLiteral("How strongly particles move (fall / rise / drift / orbit)."));
+        QStringLiteral("Travel amount (fall / rise / drift / orbit). Speed is the clock; 0 freezes."));
     motion_row->setObjectName(QStringLiteral("motionRow"));
     motion_row->bindValueChanged(this, [this](int v) { motion_amount = v / 100.0f; },
                                  [this](int) { return QString::number(motion_amount, 'f', 2); }, on_changed);
 
     EffectSliderRow* noise_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Noise:"), 0, 150, (int)std::lround(noise_amount * 100.0f),
-        QStringLiteral("Noise advection / sway / orbit wobble."));
+        QStringLiteral("Smooth sway / drift amount. Does not flash — Speed 0 stays still."));
     noise_row->setObjectName(QStringLiteral("noiseRow"));
     noise_row->bindValueChanged(this, [this](int v) { noise_amount = v / 100.0f; }, pct, on_changed);
 
     EffectSliderRow* fill_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Fill:"), 35, 160, (int)std::lround(fill_amount * 100.0f),
-        QStringLiteral("How widely particles spread across the room."));
+        QStringLiteral("How widely particles spread inside occupancy. Lower clusters toward the Spatial Anchor."));
     fill_row->setObjectName(QStringLiteral("fillRow"));
     fill_row->bindValueChanged(this, [this](int v) { fill_amount = v / 100.0f; }, pct, on_changed);
 
@@ -223,7 +226,6 @@ void ParticleField::SetupCustomUI(QWidget* parent)
 void ParticleField::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
     const float size_m = GetNormalizedSize();
-    const float speed_scale = GetNormalizedSpeed();
 
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -233,23 +235,26 @@ void ParticleField::PrepareGpuFields(std::uint64_t render_sequence, float time_s
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
     const float size01 =
-        std::clamp(std::max(0.15f, particle_size) * size_m * 0.26f, 0.04f, 0.34f);
+        std::clamp(std::max(0.15f, particle_size) * size_m * 0.22f, 0.025f, 0.28f);
     const float thick01 =
-        std::clamp(std::max(0.20f, thickness) * 0.125f, 0.022f, 0.20f);
+        std::clamp(std::max(0.20f, thickness) * 0.125f, 0.018f, 0.20f);
+    const float anim_hz = std::max(0.0f, GetMotionHz() * bb.speed_mul);
+    const float motion_clock = time_sec * anim_hz;
     const float hue_scroll =
         std::fmod(time_sec * GetColorCycleHz() * bb.speed_mul + 1000.0f, 1.0f);
+    const float freq_n = std::clamp(GetNormalizedFrequency(), 0.0f, 1.0f);
 
     const float vp[10] = {
-        time_sec,
+        motion_clock,
         (float)std::clamp(mode, 0, MODE_COUNT - 1),
         (float)std::clamp(particle_count, 4, kMaxGpuParticles),
         size01,
         thick01,
-        std::clamp(motion_amount, 0.10f, 2.5f) * bb.speed_mul,
+        std::clamp(motion_amount, 0.10f, 2.5f),
         std::clamp(noise_amount, 0.0f, 1.5f),
         std::clamp(fill_amount, 0.35f, 1.6f),
         hue_scroll,
-        speed_scale * bb.speed_mul
+        freq_n
     };
     volume_assist_.prepare(render_sequence, time_sec, vp, 10);
 }
@@ -309,7 +314,6 @@ RGBColor ParticleField::CalculateColorGrid(float x, float y, float z, float time
     sp.origin_z = origin.z;
     sp.y_norm = coord2;
 
-    const float size_m = GetNormalizedSize();
     RGBColor final_color;
     if(UseEffectStripColormap())
     {
@@ -320,7 +324,7 @@ RGBColor ParticleField::CalculateColorGrid(float x, float y, float z, float time
                                                  ph01,
                                                  time,
                                                  grid,
-                                                 size_m,
+                                                 GetNormalizedScale(),
                                                  origin,
                                                  rp);
         pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);

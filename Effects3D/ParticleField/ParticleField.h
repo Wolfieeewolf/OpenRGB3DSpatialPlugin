@@ -46,12 +46,12 @@ private:
     static constexpr int kMaxGpuParticles = 48;
 
     int mode = MODE_FLOAT;
-    int particle_count = 36;
-    float particle_size = 0.72f;
-    float thickness = 0.95f;
-    float motion_amount = 1.0f;
-    float noise_amount = 0.55f;
-    float fill_amount = 1.15f;
+    int particle_count = 28;
+    float particle_size = 0.82f;
+    float thickness = 1.08f;
+    float motion_amount = 0.70f;
+    float noise_amount = 0.30f;
+    float fill_amount = 0.90f;
     SpatialVolumeFieldAssist volume_assist_;
 };
 
