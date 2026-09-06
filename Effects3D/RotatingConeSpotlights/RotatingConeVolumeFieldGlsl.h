@@ -90,7 +90,7 @@ vec3 evalCone(int i, int count, int motion_mode, int surface,
               vec3 p01)
 {
     if(i >= count)
-        return vec3(-2.0, hue_static, 0.0);
+        return vec3(-1.0e6, hue_static, 0.0);
 
     int pair = (i / 2) * 2;
     int src = i;
@@ -131,7 +131,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float hh = max(u_params[9], 0.02);
     float hd = max(u_params[10], 0.02);
 
-    vec3 best = vec3(-2.0, hue_static, 0.0);
+    vec3 best = vec3(-1.0e6, hue_static, 0.0);
     vec3 c0 = evalCone(0, count, motion_mode, surface, u_params[11], u_params[12], origin01, hw, hh, hd,
                        clock, wander, elev_bias, scale, hue_static, p01);
     vec3 c1 = evalCone(1, count, motion_mode, surface, u_params[13], u_params[14], origin01, hw, hh, hd,
