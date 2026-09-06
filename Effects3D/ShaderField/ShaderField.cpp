@@ -185,8 +185,9 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     projection_combo->addItem(QStringLiteral("Nearest cube face"));
     projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
     projection_combo->setToolTip(QStringLiteral(
-        "How the 2D shader pattern maps onto the room.\n"
-        "Planes = wallpaper on floor/ceiling/walls.\n"
+        "How the 2D shader pattern maps onto the Spatial Anchor occupancy box "
+        "(target bounds AABB × Scale).\n"
+        "Planes = wallpaper on that box's floor/ceiling/walls.\n"
         "Sphere / Cylinder / Radial = wrap from the Spatial Anchor.\n"
         "Triplanar / Nearest cube face = pick the strongest axis like a box unwrap."));
     connect(projection_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -378,7 +379,8 @@ void ShaderField::SyncUniforms(float time)
     const float spd = std::max(0.05f, GetScaledSpeed());
     u.time_sec = time * spd * 0.35f;
     // Size → zoom, Detail → density, Frequency → hue scroll, local contrast/hue.
-    const float zoom = std::clamp(GetNormalizedSize() * (0.55f + 0.9f * GetNormalizedScale()), 0.25f, 3.0f);
+    // Scale is occupancy (atlas box), not shader zoom.
+    const float zoom = std::clamp(GetNormalizedSize() * 0.85f, 0.25f, 3.0f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float freq_norm = std::clamp(GetNormalizedFrequency(), 0.0f, 1.0f);
     const float hue = std::fmod(hue_shift + time * freq_norm * 0.08f * spd + 1.0f, 1.0f);
@@ -390,16 +392,10 @@ void ShaderField::SyncUniforms(float time)
     shader_engine->setUniforms(u);
 }
 
-void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid, const Vector3D& origin, float& u, float& v) const
+void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) const
 {
-    const float inv_w = 1.0f / std::max(1e-4f, grid.max_x - grid.min_x);
-    const float inv_h = 1.0f / std::max(1e-4f, grid.max_y - grid.min_y);
-    const float inv_d = 1.0f / std::max(1e-4f, grid.max_z - grid.min_z);
-    const float nx = (x - grid.min_x) * inv_w;
-    const float ny = (y - grid.min_y) * inv_h;
-    const float nz = (z - grid.min_z) * inv_d;
-
     const int mode = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
+    bool wrap_u = false;
     switch(mode)
     {
     case PROJ_FLOOR:
@@ -428,21 +424,20 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
         break;
     case PROJ_CYLINDER_Y:
     {
-        const float rx = x - origin.x;
-        const float rz = z - origin.z;
+        const float rx = nx * 2.0f - 1.0f;
+        const float rz = nz * 2.0f - 1.0f;
         u = std::atan2(rz, rx) / (float)(2.0 * M_PI) + 0.5f;
         v = ny;
+        wrap_u = true;
         break;
     }
     case PROJ_RADIAL_XZ:
     {
-        const float rx = x - origin.x;
-        const float rz = z - origin.z;
-        const EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, 1.0f);
-        const float span = std::sqrt(e.hw * e.hw + e.hd * e.hd);
-        const float r = std::sqrt(rx * rx + rz * rz) / std::max(1e-4f, span);
+        const float rx = nx * 2.0f - 1.0f;
+        const float rz = nz * 2.0f - 1.0f;
         u = std::atan2(rz, rx) / (float)(2.0 * M_PI) + 0.5f;
-        v = std::clamp(r, 0.0f, 1.0f);
+        v = std::sqrt(rx * rx + rz * rz);
+        wrap_u = true;
         break;
     }
     case PROJ_TRIPLANAR:
@@ -470,9 +465,9 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
     }
     case PROJ_SPHERE:
     {
-        float rx = x - origin.x;
-        float ry = y - origin.y;
-        float rz = z - origin.z;
+        float rx = nx * 2.0f - 1.0f;
+        float ry = ny * 2.0f - 1.0f;
+        float rz = nz * 2.0f - 1.0f;
         const float len = std::sqrt(rx * rx + ry * ry + rz * rz);
         if(len < 1e-4f)
         {
@@ -486,6 +481,7 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
             rz /= len;
             u = std::atan2(rz, rx) / (float)(2.0 * M_PI) + 0.5f;
             v = std::asin(std::clamp(ry, -1.0f, 1.0f)) / (float)M_PI + 0.5f;
+            wrap_u = true;
         }
         break;
     }
@@ -497,8 +493,10 @@ void ShaderField::SampleUv(float x, float y, float z, const GridContext3D& grid,
     }
     }
 
-    u = MediaTextureEffect::Frac01(u);
-    v = MediaTextureEffect::Frac01(v);
+    if(wrap_u)
+    {
+        u = MediaTextureEffect::Frac01(u);
+    }
 }
 
 RGBColor ShaderField::SampleField(float u, float v) const
@@ -530,9 +528,18 @@ RGBColor ShaderField::CalculateColorGrid(float x, float y, float z, float time, 
     }
 
     const Vector3D origin = GetEffectOriginGrid(grid);
+    float nx = 0.5f, ny = 0.5f, nz = 0.5f;
+    if(!SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &nx, &ny, &nz))
+    {
+        return 0x00000000;
+    }
     float u = 0.5f;
     float v = 0.5f;
-    SampleUv(x, y, z, grid, origin, u, v);
+    SampleUv(nx, ny, nz, u, v);
+    if(u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
+    {
+        return 0x00000000;
+    }
 
     return BrightenAudioEffectColor(SampleField(u, v), 1.0f);
 }

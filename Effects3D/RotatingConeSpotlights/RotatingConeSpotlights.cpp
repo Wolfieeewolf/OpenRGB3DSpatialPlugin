@@ -425,14 +425,11 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 
 void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
-    Vector3D origin = GetEffectOriginGrid(grid);
-    const EffectGridAxisHalfExtents he = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    const float gw = std::max(grid.width, 1e-5f);
-    const float gh = std::max(grid.height, 1e-5f);
-    const float gd = std::max(grid.depth, 1e-5f);
-    const float hw01 = std::clamp(he.hw / gw, 0.05f, 0.5f);
-    const float hh01 = std::clamp(he.hh / gh, 0.05f, 0.5f);
-    const float hd01 = std::clamp(he.hd / gd, 0.05f, 0.5f);
+    (void)grid;
+    /* Occupancy UV is origin-local [0,1]; 0.5 half-extents reach the scaled box faces. */
+    const float hw01 = 0.5f;
+    const float hh01 = 0.5f;
+    const float hd01 = 0.5f;
 
     const float speed_norm = std::clamp(GetNormalizedSpeed(), 0.05f, 1.0f);
     const float wander = std::clamp(wander_amt, 0.15f, 2.0f);

@@ -45,7 +45,7 @@ private:
     void RebuildPresetList();
     void LoadPresetAtIndex(int index);
     void SyncUniforms(float time);
-    void SampleUv(float x, float y, float z, const GridContext3D& grid, const Vector3D& origin, float& u, float& v) const;
+    void SampleUv(float nx, float ny, float nz, float& u, float& v) const;
     RGBColor SampleField(float u, float v) const;
 
     enum ProjectionMode : int

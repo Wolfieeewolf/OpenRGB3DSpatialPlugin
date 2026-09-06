@@ -95,6 +95,10 @@ void MinecraftSubEffect3D::LoadSettings(const nlohmann::json& settings)
 RGBColor MinecraftSubEffect3D::CalculateColorGrid(float gx, float gy, float gz, float time, const GridContext3D& grid)
 {
     (void)time;
+    if(EffectGridSampleOutsideVolume(gx, gy, gz, grid))
+    {
+        return 0x00000000;
+    }
     const Vector3D effect_origin = GetEffectOriginGrid(grid);
     const GameTelemetryBridge::TelemetrySnapshot& t =
         MinecraftGame::PrepareRenderFrame(grid, mc_settings_, channels_, effect_origin.x, effect_origin.y, effect_origin.z);

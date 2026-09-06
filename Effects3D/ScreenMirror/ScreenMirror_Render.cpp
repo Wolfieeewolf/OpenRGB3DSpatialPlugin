@@ -297,6 +297,10 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
                                                      bool apply_led_smoothing)
 {
     (void)time;
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return ToRGBColor(0, 0, 0);
+    }
     std::vector<DisplayPlane3D*> all_planes;
     if(pre_fetched_planes)
         all_planes = *pre_fetched_planes;
@@ -337,7 +341,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
     std::vector<MonitorContribution> contributions;
     contributions.reserve(all_planes.size());
-    Vector3D grid_anchor_ref = GetReferencePointGrid(grid);
+    Vector3D grid_anchor_ref = GetEffectOriginGrid(grid);
 
     const float scale_mm = SafeGridScaleMm(grid.grid_scale_mm);
     float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, grid_anchor_ref, scale_mm);

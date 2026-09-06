@@ -278,6 +278,8 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         return 0x00000000;
 
     float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
+    /* Wall/floor/ceiling SoT: room UV on the active grid (global or target-zone AABB).
+     * Occupancy still follows the Spatial Anchor via IsWithinEffectBoundary. */
     SampleGpuRoomVolume01(x, y, z, grid, &c1, &c2, &c3);
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float best_intensity = samp.x();

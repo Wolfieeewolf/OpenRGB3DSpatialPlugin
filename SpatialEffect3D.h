@@ -190,8 +190,9 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  * ROOM UV — NormalizeGridAxis01:
  *   Maps world position into the active GridContext3D AABB [0,1]^3
  *   (front-left floor = 0,0,0 → right / ceiling / back = 1,1,1).
- *   Use for room-fixed surfaces (walls/floor/ceiling), edge fade, and audio strip layouts.
- *   Sample GPU room-field atlases with SampleGpuRoomVolume01 — no axis flips.
+ *   Target zone bounds change that AABB. Use only for wall/floor/ceiling
+ *   surface fields (Surface Ambient) and room-edge fade.
+ *   Sample those GPU atlases with SampleGpuRoomVolume01 — no axis flips.
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
@@ -201,6 +202,7 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   (that is the four-quadrant artifact). Size is feature size (ring width, etc.)
  *   via u_params, not atlas coverage. Reconstruct world distance with
  *   MakeEffectGpuAtlasHalfExtents (same extents as the UV lookup).
+ *   All origin-centric GPU volumes and Shader Field projections use this helper.
  *
  * STRATUM Y — SampleStratumYNorm01:
  *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).

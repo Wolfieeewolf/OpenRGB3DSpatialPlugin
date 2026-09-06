@@ -2,7 +2,7 @@
 #pragma once
 
 /** Spectrum Bars volume field: R=bar energy, G=gradient_pos01.
- *  p01 = room UV. Spectrum along X, height Y, radial from room center.
+ *  p01 = origin-local UV (0.5 = Spatial Anchor). Spectrum along X, height Y.
  *  sampler2D u_media — 1×N grayscale row of smoothed band levels (R channel).
  *  u_params: [0]=band_count [1]=roll_speed [2]=roll_phase
  *            [3]=size_m [4]=detail [5]=speed_mul [6]=tight_mul

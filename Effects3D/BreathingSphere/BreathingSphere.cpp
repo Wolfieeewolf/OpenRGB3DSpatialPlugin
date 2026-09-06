@@ -199,19 +199,20 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     const int edge = NormalizeEdgeProfile(edge_profile);
     const int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
 
-    const EffectGridAxisHalfExtents he = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    float med = EffectGridMedianHalfExtent(grid, GetNormalizedScale());
+    Vector3D origin = GetEffectOriginGrid(grid);
+    const EffectGridAxisHalfExtents he = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
+    float med = EffectGridGpuAtlasMedianHalfExtent(grid, origin, GetNormalizedScale());
     if(med < 1e-4f)
         med = 1.0f;
     const float sx = std::max(0.25f, 2.0f * he.hw / med);
     const float sy = std::max(0.25f, 2.0f * he.hh / med);
     const float sz = std::max(0.25f, 2.0f * he.hd / med);
 
-    float aspect_med = std::max(grid.width, grid.depth);
+    float aspect_med = std::max(he.hw, he.hd);
     if(aspect_med < 1e-4f)
         aspect_med = 1.0f;
-    const float ax = std::clamp(grid.width / aspect_med, 0.15f, 1.0f);
-    const float az = std::clamp(grid.depth / aspect_med, 0.15f, 1.0f);
+    const float ax = std::clamp(he.hw / aspect_med, 0.15f, 1.0f);
+    const float az = std::clamp(he.hd / aspect_med, 0.15f, 1.0f);
     const float pulse_strength = breath_t;
 
     const float tm = std::max(0.25f, bb.tight_mul);

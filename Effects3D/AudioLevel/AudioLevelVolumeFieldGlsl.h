@@ -2,7 +2,7 @@
 #pragma once
 
 /** Audio Level volume field: R=fill intensity, G=gradient_pos01.
- *  p01 = room UV [0,1]^3. Path axis selects fill direction.
+ *  p01 = origin-local UV (0.5 = Spatial Anchor). Path axis selects fill direction.
  *  u_params: [0]=fill_level [1]=wave_amount [2]=edge
  *            [3]=path_axis (0/1/2) [4]=size_m [5]=wave_freq
  *            [6]=detail [7]=speed_mul [8]=tight_mul [9]=time_e
@@ -46,7 +46,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float edge_s = edge / max(0.35, size_m * tight_mul);
     float intensity = clamp((fill_boundary - axis_pos) / edge_s + 0.5, 0.0, 1.0);
 
-    /* Radial from room center for gradient (matches prior CPU). */
+    /* Radial from Spatial Anchor for gradient. */
     vec3 c = p01 - vec3(0.5);
     float radial = clamp(length(c) / 0.8660254, 0.0, 1.0);
     float gradient = clamp(0.65 * axis_pos + 0.35 * (1.0 - radial), 0.0, 1.0);

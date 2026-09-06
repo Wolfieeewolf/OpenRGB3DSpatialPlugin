@@ -2,6 +2,7 @@
 #pragma once
 
 /** Note Sparkle volume field: R=energy, G=note hue01, B=radial gradient.
+ *  p01 = origin-local UV (0.5 = Spatial Anchor).
  *  u_params: [0]=drive [1]=particle01 [2]=turbulence [3]=hull_size
  *            [4]=low01 [5]=mid01 [6]=high01 [7]=falloff
  *            [8]=size_m [9]=detail [10]=tight_mul [11]=speed_mul

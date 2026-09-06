@@ -2,7 +2,7 @@
 #pragma once
 
 /** Audio Strip Visualizer volume field: R=energy, G=path01 (gradient).
- *  p01 = room UV. Path axis + orthogonal axis form path×disp.
+ *  p01 = origin-local UV (0.5 = Spatial Anchor). Path axis + orthogonal axis form path×disp.
  *  sampler2D u_media — bars: 1×N columns; spectrogram: N×history (y=0 newest).
  *  u_params: [0]=display_mode (0=bars,1=spectrogram) [1]=path_axis
  *            [2]=mirror_bars [3]=size_m [4]=bar_edge

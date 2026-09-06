@@ -79,9 +79,10 @@ inline void StripColormapLocalAxes(const GridContext3D& grid,
                                    float& lz)
 {
     float scale_eff = std::max(0.05f, normalized_scale);
-    float sw = grid.width * 0.5f * scale_eff;
-    float sh = grid.height * 0.5f * scale_eff;
-    float sd = grid.depth * 0.5f * scale_eff;
+    EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, scale_eff);
+    float sw = e.hw;
+    float sh = e.hh;
+    float sd = e.hd;
     if(sw < 1e-5f)
         sw = 1.0f;
     if(sh < 1e-5f)

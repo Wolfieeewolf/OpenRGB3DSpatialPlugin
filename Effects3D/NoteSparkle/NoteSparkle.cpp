@@ -253,8 +253,12 @@ RGBColor NoteSparkle::CalculateColorGrid(float x, float y, float z, float time, 
     const float stratum_mot01 =
         ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
 
-    float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
-    SampleGpuRoomVolume01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, &c1, &c2, &c3);
+    float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
+    if(!SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
+                                    GetNormalizedScale(), &c1, &c2, &c3))
+    {
+        return 0x00000000;
+    }
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float intensity = samp.x();
     const float note_hue01 = std::clamp(samp.y(), 0.0f, 1.0f);
