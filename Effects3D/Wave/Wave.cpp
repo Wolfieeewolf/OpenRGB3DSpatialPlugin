@@ -263,7 +263,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     }
     else if(GetRainbowMode())
     {
-        float hue2 = fmodf(hue + time * rate * 12.0f, 360.0f);
+        float hue2 = fmodf(hue + time * GetColorCycleHz() * 360.0f, 360.0f);
         if(hue2 < 0.0f) hue2 += 360.0f;
         hue2 = ApplySpatialRainbowHue(hue2, pos_norm, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue2 / 360.0f, 1.0f);
