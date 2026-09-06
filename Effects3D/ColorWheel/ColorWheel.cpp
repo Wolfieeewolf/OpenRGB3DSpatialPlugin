@@ -18,7 +18,7 @@ ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     volume_assist_.setFragmentBody(QString::fromUtf8(ColorWheelVolumeFieldGlsl()));
-    volume_assist_.setResolution(18);
+    volume_assist_.setResolution(32);
 }
 
 EffectInfo3D ColorWheel::GetEffectInfo() const
@@ -89,7 +89,7 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
         "How hue is laid out in the active plane.\n"
         "Radial: classic wheel around the origin.\n"
         "Shear: rotating planar bands (no single center).\n"
-        "Rings: concentric hue by distance from origin.\n"
+        "Rings: concentric hue by distance from origin (Size stretches the rings; Scale is coverage).\n"
         "Pie: hard color wedges; Hue repeats sets slice count."));
     for(int i = 0; i < geom_combo->count(); i++)
     {
@@ -136,28 +136,32 @@ void ColorWheel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     const float dir = (direction == 0) ? 1.0f : -1.0f;
     const float wrap = std::clamp(hue_repeats, 0.1f, 3.0f);
     const float freq_spin = time_sec * GetScaledFrequency() * 0.12f * bb.speed_mul;
-    const float vp[6] = {
+    /* Default Size 100 → GetNormalizedSize 1.5 → size_scale 1. */
+    const float size_scale = std::max(0.2f, GetNormalizedSize() / 1.5f);
+    const float vp[7] = {
         progress,
         dir,
         wrap,
         (float)GetPlane(),
         (float)hue_geometry_mode,
-        freq_spin
+        freq_spin,
+        size_scale
     };
-    volume_assist_.prepare(render_sequence, time_sec, vp, 6);
+    volume_assist_.prepare(render_sequence, time_sec, vp, 7);
 }
 
 RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    const bool room_mapped = UsesRoomMappedCoordinates();
-    Vector3D origin = room_mapped ? Vector3D{grid.center_x, grid.center_y, grid.center_z}
-                                  : GetEffectOriginGrid(grid);
+    Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
 
     float progress = CalculateProgress(time);
     float detail = std::max(0.05f, GetScaledDetail());
     Vector3D rot{x, y, z};
-    float lx = rot.x - origin.x, ly = rot.y - origin.y, lz = rot.z - origin.z;
 
     const float y_norm = SampleStratumYNorm01(rot.y, grid, origin);
     SpatialLayerCore::MapperSettings map;
@@ -173,37 +177,14 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     const float stratum_mot01 =
         ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
     float spd_mul = bb.speed_mul;
-    float sz_mul = bb.tight_mul;
-
-    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    if(room_mapped)
-    {
-        const float size_tight = 1.0f / std::max(0.2f, GetNormalizedSize());
-        e.hw /= sz_mul * size_tight;
-        e.hh /= sz_mul * size_tight;
-        e.hd /= sz_mul * size_tight;
-        if(std::fabs(lx) > e.hw || std::fabs(ly) > e.hh || std::fabs(lz) > e.hd)
-        {
-            return 0x00000000;
-        }
-    }
-    else
-    {
-        if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
-        {
-            return 0x00000000;
-        }
-        e.hw /= sz_mul;
-        e.hh /= sz_mul;
-        e.hd /= sz_mul;
-    }
 
     float gpu_plane01 = 0.0f;
     bool have_gpu_plane = false;
     if(volume_assist_.isAvailable())
     {
         float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
-        SampleCoordsOriginLocal01(rot.x, rot.y, rot.z, origin, e, &c1, &c2, &c3);
+        SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(),
+                                    &c1, &c2, &c3);
         const QVector3D cs = volume_assist_.sample01(c1, c2, c3);
         // Cos/sin atlas encoding (range-packed to 0..1 for the RGBA8 atlas) — avoids
         // the rotating false seam from filtering wrapped hue.

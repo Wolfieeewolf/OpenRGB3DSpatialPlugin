@@ -4,7 +4,8 @@
 /** Color wheel: R=(cos(hue_ang)+1)/2, G=(sin(hue_ang)+1)/2 — the RGBA8 atlas clamps
  *  to [0,1], so signed cos/sin must be range-encoded. Decode to signed and reconstruct
  *  with atan2 after sample so atlas filtering does not paint a fake seam across ±π.
- *  u_params: [0]=progress [1]=dir(+1/-1) [2]=hue_repeats [3]=plane [4]=geom [5]=freq_spin
+ *  u_params: [0]=progress [1]=dir(+1/-1) [2]=hue_repeats [3]=plane [4]=geom
+ *            [5]=freq_spin [6]=size_scale (default 1; larger = wider rings/bands)
  *  geom: 0 Radial, 1 Shear, 2 Rings, 3 Pie
  */
 inline const char* ColorWheelVolumeFieldGlsl()
@@ -18,10 +19,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     int pl = int(u_params[3] + 0.5);
     int geom = int(u_params[4] + 0.5);
     float freq_spin = u_params[5];
+    float size_scale = max(u_params[6], 0.2);
 
-    float lx = p01.x * 2.0 - 1.0;
-    float ly = p01.y * 2.0 - 1.0;
-    float lz = p01.z * 2.0 - 1.0;
+    float lx = (p01.x * 2.0 - 1.0) / size_scale;
+    float ly = (p01.y * 2.0 - 1.0) / size_scale;
+    float lz = (p01.z * 2.0 - 1.0) / size_scale;
 
     float u = lx;
     float v = lz;

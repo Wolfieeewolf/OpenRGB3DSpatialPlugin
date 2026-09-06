@@ -134,6 +134,21 @@ inline EffectGridAxisHalfExtents MakeEffectGridAxisHalfExtents(const GridContext
     return {hw, hh, hd};
 }
 
+/** GPU atlas coverage from an arbitrary Spatial Anchor: each axis reaches the farther grid face. */
+inline EffectGridAxisHalfExtents MakeEffectGridOriginLocalHalfExtents(const GridContext3D& grid,
+                                                                      const Vector3D& origin,
+                                                                      float normalized_scale)
+{
+    float s = std::max(0.05f, normalized_scale);
+    float hw = std::max(std::fabs(origin.x - grid.min_x), std::fabs(origin.x - grid.max_x)) * s;
+    float hh = std::max(std::fabs(origin.y - grid.min_y), std::fabs(origin.y - grid.max_y)) * s;
+    float hd = std::max(std::fabs(origin.z - grid.min_z), std::fabs(origin.z - grid.max_z)) * s;
+    if(hw < 1e-6f) hw = 1.0f;
+    if(hh < 1e-6f) hh = 1.0f;
+    if(hd < 1e-6f) hd = 1.0f;
+    return {hw, hh, hd};
+}
+
 inline float EffectGridBoundingRadius(const GridContext3D& grid, float normalized_scale)
 {
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
@@ -172,7 +187,11 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
+ *   Half-extents are origin → farthest grid face on each axis (not room-half
+ *   centered on the origin) so scale=1 covers the whole grid from any anchor.
  *   Use for all GPU volume atlases. Do not also subtract packed origin01 in GLSL.
+ *   Do not shrink this UV domain by Size / stratum tightness — pass those as
+ *   u_params so the pattern scales without clamping the atlas to a small box.
  *
  * STRATUM Y — SampleStratumYNorm01:
  *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).
@@ -230,7 +249,7 @@ inline void SampleGpuVolumeOriginLocal01(float x, float y, float z,
                                          float normalized_scale,
                                          float* c1, float* c2, float* c3)
 {
-    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
+    EffectGridAxisHalfExtents e = MakeEffectGridOriginLocalHalfExtents(grid, origin, normalized_scale);
     SampleCoordsOriginLocal01(x, y, z, origin, e, c1, c2, c3);
 }
 
