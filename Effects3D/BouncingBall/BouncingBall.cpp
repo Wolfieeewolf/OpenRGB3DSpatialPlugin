@@ -30,7 +30,7 @@ EffectInfo3D BouncingBall::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
     info.supports_random = true;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
@@ -40,8 +40,8 @@ EffectInfo3D BouncingBall::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 16.0f;
-    info.default_frequency_scale = 20.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -88,15 +88,14 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
-    const float speed_lin = fmaxf(0.02f, fminf(1.0f, GetSpeed() / 200.0f));
-    const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
-    const float radius01 = std::clamp(0.045f + 0.12f * size_m * GetNormalizedScale(), 0.03f, 0.26f);
-    const float sim_phase_rate = (0.28f + motion * 2.35f) * bb.speed_mul;
+    const float radius01 = std::clamp(0.045f + 0.12f * size_m, 0.03f, 0.26f);
+    const float motion = std::clamp(GetNormalizedSpeed(), 0.02f, 1.0f);
+    const float sim_phase_rate = std::max(0.05f, GetMotionHz() * 3.5f) * bb.speed_mul;
     const float sim_t = time_sec * sim_phase_rate;
     const float hue_scroll =
-        std::fmod(time_sec * GetScaledFrequency() * 0.033f * bb.speed_mul + 1000.0f, 1.0f);
+        std::fmod(time_sec * GetColorCycleHz() * bb.speed_mul + 1000.0f, 1.0f);
     const float vp[7] = {
         sim_t,
         (float)std::clamp(ball_count == 0 ? 1u : ball_count, 1u, kMaxGpuBalls),
@@ -128,7 +127,7 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
         ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
 
     const float size_m = GetNormalizedSize();
-    const float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
+    const float color_cycle = time * GetColorCycleHz() * 360.0f * bb.speed_mul;
     const float detail = std::max(0.05f, GetScaledDetail()) * std::max(0.25f, bb.tight_mul);
 
     float max_intensity = 0.0f;

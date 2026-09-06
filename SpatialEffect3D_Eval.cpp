@@ -297,7 +297,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
     if(UseEffectStripColormap())
     {
         float ph01 = std::fmod(gradient_pos + CalculateProgress(p.time) * 0.25f
-                                   + p.time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.0f / 360.0f) + 1.0f,
+                                   + p.time * GetColorCycleHz() * bb.speed_mul + 1.0f,
                                1.0f);
         float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                GetEffectStripColormapUnfold(),
@@ -313,7 +313,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
     else if(GetRainbowMode())
     {
         float hue = gradient_pos * 360.0f + CalculateProgress(p.time) * 40.0f * bb.speed_mul
-                    + p.time * GetScaledFrequency() * 12.0f * bb.speed_mul
+                    + p.time * GetColorCycleHz() * 360.0f * bb.speed_mul
                     + EffectStratumBlend::CombinedPhase01(bb, p.stratum_mot01) * 50.0f;
         hue = ApplySpatialRainbowHue(hue, gradient_pos, basis, sp, map, p.time, p.grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
@@ -424,8 +424,9 @@ float SpatialEffect3D::GetNormalizedDetail() const
 
 float SpatialEffect3D::GetNormalizedSize() const
 {
-    /* Feature size inside the effect (ring width, blob radius, shader zoom). Not occupancy. */
-    return (effect_size / 200.0f) * 3.0f;
+    /* Feature size inside the effect (ring width, blob radius, shader zoom). Not occupancy.
+     * Slider 100 = 1.0, 200 = 2.0. */
+    return std::max(0.05f, effect_size / 100.0f);
 }
 
 float SpatialEffect3D::GetNormalizedScale() const
@@ -570,7 +571,7 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
     case SpatialMappingMode::SubtleTint:
     {
         const float h = SpatialLayerCore::CompassStratumHueOffsetDegrees(basis, sp, m, 3) * infl;
-        const float drift_deg = time * std::max(0.08f, GetScaledFrequency()) * 6.0f * infl;
+        const float drift_deg = time * GetColorCycleHz() * 360.0f * infl;
         const float h_use = h + drift_deg;
         return SpatialLayerCore::ShiftGradient01WithCompassHue(base_pos01, h_use);
     }
@@ -589,7 +590,7 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
         int spins[3];
         FillCompassSpinFromPreset(compass_layer_spin_preset, spins);
         const float scroll =
-            time * std::max(0.12f, GetScaledFrequency()) * 0.30f * infl;
+            time * GetColorCycleHz() * infl;
         const float plane_mix = 0.58f * std::clamp(GetScaledDetail(), 0.05f, 1.f) * infl;
         return SpatialLayerCore::CompassStratumPalettePosition01(css, spins, scroll, plane_mix, base_pos01);
     }
@@ -617,7 +618,7 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
     case SpatialMappingMode::SubtleTint:
     {
         const float h = SpatialLayerCore::CompassStratumHueOffsetDegrees(basis, sp, m, 3) * infl;
-        const float drift_deg = time * std::max(0.08f, GetScaledFrequency()) * 6.0f * infl;
+        const float drift_deg = time * GetColorCycleHz() * 360.0f * infl;
         return hue_deg + h + drift_deg;
     }
     case SpatialMappingMode::CompassPalette:
@@ -635,7 +636,7 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
         int spins[3];
         FillCompassSpinFromPreset(compass_layer_spin_preset, spins);
         const float scroll =
-            time * std::max(0.12f, GetScaledFrequency()) * 0.30f * infl;
+            time * GetColorCycleHz() * infl;
         const float plane_mix = 0.52f * std::clamp(GetScaledDetail(), 0.05f, 1.f) * infl;
         const float pos01 =
             SpatialLayerCore::CompassStratumPalettePosition01(css, spins, scroll, plane_mix, plane_pos01);
@@ -645,21 +646,35 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
     return hue_deg;
 }
 
-static float ScaleEffectParam(float normalized, float default_scale)
+float SpatialEffect3D::GetMotionHz() const
 {
-    float scale = (default_scale > 0.0f) ? default_scale : 10.0f;
-    scale = 10.0f + (scale - 10.0f) * 0.6f;
-    return normalized * scale;
+    if(effect_speed == 0)
+    {
+        return 0.0f;
+    }
+    /* Speed 100 → ~0.33 Hz, Speed 200 → 0.85 Hz. Same curve for every effect. */
+    return std::max(0.02f, GetNormalizedSpeed()) * 0.85f;
+}
+
+float SpatialEffect3D::GetColorCycleHz() const
+{
+    if(effect_frequency == 0)
+    {
+        return 0.0f;
+    }
+    /* Frequency 100 → ~0.11 Hz hue/palette scroll. */
+    return std::max(0.02f, GetNormalizedFrequency()) * 0.28f;
 }
 
 float SpatialEffect3D::GetScaledSpeed() const
 {
-    return ScaleEffectParam(GetNormalizedSpeed(), GetEffectInfo().default_speed_scale);
+    return GetMotionHz();
 }
 
 float SpatialEffect3D::GetScaledFrequency() const
 {
-    return ScaleEffectParam(GetNormalizedFrequency(), GetEffectInfo().default_frequency_scale);
+    /* Legacy spatial-density driver. Mid slider ≈ 3. Hue scroll should use GetColorCycleHz. */
+    return std::max(0.05f, GetNormalizedFrequency()) * 8.0f;
 }
 
 bool SpatialEffect3D::RequiresWorldSpaceCoordinates() const
@@ -687,15 +702,18 @@ bool SpatialEffect3D::UseWorldGridBounds() const
 
 float SpatialEffect3D::GetScaledDetail() const
 {
-    EffectInfo3D info = GetEffectInfo();
-    float s = (info.default_detail_scale > 0.0f) ? info.default_detail_scale : 10.0f;
-    s = 10.0f + (s - 10.0f) * 0.6f;
-    return GetNormalizedDetail() * s;
+    /* Detail 100 → ~3.1, same for every effect (no per-effect default_detail_scale). */
+    return GetNormalizedDetail() * 8.0f;
 }
 
 float SpatialEffect3D::CalculateProgress(float time) const
 {
-    return time * GetScaledSpeed();
+    return time * GetMotionHz();
+}
+
+float SpatialEffect3D::GetMotionCycle01(float time) const
+{
+    return std::fmod(CalculateProgress(time) + 1000.0f, 1.0f);
 }
 
 RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const

@@ -19,7 +19,6 @@ REGISTER_EFFECT_3D(Bubbles);
 Bubbles::Bubbles(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    SetFrequency(50);
     volume_assist_.setFragmentBody(QString::fromUtf8(BubblesVolumeFieldGlsl()));
     // Thin shells need enough atlas cells or rings vanish between voxels.
     volume_assist_.setResolution(20);
@@ -35,14 +34,14 @@ EffectInfo3D Bubbles::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_BUBBLES;
     info.is_reversible = false;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 12.0f;
+    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 16.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -108,7 +107,7 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
 {
     const float size_m = GetNormalizedSize();
     const float detail = std::max(0.05f, GetScaledDetail());
-    const float speed_scale = 0.006f + GetScaledSpeed() * 0.016f;
+    const float speed_scale = GetMotionHz();
 
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -118,7 +117,7 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
     const float rise_rate =
-        std::max(0.1f, std::min(4.0f, rise_speed)) * speed_scale * 2.2f * bb.speed_mul;
+        std::max(0.1f, std::min(4.0f, rise_speed)) * speed_scale * bb.speed_mul;
     const float interval = std::max(0.25f, std::min(2.5f, spawn_interval))
                            / std::max(0.85f, 0.85f + 0.45f * GetNormalizedSpeed());
     // Unit-cube radius (fraction of room diagonal-ish).
@@ -126,7 +125,7 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
         std::clamp(std::max(0.5f, std::min(3.5f, max_radius)) * size_m * 0.18f, 0.04f, 0.55f);
     const float thick01 =
         std::clamp(std::max(0.02f, bubble_thickness) * 0.11f / std::max(0.35f, detail), 0.014f, 0.14f);
-    const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.022f * bb.speed_mul + 1000.0f, 1.0f);
+    const float hue_scroll = std::fmod(time_sec * GetColorCycleHz() * bb.speed_mul + 1000.0f, 1.0f);
     const float vp[10] = {
         time_sec,
         (float)std::clamp(max_bubbles, 4, kMaxGpuBubbles),
@@ -165,7 +164,7 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
 
     const bool strat_on = (GetStratumLayoutMode() == 1);
     float size_m = GetNormalizedSize();
-    float color_cycle = time * GetScaledFrequency() * 8.0f;
+    float color_cycle = time * GetColorCycleHz() * 360.0f;
     if(strat_on)
     {
         color_cycle = color_cycle * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;

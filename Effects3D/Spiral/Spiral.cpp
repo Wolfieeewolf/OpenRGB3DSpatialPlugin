@@ -26,7 +26,6 @@ Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
     gap_size = 30;
     progress = 0.0f;
 
-    SetFrequency(50);
     SetRainbowMode(true);
 
     std::vector<RGBColor> default_colors;
@@ -74,7 +73,7 @@ EffectInfo3D Spiral::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_SPIRAL;
     info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 2;
     info.has_custom_settings = true;
@@ -84,8 +83,8 @@ EffectInfo3D Spiral::GetEffectInfo() const
     info.needs_arms = true;
     info.needs_frequency = false;
 
-    info.default_speed_scale = 35.0f;
-    info.default_frequency_scale = 40.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -213,7 +212,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
         return 0x00000000;
     }
 
-    float rate = GetScaledFrequency();
+    float rate = GetColorCycleHz();
     float detail = std::max(0.05f, GetScaledDetail());
     progress = CalculateProgress(time);
 
@@ -316,14 +315,14 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     {
         float arm_index = fmod(spiral_angle / (6.28318f / num_arms), (float)num_arms);
         if(arm_index < 0) arm_index += num_arms;
-        float pos = fmodf((arm_index / (float)num_arms) + time * rate_e * 0.02f, 1.0f);
+        float pos = fmodf((arm_index / (float)num_arms) + time * rate_e, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
         float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
         final_color = GetColorAtPosition(p);
     }
     else if(GetRainbowMode())
     {
-        float hue = spiral_angle * 57.2958f + spiral_value * 200.0f + norm_twist * 40.0f + time * rate_e * 12.0f;
+        float hue = spiral_angle * 57.2958f + spiral_value * 200.0f + norm_twist * 40.0f + time * rate_e * 360.0f;
         hue = ApplySpatialRainbowHue(hue, fmodf(spiral_value + 0.25f, 1.0f), compass_basis, compass_sample, compass_map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)
@@ -334,7 +333,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     }
     else
     {
-        float pos = fmodf(spiral_value + time * rate_e * 0.02f, 1.0f);
+        float pos = fmodf(spiral_value + time * rate_e, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
         float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
         final_color = GetColorAtPosition(p);

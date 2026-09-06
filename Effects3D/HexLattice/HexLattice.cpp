@@ -16,8 +16,6 @@ REGISTER_EFFECT_3D(HexLattice);
 HexLattice::HexLattice(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    SetSpeed(35);
-    SetFrequency(12);
     volume_assist_.setFragmentBody(QString::fromUtf8(HexLatticeVolumeFieldGlsl()));
     volume_assist_.setResolution(22);
 }
@@ -34,14 +32,14 @@ EffectInfo3D HexLattice::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_HEX_LATTICE;
     info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 35.0f;
-    info.default_frequency_scale = 12.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -111,14 +109,11 @@ void HexLattice::SetupCustomUI(QWidget* parent)
 void HexLattice::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     (void)grid;
-    const float speed_norm = std::max(0.05f, GetNormalizedSpeed());
-    const float freq_norm = std::max(0.05f, GetNormalizedFrequency());
     const float detail_norm = std::max(0.05f, GetNormalizedDetail());
     const float flow_mode_mul[3] = {0.68f, 1.0f, 1.55f};
     const float flow_mul = flow_mode_mul[std::clamp(flow_mode, 0, 2)];
-    // Speed drives lattice motion; Frequency drives hue cycling only.
-    const float flow_t = time_sec * (0.15f + speed_norm * 1.10f);
-    const float hue_t = time_sec * (0.04f + freq_norm * 0.45f);
+    const float flow_t = CalculateProgress(time_sec) * flow_mul;
+    const float hue_t = time_sec * GetColorCycleHz();
     const float vp[8] = {
         flow_t,
         hue_t,

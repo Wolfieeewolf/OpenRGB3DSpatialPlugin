@@ -30,7 +30,6 @@ Plasma::Plasma(QWidget* parent) : SpatialEffect3D(parent)
     {
         SetColors(plasma_colors);
     }
-    SetFrequency(60);
     SetRainbowMode(false);
     volume_assist_.setFragmentBody(QString::fromUtf8(PlasmaVolumeFieldGlsl()));
     volume_assist_.setResolution(18);
@@ -46,7 +45,7 @@ EffectInfo3D Plasma::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_PLASMA;
     info.is_reversible = false;
     info.supports_random = true;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
@@ -56,8 +55,8 @@ EffectInfo3D Plasma::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 8.0f;
-    info.default_frequency_scale = 8.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -153,7 +152,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
         return 0x00000000;
     }
 
-    float rate = GetScaledFrequency();
+    float rate = GetColorCycleHz();
     float detail = std::max(0.05f, GetScaledDetail());
     progress = CalculateProgress(time);
 
@@ -240,7 +239,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     }
     else if(GetRainbowMode())
     {
-        float hue = plasma_value * 360.0f + time * rate * 12.0f;
+        float hue = plasma_value * 360.0f + time * rate * 360.0f;
         hue = ApplySpatialRainbowHue(hue, plasma_value, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)

@@ -39,8 +39,6 @@ DNAHelix::DNAHelix(QWidget* parent) : SpatialEffect3D(parent)
     };
     if(GetColors().empty())
         SetColors(dna_colors);
-    SetFrequency(40);
-    SetSpeed(35);
     SetRainbowMode(false);
     volume_assist_.setFragmentBody(QString::fromUtf8(DNAHelixVolumeFieldGlsl()));
     volume_assist_.setResolution(24);
@@ -59,7 +57,7 @@ EffectInfo3D DNAHelix::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_DNA_HELIX;
     info.is_reversible = false;
     info.supports_random = true;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
@@ -68,8 +66,8 @@ EffectInfo3D DNAHelix::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 14.0f;
-    info.default_frequency_scale = 12.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -167,16 +165,14 @@ void DNAHelix::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, c
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    const float freq = std::max(0.05f, GetScaledFrequency());
     const float detail = std::max(0.05f, GetNormalizedDetail());
     const float size_m = std::max(0.25f, GetNormalizedSize());
-    const float progress = std::fmod(time_sec * spd * 0.11f * bb.speed_mul + 1.0f, 1.0f);
+    const float progress = std::fmod(CalculateProgress(time_sec) * bb.speed_mul + 1.0f, 1.0f);
     const int shape = std::clamp(helix_shape_mode, 0, SHAPE_COUNT - 1);
     const float radius01 =
-        std::clamp((helix_radius_pct / 100.0f) * (0.55f + 0.55f * size_m) * GetNormalizedScale(), 0.08f, 0.85f);
+        std::clamp((helix_radius_pct / 100.0f) * (0.55f + 0.55f * size_m), 0.08f, 0.85f);
     const float twists =
-        std::clamp(twist_amount * (0.55f + 0.75f * detail) * (0.45f + 0.08f * freq), 0.4f, 8.0f);
+        std::clamp(twist_amount * (0.55f + 0.75f * detail) * (0.45f + 0.55f * GetNormalizedFrequency()), 0.4f, 8.0f);
     const float thickness =
         std::clamp((strand_thickness_pct / 100.0f) * (0.65f + 0.40f * size_m), 0.055f, 0.48f);
     const float rung_amount = std::clamp(rung_amount_pct / 100.0f, 0.0f, 1.0f);
@@ -228,11 +224,9 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     sp.origin_z = origin.z;
     sp.y_norm = coord2;
 
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    const float freq = std::max(0.05f, GetScaledFrequency());
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float progress =
-        std::fmod(time * spd * 0.11f * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f,
+        std::fmod(CalculateProgress(time) * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f,
                   1.0f);
 
     float intensity = 0.0f;
@@ -252,7 +246,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     if(intensity < 0.01f)
         return 0x00000000;
 
-    const float rate = freq;
+    const float rate = GetColorCycleHz();
     float strip_p01 = 0.0f;
     if(UseEffectStripColormap())
     {
@@ -271,11 +265,11 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     RGBColor final_color;
     if(GetRainbowMode())
     {
-        float hue = palette01 * 360.0f + time * rate * 10.0f * bb.speed_mul;
+        float hue = palette01 * 360.0f + time * rate * 360.0f * bb.speed_mul;
         if(rung_hint > 0.5f)
             hue += 140.0f;
         if(UseEffectStripColormap())
-            hue = strip_p01 * 360.0f + time * rate * 10.0f * bb.speed_mul;
+            hue = strip_p01 * 360.0f + time * rate * 360.0f * bb.speed_mul;
         else
             hue = ApplySpatialRainbowHue(hue, palette01, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f + 1.0f, 1.0f);

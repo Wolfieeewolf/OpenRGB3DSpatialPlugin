@@ -30,7 +30,6 @@ const char* Wave::WaveStyleName(int s)
 
 Wave::Wave(QWidget* parent) : SpatialEffect3D(parent)
 {
-    SetFrequency(50);
     SetRainbowMode(true);
     std::vector<RGBColor> default_colors;
     default_colors.push_back(0x000000FF);
@@ -53,7 +52,7 @@ EffectInfo3D Wave::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_WAVE;
     info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
@@ -62,7 +61,7 @@ EffectInfo3D Wave::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 400.0f;
+    info.default_speed_scale = 10.0f;
     info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
@@ -236,8 +235,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
 
     float hue = fmodf(pos_norm * 180.0f + progress_val * 60.0f, 360.0f);
     if(hue < 0.0f) hue += 360.0f;
-    float rate = GetScaledFrequency();
-    float pos_color = fmodf(pos_norm + time * rate * 0.02f, 1.0f);
+    float pos_color = fmodf(pos_norm + time * GetColorCycleHz(), 1.0f);
     if(pos_color < 0.0f) pos_color += 1.0f;
 
     float detail = std::max(0.05f, GetScaledDetail());

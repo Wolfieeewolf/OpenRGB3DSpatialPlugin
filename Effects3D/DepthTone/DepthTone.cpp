@@ -40,8 +40,6 @@ const char* DepthTone::LayoutName(int L)
 DepthTone::DepthTone(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    SetSpeed(45);
-    SetFrequency(30);
     volume_assist_.setFragmentBody(QString::fromUtf8(DepthToneVolumeFieldGlsl()));
     volume_assist_.setResolution(18);
 }
@@ -59,14 +57,14 @@ EffectInfo3D DepthTone::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_DEPTH_TONE;
     info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
     info.needs_frequency = true;
-    info.default_speed_scale = 18.0f;
-    info.default_frequency_scale = 14.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -151,15 +149,13 @@ void DepthTone::SetupCustomUI(QWidget* parent)
 
 void DepthTone::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    const float freq = std::max(0.05f, GetScaledFrequency());
-    const float pos = std::fmod(time_sec * spd * 0.085f + time_sec * freq * 0.028f + 1000.0f, 1.0f);
+    const float pos = std::fmod(CalculateProgress(time_sec) + time_sec * GetColorCycleHz() * 0.35f + 1000.0f, 1.0f);
     const int dc = std::clamp(depth_tone_count, 2, 32);
     const float hue_span = (float)(dc - 1) / (float)dc;
     const float percent_dim = std::clamp(dim_amount, 0.0f, 1.0f);
     const int axis = std::clamp(depth_axis, 0, AXIS_COUNT - 1);
     const int layout_i = std::clamp(depth_layout, 0, LAYOUT_COUNT - 1);
-    const float size_zoom = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.15f, 2.5f);
+    const float size_zoom = std::clamp(GetNormalizedSize(), 0.15f, 2.5f);
     const float detail_norm = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float vp[7] = {
         pos,
@@ -200,10 +196,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     sp.origin_z = origin.z;
     sp.y_norm = SampleStratumYNorm01(rot.y, grid, origin);
 
-    // Speed = primary hue scroll; Frequency = secondary drift (both clearly audible in motion).
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    const float freq = std::max(0.05f, GetScaledFrequency());
-    const float pos = std::fmod(time * spd * 0.085f + time * freq * 0.028f + 1000.0f, 1.0f);
+    const float pos = std::fmod(CalculateProgress(time) + time * GetColorCycleHz() * 0.35f + 1000.0f, 1.0f);
 
     float hue01 = 0.0f;
     float v = 1.0f;
@@ -218,7 +211,7 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     const float size_m = std::max(0.2f, GetNormalizedSize());
-    const float rainbow_rate = spd * 0.35f + freq * 0.12f;
+    const float rainbow_rate = GetMotionHz() + GetColorCycleHz();
 
     if(UseEffectStripColormap())
     {

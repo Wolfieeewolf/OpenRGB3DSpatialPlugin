@@ -61,7 +61,7 @@ EffectInfo3D SpectrumBars::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
     info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 20.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = false;
     info.show_brightness_control = true;

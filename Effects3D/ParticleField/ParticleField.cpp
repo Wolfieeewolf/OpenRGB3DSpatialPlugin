@@ -118,8 +118,6 @@ void ParticleField::SyncCustomUiFromModel()
 ParticleField::ParticleField(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    SetSpeed(45);
-    SetFrequency(40);
     volume_assist_.setFragmentBody(QString::fromUtf8(ParticleFieldVolumeFieldGlsl()));
     volume_assist_.setResolution(22);
 }
@@ -140,9 +138,9 @@ EffectInfo3D ParticleField::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
-    info.default_speed_scale = 16.0f;
+    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 14.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -225,7 +223,7 @@ void ParticleField::SetupCustomUI(QWidget* parent)
 void ParticleField::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
     const float size_m = GetNormalizedSize();
-    const float speed_scale = 0.35f + GetScaledSpeed() * 0.08f;
+    const float speed_scale = 0.35f + GetNormalizedSpeed();
 
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -239,7 +237,7 @@ void ParticleField::PrepareGpuFields(std::uint64_t render_sequence, float time_s
     const float thick01 =
         std::clamp(std::max(0.20f, thickness) * 0.125f, 0.022f, 0.20f);
     const float hue_scroll =
-        std::fmod(time_sec * GetScaledFrequency() * 0.020f * bb.speed_mul + 1000.0f, 1.0f);
+        std::fmod(time_sec * GetColorCycleHz() * bb.speed_mul + 1000.0f, 1.0f);
 
     const float vp[10] = {
         time_sec,
@@ -280,7 +278,7 @@ RGBColor ParticleField::CalculateColorGrid(float x, float y, float z, float time
     const float stratum_mot01 = ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
     const bool strat_on = (GetStratumLayoutMode() == 1);
 
-    float color_cycle = time * GetScaledFrequency() * 8.0f;
+    float color_cycle = time * GetColorCycleHz() * 360.0f;
     if(strat_on)
     {
         color_cycle = color_cycle * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;

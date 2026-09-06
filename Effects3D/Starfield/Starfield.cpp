@@ -55,7 +55,6 @@ const char* Starfield::ModeName(int m)
 Starfield::Starfield(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    SetSpeed(45);
     volume_assist_.setFragmentBody(QString::fromUtf8(StarfieldVolumeFieldGlsl()));
     // Sparse particles need more atlas cells than soft fills (Plasma) or they vanish on LEDs/viewport.
     volume_assist_.setResolution(22);
@@ -77,9 +76,9 @@ EffectInfo3D Starfield::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
-    info.default_speed_scale = 20.0f;
+    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 18.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -228,7 +227,7 @@ void Starfield::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
     const float thickness = std::max(0.02f, star_size);
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float fill = std::clamp(fill_amount, 0.4f, 1.0f);
-    const float hue_scroll = std::fmod(time_sec * GetScaledFrequency() * 0.035f + 1.0f, 1.0f);
+    const float hue_scroll = std::fmod(time_sec * GetColorCycleHz() + 1.0f, 1.0f);
     const float vp[10] = {
         progress,
         time_sec,
@@ -260,7 +259,7 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
     EvalContext ctx;
     ctx.origin = origin;
     ctx.rp = rp;
-    ctx.color_cycle = time * GetScaledFrequency() * 12.0f;
+    ctx.color_cycle = time * GetColorCycleHz() * 360.0f;
     ctx.time = time;
     ctx.grid = &grid;
 

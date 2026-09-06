@@ -47,7 +47,6 @@ BreathingSphere::BreathingSphere(QWidget* parent) : SpatialEffect3D(parent)
 {
     progress = 0.0f;
 
-    SetFrequency(50);
     SetRainbowMode(true);
 
     std::vector<RGBColor> default_colors;
@@ -72,7 +71,7 @@ EffectInfo3D BreathingSphere::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_BREATHING_SPHERE;
     info.is_reversible = false;
     info.supports_random = true;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
@@ -82,8 +81,8 @@ EffectInfo3D BreathingSphere::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 20.0f;
-    info.default_frequency_scale = 100.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -184,7 +183,6 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     const float base_scale = 0.45f;
     const float breath_t = breath_pulse_pct / 100.0f;
     const float breath_amp = breath_t * 0.92f;
-    const float rate = GetScaledFrequency();
 
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -194,7 +192,7 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
     progress_v *= bb.speed_mul;
-    float breath_phase = progress_v * rate * 0.2f;
+    float breath_phase = progress_v * 6.283185307f;
     const float R_l = base_scale * size_multiplier * (1.0f + breath_amp * sinf(breath_phase));
     const int edge = NormalizeEdgeProfile(edge_profile);
     const int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
@@ -259,9 +257,8 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     const float stratum_mot01 =
         ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
 
-    float rate = GetScaledFrequency();
-    float detail = std::max(0.05f, GetScaledDetail());
     progress = CalculateProgress(time * bb.speed_mul);
+    const float detail = std::max(0.05f, GetScaledDetail());
     const float cmap_phase01 = std::fmod(progress + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
     float strip_p01 = 0.0f;
     if(UseEffectStripColormap())
@@ -276,7 +273,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
                                                  origin,
                                                  rot);
     }
-    float breath_phase = progress * rate * 0.2f;
+    float breath_phase = progress * 6.283185307f;
 
     float c1 = 0.5f, c2 = 0.5f, c3 = 0.5f;
     if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
@@ -309,7 +306,8 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         sp.origin_z = origin.z;
         sp.y_norm = coord2;
         float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f
-                    + time * rate * 12.0f * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
+                    + time * GetColorCycleHz() * 360.0f * bb.speed_mul
+                    + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
         hue = ApplySpatialRainbowHue(hue, norm_in_shell, basis, sp, map, time, &grid);
         final_color = GetRainbowColor(hue);
     }

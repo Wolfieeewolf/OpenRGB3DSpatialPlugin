@@ -52,6 +52,7 @@ TextureProjection::TextureProjection(QWidget* parent)
     gif_frame_timer->setTimerType(Qt::PreciseTimer);
     connect(gif_frame_timer, &QTimer::timeout, this, &TextureProjection::OnGifFrameTimerTimeout);
     SetRainbowMode(false);
+    /* Speed is GIF frames/sec for this effect (not GetMotionHz). 30 fps is a calm default. */
     SetSpeed(30);
     volume_assist_.setFragmentBody(QString::fromUtf8(TextureProjectionVolumeFieldGlsl()));
     volume_assist_.setResolution(18);
@@ -88,8 +89,8 @@ EffectInfo3D TextureProjection::GetEffectInfo() const
 
     info.default_speed_scale = 10.0f;
     info.use_size_parameter = true;
-    info.default_frequency_scale = 14.0f;
-    info.default_detail_scale = 12.0f;
+    info.default_frequency_scale = 10.0f;
+    info.default_detail_scale = 10.0f;
 
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -483,9 +484,9 @@ void TextureProjection::PrepareGpuFields(std::uint64_t render_sequence, float ti
             ? 0.0f
             : scroll_mul * (0.22f + 0.48f * speed_lin + 0.18f * freq_n) * bb.speed_mul;
     const float size_m = std::max(0.08f, GetNormalizedSize());
-    const float repeat_from_scale = 0.35f + 1.75f * GetNormalizedScale();
+    const float repeat_from_freq = 0.55f + 1.65f * freq_n;
     const float size_zoom_div = std::clamp(0.40f + 0.36f * size_m, 0.32f, 2.2f);
-    const float tile = std::clamp(repeat_from_scale / size_zoom_div, 0.12f, 6.5f);
+    const float tile = std::clamp(repeat_from_freq / size_zoom_div, 0.12f, 6.5f);
     const float amp =
         freeze_gif_motion ? 0.0f
                           : warp_mul * (0.045f + 0.20f * std::min(1.0f, detail * 0.12f)) / tm;

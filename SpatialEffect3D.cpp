@@ -31,9 +31,9 @@
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
     effect_enabled = false;
-    effect_speed = 1;
+    effect_speed = 100;
     effect_brightness = 100;
-    effect_frequency = 1;
+    effect_frequency = 80;
     effect_detail = 100;
     effect_size = 100;
     effect_scale = 200;
@@ -1254,8 +1254,8 @@ void SpatialEffect3D::PrepareStripColormapAssist(std::uint64_t render_sequence, 
         strip_cmap_body_ready_ = true;
     }
 
-    const float freq_norm = std::clamp(GetScaledFrequency() / 10.0f, 0.25f, 2.5f);
-    const float detail_norm = std::clamp(GetScaledDetail() / 10.0f, 0.25f, 2.5f);
+    const float freq_norm = std::clamp(0.35f + GetNormalizedFrequency() * 1.2f, 0.25f, 2.5f);
+    const float detail_norm = std::clamp(0.35f + GetNormalizedDetail() * 1.2f, 0.25f, 2.5f);
     float phase_eff = 0.0f;
     float time_eff = 0.0f;
     float kernel_rep_eff = 1.0f;
@@ -1303,8 +1303,8 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     if(!UseEffectStripColormap())
         return 0.0f;
 
-    const float freq_norm = std::clamp(GetScaledFrequency() / 10.0f, 0.25f, 2.5f);
-    const float detail_norm = std::clamp(GetScaledDetail() / 10.0f, 0.25f, 2.5f);
+    const float freq_norm = std::clamp(0.35f + GetNormalizedFrequency() * 1.2f, 0.25f, 2.5f);
+    const float detail_norm = std::clamp(0.35f + GetNormalizedDetail() * 1.2f, 0.25f, 2.5f);
     float phase_eff = 0.0f;
     float time_eff = 0.0f;
     float kernel_rep_eff = 1.0f;

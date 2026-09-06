@@ -253,6 +253,7 @@ OmniShapeTexture::OmniShapeTexture(QWidget* parent)
     gif_frame_timer->setTimerType(Qt::PreciseTimer);
     connect(gif_frame_timer, &QTimer::timeout, this, &OmniShapeTexture::OnGifFrameTimerTimeout);
     SetRainbowMode(false);
+    /* Speed is GIF frames/sec for this effect (not GetMotionHz). 30 fps is a calm default. */
     SetSpeed(30);
     volume_assist_.setFragmentBody(QString::fromUtf8(OmniShapeTextureVolumeFieldGlsl()));
     volume_assist_.setResolution(28);
@@ -288,10 +289,10 @@ EffectInfo3D OmniShapeTexture::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 12.0f;
+    info.default_speed_scale = 10.0f;
     info.use_size_parameter = true;
-    info.default_frequency_scale = 14.0f;
-    info.default_detail_scale = 12.0f;
+    info.default_frequency_scale = 10.0f;
+    info.default_detail_scale = 10.0f;
 
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -726,9 +727,9 @@ void OmniShapeTexture::PrepareGpuFields(std::uint64_t render_sequence, float tim
     const float phase_drive =
         freeze_gif_motion ? 0.0f : (phase_mul * 1.55f + scroll_mul * 0.95f);
     const float size_m = std::max(0.08f, GetNormalizedSize());
-    const float repeat_from_scale = 0.35f + 1.75f * GetNormalizedScale();
+    const float repeat_from_freq = 0.55f + 1.65f * GetNormalizedFrequency();
     const float size_zoom_div = std::clamp(0.55f + 0.28f * size_m, 0.40f, 2.0f);
-    const float tile = std::clamp(repeat_from_scale / size_zoom_div, 0.12f, 6.5f);
+    const float tile = std::clamp(repeat_from_freq / size_zoom_div, 0.12f, 6.5f);
     const float detail = std::max(0.05f, GetScaledDetail());
     const float amp =
         freeze_gif_motion ? 0.0f

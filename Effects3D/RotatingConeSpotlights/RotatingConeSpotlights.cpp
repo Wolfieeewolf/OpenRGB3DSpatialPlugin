@@ -207,8 +207,6 @@ void RotatingConeSpotlights::SyncUiFromState()
 
 RotatingConeSpotlights::RotatingConeSpotlights(QWidget* parent) : SpatialEffect3D(parent)
 {
-    SetFrequency(40);
-    SetSpeed(35);
     SetRainbowMode(false);
     volume_assist_.setFragmentBody(QString::fromUtf8(RotatingConeVolumeFieldGlsl()));
     volume_assist_.setResolution(24);
@@ -228,7 +226,7 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
     info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
@@ -237,8 +235,8 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 28.0f;
-    info.default_frequency_scale = 12.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -493,8 +491,7 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
     const float stratum_mot01 =
         ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
 
-    const float freq_norm = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
-    const float hue_scroll = time * freq_norm * 0.12f * bb.speed_mul;
+    const float hue_scroll = time * GetColorCycleHz() * bb.speed_mul;
 
     float sat = 0.0f;
     float val = 0.0f;

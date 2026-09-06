@@ -63,9 +63,9 @@ void TravelingLight::PrepareGpuFields(std::uint64_t render_sequence, float time_
     if(progress > 1.0f) progress = std::fmod(progress, 1.0f);
     if(progress < 0.0f) progress = std::fmod(progress, 1.0f) + 1.0f;
 
-    const float size_scale = GetNormalizedSize() / 1.5f;
+    const float size_scale = GetNormalizedSize();
     const float tight_inv = 1.0f / std::max(0.25f, bb.tight_mul);
-    const float freq_n = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
+    const float freq_n = std::min(6.0f, std::max(0.02f, 0.15f + GetNormalizedFrequency() * 2.4f));
 
     float vp[13] = {
         (float)std::clamp(mode, 0, MODE_COUNT - 1),
@@ -101,8 +101,8 @@ EffectInfo3D TravelingLight::GetEffectInfo() const
     info.user_colors = 2;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 12.0f;
-    info.default_frequency_scale = 20.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.needs_frequency = true;
     info.show_speed_control = true;
@@ -278,7 +278,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     if(progress > 1.0f) progress = std::fmod(progress, 1.0f);
     if(progress < 0.0f) progress = std::fmod(progress, 1.0f) + 1.0f;
 
-    float color_cycle = progress * GetScaledFrequency() * 3.0f;
+    float color_cycle = time * GetColorCycleHz() * 360.0f;
 
     const float size_m_tl = GetNormalizedSize();
     const float tl_phase01 = std::fmod(progress + color_cycle * (1.f / 360.f) + 1.f, 1.f);

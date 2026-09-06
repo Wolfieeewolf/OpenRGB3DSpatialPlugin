@@ -39,7 +39,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Effect animation speed (uses logarithmic curve for smooth control)</string>
+        <string>Animation rate. 100 is a calm ~0.3 Hz on every effect; 200 is ~0.85 Hz. 0 stops motion.</string>
        </property>
       </widget>
      </item>
@@ -113,7 +113,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Temporal rate (pattern motion and color cycles). When Compass room mapping is on, this also speeds compass-based palette scrolling.</string>
+        <string>Hue/palette scroll and spatial density. 100 is a calm cycle on every effect. Compass mapping also uses this for palette scrolling.</string>
        </property>
       </widget>
      </item>
@@ -187,7 +187,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Spatial scale (bigger = larger features / wider bands)</string>
+        <string>Pattern feature size (ring width, zoom, blob radius). 100 is the default size. Scale (occupancy) is a separate slider.</string>
        </property>
       </widget>
      </item>
@@ -224,7 +224,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Effect coverage: 0-200 = 0-100% of room (200=fill grid), 201-300 = 101-200% (beyond room)</string>
+        <string>Effect occupancy in the room (not pattern size). 200 = fill the grid from the Spatial Anchor. Size is a separate slider for ring width / zoom.</string>
        </property>
       </widget>
      </item>

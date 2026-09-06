@@ -27,8 +27,6 @@
 ShaderField::ShaderField(QWidget* parent)
     : SpatialEffect3D(parent)
 {
-    SetSpeed(45);
-    SetFrequency(25);
     shader_engine = new SpatialShaderEngine(this);
     shader_engine->setRenderSize(256, 144);
     connect(shader_engine,
@@ -108,7 +106,7 @@ EffectInfo3D ShaderField::GetEffectInfo() const
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
     info.needs_frequency = true;
-    info.default_speed_scale = 14.0f;
+    info.default_speed_scale = 10.0f;
     info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
@@ -376,14 +374,12 @@ void ShaderField::SyncUniforms(float time)
     EnsureShaderEngineRunning();
     SpatialShaderUniforms u;
     // Drive animation from wall-clock effect time scaled by Speed (not progress wrap alone).
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    u.time_sec = time * spd * 0.35f;
+    u.time_sec = time * GetMotionHz() * (float)(2.0 * M_PI);
     // Size → zoom, Detail → density, Frequency → hue scroll, local contrast/hue.
     // Scale is occupancy (atlas box), not shader zoom.
     const float zoom = std::clamp(GetNormalizedSize() * 0.85f, 0.25f, 3.0f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
-    const float freq_norm = std::clamp(GetNormalizedFrequency(), 0.0f, 1.0f);
-    const float hue = std::fmod(hue_shift + time * freq_norm * 0.08f * spd + 1.0f, 1.0f);
+    const float hue = std::fmod(hue_shift + time * GetColorCycleHz() + 1.0f, 1.0f);
     u.params[0] = zoom;
     u.params[1] = std::clamp(contrast, 0.35f, 2.5f);
     u.params[2] = hue;

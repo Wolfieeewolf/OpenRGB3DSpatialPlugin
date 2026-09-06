@@ -45,8 +45,6 @@ const char* SurfaceAmbient::MotionName(int m)
 SurfaceAmbient::SurfaceAmbient(QWidget* parent) : SpatialEffect3D(parent)
 {
     /* Sensible mid defaults so Speed / Frequency / Size actually move the look. */
-    SetSpeed(55);
-    SetFrequency(50);
     SetDetail(90);
     effect_size = 120;
     effect_scale = 200;
@@ -82,7 +80,7 @@ void SurfaceAmbient::PrepareGpuFields(std::uint64_t render_sequence, float time_
     const float detail = std::max(0.05f, GetScaledDetail()) * tm;
     const float freq = std::clamp(0.28f + detail * 0.22f, 0.22f, 3.0f);
     const float feature = std::clamp(GetNormalizedSize(), 0.45f, 3.0f);
-    const float speed = std::clamp(GetScaledSpeed() / 2.0f, 0.35f, 4.0f);
+    const float speed = std::max(0.02f, GetMotionHz());
     const float band_mul = std::max(0.15f, bb.speed_mul);
 
     int mask = GetSurfaceMask();
@@ -135,7 +133,7 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo() const
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 8.0f;
+    info.default_frequency_scale = 10.0f;
     info.default_detail_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
@@ -220,9 +218,9 @@ RGBColor SurfaceAmbient::PresetColor(float plasma01, float time, float speed_mul
 {
     const float p = std::clamp(plasma01, 0.0f, 1.0f);
     /* Frequency widens the palette; slight shimmer keeps color alive without a full rainbow wash. */
-    const float spread = std::clamp(0.9f + GetScaledFrequency() * 0.14f, 0.9f, 2.6f);
+    const float spread = std::clamp(0.9f + GetNormalizedFrequency() * 0.9f, 0.9f, 2.6f);
     const float shimmer =
-        std::sin(time * std::max(0.25f, GetScaledFrequency()) * 1.15f * speed_mul + p * 6.28318f) *
+        std::sin(time * std::max(0.02f, GetColorCycleHz()) * 6.2831853f * speed_mul + p * 6.28318f) *
         (5.0f + 9.0f * p);
 
     if(style == STYLE_STEAM)
@@ -303,7 +301,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         if(UseEffectStripColormap())
         {
             const float size_m = GetNormalizedSize();
-            const float ph01 = std::fmod(time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) +
+            const float ph01 = std::fmod(time * GetColorCycleHz() * bb.speed_mul +
                                              phase01 + best_plasma * 0.08f + 1.f,
                                          1.f);
             palette_driver = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
@@ -321,7 +319,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         }
         else if(GetRainbowMode())
         {
-            float hue = std::fmod(best_plasma * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul
+            float hue = std::fmod(best_plasma * 360.0f + time * GetColorCycleHz() * 360.0f * bb.speed_mul
                                       + phase01 * 360.0f,
                                   360.0f);
             if(hue < 0.0f)

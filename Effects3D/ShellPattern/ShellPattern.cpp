@@ -64,8 +64,6 @@ QString ShellPatternFullVolumeBody()
 
 ShellPattern::ShellPattern(QWidget* parent) : SpatialEffect3D(parent)
 {
-    SetSpeed(55);
-    SetFrequency(45);
     SetDetail(90);
     effect_size = 130;
     effect_scale = 200;
@@ -92,7 +90,7 @@ EffectInfo3D ShellPattern::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_SHELL_PATTERN;
     info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
@@ -101,8 +99,8 @@ EffectInfo3D ShellPattern::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 55.0f;
-    info.default_frequency_scale = 14.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.default_detail_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
@@ -251,11 +249,10 @@ void ShellPattern::OnParameterChanged()
 
 namespace
 {
-float BoundedProgress01(float time_sec, float speed_mul)
+float BoundedProgress01(float time_sec, float cycles_per_sec)
 {
     /* Keep phase in 0..1 — raw time*speed loses float precision and stutters. */
-    const float spd = std::max(0.15f, speed_mul);
-    return std::fmod(time_sec * spd * 0.28f + 1000.0f, 1.0f);
+    return std::fmod(time_sec * std::max(0.0f, cycles_per_sec) + 1000.0f, 1.0f);
 }
 } // namespace
 
@@ -283,10 +280,9 @@ void ShellPattern::PrepareGpuFields(std::uint64_t render_sequence, float time_se
                                    0.03f, 0.85f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float freq_n = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);
-    const float anim_speed = std::max(0.35f, GetScaledSpeed() * bb.speed_mul);
-    const float progress_val = BoundedProgress01(time_sec, anim_speed);
-    /* Kernel phase: Speed × Frequency so Extrude / Contour actually move. */
-    const float phase01 = std::fmod(time_sec * anim_speed * (0.10f + 0.22f * freq_n) + 1000.0f, 1.0f);
+    const float anim_hz = std::max(0.0f, GetMotionHz() * bb.speed_mul);
+    const float progress_val = BoundedProgress01(time_sec, anim_hz);
+    const float phase01 = std::fmod(time_sec * anim_hz * (0.45f + 0.55f * freq_n) + 1000.0f, 1.0f);
 
     const float vp[12] = {
         (float)disp,
@@ -361,8 +357,7 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
                          SpatialPatternKernelCount() - 1);
 
     float pos_norm = std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
-    float rate = GetScaledFrequency();
-    float pos_color = std::fmod(pos_norm + time * rate * 0.018f, 1.0f);
+    float pos_color = std::fmod(pos_norm + time * GetColorCycleHz(), 1.0f);
     if(pos_color < 0.0f)
         pos_color += 1.0f;
     pos_color = EffectStratumBlend::ApplyMotionToPhase01(pos_color, stratum_mot01, 0.5f);

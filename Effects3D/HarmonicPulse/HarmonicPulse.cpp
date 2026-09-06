@@ -38,8 +38,6 @@ RGBColor HarmonicPulse::ScaleColor(RGBColor c, float bright)
 
 HarmonicPulse::HarmonicPulse(QWidget* parent) : SpatialEffect3D(parent)
 {
-    SetFrequency(50);
-    SetSpeed(45);
     SetRainbowMode(false);
     std::vector<RGBColor> cols = {
         0x000000FF,
@@ -64,14 +62,14 @@ EffectInfo3D HarmonicPulse::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_HARMONIC_PULSE;
     info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 200;
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 22.0f;
-    info.default_frequency_scale = 14.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -170,13 +168,11 @@ void HarmonicPulse::SetupCustomUI(QWidget* parent)
 void HarmonicPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     (void)grid;
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    const float freq = std::max(0.05f, GetScaledFrequency());
     const float detail = std::max(0.05f, GetNormalizedDetail());
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float flow = std::clamp(flow_amount, 0.4f, 2.5f);
-    const float motion = std::clamp((0.12f * spd + 0.05f * freq) * flow, 0.08f, 6.0f);
-    const float spatial_freq = std::clamp(1.1f + detail * 4.5f * size_m * GetNormalizedScale(), 0.6f, 9.0f);
+    const float motion = std::clamp(GetMotionHz() * flow, 0.02f, 2.5f);
+    const float spatial_freq = std::clamp(1.1f + detail * 4.5f * size_m, 0.6f, 9.0f);
     const float pulse_mix = std::clamp(spatial_amount, 0.0f, 1.0f);
     const float contrast = std::clamp(pulse_contrast, 0.35f, 2.0f);
     const float wobble = std::clamp(zoom_wobble_strength, 0.0f, 3.0f);
@@ -197,12 +193,9 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
     if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
         return 0x00000000;
 
-    // Real motion — do not divide ScaledSpeed into oblivion.
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    const float freq = std::max(0.05f, GetScaledFrequency());
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float flow = std::clamp(flow_amount, 0.4f, 2.5f);
-    const float motion = std::clamp((0.12f * spd + 0.05f * freq) * flow, 0.08f, 6.0f);
+    const float motion = std::clamp(GetMotionHz() * flow, 0.02f, 2.5f);
     const float pulse_mix = std::clamp(spatial_amount, 0.0f, 1.0f);
 
     float val = 0.0f;

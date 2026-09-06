@@ -57,7 +57,7 @@ EffectInfo3D AudioLevel::GetEffectInfo() const
     info.needs_frequency = true;
 
     info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 20.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -147,7 +147,7 @@ void AudioLevel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     const float edge = std::clamp(edge_soft, 0.02f, 0.5f);
     const float size_m = std::max(0.35f, GetNormalizedSize());
     const float detail = std::max(0.05f, GetScaledDetail());
-    const float wave_freq = std::max(0.2f, GetScaledFrequency() * 0.15f * bb.tight_mul);
+    const float wave_freq = std::max(0.2f, 0.35f + GetNormalizedFrequency() * 2.2f * bb.tight_mul);
     const float time_e = time_sec * bb.speed_mul;
 
     float vp[10] = {

@@ -37,9 +37,9 @@ EffectInfo3D ColorWheel::GetEffectInfo() const
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 12.0f;
+    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 20.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -135,9 +135,8 @@ void ColorWheel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     const float progress = CalculateProgress(time_sec) * bb.speed_mul;
     const float dir = (direction == 0) ? 1.0f : -1.0f;
     const float wrap = std::clamp(hue_repeats, 0.1f, 3.0f);
-    const float freq_spin = time_sec * GetScaledFrequency() * 0.12f * bb.speed_mul;
-    /* Default Size 100 → GetNormalizedSize 1.5 → size_scale 1. */
-    const float size_scale = std::max(0.2f, GetNormalizedSize() / 1.5f);
+    const float freq_spin = time_sec * GetColorCycleHz() * 6.2831853f * bb.speed_mul;
+    const float size_scale = std::max(0.2f, GetNormalizedSize());
     const float vp[7] = {
         progress,
         dir,
@@ -194,7 +193,7 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
         float hue_rad = std::atan2(cs.y() * 2.0f - 1.0f, cs.x() * 2.0f - 1.0f);
         gpu_plane01 = std::fmod(hue_rad / TWO_PI + 1.0f, 1.0f);
         gpu_plane01 = std::fmod(gpu_plane01 + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01)
-                                    + time * GetScaledFrequency() * 0.02f * (spd_mul - 1.0f) + 1.0f,
+                                    + time * GetColorCycleHz() * (spd_mul - 1.0f) + 1.0f,
                                 1.0f);
         have_gpu_plane = true;
     }
@@ -228,7 +227,7 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     if(UseEffectStripColormap())
     {
         const float size_m = GetNormalizedSize();
-        const float ph01 = std::fmod(plane01 + progress * 0.17f + time * GetScaledFrequency() * 0.05f + 1.f, 1.f);
+        const float ph01 = std::fmod(plane01 + progress * 0.17f + time * GetColorCycleHz() + 1.f, 1.f);
         palette01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                  GetEffectStripColormapUnfold(),
                                                  GetEffectStripColormapDirectionDeg(),

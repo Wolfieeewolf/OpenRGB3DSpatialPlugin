@@ -60,8 +60,8 @@ EffectInfo3D AudioStripVisualizer::GetEffectInfo() const
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 8.0f;
-    info.default_frequency_scale = 12.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

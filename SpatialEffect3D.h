@@ -209,6 +209,16 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *
  * Anchor resolution: GetEffectOriginGrid(grid) only. Target zone bounds change grid, not a
  * second origin path. Do not reintroduce room-UV origin packing for GPU volumes.
+ *
+ * --- Slider feel (shared by every effect) ---
+ * Speed 0–200: GetMotionHz(). 100 ≈ 0.33 Hz, 200 ≈ 0.85 Hz. CalculateProgress(t)
+ *   is elapsed cycles (t * GetMotionHz). Do not multiply by extra 0.08-style
+ *   fudge factors or per-effect default_speed_scale.
+ * Frequency 0–200: GetColorCycleHz() for hue/palette scroll (~0.11 Hz at 100).
+ *   GetNormalizedFrequency() for spatial density. GetScaledFrequency() is
+ *   8 * normalized (mid ≈ 3) for legacy spatial drivers.
+ * Size 0–200: GetNormalizedSize() is 1.0 at 100 (feature size, not occupancy).
+ * Scale 0–300: occupancy only. Never mix Scale into Size/zoom/tile math.
  */
 
 inline float NormalizeGridAxis01(float value, float min_v, float max_v)
@@ -331,6 +341,8 @@ struct EffectInfo3D
     bool                needs_arms;
     bool                needs_frequency;
 
+    /* Legacy metadata. Speed/frequency rates come from GetMotionHz /
+     * GetColorCycleHz, not these fields. Keep at 10 so old readers stay sane. */
     float               default_speed_scale;
     float               default_frequency_scale;
     float               default_detail_scale = 10.0f;
@@ -738,8 +750,16 @@ protected:
     float GetNormalizedScale() const;
     void SetScaleInverted(bool inverted);
 
+    /** Speed slider → animation rate in cycles/sec. Speed 100 ≈ 0.33 Hz. */
+    float GetMotionHz() const;
+    /** Frequency slider → hue/palette cycle rate. Frequency 100 ≈ 0.11 Hz. */
+    float GetColorCycleHz() const;
+    /** Same as GetMotionHz (legacy name). */
     float GetScaledSpeed() const;
+    /** Elapsed motion cycles: time * GetMotionHz(). */
     float CalculateProgress(float time) const;
+    /** Fractional cycle in [0,1). */
+    float GetMotionCycle01(float time) const;
 
     float ApplySpatialPalette01(float base_pos01,
                                 const SpatialLayerCore::Basis& basis,

@@ -65,7 +65,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;
     info.supports_random        = false;
-    info.max_speed              = 100;
+    info.max_speed = 200;
     info.min_speed              = 1;
     info.user_colors            = 0;
     info.has_custom_settings    = true;

@@ -19,11 +19,9 @@ REGISTER_EFFECT_3D(PulseRing);
 
 namespace
 {
-// Keep hue drivers bounded — fmod(huge_time * rate, 360) loses precision and flashes.
-float HueScroll01(float time_sec, float scaled_freq)
+float HueScroll01(float time_sec, float cycles_per_sec)
 {
-    const float rate = std::max(0.02f, scaled_freq) * 0.12f; // cycles/sec
-    return std::fmod(time_sec * rate + 1000.0f, 1.0f);
+    return std::fmod(time_sec * std::max(0.0f, cycles_per_sec) + 1000.0f, 1.0f);
 }
 } // namespace
 
@@ -53,8 +51,6 @@ const char* PulseRing::ShapeName(int s)
 PulseRing::PulseRing(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    SetSpeed(55);
-    SetFrequency(35);
     volume_assist_.setFragmentBody(QString::fromUtf8(PulseRingVolumeFieldGlsl()));
     // Hex/square corners need enough voxels, but 28×28×28 was a major frame cost.
     volume_assist_.setResolution(20);
@@ -77,9 +73,9 @@ EffectInfo3D PulseRing::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 22.0f;
+    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 18.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -187,17 +183,14 @@ void PulseRing::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
-    // Faster expand: progress is fractional cycles (not raw CalculateProgress which grows forever).
-    const float spd = std::max(0.05f, GetScaledSpeed());
-    const float progress = std::fmod(time_sec * spd * 0.085f * bb.speed_mul + 1000.0f, 1.0f);
+    const float progress = std::fmod(CalculateProgress(time_sec) * bb.speed_mul + 1000.0f, 1.0f);
     const float hole_r = std::clamp(hole_size, 0.0f, 0.75f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float amp = std::clamp(pulse_amplitude, 0.2f, 2.0f);
     const float sigma = std::max(ring_thickness, 0.015f);
     const float phase_offset = direction_deg / 360.0f;
-    const float size_scale = std::clamp(GetNormalizedSize() * (0.65f + 0.55f * GetNormalizedScale()), 0.25f, 2.5f);
-    // Bounded 0..1 scroll — never pass raw time*freq (float fmod flash).
-    const float hue_scroll01 = HueScroll01(time_sec, GetScaledFrequency() * bb.speed_mul);
+    const float size_scale = std::clamp(GetNormalizedSize(), 0.25f, 2.5f);
+    const float hue_scroll01 = HueScroll01(time_sec, GetColorCycleHz() * bb.speed_mul);
     const float vp[10] = {
         progress,
         hole_r,
@@ -226,8 +219,6 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     if(!SampleGpuVolumeOriginLocal01(rot.x, rot.y, rot.z, grid, origin, GetNormalizedScale(), &c1, &c2, &c3))
         return 0x00000000;
 
-    const float spd = std::max(0.05f, GetScaledSpeed());
-
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float stratum_w[3];
@@ -237,7 +228,7 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     const float stratum_mot01 =
         ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
     const float progress =
-        std::fmod(time * spd * 0.085f * bb.speed_mul + 1000.0f, 1.0f);
+        std::fmod(CalculateProgress(time) * bb.speed_mul + 1000.0f, 1.0f);
     const float phase01 =
         std::fmod(progress + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
 

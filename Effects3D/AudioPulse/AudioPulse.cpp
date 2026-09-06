@@ -89,8 +89,8 @@ EffectInfo3D AudioPulse::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 35.0f;
-    info.default_frequency_scale = 20.0f;
+    info.default_speed_scale = 10.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -180,14 +180,14 @@ void AudioPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
     if(wave_mode == AudioBeatWaveMode::ClassicWave)
     {
         /* Classic wave: scale speed once; slot [7] = burst phase cap. */
-        pulse_speed = BeatWaveScaledSpeed((1.0f + GetScaledSpeed() * 0.2f) * bb.speed_mul, audio_settings);
+        pulse_speed = BeatWaveScaledSpeed((0.55f + GetNormalizedSpeed()) * bb.speed_mul, audio_settings);
         decay = BeatWaveShellDecay(audio_settings, 2.0f);
         max_travel_or_burst = BeatWaveBurstPhaseCap(audio_settings);
     }
     else
     {
         pulse_speed =
-            BeatWaveScaledSpeed((0.42f + GetScaledSpeed() * 0.10f) * bb.speed_mul, audio_settings);
+            BeatWaveScaledSpeed((0.35f + GetNormalizedSpeed() * 0.75f) * bb.speed_mul, audio_settings);
     }
 
     EffectGridAxisHalfExtents extents = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
