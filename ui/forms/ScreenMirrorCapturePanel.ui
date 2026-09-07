@@ -59,7 +59,7 @@
         <item>
          <widget class="QComboBox" name="captureQualityCombo">
           <property name="toolTip">
-           <string>Downscaled capture size before color extraction. Higher = sharper, heavier CPU/GPU/RAM.</string>
+           <string>Native matches each monitor. Caps GPU-scale on any Direct3D 11 GPU before CPU readback. Never upscales past the display.</string>
           </property>
          </widget>
         </item>

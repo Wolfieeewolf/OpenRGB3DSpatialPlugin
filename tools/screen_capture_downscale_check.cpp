@@ -44,10 +44,46 @@ int main()
         std::fprintf(stderr, "quality 7 size %dx%d\n", w, h);
         fails++;
     }
-    if(kScreenMirrorMaxWorkingWidth != 3840 || kScreenMirrorMaxWorkingHeight != 2160)
+    ScreenMirrorQualityToSize(kScreenMirrorQualityNative, w, h);
+    if(w != kScreenMirrorMaxWorkingWidth || h != kScreenMirrorMaxWorkingHeight)
+    {
+        std::fprintf(stderr, "native quality size %dx%d\n", w, h);
+        fails++;
+    }
+    if(!ScreenMirrorQualityIsNative(kScreenMirrorQualityNative) || ScreenMirrorQualityIsNative(7))
+    {
+        std::fprintf(stderr, "ScreenMirrorQualityIsNative mismatch\n");
+        fails++;
+    }
+    if(kScreenMirrorMaxWorkingWidth != 7680 || kScreenMirrorMaxWorkingHeight != 4320)
     {
         std::fprintf(stderr, "max working size %dx%d\n",
                      kScreenMirrorMaxWorkingWidth, kScreenMirrorMaxWorkingHeight);
+        fails++;
+    }
+
+    w = kScreenMirrorMaxWorkingWidth;
+    h = kScreenMirrorMaxWorkingHeight;
+    ClampWorkingCaptureSize(1920, 1080, w, h);
+    if(w != 1920 || h != 1080)
+    {
+        std::fprintf(stderr, "native 1080p display should capture 1920x1080, got %dx%d\n", w, h);
+        fails++;
+    }
+
+    ScreenMirrorQualityToSize(kScreenMirrorQualityNative, w, h);
+    ClampWorkingCaptureSize(3440, 1440, w, h);
+    if(w != 3440 || h != 1440)
+    {
+        std::fprintf(stderr, "native ultrawide should capture 3440x1440, got %dx%d\n", w, h);
+        fails++;
+    }
+
+    ScreenMirrorQualityToSize(5, w, h);
+    ClampWorkingCaptureSize(3840, 2160, w, h);
+    if(w != 1920 || h != 1080)
+    {
+        std::fprintf(stderr, "1080p cap on 4K should be 1920x1080, got %dx%d\n", w, h);
         fails++;
     }
 
@@ -127,6 +163,6 @@ int main()
         std::fprintf(stderr, "screen_capture_downscale_check: %d fail(s)\n", fails);
         return 1;
     }
-    std::printf("screen_capture_downscale_check: box-average, 1080/1440/4K sizes, native clamp OK\n");
+    std::printf("screen_capture_downscale_check: box-average, native match-display, caps, clamp OK\n");
     return 0;
 }

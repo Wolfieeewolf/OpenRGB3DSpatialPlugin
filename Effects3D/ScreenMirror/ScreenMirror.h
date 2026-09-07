@@ -292,6 +292,7 @@ public:
 private:
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
+    void SelectCaptureQualityCombo(int quality);
 
     int                 capture_quality;
     QComboBox*          capture_quality_combo;

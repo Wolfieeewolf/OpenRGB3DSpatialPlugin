@@ -107,14 +107,27 @@ inline void BoxDownscaleToRgba(const uint8_t* src,
     }
 }
 
-/** CPU working-frame ceiling. 4K is allowed; DXGI GPU-copies 1:1 or GPU-scales
- *  to this size before Map so the dGPU does the scale instead of PCIe+CPU. */
-inline constexpr int kScreenMirrorMaxWorkingWidth = 3840;
-inline constexpr int kScreenMirrorMaxWorkingHeight = 2160;
+/** Safety ceiling for Native (match display). Never used to upscale.
+ *  Covers 8K and super-ultrawide; DXGI still Maps only the real desktop size. */
+inline constexpr int kScreenMirrorMaxWorkingWidth = 7680;
+inline constexpr int kScreenMirrorMaxWorkingHeight = 4320;
+
+/** Combo value: copy each monitor at its current resolution (no cap). */
+inline constexpr int kScreenMirrorQualityNative = 8;
+
+inline int ScreenMirrorClampQuality(int quality)
+{
+    return std::clamp(quality, 0, kScreenMirrorQualityNative);
+}
+
+inline bool ScreenMirrorQualityIsNative(int quality)
+{
+    return quality == kScreenMirrorQualityNative;
+}
 
 inline void ScreenMirrorQualityToSize(int quality, int& width, int& height)
 {
-    quality = std::clamp(quality, 0, 7);
+    quality = ScreenMirrorClampQuality(quality);
     switch(quality)
     {
         case 0:
@@ -149,9 +162,13 @@ inline void ScreenMirrorQualityToSize(int quality, int& width, int& height)
             width = 3840;
             height = 2160;
             break;
+        case 8:
+            width = kScreenMirrorMaxWorkingWidth;
+            height = kScreenMirrorMaxWorkingHeight;
+            break;
         default:
-            width = 640;
-            height = 360;
+            width = kScreenMirrorMaxWorkingWidth;
+            height = kScreenMirrorMaxWorkingHeight;
             break;
     }
 }

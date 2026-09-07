@@ -410,7 +410,7 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
     capture_mgr.SetTargetFPS(120);
     int cap_w = 320;
     int cap_h = 180;
-    ScreenMirrorQualityToSize(std::clamp(capture_quality, 0, 7), cap_w, cap_h);
+    ScreenMirrorQualityToSize(ScreenMirrorClampQuality(capture_quality), cap_w, cap_h);
     capture_mgr.SetDownscaleResolution(cap_w, cap_h);
     for(size_t i = 0; i < frame_cache_planes_.size(); i++)
     {

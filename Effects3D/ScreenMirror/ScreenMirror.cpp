@@ -21,13 +21,14 @@
 #include <QFont>
 #include <QPushButton>
 #include <QString>
+#include <QSignalBlocker>
 #include <algorithm>
 
 REGISTER_EFFECT_3D(ScreenMirror);
 
 ScreenMirror::ScreenMirror(QWidget* parent)
     : SpatialEffect3D(parent)
-    , capture_quality(1)
+    , capture_quality(kScreenMirrorQualityNative)
     , capture_quality_combo(nullptr)
     , capture_backend_mode(1)
     , capture_backend_combo(nullptr)
@@ -70,7 +71,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.effect_name            = "Screen Mirror";
     info.effect_description =
         "Maps screen content onto LEDs in 3D space (GPU room field). "
-        "DXGI copies/scales on the GPU before CPU Map — 4K is a 1:1 staging copy on Arc/dGPU. "
+        "DXGI copies or GPU-scales on any Direct3D 11 GPU before CPU Map. Native matches the display. "
         "Screen UVs lock to the display plane; Spatial Anchor (or a layout point) is falloff/wave. "
         "Span, falloff, and time-to-edge follow the live grid/layout AABB (not a fixed room size). "
         "LED atlas box-averages the working frame so colors stay area-sampled. "
@@ -251,6 +252,8 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     }
 
     capture_quality_combo = capture_ui.captureQualityCombo;
+    capture_quality_combo->clear();
+    capture_quality_combo->addItem("Native (match display)", QVariant(kScreenMirrorQualityNative));
     capture_quality_combo->addItem("Low (320×180)", QVariant(0));
     capture_quality_combo->addItem("Medium (480×270)", QVariant(1));
     capture_quality_combo->addItem("High (640×360)", QVariant(2));
@@ -259,15 +262,20 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->addItem("1080p (1920×1080)", QVariant(5));
     capture_quality_combo->addItem("1440p (2560×1440)", QVariant(6));
     capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
-    capture_quality_combo->setCurrentIndex(std::clamp(capture_quality, 0, 7));
-    capture_quality_combo->setItemData(0, "Lightest load; fine for small planes or testing.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(1, "Low bandwidth; acceptable on integrated GPUs.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(2, "Balanced default for many setups.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(3, "Sharper color detail on wide monitors.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(4, "720p working buffer.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(5, "1080p. DXGI GPU-scales native pixels into this size before CPU Map.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(6, "1440p. Arc/dGPU scales native 4K in VRAM; CPU only maps 1440p.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(7, "Native 1:1 up to 4K. GPU copies into staging; CPU never downscales first. Pick this on Arc/dGPU.", Qt::ToolTipRole);
+    capture_quality_combo->setToolTip(
+        "Native copies each monitor at its current resolution (never upscales). "
+        "Lower entries are caps: any Direct3D 11 GPU scales in VRAM before CPU readback. "
+        "A 1080p video on a 4K desktop is still 4K pixels — capture sees the display, not the file.");
+    capture_quality_combo->setItemData(0, "1:1 copy of whatever the monitor is right now. 1080p screen → 1080p, 4K screen → 4K, ultrawide → ultrawide. Works on any GPU.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(1, "Lightest load; fine for small planes or testing.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(2, "Low bandwidth; useful on integrated GPUs if Native feels heavy.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(3, "Balanced cap for many setups.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(4, "Sharper color detail on wide monitors, still a cap.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(5, "720p cap. GPU-scales larger desktops before CPU Map.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(6, "1080p cap. GPU-scales native pixels into this size before CPU Map.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(7, "1440p cap. GPU scales in VRAM; CPU only maps 1440p.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(8, "4K cap (never larger than the display). Use if you want a hard ceiling below Native.", Qt::ToolTipRole);
+    SelectCaptureQualityCombo(capture_quality);
 
     capture_backend_combo = capture_ui.captureBackendCombo;
     capture_backend_combo->addItem("Auto (GDI if DXGI stalls)", QVariant(0));
@@ -285,8 +293,8 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
         OnParameterChanged();
     });
-    connect(capture_quality_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-        capture_quality = std::clamp(index, 0, 7);
+    connect(capture_quality_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        capture_quality = ScreenMirrorClampQuality(capture_quality_combo->currentData().toInt());
         int w = 320;
         int h = 180;
         ScreenMirrorQualityToSize(capture_quality, w, h);
@@ -592,6 +600,24 @@ void ScreenMirror::RefreshMonitorStatus()
                     monitor_help_label = nullptr;
                 }
             }
+        }
+    }
+}
+
+void ScreenMirror::SelectCaptureQualityCombo(int quality)
+{
+    if(!capture_quality_combo)
+    {
+        return;
+    }
+    quality = ScreenMirrorClampQuality(quality);
+    for(int i = 0; i < capture_quality_combo->count(); ++i)
+    {
+        if(capture_quality_combo->itemData(i).toInt() == quality)
+        {
+            QSignalBlocker block(capture_quality_combo);
+            capture_quality_combo->setCurrentIndex(i);
+            return;
         }
     }
 }

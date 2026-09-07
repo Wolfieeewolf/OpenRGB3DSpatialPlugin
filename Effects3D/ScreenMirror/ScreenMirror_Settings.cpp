@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ScreenMirror.h"
-#include "ScreenCaptureManager.h"
+#include "ScreenCaptureDownscale.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
 #include "VirtualReferencePoint3D.h"
@@ -18,7 +18,7 @@
 nlohmann::json ScreenMirror::SaveSettings() const
 {
     nlohmann::json settings;
-    settings["capture_quality"] = std::clamp(capture_quality, 0, 7);
+    settings["capture_quality"] = ScreenMirrorClampQuality(capture_quality);
     settings["capture_backend_mode"] = std::clamp(capture_backend_mode, 0, 2);
     nlohmann::json monitors = nlohmann::json::object();
     for(std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.begin();
@@ -407,11 +407,8 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("capture_quality"))
     {
-        capture_quality = std::clamp(settings["capture_quality"].get<int>(), 0, 7);
-        if(capture_quality_combo)
-        {
-            capture_quality_combo->setCurrentIndex(capture_quality);
-        }
+        capture_quality = ScreenMirrorClampQuality(settings["capture_quality"].get<int>());
+        SelectCaptureQualityCombo(capture_quality);
     }
     if(settings.contains("capture_backend_mode"))
     {
