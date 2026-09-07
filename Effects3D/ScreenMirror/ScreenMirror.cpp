@@ -7,6 +7,7 @@
 #include "PluginUiUtils.h"
 #include "ScreenMirror/ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
+#include "ScreenMirror/ScreenMirrorVolumeFieldGlsl.h"
 #include "ui_ScreenMirrorCapturePanel.h"
 #include "ui_ScreenMirrorEffectShell.h"
 
@@ -17,6 +18,7 @@
 #include <QSlider>
 #include <QFont>
 #include <QPushButton>
+#include <QString>
 #include <algorithm>
 
 REGISTER_EFFECT_3D(ScreenMirror);
@@ -50,7 +52,12 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , reference_points(nullptr)
     , frame_cache_refresh_ms_(0)
     , frame_cache_last_render_seq_(0)
+    , gpu_smooth_ms_(0.0f)
+    , gpu_idle_magenta_(false)
+    , gpu_logged_unavail_(false)
 {
+    volume_assist_.setFragmentBody(QString::fromUtf8(ScreenMirrorVolumeFieldGlsl()));
+    volume_assist_.setResolution(32);
 }
 
 ScreenMirror::~ScreenMirror() = default;
@@ -60,7 +67,9 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     EffectInfo3D info           = {};
     info.effect_name            = "Screen Mirror";
     info.effect_description =
-        "Maps screen content onto LEDs in 3D space. Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
+        "Maps screen content onto LEDs in 3D space (GPU room field). "
+        "Capture stays on the CPU; spatial mapping, falloff, and sampling run on the volume atlas. "
+        "Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;
