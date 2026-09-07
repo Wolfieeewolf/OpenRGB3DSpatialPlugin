@@ -3,14 +3,18 @@
 
 /** Screen Mirror volume field: atlas stores graded RGB after plane mapping.
  *  p01 = unit room UV (front-left floor = 0). Pair with SampleGpuRoomVolume01.
+ *  Do not sample origin-local — capture must sit on room/LED grid coordinates.
  *  u_media tiles: columns = monitors (1..2), rows = wave history (1..8, 0 = newest).
+ *  Engine uploads QImage top-down; texture2D t=0 is capture row 0 (same as
+ *  SampleFrame). Live capture still applies 1-v (DXGI/GDI vs mapper up).
  *
  *  Shared u_params:
  *    [0..2] AABB span_mm  [3] layout  [4] pack(steps_u, steps_v)  [5] avg_frame_ms
  *    layout = nmon + 10*nhist + 100*use_q + 1000*flip0 + 2000*flip1
  *
- *  Per monitor (21 floats), base 6 and 27:
- *    [0..2] ref_uv  [3..5] plane_right  [6..8] plane_up
+ *  Per monitor (24 floats), base 6 and 30:
+ *    [0..2] map_uv (display plane, or layout point)  [3..5] plane_right
+ *    [6..8] plane_up  [9..11] falloff_uv (Spatial Anchor / layout point)
  *    packed pairs (4095/4096): coverage/invert, softness/curve, roll/radial,
  *    bias TL/TR, BL/BR, letterbox/pillarbox, corner str/zone,
  *    zone u, zone v, wave speed/decay, fb/lr, tb/blend
@@ -143,58 +147,60 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
                    float p0, float p1, float p2, float p3, float p4, float p5,
                    float p6, float p7, float p8, float p9, float p10, float p11,
                    float p12, float p13, float p14, float p15, float p16, float p17,
-                   float p18, float p19, float p20,
+                   float p18, float p19, float p20, float p21, float p22, float p23,
                    out vec3 rgb, out float weight)
 {
     rgb = vec3(0.0);
     weight = 0.0;
-    vec3 ref_uv = vec3(p0, p1, p2);
+    vec3 map_uv = vec3(p0, p1, p2);
     vec3 right = vec3(p3, p4, p5);
     vec3 up = vec3(p6, p7, p8);
+    vec3 falloff_uv = vec3(p9, p10, p11);
     float u = 0.5;
     float v = 0.5;
-    float dist_mm = 0.0;
-    smMap(p01, ref_uv, span_mm, right, up, u, v, dist_mm);
+    float map_dist_mm = 0.0;
+    smMap(p01, map_uv, span_mm, right, up, u, v, map_dist_mm);
+    float dist_mm = length((p01 - falloff_uv) * span_mm);
 
     float zu0, zu1, zv0, zv1;
-    smUnpack01(p16, zu0, zu1);
-    smUnpack01(p17, zv0, zv1);
+    smUnpack01(p19, zu0, zu1);
+    smUnpack01(p20, zv0, zv1);
     if(u < zu0 || u > zu1 || v < zv0 || v > zv1)
         return;
 
     float coverage, invert;
-    smUnpack01(p9, coverage, invert);
+    smUnpack01(p12, coverage, invert);
     coverage *= 3.0;
     float softness, curve01;
-    smUnpack01(p10, softness, curve01);
+    smUnpack01(p13, softness, curve01);
     softness *= 100.0;
     float curve = 0.25 + curve01 * 3.75;
     float roll01, radial01;
-    smUnpack01(p11, roll01, radial01);
+    smUnpack01(p14, roll01, radial01);
     float roll = roll01 * 360.0 - 180.0;
     float radial = radial01 * 100.0 - 50.0;
     float btl01, btr01, bbl01, bbr01;
-    smUnpack01(p12, btl01, btr01);
-    smUnpack01(p13, bbl01, bbr01);
+    smUnpack01(p15, btl01, btr01);
+    smUnpack01(p16, bbl01, bbr01);
     smRadial(u, v, radial, btl01 * 100.0 - 50.0, btr01 * 100.0 - 50.0,
              bbl01 * 100.0 - 50.0, bbr01 * 100.0 - 50.0);
     smRoll(u, v, roll);
 
     float max_mm = 0.0;
-    max_mm = max(max_mm, length((vec3(0.0, 0.0, 0.0) - ref_uv) * span_mm));
-    max_mm = max(max_mm, length((vec3(1.0, 0.0, 0.0) - ref_uv) * span_mm));
-    max_mm = max(max_mm, length((vec3(0.0, 1.0, 0.0) - ref_uv) * span_mm));
-    max_mm = max(max_mm, length((vec3(1.0, 1.0, 0.0) - ref_uv) * span_mm));
-    max_mm = max(max_mm, length((vec3(0.0, 0.0, 1.0) - ref_uv) * span_mm));
-    max_mm = max(max_mm, length((vec3(1.0, 0.0, 1.0) - ref_uv) * span_mm));
-    max_mm = max(max_mm, length((vec3(0.0, 1.0, 1.0) - ref_uv) * span_mm));
-    max_mm = max(max_mm, length((vec3(1.0, 1.0, 1.0) - ref_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(0.0, 0.0, 0.0) - falloff_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(1.0, 0.0, 0.0) - falloff_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(0.0, 1.0, 0.0) - falloff_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(1.0, 1.0, 0.0) - falloff_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(0.0, 0.0, 1.0) - falloff_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(1.0, 0.0, 1.0) - falloff_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(0.0, 1.0, 1.0) - falloff_uv) * span_mm));
+    max_mm = max(max_mm, length((vec3(1.0, 1.0, 1.0) - falloff_uv) * span_mm));
     if(max_mm <= 0.0)
         max_mm = 3000.0;
 
     float fall = smFalloff(dist_mm, max_mm, coverage, softness, curve, invert);
     float spd01, decay01;
-    smUnpack01(p18, spd01, decay01);
+    smUnpack01(p21, spd01, decay01);
     float speed = spd01 * 500.0;
     float decay = decay01 * 10000.0;
     float delay_ms = 0.0;
@@ -203,15 +209,15 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
     weight = fall;
 
     float fb01, lr01, tb01, blend01;
-    smUnpack01(p19, fb01, lr01);
-    smUnpack01(p20, tb01, blend01);
+    smUnpack01(p22, fb01, lr01);
+    smUnpack01(p23, tb01, blend01);
     float fb = fb01 * 200.0 - 100.0;
     float lr = lr01 * 200.0 - 100.0;
     float tb = tb01 * 200.0 - 100.0;
     if(max_mm > 0.001 && (abs(fb) > 0.5 || abs(lr) > 0.5 || abs(tb) > 0.5))
     {
         vec3 nrm = cross(right, up);
-        vec3 d_uv = p01 - ref_uv;
+        vec3 d_uv = p01 - falloff_uv;
         float lat = dot(d_uv * span_mm, right);
         float vert = dot(d_uv * span_mm, up);
         float depth = dot(d_uv * span_mm, nrm);
@@ -228,7 +234,7 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
     }
 
     float lp, pp;
-    smUnpack01(p14, lp, pp);
+    smUnpack01(p17, lp, pp);
     lp *= 0.49;
     pp *= 0.49;
     vec2 uv_min = vec2(pp, lp);
@@ -244,7 +250,7 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
     }
 
     float str01, zone01;
-    smUnpack01(p15, str01, zone01);
+    smUnpack01(p18, str01, zone01);
     float zone = zone01 * 0.32;
     vec2 tile_scale = vec2(1.0 / max(nmon, 1.0), 1.0 / max(nhist, 1.0));
     float span_ms = 0.0;
@@ -313,7 +319,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
                   u_params[6], u_params[7], u_params[8], u_params[9], u_params[10], u_params[11],
                   u_params[12], u_params[13], u_params[14], u_params[15], u_params[16], u_params[17],
                   u_params[18], u_params[19], u_params[20], u_params[21], u_params[22], u_params[23],
-                  u_params[24], u_params[25], u_params[26],
+                  u_params[24], u_params[25], u_params[26], u_params[27], u_params[28], u_params[29],
                   rgb0, w0);
 
     vec3 rgb1 = vec3(0.0);
@@ -321,10 +327,10 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     if(nmon > 1.5)
     {
         smEvalMonitor(p01, span_mm, nmon, nhist, use_q, flip1, 1.0, steps_u, steps_v, avg_frame_ms,
-                      u_params[27], u_params[28], u_params[29], u_params[30], u_params[31], u_params[32],
-                      u_params[33], u_params[34], u_params[35], u_params[36], u_params[37], u_params[38],
-                      u_params[39], u_params[40], u_params[41], u_params[42], u_params[43], u_params[44],
-                      u_params[45], u_params[46], u_params[47],
+                      u_params[30], u_params[31], u_params[32], u_params[33], u_params[34], u_params[35],
+                      u_params[36], u_params[37], u_params[38], u_params[39], u_params[40], u_params[41],
+                      u_params[42], u_params[43], u_params[44], u_params[45], u_params[46], u_params[47],
+                      u_params[48], u_params[49], u_params[50], u_params[51], u_params[52], u_params[53],
                       rgb1, w1);
     }
 
@@ -341,8 +347,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     else
     {
         float a0, b0, a1, blend1;
-        smUnpack01(u_params[26], a0, b0);
-        smUnpack01(u_params[47], a1, blend1);
+        smUnpack01(u_params[29], a0, b0);
+        smUnpack01(u_params[53], a1, blend1);
         float blend = 0.5 * (b0 + blend1);
         float aw0 = w0 * (0.5 + 0.5 * blend);
         float aw1 = w1 * (0.5 + 0.5 * blend);

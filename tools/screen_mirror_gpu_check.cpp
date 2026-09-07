@@ -250,11 +250,119 @@ int main()
         fails++;
     }
 
+    /* Display plane at the front wall, Spatial Anchor at the LED centroid.
+     * Screen UVs must follow SpatialMapToScreen(plane.position), not the anchor. */
+    const float plane_x = 150.f, plane_y = 40.f, plane_z = -20.f;
+    const float anchor_x = ref_x, anchor_y = ref_y, anchor_z = ref_z;
+    const float plane_uvx = (plane_x - gmin_x) / span_u_x;
+    const float plane_uvy = (plane_y - gmin_y) / span_u_y;
+    const float plane_uvz = (plane_z - gmin_z) / span_u_z;
+    int plane_map_hits = 0;
+    int anchor_map_mismatch = 0;
+    for(size_t i = 0; i < sizeof(leds) / sizeof(leds[0]); ++i)
+    {
+        float u_plane, v_plane, d_plane, u_gpu, v_gpu, d_gpu, u_anchor, v_anchor, d_anchor;
+        MapToScreen(leds[i][0], leds[i][1], leds[i][2],
+                    plane_x, plane_y, plane_z, rx, ry, rz, ux, uy, uz, scale,
+                    u_plane, v_plane, d_plane);
+        float p01x = (leds[i][0] - gmin_x) / span_u_x;
+        float p01y = (leds[i][1] - gmin_y) / span_u_y;
+        float p01z = (leds[i][2] - gmin_z) / span_u_z;
+        GpuMap(p01x, p01y, p01z, plane_uvx, plane_uvy, plane_uvz,
+               span_mmx, span_mmy, span_mmz, rx, ry, rz, ux, uy, uz, u_gpu, v_gpu, d_gpu);
+        MapToScreen(leds[i][0], leds[i][1], leds[i][2],
+                    anchor_x, anchor_y, anchor_z, rx, ry, rz, ux, uy, uz, scale,
+                    u_anchor, v_anchor, d_anchor);
+        if(std::fabs(u_plane - u_gpu) > 1e-4f || std::fabs(v_plane - v_gpu) > 1e-4f)
+        {
+            std::fprintf(stderr, "plane-map fail led %zu cpu=(%f,%f) gpu=(%f,%f)\n",
+                         i, u_plane, v_plane, u_gpu, v_gpu);
+            fails++;
+        }
+        else
+        {
+            plane_map_hits++;
+        }
+        if(std::fabs(u_plane - u_anchor) > 0.02f || std::fabs(v_plane - v_anchor) > 0.02f)
+        {
+            anchor_map_mismatch++;
+        }
+        float fall_dx = (p01x - ((anchor_x - gmin_x) / span_u_x)) * span_mmx;
+        float fall_dy = (p01y - ((anchor_y - gmin_y) / span_u_y)) * span_mmy;
+        float fall_dz = (p01z - ((anchor_z - gmin_z) / span_u_z)) * span_mmz;
+        float fall_gpu = std::sqrt(fall_dx * fall_dx + fall_dy * fall_dy + fall_dz * fall_dz);
+        if(std::fabs(fall_gpu - d_anchor) > 0.05f)
+        {
+            std::fprintf(stderr, "falloff-from-anchor fail led %zu gpu=%f cpu=%f\n",
+                         i, fall_gpu, d_anchor);
+            fails++;
+        }
+    }
+    if(plane_map_hits < 3 || anchor_map_mismatch < 1)
+    {
+        std::fprintf(stderr, "plane-vs-anchor fixture too weak hits=%d mismatch=%d\n",
+                     plane_map_hits, anchor_map_mismatch);
+        fails++;
+    }
+
+    /* Atlas Y flip (the old ConvertRgbaAtlasToRgb bug) must not match plane mapping. */
+    {
+        float u0, v0, d0, uflip, vflip, dflip;
+        const float ledx = 0.f, ledy = 10.f, ledz = 30.f;
+        MapToScreen(ledx, ledy, ledz, plane_x, plane_y, plane_z, rx, ry, rz, ux, uy, uz, scale,
+                    u0, v0, d0);
+        float p01x = (ledx - gmin_x) / span_u_x;
+        float p01y = 1.f - (ledy - gmin_y) / span_u_y;
+        float p01z = (ledz - gmin_z) / span_u_z;
+        GpuMap(p01x, p01y, p01z, plane_uvx, plane_uvy, plane_uvz,
+               span_mmx, span_mmy, span_mmz, rx, ry, rz, ux, uy, uz, uflip, vflip, dflip);
+        if(std::fabs(u0 - uflip) < 1e-3f && std::fabs(v0 - vflip) < 1e-3f)
+        {
+            std::fprintf(stderr, "flipped-Y atlas UV should not match SpatialMapToScreen\n");
+            fails++;
+        }
+    }
+
+    /* u_media: first uploaded QImage row is texture t=0. Live capture applies 1-v
+     * so mapper v=1 (plane up) samples capture row 0 (screen top), matching CPU. */
+    {
+        const float mapper_v_up = 1.0f;
+        const float live_tex_v = 1.0f - mapper_v_up;
+        const float cal_tex_v = mapper_v_up;
+        if(std::fabs(live_tex_v) > 1e-6f)
+        {
+            std::fprintf(stderr, "live tex v for mapper-up want 0, got %f\n", live_tex_v);
+            fails++;
+        }
+        if(std::fabs(cal_tex_v - 1.0f) > 1e-6f)
+        {
+            std::fprintf(stderr, "calibration tex v for mapper-up want 1, got %f\n", cal_tex_v);
+            fails++;
+        }
+    }
+
+    const int kShared = 6;
+    const int kMon = 24;
+    if(kShared + 2 * kMon > 64)
+    {
+        std::fprintf(stderr, "monitor pack %d exceeds kMaxParams 64\n", kShared + 2 * kMon);
+        fails++;
+    }
+    const int mon1_base = kShared + kMon;
+    const int blend0 = kShared + 23;
+    const int blend1 = mon1_base + 23;
+    if(mon1_base != 30 || blend0 != 29 || blend1 != 53)
+    {
+        std::fprintf(stderr, "param slots mon1=%d blend0=%d blend1=%d\n",
+                     mon1_base, blend0, blend1);
+        fails++;
+    }
+
     if(fails != 0)
     {
         std::fprintf(stderr, "FAILED %d checks\n", fails);
         return 1;
     }
-    std::printf("screen_mirror_gpu_check: pack, map, layout, wave timing, trail, radial OK\n");
+        std::printf("screen_mirror_gpu_check: pack, map, plane-uv, layout, wave timing, trail, radial OK\n");
     return 0;
 }

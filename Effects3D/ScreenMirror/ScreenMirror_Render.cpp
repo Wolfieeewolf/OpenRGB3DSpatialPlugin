@@ -48,7 +48,7 @@ namespace
 {
     constexpr int kGpuMaxMonitors = 2;
     constexpr int kGpuMaxHistory = kScreenMirrorGpuMaxHistory;
-    constexpr int kGpuMonParamCount = 21;
+    constexpr int kGpuMonParamCount = 24;
     constexpr int kGpuSharedCount = 6;
 
     float Pack01(float a, float b)
@@ -188,7 +188,8 @@ namespace
     struct GpuMonitor
     {
         ScreenMirror::MonitorSettings* settings = nullptr;
-        Vector3D ref_uv{};
+        Vector3D map_uv{};
+        Vector3D falloff_uv{};
         Vector3D right{};
         Vector3D up{};
         bool flip_v = true;
@@ -317,38 +318,51 @@ namespace
         }
     }
 
+    Vector3D RoomUvUnclamped(const Vector3D& world, const GridContext3D& grid,
+                             float span_x, float span_y, float span_z)
+    {
+        Vector3D uv;
+        uv.x = (world.x - grid.min_x) / span_x;
+        uv.y = (world.y - grid.min_y) / span_y;
+        uv.z = (world.z - grid.min_z) / span_z;
+        return uv;
+    }
+
     void FillMonitorParams(float* dst, const GpuMonitor& mon)
     {
-        dst[0] = mon.ref_uv.x;
-        dst[1] = mon.ref_uv.y;
-        dst[2] = mon.ref_uv.z;
+        dst[0] = mon.map_uv.x;
+        dst[1] = mon.map_uv.y;
+        dst[2] = mon.map_uv.z;
         dst[3] = mon.right.x;
         dst[4] = mon.right.y;
         dst[5] = mon.right.z;
         dst[6] = mon.up.x;
         dst[7] = mon.up.y;
         dst[8] = mon.up.z;
+        dst[9] = mon.falloff_uv.x;
+        dst[10] = mon.falloff_uv.y;
+        dst[11] = mon.falloff_uv.z;
         const ScreenMirror::MonitorSettings& s = *mon.settings;
-        dst[9] = Pack01(std::clamp(s.scale, 0.0f, 3.0f) / 3.0f, s.scale_inverted ? 1.0f : 0.0f);
-        dst[10] = Pack01(std::clamp(s.edge_softness, 0.0f, 100.0f) / 100.0f,
+        dst[12] = Pack01(std::clamp(s.scale, 0.0f, 3.0f) / 3.0f, s.scale_inverted ? 1.0f : 0.0f);
+        dst[13] = Pack01(std::clamp(s.edge_softness, 0.0f, 100.0f) / 100.0f,
                          std::clamp((std::clamp(s.falloff_curve_exponent, 0.25f, 4.0f) - 0.25f) / 3.75f, 0.0f, 1.0f));
-        dst[11] = Pack01((std::clamp(s.screen_map_roll_deg, -180.0f, 180.0f) + 180.0f) / 360.0f,
+        dst[14] = Pack01((std::clamp(s.screen_map_roll_deg, -180.0f, 180.0f) + 180.0f) / 360.0f,
                          (RadialMapUiToInternal(s.radial_corner_expansion_ui) + 50.0f) / 100.0f);
-        dst[12] = Pack01((RadialMapUiToInternal(s.radial_corner_bias_tl_ui) + 50.0f) / 100.0f,
+        dst[15] = Pack01((RadialMapUiToInternal(s.radial_corner_bias_tl_ui) + 50.0f) / 100.0f,
                          (RadialMapUiToInternal(s.radial_corner_bias_tr_ui) + 50.0f) / 100.0f);
-        dst[13] = Pack01((RadialMapUiToInternal(s.radial_corner_bias_bl_ui) + 50.0f) / 100.0f,
+        dst[16] = Pack01((RadialMapUiToInternal(s.radial_corner_bias_bl_ui) + 50.0f) / 100.0f,
                          (RadialMapUiToInternal(s.radial_corner_bias_br_ui) + 50.0f) / 100.0f);
-        dst[14] = Pack01(std::clamp(s.black_bar_letterbox_percent, 0.0f, 49.0f) / 49.0f,
+        dst[17] = Pack01(std::clamp(s.black_bar_letterbox_percent, 0.0f, 49.0f) / 49.0f,
                          std::clamp(s.black_bar_pillarbox_percent, 0.0f, 49.0f) / 49.0f);
-        dst[15] = Pack01(std::clamp(s.corner_blend_strength_pct / 100.0f, 0.0f, 1.0f),
+        dst[18] = Pack01(std::clamp(s.corner_blend_strength_pct / 100.0f, 0.0f, 1.0f),
                          std::clamp(s.corner_blend_zone_pct / 100.0f, 0.0f, 0.32f) / 0.32f);
-        dst[16] = Pack01(std::clamp(mon.zone_u0, 0.0f, 1.0f), std::clamp(mon.zone_u1, 0.0f, 1.0f));
-        dst[17] = Pack01(std::clamp(mon.zone_v0, 0.0f, 1.0f), std::clamp(mon.zone_v1, 0.0f, 1.0f));
-        dst[18] = Pack01(std::clamp(mon.wave_speed / 500.0f, 0.0f, 1.0f),
+        dst[19] = Pack01(std::clamp(mon.zone_u0, 0.0f, 1.0f), std::clamp(mon.zone_u1, 0.0f, 1.0f));
+        dst[20] = Pack01(std::clamp(mon.zone_v0, 0.0f, 1.0f), std::clamp(mon.zone_v1, 0.0f, 1.0f));
+        dst[21] = Pack01(std::clamp(mon.wave_speed / 500.0f, 0.0f, 1.0f),
                          std::clamp(s.wave_decay_ms / 10000.0f, 0.0f, 1.0f));
-        dst[19] = Pack01((std::clamp(s.front_back_balance, -100.0f, 100.0f) + 100.0f) / 200.0f,
+        dst[22] = Pack01((std::clamp(s.front_back_balance, -100.0f, 100.0f) + 100.0f) / 200.0f,
                          (std::clamp(s.left_right_balance, -100.0f, 100.0f) + 100.0f) / 200.0f);
-        dst[20] = Pack01((std::clamp(s.top_bottom_balance, -100.0f, 100.0f) + 100.0f) / 200.0f,
+        dst[23] = Pack01((std::clamp(s.top_bottom_balance, -100.0f, 100.0f) + 100.0f) / 200.0f,
                          std::clamp(s.blend / 100.0f, 0.0f, 1.0f));
     }
 }
@@ -494,6 +508,11 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         gm.flip_v = !gm.calibration;
         ZoneUnion(mon_settings, gm.zone_u0, gm.zone_u1, gm.zone_v0, gm.zone_v1);
 
+        /* Screen UVs lock to the display plane (room grid of the monitor), not the
+         * Spatial Anchor. Mapping from the layer hub put capture on the wrong LEDs
+         * the same way origin-local vs room UV did for other GPU ports. */
+        gm.map_uv = RoomUvUnclamped(plane->GetTransform().position, grid, span_x, span_y, span_z);
+
         Vector3D falloff_ref = grid_anchor_ref;
         Vector3D custom_ref;
         if(mon_settings.reference_point_id > 0 && ResolveReferencePointById(mon_settings.reference_point_id, custom_ref))
@@ -502,10 +521,10 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
             falloff_ref.x += (effect_offset_x / 100.0f) * (grid.width * 0.5f);
             falloff_ref.y += (effect_offset_y / 100.0f) * (grid.height * 0.5f);
             falloff_ref.z += (effect_offset_z / 100.0f) * (grid.depth * 0.5f);
+            /* A chosen layout point is a viewer origin: map and falloff share it. */
+            gm.map_uv = RoomUvUnclamped(falloff_ref, grid, span_x, span_y, span_z);
         }
-        gm.ref_uv.x = (falloff_ref.x - grid.min_x) / span_x;
-        gm.ref_uv.y = (falloff_ref.y - grid.min_y) / span_y;
-        gm.ref_uv.z = (falloff_ref.z - grid.min_z) / span_z;
+        gm.falloff_uv = RoomUvUnclamped(falloff_ref, grid, span_x, span_y, span_z);
 
         float rot[9];
         Geometry3D::ComputeRotationMatrix(plane->GetTransform().rotation, rot);
@@ -751,6 +770,8 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
     }
 
     float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
+    /* Room UV on the active world/zone AABB — same contract as Surface Ambient.
+     * Origin-local sampling would slide capture off the LED grid. */
     SampleGpuRoomVolume01(x, y, z, grid, &c1, &c2, &c3);
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float total_r = std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f;
