@@ -70,6 +70,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
         "Maps screen content onto LEDs in 3D space (GPU room field). "
         "Capture stays on the CPU; spatial mapping, falloff, and sampling run on the volume atlas. "
         "Screen UVs lock to the display plane; Spatial Anchor (or a layout point) is falloff/wave. "
+        "Span, falloff, and time-to-edge follow the live grid/layout AABB (not a fixed room size). "
         "Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;

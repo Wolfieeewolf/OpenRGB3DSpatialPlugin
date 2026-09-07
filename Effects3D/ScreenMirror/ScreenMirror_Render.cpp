@@ -21,7 +21,6 @@
 #include <cstdint>
 #include <limits>
 #include <algorithm>
-#include <array>
 #include <cstring>
 #include <deque>
 #include <mutex>
@@ -196,6 +195,7 @@ namespace
         bool calibration = false;
         float wave_speed = 0.0f;
         float wave_span_ms = 0.0f;
+        float max_distance_mm = 1.0f;
         float zone_u0 = 0.0f;
         float zone_u1 = 1.0f;
         float zone_v0 = 0.0f;
@@ -358,7 +358,7 @@ namespace
                          std::clamp(s.corner_blend_zone_pct / 100.0f, 0.0f, 0.32f) / 0.32f);
         dst[19] = Pack01(std::clamp(mon.zone_u0, 0.0f, 1.0f), std::clamp(mon.zone_u1, 0.0f, 1.0f));
         dst[20] = Pack01(std::clamp(mon.zone_v0, 0.0f, 1.0f), std::clamp(mon.zone_v1, 0.0f, 1.0f));
-        dst[21] = Pack01(std::clamp(mon.wave_speed / 500.0f, 0.0f, 1.0f),
+        dst[21] = Pack01(PackWaveSpeed01(mon.wave_speed),
                          std::clamp(s.wave_decay_ms / 10000.0f, 0.0f, 1.0f));
         dst[22] = Pack01((std::clamp(s.front_back_balance, -100.0f, 100.0f) + 100.0f) / 200.0f,
                          (std::clamp(s.left_right_balance, -100.0f, 100.0f) + 100.0f) / 200.0f);
@@ -460,6 +460,8 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
     const float span_x = std::max(grid.max_x - grid.min_x, 1e-4f);
     const float span_y = std::max(grid.max_y - grid.min_y, 1e-4f);
     const float span_z = std::max(grid.max_z - grid.min_z, 1e-4f);
+    /* span_mm / map_uv / falloff_uv are rebuilt every frame from this GridContext3D
+     * (manual room, LED hull, or target-zone AABB + live grid_scale_mm). */
     const Vector3D grid_anchor_ref = GetEffectOriginGrid(grid);
 
     std::vector<DisplayPlane3D*> planes = frame_cache_planes_;
@@ -531,39 +533,20 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         gm.right = {rot[0], rot[3], rot[6]};
         gm.up = {rot[1], rot[4], rot[7]};
 
-        float reference_max_distance_mm = 3000.0f;
-        {
-            std::array<float, 2> xs = {grid.min_x, grid.max_x};
-            std::array<float, 2> ys = {grid.min_y, grid.max_y};
-            std::array<float, 2> zs = {grid.min_z, grid.max_z};
-            float max_distance_sq = 0.0f;
-            for(float cx : xs)
-            {
-                for(float cy : ys)
-                {
-                    for(float cz : zs)
-                    {
-                        float dx = GridUnitsToMM(cx - falloff_ref.x, scale_mm);
-                        float dy = GridUnitsToMM(cy - falloff_ref.y, scale_mm);
-                        float dz = GridUnitsToMM(cz - falloff_ref.z, scale_mm);
-                        max_distance_sq = std::max(max_distance_sq, dx * dx + dy * dy + dz * dz);
-                    }
-                }
-            }
-            if(max_distance_sq > 0.0f)
-            {
-                reference_max_distance_mm = sqrtf(max_distance_sq);
-            }
-        }
+        const float span_mm_x = span_x * scale_mm;
+        const float span_mm_y = span_y * scale_mm;
+        const float span_mm_z = span_z * scale_mm;
+        gm.max_distance_mm = RoomCornerMaxDistanceMm(span_mm_x, span_mm_y, span_mm_z,
+                                                     gm.falloff_uv.x, gm.falloff_uv.y, gm.falloff_uv.z);
 
         bool use_wave = !gm.calibration && !capture_id.empty();
         if(use_wave)
         {
             gm.wave_speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
                                                     mon_settings.propagation_speed_mm_per_ms,
-                                                    reference_max_distance_mm);
+                                                    gm.max_distance_mm);
             gm.wave_span_ms = WaveHistorySpanMs(gm.wave_speed,
-                                                reference_max_distance_mm,
+                                                gm.max_distance_mm,
                                                 mon_settings.wave_decay_ms);
         }
 

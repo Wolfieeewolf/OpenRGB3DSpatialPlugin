@@ -485,11 +485,126 @@ int main()
         }
     }
 
+    /* Live grid/layout AABB: mapping and time-to-edge follow room mm, not 3000. */
+    {
+        struct Room
+        {
+            float min_x, min_y, min_z;
+            float span_u_x, span_u_y, span_u_z;
+            float scale;
+        };
+        auto span_mm_x = [](const Room& r) { return r.span_u_x * r.scale; };
+        auto span_mm_y = [](const Room& r) { return r.span_u_y * r.scale; };
+        auto span_mm_z = [](const Room& r) { return r.span_u_z * r.scale; };
+        auto room_uv = [](const Room& r, float x, float y, float z,
+                          float& u, float& v, float& w) {
+            u = (x - r.min_x) / r.span_u_x;
+            v = (y - r.min_y) / r.span_u_y;
+            w = (z - r.min_z) / r.span_u_z;
+        };
+
+        const Room small{0.f, 0.f, 0.f, 100.f, 80.f, 60.f, 10.f};
+        const Room large{0.f, 0.f, 0.f, 1000.f, 800.f, 600.f, 10.f};
+        const Room rooms[2] = {small, large};
+        float max_mm_rooms[2] = {0.f, 0.f};
+
+        for(int ri = 0; ri < 2; ++ri)
+        {
+            const Room& r = rooms[ri];
+            const float led_x = r.min_x + 0.5f * r.span_u_x;
+            const float led_y = r.min_y + 0.5f * r.span_u_y;
+            const float led_z = r.min_z + 0.5f * r.span_u_z;
+            const float plane_x = r.min_x + 0.5f * r.span_u_x;
+            const float plane_y = r.min_y + 0.5f * r.span_u_y;
+            const float plane_z = r.min_z;
+            float p01x, p01y, p01z, map_u, map_v, map_w;
+            room_uv(r, led_x, led_y, led_z, p01x, p01y, p01z);
+            room_uv(r, plane_x, plane_y, plane_z, map_u, map_v, map_w);
+            if(std::fabs(p01x - 0.5f) > 1e-4f || std::fabs(p01y - 0.5f) > 1e-4f ||
+               std::fabs(p01z - 0.5f) > 1e-4f)
+            {
+                std::fprintf(stderr, "room %d mid LED UV (%f,%f,%f) want 0.5\n",
+                             ri, p01x, p01y, p01z);
+                fails++;
+            }
+            const float dmx = (p01x - map_u) * span_mm_x(r);
+            const float dmy = (p01y - map_v) * span_mm_y(r);
+            const float dmz = (p01z - map_w) * span_mm_z(r);
+            const float want_x = (led_x - plane_x) * r.scale;
+            const float want_y = (led_y - plane_y) * r.scale;
+            const float want_z = (led_z - plane_z) * r.scale;
+            if(std::fabs(dmx - want_x) > 0.05f || std::fabs(dmy - want_y) > 0.05f ||
+               std::fabs(dmz - want_z) > 0.05f)
+            {
+                std::fprintf(stderr, "room %d delta_mm (%f,%f,%f) want (%f,%f,%f)\n",
+                             ri, dmx, dmy, dmz, want_x, want_y, want_z);
+                fails++;
+            }
+
+            const float max_mm = RoomCornerMaxDistanceMm(span_mm_x(r), span_mm_y(r), span_mm_z(r),
+                                                         0.5f, 0.5f, 0.5f);
+            max_mm_rooms[ri] = max_mm;
+            if(std::fabs(max_mm - 3000.0f) < 1.0f)
+            {
+                std::fprintf(stderr, "room %d max_mm %f must not be the old 3000 fallback\n",
+                             ri, max_mm);
+                fails++;
+            }
+            const float speed_1s = ResolveWaveSpeedMmPerMs(1.0f, 0.0f, max_mm);
+            const float want_speed = max_mm / 1000.0f;
+            if(std::fabs(speed_1s - want_speed) > 0.02f)
+            {
+                std::fprintf(stderr, "room %d time-to-edge 1s speed %f want %f\n",
+                             ri, speed_1s, want_speed);
+                fails++;
+            }
+            const float packed = PackWaveSpeed01(speed_1s);
+            const float unpacked = UnpackWaveSpeedMmPerMs(packed);
+            if(std::fabs(unpacked - speed_1s) > 0.02f)
+            {
+                std::fprintf(stderr, "room %d wave pack round-trip %f -> %f\n",
+                             ri, speed_1s, unpacked);
+                fails++;
+            }
+        }
+
+        if(max_mm_rooms[0] > 1.0f)
+        {
+            const float ratio = max_mm_rooms[1] / max_mm_rooms[0];
+            if(std::fabs(ratio - 10.0f) > 0.02f)
+            {
+                std::fprintf(stderr, "10x room max_mm ratio %f want 10 (small=%f large=%f)\n",
+                             ratio, max_mm_rooms[0], max_mm_rooms[1]);
+                fails++;
+            }
+        }
+
+        float degenerate = 0.0f;
+        if(degenerate <= 0.0f)
+        {
+            degenerate = RoomSpanLengthMm(0.0f, 0.0f, 0.0f);
+        }
+        if(degenerate <= 0.0f)
+        {
+            degenerate = 1.0f;
+        }
+        if(std::fabs(degenerate - 3000.0f) < 1.0f)
+        {
+            std::fprintf(stderr, "GLSL-style empty-span fallback %f must not be 3000\n", degenerate);
+            fails++;
+        }
+        if(std::fabs(degenerate - 1.0f) > 1e-4f)
+        {
+            std::fprintf(stderr, "empty-span fallback %f want 1\n", degenerate);
+            fails++;
+        }
+    }
+
     if(fails != 0)
     {
         std::fprintf(stderr, "FAILED %d checks\n", fails);
         return 1;
     }
-        std::printf("screen_mirror_gpu_check: pack, map, plane-uv, layout, wave, trail, radial, no-face-clamp OK\n");
+        std::printf("screen_mirror_gpu_check: pack, map, plane-uv, layout, wave, trail, radial, no-face-clamp, live-room OK\n");
     return 0;
 }

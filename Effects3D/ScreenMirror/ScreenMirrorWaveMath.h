@@ -10,10 +10,58 @@ constexpr int kScreenMirrorGpuMaxHistory = 8;
 constexpr float kWaveTimeToEdgeEnableSec = 0.05f;
 constexpr float kWaveIntensityEnablePct = 5.0f;
 constexpr int kRadialMapUiNeutral = 50;
+/** GPU pack ceiling for wave speed (mm/ms). Matches WaveIntensityToSpeedMmPerMs. */
+constexpr float kWaveSpeedPackMmPerMs = 500.0f;
 
 inline float RadialMapUiToInternal(int ui_0_100)
 {
     return (float)std::clamp(ui_0_100, 0, 100) - (float)kRadialMapUiNeutral;
+}
+
+/** Live AABB diagonal in mm — fallback when a degenerate grid has no corners. */
+inline float RoomSpanLengthMm(float span_mm_x, float span_mm_y, float span_mm_z)
+{
+    float lx = std::max(span_mm_x, 0.0f);
+    float ly = std::max(span_mm_y, 0.0f);
+    float lz = std::max(span_mm_z, 0.0f);
+    float len = std::sqrt(lx * lx + ly * ly + lz * lz);
+    return std::max(len, 1.0f);
+}
+
+/** Farthest AABB corner from a room-UV origin, in mm. Scales with layout size. */
+inline float RoomCornerMaxDistanceMm(float span_mm_x, float span_mm_y, float span_mm_z,
+                                     float falloff_uv_x, float falloff_uv_y, float falloff_uv_z)
+{
+    float max_mm = 0.0f;
+    const float c[2] = {0.0f, 1.0f};
+    for(int ix = 0; ix < 2; ++ix)
+    {
+        float dx = (c[ix] - falloff_uv_x) * span_mm_x;
+        for(int iy = 0; iy < 2; ++iy)
+        {
+            float dy = (c[iy] - falloff_uv_y) * span_mm_y;
+            for(int iz = 0; iz < 2; ++iz)
+            {
+                float dz = (c[iz] - falloff_uv_z) * span_mm_z;
+                max_mm = std::max(max_mm, std::sqrt(dx * dx + dy * dy + dz * dz));
+            }
+        }
+    }
+    if(max_mm <= 1e-3f)
+    {
+        max_mm = RoomSpanLengthMm(span_mm_x, span_mm_y, span_mm_z);
+    }
+    return max_mm;
+}
+
+inline float PackWaveSpeed01(float speed_mm_per_ms)
+{
+    return std::clamp(speed_mm_per_ms / kWaveSpeedPackMmPerMs, 0.0f, 1.0f);
+}
+
+inline float UnpackWaveSpeedMmPerMs(float packed01)
+{
+    return std::clamp(packed01, 0.0f, 1.0f) * kWaveSpeedPackMmPerMs;
 }
 
 inline float WaveIntensityToSpeedMmPerMs(float intensity_0_to_100)

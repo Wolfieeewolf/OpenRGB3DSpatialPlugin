@@ -10,7 +10,8 @@
  *  SampleFrame). Live capture still applies 1-v (DXGI/GDI vs mapper up).
  *
  *  Shared u_params:
- *    [0..2] AABB span_mm  [3] layout  [4] pack(steps_u, steps_v)  [5] avg_frame_ms
+ *    [0..2] AABB span_mm (live room/layout mm extents)  [3] layout
+ *    [4] pack(steps_u, steps_v)  [5] avg_frame_ms
  *    layout = nmon + 10*nhist + 100*use_q + 1000*flip0 + 2000*flip1
  *
  *  Per monitor (24 floats), base 6 and 30:
@@ -197,11 +198,15 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
     max_mm = max(max_mm, length((vec3(0.0, 1.0, 1.0) - falloff_uv) * span_mm));
     max_mm = max(max_mm, length((vec3(1.0, 1.0, 1.0) - falloff_uv) * span_mm));
     if(max_mm <= 0.0)
-        max_mm = 3000.0;
+        max_mm = length(span_mm);
+    if(max_mm <= 0.0)
+        max_mm = 1.0;
 
     float fall = smFalloff(dist_mm, max_mm, coverage, softness, curve, invert);
     float spd01, decay01;
     smUnpack01(p21, spd01, decay01);
+    /* 500 = pack ceiling (mm/ms), not a room size. Time-to-edge is baked on CPU
+     * from live AABB max_mm, then packed as speed/500. */
     float speed = spd01 * 500.0;
     float decay = decay01 * 10000.0;
     float delay_ms = 0.0;
