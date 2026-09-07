@@ -770,9 +770,12 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
     }
 
     float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
-    /* Room UV on the active world/zone AABB — same contract as Surface Ambient.
-     * Origin-local sampling would slide capture off the LED grid. */
-    SampleGpuRoomVolume01(x, y, z, grid, &c1, &c2, &c3);
+    /* Room UV on the active world/zone AABB. Do not origin-local sample, and do
+     * not clamp UV onto atlas faces (four-quadrant / cube-face paint). */
+    if(!TrySampleGpuRoomVolume01(x, y, z, grid, &c1, &c2, &c3))
+    {
+        return ToRGBColor(0, 0, 0);
+    }
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float total_r = std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f;
     float total_g = std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f;

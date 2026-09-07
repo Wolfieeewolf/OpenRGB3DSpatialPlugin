@@ -193,6 +193,8 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   Target zone bounds change that AABB. Use only for wall/floor/ceiling
  *   surface fields (Surface Ambient) and room-edge fade.
  *   Sample those GPU atlases with SampleGpuRoomVolume01 — no axis flips.
+ *   Screen Mirror uses TrySampleGpuRoomVolume01 so samples outside the AABB
+ *   stay unlit instead of clamping onto cube faces (four-quadrant artifact).
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
@@ -301,6 +303,27 @@ inline void SampleGpuRoomVolume01(float x, float y, float z,
     *c1 = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
     *c2 = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
     *c3 = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
+}
+
+/** Room UV that does not clamp onto atlas faces (four-quadrant artifact).
+ *  Occupancy is a sphere around the Spatial Anchor, so samples can sit outside
+ *  the grid AABB; those must stay unlit instead of snapping to a cube face. */
+inline bool TrySampleGpuRoomVolume01(float x, float y, float z,
+                                     const GridContext3D& grid,
+                                     float* c1, float* c2, float* c3)
+{
+    const float u = GridAxisToUnitUnclamped(x, grid.min_x, grid.max_x);
+    const float v = GridAxisToUnitUnclamped(y, grid.min_y, grid.max_y);
+    const float w = GridAxisToUnitUnclamped(z, grid.min_z, grid.max_z);
+    constexpr float kEps = 1e-4f;
+    if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
+    {
+        return false;
+    }
+    *c1 = std::max(0.0f, std::min(1.0f, u));
+    *c2 = std::max(0.0f, std::min(1.0f, v));
+    *c3 = std::max(0.0f, std::min(1.0f, w));
+    return true;
 }
 
 inline float EffectGridMedianOfHalfExtents(const EffectGridAxisHalfExtents& e)

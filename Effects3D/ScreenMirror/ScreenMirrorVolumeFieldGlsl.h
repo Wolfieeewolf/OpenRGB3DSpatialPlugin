@@ -2,7 +2,8 @@
 #pragma once
 
 /** Screen Mirror volume field: atlas stores graded RGB after plane mapping.
- *  p01 = unit room UV (front-left floor = 0). Pair with SampleGpuRoomVolume01.
+ *  p01 = unit room UV (front-left floor = 0). Pair with TrySampleGpuRoomVolume01
+ *  (reject outside the AABB — never clamp onto atlas faces / four quadrants).
  *  Do not sample origin-local — capture must sit on room/LED grid coordinates.
  *  u_media tiles: columns = monitors (1..2), rows = wave history (1..8, 0 = newest).
  *  Engine uploads QImage top-down; texture2D t=0 is capture row 0 (same as

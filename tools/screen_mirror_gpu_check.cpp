@@ -358,11 +358,138 @@ int main()
         fails++;
     }
 
+    /* Four-quadrant / cube-face clamp: occupancy is a sphere, so samples can sit
+     * outside the AABB. Clamping room UV onto faces paints four/six solid slabs.
+     * Reject those samples instead. */
+    auto try_room_uv = [](float x, float y, float z,
+                          float minx, float miny, float minz,
+                          float spx, float spy, float spz,
+                          float& u, float& v, float& w) -> bool {
+        u = (x - minx) / spx;
+        v = (y - miny) / spy;
+        w = (z - minz) / spz;
+        constexpr float kEps = 1e-4f;
+        if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
+        {
+            return false;
+        }
+        u = std::max(0.0f, std::min(1.0f, u));
+        v = std::max(0.0f, std::min(1.0f, v));
+        w = std::max(0.0f, std::min(1.0f, w));
+        return true;
+    };
+    auto clamp_room_uv = [](float x, float y, float z,
+                            float minx, float miny, float minz,
+                            float spx, float spy, float spz,
+                            float& u, float& v, float& w) {
+        u = std::max(0.0f, std::min(1.0f, (x - minx) / spx));
+        v = std::max(0.0f, std::min(1.0f, (y - miny) / spy));
+        w = std::max(0.0f, std::min(1.0f, (z - minz) / spz));
+    };
+
+    float ru = 0.f, rv = 0.f, rw = 0.f;
+    const float mid_y = gmin_y + 0.5f * span_u_y;
+    const float mid_x = gmin_x + 0.5f * span_u_x;
+    const float mid_z = gmin_z + 0.5f * span_u_z;
+    const bool in_ok = try_room_uv(mid_x, mid_y, mid_z, gmin_x, gmin_y, gmin_z,
+                                   span_u_x, span_u_y, span_u_z, ru, rv, rw);
+    if(!in_ok || std::fabs(ru - 0.5f) > 1e-4f)
+    {
+        std::fprintf(stderr, "in-AABB room UV should sample, got ok=%d u=%f\n",
+                     in_ok ? 1 : 0, ru);
+        fails++;
+    }
+
+    const float outside[4][3] = {
+        {gmin_x + span_u_x + 40.f, mid_y, mid_z},
+        {gmin_x - 40.f, mid_y, mid_z},
+        {mid_x, mid_y, gmin_z + span_u_z + 40.f},
+        {mid_x, mid_y, gmin_z - 40.f}
+    };
+    float clamped_faces[4][3];
+    int rejected = 0;
+    for(int i = 0; i < 4; ++i)
+    {
+        float cu, cv, cw;
+        clamp_room_uv(outside[i][0], outside[i][1], outside[i][2],
+                      gmin_x, gmin_y, gmin_z, span_u_x, span_u_y, span_u_z, cu, cv, cw);
+        clamped_faces[i][0] = cu;
+        clamped_faces[i][1] = cv;
+        clamped_faces[i][2] = cw;
+        if(!try_room_uv(outside[i][0], outside[i][1], outside[i][2],
+                        gmin_x, gmin_y, gmin_z, span_u_x, span_u_y, span_u_z, ru, rv, rw))
+        {
+            rejected++;
+        }
+        else
+        {
+            std::fprintf(stderr, "outside-AABB sample %d should be unlit, got uv=(%f,%f,%f)\n",
+                         i, ru, rv, rw);
+            fails++;
+        }
+    }
+    if(rejected != 4)
+    {
+        std::fprintf(stderr, "four-quadrant reject count %d want 4\n", rejected);
+        fails++;
+    }
+    /* Face-clamp would assign four distinct atlas faces — the split artifact. */
+    int distinct_clamped = 0;
+    for(int i = 0; i < 4; ++i)
+    {
+        bool unique = true;
+        for(int j = 0; j < i; ++j)
+        {
+            if(std::fabs(clamped_faces[i][0] - clamped_faces[j][0]) < 1e-4f &&
+               std::fabs(clamped_faces[i][1] - clamped_faces[j][1]) < 1e-4f &&
+               std::fabs(clamped_faces[i][2] - clamped_faces[j][2]) < 1e-4f)
+            {
+                unique = false;
+                break;
+            }
+        }
+        if(unique)
+        {
+            distinct_clamped++;
+        }
+    }
+    if(distinct_clamped < 4)
+    {
+        std::fprintf(stderr, "face-clamp fixture too weak distinct=%d\n", distinct_clamped);
+        fails++;
+    }
+
+    /* Off-center origin + room-half box was Color Wheel's four-quadrant path.
+     * Room UV at the far wall must stay interior (0.9), not snap to 1. */
+    {
+        const float box = 0.f, span = 100.f, origin = 20.f, far = 90.f;
+        const float room_u = (far - box) / span;
+        const float hw = span * 0.5f;
+        const float origin_local_u = 0.5f + 0.5f * (far - origin) / hw;
+        const float origin_local_clamped = std::max(0.0f, std::min(1.0f, origin_local_u));
+        if(std::fabs(room_u - 0.9f) > 1e-4f)
+        {
+            std::fprintf(stderr, "far-wall room UV %f want 0.9\n", room_u);
+            fails++;
+        }
+        if(origin_local_clamped < 0.999f)
+        {
+            std::fprintf(stderr, "origin-local half-box fixture should clamp, got %f\n",
+                         origin_local_clamped);
+            fails++;
+        }
+        if(std::fabs(room_u - origin_local_clamped) < 0.05f)
+        {
+            std::fprintf(stderr, "room UV must not match origin-local face clamp\n");
+            fails++;
+        }
+    }
+
     if(fails != 0)
     {
         std::fprintf(stderr, "FAILED %d checks\n", fails);
         return 1;
     }
-        std::printf("screen_mirror_gpu_check: pack, map, plane-uv, layout, wave timing, trail, radial OK\n");
+        std::printf("screen_mirror_gpu_check: pack, map, plane-uv, layout, wave, trail, radial, no-face-clamp OK\n");
     return 0;
 }
