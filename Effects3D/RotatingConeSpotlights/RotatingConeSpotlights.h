@@ -64,6 +64,8 @@ private:
     void UpdateConeSliderLabels();
     void MarkCustomLayout();
     void SyncUiFromState();
+    void SetSurfaceFromUi(int surface_id);
+    void SyncSurfaceCombo();
 
     float cone_scale = 0.10132118364233777f;
     float hue01 = 0.0f;
