@@ -30,13 +30,14 @@ public:
     float        widthMm() const;
     float        heightMm() const;
     std::string  captureSourceId() const;
+    std::string  captureSourceLabel() const;
 
 private slots:
     void onRefreshCaptureClicked();
     void onOpenSpecsClicked();
 
 private:
-    void populateCaptureCombo(const std::string& prefer_source_id);
+    void populateCaptureCombo(const std::string& prefer_source_id, bool suggest_if_empty = false);
 
     Ui::DisplayPlaneDialog* ui = nullptr;
     OpenRGB3DSpatialTab*    host_tab_ = nullptr;

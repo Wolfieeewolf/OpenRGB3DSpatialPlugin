@@ -27,7 +27,7 @@
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>Uses every active display plane automatically.</string>
+         <string>Each display plane picks a Windows monitor (Monitor 1, Monitor 2, …). Assign it here or on the plane in Object Creator / scene edit.</string>
         </property>
        </widget>
       </item>

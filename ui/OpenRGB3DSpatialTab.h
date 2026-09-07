@@ -451,8 +451,13 @@ private:
     QWidget*        displayPlanesEmptyLabel() const;
     QPushButton*    editDisplayPlaneButton() const;
     QPushButton*    removeDisplayPlaneButton() const;
+    QComboBox*      displayPlaneCaptureCombo() const;
+    QPushButton*    displayPlaneCaptureRefreshButton() const;
 
-    void FillDisplayPlaneCaptureCombo(QComboBox* combo, const std::string& prefer_source_id);
+    void FillDisplayPlaneCaptureCombo(QComboBox* combo,
+                                      const std::string& prefer_source_id,
+                                      bool suggest_if_empty = false);
+    void SyncDisplayPlaneCaptureCombos();
 
     SpatialControllerCardList* availableControllerCards() const;
     SpatialControllerCardList* sceneControllerCards() const;
@@ -530,6 +535,8 @@ private slots:
     void addDisplayPlaneClicked();
     void editDisplayPlaneClicked();
     void removeDisplayPlaneClicked();
+    void displayPlaneCaptureComboChanged();
+    void refreshDisplayPlaneCaptureComboClicked();
     void displayPlanePositionSignal(int index, float x, float y, float z);
     void displayPlaneRotationSignal(int index, float x, float y, float z);
 

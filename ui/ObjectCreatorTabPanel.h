@@ -8,6 +8,7 @@
 class QLabel;
 class QListWidget;
 class QPushButton;
+class QComboBox;
 class ZonesPanel;
 class EffectPackPanel;
 class EventBindingsPanel;
@@ -51,6 +52,8 @@ public:
     QPushButton*    createDisplayPlaneButton() const;
     QPushButton*    editDisplayPlaneButton() const;
     QPushButton*    removeDisplayPlaneButton() const;
+    QComboBox*      displayPlaneCaptureCombo() const;
+    QPushButton*    displayPlaneCaptureRefreshButton() const;
     ZonesPanel*     zonesPanel() const;
     EffectPackPanel* effectPackPanel() const;
     EventBindingsPanel* eventBindingsPanel() const;

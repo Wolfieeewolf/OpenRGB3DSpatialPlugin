@@ -7,13 +7,40 @@
 #include "SpatialTabLedHelpers.h"
 #include "SpatialControllerCardList.h"
 #include "ScreenCaptureManager.h"
+#include "DisplayPlaneCaptureCombo.h"
+#include "DisplayPlaneCaptureLabels.h"
 #include "GridSpaceUtils.h"
 #include "PluginUiUtils.h"
+#include "ObjectCreatorTabPanel.h"
+#include "SceneObjectEditHostPanel.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSignalBlocker>
 #include <cmath>
 #include <vector>
+
+namespace
+{
+    QString DisplayPlaneListLabel(const DisplayPlane3D& plane)
+    {
+        QString label = QString::fromStdString(plane.GetName()) +
+                        QString(" (%1 x %2 mm)")
+                            .arg(plane.GetWidthMM(), 0, 'f', 0)
+                            .arg(plane.GetHeightMM(), 0, 'f', 0);
+        const std::string& capture_id = plane.GetCaptureSourceId();
+        if(capture_id.empty())
+        {
+            return label;
+        }
+        QString capture = QString::fromStdString(plane.GetCaptureLabel());
+        if(capture.isEmpty())
+        {
+            capture = QString::fromStdString(capture_id);
+        }
+        return label + QStringLiteral(" — ") + capture;
+    }
+}
 
 DisplayPlane3D* OpenRGB3DSpatialTab::GetSelectedDisplayPlane()
 {
@@ -69,11 +96,7 @@ void OpenRGB3DSpatialTab::UpdateCurrentDisplayPlaneListItemLabel()
     }
     QListWidgetItem* item = displayPlanesList()->item(current_display_plane_index);
     if(!item) return;
-    QString label = QString::fromStdString(plane->GetName()) +
-        QString(" (%1 x %2 mm)")
-            .arg(plane->GetWidthMM(), 0, 'f', 0)
-            .arg(plane->GetHeightMM(), 0, 'f', 0);
-    item->setText(label);
+    item->setText(DisplayPlaneListLabel(*plane));
 }
 
 void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
@@ -91,11 +114,7 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
     {
         const DisplayPlane3D* plane = display_planes[i].get();
         if(!plane) continue;
-        QString label = QString::fromStdString(plane->GetName()) +
-                        QString(" (%1 x %2 mm)")
-                            .arg(plane->GetWidthMM(), 0, 'f', 0)
-                            .arg(plane->GetHeightMM(), 0, 'f', 0);
-        QListWidgetItem* item = new QListWidgetItem(label, displayPlanesList());
+        QListWidgetItem* item = new QListWidgetItem(DisplayPlaneListLabel(*plane), displayPlanesList());
         item->setData(Qt::UserRole, plane->GetId());
     }
     
@@ -158,6 +177,7 @@ void OpenRGB3DSpatialTab::displayPlanesListSelectionChanged(int row)
     {
         removeDisplayPlaneButton()->setEnabled(has_plane);
     }
+    SyncDisplayPlaneCaptureCombos();
 }
 
 void OpenRGB3DSpatialTab::SyncDisplayPlaneManager()
@@ -276,6 +296,7 @@ void OpenRGB3DSpatialTab::addDisplayPlaneClicked()
     plane->SetWidthMM(dialog.widthMm());
     plane->SetHeightMM(dialog.heightMm());
     plane->SetCaptureSourceId(dialog.captureSourceId());
+    plane->SetCaptureLabel(dialog.captureSourceLabel());
     plane->SetVisible(false);
 
     const float scale = static_cast<float>(EffectiveGridScaleMm());
@@ -399,6 +420,7 @@ bool OpenRGB3DSpatialTab::EditDisplayPlaneAtIndex(int plane_index)
     plane->SetWidthMM(dialog.widthMm());
     plane->SetHeightMM(dialog.heightMm());
     plane->SetCaptureSourceId(dialog.captureSourceId());
+    plane->SetCaptureLabel(dialog.captureSourceLabel());
 
     SetLayoutDirty();
     current_display_plane_index = plane_index;
@@ -483,55 +505,81 @@ void OpenRGB3DSpatialTab::removeDisplayPlaneClicked()
     UpdateAvailableControllersList();
 }
 
-void OpenRGB3DSpatialTab::FillDisplayPlaneCaptureCombo(QComboBox* combo, const std::string& prefer_source_id)
+void OpenRGB3DSpatialTab::FillDisplayPlaneCaptureCombo(QComboBox* combo,
+                                                      const std::string& prefer_source_id,
+                                                      bool suggest_if_empty)
 {
-    if(!combo)
+    std::vector<std::string> used_ids;
+    for(const std::unique_ptr<DisplayPlane3D>& plane : display_planes)
+    {
+        if(!plane)
+        {
+            continue;
+        }
+        if(!plane->GetCaptureSourceId().empty())
+        {
+            used_ids.push_back(plane->GetCaptureSourceId());
+        }
+    }
+    ::FillDisplayPlaneCaptureCombo(combo,
+                                   prefer_source_id,
+                                   used_ids,
+                                   suggest_if_empty ? CaptureComboEmptyPolicy::SelectSuggested
+                                                    : CaptureComboEmptyPolicy::SelectNone);
+}
+
+void OpenRGB3DSpatialTab::SyncDisplayPlaneCaptureCombos()
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    const bool has_plane = plane != nullptr;
+    const std::string prefer = has_plane ? plane->GetCaptureSourceId() : std::string();
+
+    auto sync_one = [&](QComboBox* combo, QPushButton* refresh) {
+        if(!combo)
+        {
+            return;
+        }
+        combo->setEnabled(has_plane);
+        if(refresh)
+        {
+            refresh->setEnabled(has_plane);
+        }
+        if(!has_plane)
+        {
+            QSignalBlocker block(combo);
+            combo->clear();
+            combo->addItem(QStringLiteral("(None)"), QString());
+            return;
+        }
+        FillDisplayPlaneCaptureCombo(combo, prefer, false);
+    };
+
+    sync_one(displayPlaneCaptureCombo(), displayPlaneCaptureRefreshButton());
+    if(ui && ui->sceneObjectEditHostPanel)
+    {
+        sync_one(ui->sceneObjectEditHostPanel->displayPlaneCaptureCombo(),
+                 ui->sceneObjectEditHostPanel->displayPlaneCaptureRefreshButton());
+    }
+}
+
+void OpenRGB3DSpatialTab::displayPlaneCaptureComboChanged()
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    QComboBox* combo = qobject_cast<QComboBox*>(sender());
+    if(!plane || !combo)
     {
         return;
     }
+    ApplyCaptureComboToPlane(plane, combo);
+    SetLayoutDirty();
+    UpdateCurrentDisplayPlaneListItemLabel();
+    NotifyDisplayPlaneChanged();
+    SyncDisplayPlaneCaptureCombos();
+}
 
-    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-    if(!capture_mgr.IsInitialized())
-    {
-        capture_mgr.Initialize();
-    }
-
-    capture_mgr.RefreshSources();
-    const std::vector<CaptureSourceInfo> sources = capture_mgr.GetAvailableSources();
-
-    QSignalBlocker block(combo);
-    combo->clear();
-    combo->addItem("(None)", "");
-
-    for(const CaptureSourceInfo& source : sources)
-    {
-        QString label = QString::fromStdString(source.name);
-        if(source.is_primary)
-        {
-            label += " [Primary]";
-        }
-        label += QString(" (%1x%2)").arg(source.width).arg(source.height);
-        combo->addItem(label, QString::fromStdString(source.id));
-    }
-
-    const QString prefer_q = QString::fromStdString(prefer_source_id);
-    if(!prefer_q.isEmpty())
-    {
-        for(int i = 0; i < combo->count(); i++)
-        {
-            if(combo->itemData(i).toString() == prefer_q)
-            {
-                combo->setCurrentIndex(i);
-                return;
-            }
-        }
-
-        combo->addItem(prefer_q + " (custom)", prefer_q);
-        combo->setCurrentIndex(combo->count() - 1);
-        return;
-    }
-
-    combo->setCurrentIndex(0);
+void OpenRGB3DSpatialTab::refreshDisplayPlaneCaptureComboClicked()
+{
+    SyncDisplayPlaneCaptureCombos();
 }
 
 void OpenRGB3DSpatialTab::SetDisplayPlaneVisibleInScene(DisplayPlane3D* plane, bool visible)

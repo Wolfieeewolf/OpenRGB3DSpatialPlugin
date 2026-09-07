@@ -4,6 +4,7 @@
 #include "ScreenCaptureManager.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
+#include "DisplayPlaneCaptureCombo.h"
 #include "PluginUiUtils.h"
 #include "ScreenMirror/ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
@@ -421,10 +422,10 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     settings.group_box->setCheckable(true);
     settings.group_box->setChecked(settings.enabled &&
                                    (has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview));
-    settings.group_box->setEnabled(has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview);
+    settings.group_box->setEnabled(true);
     settings.group_box->setToolTip(has_capture_source
                                       ? QStringLiteral("Enable or disable this monitor's influence.")
-                                      : QStringLiteral("This monitor needs a capture source assigned in Display Plane settings."));
+                                      : QStringLiteral("Pick the Windows display this plane should capture."));
     connect(settings.group_box, &QGroupBox::toggled, this, &ScreenMirror::OnParameterChanged);
 
     auto* panel = new ScreenMirrorMonitorPanel(settings.group_box);
@@ -491,7 +492,7 @@ void ScreenMirror::RefreshMonitorStatus()
                 display_name += " (No Capture Source)";
             }
             settings.group_box->setTitle(display_name);
-            settings.group_box->setEnabled(has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview);
+            settings.group_box->setEnabled(true);
             
             if(has_capture_source)
             {
@@ -499,7 +500,16 @@ void ScreenMirror::RefreshMonitorStatus()
             }
             else
             {
-                settings.group_box->setToolTip("This monitor needs a capture source assigned in Display Plane settings.");
+                settings.group_box->setToolTip("Pick the Windows display this plane should capture.");
+            }
+            if(settings.capture_combo)
+            {
+                FillDisplayPlaneCaptureCombo(settings.capture_combo, plane->GetCaptureSourceId());
+                settings.capture_combo->setEnabled(true);
+            }
+            if(settings.capture_refresh_button)
+            {
+                settings.capture_refresh_button->setEnabled(true);
             }
             
             if(settings.scale_slider) settings.scale_slider->setEnabled(has_capture_source);
@@ -571,7 +581,7 @@ void ScreenMirror::RefreshMonitorStatus()
             {
                 if(!monitor_help_label)
                 {
-                    monitor_help_label = new QLabel("Tip: Assign capture sources to Display Planes in the Object Creator tab.");
+                    monitor_help_label = new QLabel("Tip: Pick a Windows display on each plane (Monitor 1, Monitor 2, …).");
                     monitor_help_label->setWordWrap(true);
                     PluginUiApplyItalicSecondaryLabel(monitor_help_label);
                     status_group->layout()->addWidget(monitor_help_label);

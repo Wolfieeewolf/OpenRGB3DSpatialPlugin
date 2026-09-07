@@ -7,7 +7,9 @@
 #include "SpatialControllerEntryKey.h"
 #include "ui_SceneObjectEditHostPanel.h"
 
+#include <QComboBox>
 #include <QFont>
+#include <QPushButton>
 
 SceneObjectEditHostPanel::SceneObjectEditHostPanel(QWidget* parent)
     : QWidget(parent)
@@ -40,6 +42,21 @@ SceneObjectSpacingPanel* SceneObjectEditHostPanel::spacingPanel() const
 SceneTransformPanel* SceneObjectEditHostPanel::transformPanel() const
 {
     return ui ? ui->transformPanel : nullptr;
+}
+
+QComboBox* SceneObjectEditHostPanel::displayPlaneCaptureCombo() const
+{
+    return ui ? ui->displayPlaneCaptureCombo : nullptr;
+}
+
+QPushButton* SceneObjectEditHostPanel::displayPlaneCaptureRefreshButton() const
+{
+    return ui ? ui->displayPlaneCaptureRefreshButton : nullptr;
+}
+
+QWidget* SceneObjectEditHostPanel::displayPlaneCaptureRow() const
+{
+    return ui ? ui->displayPlaneCaptureRow : nullptr;
 }
 
 void SceneObjectEditHostPanel::bindTab(OpenRGB3DSpatialTab* tab)
@@ -80,6 +97,10 @@ void SceneObjectEditHostPanel::bindTab(OpenRGB3DSpatialTab* tab)
             tab->EditDisplayPlaneForCurrentSceneSelection();
         }
     });
+    connect(ui->displayPlaneCaptureCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
+            &OpenRGB3DSpatialTab::displayPlaneCaptureComboChanged);
+    connect(ui->displayPlaneCaptureRefreshButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::refreshDisplayPlaneCaptureComboClicked);
 }
 
 void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
@@ -102,6 +123,7 @@ void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
         ui->editLayoutButton->setVisible(false);
         ui->editReferencePointButton->setVisible(false);
         ui->editDisplayPlaneButton->setVisible(false);
+        ui->displayPlaneCaptureRow->setVisible(false);
         return;
     }
 
@@ -157,4 +179,9 @@ void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
     ui->editLayoutButton->setVisible(show_layout);
     ui->editReferencePointButton->setVisible(show_ref);
     ui->editDisplayPlaneButton->setVisible(show_display);
+    ui->displayPlaneCaptureRow->setVisible(show_display);
+    if(show_display && tab_)
+    {
+        tab_->SyncDisplayPlaneCaptureCombos();
+    }
 }

@@ -82,8 +82,10 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
         "Remove selected custom controller from library (remove from 3D scene first if in use)");
     ui->editReferencePointButton->setToolTip("Edit selected reference point");
     ui->removeRefPointButton->setToolTip("Delete selected reference point");
-    ui->editDisplayPlaneButton->setToolTip("Edit selected display plane");
+    ui->editDisplayPlaneButton->setToolTip("Edit selected display plane name and size");
     ui->removeDisplayPlaneButton->setToolTip("Delete selected display plane");
+    ui->displayCaptureCombo->setToolTip(
+        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …)."));
 
     connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
             &OpenRGB3DSpatialTab::customControllerSelectionChanged);
@@ -119,6 +121,10 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
             &OpenRGB3DSpatialTab::editDisplayPlaneClicked);
     connect(ui->removeDisplayPlaneButton, &QPushButton::clicked, tab,
             &OpenRGB3DSpatialTab::removeDisplayPlaneClicked);
+    connect(ui->displayCaptureCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
+            &OpenRGB3DSpatialTab::displayPlaneCaptureComboChanged);
+    connect(ui->displayCaptureRefreshButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::refreshDisplayPlaneCaptureComboClicked);
 
     if(ui->zonesPanel)
     {
@@ -243,6 +249,8 @@ QWidget* ObjectCreatorTabPanel::displayPlanesEmptyLabel() const { return ui->dis
 QPushButton* ObjectCreatorTabPanel::createDisplayPlaneButton() const { return ui->createDisplayPlaneButton; }
 QPushButton* ObjectCreatorTabPanel::editDisplayPlaneButton() const { return ui->editDisplayPlaneButton; }
 QPushButton* ObjectCreatorTabPanel::removeDisplayPlaneButton() const { return ui->removeDisplayPlaneButton; }
+QComboBox* ObjectCreatorTabPanel::displayPlaneCaptureCombo() const { return ui->displayCaptureCombo; }
+QPushButton* ObjectCreatorTabPanel::displayPlaneCaptureRefreshButton() const { return ui->displayCaptureRefreshButton; }
 ZonesPanel* ObjectCreatorTabPanel::zonesPanel() const { return ui->zonesPanel; }
 EffectPackPanel* ObjectCreatorTabPanel::effectPackPanel() const { return ui->effectPackPanel; }
 EventBindingsPanel* ObjectCreatorTabPanel::eventBindingsPanel() const { return ui->eventBindingsPanel; }

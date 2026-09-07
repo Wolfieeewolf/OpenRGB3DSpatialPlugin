@@ -351,6 +351,7 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
         info.height = geometry.height();
         info.x = geometry.x();
         info.y = geometry.y();
+        info.display_number = i + 1;
 
         info.is_primary = (screen == QGuiApplication::primaryScreen());
         info.is_available = true;
@@ -1532,6 +1533,7 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
         info.height = geometry.height();
         info.x = geometry.x();
         info.y = geometry.y();
+        info.display_number = i + 1;
         info.is_primary = (screen == QGuiApplication::primaryScreen());
         info.is_available = true;
 

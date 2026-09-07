@@ -16,12 +16,13 @@ struct CaptureSourceInfo
 {
     std::string     id;
     std::string     name;
-    int             width;
-    int             height;
-    int             x;
-    int             y;
-    bool            is_primary;
-    bool            is_available;
+    int             width = 0;
+    int             height = 0;
+    int             x = 0;
+    int             y = 0;
+    int             display_number = 0;
+    bool            is_primary = false;
+    bool            is_available = false;
 };
 
 struct CapturedFrame

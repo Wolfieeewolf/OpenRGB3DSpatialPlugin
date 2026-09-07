@@ -140,6 +140,7 @@ HEADERS += \
     DisplayPlane3D.h \
     DisplayPlaneManager.h \
     ScreenCaptureManager.h \
+    DisplayPlaneCaptureLabels.h \
     Geometry3DUtils.h \
     TransformJson.h \
     MediaTextureEffectUtils.h \
@@ -222,6 +223,7 @@ HEADERS += \
     ui/CustomControllerDialog_Internal.h \
     ui/ReferencePointDialog.h \
     ui/DisplayPlaneDialog.h \
+    ui/DisplayPlaneCaptureCombo.h \
     ui/custom-controller-grid/CustomControllerGridCell.h \
     ui/custom-controller-grid/CustomControllerGridLayoutMath.h \
     ui/custom-controller-grid/CustomControllerGridItem.h \
@@ -463,6 +465,7 @@ SOURCES += \
     ui/CustomControllerMappingUtils.cpp \
     ui/ReferencePointDialog.cpp \
     ui/DisplayPlaneDialog.cpp \
+    ui/DisplayPlaneCaptureCombo.cpp \
     ui/custom-controller-grid/CustomControllerGridItem.cpp \
     ui/custom-controller-grid/CustomControllerGridScene.cpp \
     ui/custom-controller-grid/CustomControllerLayoutGrid.cpp \

@@ -5,6 +5,9 @@
 
 #include <QWidget>
 
+class QComboBox;
+class QPushButton;
+
 namespace Ui {
 class SceneObjectEditHostPanel;
 }
@@ -27,6 +30,9 @@ public:
 
     SceneObjectSpacingPanel* spacingPanel() const;
     SceneTransformPanel*     transformPanel() const;
+    QComboBox*               displayPlaneCaptureCombo() const;
+    QPushButton*             displayPlaneCaptureRefreshButton() const;
+    QWidget*                 displayPlaneCaptureRow() const;
 
 private:
     Ui::SceneObjectEditHostPanel* ui = nullptr;

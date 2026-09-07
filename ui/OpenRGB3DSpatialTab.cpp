@@ -146,6 +146,8 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 
     SavePluginUiSettings();
 
+    DisplayPlaneManager::instance()->SetEditCallback({});
+
     if(effect_timer)
     {
         effect_timer->stop();
@@ -259,6 +261,12 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     ui->effectLibraryPanel->bindTab(this);
     ui->effectStackPanel->bindTab(this);
     connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, &OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi);
+    DisplayPlaneManager::instance()->SetEditCallback([this]() {
+        SetLayoutDirty();
+        UpdateCurrentDisplayPlaneListItemLabel();
+        NotifyDisplayPlaneChanged();
+        SyncDisplayPlaneCaptureCombos();
+    });
 
     ui->availableControllersPanel->bindTab(this, ControllerListPanel::Mode::Available);
     ui->controllersInScenePanel->bindTab(this, ControllerListPanel::Mode::InScene);
@@ -2068,6 +2076,16 @@ QPushButton* OpenRGB3DSpatialTab::editDisplayPlaneButton() const
 QPushButton* OpenRGB3DSpatialTab::removeDisplayPlaneButton() const
 {
     return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->removeDisplayPlaneButton() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::displayPlaneCaptureCombo() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->displayPlaneCaptureCombo() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::displayPlaneCaptureRefreshButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->displayPlaneCaptureRefreshButton() : nullptr;
 }
 
 SpatialControllerCardList* OpenRGB3DSpatialTab::availableControllerCards() const

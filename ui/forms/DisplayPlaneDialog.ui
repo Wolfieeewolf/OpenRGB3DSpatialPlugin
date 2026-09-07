@@ -103,14 +103,14 @@
      <item row="1" column="0">
       <widget class="QLabel" name="captureCaption">
        <property name="text">
-        <string>Capture Source:</string>
+        <string>Windows display:</string>
        </property>
       </widget>
      </item>
      <item row="1" column="1" colspan="2">
       <widget class="QComboBox" name="captureCombo">
        <property name="toolTip">
-        <string>Select which monitor/capture source to use</string>
+        <string>Which Windows monitor this plane captures (Monitor 1, Monitor 2, …).</string>
        </property>
       </widget>
      </item>
@@ -120,7 +120,7 @@
         <string>Refresh</string>
        </property>
        <property name="toolTip">
-        <string>Refresh list of available capture sources</string>
+        <string>Refresh the list of monitors Windows currently reports.</string>
        </property>
       </widget>
      </item>

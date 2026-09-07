@@ -3,6 +3,8 @@
 #include "ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror.h"
 #include "DisplayPlane3D.h"
+#include "DisplayPlaneManager.h"
+#include "DisplayPlaneCaptureCombo.h"
 #include "EffectSliderRow.h"
 #include "PluginUiUtils.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
@@ -12,6 +14,7 @@
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QSlider>
 #include <QVBoxLayout>
 
@@ -165,6 +168,26 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     {
         return;
     }
+
+    settings.capture_combo = ui->captureCombo;
+    settings.capture_refresh_button = ui->captureRefreshButton;
+    FillDisplayPlaneCaptureCombo(ui->captureCombo, plane ? plane->GetCaptureSourceId() : std::string());
+    ui->captureCombo->setEnabled(true);
+    ui->captureRefreshButton->setEnabled(true);
+    QComboBox* capture_combo = ui->captureCombo;
+    QObject::connect(capture_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                     effect, [effect, plane, capture_combo](int) {
+                         if(!effect || !plane)
+                         {
+                             return;
+                         }
+                         ApplyCaptureComboToPlane(plane, capture_combo);
+                         DisplayPlaneManager::instance()->NotifyEdited();
+                         effect->RefreshMonitorStatus();
+                     });
+    QObject::connect(ui->captureRefreshButton, &QPushButton::clicked, effect, [plane, capture_combo]() {
+        FillDisplayPlaneCaptureCombo(capture_combo, plane ? plane->GetCaptureSourceId() : std::string());
+    });
 
     const auto wire_pct_ticks = [&](EffectSliderRow* row,
                                     QSlider*& slider,

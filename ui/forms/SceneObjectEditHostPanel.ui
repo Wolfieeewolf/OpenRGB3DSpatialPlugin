@@ -89,6 +89,51 @@
     </widget>
    </item>
    <item>
+    <widget class="QWidget" name="displayPlaneCaptureRow">
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+     <layout class="QHBoxLayout" name="displayPlaneCaptureLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="displayPlaneCaptureCaption">
+        <property name="text">
+         <string>Windows display:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="displayPlaneCaptureCombo">
+        <property name="toolTip">
+         <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …).</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="displayPlaneCaptureRefreshButton">
+        <property name="text">
+         <string>Refresh</string>
+        </property>
+        <property name="toolTip">
+         <string>Refresh the list of monitors Windows currently reports.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="SceneObjectSpacingPanel" name="spacingPanel" native="true"/>
    </item>
    <item>

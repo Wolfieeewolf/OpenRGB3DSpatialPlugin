@@ -4,6 +4,7 @@
 #include "DisplayPlaneManager.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
+#include "DisplayPlaneCaptureCombo.h"
 #include "ui_DisplayPlaneDialog.h"
 
 #include <QDesktopServices>
@@ -42,7 +43,7 @@ void DisplayPlaneDialog::setCreateDefaults(const QString& suggested_name, float 
     ui->nameEdit->setText(suggested_name);
     ui->widthSpin->setValue(width_mm);
     ui->heightSpin->setValue(height_mm);
-    populateCaptureCombo("");
+    populateCaptureCombo("", true);
 }
 
 void DisplayPlaneDialog::loadFrom(const DisplayPlane3D& plane)
@@ -50,7 +51,7 @@ void DisplayPlaneDialog::loadFrom(const DisplayPlane3D& plane)
     ui->nameEdit->setText(QString::fromStdString(plane.GetName()));
     ui->widthSpin->setValue(plane.GetWidthMM());
     ui->heightSpin->setValue(plane.GetHeightMM());
-    populateCaptureCombo(plane.GetCaptureSourceId());
+    populateCaptureCombo(plane.GetCaptureSourceId(), false);
 }
 
 QString DisplayPlaneDialog::name() const
@@ -70,21 +71,21 @@ float DisplayPlaneDialog::heightMm() const
 
 std::string DisplayPlaneDialog::captureSourceId() const
 {
-    const int index = ui->captureCombo->currentIndex();
-    if(index < 0)
-    {
-        return {};
-    }
-    return ui->captureCombo->itemData(index).toString().toStdString();
+    return CaptureComboSourceId(ui->captureCombo);
 }
 
-void DisplayPlaneDialog::populateCaptureCombo(const std::string& prefer_source_id)
+std::string DisplayPlaneDialog::captureSourceLabel() const
+{
+    return CaptureComboSourceLabel(ui->captureCombo);
+}
+
+void DisplayPlaneDialog::populateCaptureCombo(const std::string& prefer_source_id, bool suggest_if_empty)
 {
     if(!host_tab_)
     {
         return;
     }
-    host_tab_->FillDisplayPlaneCaptureCombo(ui->captureCombo, prefer_source_id);
+    host_tab_->FillDisplayPlaneCaptureCombo(ui->captureCombo, prefer_source_id, suggest_if_empty);
 }
 
 void DisplayPlaneDialog::onRefreshCaptureClicked()

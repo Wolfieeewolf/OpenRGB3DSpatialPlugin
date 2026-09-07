@@ -159,6 +159,8 @@ public:
         QSlider* top_bottom_balance_slider;
         QLabel* top_bottom_balance_label;
         QComboBox* ref_point_combo;
+        QComboBox* capture_combo;
+        QPushButton* capture_refresh_button;
         QCheckBox* calibration_pattern_check;
         QCheckBox* screen_preview_check;
         QWidget* capture_area_preview;
@@ -259,6 +261,8 @@ public:
             , top_bottom_balance_slider(nullptr)
             , top_bottom_balance_label(nullptr)
             , ref_point_combo(nullptr)
+            , capture_combo(nullptr)
+            , capture_refresh_button(nullptr)
             , calibration_pattern_check(nullptr)
             , screen_preview_check(nullptr)
             , capture_area_preview(nullptr)

@@ -19,6 +19,34 @@
     <number>8</number>
    </property>
    <item>
+    <layout class="QHBoxLayout" name="captureRow">
+     <item>
+      <widget class="QLabel" name="captureCaption">
+       <property name="text">
+        <string>Windows display:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="captureCombo">
+       <property name="toolTip">
+        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="captureRefreshButton">
+       <property name="text">
+        <string>Refresh</string>
+       </property>
+       <property name="toolTip">
+        <string>Refresh the list of monitors Windows currently reports.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QGroupBox" name="reachGroup">
      <property name="title">
       <string>Reach &amp; Falloff</string>

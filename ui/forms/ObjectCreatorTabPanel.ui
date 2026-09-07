@@ -329,7 +329,7 @@
    <item>
     <widget class="EffectInfoLabel" name="displaySubtitleLabel" native="true">
      <property name="text">
-      <string>Add virtual screens for Screen Mirror and other effects. Add to the 3D view from Available Controllers.</string>
+      <string>Add virtual screens for Screen Mirror. Pick Monitor 1 / Monitor 2 (whatever Windows reports) on each plane, then add it to the 3D view from Available Controllers.</string>
      </property>
     </widget>
    </item>
@@ -361,6 +361,40 @@
       <set>Qt::AlignHCenter</set>
      </property>
     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="displayCaptureRow">
+     <item>
+      <widget class="QLabel" name="displayCaptureCaption">
+       <property name="text">
+        <string>Windows display:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="displayCaptureCombo">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="toolTip">
+        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="displayCaptureRefreshButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Refresh</string>
+       </property>
+       <property name="toolTip">
+        <string>Refresh the list of monitors Windows currently reports.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QPushButton" name="createDisplayPlaneButton">
