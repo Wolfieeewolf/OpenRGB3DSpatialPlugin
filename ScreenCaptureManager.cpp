@@ -458,44 +458,6 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
 }
 
-static float HalfToFloat(uint16_t value)
-{
-    const uint16_t sign = (value >> 15) & 0x1;
-    const uint16_t exponent = (value >> 10) & 0x1F;
-    const uint16_t mantissa = value & 0x3FF;
-
-    if(exponent == 0)
-    {
-        if(mantissa == 0) return sign ? -0.0f : 0.0f;
-        const float m = (float)mantissa / 1024.0f;
-        const float out = std::ldexp(m, -14);
-        return sign ? -out : out;
-    }
-    if(exponent == 31)
-    {
-        return sign ? -INFINITY : INFINITY;
-    }
-
-    const float m = 1.0f + ((float)mantissa / 1024.0f);
-    const float out = std::ldexp(m, (int)exponent - 15);
-    return sign ? -out : out;
-}
-
-static uint8_t LinearHdrToSdr8(float v)
-{
-    if(!std::isfinite(v) || v <= 0.0f) return 0;
-    const float compressed = v / (1.0f + v);
-    const float srgb = std::pow((std::max)(0.0f, (std::min)(1.0f, compressed)), 1.0f / 2.2f);
-    return (uint8_t)std::lround(srgb * 255.0f);
-}
-
-static void UnpackR10G10B10A2(uint32_t packed, float& rf, float& gf, float& bf)
-{
-    rf = (float)((packed >> 0) & 0x3FF) * (1.0f / 1023.0f);
-    gf = (float)((packed >> 10) & 0x3FF) * (1.0f / 1023.0f);
-    bf = (float)((packed >> 20) & 0x3FF) * (1.0f / 1023.0f);
-}
-
 #ifdef _MSC_VER
 static void SafeDupReleaseFrame(IDXGIOutputDuplication* dup, bool& acquired_flag)
 {
@@ -520,30 +482,30 @@ static void SafeDupReleaseFrame(IDXGIOutputDuplication* dup, bool& acquired_flag
 }
 #endif
 
-struct HdrGpuConverter
+struct GpuFrameBlit
 {
     ID3D11Device* device_ref = nullptr;
-    ID3D11Texture2D* tonemap_rt = nullptr;
-    ID3D11RenderTargetView* tonemap_rtv = nullptr;
+    ID3D11Texture2D* rt = nullptr;
+    ID3D11RenderTargetView* rtv = nullptr;
     ID3D11VertexShader* vs = nullptr;
     ID3D11PixelShader* ps = nullptr;
     ID3D11Buffer* cbuf = nullptr;
     ID3D11SamplerState* samp = nullptr;
-    UINT width = 0;
-    UINT height = 0;
+    UINT dst_width = 0;
+    UINT dst_height = 0;
     DXGI_FORMAT src_format = DXGI_FORMAT_UNKNOWN;
 
     void Release()
     {
-        if(tonemap_rtv)
+        if(rtv)
         {
-            tonemap_rtv->Release();
-            tonemap_rtv = nullptr;
+            rtv->Release();
+            rtv = nullptr;
         }
-        if(tonemap_rt)
+        if(rt)
         {
-            tonemap_rt->Release();
-            tonemap_rt = nullptr;
+            rt->Release();
+            rt = nullptr;
         }
         if(vs)
         {
@@ -566,21 +528,29 @@ struct HdrGpuConverter
             samp = nullptr;
         }
         device_ref = nullptr;
-        width = 0;
-        height = 0;
+        dst_width = 0;
+        dst_height = 0;
         src_format = DXGI_FORMAT_UNKNOWN;
     }
 
-    bool Init(ID3D11Device* device, UINT w, UINT h, DXGI_FORMAT srcFmt)
+    bool Init(ID3D11Device* device, UINT dst_w, UINT dst_h, DXGI_FORMAT srcFmt)
     {
+        if(device_ref == device && dst_width == dst_w && dst_height == dst_h && src_format == srcFmt &&
+           vs && ps && cbuf && samp && rt && rtv)
+        {
+            return true;
+        }
         Release();
         device_ref = device;
-        width = w;
-        height = h;
+        dst_width = dst_w;
+        dst_height = dst_h;
         src_format = srcFmt;
 
         static const char kHlsl[] =
-            "cbuffer Params : register(b0) { float g_hdrScale; float3 g_pad; };\n"
+            "cbuffer Params : register(b0) {\n"
+            "  float g_hdrScale; float g_tonemap; float g_srcW; float g_srcH;\n"
+            "  float g_dstW; float g_dstH; float2 g_pad;\n"
+            "};\n"
             "Texture2D g_tex : register(t0);\n"
             "SamplerState g_sam : register(s0);\n"
             "struct VS_OUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };\n"
@@ -592,11 +562,25 @@ struct HdrGpuConverter
             "  return o;\n"
             "}\n"
             "float4 ps_main(VS_OUT i) : SV_Target {\n"
-            "  float4 c = g_tex.Sample(g_sam, i.uv);\n"
-            "  float3 rgb = c.rgb * g_hdrScale;\n"
-            "  rgb = rgb / (1.0f + rgb);\n"
-            "  rgb = pow(saturate(rgb), 1.0f / 2.2f);\n"
-            "  return float4(rgb, 1.0f);\n"
+            "  float4 c;\n"
+            "  if(g_dstW + 0.5f < g_srcW || g_dstH + 0.5f < g_srcH) {\n"
+            "    float2 duv = 0.25f * float2(g_srcW / max(g_dstW, 1.0f), g_srcH / max(g_dstH, 1.0f))\n"
+            "                 / float2(max(g_srcW, 1.0f), max(g_srcH, 1.0f));\n"
+            "    c  = g_tex.Sample(g_sam, i.uv + float2(-duv.x, -duv.y));\n"
+            "    c += g_tex.Sample(g_sam, i.uv + float2( duv.x, -duv.y));\n"
+            "    c += g_tex.Sample(g_sam, i.uv + float2(-duv.x,  duv.y));\n"
+            "    c += g_tex.Sample(g_sam, i.uv + float2( duv.x,  duv.y));\n"
+            "    c *= 0.25f;\n"
+            "  } else {\n"
+            "    c = g_tex.Sample(g_sam, i.uv);\n"
+            "  }\n"
+            "  if(g_tonemap > 0.5f) {\n"
+            "    float3 rgb = c.rgb * g_hdrScale;\n"
+            "    rgb = rgb / (1.0f + rgb);\n"
+            "    rgb = pow(saturate(rgb), 1.0f / 2.2f);\n"
+            "    c = float4(rgb, 1.0f);\n"
+            "  }\n"
+            "  return float4(c.rgb, 1.0f);\n"
             "}\n";
 
         ID3DBlob* vs_blob = nullptr;
@@ -609,7 +593,10 @@ struct HdrGpuConverter
             err = nullptr;
         }
         if(FAILED(hr) || !vs_blob)
+        {
+            Release();
             return false;
+        }
         hr = D3DCompile(kHlsl, std::strlen(kHlsl), nullptr, nullptr, nullptr, "ps_main", "ps_5_0", 0, 0, &ps_blob, &err);
         if(err)
         {
@@ -618,13 +605,17 @@ struct HdrGpuConverter
         if(FAILED(hr) || !ps_blob)
         {
             vs_blob->Release();
+            Release();
             return false;
         }
 
         hr = device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, &vs);
         vs_blob->Release();
         if(FAILED(hr))
+        {
+            Release();
             return false;
+        }
         hr = device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &ps);
         ps_blob->Release();
         if(FAILED(hr))
@@ -634,7 +625,7 @@ struct HdrGpuConverter
         }
 
         D3D11_BUFFER_DESC bd = {};
-        bd.ByteWidth = 16;
+        bd.ByteWidth = 32;
         bd.Usage = D3D11_USAGE_DYNAMIC;
         bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -658,21 +649,21 @@ struct HdrGpuConverter
         }
 
         D3D11_TEXTURE2D_DESC td = {};
-        td.Width = w;
-        td.Height = h;
+        td.Width = dst_w;
+        td.Height = dst_h;
         td.MipLevels = 1;
         td.ArraySize = 1;
         td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
         td.SampleDesc.Count = 1;
         td.Usage = D3D11_USAGE_DEFAULT;
         td.BindFlags = D3D11_BIND_RENDER_TARGET;
-        hr = device->CreateTexture2D(&td, nullptr, &tonemap_rt);
+        hr = device->CreateTexture2D(&td, nullptr, &rt);
         if(FAILED(hr))
         {
             Release();
             return false;
         }
-        hr = device->CreateRenderTargetView(tonemap_rt, nullptr, &tonemap_rtv);
+        hr = device->CreateRenderTargetView(rt, nullptr, &rtv);
         if(FAILED(hr))
         {
             Release();
@@ -681,56 +672,48 @@ struct HdrGpuConverter
         return true;
     }
 
-    bool TonemapFrame(ID3D11DeviceContext* ctx, ID3D11Texture2D* src_dupl_tex, bool wide_gamut_hdr)
+    bool Blit(ID3D11DeviceContext* ctx,
+              ID3D11ShaderResourceView* srv,
+              UINT src_w,
+              UINT src_h,
+              bool tonemap,
+              float hdr_scale)
     {
-        if(!ctx || !src_dupl_tex || !tonemap_rtv || !vs || !ps || !cbuf || !samp || !device_ref)
+        if(!ctx || !srv || !rtv || !vs || !ps || !cbuf || !samp)
             return false;
-        D3D11_TEXTURE2D_DESC src_desc = {};
-        src_dupl_tex->GetDesc(&src_desc);
-        if(src_desc.Width != width || src_desc.Height != height)
-            return false;
-
-        D3D11_SHADER_RESOURCE_VIEW_DESC srvd = {};
-        srvd.Format = src_format;
-        srvd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        srvd.Texture2D.MipLevels = 1;
-        ID3D11ShaderResourceView* srv = nullptr;
-        HRESULT hr = device_ref->CreateShaderResourceView(src_dupl_tex, &srvd, &srv);
-        if(FAILED(hr) || !srv)
-            return false;
-
-        const bool is_r10 = (src_format == DXGI_FORMAT_R10G10B10A2_UNORM);
-        float hdr_scale = 1.0f;
-        if(wide_gamut_hdr)
-            hdr_scale = is_r10 ? 6.0f : 1.0f;
-        else
-            hdr_scale = is_r10 ? 1.5f : 1.0f;
 
         struct CbParams
         {
-            float scale;
-            float pad[3];
-        } params = { hdr_scale, { 0.0f, 0.0f, 0.0f } };
+            float hdr_scale;
+            float tonemap;
+            float src_w;
+            float src_h;
+            float dst_w;
+            float dst_h;
+            float pad[2];
+        } params = {
+            hdr_scale,
+            tonemap ? 1.0f : 0.0f,
+            (float)src_w,
+            (float)src_h,
+            (float)dst_width,
+            (float)dst_height,
+            {0.0f, 0.0f}
+        };
 
         D3D11_MAPPED_SUBRESOURCE mr = {};
         if(FAILED(ctx->Map(cbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mr)))
-        {
-            srv->Release();
             return false;
-        }
         std::memcpy(mr.pData, &params, sizeof(params));
         ctx->Unmap(cbuf, 0);
 
         D3D11_VIEWPORT vp = {};
-        vp.Width = (FLOAT)width;
-        vp.Height = (FLOAT)height;
+        vp.Width = (FLOAT)dst_width;
+        vp.Height = (FLOAT)dst_height;
         vp.MinDepth = 0.0f;
         vp.MaxDepth = 1.0f;
         ctx->RSSetViewports(1, &vp);
-
-        const float clear[4] = { 0, 0, 0, 0 };
-        ctx->ClearRenderTargetView(tonemap_rtv, clear);
-        ctx->OMSetRenderTargets(1, &tonemap_rtv, nullptr);
+        ctx->OMSetRenderTargets(1, &rtv, nullptr);
         ctx->IASetInputLayout(nullptr);
         ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         ctx->VSSetShader(vs, nullptr, 0);
@@ -741,19 +724,16 @@ struct HdrGpuConverter
         ctx->Draw(3, 0);
         ID3D11ShaderResourceView* null_srv = nullptr;
         ctx->PSSetShaderResources(0, 1, &null_srv);
-        srv->Release();
-
         ID3D11RenderTargetView* null_rtv = nullptr;
         ctx->OMSetRenderTargets(0, &null_rtv, nullptr);
-        ctx->Flush();
         return true;
     }
 
-    bool CopyTonemapToStaging(ID3D11DeviceContext* ctx, ID3D11Texture2D* staging_bgra8) const
+    bool CopyToStaging(ID3D11DeviceContext* ctx, ID3D11Texture2D* staging_bgra8) const
     {
-        if(!ctx || !tonemap_rt || !staging_bgra8)
+        if(!ctx || !rt || !staging_bgra8)
             return false;
-        ctx->CopyResource(staging_bgra8, tonemap_rt);
+        ctx->CopyResource(staging_bgra8, rt);
         return true;
     }
 };
@@ -764,28 +744,51 @@ struct DXGICaptureState
     ID3D11DeviceContext* context = nullptr;
     IDXGIOutputDuplication* duplication = nullptr;
     ID3D11Texture2D* staging_texture = nullptr;
+    ID3D11Texture2D* gpu_copy = nullptr;
+    ID3D11ShaderResourceView* gpu_copy_srv = nullptr;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     UINT width = 0;
     UINT height = 0;
+    UINT staging_w = 0;
+    UINT staging_h = 0;
     bool desktop_frame_acquired = false;
     bool wide_gamut_hdr = false;
     bool use_gpu_hdr_tonemap = false;
-    HdrGpuConverter hdr_gpu;
+    bool gpu_blit_failed = false;
+    GpuFrameBlit gpu_blit;
+
+    void ReleaseStaging()
+    {
+        if(staging_texture)
+        {
+            staging_texture->Release();
+            staging_texture = nullptr;
+        }
+        staging_w = 0;
+        staging_h = 0;
+    }
 
     void Release()
     {
-        hdr_gpu.Release();
+        gpu_blit.Release();
+        gpu_blit_failed = false;
         use_gpu_hdr_tonemap = false;
         wide_gamut_hdr = false;
         if(duplication && desktop_frame_acquired)
         {
             SafeDupReleaseFrame(duplication, desktop_frame_acquired);
         }
-        if(staging_texture)
+        if(gpu_copy_srv)
         {
-            staging_texture->Release();
-            staging_texture = nullptr;
+            gpu_copy_srv->Release();
+            gpu_copy_srv = nullptr;
         }
+        if(gpu_copy)
+        {
+            gpu_copy->Release();
+            gpu_copy = nullptr;
+        }
+        ReleaseStaging();
         if(duplication)
         {
             duplication->Release();
@@ -806,7 +809,33 @@ struct DXGICaptureState
         height = 0;
     }
 
-    bool IsValid() const { return device && context && duplication && staging_texture && width > 0 && height > 0; }
+    bool IsValid() const { return device && context && duplication && gpu_copy && width > 0 && height > 0; }
+
+    bool EnsureStaging(UINT w, UINT h, DXGI_FORMAT staging_format)
+    {
+        if(staging_texture && staging_w == w && staging_h == h)
+        {
+            return true;
+        }
+        ReleaseStaging();
+        D3D11_TEXTURE2D_DESC tex_desc = {};
+        tex_desc.Width = w;
+        tex_desc.Height = h;
+        tex_desc.MipLevels = 1;
+        tex_desc.ArraySize = 1;
+        tex_desc.Format = staging_format;
+        tex_desc.SampleDesc.Count = 1;
+        tex_desc.Usage = D3D11_USAGE_STAGING;
+        tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        HRESULT hr = device->CreateTexture2D(&tex_desc, nullptr, &staging_texture);
+        if(FAILED(hr) || !staging_texture)
+        {
+            return false;
+        }
+        staging_w = w;
+        staging_h = h;
+        return true;
+    }
 };
 
 static long long dxgi_rect_area(int w, int h)
@@ -831,7 +860,6 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     out.Release();
     IDXGIOutput1* output1 = nullptr;
     IDXGIOutputDuplication* duplication = nullptr;
-    ID3D11Texture2D* staging_texture = nullptr;
     UINT out_width = 0, out_height = 0;
     bool wide_gamut = false;
 
@@ -991,33 +1019,40 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
 
     const bool needs_hdr_tonemap =
         (dup_fmt == DXGI_FORMAT_R16G16B16A16_FLOAT || dup_fmt == DXGI_FORMAT_R10G10B10A2_UNORM);
-    bool gpu_tonemap_ok = false;
-    if(needs_hdr_tonemap)
-    {
-        gpu_tonemap_ok = out.hdr_gpu.Init(device, out_width, out_height, dup_fmt);
-        if(!gpu_tonemap_ok)
-        {
-            LOG_WARNING("[ScreenCapture] GPU HDR tonemap init failed; using CPU path for format %u", (unsigned)dup_fmt);
-        }
-    }
 
-    D3D11_TEXTURE2D_DESC tex_desc = {};
-    tex_desc.Width = out_width;
-    tex_desc.Height = out_height;
-    tex_desc.MipLevels = 1;
-    tex_desc.ArraySize = 1;
-    tex_desc.Format = (gpu_tonemap_ok && needs_hdr_tonemap) ? DXGI_FORMAT_B8G8R8A8_UNORM : dup_fmt;
-    tex_desc.SampleDesc.Count = 1;
-    tex_desc.SampleDesc.Quality = 0;
-    tex_desc.Usage = D3D11_USAGE_STAGING;
-    tex_desc.BindFlags = 0;
-    tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    tex_desc.MiscFlags = 0;
-    hr = device->CreateTexture2D(&tex_desc, nullptr, &staging_texture);
-    if(FAILED(hr) || !staging_texture)
+    D3D11_TEXTURE2D_DESC copy_desc = {};
+    copy_desc.Width = out_width;
+    copy_desc.Height = out_height;
+    copy_desc.MipLevels = 1;
+    copy_desc.ArraySize = 1;
+    /* Sample as UNORM so SDR desktop pixels stay display-referred (no sRGB view). */
+    copy_desc.Format = dup_fmt;
+    if(copy_desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
+    {
+        copy_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    }
+    else if(copy_desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)
+    {
+        copy_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    }
+    copy_desc.SampleDesc.Count = 1;
+    copy_desc.Usage = D3D11_USAGE_DEFAULT;
+    copy_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    ID3D11Texture2D* gpu_copy = nullptr;
+    hr = device->CreateTexture2D(&copy_desc, nullptr, &gpu_copy);
+    if(FAILED(hr) || !gpu_copy)
     {
         duplication->Release();
-        out.hdr_gpu.Release();
+        context->Release();
+        device->Release();
+        return false;
+    }
+    ID3D11ShaderResourceView* gpu_copy_srv = nullptr;
+    hr = device->CreateShaderResourceView(gpu_copy, nullptr, &gpu_copy_srv);
+    if(FAILED(hr) || !gpu_copy_srv)
+    {
+        gpu_copy->Release();
+        duplication->Release();
         context->Release();
         device->Release();
         return false;
@@ -1026,22 +1061,16 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     out.device = device;
     out.context = context;
     out.duplication = duplication;
-    out.staging_texture = staging_texture;
+    out.gpu_copy = gpu_copy;
+    out.gpu_copy_srv = gpu_copy_srv;
     out.format = dup_fmt;
     out.width = out_width;
     out.height = out_height;
     out.wide_gamut_hdr = wide_gamut;
-    out.use_gpu_hdr_tonemap = gpu_tonemap_ok && needs_hdr_tonemap;
-    if(out.use_gpu_hdr_tonemap)
-    {
-        LOG_INFO("[ScreenCapture] DXGI HDR path: format=%u wide_gamut=%d GPU tonemap=1 %ux%u",
-                 (unsigned)dup_fmt, (int)wide_gamut, (int)out_width, (int)out_height);
-    }
-    else if(needs_hdr_tonemap)
-    {
-        LOG_INFO("[ScreenCapture] DXGI HDR path: format=%u wide_gamut=%d CPU tonemap %ux%u",
-                 (unsigned)dup_fmt, (int)wide_gamut, (int)out_width, (int)out_height);
-    }
+    out.use_gpu_hdr_tonemap = needs_hdr_tonemap;
+    out.gpu_blit_failed = false;
+    LOG_INFO("[ScreenCapture] DXGI path: format=%u wide_gamut=%d hdr=%d %ux%u (GPU scale/copy before Map)",
+             (unsigned)dup_fmt, (int)wide_gamut, (int)needs_hdr_tonemap, (int)out_width, (int)out_height);
     return true;
 }
 
@@ -1105,6 +1134,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         use_dxgi = TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state);
     }
     bool logged_dxgi_unavailable = false;
+    bool logged_gpu_map_size = false;
 
     uint64_t frame_counter = 0;
     std::vector<uint8_t> dxgi_rgba_buffer;
@@ -1196,36 +1226,77 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 resource->Release();
                 if(SUCCEEDED(hr) && tex)
                 {
-                    bool mapped_ok = false;
-                    if(dxgi_state.use_gpu_hdr_tonemap)
+                    D3D11_TEXTURE2D_DESC acquired_desc = {};
+                    tex->GetDesc(&acquired_desc);
+                    const int target_w = target_width.load();
+                    const int target_h = target_height.load();
+                    int out_w = 0;
+                    int out_h = 0;
+                    WorkingCaptureSize((int)dxgi_state.width, (int)dxgi_state.height,
+                                       target_w, target_h, out_w, out_h);
+
+                    bool gpu_ok = false;
+                    const bool size_ok = (acquired_desc.Width == dxgi_state.width &&
+                                          acquired_desc.Height == dxgi_state.height);
+                    const bool need_tonemap = dxgi_state.use_gpu_hdr_tonemap;
+                    const bool native_bgra =
+                        (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+                         dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+                    const bool copy_1to1 = size_ok && !need_tonemap && native_bgra &&
+                        out_w == (int)dxgi_state.width && out_h == (int)dxgi_state.height;
+
+                    if(copy_1to1)
                     {
-                        if(dxgi_state.hdr_gpu.TonemapFrame(dxgi_state.context, tex, dxgi_state.wide_gamut_hdr) &&
-                           dxgi_state.hdr_gpu.CopyTonemapToStaging(dxgi_state.context, dxgi_state.staging_texture))
+                        /* Native SDR 1:1: GPU copies the desktop into working-size staging. Map waits; no Flush(). */
+                        if(dxgi_state.EnsureStaging((UINT)out_w, (UINT)out_h, DXGI_FORMAT_B8G8R8A8_UNORM))
                         {
-                            mapped_ok = true;
+                            dxgi_state.context->CopyResource(dxgi_state.staging_texture, tex);
+                            gpu_ok = true;
                         }
                     }
-                    else
+                    else if(size_ok && !dxgi_state.gpu_blit_failed)
                     {
-                        dxgi_state.context->CopyResource(dxgi_state.staging_texture, tex);
-                        mapped_ok = true;
+                        dxgi_state.context->CopyResource(dxgi_state.gpu_copy, tex);
+                        const bool is_r10 = (dxgi_state.format == DXGI_FORMAT_R10G10B10A2_UNORM);
+                        float hdr_scale = 1.0f;
+                        if(need_tonemap)
+                        {
+                            if(dxgi_state.wide_gamut_hdr)
+                                hdr_scale = is_r10 ? 6.0f : 1.0f;
+                            else
+                                hdr_scale = is_r10 ? 1.5f : 1.0f;
+                        }
+                        if(dxgi_state.gpu_blit.Init(dxgi_state.device, (UINT)out_w, (UINT)out_h, dxgi_state.format) &&
+                           dxgi_state.EnsureStaging((UINT)out_w, (UINT)out_h, DXGI_FORMAT_B8G8R8A8_UNORM) &&
+                           dxgi_state.gpu_blit.Blit(dxgi_state.context,
+                                                    dxgi_state.gpu_copy_srv,
+                                                    dxgi_state.width,
+                                                    dxgi_state.height,
+                                                    need_tonemap,
+                                                    hdr_scale) &&
+                           dxgi_state.gpu_blit.CopyToStaging(dxgi_state.context, dxgi_state.staging_texture))
+                        {
+                            gpu_ok = true;
+                        }
+                        else
+                        {
+                            dxgi_state.gpu_blit_failed = true;
+                            LOG_WARNING("[ScreenCapture] GPU blit failed for '%s'; DXGI will not scale this output",
+                                        source_id.c_str());
+                        }
                     }
                     tex->Release();
+                    tex = nullptr;
 
                     D3D11_MAPPED_SUBRESOURCE mapped;
-                    if(mapped_ok)
+                    if(gpu_ok)
                         hr = dxgi_state.context->Map(dxgi_state.staging_texture, 0, D3D11_MAP_READ, 0, &mapped);
                     else
                         hr = E_FAIL;
                     if(SUCCEEDED(hr))
                     {
                         const uint8_t* src = (const uint8_t*)mapped.pData;
-                        const bool staging_is_bgra8 = dxgi_state.use_gpu_hdr_tonemap ||
-                            (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
-                             dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
-                        const UINT expected_row_bytes = staging_is_bgra8 ? (dxgi_state.width * 4)
-                            : (dxgi_state.format == DXGI_FORMAT_R16G16B16A16_FLOAT) ? (dxgi_state.width * 8)
-                                                                                   : (dxgi_state.width * 4);
+                        const UINT expected_row_bytes = (UINT)out_w * 4u;
                         if(mapped.RowPitch < expected_row_bytes)
                         {
                             dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
@@ -1234,96 +1305,30 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                             use_dxgi = false;
                             continue;
                         }
-                        const bool src_is_bgra =
-                            (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
-                             dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) ||
-                            dxgi_state.use_gpu_hdr_tonemap;
-                        const bool src_is_fp16 = (dxgi_state.format == DXGI_FORMAT_R16G16B16A16_FLOAT) &&
-                                                 !dxgi_state.use_gpu_hdr_tonemap;
-                        const bool src_is_r10 = (dxgi_state.format == DXGI_FORMAT_R10G10B10A2_UNORM) &&
-                                                !dxgi_state.use_gpu_hdr_tonemap;
-
-                        const int target_w = target_width.load();
-                        const int target_h = target_height.load();
-                        int out_w = 0;
-                        int out_h = 0;
-                        WorkingCaptureSize((int)dxgi_state.width, (int)dxgi_state.height,
-                                           target_w, target_h, out_w, out_h);
-
-                        if(src_is_fp16 || src_is_r10)
+                        const size_t out_need = (size_t)out_w * (size_t)out_h * 4u;
+                        if(dxgi_rgba_buffer.size() < out_need)
                         {
-                            const int src_w = (int)dxgi_state.width;
-                            const int src_h = (int)dxgi_state.height;
-                            const size_t native_need = (size_t)src_w * (size_t)src_h * 4u;
-                            if(dxgi_rgba_buffer.size() < native_need)
-                            {
-                                dxgi_rgba_buffer.resize(native_need);
-                            }
-                            uint8_t* native_dst = dxgi_rgba_buffer.data();
-                            const float r10_scale = dxgi_state.wide_gamut_hdr ? 8.0f : 1.5f;
-
-                            for(int y = 0; y < src_h; y++)
-                            {
-                                const uint8_t* row_base = src + (size_t)y * mapped.RowPitch;
-                                uint8_t* row_dst = native_dst + (size_t)y * src_w * 4;
-                                for(int x = 0; x < src_w; x++)
-                                {
-                                    if(src_is_r10)
-                                    {
-                                        const uint32_t packed = ((const uint32_t*)row_base)[x];
-                                        float rf, gf, bf;
-                                        UnpackR10G10B10A2(packed, rf, gf, bf);
-                                        row_dst[0] = LinearHdrToSdr8(rf * r10_scale);
-                                        row_dst[1] = LinearHdrToSdr8(gf * r10_scale);
-                                        row_dst[2] = LinearHdrToSdr8(bf * r10_scale);
-                                    }
-                                    else
-                                    {
-                                        const uint16_t* src_row = (const uint16_t*)row_base;
-                                        const uint16_t* px = src_row + (size_t)x * 4;
-                                        row_dst[0] = LinearHdrToSdr8(HalfToFloat(px[0]));
-                                        row_dst[1] = LinearHdrToSdr8(HalfToFloat(px[1]));
-                                        row_dst[2] = LinearHdrToSdr8(HalfToFloat(px[2]));
-                                    }
-                                    row_dst[3] = 255;
-                                    row_dst += 4;
-                                }
-                            }
-                            dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
-                            image = BoxScaleRgbaImage(
-                                QImage(dxgi_rgba_buffer.data(), src_w, src_h, src_w * 4,
-                                       QImage::Format_RGBA8888),
-                                out_w,
-                                out_h);
+                            dxgi_rgba_buffer.resize(out_need);
                         }
-                        else if(src_is_bgra)
+                        BoxDownscaleToRgba(src,
+                                           out_w,
+                                           out_h,
+                                           (int)mapped.RowPitch,
+                                           dxgi_rgba_buffer.data(),
+                                           out_w,
+                                           out_h,
+                                           2,
+                                           1,
+                                           0,
+                                           3);
+                        dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
+                        image = QImage(dxgi_rgba_buffer.data(), out_w, out_h, out_w * 4,
+                                       QImage::Format_RGBA8888).copy();
+                        if(!logged_gpu_map_size)
                         {
-                            const size_t out_need = (size_t)out_w * (size_t)out_h * 4u;
-                            if(dxgi_rgba_buffer.size() < out_need)
-                            {
-                                dxgi_rgba_buffer.resize(out_need);
-                            }
-                            BoxDownscaleToRgba(src,
-                                               (int)dxgi_state.width,
-                                               (int)dxgi_state.height,
-                                               (int)mapped.RowPitch,
-                                               dxgi_rgba_buffer.data(),
-                                               out_w,
-                                               out_h,
-                                               2,
-                                               1,
-                                               0,
-                                               3);
-                            dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
-                            image = QImage(dxgi_rgba_buffer.data(), out_w, out_h, out_w * 4,
-                                           QImage::Format_RGBA8888).copy();
-                        }
-                        else
-                        {
-                            QImage wrap((const uchar*)src, (int)dxgi_state.width, (int)dxgi_state.height,
-                                        (int)mapped.RowPitch, QImage::Format_RGBA8888);
-                            image = BoxScaleRgbaImage(wrap, out_w, out_h);
-                            dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
+                            logged_gpu_map_size = true;
+                            LOG_INFO("[ScreenCapture] DXGI mapped %dx%d BGRA from native %ux%u for '%s'",
+                                     out_w, out_h, dxgi_state.width, dxgi_state.height, source_id.c_str());
                         }
                     }
                     if(dxgi_state.desktop_frame_acquired)

@@ -645,8 +645,43 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
             {
                 continue;
             }
-            QImage scaled = src.scaled(tile_w, tile_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
-                                .convertToFormat(QImage::Format_RGBA8888);
+            QImage scaled(tile_w, tile_h, QImage::Format_RGBA8888);
+            if(scaled.isNull())
+            {
+                continue;
+            }
+            QImage rgba = src.convertToFormat(QImage::Format_RGBA8888);
+            uint8_t* dest_bits = scaled.bits();
+            if(scaled.bytesPerLine() == tile_w * 4)
+            {
+                BoxDownscaleToRgba(rgba.constBits(),
+                                   rgba.width(),
+                                   rgba.height(),
+                                   rgba.bytesPerLine(),
+                                   dest_bits,
+                                   tile_w,
+                                   tile_h,
+                                   0,
+                                   1,
+                                   2,
+                                   3);
+            }
+            else
+            {
+                std::vector<uint8_t> packed((size_t)tile_w * (size_t)tile_h * 4u);
+                BoxDownscaleToRgba(rgba.constBits(),
+                                   rgba.width(),
+                                   rgba.height(),
+                                   rgba.bytesPerLine(),
+                                   packed.data(),
+                                   tile_w,
+                                   tile_h,
+                                   0,
+                                   1,
+                                   2,
+                                   3);
+                scaled = QImage(packed.data(), tile_w, tile_h, tile_w * 4, QImage::Format_RGBA8888).copy();
+            }
             scaled = GradeImage(scaled, *gm.settings, !gm.calibration);
             const int ox = m * tile_w;
             const int oy = h * tile_h;

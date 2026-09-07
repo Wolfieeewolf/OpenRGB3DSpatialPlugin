@@ -27,14 +27,27 @@ int main()
         fails++;
     }
     ScreenMirrorQualityToSize(5, w, h);
-    ScreenMirrorQualityToSize(6, w, h);
-    int w6 = w;
-    int h6 = h;
-    ScreenMirrorQualityToSize(7, w, h);
-    if(w != kScreenMirrorMaxWorkingWidth || h != kScreenMirrorMaxWorkingHeight ||
-       w6 != kScreenMirrorMaxWorkingWidth || h6 != kScreenMirrorMaxWorkingHeight)
+    if(w != 1920 || h != 1080)
     {
-        std::fprintf(stderr, "HQ working size should stay 1920x1080, got 6=%dx%d 7=%dx%d\n", w6, h6, w, h);
+        std::fprintf(stderr, "quality 5 size %dx%d\n", w, h);
+        fails++;
+    }
+    ScreenMirrorQualityToSize(6, w, h);
+    if(w != 2560 || h != 1440)
+    {
+        std::fprintf(stderr, "quality 6 size %dx%d\n", w, h);
+        fails++;
+    }
+    ScreenMirrorQualityToSize(7, w, h);
+    if(w != 3840 || h != 2160)
+    {
+        std::fprintf(stderr, "quality 7 size %dx%d\n", w, h);
+        fails++;
+    }
+    if(kScreenMirrorMaxWorkingWidth != 3840 || kScreenMirrorMaxWorkingHeight != 2160)
+    {
+        std::fprintf(stderr, "max working size %dx%d\n",
+                     kScreenMirrorMaxWorkingWidth, kScreenMirrorMaxWorkingHeight);
         fails++;
     }
 
@@ -96,11 +109,24 @@ int main()
         fails++;
     }
 
+    /* 1:1 BGRA swizzle with padded stride. */
+    const uint8_t bgra_pad[] = {
+        10, 20, 30, 255, 40, 50, 60, 255, 0, 0, 0, 0, 0, 0, 0, 0
+    };
+    uint8_t rgba_pad[8] = {};
+    BoxDownscaleToRgba(bgra_pad, 2, 1, 16, rgba_pad, 2, 1, 2, 1, 0, 3);
+    if(rgba_pad[0] != 30 || rgba_pad[1] != 20 || rgba_pad[2] != 10 || rgba_pad[3] != 255 ||
+       rgba_pad[4] != 60 || rgba_pad[5] != 50 || rgba_pad[6] != 40 || rgba_pad[7] != 255)
+    {
+        std::fprintf(stderr, "1:1 BGRA padded stride swizzle failed\n");
+        fails++;
+    }
+
     if(fails != 0)
     {
         std::fprintf(stderr, "screen_capture_downscale_check: %d fail(s)\n", fails);
         return 1;
     }
-    std::printf("screen_capture_downscale_check: box-average, quality cap, native clamp OK\n");
+    std::printf("screen_capture_downscale_check: box-average, 1080/1440/4K sizes, native clamp OK\n");
     return 0;
 }

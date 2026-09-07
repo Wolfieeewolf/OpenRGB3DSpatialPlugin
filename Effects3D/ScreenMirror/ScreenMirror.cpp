@@ -70,10 +70,10 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.effect_name            = "Screen Mirror";
     info.effect_description =
         "Maps screen content onto LEDs in 3D space (GPU room field). "
-        "Capture stays on the CPU; spatial mapping, falloff, and sampling run on the volume atlas. "
+        "DXGI copies/scales on the GPU before CPU Map — 4K is a 1:1 staging copy on Arc/dGPU. "
         "Screen UVs lock to the display plane; Spatial Anchor (or a layout point) is falloff/wave. "
         "Span, falloff, and time-to-edge follow the live grid/layout AABB (not a fixed room size). "
-        "Capture box-averages native pixels into a 1080p-or-smaller working frame (DXGI and GDI). "
+        "LED atlas box-averages the working frame so colors stay area-sampled. "
         "Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
@@ -256,18 +256,18 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->addItem("High (640×360)", QVariant(2));
     capture_quality_combo->addItem("Ultra (960×540)", QVariant(3));
     capture_quality_combo->addItem("Maximum (1280×720)", QVariant(4));
-    capture_quality_combo->addItem("1080p (box-average)", QVariant(5));
-    capture_quality_combo->addItem("1440p (box-average from native)", QVariant(6));
-    capture_quality_combo->addItem("4K (box-average from native)", QVariant(7));
+    capture_quality_combo->addItem("1080p (1920×1080)", QVariant(5));
+    capture_quality_combo->addItem("1440p (2560×1440)", QVariant(6));
+    capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
     capture_quality_combo->setCurrentIndex(std::clamp(capture_quality, 0, 7));
     capture_quality_combo->setItemData(0, "Lightest load; fine for small planes or testing.", Qt::ToolTipRole);
     capture_quality_combo->setItemData(1, "Low bandwidth; acceptable on integrated GPUs.", Qt::ToolTipRole);
     capture_quality_combo->setItemData(2, "Balanced default for many setups.", Qt::ToolTipRole);
     capture_quality_combo->setItemData(3, "Sharper color detail on wide monitors.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(4, "720p working buffer; use when GPU headroom is comfortable.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(5, "1080p working buffer. Native pixels are area-averaged so LED colors stay 1:1.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(6, "Same 1080p working buffer as 1080p; 1440p desktops are box-averaged from native (no 1440 CPU frame).", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(7, "Same 1080p working buffer as 1080p; 4K desktops are box-averaged from native (no 4K CPU frame).", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(4, "720p working buffer.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(5, "1080p. DXGI GPU-scales native pixels into this size before CPU Map.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(6, "1440p. Arc/dGPU scales native 4K in VRAM; CPU only maps 1440p.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(7, "Native 1:1 up to 4K. GPU copies into staging; CPU never downscales first. Pick this on Arc/dGPU.", Qt::ToolTipRole);
 
     capture_backend_combo = capture_ui.captureBackendCombo;
     capture_backend_combo->addItem("Auto (GDI if DXGI stalls)", QVariant(0));

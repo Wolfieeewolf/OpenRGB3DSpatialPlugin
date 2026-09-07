@@ -26,13 +26,30 @@ inline void BoxDownscaleToRgba(const uint8_t* src,
         return;
     }
 
-    if(src_w == dst_w && src_h == dst_h && src_stride == dst_w * 4 &&
-       src_r == 0 && src_g == 1 && src_b == 2 && src_a == 3)
+    if(src_w == dst_w && src_h == dst_h)
     {
-        const size_t bytes = (size_t)dst_w * (size_t)dst_h * 4u;
-        if(src != dst)
+        if(src_stride == dst_w * 4 && src_r == 0 && src_g == 1 && src_b == 2 && src_a == 3)
         {
-            std::copy(src, src + bytes, dst);
+            const size_t bytes = (size_t)dst_w * (size_t)dst_h * 4u;
+            if(src != dst)
+            {
+                std::copy(src, src + bytes, dst);
+            }
+            return;
+        }
+        for(int y = 0; y < dst_h; ++y)
+        {
+            const uint8_t* row = src + (size_t)y * (size_t)src_stride;
+            uint8_t* row_dst = dst + (size_t)y * (size_t)dst_w * 4u;
+            for(int x = 0; x < dst_w; ++x)
+            {
+                const uint8_t* px = row + (size_t)x * 4u;
+                row_dst[0] = px[src_r];
+                row_dst[1] = px[src_g];
+                row_dst[2] = px[src_b];
+                row_dst[3] = px[src_a];
+                row_dst += 4;
+            }
         }
         return;
     }
@@ -90,10 +107,10 @@ inline void BoxDownscaleToRgba(const uint8_t* src,
     }
 }
 
-/** Never keep a CPU working frame larger than 1080p. 1440/4K displays are
- *  box-averaged into this size so ambilight stays area-sampled without lag. */
-inline constexpr int kScreenMirrorMaxWorkingWidth = 1920;
-inline constexpr int kScreenMirrorMaxWorkingHeight = 1080;
+/** CPU working-frame ceiling. 4K is allowed; DXGI GPU-copies 1:1 or GPU-scales
+ *  to this size before Map so the dGPU does the scale instead of PCIe+CPU. */
+inline constexpr int kScreenMirrorMaxWorkingWidth = 3840;
+inline constexpr int kScreenMirrorMaxWorkingHeight = 2160;
 
 inline void ScreenMirrorQualityToSize(int quality, int& width, int& height)
 {
@@ -121,10 +138,16 @@ inline void ScreenMirrorQualityToSize(int quality, int& width, int& height)
             height = 720;
             break;
         case 5:
+            width = 1920;
+            height = 1080;
+            break;
         case 6:
+            width = 2560;
+            height = 1440;
+            break;
         case 7:
-            width = kScreenMirrorMaxWorkingWidth;
-            height = kScreenMirrorMaxWorkingHeight;
+            width = 3840;
+            height = 2160;
             break;
         default:
             width = 640;
