@@ -79,4 +79,6 @@ Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a 
 
 ## GPU vs CPU
 
-GPU for room fields — including **audio visual fields** (Audio Level, Spectrum Bars, Strip Viz, Pulse) via `SpatialVolumeFieldAssist` + optional `u_media`. CPU keeps **analysis** (FFT / bands / onset in `AudioInputManager`), screen capture, Minecraft, and cheap color finish after atlas sample.
+GPU for room fields — including **audio visual fields** (Audio Level, Spectrum Bars, Strip Viz, Pulse) and **Screen Mirror** via `SpatialVolumeFieldAssist` + optional `u_media`. CPU keeps **analysis** (FFT / bands / onset in `AudioInputManager`), screen **capture** (not the room map), Minecraft, and cheap color finish after atlas sample (Screen Mirror: capture + LED temporal smoothing + 2D color grade before `u_media` upload).
+
+Pack/mapping self-check: `g++ -std=c++17 -O2 -o /tmp/sm_gpu_check tools/screen_mirror_gpu_check.cpp && /tmp/sm_gpu_check`

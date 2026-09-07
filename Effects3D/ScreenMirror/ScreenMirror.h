@@ -5,6 +5,7 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "SpatialVolumeFieldAssist.h"
 #include <map>
 #include <unordered_map>
 #include <deque>
@@ -36,6 +37,7 @@ public:
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
+    void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool UsesSpatialSamplingQuantization() const override { return false; }
     bool RequiresWorldSpaceCoordinates() const override { return true; }
@@ -362,10 +364,10 @@ private:
     float GetHistoryRetentionMs() const;
     LEDKey MakeLEDKey(float x, float y, float z) const;
 
-    RGBColor CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
-                                       const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
-                                       const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr,
-                                       bool apply_led_smoothing = true);
+    SpatialVolumeFieldAssist volume_assist_;
+    float gpu_smooth_ms_;
+    bool gpu_idle_magenta_;
+    bool gpu_logged_unavail_;
 };
 
 #endif

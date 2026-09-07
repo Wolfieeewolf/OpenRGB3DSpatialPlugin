@@ -39,7 +39,7 @@ The whole plugin is **experimental**. Pieces land at different levels of polish:
 - **Spatial layout / viewport** — Backbone of the project. Furthest along, still evolving, and still easy to confuse (pivots, wipe directions, gizmo feel, DPI).
 - **Effects** — A **mix**. Some feel great in 3D; others are lackluster, half-ported, or need more tuning. Grab-bag until you find what matches your rig.
 - **Packs / events** — Real path, not a mock—but authoring and bindings are early. Expect rough UI and “why did that not fire?” moments.
-- **Screen mirror / ambilight** — **Works** for some setups, still **experimental** when mapping live capture into 3D (planes, zones, room grid). GPU / HDR / compositor quirks apply.
+- **Screen mirror / ambilight** — **Works** for some setups, still **experimental** when mapping live capture into 3D (planes, zones, room grid). Capture stays on the CPU; the room field is a GPU volume atlas. HDR / compositor quirks apply.
 - **Gaming** — Minecraft path above; other games are “bring your own telemetry story.” Don’t assume a title is supported because someone asked for it.
 
 Until you have tried a feature on **your** PC, treat it as **unproven** for you—not “done” for everyone.

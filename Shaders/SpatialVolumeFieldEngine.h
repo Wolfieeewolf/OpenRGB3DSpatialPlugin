@@ -23,7 +23,7 @@ class QOpenGLShaderProgram;
  * where p01 is in [0,1]^3 and matches room / origin-local sample coords
  * (x→right, y→up/ceiling, z→back). Atlas readback preserves that orientation.
  * Engine supplies u_time, u_params[kMaxParams], and optional
- * sampler2D u_media (media texture for TextureProjection / OmniShapeTexture).
+ * sampler2D u_media (media texture for TextureProjection / OmniShapeTexture / ScreenMirror).
  *
  * Sibling to SpatialShaderEngine (2D fullscreen). Does not use the viewport MeshBatch.
  * Call ensureReady() from one thread only (typically the effect render path).
@@ -32,7 +32,7 @@ class QOpenGLShaderProgram;
 class SpatialVolumeFieldEngine
 {
 public:
-    static constexpr int kMaxParams = 24;
+    static constexpr int kMaxParams = 48;
     static constexpr int kMinResolution = 8;
     static constexpr int kMaxResolution = 32;
     static constexpr int kMaxMediaEdge = 512;
