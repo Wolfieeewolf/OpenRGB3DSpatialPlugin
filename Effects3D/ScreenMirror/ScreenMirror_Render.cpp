@@ -18,6 +18,8 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -45,17 +47,9 @@ const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h)
 namespace
 {
     constexpr int kGpuMaxMonitors = 2;
-    constexpr int kGpuMaxHistory = 4;
+    constexpr int kGpuMaxHistory = kScreenMirrorGpuMaxHistory;
     constexpr int kGpuMonParamCount = 21;
     constexpr int kGpuSharedCount = 6;
-
-    float WaveIntensityToSpeedMmPerMs(float intensity_0_to_100)
-    {
-        if(intensity_0_to_100 < 0.5f) return 0.0f;
-        float p = std::clamp(intensity_0_to_100, 1.0f, 100.0f) / 100.0f;
-        float speed = 200.0f * powf(0.01f, p);
-        return std::clamp(speed, 0.5f, 500.0f);
-    }
 
     float Pack01(float a, float b)
     {
@@ -200,6 +194,7 @@ namespace
         bool flip_v = true;
         bool calibration = false;
         float wave_speed = 0.0f;
+        float wave_span_ms = 0.0f;
         float zone_u0 = 0.0f;
         float zone_u1 = 1.0f;
         float zone_v0 = 0.0f;
@@ -256,6 +251,69 @@ namespace
             u1 = 1.0f;
             v0 = 0.0f;
             v1 = 1.0f;
+        }
+    }
+
+    std::shared_ptr<CapturedFrame> ClosestFrameAtOrBefore(
+        const std::deque<std::shared_ptr<CapturedFrame>>& dq,
+        uint64_t target_ms)
+    {
+        std::shared_ptr<CapturedFrame> best;
+        uint64_t best_delta = std::numeric_limits<uint64_t>::max();
+        for(size_t i = 0; i < dq.size(); ++i)
+        {
+            const std::shared_ptr<CapturedFrame>& fr = dq[i];
+            if(!fr || !fr->valid)
+            {
+                continue;
+            }
+            if(fr->timestamp_ms > target_ms)
+            {
+                continue;
+            }
+            uint64_t delta = target_ms - fr->timestamp_ms;
+            if(delta < best_delta)
+            {
+                best_delta = delta;
+                best = fr;
+            }
+        }
+        if(best)
+        {
+            return best;
+        }
+        return dq.empty() ? std::shared_ptr<CapturedFrame>() : dq.front();
+    }
+
+    void FillHistoryByAge(const std::deque<std::shared_ptr<CapturedFrame>>& dq,
+                          float span_ms,
+                          int nhist,
+                          std::vector<std::shared_ptr<CapturedFrame>>& out)
+    {
+        out.clear();
+        if(dq.empty() || nhist <= 0)
+        {
+            return;
+        }
+        uint64_t newest = dq.back()->timestamp_ms;
+        const int rows = std::max(1, nhist);
+        for(int h = 0; h < rows; ++h)
+        {
+            float age = (rows == 1) ? 0.0f : ((float)h / (float)(rows - 1)) * std::max(span_ms, 0.0f);
+            uint64_t target = newest;
+            if(age > 0.0f && newest > (uint64_t)age)
+            {
+                target = newest - (uint64_t)age;
+            }
+            else if(age > 0.0f)
+            {
+                target = dq.front()->timestamp_ms;
+            }
+            std::shared_ptr<CapturedFrame> fr = ClosestFrameAtOrBefore(dq, target);
+            if(fr && fr->valid && !fr->data.empty())
+            {
+                out.push_back(fr);
+            }
         }
     }
 
@@ -441,6 +499,9 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         if(mon_settings.reference_point_id > 0 && ResolveReferencePointById(mon_settings.reference_point_id, custom_ref))
         {
             falloff_ref = custom_ref;
+            falloff_ref.x += (effect_offset_x / 100.0f) * (grid.width * 0.5f);
+            falloff_ref.y += (effect_offset_y / 100.0f) * (grid.height * 0.5f);
+            falloff_ref.z += (effect_offset_z / 100.0f) * (grid.depth * 0.5f);
         }
         gm.ref_uv.x = (falloff_ref.x - grid.min_x) / span_x;
         gm.ref_uv.y = (falloff_ref.y - grid.min_y) / span_y;
@@ -477,14 +538,14 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         }
 
         bool use_wave = !gm.calibration && !capture_id.empty();
-        if(use_wave && mon_settings.wave_time_to_edge_sec > 0.4f)
+        if(use_wave)
         {
-            float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
-            gm.wave_speed = std::max(reference_max_distance_mm / (t_sec * 1000.0f), 0.1f);
-        }
-        else if(use_wave && mon_settings.propagation_speed_mm_per_ms >= 5.0f)
-        {
-            gm.wave_speed = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
+            gm.wave_speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
+                                                    mon_settings.propagation_speed_mm_per_ms,
+                                                    reference_max_distance_mm);
+            gm.wave_span_ms = WaveHistorySpanMs(gm.wave_speed,
+                                                reference_max_distance_mm,
+                                                mon_settings.wave_decay_ms);
         }
 
         if(gm.calibration)
@@ -507,11 +568,8 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
             std::unordered_map<std::string, FrameHistory>::iterator hist_it = capture_history.find(capture_id);
             if(hist_it != capture_history.end() && !hist_it->second.frames.empty())
             {
-                const std::deque<std::shared_ptr<CapturedFrame>>& dq = hist_it->second.frames;
-                for(int i = (int)dq.size() - 1; i >= 0 && (int)frames.size() < kGpuMaxHistory; --i)
-                {
-                    frames.push_back(dq[(size_t)i]);
-                }
+                const int rows = (gm.wave_speed >= 0.1f) ? kGpuMaxHistory : 1;
+                FillHistoryByAge(hist_it->second.frames, gm.wave_span_ms, rows, frames);
             }
             else
             {
@@ -824,21 +882,13 @@ float ScreenMirror::GetHistoryRetentionMs() const
         if(!mon_settings.enabled) continue;
 
         float monitor_retention = std::max(mon_settings.wave_decay_ms * 3.0f, mon_settings.smoothing_time_ms * 3.0f);
-        if(mon_settings.propagation_speed_mm_per_ms >= 5.0f || mon_settings.wave_time_to_edge_sec > 0.4f)
+        float speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
+                                             mon_settings.propagation_speed_mm_per_ms,
+                                             5000.0f);
+        if(speed >= 0.1f)
         {
-            float max_distance_mm = 5000.0f;
-            if(mon_settings.wave_time_to_edge_sec > 0.4f)
-            {
-                float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
-                monitor_retention = std::max(monitor_retention, t_sec * 1000.0f);
-            }
-            else
-            {
-                float speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
-                if(speed_mm_per_ms > 0.0f)
-                    monitor_retention = std::max(monitor_retention, max_distance_mm / speed_mm_per_ms);
-            }
-            monitor_retention = std::max(monitor_retention, mon_settings.wave_decay_ms * 2.0f);
+            monitor_retention = std::max(monitor_retention,
+                                         WaveHistorySpanMs(speed, 5000.0f, mon_settings.wave_decay_ms));
         }
         max_retention = std::max(max_retention, monitor_retention);
     }

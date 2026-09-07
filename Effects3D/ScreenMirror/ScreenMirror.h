@@ -6,6 +6,7 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "SpatialVolumeFieldAssist.h"
+#include "ScreenMirror/ScreenMirrorWaveMath.h"
 #include <map>
 #include <unordered_map>
 #include <deque>
@@ -42,6 +43,7 @@ public:
     bool UsesSpatialSamplingQuantization() const override { return false; }
     bool RequiresWorldSpaceCoordinates() const override { return true; }
     bool RequiresWorldSpaceGridBounds() const override { return true; }
+    bool SkipsSpatialSampleWarp() const override { return true; }
 
     void SetGridScaleMM(float mm);
 
@@ -207,11 +209,11 @@ public:
             , show_calibration_pattern(false)
             , show_screen_preview(false)
             , screen_map_roll_deg(0.0f)
-            , radial_corner_expansion_ui(0)
-            , radial_corner_bias_tl_ui(0)
-            , radial_corner_bias_tr_ui(0)
-            , radial_corner_bias_bl_ui(0)
-            , radial_corner_bias_br_ui(0)
+            , radial_corner_expansion_ui(kRadialMapUiNeutral)
+            , radial_corner_bias_tl_ui(kRadialMapUiNeutral)
+            , radial_corner_bias_tr_ui(kRadialMapUiNeutral)
+            , radial_corner_bias_bl_ui(kRadialMapUiNeutral)
+            , radial_corner_bias_br_ui(kRadialMapUiNeutral)
             , corner_blend_strength_pct(0.0f)
             , corner_blend_zone_pct(0.0f)
             , group_box(nullptr)

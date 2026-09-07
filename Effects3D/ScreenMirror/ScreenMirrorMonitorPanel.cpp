@@ -5,22 +5,17 @@
 #include "DisplayPlane3D.h"
 #include "EffectSliderRow.h"
 #include "PluginUiUtils.h"
+#include "ScreenMirror/ScreenMirror_Internal.h"
 #include "ui_ScreenMirrorMonitorSettings.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QSlider>
 #include <QVBoxLayout>
 
 #include <algorithm>
-
-namespace
-{
-constexpr int kWhiteRolloffSliderMax = 125;
-constexpr int kScreenMapRollTicksPerDegree = 2;
-constexpr int kScreenMapRollSliderMax = 180 * kScreenMapRollTicksPerDegree;
-} // namespace
 
 namespace
 {
@@ -61,6 +56,16 @@ void ScreenMirrorMonitorPanel::PopulateLedTrimHost(ScreenMirror* effect,
         BindSliderRow(channel, slider, label);
         h->addWidget(channel, 1);
         QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
+        QObject::connect(slider, &QSlider::valueChanged, effect, [label](int v) {
+            if(label)
+            {
+                label->setText(QString::number(v) + QStringLiteral("%"));
+            }
+        });
+        if(label)
+        {
+            label->setText(QString::number(slider->value()) + QStringLiteral("%"));
+        }
     };
 
     add_channel(QStringLiteral("R"), settings.led_output_gain_r_slider, settings.led_output_gain_r_label,
@@ -205,6 +210,9 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     settings.scale_invert_check = ui->scaleInvertCheck;
     ui->scaleInvertCheck->setEnabled(has_capture_source);
     ui->scaleInvertCheck->setChecked(settings.scale_inverted);
+    ui->scaleInvertCheck->setToolTip(
+        QStringLiteral("On (default): brightness falls off with distance from the Spatial Anchor / reference. "
+                       "Off: far LEDs stay brighter (outer shell)."));
     QObject::connect(ui->scaleInvertCheck, &QCheckBox::toggled, effect, &ScreenMirror::OnParameterChanged);
 
     wire_pct_ticks(ui->falloffCurveRow,
@@ -218,16 +226,17 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
     settings.ref_point_combo = ui->refPointCombo;
-    ui->refPointCombo->addItem(QStringLiteral("Room Center"), QVariant(-1));
+    ui->refPointCombo->addItem(QStringLiteral("Spatial Anchor"), QVariant(-1));
     ui->refPointCombo->setItemData(
         0,
         QStringLiteral(
-            "Falloff distance is measured from the room center. Named reference points appear here when available."),
+            "Use this layer's Spatial Anchor (Effect global settings) plus center offset. "
+            "Layout reference points appear below when available."),
         Qt::ToolTipRole);
     ui->refPointCombo->setEnabled(has_capture_source);
     ui->refPointCombo->setToolTip(
-        QStringLiteral("Anchor for reach/falloff: room center or a saved reference point. "
-                       "The list refreshes when reference points change (see 3D layout / reference points)."));
+        QStringLiteral("Origin for reach/falloff and screen mapping. Spatial Anchor follows the layer control; "
+                       "pick a layout point to measure from a saved marker (monitor, chair, etc.)."));
     QObject::connect(ui->refPointCombo, qOverload<int>(&QComboBox::currentIndexChanged), effect,
                      &ScreenMirror::OnParameterChanged);
 
@@ -342,9 +351,13 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
         QObject::connect(slider, &QSlider::valueChanged, effect, [label](int v) {
             if(label)
             {
-                label->setText(QString::number(v) + QStringLiteral("%"));
+                label->setText(FormatRadialMapUi(v));
             }
         });
+        if(label)
+        {
+            label->setText(FormatRadialMapUi(slider->value()));
+        }
     };
 
     wire_radial_pct(ui->radialExpansionRow,
@@ -352,31 +365,31 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                     settings.radial_corner_expansion_label,
                     QStringLiteral("Corner expansion:"),
                     settings.radial_corner_expansion_ui,
-                    "0% = baseline mapping; raise to push toward corners or lower to pinch (internal −50…+50).");
+                    "0% is baseline (slider center). Raise to push toward corners; lower to pinch.");
     wire_radial_pct(ui->radialBiasTlRow,
                     settings.radial_corner_bias_tl_slider,
                     settings.radial_corner_bias_tl_label,
                     QStringLiteral("Bottom-left:"),
                     settings.radial_corner_bias_tl_ui,
-                    "Bias toward capture bottom-left in that quadrant; 0% = baseline.");
+                    "Bias toward capture bottom-left in that quadrant. 0% = baseline (slider center).");
     wire_radial_pct(ui->radialBiasTrRow,
                     settings.radial_corner_bias_tr_slider,
                     settings.radial_corner_bias_tr_label,
                     QStringLiteral("Bottom-right:"),
                     settings.radial_corner_bias_tr_ui,
-                    "Bias toward capture bottom-right in that quadrant; 0% = baseline.");
+                    "Bias toward capture bottom-right in that quadrant. 0% = baseline (slider center).");
     wire_radial_pct(ui->radialBiasBlRow,
                     settings.radial_corner_bias_bl_slider,
                     settings.radial_corner_bias_bl_label,
                     QStringLiteral("Top-left:"),
                     settings.radial_corner_bias_bl_ui,
-                    "Bias toward capture top-left in that quadrant; 0% = baseline.");
+                    "Bias toward capture top-left in that quadrant. 0% = baseline (slider center).");
     wire_radial_pct(ui->radialBiasBrRow,
                     settings.radial_corner_bias_br_slider,
                     settings.radial_corner_bias_br_label,
                     QStringLiteral("Top-right:"),
                     settings.radial_corner_bias_br_ui,
-                    "Bias toward capture top-right in that quadrant; 0% = baseline.");
+                    "Bias toward capture top-right in that quadrant. 0% = baseline (slider center).");
 
     ui->cornerStrengthRow->setCaptionText(QStringLiteral("Strength:"));
     ui->cornerStrengthRow->setValueLabelMinimumWidth(40);

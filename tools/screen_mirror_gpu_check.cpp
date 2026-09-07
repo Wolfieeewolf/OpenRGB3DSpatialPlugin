@@ -8,6 +8,8 @@
 #include <cstdlib>
 #include <vector>
 
+#include "../Effects3D/ScreenMirror/ScreenMirrorWaveMath.h"
+
 namespace
 {
     float Pack01(float a, float b)
@@ -165,13 +167,94 @@ int main()
         fails++;
     }
 
+    float layout8 = 2.f + 10.f * 8.f + 100.f + 1000.f + 2000.f;
+    L = std::floor(layout8 + 0.5f);
+    flip1 = (L >= 1999.5f) ? 1.f : 0.f;
+    L -= flip1 * 2000.f;
+    flip0 = (L >= 999.5f) ? 1.f : 0.f;
+    L -= flip0 * 1000.f;
+    use_q = (L >= 99.5f) ? 1.f : 0.f;
+    L -= use_q * 100.f;
+    nhist = std::floor(L / 10.f);
+    nmon = L - nhist * 10.f;
+    if(nmon != 2.f || nhist != 8.f || use_q != 1.f || flip0 != 1.f || flip1 != 1.f)
+    {
+        std::fprintf(stderr, "layout8 decode fail nmon=%f nhist=%f q=%f f0=%f f1=%f\n",
+                     nmon, nhist, use_q, flip0, flip1);
+        fails++;
+    }
+
+    float speed_short = ResolveWaveSpeedMmPerMs(0.2f, 0.0f, 3000.0f);
+    if(speed_short < 0.1f)
+    {
+        std::fprintf(stderr, "time-to-edge 0.2s should enable wave, got %f\n", speed_short);
+        fails++;
+    }
+    float expected_speed = 3000.0f / 200.0f;
+    if(std::fabs(speed_short - expected_speed) > 0.02f)
+    {
+        std::fprintf(stderr, "time-to-edge speed %f want %f\n", speed_short, expected_speed);
+        fails++;
+    }
+    if(ResolveWaveSpeedMmPerMs(0.0f, 4.0f, 3000.0f) != 0.0f)
+    {
+        std::fprintf(stderr, "wave intensity 4%% should stay off\n");
+        fails++;
+    }
+    if(ResolveWaveSpeedMmPerMs(0.0f, 5.0f, 3000.0f) < 0.1f)
+    {
+        std::fprintf(stderr, "wave intensity 5%% should enable wave\n");
+        fails++;
+    }
+
+    float span = WaveHistorySpanMs(1.0f, 2000.0f, 500.0f);
+    if(std::fabs(span - 2500.0f) > 0.01f)
+    {
+        std::fprintf(stderr, "span %f want 2500\n", span);
+        fails++;
+    }
+    float row = WaveHistoryRow(1000.0f, 2000.0f, 8);
+    if(std::fabs(row - 3.5f) > 0.01f)
+    {
+        std::fprintf(stderr, "history row %f want 3.5\n", row);
+        fails++;
+    }
+    float w_front = WaveTrailWeight(500.0f, 500.0f, 500.0f, 2000.0f, 8);
+    float w_tail = WaveTrailWeight(1000.0f, 500.0f, 500.0f, 2000.0f, 8);
+    float w_future = WaveTrailWeight(0.0f, 500.0f, 500.0f, 2000.0f, 8);
+    if(std::fabs(w_front - 1.0f) > 0.01f)
+    {
+        std::fprintf(stderr, "trail front weight %f want 1\n", w_front);
+        fails++;
+    }
+    float want_tail = std::exp(-1.0f);
+    if(std::fabs(w_tail - want_tail) > 0.02f)
+    {
+        std::fprintf(stderr, "trail weight %f want %f\n", w_tail, want_tail);
+        fails++;
+    }
+    if(w_future > 0.01f)
+    {
+        std::fprintf(stderr, "future tile should not trail, got %f\n", w_future);
+        fails++;
+    }
+    if(std::fabs(RadialMapUiToInternal(kRadialMapUiNeutral)) > 0.01f)
+    {
+        std::fprintf(stderr, "radial center should be 0, got %f\n", RadialMapUiToInternal(kRadialMapUiNeutral));
+        fails++;
+    }
+    if(std::fabs(RadialMapUiToInternal(0) + 50.0f) > 0.01f ||
+       std::fabs(RadialMapUiToInternal(100) - 50.0f) > 0.01f)
+    {
+        std::fprintf(stderr, "radial ends want -50/+50\n");
+        fails++;
+    }
+
     if(fails != 0)
     {
         std::fprintf(stderr, "FAILED %d checks\n", fails);
         return 1;
     }
-    std::printf("screen_mirror_gpu_check: %d pack cases, %d map samples, layout decode OK\n",
-                (int)(sizeof(pack_cases) / sizeof(pack_cases[0])),
-                (int)(sizeof(leds) / sizeof(leds[0])));
+    std::printf("screen_mirror_gpu_check: pack, map, layout, wave timing, trail, radial OK\n");
     return 0;
 }

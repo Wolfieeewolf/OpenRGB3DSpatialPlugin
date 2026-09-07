@@ -318,7 +318,7 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     }
     if(msettings.radial_corner_expansion_label)
     {
-        msettings.radial_corner_expansion_label->setText(QString::number(msettings.radial_corner_expansion_ui) + "%");
+        msettings.radial_corner_expansion_label->setText(FormatRadialMapUi(msettings.radial_corner_expansion_ui));
     }
     if(msettings.radial_corner_bias_tl_slider)
     {
@@ -327,7 +327,7 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     }
     if(msettings.radial_corner_bias_tl_label)
     {
-        msettings.radial_corner_bias_tl_label->setText(QString::number(msettings.radial_corner_bias_tl_ui) + "%");
+        msettings.radial_corner_bias_tl_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_tl_ui));
     }
     if(msettings.radial_corner_bias_tr_slider)
     {
@@ -336,7 +336,7 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     }
     if(msettings.radial_corner_bias_tr_label)
     {
-        msettings.radial_corner_bias_tr_label->setText(QString::number(msettings.radial_corner_bias_tr_ui) + "%");
+        msettings.radial_corner_bias_tr_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_tr_ui));
     }
     if(msettings.radial_corner_bias_bl_slider)
     {
@@ -345,7 +345,7 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     }
     if(msettings.radial_corner_bias_bl_label)
     {
-        msettings.radial_corner_bias_bl_label->setText(QString::number(msettings.radial_corner_bias_bl_ui) + "%");
+        msettings.radial_corner_bias_bl_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_bl_ui));
     }
     if(msettings.radial_corner_bias_br_slider)
     {
@@ -354,7 +354,7 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     }
     if(msettings.radial_corner_bias_br_label)
     {
-        msettings.radial_corner_bias_br_label->setText(QString::number(msettings.radial_corner_bias_br_ui) + "%");
+        msettings.radial_corner_bias_br_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_br_ui));
     }
     if(msettings.corner_blend_strength_slider)
     {
@@ -578,21 +578,41 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             {
                 msettings.radial_corner_expansion_ui = std::clamp(mon["radial_map_expansion"].get<int>(), 0, 100);
             }
+            else
+            {
+                msettings.radial_corner_expansion_ui = kRadialMapUiNeutral;
+            }
             if(mon.contains("radial_map_bias_tl"))
             {
                 msettings.radial_corner_bias_tl_ui = std::clamp(mon["radial_map_bias_tl"].get<int>(), 0, 100);
+            }
+            else
+            {
+                msettings.radial_corner_bias_tl_ui = kRadialMapUiNeutral;
             }
             if(mon.contains("radial_map_bias_tr"))
             {
                 msettings.radial_corner_bias_tr_ui = std::clamp(mon["radial_map_bias_tr"].get<int>(), 0, 100);
             }
+            else
+            {
+                msettings.radial_corner_bias_tr_ui = kRadialMapUiNeutral;
+            }
             if(mon.contains("radial_map_bias_bl"))
             {
                 msettings.radial_corner_bias_bl_ui = std::clamp(mon["radial_map_bias_bl"].get<int>(), 0, 100);
             }
+            else
+            {
+                msettings.radial_corner_bias_bl_ui = kRadialMapUiNeutral;
+            }
             if(mon.contains("radial_map_bias_br"))
             {
                 msettings.radial_corner_bias_br_ui = std::clamp(mon["radial_map_bias_br"].get<int>(), 0, 100);
+            }
+            else
+            {
+                msettings.radial_corner_bias_br_ui = kRadialMapUiNeutral;
             }
             if(mon.contains("sample_corner_blend_strength_pct"))
             {
@@ -818,9 +838,9 @@ void ScreenMirror::RefreshReferencePointDropdowns()
         settings.ref_point_combo->blockSignals(true);
         settings.ref_point_combo->clear();
 
-        settings.ref_point_combo->addItem("Room Center", QVariant(-1));
+        settings.ref_point_combo->addItem("Spatial Anchor", QVariant(-1));
         settings.ref_point_combo->setItemData(0,
-            "Falloff distance is measured from the room center.",
+            "Falloff and mapping origin follow this layer's Spatial Anchor (Effect global settings) plus center offset.",
             Qt::ToolTipRole);
 
         for(size_t i = 0; i < reference_points->size(); i++)
@@ -834,7 +854,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
             settings.ref_point_combo->addItem(display, QVariant(ref_point->GetId()));
             const int row = settings.ref_point_combo->count() - 1;
             settings.ref_point_combo->setItemData(row,
-                QStringLiteral("Measure reach/falloff from \"%1\" for this monitor.").arg(name),
+                QStringLiteral("Measure reach/falloff from layout point \"%1\" instead of the Spatial Anchor.").arg(name),
                 Qt::ToolTipRole);
         }
 

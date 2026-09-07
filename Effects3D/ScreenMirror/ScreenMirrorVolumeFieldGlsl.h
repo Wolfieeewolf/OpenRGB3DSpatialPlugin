@@ -3,7 +3,7 @@
 
 /** Screen Mirror volume field: atlas stores graded RGB after plane mapping.
  *  p01 = unit room UV (front-left floor = 0). Pair with SampleGpuRoomVolume01.
- *  u_media tiles: columns = monitors (1..2), rows = wave history (1..4, 0 = newest).
+ *  u_media tiles: columns = monitors (1..2), rows = wave history (1..8, 0 = newest).
  *
  *  Shared u_params:
  *    [0..2] AABB span_mm  [3] layout  [4] pack(steps_u, steps_v)  [5] avg_frame_ms
@@ -14,6 +14,8 @@
  *    packed pairs (4095/4096): coverage/invert, softness/curve, roll/radial,
  *    bias TL/TR, BL/BR, letterbox/pillarbox, corner str/zone,
  *    zone u, zone v, wave speed/decay, fb/lr, tb/blend
+ *  Wave history tiles span 0..max_delay+decay (row 0 = newest). Time-to-edge
+ *  and wave intensity set delay; decay mixes older tiles as a trail.
  */
 inline const char* ScreenMirrorVolumeFieldGlsl()
 {
@@ -198,10 +200,7 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
     float delay_ms = 0.0;
     if(speed >= 0.1)
         delay_ms = clamp(dist_mm / max(speed, 0.1), 0.0, 60000.0);
-    float wave_env = 1.0;
-    if(speed >= 0.1 && decay > 0.1)
-        wave_env = exp(-delay_ms / max(decay, 0.1));
-    weight = fall * wave_env;
+    weight = fall;
 
     float fb01, lr01, tb01, blend01;
     smUnpack01(p19, fb01, lr01);
@@ -244,19 +243,50 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
         sv = floor(sv * steps_v) / steps_v;
     }
 
-    float hist = 0.0;
-    if(nhist > 1.5 && speed >= 0.1)
-    {
-        float frame_off = delay_ms / max(avg_frame_ms, 1.0);
-        hist = clamp(floor(frame_off + 0.5), 0.0, nhist - 1.0);
-    }
-
     float str01, zone01;
     smUnpack01(p15, str01, zone01);
     float zone = zone01 * 0.32;
     vec2 tile_scale = vec2(1.0 / max(nmon, 1.0), 1.0 / max(nhist, 1.0));
-    vec2 tile_origin = vec2(mon, hist) * tile_scale;
-    rgb = smCornerSample(vec2(su, sv), tile_origin, tile_scale, uv_min, uv_max, str01, zone);
+    float span_ms = 0.0;
+    if(speed >= 0.1)
+        span_ms = max_mm / max(speed, 0.1) + max(decay, 0.0);
+
+    if(nhist > 1.5 && speed >= 0.1 && span_ms > 0.1)
+    {
+        vec3 acc = vec3(0.0);
+        float aw = 0.0;
+        float bin = span_ms / max(nhist - 1.0, 1.0);
+        for(int i = 0; i < 8; i++)
+        {
+            if(float(i) >= nhist)
+                break;
+            float age = float(i) / max(nhist - 1.0, 1.0) * span_ms;
+            float behind = age - delay_ms;
+            float tw = 0.0;
+            if(decay <= 0.1)
+                tw = (abs(behind) <= 0.51 * max(bin, 1.0)) ? 1.0 : 0.0;
+            else if(behind >= -0.51 * max(bin, 1.0))
+                tw = exp(-max(behind, 0.0) / max(decay, 0.1));
+            if(tw <= 0.004)
+                continue;
+            vec2 tile_origin = vec2(mon, float(i)) * tile_scale;
+            acc += tw * smCornerSample(vec2(su, sv), tile_origin, tile_scale, uv_min, uv_max, str01, zone);
+            aw += tw;
+        }
+        if(aw > 1e-6)
+            rgb = acc / aw;
+        else
+        {
+            float hist = clamp(delay_ms / span_ms * (nhist - 1.0), 0.0, nhist - 1.0);
+            rgb = smCornerSample(vec2(su, sv), vec2(mon, floor(hist + 0.5)) * tile_scale,
+                                 tile_scale, uv_min, uv_max, str01, zone);
+        }
+    }
+    else
+    {
+        rgb = smCornerSample(vec2(su, sv), vec2(mon, 0.0) * tile_scale,
+                             tile_scale, uv_min, uv_max, str01, zone);
+    }
 }
 void volumeMain(out vec4 out_color, in vec3 p01)
 {

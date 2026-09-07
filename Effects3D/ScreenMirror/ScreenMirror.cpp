@@ -69,6 +69,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.effect_description =
         "Maps screen content onto LEDs in 3D space (GPU room field). "
         "Capture stays on the CPU; spatial mapping, falloff, and sampling run on the volume atlas. "
+        "Per-monitor Spatial Anchor follows the layer anchor (or a layout point). "
         "Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
@@ -187,6 +188,30 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
             rotation_group->setVisible(false);
         }
     }
+    if(scale_x_slider)
+    {
+        QWidget* scale_group = scale_x_slider->parentWidget();
+        while(scale_group && !qobject_cast<QGroupBox*>(scale_group))
+        {
+            scale_group = scale_group->parentWidget();
+        }
+        if(scale_group && scale_group != effect_controls_group)
+        {
+            scale_group->setVisible(false);
+        }
+    }
+    if(axis_scale_rot_yaw_slider)
+    {
+        QWidget* asr_group = axis_scale_rot_yaw_slider->parentWidget();
+        while(asr_group && !qobject_cast<QGroupBox*>(asr_group))
+        {
+            asr_group = asr_group->parentWidget();
+        }
+        if(asr_group && asr_group != effect_controls_group)
+        {
+            asr_group->setVisible(false);
+        }
+    }
     if(intensity_slider)
     {
         QWidget* intensity_widget = intensity_slider->parentWidget();
@@ -285,22 +310,13 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         if(settings_it == monitor_settings.end())
         {
             MonitorSettings new_settings;
-            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
-            if(plane_ref_id > 0)
-            {
-                new_settings.reference_point_id = plane_ref_id;
-            }
             new_settings.enabled = DefaultMonitorEnabledForPlane(plane);
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
         MonitorSettings& settings = settings_it->second;
         if(settings.reference_point_id <= 0)
         {
-            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
-            if(plane_ref_id > 0)
-            {
-                settings.reference_point_id = plane_ref_id;
-            }
+            settings.reference_point_id = -1;
         }
 
         if(!settings.group_box)
@@ -452,11 +468,6 @@ void ScreenMirror::RefreshMonitorStatus()
         if(settings_it == monitor_settings.end())
         {
             MonitorSettings new_settings;
-            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
-            if(plane_ref_id > 0)
-            {
-                new_settings.reference_point_id = plane_ref_id;
-            }
             new_settings.enabled = DefaultMonitorEnabledForPlane(plane);
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
@@ -464,11 +475,7 @@ void ScreenMirror::RefreshMonitorStatus()
 
         if(settings.reference_point_id <= 0)
         {
-            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
-            if(plane_ref_id > 0)
-            {
-                settings.reference_point_id = plane_ref_id;
-            }
+            settings.reference_point_id = -1;
         }
 
         if(!settings.group_box && monitors_container && monitors_layout)
@@ -495,10 +502,19 @@ void ScreenMirror::RefreshMonitorStatus()
             }
             
             if(settings.scale_slider) settings.scale_slider->setEnabled(has_capture_source);
-            if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
-            if(settings.softness_slider) settings.softness_slider->setEnabled(has_capture_source);
-            if(settings.blend_slider) settings.blend_slider->setEnabled(has_capture_source);
-            if(settings.scale_slider) settings.scale_slider->setEnabled(has_capture_source);
+            if(settings.white_rolloff_slider) settings.white_rolloff_slider->setEnabled(has_capture_source);
+            if(settings.vibrance_slider) settings.vibrance_slider->setEnabled(has_capture_source);
+            if(settings.led_output_gain_r_slider) settings.led_output_gain_r_slider->setEnabled(has_capture_source);
+            if(settings.led_output_gain_g_slider) settings.led_output_gain_g_slider->setEnabled(has_capture_source);
+            if(settings.led_output_gain_b_slider) settings.led_output_gain_b_slider->setEnabled(has_capture_source);
+            if(settings.screen_map_roll_slider) settings.screen_map_roll_slider->setEnabled(has_capture_source);
+            if(settings.radial_corner_expansion_slider) settings.radial_corner_expansion_slider->setEnabled(has_capture_source);
+            if(settings.radial_corner_bias_tl_slider) settings.radial_corner_bias_tl_slider->setEnabled(has_capture_source);
+            if(settings.radial_corner_bias_tr_slider) settings.radial_corner_bias_tr_slider->setEnabled(has_capture_source);
+            if(settings.radial_corner_bias_bl_slider) settings.radial_corner_bias_bl_slider->setEnabled(has_capture_source);
+            if(settings.radial_corner_bias_br_slider) settings.radial_corner_bias_br_slider->setEnabled(has_capture_source);
+            if(settings.corner_blend_strength_slider) settings.corner_blend_strength_slider->setEnabled(has_capture_source);
+            if(settings.corner_blend_zone_slider) settings.corner_blend_zone_slider->setEnabled(has_capture_source);
             if(settings.scale_invert_check) settings.scale_invert_check->setEnabled(has_capture_source);
             if(settings.smoothing_time_slider) settings.smoothing_time_slider->setEnabled(has_capture_source);
             if(settings.brightness_slider) settings.brightness_slider->setEnabled(has_capture_source);

@@ -6,11 +6,13 @@
 #include "ScreenCaptureManager.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
+#include "ScreenMirror/ScreenMirrorWaveMath.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <QString>
 
 constexpr int kWhiteRolloffSliderMax = 125;
 constexpr float kWhiteRolloffStoredMax = static_cast<float>(kWhiteRolloffSliderMax) / 100.0f;
@@ -18,9 +20,14 @@ constexpr float kWhiteRolloffStoredMax = static_cast<float>(kWhiteRolloffSliderM
 constexpr int kScreenMapRollTicksPerDegree = 2;
 constexpr int kScreenMapRollSliderMax = 180 * kScreenMapRollTicksPerDegree;
 
-inline float RadialMapUiToInternal(int ui_0_100)
+inline QString FormatRadialMapUi(int ui_0_100)
 {
-    return (float)std::clamp(ui_0_100, 0, 100) - 50.0f;
+    const int v = (int)std::lround(RadialMapUiToInternal(ui_0_100));
+    if(v > 0)
+    {
+        return QString("+%1%").arg(v);
+    }
+    return QString("%1%").arg(v);
 }
 
 /* Single definition in ScreenMirror_Render.cpp (std::call_once / static buffer). */

@@ -298,7 +298,7 @@
             <enum>QSlider::TicksBelow</enum>
            </property>
            <property name="toolTip">
-            <string>Wave tail length (0-3000ms). 0 = no tail, ~500-1500ms = visible trail.</string>
+            <string>Trail behind the delayed sample (0-3000ms). 0 = sharp wave front, ~500-1500ms = visible comet tail. Does not dim far LEDs by itself.</string>
            </property>
           </widget>
          </item>
@@ -352,7 +352,7 @@
             <enum>QSlider::TicksBelow</enum>
            </property>
            <property name="toolTip">
-            <string>Seconds for the wave to cross the layout (replaces Wave Intensity when &gt;0.4s). Large values add visible latency; use Off for real-time mirror.</string>
+            <string>Seconds for the wave to cross the layout (replaces Wave Intensity when &gt; 0). 0 = Off (real-time mirror). 0.1s and up delay far LEDs by that travel time.</string>
            </property>
           </widget>
          </item>

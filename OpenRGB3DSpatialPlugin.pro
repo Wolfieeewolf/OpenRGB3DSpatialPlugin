@@ -340,6 +340,7 @@ HEADERS += \
     Effects3D/ColorWheel/ColorWheel.h \
     Effects3D/ScreenMirror/ScreenMirror.h \
     Effects3D/ScreenMirror/ScreenMirror_Internal.h \
+    Effects3D/ScreenMirror/ScreenMirrorWaveMath.h \
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
     Effects3D/ScreenMirror/ScreenMirrorVolumeFieldGlsl.h \
