@@ -9,6 +9,7 @@
 #include <functional>
 
 class DisplayPlane3D;
+class QGroupBox;
 class QLabel;
 class QPushButton;
 class QSlider;
@@ -73,6 +74,11 @@ public:
     QLabel* getLeftRightBalanceLabel() const;
     QSlider* getTopBottomBalanceSlider() const;
     QLabel* getTopBottomBalanceLabel() const;
+
+    QGroupBox* getDirectionGroup() const;
+    QGroupBox* getWaveGroup() const;
+    QGroupBox* getZonesGroup() const;
+    void syncWaveIntensityVisibility();
 
 signals:
     void valueChanged();

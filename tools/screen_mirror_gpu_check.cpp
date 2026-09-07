@@ -206,6 +206,15 @@ int main()
         std::fprintf(stderr, "wave intensity 5%% should enable wave\n");
         fails++;
     }
+    {
+        const float tte_only = ResolveWaveSpeedMmPerMs(1.0f, 0.0f, 3000.0f);
+        const float tte_wins = ResolveWaveSpeedMmPerMs(1.0f, 100.0f, 3000.0f);
+        if(std::fabs(tte_only - tte_wins) > 1e-4f)
+        {
+            std::fprintf(stderr, "time-to-edge should replace intensity, got %f vs %f\n", tte_wins, tte_only);
+            fails++;
+        }
+    }
 
     float span = WaveHistorySpanMs(1.0f, 2000.0f, 500.0f);
     if(std::fabs(span - 2500.0f) > 0.01f)

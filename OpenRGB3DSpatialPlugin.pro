@@ -140,6 +140,7 @@ HEADERS += \
     DisplayPlane3D.h \
     DisplayPlaneManager.h \
     ScreenCaptureManager.h \
+    ScreenCaptureDownscale.h \
     DisplayPlaneCaptureLabels.h \
     Geometry3DUtils.h \
     TransformJson.h \

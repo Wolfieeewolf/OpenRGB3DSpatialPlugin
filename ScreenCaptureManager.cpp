@@ -2,12 +2,72 @@
 
 #include "ScreenCaptureManager.h"
 #include "PluginLog.h"
+#include "ScreenCaptureDownscale.h"
 #include <chrono>
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <set>
+#include <vector>
 #include <QGuiApplication>
 #include <QScreen>
 #include <QImage>
+
+namespace
+{
+void WorkingCaptureSize(int src_w, int src_h, int target_w, int target_h, int& out_w, int& out_h)
+{
+    out_w = std::max(1, std::min(target_w, std::max(src_w, 1)));
+    out_h = std::max(1, std::min(target_h, std::max(src_h, 1)));
+}
+
+QImage BoxScaleRgbaImage(const QImage& src, int dst_w, int dst_h)
+{
+    if(src.isNull())
+    {
+        return QImage();
+    }
+    QImage rgba = src.convertToFormat(QImage::Format_RGBA8888);
+    WorkingCaptureSize(rgba.width(), rgba.height(), dst_w, dst_h, dst_w, dst_h);
+    if(dst_w == rgba.width() && dst_h == rgba.height())
+    {
+        return rgba;
+    }
+    QImage out(dst_w, dst_h, QImage::Format_RGBA8888);
+    if(out.isNull())
+    {
+        return QImage();
+    }
+    if(out.bytesPerLine() == dst_w * 4)
+    {
+        BoxDownscaleToRgba(rgba.constBits(),
+                           rgba.width(),
+                           rgba.height(),
+                           rgba.bytesPerLine(),
+                           out.bits(),
+                           dst_w,
+                           dst_h,
+                           0,
+                           1,
+                           2,
+                           3);
+        return out;
+    }
+    std::vector<uint8_t> packed((size_t)dst_w * (size_t)dst_h * 4u);
+    BoxDownscaleToRgba(rgba.constBits(),
+                       rgba.width(),
+                       rgba.height(),
+                       rgba.bytesPerLine(),
+                       packed.data(),
+                       dst_w,
+                       dst_h,
+                       0,
+                       1,
+                       2,
+                       3);
+    return QImage(packed.data(), dst_w, dst_h, dst_w * 4, QImage::Format_RGBA8888).copy();
+}
+} // namespace
 
 #ifdef _WIN32
     #include <Windows.h>
@@ -283,8 +343,8 @@ void ScreenCaptureManager::EndRenderTickSnapshot()
 
 void ScreenCaptureManager::SetDownscaleResolution(int width, int height)
 {
-    target_width.store((std::max)(32, (std::min)(width, 3840)));
-    target_height.store((std::max)(32, (std::min)(height, 2160)));
+    target_width.store((std::max)(32, (std::min)(width, kScreenMirrorMaxWorkingWidth)));
+    target_height.store((std::max)(32, (std::min)(height, kScreenMirrorMaxWorkingHeight)));
 }
 
 void ScreenCaptureManager::SetTargetFPS(int fps)
@@ -1185,33 +1245,32 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
                         const int target_w = target_width.load();
                         const int target_h = target_height.load();
-                        const bool needs_downscale = ((int)dxgi_state.width != target_w || (int)dxgi_state.height != target_h);
+                        int out_w = 0;
+                        int out_h = 0;
+                        WorkingCaptureSize((int)dxgi_state.width, (int)dxgi_state.height,
+                                           target_w, target_h, out_w, out_h);
 
                         if(src_is_fp16 || src_is_r10)
                         {
-                            const int out_w = needs_downscale ? target_w : (int)dxgi_state.width;
-                            const int out_h = needs_downscale ? target_h : (int)dxgi_state.height;
-                            const size_t out_need = (size_t)out_w * (size_t)out_h * 4;
-                            if(dxgi_rgba_buffer.size() < out_need)
-                                dxgi_rgba_buffer.resize(out_need);
-                            uint8_t* out_dst = dxgi_rgba_buffer.data();
+                            const int src_w = (int)dxgi_state.width;
+                            const int src_h = (int)dxgi_state.height;
+                            const size_t native_need = (size_t)src_w * (size_t)src_h * 4u;
+                            if(dxgi_rgba_buffer.size() < native_need)
+                            {
+                                dxgi_rgba_buffer.resize(native_need);
+                            }
+                            uint8_t* native_dst = dxgi_rgba_buffer.data();
                             const float r10_scale = dxgi_state.wide_gamut_hdr ? 8.0f : 1.5f;
 
-                            for(int y = 0; y < out_h; y++)
+                            for(int y = 0; y < src_h; y++)
                             {
-                                const UINT src_y = needs_downscale
-                                    ? (UINT)(((uint64_t)y * dxgi_state.height) / (uint64_t)out_h)
-                                    : (UINT)y;
-                                const uint8_t* row_base = src + (size_t)src_y * mapped.RowPitch;
-                                uint8_t* row_dst = out_dst + (size_t)y * out_w * 4;
-                                for(int x = 0; x < out_w; x++)
+                                const uint8_t* row_base = src + (size_t)y * mapped.RowPitch;
+                                uint8_t* row_dst = native_dst + (size_t)y * src_w * 4;
+                                for(int x = 0; x < src_w; x++)
                                 {
-                                    const UINT src_x = needs_downscale
-                                        ? (UINT)(((uint64_t)x * dxgi_state.width) / (uint64_t)out_w)
-                                        : (UINT)x;
                                     if(src_is_r10)
                                     {
-                                        const uint32_t packed = ((const uint32_t*)row_base)[src_x];
+                                        const uint32_t packed = ((const uint32_t*)row_base)[x];
                                         float rf, gf, bf;
                                         UnpackR10G10B10A2(packed, rf, gf, bf);
                                         row_dst[0] = LinearHdrToSdr8(rf * r10_scale);
@@ -1221,7 +1280,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                     else
                                     {
                                         const uint16_t* src_row = (const uint16_t*)row_base;
-                                        const uint16_t* px = src_row + (size_t)src_x * 4;
+                                        const uint16_t* px = src_row + (size_t)x * 4;
                                         row_dst[0] = LinearHdrToSdr8(HalfToFloat(px[0]));
                                         row_dst[1] = LinearHdrToSdr8(HalfToFloat(px[1]));
                                         row_dst[2] = LinearHdrToSdr8(HalfToFloat(px[2]));
@@ -1231,39 +1290,30 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                 }
                             }
                             dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
-                            image = QImage(out_dst, out_w, out_h, out_w * 4, QImage::Format_RGBA8888).copy();
+                            image = BoxScaleRgbaImage(
+                                QImage(dxgi_rgba_buffer.data(), src_w, src_h, src_w * 4,
+                                       QImage::Format_RGBA8888),
+                                out_w,
+                                out_h);
                         }
                         else if(src_is_bgra)
                         {
-                            const int out_w = needs_downscale ? target_w : (int)dxgi_state.width;
-                            const int out_h = needs_downscale ? target_h : (int)dxgi_state.height;
-                            const size_t out_need = (size_t)out_w * (size_t)out_h * 4;
+                            const size_t out_need = (size_t)out_w * (size_t)out_h * 4u;
                             if(dxgi_rgba_buffer.size() < out_need)
                             {
                                 dxgi_rgba_buffer.resize(out_need);
                             }
-
-                            // One pass: BGRA→RGBA + optional nearest downscale (avoids QImage convertToFormat).
-                            for(int y = 0; y < out_h; y++)
-                            {
-                                const UINT src_y = needs_downscale
-                                    ? (UINT)(((uint64_t)y * dxgi_state.height) / (uint64_t)out_h)
-                                    : (UINT)y;
-                                const uint8_t* row_base = src + (size_t)src_y * mapped.RowPitch;
-                                uint8_t* row_dst = dxgi_rgba_buffer.data() + (size_t)y * out_w * 4;
-                                for(int x = 0; x < out_w; x++)
-                                {
-                                    const UINT src_x = needs_downscale
-                                        ? (UINT)(((uint64_t)x * dxgi_state.width) / (uint64_t)out_w)
-                                        : (UINT)x;
-                                    const uint8_t* px = row_base + (size_t)src_x * 4;
-                                    row_dst[0] = px[2];
-                                    row_dst[1] = px[1];
-                                    row_dst[2] = px[0];
-                                    row_dst[3] = px[3];
-                                    row_dst += 4;
-                                }
-                            }
+                            BoxDownscaleToRgba(src,
+                                               (int)dxgi_state.width,
+                                               (int)dxgi_state.height,
+                                               (int)mapped.RowPitch,
+                                               dxgi_rgba_buffer.data(),
+                                               out_w,
+                                               out_h,
+                                               2,
+                                               1,
+                                               0,
+                                               3);
                             dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
                             image = QImage(dxgi_rgba_buffer.data(), out_w, out_h, out_w * 4,
                                            QImage::Format_RGBA8888).copy();
@@ -1272,15 +1322,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                         {
                             QImage wrap((const uchar*)src, (int)dxgi_state.width, (int)dxgi_state.height,
                                         (int)mapped.RowPitch, QImage::Format_RGBA8888);
-                            if(needs_downscale)
-                            {
-                                image = wrap.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::FastTransformation)
-                                            .convertToFormat(QImage::Format_RGBA8888);
-                            }
-                            else
-                            {
-                                image = wrap.copy();
-                            }
+                            image = BoxScaleRgbaImage(wrap, out_w, out_h);
                             dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
                         }
                     }
@@ -1334,25 +1376,42 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                     HDC mem_dc = CreateCompatibleDC(screen_dc);
                     if(mem_dc)
                     {
-                        HBITMAP bmp = CreateCompatibleBitmap(screen_dc, dw, dh);
+                        int out_w = 0;
+                        int out_h = 0;
+                        WorkingCaptureSize(dw, dh, target_width.load(), target_height.load(), out_w, out_h);
+                        HBITMAP bmp = CreateCompatibleBitmap(screen_dc, out_w, out_h);
                         if(bmp)
                         {
                             HGDIOBJ old_obj = SelectObject(mem_dc, bmp);
-                            if(BitBlt(mem_dc, 0, 0, dw, dh, screen_dc, dx, dy, SRCCOPY))
+                            SetStretchBltMode(mem_dc, HALFTONE);
+                            SetBrushOrgEx(mem_dc, 0, 0, nullptr);
+                            if(StretchBlt(mem_dc, 0, 0, out_w, out_h, screen_dc, dx, dy, dw, dh, SRCCOPY))
                             {
                                 BITMAPINFO bmi = {};
                                 bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                                bmi.bmiHeader.biWidth = dw;
-                                bmi.bmiHeader.biHeight = -dh;
+                                bmi.bmiHeader.biWidth = out_w;
+                                bmi.bmiHeader.biHeight = -out_h;
                                 bmi.bmiHeader.biPlanes = 1;
                                 bmi.bmiHeader.biBitCount = 32;
                                 bmi.bmiHeader.biCompression = BI_RGB;
 
-                                std::vector<uint8_t> buffer((size_t)dw * (size_t)dh * 4);
-                                if(GetDIBits(mem_dc, bmp, 0, (UINT)dh, buffer.data(), &bmi, DIB_RGB_COLORS) > 0)
+                                std::vector<uint8_t> buffer((size_t)out_w * (size_t)out_h * 4);
+                                if(GetDIBits(mem_dc, bmp, 0, (UINT)out_h, buffer.data(), &bmi, DIB_RGB_COLORS) > 0)
                                 {
-                                    image = QImage(buffer.data(), dw, dh, dw * 4, QImage::Format_ARGB32)
-                                                .convertToFormat(QImage::Format_RGBA8888);
+                                    std::vector<uint8_t> rgba((size_t)out_w * (size_t)out_h * 4u);
+                                    BoxDownscaleToRgba(buffer.data(),
+                                                       out_w,
+                                                       out_h,
+                                                       out_w * 4,
+                                                       rgba.data(),
+                                                       out_w,
+                                                       out_h,
+                                                       2,
+                                                       1,
+                                                       0,
+                                                       3);
+                                    image = QImage(rgba.data(), out_w, out_h, out_w * 4,
+                                                   QImage::Format_RGBA8888).copy();
                                     frame_from_gdi = true;
                                 }
                             }
@@ -1404,7 +1463,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         int target_h = target_height.load();
         if(image.width() != target_w || image.height() != target_h)
         {
-            image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+            image = BoxScaleRgbaImage(image, target_w, target_h);
         }
         if(image.format() != QImage::Format_RGBA8888)
         {
@@ -1438,31 +1497,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 src += src_stride;
             }
         }
-
-        thread_local std::vector<uint8_t> capture_blend_prev;
-        thread_local bool blend_backend_known = false;
-        thread_local bool blend_last_was_gdi = false;
-        const bool backend_switched = blend_backend_known && (blend_last_was_gdi != frame_from_gdi);
-        if(backend_switched)
-        {
-            capture_blend_prev.clear();
-        }
-
-        const size_t px_bytes = frame->data.size();
-        if(!capture_blend_prev.empty() && capture_blend_prev.size() == px_bytes)
-        {
-            constexpr int new_pct = 90;
-            constexpr int old_pct = 100 - new_pct;
-            uint8_t* px = frame->data.data();
-            for(size_t i = 0; i < px_bytes; i++)
-            {
-                px[i] = (uint8_t)(((int)px[i] * new_pct + (int)capture_blend_prev[i] * old_pct + 50) / 100);
-            }
-        }
-        capture_blend_prev.resize(px_bytes);
-        std::memcpy(capture_blend_prev.data(), frame->data.data(), px_bytes);
-        blend_last_was_gdi = frame_from_gdi;
-        blend_backend_known = true;
 
         frame->frame_id = frame_counter++;
         frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1645,7 +1679,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         int target_h = target_height.load();
         if(image.width() != target_w || image.height() != target_h)
         {
-            image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+            image = BoxScaleRgbaImage(image, target_w, target_h);
         }
         if(image.format() != QImage::Format_RGBA8888)
         {

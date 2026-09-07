@@ -614,6 +614,7 @@ CaptureZonesWidget::CaptureZonesWidget(
     ui->waveTimeToEdgeSlider->setValue((int)(wave_time_to_edge_sec * 10.0f));
     ui->waveTimeToEdgeLabel->setText(wave_time_to_edge_sec <= 0.0f ? "Off"
                                                                    : QString::number(wave_time_to_edge_sec, 'f', 1) + "s");
+    syncWaveIntensityVisibility();
 
     auto* preview_layout = new QVBoxLayout(ui->previewHost);
     preview_layout->setContentsMargins(0, 0, 0, 0);
@@ -650,6 +651,7 @@ void CaptureZonesWidget::wireSliderConnections()
     });
     connect(ui->waveTimeToEdgeSlider, &QSlider::valueChanged, this, [this](int v) {
         ui->waveTimeToEdgeLabel->setText(v == 0 ? "Off" : QString::number(v / 10.0, 'f', 1) + "s");
+        syncWaveIntensityVisibility();
         onInternalChange();
     });
     connect(ui->frontBackBalanceSlider, &QSlider::valueChanged, this, [this](int v) {
@@ -704,3 +706,24 @@ QSlider* CaptureZonesWidget::getLeftRightBalanceSlider() const { return ui->left
 QLabel* CaptureZonesWidget::getLeftRightBalanceLabel() const { return ui->leftRightBalanceLabel; }
 QSlider* CaptureZonesWidget::getTopBottomBalanceSlider() const { return ui->topBottomBalanceSlider; }
 QLabel* CaptureZonesWidget::getTopBottomBalanceLabel() const { return ui->topBottomBalanceLabel; }
+
+QGroupBox* CaptureZonesWidget::getDirectionGroup() const { return ui->directionGroup; }
+QGroupBox* CaptureZonesWidget::getWaveGroup() const { return ui->waveGroup; }
+QGroupBox* CaptureZonesWidget::getZonesGroup() const { return ui->zonesGroup; }
+
+void CaptureZonesWidget::syncWaveIntensityVisibility()
+{
+    if(!ui)
+    {
+        return;
+    }
+    const bool tte_on = ui->waveTimeToEdgeSlider && ui->waveTimeToEdgeSlider->value() > 0;
+    if(ui->propagationCaption)
+    {
+        ui->propagationCaption->setVisible(!tte_on);
+    }
+    if(ui->propagationRow)
+    {
+        ui->propagationRow->setVisible(!tte_on);
+    }
+}

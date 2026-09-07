@@ -838,9 +838,9 @@ void ScreenMirror::RefreshReferencePointDropdowns()
         settings.ref_point_combo->blockSignals(true);
         settings.ref_point_combo->clear();
 
-        settings.ref_point_combo->addItem("Spatial Anchor", QVariant(-1));
+        settings.ref_point_combo->addItem("Follow layer Spatial Anchor", QVariant(-1));
         settings.ref_point_combo->setItemData(0,
-            "Falloff and mapping origin follow this layer's Spatial Anchor (Effect global settings) plus center offset.",
+            "Falloff and mapping origin follow this layer's Spatial Anchor (mapped-lights center by default, like other effects).",
             Qt::ToolTipRole);
 
         for(size_t i = 0; i < reference_points->size(); i++)
@@ -854,7 +854,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
             settings.ref_point_combo->addItem(display, QVariant(ref_point->GetId()));
             const int row = settings.ref_point_combo->count() - 1;
             settings.ref_point_combo->setItemData(row,
-                QStringLiteral("Measure reach/falloff from layout point \"%1\" instead of the Spatial Anchor.").arg(name),
+                QStringLiteral("Measure reach/falloff from layout point \"%1\" instead of the layer Spatial Anchor. Also remaps screen UVs to that point.").arg(name),
                 Qt::ToolTipRole);
         }
 

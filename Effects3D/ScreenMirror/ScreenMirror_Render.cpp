@@ -2,6 +2,7 @@
 
 #include "ScreenMirror.h"
 #include "ScreenCaptureManager.h"
+#include "ScreenCaptureDownscale.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
@@ -407,15 +408,9 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
         capture_mgr.Initialize();
     }
     capture_mgr.SetTargetFPS(120);
-    int cap_w = 320, cap_h = 180;
-    int q = std::clamp(capture_quality, 0, 7);
-    if(q == 1) { cap_w = 480; cap_h = 270; }
-    else if(q == 2) { cap_w = 640; cap_h = 360; }
-    else if(q == 3) { cap_w = 960; cap_h = 540; }
-    else if(q == 4) { cap_w = 1280; cap_h = 720; }
-    else if(q == 5) { cap_w = 1920; cap_h = 1080; }
-    else if(q == 6) { cap_w = 2560; cap_h = 1440; }
-    else if(q == 7) { cap_w = 3840; cap_h = 2160; }
+    int cap_w = 320;
+    int cap_h = 180;
+    ScreenMirrorQualityToSize(std::clamp(capture_quality, 0, 7), cap_w, cap_h);
     capture_mgr.SetDownscaleResolution(cap_w, cap_h);
     for(size_t i = 0; i < frame_cache_planes_.size(); i++)
     {
@@ -650,7 +645,7 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
             {
                 continue;
             }
-            QImage scaled = src.scaled(tile_w, tile_h, Qt::IgnoreAspectRatio, Qt::FastTransformation)
+            QImage scaled = src.scaled(tile_w, tile_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
                                 .convertToFormat(QImage::Format_RGBA8888);
             scaled = GradeImage(scaled, *gm.settings, !gm.calibration);
             const int ox = m * tile_w;

@@ -6,12 +6,15 @@
 #include "DisplayPlaneManager.h"
 #include "DisplayPlaneCaptureCombo.h"
 #include "EffectSliderRow.h"
+#include "EffectUiRows.h"
 #include "PluginUiUtils.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
 #include "ui_ScreenMirrorMonitorSettings.h"
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -19,6 +22,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace
 {
@@ -30,6 +34,20 @@ void BindSliderRow(EffectSliderRow* row, QSlider*& slider_out, QLabel*& label_ou
     }
     slider_out = row->slider();
     label_out  = row->valueLabel();
+}
+
+void MoveFormRowTo(QFormLayout* src, QWidget* field, QFormLayout* dest)
+{
+    if(!src || !field || !dest)
+    {
+        return;
+    }
+    QFormLayout::TakeRowResult taken = src->takeRow(field);
+    QWidget* label = taken.labelItem ? taken.labelItem->widget() : nullptr;
+    QWidget* field_w = taken.fieldItem ? taken.fieldItem->widget() : field;
+    dest->addRow(label, field_w);
+    delete taken.labelItem;
+    delete taken.fieldItem;
 }
 } // namespace
 
@@ -119,8 +137,7 @@ void ScreenMirrorMonitorPanel::ensureWhiteRolloffAndVibranceWired(ScreenMirror* 
             return;
         }
         row->configure(min, max, value, tooltip);
-        row->slider()->setTickPosition(QSlider::TicksBelow);
-        row->slider()->setTickInterval(tick_interval);
+        (void)tick_interval;
         row->setEnabled(has_capture_source);
         BindSliderRow(row, slider, label);
         QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
@@ -203,8 +220,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
             return;
         }
         row->configure(min, max, value, tooltip);
-        row->slider()->setTickPosition(QSlider::TicksBelow);
-        row->slider()->setTickInterval(tick_interval);
+        (void)tick_interval;
         row->setEnabled(has_capture_source);
         BindSliderRow(row, slider, label);
         QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
@@ -249,17 +265,18 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
     settings.ref_point_combo = ui->refPointCombo;
-    ui->refPointCombo->addItem(QStringLiteral("Spatial Anchor"), QVariant(-1));
+    ui->refPointCombo->addItem(QStringLiteral("Follow layer Spatial Anchor"), QVariant(-1));
     ui->refPointCombo->setItemData(
         0,
         QStringLiteral(
-            "Use this layer's Spatial Anchor (Effect global settings) plus center offset. "
-            "Layout reference points appear below when available."),
+            "Use this layer's Spatial Anchor (Effect global settings: mapped-lights center by default, "
+            "room box, target zone, or a layout point)."),
         Qt::ToolTipRole);
     ui->refPointCombo->setEnabled(has_capture_source);
     ui->refPointCombo->setToolTip(
-        QStringLiteral("Origin for reach/falloff and screen mapping. Spatial Anchor follows the layer control; "
-                       "pick a layout point to measure from a saved marker (monitor, chair, etc.)."));
+        QStringLiteral("Falloff/wave origin for this display. Follow layer Spatial Anchor uses the same "
+                       "choices as other effects. Pick a layout point to measure from a saved marker "
+                       "(and remap screen UVs to that point)."));
     QObject::connect(ui->refPointCombo, qOverload<int>(&QComboBox::currentIndexChanged), effect,
                      &ScreenMirror::OnParameterChanged);
 
@@ -551,4 +568,58 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     {
         QObject::connect(settings.top_bottom_balance_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
     }
+
+    auto* root = qobject_cast<QVBoxLayout*>(layout());
+    if(!root)
+    {
+        return;
+    }
+
+    auto* extras_box = new QGroupBox(QStringLiteral("Color & falloff extras"), this);
+    auto* extras_form = new QFormLayout(extras_box);
+    extras_form->setContentsMargins(8, 12, 8, 8);
+    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->reachGroup->layout()), ui->falloffCurveRow, extras_form);
+    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->brightnessThresholdRow, extras_form);
+    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->whiteRolloffRow, extras_form);
+    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->vibranceRow, extras_form);
+    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->ledTrimHost, extras_form);
+    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->blendGroup->layout()), ui->blendRow, extras_form);
+    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->previewGroup->layout()), ui->calibrationPatternCheck, extras_form);
+
+    EffectCollapsibleSection* advanced = EffectUiRows::AppendCollapsibleSection(
+        root,
+        QStringLiteral("Advanced"),
+        QStringLiteral("Black bars, radial mapping, corner blend, capture zones, direction focus, and extra color/falloff."),
+        false);
+    if(!advanced)
+    {
+        return;
+    }
+    QVBoxLayout* advanced_body = advanced->bodyLayout();
+    advanced_body->addWidget(extras_box);
+    advanced_body->addWidget(ui->blackBarsGroup);
+    advanced_body->addWidget(ui->radialCornerGroup);
+    advanced_body->addWidget(ui->cornerBlendGroup);
+    if(QGroupBox* dir = zones_widget->getDirectionGroup())
+    {
+        advanced_body->addWidget(dir);
+    }
+    if(QGroupBox* zones = zones_widget->getZonesGroup())
+    {
+        advanced_body->addWidget(zones);
+    }
+    if(QGroupBox* wave = zones_widget->getWaveGroup())
+    {
+        const int advanced_index = root->indexOf(advanced);
+        if(advanced_index >= 0)
+        {
+            root->insertWidget(advanced_index, wave);
+        }
+        else
+        {
+            root->addWidget(wave);
+        }
+    }
+    root->removeWidget(ui->captureZonesHost);
+    ui->captureZonesHost->hide();
 }

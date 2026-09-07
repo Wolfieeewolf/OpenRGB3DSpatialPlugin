@@ -2,6 +2,7 @@
 
 #include "ScreenMirror.h"
 #include "ScreenCaptureManager.h"
+#include "ScreenCaptureDownscale.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
 #include "DisplayPlaneCaptureCombo.h"
@@ -72,6 +73,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
         "Capture stays on the CPU; spatial mapping, falloff, and sampling run on the volume atlas. "
         "Screen UVs lock to the display plane; Spatial Anchor (or a layout point) is falloff/wave. "
         "Span, falloff, and time-to-edge follow the live grid/layout AABB (not a fixed room size). "
+        "Capture box-averages native pixels into a 1080p-or-smaller working frame (DXGI and GDI). "
         "Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
@@ -81,7 +83,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.min_speed              = 0;
     info.user_colors            = 0;
     info.has_custom_settings    = true;
-    info.needs_3d_origin        = false;
+    info.needs_3d_origin        = true;
     info.needs_direction        = false;
     info.needs_thickness        = false;
     info.needs_arms             = false;
@@ -254,18 +256,18 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->addItem("High (640×360)", QVariant(2));
     capture_quality_combo->addItem("Ultra (960×540)", QVariant(3));
     capture_quality_combo->addItem("Maximum (1280×720)", QVariant(4));
-    capture_quality_combo->addItem("1080p (1920×1080)", QVariant(5));
-    capture_quality_combo->addItem("1440p (2560×1440)", QVariant(6));
-    capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
+    capture_quality_combo->addItem("1080p (box-average)", QVariant(5));
+    capture_quality_combo->addItem("1440p (box-average from native)", QVariant(6));
+    capture_quality_combo->addItem("4K (box-average from native)", QVariant(7));
     capture_quality_combo->setCurrentIndex(std::clamp(capture_quality, 0, 7));
     capture_quality_combo->setItemData(0, "Lightest load; fine for small planes or testing.", Qt::ToolTipRole);
     capture_quality_combo->setItemData(1, "Low bandwidth; acceptable on integrated GPUs.", Qt::ToolTipRole);
     capture_quality_combo->setItemData(2, "Balanced default for many setups.", Qt::ToolTipRole);
     capture_quality_combo->setItemData(3, "Sharper color detail on wide monitors.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(4, "720p capture; use when GPU headroom is comfortable.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(5, "1080p; noticeable cost—prefer on discrete GPUs.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(6, "1440p; high cost.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(7, "4K; only if you need maximum edge fidelity.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(4, "720p working buffer; use when GPU headroom is comfortable.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(5, "1080p working buffer. Native pixels are area-averaged so LED colors stay 1:1.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(6, "Same 1080p working buffer as 1080p; 1440p desktops are box-averaged from native (no 1440 CPU frame).", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(7, "Same 1080p working buffer as 1080p; 4K desktops are box-averaged from native (no 4K CPU frame).", Qt::ToolTipRole);
 
     capture_backend_combo = capture_ui.captureBackendCombo;
     capture_backend_combo->addItem("Auto (GDI if DXGI stalls)", QVariant(0));
@@ -285,14 +287,9 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     });
     connect(capture_quality_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         capture_quality = std::clamp(index, 0, 7);
-        int w = 320, h = 180;
-        if(capture_quality == 1) { w = 480; h = 270; }
-        else if(capture_quality == 2) { w = 640; h = 360; }
-        else if(capture_quality == 3) { w = 960; h = 540; }
-        else if(capture_quality == 4) { w = 1280; h = 720; }
-        else if(capture_quality == 5) { w = 1920; h = 1080; }
-        else if(capture_quality == 6) { w = 2560; h = 1440; }
-        else if(capture_quality == 7) { w = 3840; h = 2160; }
+        int w = 320;
+        int h = 180;
+        ScreenMirrorQualityToSize(capture_quality, w, h);
         ScreenCaptureManager::Instance().SetDownscaleResolution(w, h);
         OnParameterChanged();
     });

@@ -75,7 +75,10 @@ inline float WaveIntensityToSpeedMmPerMs(float intensity_0_to_100)
     return std::clamp(speed, 0.5f, 500.0f);
 }
 
-/** Time-to-edge (>0) replaces wave intensity. Intensity below 5% is instant (no wave). */
+/** Time-to-edge (>= 0.05s) is the room-relative delay: farthest LED from the
+ *  falloff origin waits that many seconds. It replaces wave intensity — they
+ *  are not stacked. Intensity is a layout-agnostic speed curve (higher % =
+ *  slower) used only when time-to-edge is Off. Intensity below 5% is instant. */
 inline float ResolveWaveSpeedMmPerMs(float time_to_edge_sec, float intensity_pct, float max_distance_mm)
 {
     if(time_to_edge_sec >= kWaveTimeToEdgeEnableSec)

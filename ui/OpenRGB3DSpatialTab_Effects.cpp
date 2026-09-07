@@ -516,6 +516,18 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
 
     setStackLayerGlobalChromeVisible(settings_layout == SpatialEffectSettingsLayout::FullWithTransport);
+    if(instance->effect_class_name == "ScreenMirror")
+    {
+        if(originLabel())
+        {
+            originLabel()->setVisible(true);
+        }
+        if(effectOriginCombo())
+        {
+            effectOriginCombo()->setVisible(true);
+        }
+        UpdateEffectOriginCombo();
+    }
 
     nlohmann::json settings;
     if(instance->saved_settings && !instance->saved_settings->empty())

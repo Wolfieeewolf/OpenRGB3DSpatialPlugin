@@ -208,15 +208,15 @@
        <number>8</number>
       </property>
       <item row="0" column="0">
-       <widget class="QLabel" name="propagationCaption">
+       <widget class="QLabel" name="waveTimeCaption">
         <property name="text">
-         <string>Wave Intensity:</string>
+         <string>Time to edge (s):</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QWidget" name="propagationRow" native="true">
-        <layout class="QHBoxLayout" name="propagationLayout">
+       <widget class="QWidget" name="waveTimeRow" native="true">
+        <layout class="QHBoxLayout" name="waveTimeLayout">
          <property name="leftMargin">
           <number>0</number>
          </property>
@@ -230,26 +230,20 @@
           <number>0</number>
          </property>
          <item>
-          <widget class="QSlider" name="propagationSpeedSlider">
+          <widget class="QSlider" name="waveTimeToEdgeSlider">
            <property name="maximum">
             <number>100</number>
            </property>
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
-           <property name="tickInterval">
-            <number>10</number>
-           </property>
-           <property name="tickPosition">
-            <enum>QSlider::TicksBelow</enum>
-           </property>
            <property name="toolTip">
-            <string>Wave / trail (5-100% enables delayed sampling along distance). 0-4%: instant mirror (no wave). Higher % = slower wave = more latency for far LEDs.</string>
+            <string>Seconds for the wave to reach the farthest LED from the falloff origin. This replaces Wave Intensity — they are not combined. 0 = Off (instant mirror, or use Wave Intensity). 0.1s and up delay far LEDs by that travel time.</string>
            </property>
           </widget>
          </item>
          <item>
-          <widget class="QLabel" name="propagationSpeedLabel">
+          <widget class="QLabel" name="waveTimeToEdgeLabel">
            <property name="minimumSize">
             <size>
              <width>45</width>
@@ -291,14 +285,8 @@
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
-           <property name="tickInterval">
-            <number>300</number>
-           </property>
-           <property name="tickPosition">
-            <enum>QSlider::TicksBelow</enum>
-           </property>
            <property name="toolTip">
-            <string>Trail behind the delayed sample (0-3000ms). 0 = sharp wave front, ~500-1500ms = visible comet tail. Does not dim far LEDs by itself.</string>
+            <string>Trail behind the delayed sample (0-3000ms). 0 = sharp wave front, ~500-1500ms = visible comet tail. Does not change how fast the wave travels.</string>
            </property>
           </widget>
          </item>
@@ -316,15 +304,15 @@
        </widget>
       </item>
       <item row="2" column="0">
-       <widget class="QLabel" name="waveTimeCaption">
+       <widget class="QLabel" name="propagationCaption">
         <property name="text">
-         <string>Time to edge (s):</string>
+         <string>Wave Intensity:</string>
         </property>
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="QWidget" name="waveTimeRow" native="true">
-        <layout class="QHBoxLayout" name="waveTimeLayout">
+       <widget class="QWidget" name="propagationRow" native="true">
+        <layout class="QHBoxLayout" name="propagationLayout">
          <property name="leftMargin">
           <number>0</number>
          </property>
@@ -338,26 +326,20 @@
           <number>0</number>
          </property>
          <item>
-          <widget class="QSlider" name="waveTimeToEdgeSlider">
+          <widget class="QSlider" name="propagationSpeedSlider">
            <property name="maximum">
             <number>100</number>
            </property>
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
-           <property name="tickInterval">
-            <number>10</number>
-           </property>
-           <property name="tickPosition">
-            <enum>QSlider::TicksBelow</enum>
-           </property>
            <property name="toolTip">
-            <string>Seconds for the wave to cross the layout (replaces Wave Intensity when &gt; 0). 0 = Off (real-time mirror). 0.1s and up delay far LEDs by that travel time.</string>
+            <string>Layout-agnostic delay curve used only when Time to edge is Off. 0-4%: instant mirror. 5-100% enables delayed sampling (higher % = slower wave). Ignored while Time to edge is on.</string>
            </property>
           </widget>
          </item>
          <item>
-          <widget class="QLabel" name="waveTimeToEdgeLabel">
+          <widget class="QLabel" name="propagationSpeedLabel">
            <property name="minimumSize">
             <size>
              <width>45</width>
