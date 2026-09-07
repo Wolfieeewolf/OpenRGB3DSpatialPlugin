@@ -22,12 +22,29 @@
 
 REGISTER_EFFECT_3D(RotatingConeSpotlights);
 
+namespace
+{
+Vector3D WorldToOccupancy01(float x, float y, float z,
+                            const Vector3D& origin,
+                            const EffectGridAxisHalfExtents& e)
+{
+    const float hw = std::max(e.hw, 1e-5f);
+    const float hh = std::max(e.hh, 1e-5f);
+    const float hd = std::max(e.hd, 1e-5f);
+    return {
+        0.5f + 0.5f * (x - origin.x) / hw,
+        0.5f + 0.5f * (y - origin.y) / hh,
+        0.5f + 0.5f * (z - origin.z) / hd
+    };
+}
+} // namespace
+
 const char* RotatingConeSpotlights::SurfaceName(int s)
 {
     switch(s)
     {
     case SURF_CENTER: return "Center";
-    case SURF_REF: return "Ref point";
+    case SURF_REF: return "Center";
     case SURF_CEILING: return "Ceiling";
     case SURF_FLOOR: return "Floor";
     case SURF_WALLS: return "Walls";
@@ -52,17 +69,29 @@ const char* RotatingConeSpotlights::LayoutName(int l)
 void RotatingConeSpotlights::ApplyLayoutPreset(int preset)
 {
     const int count = std::clamp(cone_count, 1, kMaxCones);
+    int surf = surface;
+    if(surf == SURF_REF)
+        surf = SURF_CENTER;
+
     int use = preset;
     if(use == LAYOUT_AUTO)
     {
         if(count <= 1)
             use = LAYOUT_CENTER;
-        else if(count == 4 && surface == SURF_WALLS)
-            use = LAYOUT_WALLS;
+        else if(surf == SURF_WALLS)
+            use = (count == 4) ? LAYOUT_WALLS : LAYOUT_ROW;
         else if(count == 4)
             use = LAYOUT_CORNERS;
         else
             use = LAYOUT_ROW;
+    }
+
+    if(use == LAYOUT_WALLS && surf != SURF_WALLS)
+    {
+        surface = SURF_WALLS;
+        surf = SURF_WALLS;
+        SyncSurfaceCombo();
+        UpdateConeSliderLabels();
     }
 
     for(int i = 0; i < kMaxCones; i++)
@@ -71,25 +100,55 @@ void RotatingConeSpotlights::ApplyLayoutPreset(int preset)
         apex_v[i] = 0.5f;
     }
 
+    const bool on_walls = (surf == SURF_WALLS);
     switch(use)
     {
     case LAYOUT_CENTER:
+        if(on_walls)
+        {
+            for(int i = 0; i < kMaxCones; i++)
+            {
+                apex_u[i] = 0.125f;
+                apex_v[i] = 0.5f;
+            }
+        }
         break;
     case LAYOUT_ROW:
-        for(int i = 0; i < count; i++)
+        if(on_walls)
         {
-            apex_u[i] = (count == 1) ? 0.5f : (0.12f + 0.76f * (float)i / (float)(count - 1));
-            apex_v[i] = 0.5f;
+            for(int i = 0; i < count; i++)
+            {
+                const int wall = (count <= 0) ? 0 : (i * 4) / count;
+                apex_u[i] = ((float)std::clamp(wall, 0, 3) + 0.5f) / 4.0f;
+                apex_v[i] = 0.5f;
+            }
+        }
+        else
+        {
+            for(int i = 0; i < count; i++)
+            {
+                apex_u[i] = (count == 1) ? 0.5f : (0.12f + 0.76f * (float)i / (float)(count - 1));
+                apex_v[i] = 0.5f;
+            }
         }
         break;
     case LAYOUT_CORNERS:
-        apex_u[0] = 0.18f; apex_v[0] = 0.18f;
-        apex_u[1] = 0.82f; apex_v[1] = 0.18f;
-        apex_u[2] = 0.18f; apex_v[2] = 0.82f;
-        apex_u[3] = 0.82f; apex_v[3] = 0.82f;
+        if(on_walls)
+        {
+            apex_u[0] = 0.00f; apex_v[0] = 0.5f;
+            apex_u[1] = 0.25f; apex_v[1] = 0.5f;
+            apex_u[2] = 0.50f; apex_v[2] = 0.5f;
+            apex_u[3] = 0.75f; apex_v[3] = 0.5f;
+        }
+        else
+        {
+            apex_u[0] = 0.18f; apex_v[0] = 0.18f;
+            apex_u[1] = 0.82f; apex_v[1] = 0.18f;
+            apex_u[2] = 0.18f; apex_v[2] = 0.82f;
+            apex_u[3] = 0.82f; apex_v[3] = 0.82f;
+        }
         break;
     case LAYOUT_WALLS:
-        // U = wall angle (0, 0.25, 0.5, 0.75); V = mid height
         for(int i = 0; i < kMaxCones; i++)
         {
             apex_u[i] = ((float)i + 0.5f) / 4.0f;
@@ -135,11 +194,6 @@ void RotatingConeSpotlights::UpdateConeSliderLabels()
         u_cap = "Angle";
         v_cap = "Height";
     }
-    else if(surface == SURF_REF)
-    {
-        u_cap = "Offset X";
-        v_cap = "Offset Z";
-    }
 
     for(int i = 0; i < kMaxCones; i++)
     {
@@ -154,6 +208,40 @@ void RotatingConeSpotlights::UpdateConeSliderLabels()
             apex_v_slider_[i]->setToolTip(
                 QStringLiteral("Cone %1 %2 (0–100%).").arg(i + 1).arg(QString::fromUtf8(v_cap)));
     }
+}
+
+void RotatingConeSpotlights::SyncSurfaceCombo()
+{
+    if(!surface_combo)
+        return;
+    const int want = (surface == SURF_REF) ? SURF_CENTER : surface;
+    int idx = -1;
+    for(int i = 0; i < surface_combo->count(); i++)
+    {
+        if(surface_combo->itemData(i).toInt() == want)
+        {
+            idx = i;
+            break;
+        }
+    }
+    if(idx < 0)
+        return;
+    surface_combo->blockSignals(true);
+    surface_combo->setCurrentIndex(idx);
+    surface_combo->blockSignals(false);
+}
+
+void RotatingConeSpotlights::SetSurfaceFromUi(int surface_id)
+{
+    int next = std::clamp(surface_id, 0, SURF_COUNT - 1);
+    if(next == SURF_REF)
+        next = SURF_CENTER;
+    surface = next;
+    if(next != SURF_WALLS && layout_preset == LAYOUT_WALLS)
+        layout_preset = (std::clamp(cone_count, 1, kMaxCones) == 4) ? LAYOUT_CORNERS : LAYOUT_ROW;
+    UpdateConeSliderLabels();
+    if(layout_preset != LAYOUT_CUSTOM)
+        ApplyLayoutPreset(layout_preset);
 }
 
 void RotatingConeSpotlights::SyncUiFromState()
@@ -179,6 +267,7 @@ void RotatingConeSpotlights::SyncUiFromState()
         layout_combo->setCurrentIndex(std::clamp(layout_preset, 0, LAYOUT_COUNT - 1));
         layout_combo->blockSignals(false);
     }
+    SyncSurfaceCombo();
     if(mirror_check)
     {
         mirror_check->blockSignals(true);
@@ -204,9 +293,9 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Rotating Cone Spotlights";
     info.effect_description =
-        "One to four Pixelblaze-style searchlight cones. Place each apex on Center / Ref / Floor / "
-        "Ceiling / Walls; Speed sweeps the beam; Frequency scrolls hue. Mirrored cone (off by default) "
-        "adds the opposite beam through the same apex.";
+        "Searchlights you mount on Center (Spatial Anchor), Floor, Ceiling, or Walls. "
+        "Layout arranges them on that surface. Speed sweeps the beam; Frequency scrolls hue. "
+        "Mirrored cone (off by default) adds the opposite beam through the same apex.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
     info.is_reversible = true;
@@ -260,18 +349,18 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     EffectLabeledComboRow* surf_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Surface:"));
     surf_row->setObjectName(QStringLiteral("surfaceRow"));
     surface_combo = surf_row->combo();
-    for(int s = 0; s < SURF_COUNT; s++)
-        surface_combo->addItem(QString::fromUtf8(SurfaceName(s)));
-    surface_combo->setCurrentIndex(std::clamp(surface, 0, SURF_COUNT - 1));
+    surface_combo->addItem(QString::fromUtf8(SurfaceName(SURF_CENTER)), SURF_CENTER);
+    surface_combo->addItem(QString::fromUtf8(SurfaceName(SURF_CEILING)), SURF_CEILING);
+    surface_combo->addItem(QString::fromUtf8(SurfaceName(SURF_FLOOR)), SURF_FLOOR);
+    surface_combo->addItem(QString::fromUtf8(SurfaceName(SURF_WALLS)), SURF_WALLS);
+    SyncSurfaceCombo();
     surface_combo->setToolTip(QStringLiteral(
-        "Where each spotlight sits in occupancy (Scale box from the Spatial Anchor).\n"
-        "Center = mid-height XZ; Ref = tighter offsets around the Anchor; Floor / Ceiling = occupancy faces;\n"
-        "Walls = around the four occupancy walls (Angle + Height). Each cone aims into the room like a searchlight."));
+        "Where the spotlights mount.\n"
+        "Center = Spatial Anchor (occupancy mid-plane). Floor / Ceiling = room floor or ceiling, "
+        "arranged in occupancy XZ so Scale still groups them.\n"
+        "Walls = room walls. The Spatial Anchor is not a second surface — it is the occupancy hub."));
     connect(surface_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, on_changed](int idx) {
-        surface = std::clamp(idx, 0, SURF_COUNT - 1);
-        UpdateConeSliderLabels();
-        if(layout_preset == LAYOUT_AUTO)
-            ApplyLayoutPreset(LAYOUT_AUTO);
+        SetSurfaceFromUi(surface_combo->itemData(idx).toInt());
         on_changed();
     });
 
@@ -295,7 +384,11 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     for(int l = 0; l < LAYOUT_COUNT; l++)
         layout_combo->addItem(QString::fromUtf8(LayoutName(l)));
     layout_combo->setCurrentIndex(std::clamp(layout_preset, 0, LAYOUT_COUNT - 1));
-    layout_combo->setToolTip(QStringLiteral("Presets fill per-cone positions. Editing a slider switches to Custom."));
+    layout_combo->setToolTip(QStringLiteral(
+        "How the spotlights sit on the chosen surface.\n"
+        "All center = stacked at the surface middle. Equal row = spread along X (or around the walls).\n"
+        "Corners = occupancy/floor corners, or the four vertical room corners on Walls.\n"
+        "One per wall = mid-face of each room wall (switches Surface to Walls)."));
     connect(layout_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, on_changed](int idx) {
         const int p = std::clamp(idx, 0, LAYOUT_COUNT - 1);
         if(p == LAYOUT_CUSTOM)
@@ -410,11 +503,6 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 
 void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
-    (void)grid;
-    const float hw01 = 0.5f;
-    const float hh01 = 0.5f;
-    const float hd01 = 0.5f;
-
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -426,9 +514,17 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     const float clock = time_sec * GetMotionHz() * bb.speed_mul * std::max(0.2f, motion_rate);
     const float scale = std::max(1e-5f, cone_scale * (0.5f + 0.5f * GetNormalizedSize()));
     const int count = std::clamp(cone_count, 1, kMaxCones);
-    const int surf = std::clamp(surface, 0, SURF_COUNT - 1);
+    int surf = std::clamp(surface, 0, SURF_COUNT - 1);
+    if(surf == SURF_REF)
+        surf = SURF_CENTER;
 
-    float vp[19] = {};
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    const EffectGridAxisHalfExtents ext =
+        MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
+    const Vector3D pmin = WorldToOccupancy01(grid.min_x, grid.min_y, grid.min_z, origin, ext);
+    const Vector3D pmax = WorldToOccupancy01(grid.max_x, grid.max_y, grid.max_z, origin, ext);
+
+    float vp[21] = {};
     vp[0] = clock;
     vp[1] = scale;
     vp[2] = hue01;
@@ -436,16 +532,18 @@ void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, flo
     vp[4] = mirror_cone ? 1.0f : 0.0f;
     vp[5] = (float)surf;
     vp[6] = wander;
-    vp[7] = 0.0f;
-    vp[8] = hw01;
-    vp[9] = hh01;
-    vp[10] = hd01;
+    vp[7] = pmin.y;
+    vp[8] = pmax.y;
+    vp[9] = pmin.x;
+    vp[10] = pmax.x;
+    vp[11] = pmin.z;
+    vp[12] = pmax.z;
     for(int i = 0; i < kMaxCones; i++)
     {
-        vp[11 + i * 2] = std::clamp(apex_u[i], 0.0f, 1.0f);
-        vp[12 + i * 2] = std::clamp(apex_v[i], 0.0f, 1.0f);
+        vp[13 + i * 2] = std::clamp(apex_u[i], 0.0f, 1.0f);
+        vp[14 + i * 2] = std::clamp(apex_v[i], 0.0f, 1.0f);
     }
-    if(!volume_assist_.prepare(render_sequence, time_sec, vp, 19))
+    if(!volume_assist_.prepare(render_sequence, time_sec, vp, 21))
     {
         static bool logged_once = false;
         if(!logged_once)
@@ -571,7 +669,11 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("cone_spot_count") && settings["cone_spot_count"].is_number_integer())
         cone_count = std::clamp(settings["cone_spot_count"].get<int>(), 1, kMaxCones);
     if(settings.contains("cone_spot_surface") && settings["cone_spot_surface"].is_number_integer())
+    {
         surface = std::clamp(settings["cone_spot_surface"].get<int>(), 0, SURF_COUNT - 1);
+        if(surface == SURF_REF)
+            surface = SURF_CENTER;
+    }
     mirror_cone = false;
     if(settings.contains("cone_spot_mirror"))
     {
@@ -611,7 +713,5 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
         wander_slider->setValue((int)std::lround(wander_amt * 100.0f));
     if(count_slider)
         count_slider->setValue(std::clamp(cone_count, 1, kMaxCones));
-    if(surface_combo)
-        surface_combo->setCurrentIndex(std::clamp(surface, 0, SURF_COUNT - 1));
     SyncUiFromState();
 }
