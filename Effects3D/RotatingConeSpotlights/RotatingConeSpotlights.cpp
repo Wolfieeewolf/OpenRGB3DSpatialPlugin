@@ -7,6 +7,7 @@
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include <QByteArray>
+#include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QLabel>
@@ -21,19 +22,6 @@
 
 REGISTER_EFFECT_3D(RotatingConeSpotlights);
 
-namespace
-{
-float ElevBiasForSurface(int surface)
-{
-    switch(surface)
-    {
-    case 2: return -0.55f;
-    case 3: return 0.55f;
-    default: return 0.0f;
-    }
-}
-} // namespace
-
 const char* RotatingConeSpotlights::SurfaceName(int s)
 {
     switch(s)
@@ -44,16 +32,6 @@ const char* RotatingConeSpotlights::SurfaceName(int s)
     case SURF_FLOOR: return "Floor";
     case SURF_WALLS: return "Walls";
     default: return "Center";
-    }
-}
-
-const char* RotatingConeSpotlights::MotionName(int m)
-{
-    switch(m)
-    {
-    case MOTION_INDEPENDENT: return "Independent";
-    case MOTION_OPPOSITE: return "Opposite pairs";
-    default: return "Independent";
     }
 }
 
@@ -82,7 +60,7 @@ void RotatingConeSpotlights::ApplyLayoutPreset(int preset)
         else if(count == 4 && surface == SURF_WALLS)
             use = LAYOUT_WALLS;
         else if(count == 4)
-            use = LAYOUT_ROW;
+            use = LAYOUT_CORNERS;
         else
             use = LAYOUT_ROW;
     }
@@ -114,7 +92,7 @@ void RotatingConeSpotlights::ApplyLayoutPreset(int preset)
         // U = wall angle (0, 0.25, 0.5, 0.75); V = mid height
         for(int i = 0; i < kMaxCones; i++)
         {
-            apex_u[i] = (float)i / 4.0f;
+            apex_u[i] = ((float)i + 0.5f) / 4.0f;
             apex_v[i] = 0.5f;
         }
         break;
@@ -201,6 +179,12 @@ void RotatingConeSpotlights::SyncUiFromState()
         layout_combo->setCurrentIndex(std::clamp(layout_preset, 0, LAYOUT_COUNT - 1));
         layout_combo->blockSignals(false);
     }
+    if(mirror_check)
+    {
+        mirror_check->blockSignals(true);
+        mirror_check->setChecked(mirror_cone);
+        mirror_check->blockSignals(false);
+    }
     UpdateConeSliderVisibility();
     UpdateConeSliderLabels();
 }
@@ -220,8 +204,9 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Rotating Cone Spotlights";
     info.effect_description =
-        "One to four single-beam spotlights with static placement (presets + per-cone sliders) and "
-        "360° aim wander. Opposite mode locks pairs 180° apart. Speed + Motion drive aim; Frequency scrolls hue.";
+        "One to four Pixelblaze-style searchlight cones. Place each apex on Center / Ref / Floor / "
+        "Ceiling / Walls; Speed sweeps the beam; Frequency scrolls hue. Mirrored cone (off by default) "
+        "adds the opposite beam through the same apex.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
     info.is_reversible = true;
@@ -258,7 +243,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 
     EffectSliderRow* count_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Cone count:"), 1, 4, std::clamp(cone_count, 1, 4),
-        QStringLiteral("Number of beams. Each has its own apex and aim path."));
+        QStringLiteral("Number of spotlights. Each adds one cone. Enable Mirrored cone for the opposite beam on every spotlight."));
     count_row->setObjectName(QStringLiteral("coneCountRow"));
     count_slider = count_row->slider();
     count_row->bindValueChanged(
@@ -279,8 +264,9 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
         surface_combo->addItem(QString::fromUtf8(SurfaceName(s)));
     surface_combo->setCurrentIndex(std::clamp(surface, 0, SURF_COUNT - 1));
     surface_combo->setToolTip(QStringLiteral(
-        "Where cone apexes sit relative to the stack origin. Floor/Ceiling offset vertically; "
-        "Walls use angle + height; Ref uses X/Z offsets around the origin."));
+        "Where each spotlight sits in occupancy (Scale box from the Spatial Anchor).\n"
+        "Center = mid-height XZ; Ref = tighter offsets around the Anchor; Floor / Ceiling = occupancy faces;\n"
+        "Walls = around the four occupancy walls (Angle + Height). Each cone aims into the room like a searchlight."));
     connect(surface_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, on_changed](int idx) {
         surface = std::clamp(idx, 0, SURF_COUNT - 1);
         UpdateConeSliderLabels();
@@ -289,18 +275,19 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
         on_changed();
     });
 
-    EffectLabeledComboRow* motion_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Motion:"));
-    motion_row->setObjectName(QStringLiteral("motionModeRow"));
-    motion_combo = motion_row->combo();
-    for(int m = 0; m < MOTION_COUNT; m++)
-        motion_combo->addItem(QString::fromUtf8(MotionName(m)));
-    motion_combo->setCurrentIndex(std::clamp(motion_mode, 0, MOTION_COUNT - 1));
-    motion_combo->setToolTip(QStringLiteral(
-        "Independent: each cone wanders freely on a sphere. Opposite: pairs lock 180° apart (1 ignored; 3 keeps cone 3 free)."));
-    connect(motion_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, on_changed](int idx) {
-        motion_mode = std::clamp(idx, 0, MOTION_COUNT - 1);
-        on_changed();
-    });
+    EffectCheckRow* mirror_row = EffectUiRows::AppendCheckRow(
+        layout,
+        QStringLiteral("Mirrored cone"),
+        mirror_cone,
+        QStringLiteral(
+            "Off (default): one searchlight beam per spotlight. "
+            "On: also emit the opposite cone through the same apex (Pixelblaze hourglass)."));
+    mirror_row->setObjectName(QStringLiteral("mirrorConeRow"));
+    mirror_check = mirror_row->checkBox();
+    mirror_row->bindToggled(
+        this,
+        [this](bool on) { mirror_cone = on; },
+        on_changed);
 
     EffectLabeledComboRow* layout_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Layout:"));
     layout_row->setObjectName(QStringLiteral("layoutPresetRow"));
@@ -324,7 +311,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 
     QVBoxLayout* pos_body = EffectUiRows::AppendCollapsibleSectionBody(
         layout, QStringLiteral("Cone positions"),
-        QStringLiteral("Per-cone U/V on the chosen surface. Presets fill these; drag to customize."), true);
+        QStringLiteral("Per-spotlight U/V on the chosen surface. Presets fill these; drag to move each searchlight."), true);
 
     for(int i = 0; i < kMaxCones; i++)
     {
@@ -371,7 +358,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     EffectSliderRow* cone_scale_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Cone scale:"), 5, 500,
         (int)std::lround(cone_scale * 1000.0f),
-        QStringLiteral("Beam width. Lower = tighter spotlight, higher = wider wash."));
+        QStringLiteral("Beam width (same 1/π² scale as the Pixelblaze mock-up). Lower = tighter, higher = wider wash."));
     cone_scale_row->setObjectName(QStringLiteral("coneScaleRow"));
     cone_slider = cone_scale_row->slider();
     cone_scale_row->bindValueChanged(
@@ -395,7 +382,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     EffectSliderRow* motion_rate_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Motion rate:"), 20, 300,
         (int)std::lround(motion_rate * 100.0f),
-        QStringLiteral("How fast aims wander (multiplies Speed). Does not affect hue."));
+        QStringLiteral("How fast the searchlight aim sweeps (multiplies Speed). Does not affect hue."));
     motion_rate_row->setObjectName(QStringLiteral("motionRow"));
     motion_slider = motion_rate_row->slider();
     motion_rate_row->bindValueChanged(
@@ -407,7 +394,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
     EffectSliderRow* wander_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Path wander:"), 15, 200,
         (int)std::lround(wander_amt * 100.0f),
-        QStringLiteral("How irregular the spherical aim path is. Higher = more chaotic sweep."));
+        QStringLiteral("How much the searchlight aim tumbles (Pixelblaze-style). Higher = more sweep, not faster."));
     wander_row->setObjectName(QStringLiteral("wanderRow"));
     wander_slider = wander_row->slider();
     wander_row->bindValueChanged(
@@ -424,29 +411,32 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 void RotatingConeSpotlights::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     (void)grid;
-    /* Occupancy UV is origin-local [0,1]; 0.5 half-extents reach the scaled box faces. */
     const float hw01 = 0.5f;
     const float hh01 = 0.5f;
     const float hd01 = 0.5f;
 
-    const float speed_norm = GetNormalizedSpeed();
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(0.5f, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+
     const float wander = std::clamp(wander_amt, 0.15f, 2.0f);
-    const float spin_t = time_sec * motion_rate * 0.65f * speed_norm * (0.55f + 0.45f * wander);
+    const float clock = time_sec * GetMotionHz() * bb.speed_mul * std::max(0.2f, motion_rate);
     const float scale = std::max(1e-5f, cone_scale * (0.5f + 0.5f * GetNormalizedSize()));
     const int count = std::clamp(cone_count, 1, kMaxCones);
     const int surf = std::clamp(surface, 0, SURF_COUNT - 1);
-    const int mot = std::clamp(motion_mode, 0, MOTION_COUNT - 1);
-    const float elev = ElevBiasForSurface(surf);
 
     float vp[19] = {};
-    vp[0] = spin_t;
+    vp[0] = clock;
     vp[1] = scale;
     vp[2] = hue01;
     vp[3] = (float)count;
-    vp[4] = (float)mot;
+    vp[4] = mirror_cone ? 1.0f : 0.0f;
     vp[5] = (float)surf;
     vp[6] = wander;
-    vp[7] = elev;
+    vp[7] = 0.0f;
     vp[8] = hw01;
     vp[9] = hh01;
     vp[10] = hd01;
@@ -504,7 +494,9 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
         h_base = samp.z();
     }
 
-    if(sat <= 1e-5f)
+    // Pixelblaze hsv(x, 1-dist, (1+dist)^4): the axis is a white core (sat≈0, val≈1).
+    // Cull on value, not saturation, or the cores go black.
+    if(val <= 1e-5f)
         return 0x00000000;
 
     float h = std::fmod(h_base + hue_scroll + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
@@ -531,7 +523,7 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
                                                    ph01,
                                                    time,
                                                    grid,
-                                                   GetNormalizedSize(),
+                                                   GetNormalizedScale(),
                                                    origin,
                                                    rot);
         RGBColor c = ResolveStripKernelFinalColor(SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
@@ -559,7 +551,7 @@ nlohmann::json RotatingConeSpotlights::SaveSettings() const
     j["cone_spot_motion"] = motion_rate;
     j["cone_spot_count"] = cone_count;
     j["cone_spot_surface"] = surface;
-    j["cone_spot_motion_mode"] = motion_mode;
+    j["cone_spot_mirror"] = mirror_cone;
     j["cone_spot_layout"] = layout_preset;
     j["cone_spot_wander"] = wander_amt;
     j["cone_spot_apex_u"] = nlohmann::json::array({apex_u[0], apex_u[1], apex_u[2], apex_u[3]});
@@ -580,8 +572,16 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
         cone_count = std::clamp(settings["cone_spot_count"].get<int>(), 1, kMaxCones);
     if(settings.contains("cone_spot_surface") && settings["cone_spot_surface"].is_number_integer())
         surface = std::clamp(settings["cone_spot_surface"].get<int>(), 0, SURF_COUNT - 1);
-    if(settings.contains("cone_spot_motion_mode") && settings["cone_spot_motion_mode"].is_number_integer())
-        motion_mode = std::clamp(settings["cone_spot_motion_mode"].get<int>(), 0, MOTION_COUNT - 1);
+    mirror_cone = false;
+    if(settings.contains("cone_spot_mirror"))
+    {
+        if(settings["cone_spot_mirror"].is_boolean())
+            mirror_cone = settings["cone_spot_mirror"].get<bool>();
+        else if(settings["cone_spot_mirror"].is_number_integer())
+            mirror_cone = settings["cone_spot_mirror"].get<int>() != 0;
+    }
+    else if(settings.contains("cone_spot_motion_mode") && settings["cone_spot_motion_mode"].is_number_integer())
+        mirror_cone = settings["cone_spot_motion_mode"].get<int>() != 0;
     if(settings.contains("cone_spot_layout") && settings["cone_spot_layout"].is_number_integer())
         layout_preset = std::clamp(settings["cone_spot_layout"].get<int>(), 0, LAYOUT_COUNT - 1);
     if(settings.contains("cone_spot_wander") && settings["cone_spot_wander"].is_number())
@@ -613,7 +613,5 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
         count_slider->setValue(std::clamp(cone_count, 1, kMaxCones));
     if(surface_combo)
         surface_combo->setCurrentIndex(std::clamp(surface, 0, SURF_COUNT - 1));
-    if(motion_combo)
-        motion_combo->setCurrentIndex(std::clamp(motion_mode, 0, MOTION_COUNT - 1));
     SyncUiFromState();
 }

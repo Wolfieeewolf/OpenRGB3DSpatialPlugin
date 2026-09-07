@@ -12,6 +12,7 @@
 class QSlider;
 class QComboBox;
 class QWidget;
+class QCheckBox;
 class EffectSliderRow;
 
 class RotatingConeSpotlights : public SpatialEffect3D
@@ -45,11 +46,6 @@ private:
         SURF_WALLS,
         SURF_COUNT
     };
-    enum MotionMode {
-        MOTION_INDEPENDENT = 0,
-        MOTION_OPPOSITE,
-        MOTION_COUNT
-    };
     enum LayoutPreset {
         LAYOUT_AUTO = 0,
         LAYOUT_CENTER,
@@ -61,7 +57,6 @@ private:
     };
 
     static const char* SurfaceName(int s);
-    static const char* MotionName(int m);
     static const char* LayoutName(int l);
 
     void ApplyLayoutPreset(int preset);
@@ -74,9 +69,9 @@ private:
     float hue01 = 0.0f;
     float motion_rate = 1.0f;
     float wander_amt = 1.0f;
-    int cone_count = 2;
+    int cone_count = 1;
     int surface = SURF_CENTER;
-    int motion_mode = MOTION_INDEPENDENT;
+    bool mirror_cone = false;
     int layout_preset = LAYOUT_AUTO;
     std::array<float, kMaxCones> apex_u = {0.5f, 0.25f, 0.5f, 0.75f};
     std::array<float, kMaxCones> apex_v = {0.5f, 0.5f, 0.5f, 0.5f};
@@ -87,7 +82,7 @@ private:
     QSlider* wander_slider = nullptr;
     QSlider* count_slider = nullptr;
     QComboBox* surface_combo = nullptr;
-    QComboBox* motion_combo = nullptr;
+    QCheckBox* mirror_check = nullptr;
     QComboBox* layout_combo = nullptr;
     QWidget* cone_pos_rows_[kMaxCones] = {};
     EffectSliderRow* apex_u_row_[kMaxCones] = {};
