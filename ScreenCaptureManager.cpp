@@ -63,6 +63,7 @@ QImage BoxScaleRgbaImage(const QImage& src, int dst_w, int dst_h)
     return QImage(packed.data(), dst_w, dst_h, dst_w * 4, QImage::Format_RGBA8888).copy();
 }
 
+#ifdef _WIN32
 std::shared_ptr<CapturedFrame> MakeCapturedFrameFromBgra(const uint8_t* bgra,
                                                           int w,
                                                           int h,
@@ -85,6 +86,7 @@ std::shared_ptr<CapturedFrame> MakeCapturedFrameFromBgra(const uint8_t* bgra,
         std::chrono::system_clock::now().time_since_epoch()).count();
     return frame;
 }
+#endif
 } // namespace
 
 #ifdef _WIN32
