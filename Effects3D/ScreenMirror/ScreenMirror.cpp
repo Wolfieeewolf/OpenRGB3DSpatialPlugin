@@ -47,7 +47,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     EffectInfo3D info           = {};
     info.effect_name            = "Screen Mirror";
     info.effect_description =
-        "Projects each display plane through the room so nearby LEDs bloom the image.";
+        "Pushes the whole display into the room in 360 degrees; each LED takes the closest screen pixel.";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;

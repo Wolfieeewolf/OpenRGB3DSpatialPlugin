@@ -116,8 +116,8 @@ namespace
         b = std::clamp(b * gain_b, 0.0f, 255.0f);
     }
 
-    void SampleBilinearRgba(const uint8_t* data, int w, int h, float u, float v,
-                            float& r, float& g, float& b)
+    void SampleNearestRgba(const uint8_t* data, int w, int h, float u, float v,
+                           float& r, float& g, float& b)
     {
         r = 0.0f;
         g = 0.0f;
@@ -129,25 +129,12 @@ namespace
         v = 1.0f - v;
         u = std::clamp(u, 0.0f, 1.0f);
         v = std::clamp(v, 0.0f, 1.0f);
-        const float x = u * (float)(w - 1);
-        const float y = v * (float)(h - 1);
-        const int x0 = (int)x;
-        const int y0 = (int)y;
-        const int x1 = std::min(x0 + 1, w - 1);
-        const int y1 = std::min(y0 + 1, h - 1);
-        const float fx = x - (float)x0;
-        const float fy = y - (float)y0;
-        const uint8_t* p00 = data + ((size_t)y0 * (size_t)w + (size_t)x0) * 4u;
-        const uint8_t* p10 = data + ((size_t)y0 * (size_t)w + (size_t)x1) * 4u;
-        const uint8_t* p01 = data + ((size_t)y1 * (size_t)w + (size_t)x0) * 4u;
-        const uint8_t* p11 = data + ((size_t)y1 * (size_t)w + (size_t)x1) * 4u;
-        const float w00 = (1.0f - fx) * (1.0f - fy);
-        const float w10 = fx * (1.0f - fy);
-        const float w01 = (1.0f - fx) * fy;
-        const float w11 = fx * fy;
-        r = w00 * (float)p00[0] + w10 * (float)p10[0] + w01 * (float)p01[0] + w11 * (float)p11[0];
-        g = w00 * (float)p00[1] + w10 * (float)p10[1] + w01 * (float)p01[1] + w11 * (float)p11[1];
-        b = w00 * (float)p00[2] + w10 * (float)p10[2] + w01 * (float)p01[2] + w11 * (float)p11[2];
+        const int ix = std::clamp((int)(u * (float)(w - 1) + 0.5f), 0, w - 1);
+        const int iy = std::clamp((int)(v * (float)(h - 1) + 0.5f), 0, h - 1);
+        const uint8_t* p = data + ((size_t)iy * (size_t)w + (size_t)ix) * 4u;
+        r = (float)p[0];
+        g = (float)p[1];
+        b = (float)p[2];
     }
 
     float FalloffWeight(float dist_mm, float max_mm, float coverage, float softness, float curve, bool inverted)
@@ -573,7 +560,7 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
         float r = 0.0f;
         float g = 0.0f;
         float b = 0.0f;
-        SampleBilinearRgba(rgba, fw, fh, u, v, r, g, b);
+        SampleNearestRgba(rgba, fw, fh, u, v, r, g, b);
         GradeRgb(r, g, b,
                  s.brightness_multiplier,
                  s.brightness_threshold,

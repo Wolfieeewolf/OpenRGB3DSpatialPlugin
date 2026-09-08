@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Standalone math check for Screen Mirror plane mapping (perspective bloom) + wave/occupancy.
+// Standalone math check for Screen Mirror plane mapping (360° closest-point) + wave/occupancy.
 // g++ -std=c++17 -O2 -o /tmp/screen_mirror_gpu_check tools/screen_mirror_gpu_check.cpp && /tmp/screen_mirror_gpu_check
 
 #include <algorithm>
@@ -100,10 +100,10 @@ namespace
         const float height_units = std::max(height_mm / grid_scale_mm, 1e-4f);
         const float half_w = 0.5f * width_units;
         const float half_h = 0.5f * height_units;
-        const float focal = std::max(half_w, half_h);
-        const float t = focal / (focal + std::fabs(local.z));
-        u = std::clamp(0.5f + (local.x * t) / width_units, 0.0f, 1.0f);
-        v = std::clamp(0.5f + (local.y * t) / height_units, 0.0f, 1.0f);
+        const float hit_x = std::clamp(local.x, -half_w, half_w);
+        const float hit_y = std::clamp(local.y, -half_h, half_h);
+        u = std::clamp(0.5f + hit_x / width_units, 0.0f, 1.0f);
+        v = std::clamp(0.5f + hit_y / height_units, 0.0f, 1.0f);
         dist_mm = std::fabs(local.z) * grid_scale_mm;
     }
 
@@ -203,24 +203,22 @@ int main()
             std::fprintf(stderr, "center in front (%f,%f,%f) want (0.5,0.5,120)\n", u, v, d);
             fails++;
         }
-        const float focal = std::max(half_w, half_h);
-        MapRectangle({half_w, 0.f, focal}, identity, width_mm, height_mm, scale, u, v, d);
-        if(std::fabs(u - 0.75f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
+        MapRectangle({0.f, 0.f, -12.f}, identity, width_mm, height_mm, scale, u, v, d);
+        if(std::fabs(u - 0.5f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f || std::fabs(d - 120.f) > 0.05f)
         {
-            std::fprintf(stderr, "front right edge should bloom inward (%f,%f) want (0.75,0.5)\n", u, v);
+            std::fprintf(stderr, "center behind (%f,%f,%f) want (0.5,0.5,120)\n", u, v, d);
             fails++;
         }
-        MapRectangle({half_w, 0.f, -focal}, identity, width_mm, height_mm, scale, u, v, d);
-        if(std::fabs(u - 0.75f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
-        {
-            std::fprintf(stderr, "behind right edge should bloom inward (%f,%f) want (0.75,0.5)\n", u, v);
-            fails++;
-        }
-        const float edge_x = half_w * (focal + focal) / focal;
-        MapRectangle({edge_x, 0.f, focal}, identity, width_mm, height_mm, scale, u, v, d);
+        MapRectangle({half_w, 0.f, 12.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 1.0f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
         {
-            std::fprintf(stderr, "front edge ray (%f,%f) want (1,0.5)\n", u, v);
+            std::fprintf(stderr, "front right should keep the edge pixel (%f,%f) want (1,0.5)\n", u, v);
+            fails++;
+        }
+        MapRectangle({half_w, 0.f, -12.f}, identity, width_mm, height_mm, scale, u, v, d);
+        if(std::fabs(u - 1.0f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
+        {
+            std::fprintf(stderr, "behind right should keep the edge pixel (%f,%f) want (1,0.5)\n", u, v);
             fails++;
         }
     }
@@ -245,12 +243,18 @@ int main()
             std::fprintf(stderr, "Rz90 top edge (%f,%f) want (0.5,1)\n", u, v);
             fails++;
         }
-        const float focal = std::max(half_w, half_h);
-        const Vec3 world_front_right = LocalToWorld({half_w, 0.f, focal}, rz90);
+        const Vec3 world_front_right = LocalToWorld({half_w, 0.f, 12.f}, rz90);
         MapRectangle(world_front_right, rz90, width_mm, height_mm, scale, u, v, d);
-        if(std::fabs(u - 0.75f) > 1e-4f || std::fabs(v - 0.5f) > 1e-4f)
+        if(std::fabs(u - 1.0f) > 1e-4f || std::fabs(v - 0.5f) > 1e-4f)
         {
-            std::fprintf(stderr, "Rz90 front right bloom (%f,%f) want (0.75,0.5)\n", u, v);
+            std::fprintf(stderr, "Rz90 front right (%f,%f) want (1,0.5)\n", u, v);
+            fails++;
+        }
+        const Vec3 world_back_center = LocalToWorld({0.f, 0.f, -12.f}, rz90);
+        MapRectangle(world_back_center, rz90, width_mm, height_mm, scale, u, v, d);
+        if(std::fabs(u - 0.5f) > 1e-4f || std::fabs(v - 0.5f) > 1e-4f)
+        {
+            std::fprintf(stderr, "Rz90 back center (%f,%f) want (0.5,0.5)\n", u, v);
             fails++;
         }
     }

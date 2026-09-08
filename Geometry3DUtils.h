@@ -276,10 +276,10 @@ namespace Geometry3D
         const float height_units = std::max(MMToGridUnits(plane.GetHeightMM(), grid_scale_mm), 1e-4f);
         const float half_w = 0.5f * width_units;
         const float half_h = 0.5f * height_units;
-        const float focal = std::max(half_w, half_h);
-        const float t = focal / (focal + std::fabs(local.z));
-        result.u = std::clamp(0.5f + (local.x * t) / width_units, 0.0f, 1.0f);
-        result.v = std::clamp(0.5f + (local.y * t) / height_units, 0.0f, 1.0f);
+        const float hit_x = std::clamp(local.x, -half_w, half_w);
+        const float hit_y = std::clamp(local.y, -half_h, half_h);
+        result.u = std::clamp(0.5f + hit_x / width_units, 0.0f, 1.0f);
+        result.v = std::clamp(0.5f + hit_y / height_units, 0.0f, 1.0f);
         result.distance = GridUnitsToMM(std::fabs(local.z), grid_scale_mm);
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;
