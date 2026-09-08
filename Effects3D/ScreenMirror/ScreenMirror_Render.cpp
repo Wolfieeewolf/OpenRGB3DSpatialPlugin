@@ -7,6 +7,8 @@
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
+#include "LEDPosition3D.h"
+#include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
 
@@ -135,6 +137,59 @@ namespace
         r = (float)p[0];
         g = (float)p[1];
         b = (float)p[2];
+    }
+
+    struct SurfaceUvCache
+    {
+        uint64_t seq = 0;
+        int ctrl = -2;
+        const DisplayPlane3D* plane = nullptr;
+        int u_axis = 0;
+        int v_axis = 1;
+    };
+    thread_local SurfaceUvCache g_surface_uv;
+
+    void ResolveSurfaceUvAxes(const DisplayPlane3D& plane,
+                              float grid_scale_mm,
+                              uint64_t render_sequence,
+                              int& u_axis,
+                              int& v_axis)
+    {
+        const int ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
+        if(g_surface_uv.seq == render_sequence &&
+           g_surface_uv.ctrl == ctrl &&
+           g_surface_uv.plane == &plane)
+        {
+            u_axis = g_surface_uv.u_axis;
+            v_axis = g_surface_uv.v_axis;
+            return;
+        }
+
+        u_axis = 0;
+        v_axis = 1;
+        const std::vector<std::unique_ptr<ControllerTransform>>* transforms =
+            SpatialLightingSceneProvider::instance()->controllers();
+        if(transforms && ctrl >= 0 && ctrl < (int)transforms->size())
+        {
+            const ControllerTransform* transform = (*transforms)[(size_t)ctrl].get();
+            if(transform && transform->led_positions.size() >= 2)
+            {
+                std::vector<Vector3D> local_pts;
+                local_pts.reserve(transform->led_positions.size());
+                for(const LEDPosition3D& led : transform->led_positions)
+                {
+                    local_pts.push_back(Geometry3D::TransformDisplayPlaneWorldToLocal(
+                        led.world_position, plane.GetTransform()));
+                }
+                Geometry3D::ChooseSurfaceUvAxes(local_pts.data(), (int)local_pts.size(), u_axis, v_axis);
+            }
+        }
+        (void)grid_scale_mm;
+        g_surface_uv.seq = render_sequence;
+        g_surface_uv.ctrl = ctrl;
+        g_surface_uv.plane = &plane;
+        g_surface_uv.u_axis = u_axis;
+        g_surface_uv.v_axis = v_axis;
     }
 
     float FalloffWeight(float dist_mm, float max_mm, float coverage, float softness, float curve, bool inverted)
@@ -461,7 +516,11 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
             continue;
         }
         const MonitorSettings& s = *sm.settings;
-        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led, *sm.plane, tick_scale_mm_);
+        int u_axis = 0;
+        int v_axis = 1;
+        ResolveSurfaceUvAxes(*sm.plane, tick_scale_mm_, grid.render_sequence, u_axis, v_axis);
+        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led, *sm.plane, tick_scale_mm_,
+                                                                          u_axis, v_axis);
         if(!proj.is_valid)
         {
             continue;

@@ -266,9 +266,78 @@ namespace Geometry3D
         v = std::clamp(0.5f + s * du + c * dv, 0.0f, 1.0f);
     }
 
+    inline void ChooseSurfaceUvAxes(const Vector3D* pts, int count, int& u_axis, int& v_axis)
+    {
+        u_axis = 0;
+        v_axis = 1;
+        if(pts == nullptr || count < 2)
+        {
+            return;
+        }
+
+        double sum[3] = {0.0, 0.0, 0.0};
+        for(int i = 0; i < count; ++i)
+        {
+            sum[0] += (double)pts[i].x;
+            sum[1] += (double)pts[i].y;
+            sum[2] += (double)pts[i].z;
+        }
+        const double inv = 1.0 / (double)count;
+        const float mean0 = (float)(sum[0] * inv);
+        const float mean1 = (float)(sum[1] * inv);
+        const float mean2 = (float)(sum[2] * inv);
+        float var[3] = {0.0f, 0.0f, 0.0f};
+        for(int i = 0; i < count; ++i)
+        {
+            const float d0 = pts[i].x - mean0;
+            const float d1 = pts[i].y - mean1;
+            const float d2 = pts[i].z - mean2;
+            var[0] += d0 * d0;
+            var[1] += d1 * d1;
+            var[2] += d2 * d2;
+        }
+        if(var[0] + var[1] + var[2] < 1e-8f)
+        {
+            return;
+        }
+
+        int first = 0;
+        if(var[1] > var[first])
+        {
+            first = 1;
+        }
+        if(var[2] > var[first])
+        {
+            first = 2;
+        }
+        int second = (first == 0) ? 1 : 0;
+        for(int axis = 0; axis < 3; ++axis)
+        {
+            if(axis == first)
+            {
+                continue;
+            }
+            if(var[axis] > var[second])
+            {
+                second = axis;
+            }
+        }
+
+        if(first == 0 || second == 0)
+        {
+            u_axis = 0;
+            v_axis = (first == 0) ? second : first;
+            return;
+        }
+        u_axis = 2;
+        v_axis = 1;
+    }
+
     inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position,
                                               const DisplayPlane3D& plane,
-                                              float grid_scale_mm = DEFAULT_GRID_SCALE_MM)
+                                              float grid_scale_mm = DEFAULT_GRID_SCALE_MM,
+                                              int u_axis = 0,
+                                              int v_axis = 1)
     {
         PlaneProjection result;
         const Vector3D local = TransformDisplayPlaneWorldToLocal(led_position, plane.GetTransform());
@@ -277,20 +346,33 @@ namespace Geometry3D
         const float half_w = 0.5f * width_units;
         const float half_h = 0.5f * height_units;
         const float half_d = std::max(half_w, half_h);
-        const float nx = local.x / half_w;
-        const float ny = local.y / half_h;
-        const float nz = local.z / half_d;
-        const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+        const float n[3] = {
+            local.x / half_w,
+            local.y / half_h,
+            local.z / half_d
+        };
+        u_axis = std::clamp(u_axis, 0, 2);
+        v_axis = std::clamp(v_axis, 0, 2);
+        if(u_axis == v_axis)
+        {
+            v_axis = (u_axis + 1) % 3;
+        }
+        const float len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
         if(len < 1e-6f)
         {
             result.u = 0.5f;
             result.v = 0.5f;
         }
+        else if(u_axis == 2 || v_axis == 2)
+        {
+            result.u = std::clamp(0.5f + 0.5f * n[u_axis], 0.0f, 1.0f);
+            result.v = std::clamp(0.5f + 0.5f * n[v_axis], 0.0f, 1.0f);
+        }
         else
         {
             static constexpr float kScreenEdgeAt45Deg = 1.414213562373095f;
-            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * nx / len, 0.0f, 1.0f);
-            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * ny / len, 0.0f, 1.0f);
+            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * n[u_axis] / len, 0.0f, 1.0f);
+            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * n[v_axis] / len, 0.0f, 1.0f);
         }
         result.distance = GridUnitsToMM(std::fabs(local.z), grid_scale_mm);
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
