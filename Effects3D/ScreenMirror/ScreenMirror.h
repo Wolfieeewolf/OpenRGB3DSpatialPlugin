@@ -5,13 +5,13 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
-#include "SpatialVolumeFieldAssist.h"
 #include "ScreenMirror/ScreenMirrorWaveMath.h"
 #include <map>
 #include <unordered_map>
 #include <deque>
 #include <memory>
 #include <string>
+#include <vector>
 #include "ScreenCaptureManager.h"
 #include "ui/CaptureZonesWidget.h"
 
@@ -337,8 +337,10 @@ private:
 
     struct LEDState
     {
-        float r, g, b;
-        uint64_t smooth_last_tick_ms;
+        float r = 0.0f;
+        float g = 0.0f;
+        float b = 0.0f;
+        uint64_t smooth_last_tick_ms = 0;
     };
     std::map<LEDKey, LEDState> led_states;
 
@@ -348,9 +350,27 @@ private:
     float GetHistoryRetentionMs() const;
     LEDKey MakeLEDKey(float x, float y, float z) const;
 
-    SpatialVolumeFieldAssist volume_assist_;
+    struct SampleMonitor
+    {
+        DisplayPlane3D* plane;
+        MonitorSettings* settings;
+        Vector3D falloff_origin;
+        float zone_u0;
+        float zone_u1;
+        float zone_v0;
+        float zone_v1;
+        bool calibration;
+        bool flip_v;
+        float wave_speed;
+        float max_distance_mm;
+        std::shared_ptr<CapturedFrame> latest;
+        const uint8_t* cal_rgba;
+        int cal_w;
+        int cal_h;
+    };
+    std::vector<SampleMonitor> sample_tick_;
+    float tick_scale_mm_;
     float gpu_smooth_ms_;
-    bool gpu_logged_unavail_;
 };
 
 #endif

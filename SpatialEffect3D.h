@@ -193,8 +193,9 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   Target zone bounds change that AABB. Use only for wall/floor/ceiling
  *   surface fields (Surface Ambient) and room-edge fade.
  *   Sample those GPU atlases with SampleGpuRoomVolume01 — no axis flips.
- *   Screen Mirror uses TrySampleGpuRoomVolume01 so samples outside the AABB
- *   stay unlit instead of clamping onto cube faces (four-quadrant artifact).
+ *   Screen Mirror samples the 2D capture per LED from the display-plane
+ *   rectangle (not a room volume). Occupancy still uses
+ *   EffectGridSampleOutsideVolume so samples outside the AABB stay unlit.
  *
  * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.

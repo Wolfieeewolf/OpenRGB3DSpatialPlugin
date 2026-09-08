@@ -9,7 +9,6 @@
 #include "PluginUiUtils.h"
 #include "ScreenMirror/ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
-#include "ScreenMirror/ScreenMirrorVolumeFieldGlsl.h"
 #include "ui_ScreenMirrorCapturePanel.h"
 #include "ui_ScreenMirrorEffectShell.h"
 
@@ -36,11 +35,9 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , reference_points(nullptr)
     , frame_cache_refresh_ms_(0)
     , frame_cache_last_render_seq_(0)
+    , tick_scale_mm_(10.0f)
     , gpu_smooth_ms_(0.0f)
-    , gpu_logged_unavail_(false)
 {
-    volume_assist_.setFragmentBody(QString::fromUtf8(ScreenMirrorVolumeFieldGlsl()));
-    volume_assist_.setResolution(32);
 }
 
 ScreenMirror::~ScreenMirror() = default;
@@ -50,7 +47,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     EffectInfo3D info           = {};
     info.effect_name            = "Screen Mirror";
     info.effect_description =
-        "Maps screen content onto LEDs. Native capture matches the display; optional caps GPU-scale first.";
+        "Maps each display plane onto nearby LEDs. Capture is sampled per LED from the plane rectangle.";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;

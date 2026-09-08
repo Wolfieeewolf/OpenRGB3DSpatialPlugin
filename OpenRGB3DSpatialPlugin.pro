@@ -346,7 +346,6 @@ HEADERS += \
     Effects3D/ScreenMirror/ScreenMirrorWaveMath.h \
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
-    Effects3D/ScreenMirror/ScreenMirrorVolumeFieldGlsl.h \
     Effects3D/TextureProjection/TextureProjection.h \
     Effects3D/OmniShapeTexture/OmniShapeTexture.h \
     Effects3D/ShellPattern/ShellPattern.h \

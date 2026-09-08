@@ -133,7 +133,7 @@ namespace Geometry3D
         };
     }
 
-    /** Inverse of TransformDisplayPlaneLocalToWorld (for emitter / display-plane UV). */
+    /** Inverse of TransformDisplayPlaneLocalToWorld (same Euler XYZ formulas, reverse order). */
     inline Vector3D TransformDisplayPlaneWorldToLocal(const Vector3D& world_pos, const Transform3D& transform)
     {
         Vector3D p{
@@ -143,29 +143,24 @@ namespace Geometry3D
         };
 
         const float deg = 3.14159265359f / 180.0f;
-        const float rz = -transform.rotation.z * deg;
-        const float cz = std::cos(rz);
-        const float sz = std::sin(rz);
-        float tx = p.x * cz + p.y * sz;
-        float ty = -p.x * sz + p.y * cz;
-        p.x = tx;
-        p.y = ty;
-
-        const float ry = -transform.rotation.y * deg;
-        const float cy = std::cos(ry);
-        const float sy = std::sin(ry);
-        tx = p.x * cy - p.z * sy;
-        float tz = p.x * sy + p.z * cy;
-        p.x = tx;
-        p.z = tz;
-
         const float rx = -transform.rotation.x * deg;
-        const float cx = std::cos(rx);
-        const float sx = std::sin(rx);
-        ty = p.y * cx + p.z * sx;
-        tz = -p.y * sx + p.z * cx;
-        p.y = ty;
-        p.z = tz;
+        const float ry = -transform.rotation.y * deg;
+        const float rz = -transform.rotation.z * deg;
+
+        float temp_x = p.x * std::cos(rz) - p.y * std::sin(rz);
+        float temp_y = p.x * std::sin(rz) + p.y * std::cos(rz);
+        p.x = temp_x;
+        p.y = temp_y;
+
+        temp_x = p.x * std::cos(ry) + p.z * std::sin(ry);
+        float temp_z = -p.x * std::sin(ry) + p.z * std::cos(ry);
+        p.x = temp_x;
+        p.z = temp_z;
+
+        temp_y = p.y * std::cos(rx) - p.z * std::sin(rx);
+        temp_z = p.y * std::sin(rx) + p.z * std::cos(rx);
+        p.y = temp_y;
+        p.z = temp_z;
 
         const float inv_sx = (std::fabs(transform.scale.x) > 1e-8f) ? 1.0f / transform.scale.x : 1.0f;
         const float inv_sy = (std::fabs(transform.scale.y) > 1e-8f) ? 1.0f / transform.scale.y : 1.0f;
@@ -271,7 +266,9 @@ namespace Geometry3D
         v = std::clamp(0.5f + s * du + c * dv, 0.0f, 1.0f);
     }
 
-    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = DEFAULT_GRID_SCALE_MM)
+    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position,
+                                              const DisplayPlane3D& plane,
+                                              float grid_scale_mm = DEFAULT_GRID_SCALE_MM)
     {
         PlaneProjection result;
         result.is_valid = false;
@@ -280,71 +277,17 @@ namespace Geometry3D
         result.distance = 0.0f;
 
         const Transform3D& transform = plane.GetTransform();
-        const Vector3D& ref = user_position ? *user_position : transform.position;
+        const Vector3D local = TransformDisplayPlaneWorldToLocal(led_position, transform);
+        const float width_units = std::max(MMToGridUnits(plane.GetWidthMM(), grid_scale_mm), 1e-4f);
+        const float height_units = std::max(MMToGridUnits(plane.GetHeightMM(), grid_scale_mm), 1e-4f);
+        result.u = 0.5f + local.x / width_units;
+        result.v = 0.5f + local.y / height_units;
+        result.distance = GridUnitsToMM(std::fabs(local.z), grid_scale_mm);
 
-        Vector3D ref_to_led;
-        ref_to_led.x = led_position.x - ref.x;
-        ref_to_led.y = led_position.y - ref.y;
-        ref_to_led.z = led_position.z - ref.z;
-        result.distance = sqrtf(ref_to_led.x * ref_to_led.x + ref_to_led.y * ref_to_led.y + ref_to_led.z * ref_to_led.z);
-        result.distance = GridUnitsToMM(result.distance, grid_scale_mm);
+        result.u = std::clamp(result.u, 0.0f, 1.0f);
+        result.v = std::clamp(result.v, 0.0f, 1.0f);
 
-        float rotation_matrix[9];
-        ComputeRotationMatrix(transform.rotation, rotation_matrix);
-
-        Vector3D plane_right  = { rotation_matrix[0], rotation_matrix[3], rotation_matrix[6] };
-        Vector3D plane_up     = { rotation_matrix[1], rotation_matrix[4], rotation_matrix[7] };
-
-        float len_sq = ref_to_led.x * ref_to_led.x + ref_to_led.y * ref_to_led.y + ref_to_led.z * ref_to_led.z;
-        float len = sqrtf(len_sq);
-        const float eps = 1e-6f;
-        if (len < eps)
-        {
-            result.u = 0.5f;
-            result.v = 0.5f;
-            result.is_valid = true;
-            return result;
-        }
-        float inv_len = 1.0f / len;
-        float dir_x = ref_to_led.x * inv_len;
-        float dir_y = ref_to_led.y * inv_len;
-        float dir_z = ref_to_led.z * inv_len;
-        float dir_right = dir_x * plane_right.x + dir_y * plane_right.y + dir_z * plane_right.z;
-        float dir_up    = dir_x * plane_up.x    + dir_y * plane_up.y    + dir_z * plane_up.z;
-        static constexpr float kDirectionalMapBasisRotationDeg = -25.5f;
-        const float calib_rad = kDirectionalMapBasisRotationDeg * 3.14159265359f / 180.0f;
-        const float cc = std::cos(calib_rad);
-        const float ss = std::sin(calib_rad);
-        const float dir_r_rot = dir_right * cc - dir_up * ss;
-        const float dir_u_rot = dir_right * ss + dir_up * cc;
-        static const float inv_half_sqrt2 = 1.414213562373095f;
-        result.u = 0.5f + 0.5f * dir_r_rot * inv_half_sqrt2;
-        result.v = 0.5f + 0.5f * dir_u_rot * inv_half_sqrt2;
-
-        if (result.u < 0.0f) result.u = 0.0f;
-        if (result.u > 1.0f) result.u = 1.0f;
-        if (result.v < 0.0f) result.v = 0.0f;
-        if (result.v > 1.0f) result.v = 1.0f;
-
-        float inset = edge_zone_depth;
-        if(inset > 0.0f)
-        {
-            inset = std::clamp(inset, 0.0f, 0.49f);
-            float min_uv = inset;
-            float max_uv = 1.0f - inset;
-            float span = std::max(0.0f, max_uv - min_uv);
-            if(span > 0.0f)
-            {
-                result.u = min_uv + span * result.u;
-                result.v = min_uv + span * result.v;
-            }
-            else
-            {
-                result.u = result.v = 0.5f;
-            }
-        }
-
-        if (std::isnan(result.u) || std::isnan(result.v) || !std::isfinite(result.u) || !std::isfinite(result.v))
+        if(std::isnan(result.u) || std::isnan(result.v) || !std::isfinite(result.u) || !std::isfinite(result.v))
         {
             result.is_valid = false;
             return result;

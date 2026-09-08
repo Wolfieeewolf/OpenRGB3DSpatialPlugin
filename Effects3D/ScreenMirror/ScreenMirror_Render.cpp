@@ -7,26 +7,18 @@
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
-#include "PluginLog.h"
 #include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
-#include "SpatialVolumeFieldEngine.h"
-
-#include <QImage>
-#include <QByteArray>
-#include <QVector3D>
 
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <algorithm>
-#include <cstring>
 #include <deque>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <vector>
 
 const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h)
@@ -41,20 +33,6 @@ const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h)
 
 namespace
 {
-    constexpr int kGpuMaxMonitors = 2;
-    constexpr int kGpuMaxHistory = kScreenMirrorGpuMaxHistory;
-    constexpr int kGpuMonParamCount = 24;
-    constexpr int kGpuSharedCount = 6;
-
-    float Pack01(float a, float b)
-    {
-        a = std::clamp(a, 0.0f, 1.0f);
-        b = std::clamp(b, 0.0f, 1.0f);
-        const float ai = std::floor(a * 4095.0f + 0.5f);
-        const float bi = std::floor(b * 4095.0f + 0.5f);
-        return ai * 4096.0f + bi;
-    }
-
     void GradeRgb(float& r, float& g, float& b,
                   float brightness,
                   float threshold,
@@ -138,67 +116,87 @@ namespace
         b = std::clamp(b * gain_b, 0.0f, 255.0f);
     }
 
-    QImage ImageFromRgba(const uint8_t* data, int w, int h)
+    void SampleBilinearRgba(const uint8_t* data, int w, int h, float u, float v, bool flip_v,
+                            float& r, float& g, float& b)
     {
+        r = 0.0f;
+        g = 0.0f;
+        b = 0.0f;
         if(!data || w <= 0 || h <= 0)
         {
-            return QImage();
+            return;
         }
-        QImage img(data, w, h, w * 4, QImage::Format_RGBA8888);
-        return img.copy();
-    }
-
-    QImage GradeImage(const QImage& src,
-                      const ScreenMirror::MonitorSettings& mon,
-                      bool apply_threshold)
-    {
-        QImage img = src.convertToFormat(QImage::Format_RGBA8888);
-        for(int y = 0; y < img.height(); ++y)
+        if(flip_v)
         {
-            unsigned char* row = img.scanLine(y);
-            for(int x = 0; x < img.width(); ++x)
-            {
-                unsigned char* px = row + (size_t)x * 4u;
-                float r = (float)px[0];
-                float g = (float)px[1];
-                float b = (float)px[2];
-                GradeRgb(r, g, b,
-                         mon.brightness_multiplier,
-                         mon.brightness_threshold,
-                         mon.white_rolloff,
-                         mon.vibrance,
-                         mon.led_output_gain_r,
-                         mon.led_output_gain_g,
-                         mon.led_output_gain_b,
-                         apply_threshold);
-                px[0] = (unsigned char)std::clamp((int)std::lround(r), 0, 255);
-                px[1] = (unsigned char)std::clamp((int)std::lround(g), 0, 255);
-                px[2] = (unsigned char)std::clamp((int)std::lround(b), 0, 255);
-                px[3] = 255;
-            }
+            v = 1.0f - v;
         }
-        return img;
+        u = std::clamp(u, 0.0f, 1.0f);
+        v = std::clamp(v, 0.0f, 1.0f);
+        const float x = u * (float)(w - 1);
+        const float y = v * (float)(h - 1);
+        const int x0 = (int)x;
+        const int y0 = (int)y;
+        const int x1 = std::min(x0 + 1, w - 1);
+        const int y1 = std::min(y0 + 1, h - 1);
+        const float fx = x - (float)x0;
+        const float fy = y - (float)y0;
+        const auto px = [&](int sx, int sy) -> const uint8_t* {
+            return data + ((size_t)sy * (size_t)w + (size_t)sx) * 4u;
+        };
+        const uint8_t* p00 = px(x0, y0);
+        const uint8_t* p10 = px(x1, y0);
+        const uint8_t* p01 = px(x0, y1);
+        const uint8_t* p11 = px(x1, y1);
+        const float w00 = (1.0f - fx) * (1.0f - fy);
+        const float w10 = fx * (1.0f - fy);
+        const float w01 = (1.0f - fx) * fy;
+        const float w11 = fx * fy;
+        r = w00 * (float)p00[0] + w10 * (float)p10[0] + w01 * (float)p01[0] + w11 * (float)p11[0];
+        g = w00 * (float)p00[1] + w10 * (float)p10[1] + w01 * (float)p01[1] + w11 * (float)p11[1];
+        b = w00 * (float)p00[2] + w10 * (float)p10[2] + w01 * (float)p01[2] + w11 * (float)p11[2];
     }
 
-    struct GpuMonitor
+    float FalloffWeight(float dist_mm, float max_mm, float coverage, float softness, float curve, bool inverted)
     {
-        ScreenMirror::MonitorSettings* settings = nullptr;
-        Vector3D map_uv{};
-        Vector3D falloff_uv{};
-        Vector3D right{};
-        Vector3D up{};
-        bool flip_v = true;
-        bool calibration = false;
-        float wave_speed = 0.0f;
-        float wave_span_ms = 0.0f;
-        float max_distance_mm = 1.0f;
-        float zone_u0 = 0.0f;
-        float zone_u1 = 1.0f;
-        float zone_v0 = 0.0f;
-        float zone_v1 = 1.0f;
-        QImage calibration_image;
-        std::vector<std::shared_ptr<CapturedFrame>> live_newest_first;
-    };
+        coverage = std::max(coverage, 0.0f);
+        if(coverage <= 0.0001f || max_mm <= 0.0f)
+        {
+            return 0.0f;
+        }
+        if(inverted)
+        {
+            float range = std::max(max_mm * coverage, 10.0f);
+            if(dist_mm <= range * (1.0f - softness / 100.0f))
+            {
+                return 1.0f;
+            }
+            if(dist_mm >= range)
+            {
+                return 0.0f;
+            }
+            float feather = range * (softness / 100.0f);
+            float core = range - feather;
+            float t = std::clamp((dist_mm - core) / std::max(feather, 1e-4f), 0.0f, 1.0f);
+            t = t * t * (3.0f - 2.0f * t);
+            return 1.0f - t;
+        }
+        if(coverage >= 0.999f)
+        {
+            return 1.0f;
+        }
+        float nd = std::clamp(dist_mm / std::max(max_mm, 1.0f), 0.0f, 1.0f);
+        nd = powf(nd, std::clamp(curve, 0.25f, 4.0f));
+        float boundary = std::max(0.0f, 1.0f - coverage);
+        if(boundary <= 0.0005f)
+        {
+            return 1.0f;
+        }
+        float feather_band = std::clamp(softness / 100.0f, 0.0f, 0.95f) * 0.5f;
+        float fade_start = std::max(0.0f, boundary - feather_band);
+        float t = std::clamp((nd - fade_start) / std::max(boundary - fade_start, 1e-5f), 0.0f, 1.0f);
+        t = t * t * (3.0f - 2.0f * t);
+        return t;
+    }
 
     void EnsureDefaultZones(ScreenMirror::MonitorSettings& mon)
     {
@@ -281,86 +279,6 @@ namespace
         }
         return dq.empty() ? std::shared_ptr<CapturedFrame>() : dq.front();
     }
-
-    void FillHistoryByAge(const std::deque<std::shared_ptr<CapturedFrame>>& dq,
-                          float span_ms,
-                          int nhist,
-                          std::vector<std::shared_ptr<CapturedFrame>>& out)
-    {
-        out.clear();
-        if(dq.empty() || nhist <= 0)
-        {
-            return;
-        }
-        uint64_t newest = dq.back()->timestamp_ms;
-        const int rows = std::max(1, nhist);
-        for(int h = 0; h < rows; ++h)
-        {
-            float age = (rows == 1) ? 0.0f : ((float)h / (float)(rows - 1)) * std::max(span_ms, 0.0f);
-            uint64_t target = newest;
-            if(age > 0.0f && newest > (uint64_t)age)
-            {
-                target = newest - (uint64_t)age;
-            }
-            else if(age > 0.0f)
-            {
-                target = dq.front()->timestamp_ms;
-            }
-            std::shared_ptr<CapturedFrame> fr = ClosestFrameAtOrBefore(dq, target);
-            if(fr && fr->valid && !fr->data.empty())
-            {
-                out.push_back(fr);
-            }
-        }
-    }
-
-    Vector3D RoomUvUnclamped(const Vector3D& world, const GridContext3D& grid,
-                             float span_x, float span_y, float span_z)
-    {
-        Vector3D uv;
-        uv.x = (world.x - grid.min_x) / span_x;
-        uv.y = (world.y - grid.min_y) / span_y;
-        uv.z = (world.z - grid.min_z) / span_z;
-        return uv;
-    }
-
-    void FillMonitorParams(float* dst, const GpuMonitor& mon)
-    {
-        dst[0] = mon.map_uv.x;
-        dst[1] = mon.map_uv.y;
-        dst[2] = mon.map_uv.z;
-        dst[3] = mon.right.x;
-        dst[4] = mon.right.y;
-        dst[5] = mon.right.z;
-        dst[6] = mon.up.x;
-        dst[7] = mon.up.y;
-        dst[8] = mon.up.z;
-        dst[9] = mon.falloff_uv.x;
-        dst[10] = mon.falloff_uv.y;
-        dst[11] = mon.falloff_uv.z;
-        const ScreenMirror::MonitorSettings& s = *mon.settings;
-        dst[12] = Pack01(std::clamp(s.scale, 0.0f, 3.0f) / 3.0f, s.scale_inverted ? 1.0f : 0.0f);
-        dst[13] = Pack01(std::clamp(s.edge_softness, 0.0f, 100.0f) / 100.0f,
-                         std::clamp((std::clamp(s.falloff_curve_exponent, 0.25f, 4.0f) - 0.25f) / 3.75f, 0.0f, 1.0f));
-        dst[14] = Pack01((std::clamp(s.screen_map_roll_deg, -180.0f, 180.0f) + 180.0f) / 360.0f,
-                         (RadialMapUiToInternal(s.radial_corner_expansion_ui) + 50.0f) / 100.0f);
-        dst[15] = Pack01((RadialMapUiToInternal(s.radial_corner_bias_tl_ui) + 50.0f) / 100.0f,
-                         (RadialMapUiToInternal(s.radial_corner_bias_tr_ui) + 50.0f) / 100.0f);
-        dst[16] = Pack01((RadialMapUiToInternal(s.radial_corner_bias_bl_ui) + 50.0f) / 100.0f,
-                         (RadialMapUiToInternal(s.radial_corner_bias_br_ui) + 50.0f) / 100.0f);
-        dst[17] = Pack01(std::clamp(s.black_bar_letterbox_percent, 0.0f, 49.0f) / 49.0f,
-                         std::clamp(s.black_bar_pillarbox_percent, 0.0f, 49.0f) / 49.0f);
-        dst[18] = Pack01(std::clamp(s.corner_blend_strength_pct / 100.0f, 0.0f, 1.0f),
-                         std::clamp(s.corner_blend_zone_pct / 100.0f, 0.0f, 0.32f) / 0.32f);
-        dst[19] = Pack01(std::clamp(mon.zone_u0, 0.0f, 1.0f), std::clamp(mon.zone_u1, 0.0f, 1.0f));
-        dst[20] = Pack01(std::clamp(mon.zone_v0, 0.0f, 1.0f), std::clamp(mon.zone_v1, 0.0f, 1.0f));
-        dst[21] = Pack01(PackWaveSpeed01(mon.wave_speed),
-                         std::clamp(s.wave_decay_ms / 10000.0f, 0.0f, 1.0f));
-        dst[22] = Pack01((std::clamp(s.front_back_balance, -100.0f, 100.0f) + 100.0f) / 200.0f,
-                         (std::clamp(s.left_right_balance, -100.0f, 100.0f) + 100.0f) / 200.0f);
-        dst[23] = Pack01((std::clamp(s.top_bottom_balance, -100.0f, 100.0f) + 100.0f) / 200.0f,
-                         std::clamp(s.blend / 100.0f, 0.0f, 1.0f));
-    }
 }
 
 void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
@@ -440,12 +358,13 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
     frame_cache_refresh_ms_ = now_ms;
 }
 
-void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
+void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& grid)
 {
     RefreshFrameCacheForRenderSequence(grid);
     gpu_smooth_ms_ = 0.0f;
+    sample_tick_.clear();
+    tick_scale_mm_ = SafeGridScaleMm(grid.grid_scale_mm);
 
-    const float scale_mm = SafeGridScaleMm(grid.grid_scale_mm);
     const float span_x = std::max(grid.max_x - grid.min_x, 1e-4f);
     const float span_y = std::max(grid.max_y - grid.min_y, 1e-4f);
     const float span_z = std::max(grid.max_z - grid.min_z, 1e-4f);
@@ -457,10 +376,7 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
     }
 
-    std::vector<GpuMonitor> gpus;
-    gpus.reserve(kGpuMaxMonitors);
-
-    for(size_t plane_index = 0; plane_index < planes.size() && (int)gpus.size() < kGpuMaxMonitors; ++plane_index)
+    for(size_t plane_index = 0; plane_index < planes.size(); ++plane_index)
     {
         DisplayPlane3D* plane = planes[plane_index];
         if(!plane)
@@ -483,59 +399,39 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
             continue;
         }
 
-        const std::string capture_id = plane->GetCaptureSourceId();
+        SampleMonitor sm;
+        sm.plane = plane;
+        sm.settings = &mon_settings;
+        sm.calibration = mon_settings.show_calibration_pattern;
+        sm.flip_v = true;
+        sm.cal_rgba = nullptr;
+        sm.cal_w = 0;
+        sm.cal_h = 0;
+        sm.wave_speed = 0.0f;
+        ZoneUnion(mon_settings, sm.zone_u0, sm.zone_u1, sm.zone_v0, sm.zone_v1);
 
-        GpuMonitor gm;
-        gm.settings = &mon_settings;
-        gm.calibration = mon_settings.show_calibration_pattern;
-        gm.flip_v = !gm.calibration;
-        ZoneUnion(mon_settings, gm.zone_u0, gm.zone_u1, gm.zone_v0, gm.zone_v1);
-
-        gm.map_uv = RoomUvUnclamped(plane->GetTransform().position, grid, span_x, span_y, span_z);
-
-        Vector3D falloff_ref = grid_anchor_ref;
+        sm.falloff_origin = grid_anchor_ref;
         Vector3D custom_ref;
         if(mon_settings.reference_point_id > 0 && ResolveReferencePointById(mon_settings.reference_point_id, custom_ref))
         {
-            falloff_ref = custom_ref;
-            falloff_ref.x += (effect_offset_x / 100.0f) * (grid.width * 0.5f);
-            falloff_ref.y += (effect_offset_y / 100.0f) * (grid.height * 0.5f);
-            falloff_ref.z += (effect_offset_z / 100.0f) * (grid.depth * 0.5f);
-            gm.map_uv = RoomUvUnclamped(falloff_ref, grid, span_x, span_y, span_z);
-        }
-        gm.falloff_uv = RoomUvUnclamped(falloff_ref, grid, span_x, span_y, span_z);
-
-        float rot[9];
-        Geometry3D::ComputeRotationMatrix(plane->GetTransform().rotation, rot);
-        gm.right = {rot[0], rot[3], rot[6]};
-        gm.up = {rot[1], rot[4], rot[7]};
-
-        const float span_mm_x = span_x * scale_mm;
-        const float span_mm_y = span_y * scale_mm;
-        const float span_mm_z = span_z * scale_mm;
-        gm.max_distance_mm = RoomCornerMaxDistanceMm(span_mm_x, span_mm_y, span_mm_z,
-                                                     gm.falloff_uv.x, gm.falloff_uv.y, gm.falloff_uv.z);
-
-        bool use_wave = !gm.calibration && !capture_id.empty();
-        if(use_wave)
-        {
-            gm.wave_speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
-                                                    mon_settings.propagation_speed_mm_per_ms,
-                                                    gm.max_distance_mm);
-            gm.wave_span_ms = WaveHistorySpanMs(gm.wave_speed,
-                                                gm.max_distance_mm,
-                                                mon_settings.wave_decay_ms);
+            sm.falloff_origin = custom_ref;
+            sm.falloff_origin.x += (effect_offset_x / 100.0f) * (grid.width * 0.5f);
+            sm.falloff_origin.y += (effect_offset_y / 100.0f) * (grid.height * 0.5f);
+            sm.falloff_origin.z += (effect_offset_z / 100.0f) * (grid.depth * 0.5f);
         }
 
-        if(gm.calibration)
+        const float span_mm_x = span_x * tick_scale_mm_;
+        const float span_mm_y = span_y * tick_scale_mm_;
+        const float span_mm_z = span_z * tick_scale_mm_;
+        const float fux = (sm.falloff_origin.x - grid.min_x) / span_x;
+        const float fuy = (sm.falloff_origin.y - grid.min_y) / span_y;
+        const float fuz = (sm.falloff_origin.z - grid.min_z) / span_z;
+        sm.max_distance_mm = RoomCornerMaxDistanceMm(span_mm_x, span_mm_y, span_mm_z, fux, fuy, fuz);
+
+        const std::string capture_id = plane->GetCaptureSourceId();
+        if(sm.calibration)
         {
-            int cw = 0, ch = 0;
-            const uint8_t* cal = GetCalibrationPatternBuffer(cw, ch);
-            QImage cal_img = ImageFromRgba(cal, cw, ch);
-            if(!cal_img.isNull())
-            {
-                gm.calibration_image = std::move(cal_img);
-            }
+            sm.cal_rgba = GetCalibrationPatternBuffer(sm.cal_w, sm.cal_h);
         }
         else
         {
@@ -543,201 +439,20 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
             {
                 continue;
             }
-            std::vector<std::shared_ptr<CapturedFrame>> frames;
-            std::unordered_map<std::string, FrameHistory>::iterator hist_it = capture_history.find(capture_id);
-            if(hist_it != capture_history.end() && !hist_it->second.frames.empty())
+            std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>::iterator cache_it =
+                frame_cache_.find(capture_id);
+            if(cache_it != frame_cache_.end())
             {
-                const int rows = (gm.wave_speed >= 0.1f) ? kGpuMaxHistory : 1;
-                FillHistoryByAge(hist_it->second.frames, gm.wave_span_ms, rows, frames);
+                sm.latest = cache_it->second;
             }
-            else
-            {
-                std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>::iterator cache_it =
-                    frame_cache_.find(capture_id);
-                if(cache_it != frame_cache_.end())
-                {
-                    frames.push_back(cache_it->second);
-                }
-            }
-            for(size_t fi = 0; fi < frames.size(); ++fi)
-            {
-                const std::shared_ptr<CapturedFrame>& fr = frames[fi];
-                if(!fr || !fr->valid || fr->data.empty())
-                {
-                    continue;
-                }
-                gm.live_newest_first.push_back(fr);
-            }
-        }
-
-        if((gm.calibration && gm.calibration_image.isNull()) ||
-           (!gm.calibration && gm.live_newest_first.empty()))
-        {
-            continue;
+            sm.wave_speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
+                                                     mon_settings.propagation_speed_mm_per_ms,
+                                                     sm.max_distance_mm);
         }
 
         gpu_smooth_ms_ = std::max(gpu_smooth_ms_, mon_settings.smoothing_time_ms);
-        gpus.push_back(std::move(gm));
+        sample_tick_.push_back(sm);
     }
-
-    if(gpus.empty())
-    {
-        volume_assist_.clearMediaTexture();
-        float zp[kGpuSharedCount] = {};
-        volume_assist_.prepare(render_sequence, time_sec, zp, kGpuSharedCount);
-        return;
-    }
-
-    int nmon = (int)gpus.size();
-    int nhist = 1;
-    for(size_t i = 0; i < gpus.size(); ++i)
-    {
-        if(gpus[i].wave_speed >= 0.1f)
-        {
-            nhist = std::max(nhist, std::max(1, (int)gpus[i].live_newest_first.size()));
-        }
-    }
-    nhist = std::clamp(nhist, 1, kGpuMaxHistory);
-
-    const int tile_w = std::max(1, SpatialVolumeFieldEngine::kMaxMediaEdge / nmon);
-    const int tile_h = std::max(1, SpatialVolumeFieldEngine::kMaxMediaEdge / nhist);
-    QImage media(tile_w * nmon, tile_h * nhist, QImage::Format_RGBA8888);
-    media.fill(qRgba(0, 0, 0, 255));
-    for(int m = 0; m < nmon; ++m)
-    {
-        GpuMonitor& gm = gpus[(size_t)m];
-        for(int h = 0; h < nhist; ++h)
-        {
-            QImage src;
-            if(gm.calibration)
-            {
-                src = gm.calibration_image;
-            }
-            else if(!gm.live_newest_first.empty())
-            {
-                const int idx = std::min(h, (int)gm.live_newest_first.size() - 1);
-                const std::shared_ptr<CapturedFrame>& fr = gm.live_newest_first[(size_t)idx];
-                if(fr && fr->valid && !fr->data.empty())
-                {
-                    src = QImage(fr->data.data(), fr->width, fr->height, fr->width * 4, QImage::Format_RGBA8888);
-                }
-            }
-            if(src.isNull())
-            {
-                continue;
-            }
-            QImage scaled(tile_w, tile_h, QImage::Format_RGBA8888);
-            if(scaled.isNull())
-            {
-                continue;
-            }
-            QImage rgba = src.convertToFormat(QImage::Format_RGBA8888);
-            uint8_t* dest_bits = scaled.bits();
-            if(scaled.bytesPerLine() == tile_w * 4)
-            {
-                BoxDownscaleToRgba(rgba.constBits(),
-                                   rgba.width(),
-                                   rgba.height(),
-                                   rgba.bytesPerLine(),
-                                   dest_bits,
-                                   tile_w,
-                                   tile_h,
-                                   0,
-                                   1,
-                                   2,
-                                   3);
-            }
-            else
-            {
-                std::vector<uint8_t> packed((size_t)tile_w * (size_t)tile_h * 4u);
-                BoxDownscaleToRgba(rgba.constBits(),
-                                   rgba.width(),
-                                   rgba.height(),
-                                   rgba.bytesPerLine(),
-                                   packed.data(),
-                                   tile_w,
-                                   tile_h,
-                                   0,
-                                   1,
-                                   2,
-                                   3);
-                scaled = QImage(packed.data(), tile_w, tile_h, tile_w * 4, QImage::Format_RGBA8888).copy();
-            }
-            scaled = GradeImage(scaled, *gm.settings, !gm.calibration);
-            const int ox = m * tile_w;
-            const int oy = h * tile_h;
-            for(int y = 0; y < tile_h; ++y)
-            {
-                const unsigned char* srow = scaled.constScanLine(y);
-                unsigned char* drow = media.scanLine(oy + y);
-                memcpy(drow + (size_t)ox * 4u, srow, (size_t)tile_w * 4u);
-            }
-        }
-    }
-    volume_assist_.setMediaTexture(media, false);
-
-    float avg_frame_ms = 16.67f;
-    for(size_t plane_index = 0; plane_index < planes.size(); ++plane_index)
-    {
-        DisplayPlane3D* plane = planes[plane_index];
-        if(!plane)
-        {
-            continue;
-        }
-        std::unordered_map<std::string, FrameHistory>::iterator hist_it =
-            capture_history.find(plane->GetCaptureSourceId());
-        if(hist_it != capture_history.end() && hist_it->second.cached_avg_frame_time_ms > 0.0f)
-        {
-            avg_frame_ms = hist_it->second.cached_avg_frame_time_ms;
-            break;
-        }
-    }
-
-    const unsigned int samp = GetSamplingResolution();
-    const bool use_q = samp < 100u;
-    float steps_u = 2.0f;
-    float steps_v = 2.0f;
-    int src_w = tile_w;
-    int src_h = tile_h;
-    if(gpus[0].calibration && !gpus[0].calibration_image.isNull())
-    {
-        src_w = gpus[0].calibration_image.width();
-        src_h = gpus[0].calibration_image.height();
-    }
-    else if(!gpus[0].live_newest_first.empty() && gpus[0].live_newest_first[0])
-    {
-        src_w = gpus[0].live_newest_first[0]->width;
-        src_h = gpus[0].live_newest_first[0]->height;
-    }
-    {
-        const float q = samp / 100.0f;
-        steps_u = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, src_w) - 4));
-        steps_v = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, src_h) - 4));
-    }
-
-    float layout = (float)nmon + 10.0f * (float)nhist + (use_q ? 100.0f : 0.0f);
-    if(gpus[0].flip_v)
-    {
-        layout += 1000.0f;
-    }
-    if(nmon > 1 && gpus[1].flip_v)
-    {
-        layout += 2000.0f;
-    }
-
-    float vp[SpatialVolumeFieldEngine::kMaxParams] = {};
-    vp[0] = span_x * scale_mm;
-    vp[1] = span_y * scale_mm;
-    vp[2] = span_z * scale_mm;
-    vp[3] = layout;
-    vp[4] = Pack01(std::clamp(steps_u / 2048.0f, 0.0f, 1.0f), std::clamp(steps_v / 2048.0f, 0.0f, 1.0f));
-    vp[5] = avg_frame_ms;
-    FillMonitorParams(vp + kGpuSharedCount, gpus[0]);
-    if(nmon > 1)
-    {
-        FillMonitorParams(vp + kGpuSharedCount + kGpuMonParamCount, gpus[1]);
-    }
-    volume_assist_.prepare(render_sequence, time_sec, vp, SpatialVolumeFieldEngine::kMaxParams);
 }
 
 RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -747,27 +462,147 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
     {
         return ToRGBColor(0, 0, 0);
     }
-    if(!volume_assist_.isAvailable())
+    if(sample_tick_.empty())
     {
-        if(!gpu_logged_unavail_)
-        {
-            gpu_logged_unavail_ = true;
-            const QByteArray err = volume_assist_.lastError().toUtf8();
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] ScreenMirror volume assist unavailable: %s",
-                        err.isEmpty() ? "ensureReady failed" : err.constData());
-        }
         return ToRGBColor(0, 0, 0);
     }
 
-    float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
-    if(!TrySampleGpuRoomVolume01(x, y, z, grid, &c1, &c2, &c3))
+    const Vector3D led{x, y, z};
+    float acc_r = 0.0f;
+    float acc_g = 0.0f;
+    float acc_b = 0.0f;
+    float acc_w = 0.0f;
+
+    for(size_t i = 0; i < sample_tick_.size(); ++i)
+    {
+        SampleMonitor& sm = sample_tick_[i];
+        if(!sm.plane || !sm.settings)
+        {
+            continue;
+        }
+        const MonitorSettings& s = *sm.settings;
+        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led, *sm.plane, tick_scale_mm_);
+        if(!proj.is_valid)
+        {
+            continue;
+        }
+        float u = proj.u;
+        float v = proj.v;
+        Geometry3D::ApplyUVRotationDegrees01(u, v, s.screen_map_roll_deg);
+        Geometry3D::ApplyRadialCornerMapping01(u, v,
+                                            RadialMapUiToInternal(s.radial_corner_expansion_ui),
+                                            RadialMapUiToInternal(s.radial_corner_bias_tl_ui),
+                                            RadialMapUiToInternal(s.radial_corner_bias_tr_ui),
+                                            RadialMapUiToInternal(s.radial_corner_bias_bl_ui),
+                                            RadialMapUiToInternal(s.radial_corner_bias_br_ui));
+        if(u < sm.zone_u0 || u > sm.zone_u1 || v < sm.zone_v0 || v > sm.zone_v1)
+        {
+            continue;
+        }
+
+        const float lp = std::clamp(s.black_bar_letterbox_percent, 0.0f, 49.0f) / 100.0f;
+        const float pp = std::clamp(s.black_bar_pillarbox_percent, 0.0f, 49.0f) / 100.0f;
+        u = std::clamp(u, pp, 1.0f - pp);
+        v = std::clamp(v, lp, 1.0f - lp);
+
+        Vector3D d{
+            led.x - sm.falloff_origin.x,
+            led.y - sm.falloff_origin.y,
+            led.z - sm.falloff_origin.z
+        };
+        float dist_mm = GridUnitsToMM(std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z), tick_scale_mm_);
+        float weight = FalloffWeight(dist_mm, sm.max_distance_mm, s.scale, s.edge_softness,
+                                      s.falloff_curve_exponent, s.scale_inverted);
+        if(weight <= 0.01f)
+        {
+            continue;
+        }
+
+        const float fb = s.front_back_balance;
+        const float lr = s.left_right_balance;
+        const float tb = s.top_bottom_balance;
+        if(std::fabs(fb) > 0.5f || std::fabs(lr) > 0.5f || std::fabs(tb) > 0.5f)
+        {
+            const Vector3D local = Geometry3D::TransformDisplayPlaneWorldToLocal(led, sm.plane->GetTransform());
+            const float inv_max = 1.0f / std::max(sm.max_distance_mm, 1.0f);
+            const float lat = local.x * tick_scale_mm_;
+            const float vert = local.y * tick_scale_mm_;
+            const float depth = local.z * tick_scale_mm_;
+            weight *= std::clamp(1.0f + (fb / 100.0f) * std::clamp(depth * inv_max, -1.0f, 1.0f), 0.0f, 2.0f);
+            weight *= std::clamp(1.0f + (lr / 100.0f) * std::clamp(lat * inv_max, -1.0f, 1.0f), 0.0f, 2.0f);
+            weight *= std::clamp(1.0f + (tb / 100.0f) * std::clamp(vert * inv_max, -1.0f, 1.0f), 0.0f, 2.0f);
+        }
+        if(weight <= 0.01f)
+        {
+            continue;
+        }
+
+        const uint8_t* rgba = nullptr;
+        int fw = 0;
+        int fh = 0;
+        if(sm.calibration && sm.cal_rgba)
+        {
+            rgba = sm.cal_rgba;
+            fw = sm.cal_w;
+            fh = sm.cal_h;
+        }
+        else
+        {
+            std::shared_ptr<CapturedFrame> fr = sm.latest;
+            if(sm.wave_speed >= 0.1f)
+            {
+                const std::string capture_id = sm.plane->GetCaptureSourceId();
+                std::unordered_map<std::string, FrameHistory>::iterator hist_it = capture_history.find(capture_id);
+                if(hist_it != capture_history.end() && !hist_it->second.frames.empty())
+                {
+                    const float delay_ms = dist_mm / std::max(sm.wave_speed, 0.1f);
+                    uint64_t newest = hist_it->second.frames.back()->timestamp_ms;
+                    uint64_t target = newest;
+                    if(delay_ms > 0.0f && newest > (uint64_t)delay_ms)
+                    {
+                        target = newest - (uint64_t)delay_ms;
+                    }
+                    fr = ClosestFrameAtOrBefore(hist_it->second.frames, target);
+                }
+            }
+            if(fr && fr->valid && !fr->data.empty())
+            {
+                rgba = fr->data.data();
+                fw = fr->width;
+                fh = fr->height;
+            }
+        }
+        if(!rgba || fw <= 0 || fh <= 0)
+        {
+            continue;
+        }
+
+        float r = 0.0f;
+        float g = 0.0f;
+        float b = 0.0f;
+        SampleBilinearRgba(rgba, fw, fh, u, v, sm.flip_v, r, g, b);
+        GradeRgb(r, g, b,
+                 s.brightness_multiplier,
+                 s.brightness_threshold,
+                 s.white_rolloff,
+                 s.vibrance,
+                 s.led_output_gain_r,
+                 s.led_output_gain_g,
+                 s.led_output_gain_b,
+                 !sm.calibration);
+        acc_r += weight * r;
+        acc_g += weight * g;
+        acc_b += weight * b;
+        acc_w += weight;
+    }
+
+    if(acc_w <= 0.01f)
     {
         return ToRGBColor(0, 0, 0);
     }
-    const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
-    float total_r = std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f;
-    float total_g = std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f;
-    float total_b = std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f;
+    float total_r = acc_r / acc_w;
+    float total_g = acc_g / acc_w;
+    float total_b = acc_b / acc_w;
 
     if(gpu_smooth_ms_ > 0.1f)
     {
