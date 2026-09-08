@@ -407,7 +407,7 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
     {
         capture_mgr.Initialize();
     }
-    capture_mgr.SetTargetFPS(120);
+    capture_mgr.SetTargetFPS(240);
     int cap_w = 320;
     int cap_h = 180;
     ScreenMirrorQualityToSize(ScreenMirrorClampQuality(capture_quality), cap_w, cap_h);
@@ -875,7 +875,7 @@ void ScreenMirror::AddFrameToHistory(const std::string& capture_id, const std::s
         size_t check_frames = std::min(history.frames.size() - 1, (size_t)10);
         uint64_t total_time = 0;
         size_t valid_pairs = 0;
-        const uint64_t min_delta_ms = 8;
+        const uint64_t min_delta_ms = 4;
         const uint64_t max_delta_ms = 80;
         for(size_t i = history.frames.size() - check_frames; i < history.frames.size(); ++i)
         {
@@ -894,7 +894,7 @@ void ScreenMirror::AddFrameToHistory(const std::string& capture_id, const std::s
         }
         if(valid_pairs > 0 && total_time > 0)
         {
-            float measured_ms = std::clamp((float)total_time / (float)valid_pairs, 12.0f, 50.0f);
+            float measured_ms = std::clamp((float)total_time / (float)valid_pairs, 4.0f, 50.0f);
             if(history.cached_avg_frame_time_ms > 0.0f)
             {
                 history.cached_avg_frame_time_ms = 0.75f * history.cached_avg_frame_time_ms + 0.25f * measured_ms;

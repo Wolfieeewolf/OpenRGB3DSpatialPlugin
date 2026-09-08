@@ -107,6 +107,36 @@ inline void BoxDownscaleToRgba(const uint8_t* src,
     }
 }
 
+/** Pack BGRA8 into RGBA8888. flip_y matches DXGI's CPU mirror (GDI is already top-down). */
+inline void CopyBgraToRgba(const uint8_t* src,
+                            int w,
+                            int h,
+                            int src_stride,
+                            uint8_t* dst,
+                            bool flip_y)
+{
+    if(!src || !dst || w <= 0 || h <= 0 || src_stride <= 0)
+    {
+        return;
+    }
+    const int dst_stride = w * 4;
+    for(int y = 0; y < h; ++y)
+    {
+        const int sy = flip_y ? (h - 1 - y) : y;
+        const uint8_t* row = src + (size_t)sy * (size_t)src_stride;
+        uint8_t* row_dst = dst + (size_t)y * (size_t)dst_stride;
+        for(int x = 0; x < w; ++x)
+        {
+            const uint8_t* px = row + (size_t)x * 4u;
+            row_dst[0] = px[2];
+            row_dst[1] = px[1];
+            row_dst[2] = px[0];
+            row_dst[3] = px[3];
+            row_dst += 4;
+        }
+    }
+}
+
 /** Safety ceiling for Native (match display). Never used to upscale.
  *  Covers 8K and super-ultrawide; DXGI still Maps only the real desktop size. */
 inline constexpr int kScreenMirrorMaxWorkingWidth = 7680;

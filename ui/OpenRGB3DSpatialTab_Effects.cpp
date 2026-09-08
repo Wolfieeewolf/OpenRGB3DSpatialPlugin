@@ -819,9 +819,9 @@ void OpenRGB3DSpatialTab::startEffectClicked()
                     break;
                 }
             }
-            if(stack_has_screen_mirror && target_fps < 120u)
+            if(stack_has_screen_mirror && target_fps < 240u)
             {
-                target_fps = 120u;
+                target_fps = 240u;
             }
             int interval_ms = (int)(1000 / target_fps);
             if(interval_ms < 1) interval_ms = 1;
@@ -861,9 +861,9 @@ void OpenRGB3DSpatialTab::startEffectClicked()
     {
         unsigned int target_fps = current_effect_ui->GetTargetFPS();
         if(target_fps < 1) target_fps = 30;
-        if(dynamic_cast<ScreenMirror*>(current_effect_ui) && target_fps < 120u)
+        if(dynamic_cast<ScreenMirror*>(current_effect_ui) && target_fps < 240u)
         {
-            target_fps = 120u;
+            target_fps = 240u;
         }
         int interval_ms = (int)(1000 / target_fps);
         if(interval_ms < 1) interval_ms = 1;

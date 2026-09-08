@@ -158,11 +158,32 @@ int main()
         fails++;
     }
 
+    /* CopyBgraToRgba with Y flip: row0 and row1 swap. */
+    const uint8_t bgra2[] = {
+        10, 20, 30, 255, 1, 2, 3, 255,
+        40, 50, 60, 255, 7, 8, 9, 255
+    };
+    uint8_t rgba_flip[16] = {};
+    CopyBgraToRgba(bgra2, 2, 2, 8, rgba_flip, true);
+    if(rgba_flip[0] != 60 || rgba_flip[1] != 50 || rgba_flip[2] != 40 ||
+       rgba_flip[4] != 9 || rgba_flip[8] != 30 || rgba_flip[12] != 3)
+    {
+        std::fprintf(stderr, "CopyBgraToRgba flip failed\n");
+        fails++;
+    }
+    uint8_t rgba_nof[16] = {};
+    CopyBgraToRgba(bgra2, 2, 2, 8, rgba_nof, false);
+    if(rgba_nof[0] != 30 || rgba_nof[8] != 60)
+    {
+        std::fprintf(stderr, "CopyBgraToRgba no-flip failed\n");
+        fails++;
+    }
+
     if(fails != 0)
     {
         std::fprintf(stderr, "screen_capture_downscale_check: %d fail(s)\n", fails);
         return 1;
     }
-    std::printf("screen_capture_downscale_check: box-average, native match-display, caps, clamp OK\n");
+    std::printf("screen_capture_downscale_check: box-average, native match-display, BGRA copy/flip OK\n");
     return 0;
 }

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <set>
 #include <vector>
 #include <QGuiApplication>
@@ -66,6 +67,31 @@ QImage BoxScaleRgbaImage(const QImage& src, int dst_w, int dst_h)
                        2,
                        3);
     return QImage(packed.data(), dst_w, dst_h, dst_w * 4, QImage::Format_RGBA8888).copy();
+}
+
+std::shared_ptr<CapturedFrame> MakeCapturedFrameFromBgra(const uint8_t* bgra,
+                                                          int w,
+                                                          int h,
+                                                          int stride,
+                                                          bool flip_y,
+                                                          bool gdi,
+                                                          uint64_t frame_id)
+{
+    if(!bgra || w <= 0 || h <= 0)
+    {
+        return nullptr;
+    }
+    std::shared_ptr<CapturedFrame> frame = std::make_shared<CapturedFrame>();
+    frame->width = w;
+    frame->height = h;
+    frame->data.resize((size_t)w * (size_t)h * 4u);
+    CopyBgraToRgba(bgra, w, h, stride, frame->data.data(), flip_y);
+    frame->frame_id = frame_id;
+    frame->used_gdi_capture = gdi;
+    frame->valid = true;
+    frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    return frame;
 }
 } // namespace
 
@@ -349,7 +375,7 @@ void ScreenCaptureManager::SetDownscaleResolution(int width, int height)
 
 void ScreenCaptureManager::SetTargetFPS(int fps)
 {
-    target_fps.store((std::max)(1, (std::min)(fps, 120)));
+    target_fps.store((std::max)(1, (std::min)(fps, 360)));
 }
 
 void ScreenCaptureManager::SetWindowsCaptureBackendMode(int mode)
@@ -743,7 +769,7 @@ struct DXGICaptureState
     ID3D11Device* device = nullptr;
     ID3D11DeviceContext* context = nullptr;
     IDXGIOutputDuplication* duplication = nullptr;
-    ID3D11Texture2D* staging_texture = nullptr;
+    ID3D11Texture2D* staging_texture[2] = {nullptr, nullptr};
     ID3D11Texture2D* gpu_copy = nullptr;
     ID3D11ShaderResourceView* gpu_copy_srv = nullptr;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
@@ -751,6 +777,8 @@ struct DXGICaptureState
     UINT height = 0;
     UINT staging_w = 0;
     UINT staging_h = 0;
+    int staging_write = 0;
+    int staging_ready = -1;
     bool desktop_frame_acquired = false;
     bool wide_gamut_hdr = false;
     bool use_gpu_hdr_tonemap = false;
@@ -759,13 +787,18 @@ struct DXGICaptureState
 
     void ReleaseStaging()
     {
-        if(staging_texture)
+        for(int i = 0; i < 2; ++i)
         {
-            staging_texture->Release();
-            staging_texture = nullptr;
+            if(staging_texture[i])
+            {
+                staging_texture[i]->Release();
+                staging_texture[i] = nullptr;
+            }
         }
         staging_w = 0;
         staging_h = 0;
+        staging_write = 0;
+        staging_ready = -1;
     }
 
     void Release()
@@ -813,24 +846,28 @@ struct DXGICaptureState
 
     bool EnsureStaging(UINT w, UINT h, DXGI_FORMAT staging_format)
     {
-        if(staging_texture && staging_w == w && staging_h == h)
+        if(staging_texture[0] && staging_texture[1] && staging_w == w && staging_h == h)
         {
             return true;
         }
         ReleaseStaging();
-        D3D11_TEXTURE2D_DESC tex_desc = {};
-        tex_desc.Width = w;
-        tex_desc.Height = h;
-        tex_desc.MipLevels = 1;
-        tex_desc.ArraySize = 1;
-        tex_desc.Format = staging_format;
-        tex_desc.SampleDesc.Count = 1;
-        tex_desc.Usage = D3D11_USAGE_STAGING;
-        tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-        HRESULT hr = device->CreateTexture2D(&tex_desc, nullptr, &staging_texture);
-        if(FAILED(hr) || !staging_texture)
+        for(int i = 0; i < 2; ++i)
         {
-            return false;
+            D3D11_TEXTURE2D_DESC tex_desc = {};
+            tex_desc.Width = w;
+            tex_desc.Height = h;
+            tex_desc.MipLevels = 1;
+            tex_desc.ArraySize = 1;
+            tex_desc.Format = staging_format;
+            tex_desc.SampleDesc.Count = 1;
+            tex_desc.Usage = D3D11_USAGE_STAGING;
+            tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            HRESULT hr = device->CreateTexture2D(&tex_desc, nullptr, &staging_texture[i]);
+            if(FAILED(hr) || !staging_texture[i])
+            {
+                ReleaseStaging();
+                return false;
+            }
         }
         staging_w = w;
         staging_h = h;
@@ -1137,14 +1174,38 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     bool logged_gpu_map_size = false;
 
     uint64_t frame_counter = 0;
-    std::vector<uint8_t> dxgi_rgba_buffer;
     std::chrono::steady_clock::time_point thread_start_tp = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point last_dxgi_retry = thread_start_tp;
     std::chrono::steady_clock::time_point last_gdi_force = thread_start_tp;
     std::chrono::steady_clock::time_point last_frame_produced = thread_start_tp;
     std::chrono::steady_clock::time_point last_stuck_warn = thread_start_tp;
+    uint64_t missed_presents = 0;
     LOG_INFO("[ScreenCapture] Capture thread started for '%s' (use_dxgi=%d, backend_mode=%d, %dx%d at (%d,%d), target_fps=%d)",
              source_id.c_str(), (int)use_dxgi, windows_capture_backend_mode.load(), dw, dh, dx, dy, target_fps.load());
+
+    auto store_latest = [&](std::shared_ptr<CapturedFrame> frame) {
+        if(!frame)
+        {
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(frames_mutex);
+            latest_frames[source_id] = frame;
+        }
+        last_frame_produced = std::chrono::steady_clock::now();
+        if(frame->frame_id == 0)
+        {
+            LOG_INFO("[ScreenCapture] '%s' first frame produced (%dx%d, dxgi=%d)",
+                     source_id.c_str(), frame->width, frame->height, (int)use_dxgi);
+        }
+        else if(frame->frame_id == 29 || (frame->frame_id % 600) == 0)
+        {
+            LOG_VERBOSE("[ScreenCapture] '%s' produced frame #%llu (%dx%d, dxgi=%d, missed_presents=%llu)",
+                        source_id.c_str(), (unsigned long long)(frame->frame_id + 1),
+                        frame->width, frame->height, (int)use_dxgi,
+                        (unsigned long long)missed_presents);
+        }
+    };
     while(active_flag->load())
     {
         const int backend_mode = windows_capture_backend_mode.load();
@@ -1178,7 +1239,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             }
         }
 
-        QImage image;
         bool dxgi_timed_out = false;
         bool frame_from_gdi = false;
         if(use_dxgi && dxgi_state.IsValid())
@@ -1214,10 +1274,11 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                     resource->Release();
                     dxgi_state.desktop_frame_acquired = true;
                     SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
-                    last_frame_produced = std::chrono::steady_clock::now();
-                    int skip_sleep = target_frame_time_ms > 0 ? target_frame_time_ms : 2;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(skip_sleep));
                     continue;
+                }
+                if(frame_info.AccumulatedFrames > 1)
+                {
+                    missed_presents += (uint64_t)(frame_info.AccumulatedFrames - 1);
                 }
 
                 dxgi_state.desktop_frame_acquired = true;
@@ -1247,10 +1308,10 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
                     if(copy_1to1)
                     {
-                        /* Native SDR 1:1: GPU copies the desktop into working-size staging. Map waits; no Flush(). */
                         if(dxgi_state.EnsureStaging((UINT)out_w, (UINT)out_h, DXGI_FORMAT_B8G8R8A8_UNORM))
                         {
-                            dxgi_state.context->CopyResource(dxgi_state.staging_texture, tex);
+                            dxgi_state.context->CopyResource(
+                                dxgi_state.staging_texture[dxgi_state.staging_write], tex);
                             gpu_ok = true;
                         }
                     }
@@ -1274,7 +1335,9 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                                     dxgi_state.height,
                                                     need_tonemap,
                                                     hdr_scale) &&
-                           dxgi_state.gpu_blit.CopyToStaging(dxgi_state.context, dxgi_state.staging_texture))
+                           dxgi_state.gpu_blit.CopyToStaging(
+                               dxgi_state.context,
+                               dxgi_state.staging_texture[dxgi_state.staging_write]))
                         {
                             gpu_ok = true;
                         }
@@ -1288,51 +1351,51 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                     tex->Release();
                     tex = nullptr;
 
-                    D3D11_MAPPED_SUBRESOURCE mapped;
-                    if(gpu_ok)
-                        hr = dxgi_state.context->Map(dxgi_state.staging_texture, 0, D3D11_MAP_READ, 0, &mapped);
-                    else
-                        hr = E_FAIL;
-                    if(SUCCEEDED(hr))
-                    {
-                        const uint8_t* src = (const uint8_t*)mapped.pData;
-                        const UINT expected_row_bytes = (UINT)out_w * 4u;
-                        if(mapped.RowPitch < expected_row_bytes)
-                        {
-                            dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
-                            if(dxgi_state.desktop_frame_acquired)
-                                SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
-                            use_dxgi = false;
-                            continue;
-                        }
-                        const size_t out_need = (size_t)out_w * (size_t)out_h * 4u;
-                        if(dxgi_rgba_buffer.size() < out_need)
-                        {
-                            dxgi_rgba_buffer.resize(out_need);
-                        }
-                        BoxDownscaleToRgba(src,
-                                           out_w,
-                                           out_h,
-                                           (int)mapped.RowPitch,
-                                           dxgi_rgba_buffer.data(),
-                                           out_w,
-                                           out_h,
-                                           2,
-                                           1,
-                                           0,
-                                           3);
-                        dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
-                        image = QImage(dxgi_rgba_buffer.data(), out_w, out_h, out_w * 4,
-                                       QImage::Format_RGBA8888).copy();
-                        if(!logged_gpu_map_size)
-                        {
-                            logged_gpu_map_size = true;
-                            LOG_INFO("[ScreenCapture] DXGI mapped %dx%d BGRA from native %ux%u for '%s'",
-                                     out_w, out_h, dxgi_state.width, dxgi_state.height, source_id.c_str());
-                        }
-                    }
+                    /* Release the duplication slot before Map so the desktop can keep presenting. */
                     if(dxgi_state.desktop_frame_acquired)
                         SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
+
+                    if(gpu_ok)
+                    {
+                        const int ready = dxgi_state.staging_ready;
+                        dxgi_state.staging_ready = dxgi_state.staging_write;
+                        dxgi_state.staging_write = 1 - dxgi_state.staging_write;
+                        if(ready >= 0 && dxgi_state.staging_texture[ready])
+                        {
+                            D3D11_MAPPED_SUBRESOURCE mapped = {};
+                            hr = dxgi_state.context->Map(dxgi_state.staging_texture[ready], 0, D3D11_MAP_READ, 0, &mapped);
+                            if(SUCCEEDED(hr))
+                            {
+                                const UINT expected_row_bytes = dxgi_state.staging_w * 4u;
+                                if(mapped.RowPitch >= expected_row_bytes)
+                                {
+                                    std::shared_ptr<CapturedFrame> frame = MakeCapturedFrameFromBgra(
+                                        (const uint8_t*)mapped.pData,
+                                        (int)dxgi_state.staging_w,
+                                        (int)dxgi_state.staging_h,
+                                        (int)mapped.RowPitch,
+                                        true,
+                                        false,
+                                        frame_counter++);
+                                    dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
+                                    if(!logged_gpu_map_size)
+                                    {
+                                        logged_gpu_map_size = true;
+                                        LOG_INFO("[ScreenCapture] DXGI mapped %dx%d BGRA from native %ux%u for '%s'",
+                                                 (int)dxgi_state.staging_w, (int)dxgi_state.staging_h,
+                                                 dxgi_state.width, dxgi_state.height, source_id.c_str());
+                                    }
+                                    store_latest(frame);
+                                }
+                                else
+                                {
+                                    dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
+                                    use_dxgi = false;
+                                }
+                            }
+                        }
+                        continue;
+                    }
                 }
                 else
                 {
@@ -1351,17 +1414,31 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 use_dxgi = false;
             }
         }
-        if(image.isNull())
-        {
-            std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
             const int ms_since_last_gdi = (int)std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - last_gdi_force).count();
             const bool should_force_gdi =
                 allow_gdi && dxgi_timed_out && ms_since_last_gdi >= k_gdi_poll_after_dxgi_timeout_ms;
             if(dxgi_timed_out && !should_force_gdi)
             {
-                int backoff_ms = target_frame_time_ms > 0 ? (target_frame_time_ms / 8) : 1;
-                backoff_ms = (std::clamp)(backoff_ms, 1, 4);
-                std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
+                if(dxgi_state.staging_ready >= 0 && dxgi_state.staging_texture[dxgi_state.staging_ready])
+                {
+                    D3D11_MAPPED_SUBRESOURCE mapped = {};
+                    if(SUCCEEDED(dxgi_state.context->Map(dxgi_state.staging_texture[dxgi_state.staging_ready],
+                                                          0, D3D11_MAP_READ, 0, &mapped)))
+                    {
+                        std::shared_ptr<CapturedFrame> frame = MakeCapturedFrameFromBgra(
+                            (const uint8_t*)mapped.pData,
+                            (int)dxgi_state.staging_w,
+                            (int)dxgi_state.staging_h,
+                            (int)mapped.RowPitch,
+                            true,
+                            false,
+                            frame_counter++);
+                        dxgi_state.context->Unmap(dxgi_state.staging_texture[dxgi_state.staging_ready], 0);
+                        store_latest(frame);
+                    }
+                    dxgi_state.staging_ready = -1;
+                }
                 continue;
             }
             if(should_force_gdi)
@@ -1403,20 +1480,13 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                 std::vector<uint8_t> buffer((size_t)out_w * (size_t)out_h * 4);
                                 if(GetDIBits(mem_dc, bmp, 0, (UINT)out_h, buffer.data(), &bmi, DIB_RGB_COLORS) > 0)
                                 {
-                                    std::vector<uint8_t> rgba((size_t)out_w * (size_t)out_h * 4u);
-                                    BoxDownscaleToRgba(buffer.data(),
-                                                       out_w,
-                                                       out_h,
-                                                       out_w * 4,
-                                                       rgba.data(),
-                                                       out_w,
-                                                       out_h,
-                                                       2,
-                                                       1,
-                                                       0,
-                                                       3);
-                                    image = QImage(rgba.data(), out_w, out_h, out_w * 4,
-                                                   QImage::Format_RGBA8888).copy();
+                                    store_latest(MakeCapturedFrameFromBgra(buffer.data(),
+                                                                            out_w,
+                                                                            out_h,
+                                                                            out_w * 4,
+                                                                            false,
+                                                                            true,
+                                                                            frame_counter++));
                                     frame_from_gdi = true;
                                 }
                             }
@@ -1429,7 +1499,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 }
             }
 
-            if(image.isNull())
+            if(!frame_from_gdi)
             {
                 if(!use_dxgi && backend_mode != 2)
                 {
@@ -1448,93 +1518,13 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 std::this_thread::sleep_for(std::chrono::milliseconds(target_frame_time_ms > 0 ? target_frame_time_ms : 2));
                 continue;
             }
-        }
-        else if(!use_dxgi && backend_mode != 2)
-        {
-            std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
-            if(std::chrono::duration_cast<std::chrono::seconds>(now_tp - last_dxgi_retry).count() >= 3)
-            {
-                last_dxgi_retry = now_tp;
-                if(TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state))
-                {
-                    use_dxgi = true;
-                    logged_dxgi_unavailable = false;
-                    LOG_INFO("[ScreenCapture] DXGI re-established for '%s' after GDI fallback", source_id.c_str());
-                }
-            }
-        }
 
-        int target_w = target_width.load();
-        int target_h = target_height.load();
-        if(image.width() != target_w || image.height() != target_h)
-        {
-            image = BoxScaleRgbaImage(image, target_w, target_h);
-        }
-        if(image.format() != QImage::Format_RGBA8888)
-        {
-            image = image.convertToFormat(QImage::Format_RGBA8888);
-        }
-
-        if(!frame_from_gdi)
-        {
-            image = image.mirrored(false, true);
-        }
-
-        std::shared_ptr<CapturedFrame> frame = std::make_shared<CapturedFrame>();
-        frame->used_gdi_capture = frame_from_gdi;
-        frame->width = image.width();
-        frame->height = image.height();
-        frame->data.resize(frame->width * frame->height * 4);
-        const int line_bytes = frame->width * 4;
-        const int src_stride = image.bytesPerLine();
-        const uint8_t* src = image.constBits();
-        uint8_t* dst = frame->data.data();
-        if(src_stride == line_bytes)
-        {
-            memcpy(dst, src, (size_t)line_bytes * (size_t)frame->height);
-        }
-        else
-        {
-            for(int y = 0; y < frame->height; y++)
-            {
-                memcpy(dst, src, (size_t)line_bytes);
-                dst += line_bytes;
-                src += src_stride;
-            }
-        }
-
-        frame->frame_id = frame_counter++;
-        frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-        frame->valid = true;
-
-        {
-            std::lock_guard<std::mutex> lock(frames_mutex);
-            latest_frames[source_id] = frame;
-        }
-
-        last_frame_produced = std::chrono::steady_clock::now();
-        if(frame_counter == 1)
-        {
-            LOG_INFO("[ScreenCapture] '%s' first frame produced (%dx%d, dxgi=%d)",
-                     source_id.c_str(), frame->width, frame->height, (int)use_dxgi);
-        }
-        else if(frame_counter == 30 || (frame_counter % 600) == 0)
-        {
-            LOG_VERBOSE("[ScreenCapture] '%s' produced frame #%llu (%dx%d, dxgi=%d)",
-                        source_id.c_str(), (unsigned long long)frame_counter,
-                        frame->width, frame->height, (int)use_dxgi);
-        }
-
-        std::chrono::steady_clock::time_point frame_end = last_frame_produced;
+        /* GDI (and Linux-style grab) are CPU-paced. DXGI is paced by AcquireNextFrame. */
+        std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
         int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_end - frame_start).count();
         int sleep_time = target_frame_time_ms - elapsed;
         if(sleep_time > 0)
         {
-            if(sleep_time < 1)
-            {
-                sleep_time = 1;
-            }
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
         }
     }
