@@ -276,10 +276,22 @@ namespace Geometry3D
         const float height_units = std::max(MMToGridUnits(plane.GetHeightMM(), grid_scale_mm), 1e-4f);
         const float half_w = 0.5f * width_units;
         const float half_h = 0.5f * height_units;
-        const float hit_x = std::clamp(local.x, -half_w, half_w);
-        const float hit_y = std::clamp(local.y, -half_h, half_h);
-        result.u = std::clamp(0.5f + hit_x / width_units, 0.0f, 1.0f);
-        result.v = std::clamp(0.5f + hit_y / height_units, 0.0f, 1.0f);
+        const float half_d = std::max(half_w, half_h);
+        const float nx = local.x / half_w;
+        const float ny = local.y / half_h;
+        const float nz = local.z / half_d;
+        const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+        if(len < 1e-6f)
+        {
+            result.u = 0.5f;
+            result.v = 0.5f;
+        }
+        else
+        {
+            static constexpr float kScreenEdgeAt45Deg = 1.414213562373095f;
+            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * nx / len, 0.0f, 1.0f);
+            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * ny / len, 0.0f, 1.0f);
+        }
         result.distance = GridUnitsToMM(std::fabs(local.z), grid_scale_mm);
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;

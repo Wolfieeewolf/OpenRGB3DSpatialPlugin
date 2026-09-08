@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Standalone math check for Screen Mirror plane mapping (360° closest-point) + wave/occupancy.
+// Standalone math check for Screen Mirror directional 3D mapping + wave/occupancy.
 // g++ -std=c++17 -O2 -o /tmp/screen_mirror_gpu_check tools/screen_mirror_gpu_check.cpp && /tmp/screen_mirror_gpu_check
 
 #include <algorithm>
@@ -92,18 +92,30 @@ namespace
         return {p.x * inv_sx, p.y * inv_sy, p.z * inv_sz};
     }
 
-    void MapRectangle(const Vec3& led, const Xform& plane, float width_mm, float height_mm,
-                      float grid_scale_mm, float& u, float& v, float& dist_mm)
+    void MapScreen(const Vec3& led, const Xform& plane, float width_mm, float height_mm,
+                   float grid_scale_mm, float& u, float& v, float& dist_mm)
     {
         const Vec3 local = WorldToLocal(led, plane);
         const float width_units = std::max(width_mm / grid_scale_mm, 1e-4f);
         const float height_units = std::max(height_mm / grid_scale_mm, 1e-4f);
         const float half_w = 0.5f * width_units;
         const float half_h = 0.5f * height_units;
-        const float hit_x = std::clamp(local.x, -half_w, half_w);
-        const float hit_y = std::clamp(local.y, -half_h, half_h);
-        u = std::clamp(0.5f + hit_x / width_units, 0.0f, 1.0f);
-        v = std::clamp(0.5f + hit_y / height_units, 0.0f, 1.0f);
+        const float half_d = std::max(half_w, half_h);
+        const float nx = local.x / half_w;
+        const float ny = local.y / half_h;
+        const float nz = local.z / half_d;
+        const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+        if(len < 1e-6f)
+        {
+            u = 0.5f;
+            v = 0.5f;
+        }
+        else
+        {
+            static constexpr float k = 1.414213562373095f;
+            u = std::clamp(0.5f + 0.5f * k * nx / len, 0.0f, 1.0f);
+            v = std::clamp(0.5f + 0.5f * k * ny / len, 0.0f, 1.0f);
+        }
         dist_mm = std::fabs(local.z) * grid_scale_mm;
     }
 
@@ -161,64 +173,78 @@ int main()
 
     {
         float u, v, d;
-        MapRectangle({0.f, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({0.f, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 0.5f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f || d > 1e-4f)
         {
             std::fprintf(stderr, "center map (%f,%f,%f) want (0.5,0.5,0)\n", u, v, d);
             fails++;
         }
-        MapRectangle({half_w, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({half_w, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 1.0f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
         {
             std::fprintf(stderr, "right edge (%f,%f) want (1,0.5)\n", u, v);
             fails++;
         }
-        MapRectangle({-half_w, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({-half_w, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
         {
             std::fprintf(stderr, "left edge (%f,%f) want (0,0.5)\n", u, v);
             fails++;
         }
-        MapRectangle({0.f, half_h, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({0.f, half_h, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 0.5f) > 1e-5f || std::fabs(v - 1.0f) > 1e-5f)
         {
             std::fprintf(stderr, "top edge (%f,%f) want (0.5,1)\n", u, v);
             fails++;
         }
-        MapRectangle({0.f, -half_h, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({0.f, -half_h, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 0.5f) > 1e-5f || std::fabs(v) > 1e-5f)
         {
             std::fprintf(stderr, "bottom edge (%f,%f) want (0.5,0)\n", u, v);
             fails++;
         }
-        MapRectangle({half_w * 3.f, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({half_w * 3.f, 0.f, 0.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 1.0f) > 1e-5f)
         {
             std::fprintf(stderr, "outside right should clamp u=1, got %f\n", u);
             fails++;
         }
-        MapRectangle({0.f, 0.f, 12.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({0.f, 0.f, 12.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 0.5f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f || std::fabs(d - 120.f) > 0.05f)
         {
             std::fprintf(stderr, "center in front (%f,%f,%f) want (0.5,0.5,120)\n", u, v, d);
             fails++;
         }
-        MapRectangle({0.f, 0.f, -12.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({0.f, 0.f, -12.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 0.5f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f || std::fabs(d - 120.f) > 0.05f)
         {
             std::fprintf(stderr, "center behind (%f,%f,%f) want (0.5,0.5,120)\n", u, v, d);
             fails++;
         }
-        MapRectangle({half_w, 0.f, 12.f}, identity, width_mm, height_mm, scale, u, v, d);
+        MapScreen({half_w, 0.f, 12.f}, identity, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 1.0f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
         {
-            std::fprintf(stderr, "front right should keep the edge pixel (%f,%f) want (1,0.5)\n", u, v);
+            std::fprintf(stderr, "near-plane front right (%f,%f) want (1,0.5)\n", u, v);
             fails++;
         }
-        MapRectangle({half_w, 0.f, -12.f}, identity, width_mm, height_mm, scale, u, v, d);
-        if(std::fabs(u - 1.0f) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
+        const float far_z = 2.f * std::max(half_w, half_h);
+        MapScreen({half_w, 0.f, far_z}, identity, width_mm, height_mm, scale, u, v, d);
+        if(u > 0.90f || u < 0.70f || std::fabs(v - 0.5f) > 1e-5f)
         {
-            std::fprintf(stderr, "behind right should keep the edge pixel (%f,%f) want (1,0.5)\n", u, v);
+            std::fprintf(stderr, "far front right should leave the square column (%f,%f)\n", u, v);
+            fails++;
+        }
+        const float u_far_right = u;
+        MapScreen({half_w, 0.f, -far_z}, identity, width_mm, height_mm, scale, u, v, d);
+        if(std::fabs(u - u_far_right) > 1e-5f || std::fabs(v - 0.5f) > 1e-5f)
+        {
+            std::fprintf(stderr, "far behind right should match front (%f,%f) want u=%f\n", u, v, u_far_right);
+            fails++;
+        }
+        MapScreen({0.5f * half_w, 0.f, 0.5f * far_z}, identity, width_mm, height_mm, scale, u, v, d);
+        if(std::fabs(u - u_far_right) > 1e-4f)
+        {
+            std::fprintf(stderr, "same ray should share u (%f) want %f\n", u, u_far_right);
             fails++;
         }
     }
@@ -228,7 +254,7 @@ int main()
         const Vec3 local_right{half_w, 0.f, 0.f};
         const Vec3 world_right = LocalToWorld(local_right, rz90);
         float u, v, d;
-        MapRectangle(world_right, rz90, width_mm, height_mm, scale, u, v, d);
+        MapScreen(world_right, rz90, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 1.0f) > 1e-4f || std::fabs(v - 0.5f) > 1e-4f)
         {
             std::fprintf(stderr, "Rz90 right edge (%f,%f) want (1,0.5) world=(%f,%f,%f)\n",
@@ -237,21 +263,29 @@ int main()
         }
         const Vec3 local_top{0.f, half_h, 0.f};
         const Vec3 world_top = LocalToWorld(local_top, rz90);
-        MapRectangle(world_top, rz90, width_mm, height_mm, scale, u, v, d);
+        MapScreen(world_top, rz90, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 0.5f) > 1e-4f || std::fabs(v - 1.0f) > 1e-4f)
         {
             std::fprintf(stderr, "Rz90 top edge (%f,%f) want (0.5,1)\n", u, v);
             fails++;
         }
         const Vec3 world_front_right = LocalToWorld({half_w, 0.f, 12.f}, rz90);
-        MapRectangle(world_front_right, rz90, width_mm, height_mm, scale, u, v, d);
+        MapScreen(world_front_right, rz90, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 1.0f) > 1e-4f || std::fabs(v - 0.5f) > 1e-4f)
         {
-            std::fprintf(stderr, "Rz90 front right (%f,%f) want (1,0.5)\n", u, v);
+            std::fprintf(stderr, "Rz90 near-plane front right (%f,%f) want (1,0.5)\n", u, v);
+            fails++;
+        }
+        const float far_z = 2.f * std::max(half_w, half_h);
+        const Vec3 world_far_right = LocalToWorld({half_w, 0.f, far_z}, rz90);
+        MapScreen(world_far_right, rz90, width_mm, height_mm, scale, u, v, d);
+        if(u > 0.90f || u < 0.70f || std::fabs(v - 0.5f) > 1e-4f)
+        {
+            std::fprintf(stderr, "Rz90 far front right should leave the square column (%f,%f)\n", u, v);
             fails++;
         }
         const Vec3 world_back_center = LocalToWorld({0.f, 0.f, -12.f}, rz90);
-        MapRectangle(world_back_center, rz90, width_mm, height_mm, scale, u, v, d);
+        MapScreen(world_back_center, rz90, width_mm, height_mm, scale, u, v, d);
         if(std::fabs(u - 0.5f) > 1e-4f || std::fabs(v - 0.5f) > 1e-4f)
         {
             std::fprintf(stderr, "Rz90 back center (%f,%f) want (0.5,0.5)\n", u, v);
@@ -272,7 +306,7 @@ int main()
         {
             const Vec3 world = LocalToWorld(corners[i], moved);
             float u, v, d;
-            MapRectangle(world, moved, width_mm, height_mm, scale, u, v, d);
+            MapScreen(world, moved, width_mm, height_mm, scale, u, v, d);
             if(std::fabs(u - want[i][0]) > 1e-4f || std::fabs(v - want[i][1]) > 1e-4f || d > 0.05f)
             {
                 std::fprintf(stderr, "gizmo corner %d uv=(%f,%f) dist=%f want (%f,%f)\n",

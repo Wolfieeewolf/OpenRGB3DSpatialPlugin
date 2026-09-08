@@ -47,7 +47,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     EffectInfo3D info           = {};
     info.effect_name            = "Screen Mirror";
     info.effect_description =
-        "Pushes the whole display into the room in 360 degrees; each LED takes the closest screen pixel.";
+        "Maps the display into the room along 3D rays so the grid lights the whole screen, not a square slab.";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;
