@@ -10,7 +10,6 @@ constexpr int kScreenMirrorGpuMaxHistory = 8;
 constexpr float kWaveTimeToEdgeEnableSec = 0.05f;
 constexpr float kWaveIntensityEnablePct = 5.0f;
 constexpr int kRadialMapUiNeutral = 50;
-/** GPU pack ceiling for wave speed (mm/ms). Matches WaveIntensityToSpeedMmPerMs. */
 constexpr float kWaveSpeedPackMmPerMs = 500.0f;
 
 inline float RadialMapUiToInternal(int ui_0_100)
@@ -18,7 +17,6 @@ inline float RadialMapUiToInternal(int ui_0_100)
     return (float)std::clamp(ui_0_100, 0, 100) - (float)kRadialMapUiNeutral;
 }
 
-/** Live AABB diagonal in mm — fallback when a degenerate grid has no corners. */
 inline float RoomSpanLengthMm(float span_mm_x, float span_mm_y, float span_mm_z)
 {
     float lx = std::max(span_mm_x, 0.0f);
@@ -28,7 +26,6 @@ inline float RoomSpanLengthMm(float span_mm_x, float span_mm_y, float span_mm_z)
     return std::max(len, 1.0f);
 }
 
-/** Farthest AABB corner from a room-UV origin, in mm. Scales with layout size. */
 inline float RoomCornerMaxDistanceMm(float span_mm_x, float span_mm_y, float span_mm_z,
                                      float falloff_uv_x, float falloff_uv_y, float falloff_uv_z)
 {
@@ -75,10 +72,6 @@ inline float WaveIntensityToSpeedMmPerMs(float intensity_0_to_100)
     return std::clamp(speed, 0.5f, 500.0f);
 }
 
-/** Time-to-edge (>= 0.05s) is the room-relative delay: farthest LED from the
- *  falloff origin waits that many seconds. It replaces wave intensity — they
- *  are not stacked. Intensity is a layout-agnostic speed curve (higher % =
- *  slower) used only when time-to-edge is Off. Intensity below 5% is instant. */
 inline float ResolveWaveSpeedMmPerMs(float time_to_edge_sec, float intensity_pct, float max_distance_mm)
 {
     if(time_to_edge_sec >= kWaveTimeToEdgeEnableSec)
@@ -114,7 +107,6 @@ inline float WaveHistoryRow(float delay_ms, float span_ms, int nhist)
     return std::clamp(h, 0.0f, (float)(nhist - 1));
 }
 
-/** Trail weight for a history tile. Age 0 = newest frame. Decay 0 = nearest tile only. */
 inline float WaveTrailWeight(float tile_age_ms, float delay_ms, float decay_ms, float span_ms, int nhist)
 {
     float behind = tile_age_ms - delay_ms;

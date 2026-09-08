@@ -114,68 +114,6 @@ ScreenMirrorMonitorPanel::~ScreenMirrorMonitorPanel()
     delete ui;
 }
 
-void ScreenMirrorMonitorPanel::ensureWhiteRolloffAndVibranceWired(ScreenMirror* effect,
-                                                                  ScreenMirror::MonitorSettings& settings,
-                                                                  bool has_capture_source)
-{
-    if(!effect || !ui || settings.white_rolloff_slider != nullptr)
-    {
-        return;
-    }
-
-    const auto wire_pct_ticks = [&](EffectSliderRow* row,
-                                    QSlider*& slider,
-                                    QLabel*& label,
-                                    int min,
-                                    int max,
-                                    int value,
-                                    int tick_interval,
-                                    const QString& tooltip,
-                                    auto label_fn) {
-        if(!row)
-        {
-            return;
-        }
-        row->configure(min, max, value, tooltip);
-        (void)tick_interval;
-        row->setEnabled(has_capture_source);
-        BindSliderRow(row, slider, label);
-        QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-        QObject::connect(slider, &QSlider::valueChanged, effect, [label, label_fn](int v) {
-            if(label)
-            {
-                label->setText(label_fn(v));
-            }
-        });
-        if(label)
-        {
-            label->setText(label_fn(slider->value()));
-        }
-    };
-
-    wire_pct_ticks(ui->whiteRolloffRow,
-                   settings.white_rolloff_slider,
-                   settings.white_rolloff_label,
-                   0,
-                   kWhiteRolloffSliderMax,
-                   (int)std::lround(settings.white_rolloff * 100.0f),
-                   10,
-                   QStringLiteral(
-                       "0-125%: strip gray/white (~70-80% sweet spot). 100% = max fog removal. 101-125% = Plus Ultra extra chroma."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
-
-    wire_pct_ticks(ui->vibranceRow,
-                   settings.vibrance_slider,
-                   settings.vibrance_label,
-                   0,
-                   200,
-                   (int)std::lround(settings.vibrance * 100.0f),
-                   25,
-                   QStringLiteral(
-                       "Saturation (0-200%). 100% = no change, below 100% = more muted, above 100% = more vivid RGB/CYM."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
-}
-
 void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                                           ScreenMirror::MonitorSettings& settings,
                                           DisplayPlane3D* plane,

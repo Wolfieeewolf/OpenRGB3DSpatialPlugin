@@ -30,7 +30,6 @@ inline QString FormatRadialMapUi(int ui_0_100)
     return QString("%1%").arg(v);
 }
 
-/* Single definition in ScreenMirror_Render.cpp (std::call_once / static buffer). */
 const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h);
 
 inline bool CaptureSourceIdIsPrimary(const std::string& source_id)
@@ -90,4 +89,4 @@ inline DisplayPlane3D* FindDisplayPlaneByName(const std::string& name)
     return nullptr;
 }
 
-#endif // SCREENMIRROR_INTERNAL_H
+#endif

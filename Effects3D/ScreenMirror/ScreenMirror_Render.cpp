@@ -8,7 +8,6 @@
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
 #include "PluginLog.h"
-#include "VirtualReferencePoint3D.h"
 #include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
 #include "SpatialVolumeFieldEngine.h"
@@ -29,10 +28,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h)
 {
@@ -449,14 +444,11 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
 {
     RefreshFrameCacheForRenderSequence(grid);
     gpu_smooth_ms_ = 0.0f;
-    gpu_idle_magenta_ = false;
 
     const float scale_mm = SafeGridScaleMm(grid.grid_scale_mm);
     const float span_x = std::max(grid.max_x - grid.min_x, 1e-4f);
     const float span_y = std::max(grid.max_y - grid.min_y, 1e-4f);
     const float span_z = std::max(grid.max_z - grid.min_z, 1e-4f);
-    /* span_mm / map_uv / falloff_uv are rebuilt every frame from this GridContext3D
-     * (manual room, LED hull, or target-zone AABB + live grid_scale_mm). */
     const Vector3D grid_anchor_ref = GetEffectOriginGrid(grid);
 
     std::vector<DisplayPlane3D*> planes = frame_cache_planes_;
@@ -467,8 +459,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
 
     std::vector<GpuMonitor> gpus;
     gpus.reserve(kGpuMaxMonitors);
-    int capturing_count = 0;
-    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
 
     for(size_t plane_index = 0; plane_index < planes.size() && (int)gpus.size() < kGpuMaxMonitors; ++plane_index)
     {
@@ -494,10 +484,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         }
 
         const std::string capture_id = plane->GetCaptureSourceId();
-        if(!capture_id.empty() && capture_mgr.IsCapturing(capture_id))
-        {
-            capturing_count++;
-        }
 
         GpuMonitor gm;
         gm.settings = &mon_settings;
@@ -505,9 +491,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         gm.flip_v = !gm.calibration;
         ZoneUnion(mon_settings, gm.zone_u0, gm.zone_u1, gm.zone_v0, gm.zone_v1);
 
-        /* Screen UVs lock to the display plane (room grid of the monitor), not the
-         * Spatial Anchor. Mapping from the layer hub put capture on the wrong LEDs
-         * the same way origin-local vs room UV did for other GPU ports. */
         gm.map_uv = RoomUvUnclamped(plane->GetTransform().position, grid, span_x, span_y, span_z);
 
         Vector3D falloff_ref = grid_anchor_ref;
@@ -518,7 +501,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
             falloff_ref.x += (effect_offset_x / 100.0f) * (grid.width * 0.5f);
             falloff_ref.y += (effect_offset_y / 100.0f) * (grid.height * 0.5f);
             falloff_ref.z += (effect_offset_z / 100.0f) * (grid.depth * 0.5f);
-            /* A chosen layout point is a viewer origin: map and falloff share it. */
             gm.map_uv = RoomUvUnclamped(falloff_ref, grid, span_x, span_y, span_z);
         }
         gm.falloff_uv = RoomUvUnclamped(falloff_ref, grid, span_x, span_y, span_z);
@@ -600,7 +582,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t render_sequence, float time_se
 
     if(gpus.empty())
     {
-        gpu_idle_magenta_ = (capturing_count == 0);
         volume_assist_.clearMediaTexture();
         float zp[kGpuSharedCount] = {};
         volume_assist_.prepare(render_sequence, time_sec, zp, kGpuSharedCount);
@@ -766,10 +747,6 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
     {
         return ToRGBColor(0, 0, 0);
     }
-    if(gpu_idle_magenta_)
-    {
-        return ToRGBColor(128, 0, 128);
-    }
     if(!volume_assist_.isAvailable())
     {
         if(!gpu_logged_unavail_)
@@ -783,8 +760,6 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
     }
 
     float c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
-    /* Room UV on the active world/zone AABB. Do not origin-local sample, and do
-     * not clamp UV onto atlas faces (four-quadrant / cube-face paint). */
     if(!TrySampleGpuRoomVolume01(x, y, z, grid, &c1, &c2, &c3))
     {
         return ToRGBColor(0, 0, 0);

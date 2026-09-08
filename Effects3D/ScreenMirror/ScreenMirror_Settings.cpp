@@ -7,11 +7,7 @@
 #include "VirtualReferencePoint3D.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
 
-#include <QGroupBox>
-#include <QFormLayout>
-#include <QSlider>
 #include <QSignalBlocker>
-#include <QPushButton>
 #include <algorithm>
 #include <cmath>
 

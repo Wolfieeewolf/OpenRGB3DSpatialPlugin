@@ -1,28 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-/** Screen Mirror volume field: atlas stores graded RGB after plane mapping.
- *  p01 = unit room UV (front-left floor = 0). Pair with TrySampleGpuRoomVolume01
- *  (reject outside the AABB — never clamp onto atlas faces / four quadrants).
- *  Do not sample origin-local — capture must sit on room/LED grid coordinates.
- *  u_media tiles: columns = monitors (1..2), rows = wave history (1..8, 0 = newest).
- *  Engine uploads QImage top-down; texture2D t=0 is capture row 0 (same as
- *  SampleFrame). Live capture still applies 1-v (DXGI/GDI vs mapper up).
- *
- *  Shared u_params:
- *    [0..2] AABB span_mm (live room/layout mm extents)  [3] layout
- *    [4] pack(steps_u, steps_v)  [5] avg_frame_ms
- *    layout = nmon + 10*nhist + 100*use_q + 1000*flip0 + 2000*flip1
- *
- *  Per monitor (24 floats), base 6 and 30:
- *    [0..2] map_uv (display plane, or layout point)  [3..5] plane_right
- *    [6..8] plane_up  [9..11] falloff_uv (Spatial Anchor / layout point)
- *    packed pairs (4095/4096): coverage/invert, softness/curve, roll/radial,
- *    bias TL/TR, BL/BR, letterbox/pillarbox, corner str/zone,
- *    zone u, zone v, wave speed/decay, fb/lr, tb/blend
- *  Wave history tiles span 0..max_delay+decay (row 0 = newest). Time-to-edge
- *  and wave intensity set delay; decay mixes older tiles as a trail.
- */
 inline const char* ScreenMirrorVolumeFieldGlsl()
 {
     return R"(
@@ -205,8 +183,6 @@ void smEvalMonitor(vec3 p01, vec3 span_mm, float nmon, float nhist, float use_q,
     float fall = smFalloff(dist_mm, max_mm, coverage, softness, curve, invert);
     float spd01, decay01;
     smUnpack01(p21, spd01, decay01);
-    /* 500 = pack ceiling (mm/ms), not a room size. Time-to-edge is baked on CPU
-     * from live AABB max_mm, then packed as speed/500. */
     float speed = spd01 * 500.0;
     float decay = decay01 * 10000.0;
     float delay_ms = 0.0;

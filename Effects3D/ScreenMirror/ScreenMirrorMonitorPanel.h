@@ -28,10 +28,6 @@ public:
                                     QWidget* host,
                                     bool has_capture);
 
-    void ensureWhiteRolloffAndVibranceWired(ScreenMirror* effect,
-                                            ScreenMirror::MonitorSettings& settings,
-                                            bool has_capture_source);
-
 private:
     Ui::ScreenMirrorMonitorSettings* ui = nullptr;
 };

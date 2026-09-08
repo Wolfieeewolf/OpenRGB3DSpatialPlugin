@@ -4,7 +4,6 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
 #include "ControllerLayout3D.h"
-#include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ui_GridSettingsPanel.h"
 
 #include <QFont>
@@ -177,14 +176,6 @@ void GridSettingsPanel::onGridScaleChanged(double value)
                                              host_tab_->manual_room_height, true);
     }
     host_tab_->SetLayoutDirty();
-    if(host_tab_->current_effect_ui)
-    {
-        ScreenMirror* sm = qobject_cast<ScreenMirror*>(host_tab_->current_effect_ui);
-        if(sm)
-        {
-            sm->SetGridScaleMM(host_tab_->grid_scale_mm);
-        }
-    }
     for(unsigned int i = 0; i < host_tab_->controller_transforms.size(); i++)
     {
         host_tab_->RegenerateLEDPositions(host_tab_->controller_transforms[i].get());

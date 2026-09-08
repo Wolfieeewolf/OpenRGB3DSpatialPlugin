@@ -17,8 +17,6 @@
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
-class QFormLayout;
-struct CaptureSourceInfo;
 struct CapturedFrame;
 
 class ScreenMirrorMonitorPanel;
@@ -34,7 +32,6 @@ public:
     ~ScreenMirror();
 
     EFFECT_REGISTERER_3D("ScreenMirror", "Screen Mirror", "Ambilight", [](){return new ScreenMirror;});
-    static void ForceLink() {}
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
@@ -44,8 +41,6 @@ public:
     bool RequiresWorldSpaceCoordinates() const override { return true; }
     bool RequiresWorldSpaceGridBounds() const override { return true; }
     bool SkipsSpatialSampleWarp() const override { return true; }
-
-    void SetGridScaleMM(float mm);
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
@@ -299,28 +294,12 @@ private:
     int                 capture_backend_mode;
     QComboBox*          capture_backend_combo;
 
-    QSlider*            global_scale_slider;
-    QLabel*             global_scale_label;
-    QSlider*            smoothing_time_slider;
-    QLabel*             smoothing_time_label;
-    QSlider*            brightness_slider;
-    QLabel*             brightness_label;
-    QSlider*            propagation_speed_slider;
-    QLabel*             propagation_speed_label;
-    QSlider*            wave_decay_slider;
-    QLabel*             wave_decay_label;
-    QSlider*            brightness_threshold_slider;
-    QLabel*             brightness_threshold_label;
-    QCheckBox*          global_scale_invert_check;
     QLabel*             monitor_status_label;
     QLabel*             monitor_help_label;
     QGroupBox*          monitors_container;
     QVBoxLayout*        monitors_layout;
     std::map<std::string, MonitorSettings> monitor_settings;
 
-    float               grid_scale_mm_;
-
-    bool                        show_calibration_pattern;
     bool                        in_parameter_change_;
 
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
@@ -329,11 +308,9 @@ private:
     {
         std::deque<std::shared_ptr<CapturedFrame>> frames;
         float cached_avg_frame_time_ms;
-        uint64_t last_frame_rate_update;
 
         FrameHistory()
             : cached_avg_frame_time_ms(16.67f)
-            , last_frame_rate_update(0)
         {
         }
     };
@@ -373,7 +350,6 @@ private:
 
     SpatialVolumeFieldAssist volume_assist_;
     float gpu_smooth_ms_;
-    bool gpu_idle_magenta_;
     bool gpu_logged_unavail_;
 };
 

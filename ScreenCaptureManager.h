@@ -33,10 +33,9 @@ struct CapturedFrame
     uint64_t                frame_id;
     uint64_t                timestamp_ms;
     bool                    valid;
-    bool                    used_gdi_capture;
 
     CapturedFrame()
-        : width(0), height(0), frame_id(0), timestamp_ms(0), valid(false), used_gdi_capture(false)
+        : width(0), height(0), frame_id(0), timestamp_ms(0), valid(false)
     {}
 };
 
@@ -57,18 +56,8 @@ public:
     void BeginRenderTickSnapshot();
     void EndRenderTickSnapshot();
     void SetDownscaleResolution(int width, int height);
-    void GetDownscaleResolution(int& width, int& height) const
-    {
-        width = target_width;
-        height = target_height;
-    }
     void SetTargetFPS(int fps);
-    int GetTargetFPS() const { return target_fps; }
-
     void SetWindowsCaptureBackendMode(int mode);
-    int GetWindowsCaptureBackendMode() const { return windows_capture_backend_mode.load(); }
-
-    /** When false, DXGI/GDI capture threads are not started (enumeration still works). */
     void SetCaptureSessionActive(bool active);
     bool IsCaptureSessionActive() const { return capture_session_active.load(); }
 
@@ -105,4 +94,4 @@ private:
     std::map<std::string, std::atomic<bool>> capture_active;
 };
 
-#endif // SCREENCAPTUREMANAGER_H
+#endif

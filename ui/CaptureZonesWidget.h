@@ -25,7 +25,6 @@ struct CaptureZone
 
     CaptureZone();
     CaptureZone(float u0, float u1, float v0, float v1);
-    bool Contains(float u, float v) const;
 };
 
 class CaptureAreaPreviewWidget;

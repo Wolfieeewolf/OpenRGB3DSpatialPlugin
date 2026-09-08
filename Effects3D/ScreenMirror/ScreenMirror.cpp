@@ -14,12 +14,8 @@
 #include "ui_ScreenMirrorEffectShell.h"
 
 #include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QGroupBox>
-#include <QFormLayout>
-#include <QSlider>
 #include <QFont>
-#include <QPushButton>
 #include <QString>
 #include <QSignalBlocker>
 #include <algorithm>
@@ -32,31 +28,15 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , capture_quality_combo(nullptr)
     , capture_backend_mode(1)
     , capture_backend_combo(nullptr)
-    , global_scale_slider(nullptr)
-    , global_scale_label(nullptr)
-    , smoothing_time_slider(nullptr)
-    , smoothing_time_label(nullptr)
-    , brightness_slider(nullptr)
-    , brightness_label(nullptr)
-    , propagation_speed_slider(nullptr)
-    , propagation_speed_label(nullptr)
-    , wave_decay_slider(nullptr)
-    , wave_decay_label(nullptr)
-    , brightness_threshold_slider(nullptr)
-    , brightness_threshold_label(nullptr)
-    , global_scale_invert_check(nullptr)
     , monitor_status_label(nullptr)
     , monitor_help_label(nullptr)
     , monitors_container(nullptr)
     , monitors_layout(nullptr)
-    , grid_scale_mm_(10.0f)
-    , show_calibration_pattern(false)
     , in_parameter_change_(false)
     , reference_points(nullptr)
     , frame_cache_refresh_ms_(0)
     , frame_cache_last_render_seq_(0)
     , gpu_smooth_ms_(0.0f)
-    , gpu_idle_magenta_(false)
     , gpu_logged_unavail_(false)
 {
     volume_assist_.setFragmentBody(QString::fromUtf8(ScreenMirrorVolumeFieldGlsl()));
@@ -70,12 +50,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     EffectInfo3D info           = {};
     info.effect_name            = "Screen Mirror";
     info.effect_description =
-        "Maps screen content onto LEDs in 3D space (GPU room field). "
-        "DXGI copies or GPU-scales on any Direct3D 11 GPU before CPU Map. Native matches the display. "
-        "Screen UVs lock to the display plane; Spatial Anchor (or a layout point) is falloff/wave. "
-        "Span, falloff, and time-to-edge follow the live grid/layout AABB (not a fixed room size). "
-        "LED atlas box-averages the working frame so colors stay area-sampled. "
-        "Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
+        "Maps screen content onto LEDs. Native capture matches the display; optional caps GPU-scale first.";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;
@@ -441,13 +416,6 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     outer->addWidget(panel);
 
     monitors_layout->addWidget(settings.group_box);
-}
-
-void ScreenMirror::SetGridScaleMM(float mm)
-{
-    float v = (mm > 0.001f) ? mm : 10.0f;
-    if(grid_scale_mm_ == v) return;
-    grid_scale_mm_ = v;
 }
 
 void ScreenMirror::RefreshMonitorStatus()

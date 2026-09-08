@@ -259,8 +259,6 @@ int main()
         fails++;
     }
 
-    /* Display plane at the front wall, Spatial Anchor at the LED centroid.
-     * Screen UVs must follow SpatialMapToScreen(plane.position), not the anchor. */
     const float plane_x = 150.f, plane_y = 40.f, plane_z = -20.f;
     const float anchor_x = ref_x, anchor_y = ref_y, anchor_z = ref_z;
     const float plane_uvx = (plane_x - gmin_x) / span_u_x;
@@ -314,7 +312,6 @@ int main()
         fails++;
     }
 
-    /* Atlas Y flip (the old ConvertRgbaAtlasToRgb bug) must not match plane mapping. */
     {
         float u0, v0, d0, uflip, vflip, dflip;
         const float ledx = 0.f, ledy = 10.f, ledz = 30.f;
@@ -332,8 +329,6 @@ int main()
         }
     }
 
-    /* u_media: first uploaded QImage row is texture t=0. Live capture applies 1-v
-     * so mapper v=1 (plane up) samples capture row 0 (screen top), matching CPU. */
     {
         const float mapper_v_up = 1.0f;
         const float live_tex_v = 1.0f - mapper_v_up;
@@ -367,9 +362,6 @@ int main()
         fails++;
     }
 
-    /* Four-quadrant / cube-face clamp: occupancy is a sphere, so samples can sit
-     * outside the AABB. Clamping room UV onto faces paints four/six solid slabs.
-     * Reject those samples instead. */
     auto try_room_uv = [](float x, float y, float z,
                           float minx, float miny, float minz,
                           float spx, float spy, float spz,
@@ -442,7 +434,6 @@ int main()
         std::fprintf(stderr, "four-quadrant reject count %d want 4\n", rejected);
         fails++;
     }
-    /* Face-clamp would assign four distinct atlas faces — the split artifact. */
     int distinct_clamped = 0;
     for(int i = 0; i < 4; ++i)
     {
@@ -468,8 +459,6 @@ int main()
         fails++;
     }
 
-    /* Off-center origin + room-half box was Color Wheel's four-quadrant path.
-     * Room UV at the far wall must stay interior (0.9), not snap to 1. */
     {
         const float box = 0.f, span = 100.f, origin = 20.f, far = 90.f;
         const float room_u = (far - box) / span;
@@ -494,7 +483,6 @@ int main()
         }
     }
 
-    /* Live grid/layout AABB: mapping and time-to-edge follow room mm, not 3000. */
     {
         struct Room
         {

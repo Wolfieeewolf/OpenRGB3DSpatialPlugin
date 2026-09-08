@@ -7,8 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 
-/** Box-average a packed 8-bit 4-channel image into RGBA8888.
- *  src_r/g/b/a are byte offsets in each source pixel (BGRA: 2,1,0,3). */
 inline void BoxDownscaleToRgba(const uint8_t* src,
                                int src_w,
                                int src_h,
@@ -107,7 +105,6 @@ inline void BoxDownscaleToRgba(const uint8_t* src,
     }
 }
 
-/** Pack BGRA8 into RGBA8888. flip_y matches DXGI's CPU mirror (GDI is already top-down). */
 inline void CopyBgraToRgba(const uint8_t* src,
                             int w,
                             int h,
@@ -137,22 +134,13 @@ inline void CopyBgraToRgba(const uint8_t* src,
     }
 }
 
-/** Safety ceiling for Native (match display). Never used to upscale.
- *  Covers 8K and super-ultrawide; DXGI still Maps only the real desktop size. */
 inline constexpr int kScreenMirrorMaxWorkingWidth = 7680;
 inline constexpr int kScreenMirrorMaxWorkingHeight = 4320;
-
-/** Combo value: copy each monitor at its current resolution (no cap). */
 inline constexpr int kScreenMirrorQualityNative = 8;
 
 inline int ScreenMirrorClampQuality(int quality)
 {
     return std::clamp(quality, 0, kScreenMirrorQualityNative);
-}
-
-inline bool ScreenMirrorQualityIsNative(int quality)
-{
-    return quality == kScreenMirrorQualityNative;
 }
 
 inline void ScreenMirrorQualityToSize(int quality, int& width, int& height)
@@ -205,16 +193,8 @@ inline void ScreenMirrorQualityToSize(int quality, int& width, int& height)
 
 inline void ClampWorkingCaptureSize(int native_w, int native_h, int& width, int& height)
 {
-    if(native_w > 0)
-    {
-        width = std::min(width, native_w);
-    }
-    if(native_h > 0)
-    {
-        height = std::min(height, native_h);
-    }
-    width = std::max(width, 1);
-    height = std::max(height, 1);
+    width = std::max(1, std::min(width, std::max(native_w, 1)));
+    height = std::max(1, std::min(height, std::max(native_h, 1)));
 }
 
 #endif

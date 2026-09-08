@@ -50,11 +50,6 @@ int main()
         std::fprintf(stderr, "native quality size %dx%d\n", w, h);
         fails++;
     }
-    if(!ScreenMirrorQualityIsNative(kScreenMirrorQualityNative) || ScreenMirrorQualityIsNative(7))
-    {
-        std::fprintf(stderr, "ScreenMirrorQualityIsNative mismatch\n");
-        fails++;
-    }
     if(kScreenMirrorMaxWorkingWidth != 7680 || kScreenMirrorMaxWorkingHeight != 4320)
     {
         std::fprintf(stderr, "max working size %dx%d\n",
@@ -96,7 +91,6 @@ int main()
         fails++;
     }
 
-    /* 2x2 BGRA -> 1x1 RGBA box average. */
     const uint8_t src[] = {
         10, 20, 30, 255,
         20, 40, 60, 255,
@@ -112,7 +106,6 @@ int main()
         fails++;
     }
 
-    /* 1:1 RGBA copy path. */
     uint8_t rgba[] = {1, 2, 3, 4, 5, 6, 7, 8};
     uint8_t rgba_out[8] = {};
     BoxDownscaleToRgba(rgba, 2, 1, 8, rgba_out, 2, 1, 0, 1, 2, 3);
@@ -122,7 +115,6 @@ int main()
         fails++;
     }
 
-    /* Checkerboard 4x4 -> 2x2 should average each 2x2 tile. */
     std::vector<uint8_t> checker((size_t)4 * 4 * 4, 0);
     for(int y = 0; y < 4; ++y)
     {
@@ -145,7 +137,6 @@ int main()
         fails++;
     }
 
-    /* 1:1 BGRA swizzle with padded stride. */
     const uint8_t bgra_pad[] = {
         10, 20, 30, 255, 40, 50, 60, 255, 0, 0, 0, 0, 0, 0, 0, 0
     };
@@ -158,7 +149,6 @@ int main()
         fails++;
     }
 
-    /* CopyBgraToRgba with Y flip: row0 and row1 swap. */
     const uint8_t bgra2[] = {
         10, 20, 30, 255, 1, 2, 3, 255,
         40, 50, 60, 255, 7, 8, 9, 255

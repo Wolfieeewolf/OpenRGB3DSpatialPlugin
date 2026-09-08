@@ -8,14 +8,9 @@
 #include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
 
 #include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QGroupBox>
-#include <QFormLayout>
 #include <QLabel>
 #include <QPainter>
-#ifdef Q_OS_WIN
-#include <QFontMetrics>
-#endif
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSlider>
@@ -43,11 +38,6 @@ CaptureZone::CaptureZone(float u0, float u1, float v0, float v1)
     , enabled(true)
     , name("Zone")
 {}
-
-bool CaptureZone::Contains(float u, float v) const
-{
-    return enabled && u >= u_min && u <= u_max && v >= v_min && v <= v_max;
-}
 
 class CaptureAreaPreviewWidget : public QWidget
 {
@@ -216,24 +206,6 @@ protected:
                         if(!image.isNull())
                         {
                             painter.drawImage(rect, image);
-#ifdef Q_OS_WIN
-                            {
-                                const QString tag = frame->used_gdi_capture ? QStringLiteral("GDI")
-                                                                            : QStringLiteral("DXGI");
-                                QFont font = painter.font();
-                                font.setPointSize(9);
-                                font.setBold(true);
-                                painter.setFont(font);
-                                QFontMetrics fm(font);
-                                const QSize ts = fm.size(0, tag);
-                                QRect badge(rect.right() - ts.width() - 14, rect.bottom() - ts.height() - 10,
-                                            ts.width() + 8, ts.height() + 4);
-                                painter.fillRect(badge, QColor(0, 0, 0, 185));
-                                painter.setPen(frame->used_gdi_capture ? QColor(255, 190, 90)
-                                                                     : QColor(120, 255, 160));
-                                painter.drawText(badge, Qt::AlignCenter, tag);
-                            }
-#endif
                             if(black_bar_letterbox_percent_ptr && black_bar_pillarbox_percent_ptr)
                             {
                                 float lp = std::clamp(*black_bar_letterbox_percent_ptr, 0.0f, 49.0f) / 100.0f;
