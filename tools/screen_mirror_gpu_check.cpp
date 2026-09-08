@@ -93,8 +93,7 @@ namespace
     }
 
     void MapScreen(const Vec3& led, const Xform& plane, float width_mm, float height_mm,
-                   float grid_scale_mm, float& u, float& v, float& dist_mm,
-                   int u_axis = 0, int v_axis = 1)
+                   float grid_scale_mm, float& u, float& v, float& dist_mm)
     {
         const Vec3 local = WorldToLocal(led, plane);
         const float width_units = std::max(width_mm / grid_scale_mm, 1e-4f);
@@ -102,87 +101,22 @@ namespace
         const float half_w = 0.5f * width_units;
         const float half_h = 0.5f * height_units;
         const float half_d = std::max(half_w, half_h);
-        const float n[3] = {
-            local.x / half_w,
-            local.y / half_h,
-            local.z / half_d
-        };
-        u_axis = std::clamp(u_axis, 0, 2);
-        v_axis = std::clamp(v_axis, 0, 2);
-        if(u_axis == v_axis)
-        {
-            v_axis = (u_axis + 1) % 3;
-        }
-        const float len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+        const float nx = local.x / half_w;
+        const float ny = local.y / half_h;
+        const float nz = local.z / half_d;
+        const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
         if(len < 1e-6f)
         {
             u = 0.5f;
             v = 0.5f;
         }
-        else if(u_axis == 2 || v_axis == 2)
-        {
-            u = std::clamp(0.5f + 0.5f * n[u_axis], 0.0f, 1.0f);
-            v = std::clamp(0.5f + 0.5f * n[v_axis], 0.0f, 1.0f);
-        }
         else
         {
             static constexpr float k = 1.414213562373095f;
-            u = std::clamp(0.5f + 0.5f * k * n[u_axis] / len, 0.0f, 1.0f);
-            v = std::clamp(0.5f + 0.5f * k * n[v_axis] / len, 0.0f, 1.0f);
+            u = std::clamp(0.5f + 0.5f * k * nx / len, 0.0f, 1.0f);
+            v = std::clamp(0.5f + 0.5f * k * ny / len, 0.0f, 1.0f);
         }
         dist_mm = std::fabs(local.z) * grid_scale_mm;
-    }
-
-    void ChooseSurfaceUvAxes(const Vec3* pts, int count, int& u_axis, int& v_axis)
-    {
-        u_axis = 0;
-        v_axis = 1;
-        if(pts == nullptr || count < 2)
-        {
-            return;
-        }
-        double sum[3] = {0.0, 0.0, 0.0};
-        for(int i = 0; i < count; ++i)
-        {
-            sum[0] += (double)pts[i].x;
-            sum[1] += (double)pts[i].y;
-            sum[2] += (double)pts[i].z;
-        }
-        const double inv = 1.0 / (double)count;
-        const float mean0 = (float)(sum[0] * inv);
-        const float mean1 = (float)(sum[1] * inv);
-        const float mean2 = (float)(sum[2] * inv);
-        float var[3] = {0.0f, 0.0f, 0.0f};
-        for(int i = 0; i < count; ++i)
-        {
-            const float d0 = pts[i].x - mean0;
-            const float d1 = pts[i].y - mean1;
-            const float d2 = pts[i].z - mean2;
-            var[0] += d0 * d0;
-            var[1] += d1 * d1;
-            var[2] += d2 * d2;
-        }
-        if(var[0] + var[1] + var[2] < 1e-8f)
-        {
-            return;
-        }
-        int first = 0;
-        if(var[1] > var[first]) first = 1;
-        if(var[2] > var[first]) first = 2;
-        int second = (first == 0) ? 1 : 0;
-        for(int axis = 0; axis < 3; ++axis)
-        {
-            if(axis == first) continue;
-            if(var[axis] > var[second]) second = axis;
-        }
-        if(first == 0 || second == 0)
-        {
-            u_axis = 0;
-            v_axis = (first == 0) ? second : first;
-            return;
-        }
-        u_axis = 2;
-        v_axis = 1;
     }
 
     float Dist3(const Vec3& a, const Vec3& b)
@@ -379,48 +313,6 @@ int main()
                              i, u, v, d, want[i][0], want[i][1]);
                 fails++;
             }
-        }
-    }
-
-    {
-        const Vec3 keyboard[] = {
-            {-20.f, 0.f, 10.f}, {0.f, 0.f, 10.f}, {20.f, 0.f, 10.f},
-            {-20.f, 0.f, 40.f}, {0.f, 0.f, 40.f}, {20.f, 0.f, 40.f},
-        };
-        int ku = 0;
-        int kv = 1;
-        ChooseSurfaceUvAxes(keyboard, 6, ku, kv);
-        if(ku != 0 || kv != 2)
-        {
-            std::fprintf(stderr, "keyboard surface axes (%d,%d) want (0,2)\n", ku, kv);
-            fails++;
-        }
-        float u0, v0, d0, u1, v1, d1;
-        MapScreen({0.f, 0.f, 10.f}, identity, width_mm, height_mm, scale, u0, v0, d0, 0, 1);
-        MapScreen({0.f, 0.f, 40.f}, identity, width_mm, height_mm, scale, u1, v1, d1, 0, 1);
-        if(std::fabs(v0 - v1) > 1e-4f)
-        {
-            std::fprintf(stderr, "default axes should pin a flat keyboard to one screen row (%f vs %f)\n", v0, v1);
-            fails++;
-        }
-        MapScreen({0.f, 0.f, 10.f}, identity, width_mm, height_mm, scale, u0, v0, d0, ku, kv);
-        MapScreen({0.f, 0.f, 40.f}, identity, width_mm, height_mm, scale, u1, v1, d1, ku, kv);
-        if(std::fabs(v0 - v1) < 0.05f)
-        {
-            std::fprintf(stderr, "layout-aware axes should flow V across a keyboard (%f vs %f)\n", v0, v1);
-            fails++;
-        }
-        const Vec3 vertical[] = {
-            {0.f, -20.f, 8.f}, {0.f, 0.f, 8.f}, {0.f, 20.f, 8.f},
-            {3.f, -20.f, 8.f}, {3.f, 0.f, 8.f}, {3.f, 20.f, 8.f},
-        };
-        int vu = 0;
-        int vv = 1;
-        ChooseSurfaceUvAxes(vertical, 6, vu, vv);
-        if(vu != 0 || vv != 1)
-        {
-            std::fprintf(stderr, "vertical surface axes (%d,%d) want (0,1)\n", vu, vv);
-            fails++;
         }
     }
 
