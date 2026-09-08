@@ -271,28 +271,13 @@ namespace Geometry3D
                                               float grid_scale_mm = DEFAULT_GRID_SCALE_MM)
     {
         PlaneProjection result;
-        result.is_valid = false;
-        result.u = 0.5f;
-        result.v = 0.5f;
-        result.distance = 0.0f;
-
-        const Transform3D& transform = plane.GetTransform();
-        const Vector3D local = TransformDisplayPlaneWorldToLocal(led_position, transform);
+        const Vector3D local = TransformDisplayPlaneWorldToLocal(led_position, plane.GetTransform());
         const float width_units = std::max(MMToGridUnits(plane.GetWidthMM(), grid_scale_mm), 1e-4f);
         const float height_units = std::max(MMToGridUnits(plane.GetHeightMM(), grid_scale_mm), 1e-4f);
-        result.u = 0.5f + local.x / width_units;
-        result.v = 0.5f + local.y / height_units;
+        result.u = std::clamp(0.5f + local.x / width_units, 0.0f, 1.0f);
+        result.v = std::clamp(0.5f + local.y / height_units, 0.0f, 1.0f);
         result.distance = GridUnitsToMM(std::fabs(local.z), grid_scale_mm);
-
-        result.u = std::clamp(result.u, 0.0f, 1.0f);
-        result.v = std::clamp(result.v, 0.0f, 1.0f);
-
-        if(std::isnan(result.u) || std::isnan(result.v) || !std::isfinite(result.u) || !std::isfinite(result.v))
-        {
-            result.is_valid = false;
-            return result;
-        }
-        result.is_valid = true;
+        result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;
     }
 

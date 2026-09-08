@@ -271,24 +271,9 @@
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="cornerBlendGroup">
-     <property name="title">
-      <string>Corner blend (sampling)</string>
-     </property>
-     <layout class="QVBoxLayout" name="cornerBlendLayout">
-      <item>
-       <widget class="EffectSliderRow" name="cornerStrengthRow" native="true"/>
-      </item>
-      <item>
-       <widget class="EffectSliderRow" name="cornerZoneRow" native="true"/>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
     <widget class="QGroupBox" name="blendGroup">
      <property name="title">
-      <string>Blend &amp; Smoothing</string>
+      <string>Smoothing</string>
      </property>
      <layout class="QFormLayout" name="blendForm">
       <property name="leftMargin">
@@ -312,16 +297,6 @@
       </item>
       <item row="0" column="1">
        <widget class="EffectSliderRow" name="smoothingRow" native="true"/>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="blendCaption">
-        <property name="text">
-         <string>Blend:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="EffectSliderRow" name="blendRow" native="true"/>
       </item>
      </layout>
     </widget>

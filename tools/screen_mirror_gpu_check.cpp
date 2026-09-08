@@ -5,8 +5,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
-#include <vector>
 
 #include "../Effects3D/ScreenMirror/ScreenMirrorWaveMath.h"
 
@@ -248,22 +246,6 @@ int main()
         }
     }
 
-    {
-        const float mapper_v_up = 1.0f;
-        const float live_tex_v = 1.0f - mapper_v_up;
-        const float cal_tex_v = 1.0f - mapper_v_up;
-        if(std::fabs(live_tex_v) > 1e-6f)
-        {
-            std::fprintf(stderr, "live tex v for mapper-up want 0, got %f\n", live_tex_v);
-            fails++;
-        }
-        if(std::fabs(cal_tex_v) > 1e-6f)
-        {
-            std::fprintf(stderr, "calibration tex v for mapper-up want 0, got %f\n", cal_tex_v);
-            fails++;
-        }
-    }
-
     float speed_short = ResolveWaveSpeedMmPerMs(0.2f, 0.0f, 3000.0f);
     if(speed_short < 0.1f)
     {
@@ -300,31 +282,6 @@ int main()
     if(std::fabs(span - 2500.0f) > 0.01f)
     {
         std::fprintf(stderr, "span %f want 2500\n", span);
-        fails++;
-    }
-    float row = WaveHistoryRow(1000.0f, 2000.0f, 8);
-    if(std::fabs(row - 3.5f) > 0.01f)
-    {
-        std::fprintf(stderr, "history row %f want 3.5\n", row);
-        fails++;
-    }
-    float w_front = WaveTrailWeight(500.0f, 500.0f, 500.0f, 2000.0f, 8);
-    float w_tail = WaveTrailWeight(1000.0f, 500.0f, 500.0f, 2000.0f, 8);
-    float w_future = WaveTrailWeight(0.0f, 500.0f, 500.0f, 2000.0f, 8);
-    if(std::fabs(w_front - 1.0f) > 0.01f)
-    {
-        std::fprintf(stderr, "trail front weight %f want 1\n", w_front);
-        fails++;
-    }
-    float want_tail = std::exp(-1.0f);
-    if(std::fabs(w_tail - want_tail) > 0.02f)
-    {
-        std::fprintf(stderr, "trail weight %f want %f\n", w_tail, want_tail);
-        fails++;
-    }
-    if(w_future > 0.01f)
-    {
-        std::fprintf(stderr, "future tile should not trail, got %f\n", w_future);
         fails++;
     }
     if(std::fabs(RadialMapUiToInternal(kRadialMapUiNeutral)) > 0.01f)
@@ -534,14 +491,6 @@ int main()
                              ri, speed_1s, want_speed);
                 fails++;
             }
-            const float packed = PackWaveSpeed01(speed_1s);
-            const float unpacked = UnpackWaveSpeedMmPerMs(packed);
-            if(std::fabs(unpacked - speed_1s) > 0.02f)
-            {
-                std::fprintf(stderr, "room %d wave pack round-trip %f -> %f\n",
-                             ri, speed_1s, unpacked);
-                fails++;
-            }
         }
 
         if(max_mm_rooms[0] > 1.0f)
@@ -581,6 +530,6 @@ int main()
         std::fprintf(stderr, "FAILED %d checks\n", fails);
         return 1;
     }
-    std::printf("screen_mirror_gpu_check: plane-rect, roundtrip, wave, trail, radial, no-face-clamp, live-room OK\n");
+        std::printf("screen_mirror_gpu_check: plane-rect, roundtrip, wave, radial, no-face-clamp, live-room OK\n");
     return 0;
 }

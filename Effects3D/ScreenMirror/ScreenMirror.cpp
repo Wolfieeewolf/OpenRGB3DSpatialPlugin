@@ -36,7 +36,7 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , frame_cache_refresh_ms_(0)
     , frame_cache_last_render_seq_(0)
     , tick_scale_mm_(10.0f)
-    , gpu_smooth_ms_(0.0f)
+    , smooth_ms_(0.0f)
 {
 }
 
@@ -47,7 +47,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     EffectInfo3D info           = {};
     info.effect_name            = "Screen Mirror";
     info.effect_description =
-        "Maps each display plane onto nearby LEDs. Capture is sampled per LED from the plane rectangle.";
+        "Maps each display plane onto nearby LEDs.";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_SCREEN_MIRROR;
     info.is_reversible          = false;
@@ -113,8 +113,6 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.black_bar_pillarbox_label = nullptr;
         s.softness_slider = nullptr;
         s.softness_label = nullptr;
-        s.blend_slider = nullptr;
-        s.blend_label = nullptr;
         s.propagation_speed_slider = nullptr;
         s.propagation_speed_label = nullptr;
         s.wave_decay_slider = nullptr;
@@ -147,10 +145,6 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.radial_corner_bias_bl_label = nullptr;
         s.radial_corner_bias_br_slider = nullptr;
         s.radial_corner_bias_br_label = nullptr;
-        s.corner_blend_strength_slider = nullptr;
-        s.corner_blend_strength_label = nullptr;
-        s.corner_blend_zone_slider = nullptr;
-        s.corner_blend_zone_label = nullptr;
     }
 
     if(rotation_yaw_slider)
@@ -236,17 +230,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
     capture_quality_combo->setToolTip(
         "Native copies each monitor at its current resolution (never upscales). "
-        "Lower entries are caps: any Direct3D 11 GPU scales in VRAM before CPU readback. "
-        "A 1080p video on a 4K desktop is still 4K pixels — capture sees the display, not the file.");
-    capture_quality_combo->setItemData(0, "1:1 copy of whatever the monitor is right now. 1080p screen → 1080p, 4K screen → 4K, ultrawide → ultrawide. Works on any GPU.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(1, "Lightest load; fine for small planes or testing.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(2, "Low bandwidth; useful on integrated GPUs if Native feels heavy.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(3, "Balanced cap for many setups.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(4, "Sharper color detail on wide monitors, still a cap.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(5, "720p cap. GPU-scales larger desktops before CPU Map.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(6, "1080p cap. GPU-scales native pixels into this size before CPU Map.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(7, "1440p cap. GPU scales in VRAM; CPU only maps 1440p.", Qt::ToolTipRole);
-    capture_quality_combo->setItemData(8, "4K cap (never larger than the display). Use if you want a hard ceiling below Native.", Qt::ToolTipRole);
+        "Lower entries cap GPU scale before CPU readback.");
     SelectCaptureQualityCombo(capture_quality);
 
     capture_backend_combo = capture_ui.captureBackendCombo;
@@ -494,8 +478,6 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.radial_corner_bias_tr_slider) settings.radial_corner_bias_tr_slider->setEnabled(has_capture_source);
             if(settings.radial_corner_bias_bl_slider) settings.radial_corner_bias_bl_slider->setEnabled(has_capture_source);
             if(settings.radial_corner_bias_br_slider) settings.radial_corner_bias_br_slider->setEnabled(has_capture_source);
-            if(settings.corner_blend_strength_slider) settings.corner_blend_strength_slider->setEnabled(has_capture_source);
-            if(settings.corner_blend_zone_slider) settings.corner_blend_zone_slider->setEnabled(has_capture_source);
             if(settings.scale_invert_check) settings.scale_invert_check->setEnabled(has_capture_source);
             if(settings.smoothing_time_slider) settings.smoothing_time_slider->setEnabled(has_capture_source);
             if(settings.brightness_slider) settings.brightness_slider->setEnabled(has_capture_source);
@@ -503,7 +485,6 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.black_bar_letterbox_slider) settings.black_bar_letterbox_slider->setEnabled(has_capture_source);
             if(settings.black_bar_pillarbox_slider) settings.black_bar_pillarbox_slider->setEnabled(has_capture_source);
             if(settings.softness_slider) settings.softness_slider->setEnabled(has_capture_source);
-            if(settings.blend_slider) settings.blend_slider->setEnabled(has_capture_source);
             if(settings.propagation_speed_slider) settings.propagation_speed_slider->setEnabled(has_capture_source);
             if(settings.wave_decay_slider) settings.wave_decay_slider->setEnabled(has_capture_source);
             if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_slider->setEnabled(has_capture_source);

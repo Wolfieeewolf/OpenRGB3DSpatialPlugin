@@ -369,42 +369,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                     settings.radial_corner_bias_br_ui,
                     "Bias toward capture top-right in that quadrant. 0% = baseline (slider center).");
 
-    ui->cornerStrengthRow->setCaptionText(QStringLiteral("Strength:"));
-    ui->cornerStrengthRow->setValueLabelMinimumWidth(40);
-    ui->cornerStrengthRow->configure(
-        0,
-        100,
-        (int)std::lround(settings.corner_blend_strength_pct),
-        QStringLiteral(
-            "Mix edge colors near frame corners when reading the capture. 0% = off (center sample only); 100% = full blend."));
-    ui->cornerStrengthRow->setEnabled(has_capture_source);
-    BindSliderRow(ui->cornerStrengthRow, settings.corner_blend_strength_slider, settings.corner_blend_strength_label);
-    QObject::connect(settings.corner_blend_strength_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    QObject::connect(settings.corner_blend_strength_slider, &QSlider::valueChanged, effect, [&settings](int v) {
-        if(settings.corner_blend_strength_label)
-        {
-            settings.corner_blend_strength_label->setText(QString::number(v) + QStringLiteral("%"));
-        }
-    });
-
-    ui->cornerZoneRow->setCaptionText(QStringLiteral("Zone width:"));
-    ui->cornerZoneRow->setValueLabelMinimumWidth(40);
-    ui->cornerZoneRow->configure(
-        0,
-        32,
-        (int)std::lround(settings.corner_blend_zone_pct),
-        QStringLiteral(
-            "0% = off. Otherwise corner transition size as % of half the active image (after letterbox). Higher = wider, softer corner."));
-    ui->cornerZoneRow->setEnabled(has_capture_source);
-    BindSliderRow(ui->cornerZoneRow, settings.corner_blend_zone_slider, settings.corner_blend_zone_label);
-    QObject::connect(settings.corner_blend_zone_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    QObject::connect(settings.corner_blend_zone_slider, &QSlider::valueChanged, effect, [&settings](int v) {
-        if(settings.corner_blend_zone_label)
-        {
-            settings.corner_blend_zone_label->setText(QString::number(v) + QStringLiteral("%"));
-        }
-    });
-
     wire_pct_ticks(ui->smoothingRow,
                    settings.smoothing_time_slider,
                    settings.smoothing_time_label,
@@ -415,22 +379,11 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    QStringLiteral("Temporal smoothing to reduce flicker (0-500ms)."),
                    [](int v) { return QString::number(v) + QStringLiteral("ms"); });
 
-    wire_pct_ticks(ui->blendRow,
-                   settings.blend_slider,
-                   settings.blend_label,
-                   0,
-                   100,
-                   (int)settings.blend,
-                   10,
-                   QStringLiteral("Blend with other monitors (0 = isolated, 100 = fully shared)."),
-                   [](int v) { return QString::number(v); });
-
     settings.calibration_pattern_check = ui->calibrationPatternCheck;
     ui->calibrationPatternCheck->setEnabled(true);
     ui->calibrationPatternCheck->setChecked(settings.show_calibration_pattern);
     ui->calibrationPatternCheck->setToolTip(
-        QStringLiteral("LEDs use a grid, rings, spokes, and quadrant colors (same as the zone preview). "
-                       "Tune radial corners, map roll, and corner blend until geometry looks straight and corners behave like the preview."));
+        QStringLiteral("LEDs use a grid, rings, spokes, and quadrant colors (same as the zone preview)."));
     QObject::connect(ui->calibrationPatternCheck, &QCheckBox::stateChanged, effect, [effect](int) {
         effect->OnParameterChanged();
         effect->OnCalibrationPatternChanged();
@@ -521,13 +474,12 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->whiteRolloffRow, extras_form);
     MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->vibranceRow, extras_form);
     MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->ledTrimHost, extras_form);
-    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->blendGroup->layout()), ui->blendRow, extras_form);
     MoveFormRowTo(qobject_cast<QFormLayout*>(ui->previewGroup->layout()), ui->calibrationPatternCheck, extras_form);
 
     EffectCollapsibleSection* advanced = EffectUiRows::AppendCollapsibleSection(
         root,
         QStringLiteral("Advanced"),
-        QStringLiteral("Black bars, radial mapping, corner blend, capture zones, direction focus, and extra color/falloff."),
+        QStringLiteral("Black bars, radial mapping, capture zones, direction focus, and extra color/falloff."),
         false);
     if(!advanced)
     {
@@ -537,7 +489,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     advanced_body->addWidget(extras_box);
     advanced_body->addWidget(ui->blackBarsGroup);
     advanced_body->addWidget(ui->radialCornerGroup);
-    advanced_body->addWidget(ui->cornerBlendGroup);
     if(QGroupBox* dir = zones_widget->getDirectionGroup())
     {
         advanced_body->addWidget(dir);

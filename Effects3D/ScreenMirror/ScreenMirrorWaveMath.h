@@ -6,11 +6,9 @@
 #include <algorithm>
 #include <cmath>
 
-constexpr int kScreenMirrorGpuMaxHistory = 8;
 constexpr float kWaveTimeToEdgeEnableSec = 0.05f;
 constexpr float kWaveIntensityEnablePct = 5.0f;
 constexpr int kRadialMapUiNeutral = 50;
-constexpr float kWaveSpeedPackMmPerMs = 500.0f;
 
 inline float RadialMapUiToInternal(int ui_0_100)
 {
@@ -51,16 +49,6 @@ inline float RoomCornerMaxDistanceMm(float span_mm_x, float span_mm_y, float spa
     return max_mm;
 }
 
-inline float PackWaveSpeed01(float speed_mm_per_ms)
-{
-    return std::clamp(speed_mm_per_ms / kWaveSpeedPackMmPerMs, 0.0f, 1.0f);
-}
-
-inline float UnpackWaveSpeedMmPerMs(float packed01)
-{
-    return std::clamp(packed01, 0.0f, 1.0f) * kWaveSpeedPackMmPerMs;
-}
-
 inline float WaveIntensityToSpeedMmPerMs(float intensity_0_to_100)
 {
     if(intensity_0_to_100 < 0.5f)
@@ -95,32 +83,6 @@ inline float WaveHistorySpanMs(float speed_mm_per_ms, float max_distance_mm, flo
     }
     float max_delay = std::max(max_distance_mm, 1.0f) / std::max(speed_mm_per_ms, 0.1f);
     return max_delay + std::max(decay_ms, 0.0f);
-}
-
-inline float WaveHistoryRow(float delay_ms, float span_ms, int nhist)
-{
-    if(nhist <= 1 || span_ms <= 0.1f)
-    {
-        return 0.0f;
-    }
-    float h = delay_ms / span_ms * (float)(nhist - 1);
-    return std::clamp(h, 0.0f, (float)(nhist - 1));
-}
-
-inline float WaveTrailWeight(float tile_age_ms, float delay_ms, float decay_ms, float span_ms, int nhist)
-{
-    float behind = tile_age_ms - delay_ms;
-    if(decay_ms <= 0.1f)
-    {
-        float bin = span_ms / std::max((float)(nhist - 1), 1.0f);
-        return (std::fabs(behind) <= 0.51f * std::max(bin, 1.0f)) ? 1.0f : 0.0f;
-    }
-    float bin = span_ms / std::max((float)(nhist - 1), 1.0f);
-    if(behind < -0.51f * std::max(bin, 1.0f))
-    {
-        return 0.0f;
-    }
-    return expf(-std::max(behind, 0.0f) / std::max(decay_ms, 0.1f));
 }
 
 #endif

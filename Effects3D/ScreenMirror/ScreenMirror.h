@@ -86,7 +86,6 @@ public:
         float black_bar_pillarbox_percent;
 
         float edge_softness;
-        float blend;
         float propagation_speed_mm_per_ms;
         float wave_decay_ms;
         float wave_time_to_edge_sec;
@@ -106,8 +105,6 @@ public:
         int radial_corner_bias_tr_ui;
         int radial_corner_bias_bl_ui;
         int radial_corner_bias_br_ui;
-        float corner_blend_strength_pct;
-        float corner_blend_zone_pct;
 
         std::vector<CaptureZone> capture_zones;
 
@@ -137,8 +134,6 @@ public:
         QLabel* black_bar_pillarbox_label;
         QSlider* softness_slider;
         QLabel* softness_label;
-        QSlider* blend_slider;
-        QLabel* blend_label;
         QSlider* propagation_speed_slider;
         QLabel* propagation_speed_label;
         QSlider* wave_decay_slider;
@@ -174,10 +169,6 @@ public:
         QLabel* radial_corner_bias_bl_label;
         QSlider* radial_corner_bias_br_slider;
         QLabel* radial_corner_bias_br_label;
-        QSlider* corner_blend_strength_slider;
-        QLabel* corner_blend_strength_label;
-        QSlider* corner_blend_zone_slider;
-        QLabel* corner_blend_zone_label;
 
         MonitorSettings()
             : enabled(false)
@@ -194,7 +185,6 @@ public:
             , black_bar_letterbox_percent(0.0f)
             , black_bar_pillarbox_percent(0.0f)
             , edge_softness(0.0f)
-            , blend(0.0f)
             , propagation_speed_mm_per_ms(0.0f)
             , wave_decay_ms(0.0f)
             , wave_time_to_edge_sec(0.0f)
@@ -211,8 +201,6 @@ public:
             , radial_corner_bias_tr_ui(kRadialMapUiNeutral)
             , radial_corner_bias_bl_ui(kRadialMapUiNeutral)
             , radial_corner_bias_br_ui(kRadialMapUiNeutral)
-            , corner_blend_strength_pct(0.0f)
-            , corner_blend_zone_pct(0.0f)
             , group_box(nullptr)
             , scale_slider(nullptr)
             , scale_label(nullptr)
@@ -239,8 +227,6 @@ public:
             , black_bar_pillarbox_label(nullptr)
             , softness_slider(nullptr)
             , softness_label(nullptr)
-            , blend_slider(nullptr)
-            , blend_label(nullptr)
             , propagation_speed_slider(nullptr)
             , propagation_speed_label(nullptr)
             , wave_decay_slider(nullptr)
@@ -275,10 +261,6 @@ public:
             , radial_corner_bias_bl_label(nullptr)
             , radial_corner_bias_br_slider(nullptr)
             , radial_corner_bias_br_label(nullptr)
-            , corner_blend_strength_slider(nullptr)
-            , corner_blend_strength_label(nullptr)
-            , corner_blend_zone_slider(nullptr)
-            , corner_blend_zone_label(nullptr)
         {
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }
@@ -307,12 +289,6 @@ private:
     struct FrameHistory
     {
         std::deque<std::shared_ptr<CapturedFrame>> frames;
-        float cached_avg_frame_time_ms;
-
-        FrameHistory()
-            : cached_avg_frame_time_ms(16.67f)
-        {
-        }
     };
     std::unordered_map<std::string, FrameHistory> capture_history;
 
@@ -360,7 +336,6 @@ private:
         float zone_v0;
         float zone_v1;
         bool calibration;
-        bool flip_v;
         float wave_speed;
         float max_distance_mm;
         std::shared_ptr<CapturedFrame> latest;
@@ -370,7 +345,7 @@ private:
     };
     std::vector<SampleMonitor> sample_tick_;
     float tick_scale_mm_;
-    float gpu_smooth_ms_;
+    float smooth_ms_;
 };
 
 #endif

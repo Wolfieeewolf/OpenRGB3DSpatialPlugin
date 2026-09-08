@@ -116,7 +116,7 @@ namespace
         b = std::clamp(b * gain_b, 0.0f, 255.0f);
     }
 
-    void SampleBilinearRgba(const uint8_t* data, int w, int h, float u, float v, bool flip_v,
+    void SampleBilinearRgba(const uint8_t* data, int w, int h, float u, float v,
                             float& r, float& g, float& b)
     {
         r = 0.0f;
@@ -126,10 +126,7 @@ namespace
         {
             return;
         }
-        if(flip_v)
-        {
-            v = 1.0f - v;
-        }
+        v = 1.0f - v;
         u = std::clamp(u, 0.0f, 1.0f);
         v = std::clamp(v, 0.0f, 1.0f);
         const float x = u * (float)(w - 1);
@@ -140,13 +137,10 @@ namespace
         const int y1 = std::min(y0 + 1, h - 1);
         const float fx = x - (float)x0;
         const float fy = y - (float)y0;
-        const auto px = [&](int sx, int sy) -> const uint8_t* {
-            return data + ((size_t)sy * (size_t)w + (size_t)sx) * 4u;
-        };
-        const uint8_t* p00 = px(x0, y0);
-        const uint8_t* p10 = px(x1, y0);
-        const uint8_t* p01 = px(x0, y1);
-        const uint8_t* p11 = px(x1, y1);
+        const uint8_t* p00 = data + ((size_t)y0 * (size_t)w + (size_t)x0) * 4u;
+        const uint8_t* p10 = data + ((size_t)y0 * (size_t)w + (size_t)x1) * 4u;
+        const uint8_t* p01 = data + ((size_t)y1 * (size_t)w + (size_t)x0) * 4u;
+        const uint8_t* p11 = data + ((size_t)y1 * (size_t)w + (size_t)x1) * 4u;
         const float w00 = (1.0f - fx) * (1.0f - fy);
         const float w10 = fx * (1.0f - fy);
         const float w01 = (1.0f - fx) * fy;
@@ -361,7 +355,7 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
 void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& grid)
 {
     RefreshFrameCacheForRenderSequence(grid);
-    gpu_smooth_ms_ = 0.0f;
+    smooth_ms_ = 0.0f;
     sample_tick_.clear();
     tick_scale_mm_ = SafeGridScaleMm(grid.grid_scale_mm);
 
@@ -403,7 +397,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
         sm.plane = plane;
         sm.settings = &mon_settings;
         sm.calibration = mon_settings.show_calibration_pattern;
-        sm.flip_v = true;
         sm.cal_rgba = nullptr;
         sm.cal_w = 0;
         sm.cal_h = 0;
@@ -450,7 +443,7 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
                                                      sm.max_distance_mm);
         }
 
-        gpu_smooth_ms_ = std::max(gpu_smooth_ms_, mon_settings.smoothing_time_ms);
+        smooth_ms_ = std::max(smooth_ms_, mon_settings.smoothing_time_ms);
         sample_tick_.push_back(sm);
     }
 }
@@ -580,7 +573,7 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
         float r = 0.0f;
         float g = 0.0f;
         float b = 0.0f;
-        SampleBilinearRgba(rgba, fw, fh, u, v, sm.flip_v, r, g, b);
+        SampleBilinearRgba(rgba, fw, fh, u, v, r, g, b);
         GradeRgb(r, g, b,
                  s.brightness_multiplier,
                  s.brightness_threshold,
@@ -604,7 +597,7 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
     float total_g = acc_g / acc_w;
     float total_b = acc_b / acc_w;
 
-    if(gpu_smooth_ms_ > 0.1f)
+    if(smooth_ms_ > 0.1f)
     {
         LEDKey key = MakeLEDKey(x, y, z);
         LEDState& state = led_states[key];
@@ -630,7 +623,7 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
                 dt_ms_u64 = 1;
             }
             float dt = (float)dt_ms_u64;
-            float tau = gpu_smooth_ms_;
+            float tau = smooth_ms_;
             float alpha = dt / (tau + dt);
             state.r += alpha * (total_r - state.r);
             state.g += alpha * (total_g - state.g);
@@ -678,42 +671,6 @@ void ScreenMirror::AddFrameToHistory(const std::string& capture_id, const std::s
     if(history.frames.size() > max_frames)
     {
         history.frames.pop_front();
-    }
-
-    if(history.frames.size() >= 2)
-    {
-        size_t check_frames = std::min(history.frames.size() - 1, (size_t)10);
-        uint64_t total_time = 0;
-        size_t valid_pairs = 0;
-        const uint64_t min_delta_ms = 4;
-        const uint64_t max_delta_ms = 80;
-        for(size_t i = history.frames.size() - check_frames; i < history.frames.size(); ++i)
-        {
-            if(i == 0)
-            {
-                continue;
-            }
-            uint64_t delta = (history.frames[i]->timestamp_ms > history.frames[i - 1]->timestamp_ms)
-                ? (history.frames[i]->timestamp_ms - history.frames[i - 1]->timestamp_ms)
-                : 0;
-            if(delta >= min_delta_ms && delta <= max_delta_ms)
-            {
-                total_time += delta;
-                valid_pairs++;
-            }
-        }
-        if(valid_pairs > 0 && total_time > 0)
-        {
-            float measured_ms = std::clamp((float)total_time / (float)valid_pairs, 4.0f, 50.0f);
-            if(history.cached_avg_frame_time_ms > 0.0f)
-            {
-                history.cached_avg_frame_time_ms = 0.75f * history.cached_avg_frame_time_ms + 0.25f * measured_ms;
-            }
-            else
-            {
-                history.cached_avg_frame_time_ms = measured_ms;
-            }
-        }
     }
 }
 

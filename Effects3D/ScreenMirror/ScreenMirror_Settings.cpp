@@ -40,7 +40,6 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["black_bar_pillarbox_percent"] = mon_settings.black_bar_pillarbox_percent;
         
         mon["edge_softness"] = mon_settings.edge_softness;
-        mon["blend"] = mon_settings.blend;
         mon["propagation_speed_mm_per_ms"] = mon_settings.propagation_speed_mm_per_ms;
         mon["wave_decay_ms"] = mon_settings.wave_decay_ms;
         mon["wave_time_to_edge_sec"] = mon_settings.wave_time_to_edge_sec;
@@ -59,8 +58,6 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["radial_map_bias_tr"] = std::clamp(mon_settings.radial_corner_bias_tr_ui, 0, 100);
         mon["radial_map_bias_bl"] = std::clamp(mon_settings.radial_corner_bias_bl_ui, 0, 100);
         mon["radial_map_bias_br"] = std::clamp(mon_settings.radial_corner_bias_br_ui, 0, 100);
-        mon["sample_corner_blend_strength_pct"] = std::clamp(mon_settings.corner_blend_strength_pct, 0.0f, 100.0f);
-        mon["sample_corner_blend_zone_pct"] = std::clamp(mon_settings.corner_blend_zone_pct, 0.0f, 32.0f);
         
         nlohmann::json zones_array = nlohmann::json::array();
         for(const CaptureZone& zone : mon_settings.capture_zones)
@@ -208,15 +205,6 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         msettings.softness_label->setText(QString::number((int)msettings.edge_softness));
     }
-    if(msettings.blend_slider)
-    {
-        QSignalBlocker blocker(msettings.blend_slider);
-        msettings.blend_slider->setValue((int)std::lround(msettings.blend));
-    }
-    if(msettings.blend_label)
-    {
-        msettings.blend_label->setText(QString::number((int)msettings.blend));
-    }
     if(msettings.propagation_speed_slider)
     {
         QSignalBlocker blocker(msettings.propagation_speed_slider);
@@ -352,26 +340,6 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         msettings.radial_corner_bias_br_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_br_ui));
     }
-    if(msettings.corner_blend_strength_slider)
-    {
-        QSignalBlocker blocker(msettings.corner_blend_strength_slider);
-        msettings.corner_blend_strength_slider->setValue((int)std::lround(msettings.corner_blend_strength_pct));
-    }
-    if(msettings.corner_blend_strength_label)
-    {
-        msettings.corner_blend_strength_label->setText(
-            QString::number((int)std::lround(msettings.corner_blend_strength_pct)) + "%");
-    }
-    if(msettings.corner_blend_zone_slider)
-    {
-        QSignalBlocker blocker(msettings.corner_blend_zone_slider);
-        msettings.corner_blend_zone_slider->setValue((int)std::lround(msettings.corner_blend_zone_pct));
-    }
-    if(msettings.corner_blend_zone_label)
-    {
-        msettings.corner_blend_zone_label->setText(
-            QString::number((int)std::lround(msettings.corner_blend_zone_pct)) + "%");
-    }
     if(msettings.ref_point_combo)
     {
         QSignalBlocker blocker(msettings.ref_point_combo);
@@ -495,8 +463,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
 
             if(mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
             else msettings.edge_softness = 0.0f;
-            if(mon.contains("blend")) msettings.blend = mon["blend"].get<float>();
-            else msettings.blend = 0.0f;
             if(mon.contains("propagation_speed_mm_per_ms"))
             {
                 msettings.propagation_speed_mm_per_ms = mon["propagation_speed_mm_per_ms"].get<float>();
@@ -607,16 +573,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             {
                 msettings.radial_corner_bias_br_ui = kRadialMapUiNeutral;
             }
-            if(mon.contains("sample_corner_blend_strength_pct"))
-            {
-                msettings.corner_blend_strength_pct = std::clamp(
-                    static_cast<float>(mon["sample_corner_blend_strength_pct"].get<double>()), 0.0f, 100.0f);
-            }
-            if(mon.contains("sample_corner_blend_zone_pct"))
-            {
-                msettings.corner_blend_zone_pct = std::clamp(
-                    static_cast<float>(mon["sample_corner_blend_zone_pct"].get<double>()), 0.0f, 32.0f);
-            }
 
             msettings.scale = std::clamp(msettings.scale, 0.0f, 3.0f);
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
@@ -630,7 +586,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             msettings.black_bar_letterbox_percent = std::clamp(msettings.black_bar_letterbox_percent, 0.0f, 50.0f);
             msettings.black_bar_pillarbox_percent = std::clamp(msettings.black_bar_pillarbox_percent, 0.0f, 50.0f);
             msettings.edge_softness = std::clamp(msettings.edge_softness, 0.0f, 100.0f);
-            msettings.blend = std::clamp(msettings.blend, 0.0f, 100.0f);
             msettings.propagation_speed_mm_per_ms = std::clamp(msettings.propagation_speed_mm_per_ms, 0.0f, 100.0f);
             msettings.wave_decay_ms = std::clamp(msettings.wave_decay_ms, 0.0f, 3000.0f);
             msettings.wave_time_to_edge_sec = std::clamp(msettings.wave_time_to_edge_sec, 0.0f, 10.0f);
@@ -644,8 +599,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             msettings.radial_corner_bias_tr_ui = std::clamp(msettings.radial_corner_bias_tr_ui, 0, 100);
             msettings.radial_corner_bias_bl_ui = std::clamp(msettings.radial_corner_bias_bl_ui, 0, 100);
             msettings.radial_corner_bias_br_ui = std::clamp(msettings.radial_corner_bias_br_ui, 0, 100);
-            msettings.corner_blend_strength_pct = std::clamp(msettings.corner_blend_strength_pct, 0.0f, 100.0f);
-            msettings.corner_blend_zone_pct = std::clamp(msettings.corner_blend_zone_pct, 0.0f, 32.0f);
     }
 
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
@@ -703,7 +656,6 @@ void ScreenMirror::OnParameterChanged()
         if(settings.black_bar_pillarbox_slider) settings.black_bar_pillarbox_percent = (float)settings.black_bar_pillarbox_slider->value();
         
         if(settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
-        if(settings.blend_slider) settings.blend = (float)settings.blend_slider->value();
         if(settings.propagation_speed_slider) settings.propagation_speed_mm_per_ms = std::clamp((float)settings.propagation_speed_slider->value(), 0.0f, 100.0f);
         if(settings.wave_decay_slider) settings.wave_decay_ms = (float)settings.wave_decay_slider->value();
         if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_sec = (float)settings.wave_time_to_edge_slider->value() / 10.0f;
@@ -736,16 +688,6 @@ void ScreenMirror::OnParameterChanged()
         if(settings.radial_corner_bias_br_slider)
         {
             settings.radial_corner_bias_br_ui = std::clamp(settings.radial_corner_bias_br_slider->value(), 0, 100);
-        }
-        if(settings.corner_blend_strength_slider)
-        {
-            settings.corner_blend_strength_pct =
-                std::clamp((float)settings.corner_blend_strength_slider->value(), 0.0f, 100.0f);
-        }
-        if(settings.corner_blend_zone_slider)
-        {
-            settings.corner_blend_zone_pct =
-                std::clamp((float)settings.corner_blend_zone_slider->value(), 0.0f, 32.0f);
         }
         
         bool old_calibration_pattern = settings.show_calibration_pattern;
