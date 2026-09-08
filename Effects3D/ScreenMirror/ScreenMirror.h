@@ -54,19 +54,11 @@ public:
 signals:
     void ScreenPreviewChanged(bool enabled);
     void CalibrationPatternChanged(bool enabled);
-    
+
 public:
     bool ShouldShowCalibrationPattern(const std::string& plane_name) const;
     bool ShouldShowScreenPreview(const std::string& plane_name) const;
 
-    void RefreshFrameCacheForRenderSequence(const GridContext3D& grid);
-
-private slots:
-    void OnParameterChanged();
-    void OnScreenPreviewChanged();
-    void OnCalibrationPatternChanged();
-
-public:
     struct MonitorSettings
     {
         bool enabled;
@@ -266,7 +258,13 @@ public:
         }
     };
 
+private slots:
+    void OnParameterChanged();
+    void OnScreenPreviewChanged();
+    void OnCalibrationPatternChanged();
+
 private:
+    void RefreshFrameCacheForRenderSequence(const GridContext3D& grid);
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
     void SelectCaptureQualityCombo(int quality);
@@ -321,7 +319,6 @@ private:
     std::map<LEDKey, LEDState> led_states;
 
     bool ResolveReferencePointById(int id, Vector3D& out) const;
-    int LookupReferencePointIdByIndex(int index) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
     float GetHistoryRetentionMs() const;
     LEDKey MakeLEDKey(float x, float y, float z) const;

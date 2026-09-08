@@ -150,7 +150,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                                     int min,
                                     int max,
                                     int value,
-                                    int tick_interval,
                                     const QString& tooltip,
                                     auto label_fn) {
         if(!row)
@@ -158,7 +157,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
             return;
         }
         row->configure(min, max, value, tooltip);
-        (void)tick_interval;
         row->setEnabled(has_capture_source);
         BindSliderRow(row, slider, label);
         QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
@@ -180,7 +178,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    300,
                    (int)(settings.scale * 100.0f),
-                   25,
                    QStringLiteral("Global reach: 0-100% = fill room, 101-300% = beyond room (extreme)."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
@@ -198,7 +195,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    50,
                    200,
                    (int)(settings.falloff_curve_exponent * 100.0f),
-                   25,
                    QStringLiteral("Falloff curve: 50% = softer (gradual), 100% = linear, 200% = sharper (sudden edge)."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
@@ -213,8 +209,8 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     ui->refPointCombo->setEnabled(has_capture_source);
     ui->refPointCombo->setToolTip(
         QStringLiteral("Falloff/wave origin for this display. Follow layer Spatial Anchor uses the same "
-                       "choices as other effects. Pick a layout point to measure from a saved marker "
-                       "(and remap screen UVs to that point)."));
+                       "choices as other effects. Pick a layout point to measure from a saved marker. "
+                       "Screen UVs always come from the display plane."));
     QObject::connect(ui->refPointCombo, qOverload<int>(&QComboBox::currentIndexChanged), effect,
                      &ScreenMirror::OnParameterChanged);
 
@@ -224,7 +220,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    100,
                    (int)settings.edge_softness,
-                   10,
                    QStringLiteral("Edge feathering (0 = hard, 100 = very soft)."),
                    [](int v) { return QString::number(v); });
 
@@ -234,7 +229,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    200,
                    (int)(settings.brightness_multiplier * 100.0f),
-                   25,
                    QStringLiteral(
                        "Overall output level (0-200%). 100% = neutral. Use White rolloff to reduce wash and keep colors vibrant."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
@@ -245,7 +239,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    255,
                    (int)settings.brightness_threshold,
-                   25,
                    QStringLiteral(
                        "Floor for dim pixels (0-255). Uses peak RGB and luma so saturated reds/greens/blues are not crushed. "
                        "0 = off, higher = only brighter content passes at full strength."),
@@ -257,7 +250,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    kWhiteRolloffSliderMax,
                    (int)std::lround(settings.white_rolloff * 100.0f),
-                   10,
                    QStringLiteral(
                        "0-125%: strip gray/white (~70-80% sweet spot). 100% = max fog removal. 101-125% = Plus Ultra extra chroma."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
@@ -268,7 +260,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    200,
                    (int)std::lround(settings.vibrance * 100.0f),
-                   25,
                    QStringLiteral("Saturation (0-200%). 100% = no change, below 100% = more muted, above 100% = more vivid RGB/CYM."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
@@ -280,7 +271,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    50,
                    (int)std::lround(settings.black_bar_letterbox_percent),
-                   5,
                    QStringLiteral("Crop top and bottom (letterbox). 0 = no crop."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
@@ -290,7 +280,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    50,
                    (int)std::lround(settings.black_bar_pillarbox_percent),
-                   5,
                    QStringLiteral("Crop left and right (pillarbox). 0 = no crop."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
@@ -375,7 +364,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    500,
                    (int)settings.smoothing_time_ms,
-                   50,
                    QStringLiteral("Temporal smoothing to reduce flicker (0-500ms)."),
                    [](int v) { return QString::number(v) + QStringLiteral("ms"); });
 

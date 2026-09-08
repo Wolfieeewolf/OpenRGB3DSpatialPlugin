@@ -675,11 +675,11 @@ float ScreenMirror::GetHistoryRetentionMs() const
         float monitor_retention = std::max(mon_settings.wave_decay_ms * 3.0f, mon_settings.smoothing_time_ms * 3.0f);
         float speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
                                              mon_settings.propagation_speed_mm_per_ms,
-                                             5000.0f);
+                                             kWaveHistoryDistanceMm);
         if(speed >= 0.1f)
         {
             monitor_retention = std::max(monitor_retention,
-                                         WaveHistorySpanMs(speed, 5000.0f, mon_settings.wave_decay_ms));
+                                         WaveHistorySpanMs(speed, kWaveHistoryDistanceMm, mon_settings.wave_decay_ms));
         }
         max_retention = std::max(max_retention, monitor_retention);
     }

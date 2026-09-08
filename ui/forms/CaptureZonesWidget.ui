@@ -286,7 +286,7 @@
             <enum>Qt::Horizontal</enum>
            </property>
            <property name="toolTip">
-            <string>Trail behind the delayed sample (0-3000ms). 0 = sharp wave front, ~500-1500ms = visible comet tail. Does not change how fast the wave travels.</string>
+            <string>How long delayed wave frames stay in capture history (0-3000ms). 0 keeps a short buffer. Higher values retain earlier frames for delayed LEDs. Does not change how fast the wave travels.</string>
            </property>
           </widget>
          </item>

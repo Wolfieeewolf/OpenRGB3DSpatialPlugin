@@ -62,7 +62,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.needs_arms             = false;
     info.needs_frequency        = false;
     info.use_size_parameter     = false;
-    
+
     info.show_color_controls    = false;
     info.show_speed_control     = false;
     info.show_brightness_control = false;
