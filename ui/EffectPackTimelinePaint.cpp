@@ -5,7 +5,6 @@
 #include "EffectPacks/EffectPackApplier.h"
 #include "ZoneManager3D.h"
 
-#include <QColorDialog>
 #include <QCursor>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -22,7 +21,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <functional>
 
 namespace
 {

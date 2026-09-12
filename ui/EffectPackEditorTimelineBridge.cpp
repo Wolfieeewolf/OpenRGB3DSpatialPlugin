@@ -15,7 +15,6 @@
 
 #include <QAbstractItemView>
 #include <QAbstractSpinBox>
-#include <QColorDialog>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>

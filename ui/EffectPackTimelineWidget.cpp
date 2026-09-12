@@ -5,13 +5,11 @@
 #include "EffectPacks/EffectPackApplier.h"
 #include "ZoneManager3D.h"
 
-#include <QColorDialog>
 #include <QCursor>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QEvent>
-#include <QImage>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMimeData>

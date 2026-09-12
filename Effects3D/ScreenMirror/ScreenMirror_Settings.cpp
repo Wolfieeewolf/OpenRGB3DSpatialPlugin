@@ -826,13 +826,3 @@ bool ScreenMirror::ResolveReferencePointById(int id, Vector3D& out) const
     }
     return false;
 }
-
-int ScreenMirror::LookupReferencePointIdByIndex(int index) const
-{
-    if(!reference_points || index < 0 || index >= (int)reference_points->size())
-    {
-        return -1;
-    }
-    VirtualReferencePoint3D* ref_point = (*reference_points)[index].get();
-    return ref_point ? ref_point->GetId() : -1;
-}

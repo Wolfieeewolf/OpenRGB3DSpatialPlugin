@@ -11,7 +11,6 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QEvent>
-#include <QImage>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMimeData>

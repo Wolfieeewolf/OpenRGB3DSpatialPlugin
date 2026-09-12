@@ -15,7 +15,6 @@ namespace Geometry3D
     {
         float   u;
         float   v;
-        float   distance;
         bool    is_valid;
     };
 
@@ -292,22 +291,8 @@ namespace Geometry3D
             result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * nx / len, 0.0f, 1.0f);
             result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * ny / len, 0.0f, 1.0f);
         }
-        result.distance = GridUnitsToMM(std::fabs(local.z), grid_scale_mm);
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;
-    }
-
-    inline void QuantizeMediaUV01(float& u, float& v, int w, int h, unsigned int resolution_pct)
-    {
-        if(resolution_pct >= 100u)
-        {
-            return;
-        }
-        const float q = resolution_pct / 100.0f;
-        const float steps_u = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, w) - 4));
-        const float steps_v = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, h) - 4));
-        u = std::floor(u * steps_u) / steps_u;
-        v = std::floor(v * steps_v) / steps_v;
     }
 
     inline void QuantizeNormalizedAxis01(float& t, unsigned int resolution_pct, int virtual_cells = 128)
@@ -319,71 +304,6 @@ namespace Geometry3D
         const float q = resolution_pct / 100.0f;
         const float steps = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, virtual_cells) - 4));
         t = std::floor(t * steps) / steps;
-    }
-
-    inline RGBColor SampleFrame(const uint8_t* frame_data, int frame_width, int frame_height,
-                               float u, float v, bool use_bilinear = true)
-    {
-        if (!frame_data || frame_width <= 0 || frame_height <= 0)
-        {
-            return ToRGBColor(0, 0, 0);
-        }
-        if (u < 0.0f) u = 0.0f;
-        if (u > 1.0f) u = 1.0f;
-        if (v < 0.0f) v = 0.0f;
-        if (v > 1.0f) v = 1.0f;
-
-        float x = u * (frame_width - 1);
-        float y = v * (frame_height - 1);
-
-        if (!use_bilinear)
-        {
-            int ix = (int)(x + 0.5f);
-            int iy = (int)(y + 0.5f);
-            int index = (iy * frame_width + ix) * 4;
-
-            uint8_t r = frame_data[index + 0];
-            uint8_t g = frame_data[index + 1];
-            uint8_t b = frame_data[index + 2];
-            return ToRGBColor(r, g, b);
-        }
-        else
-        {
-            int x0 = (int)x;
-            int y0 = (int)y;
-            int x1 = (x0 + 1 < frame_width) ? x0 + 1 : x0;
-            int y1 = (y0 + 1 < frame_height) ? y0 + 1 : y0;
-
-            float fx = x - x0;
-            float fy = y - y0;
-
-            int idx00 = (y0 * frame_width + x0) * 4;
-            int idx10 = (y0 * frame_width + x1) * 4;
-            int idx01 = (y1 * frame_width + x0) * 4;
-            int idx11 = (y1 * frame_width + x1) * 4;
-
-            float r00 = frame_data[idx00 + 0];
-            float g00 = frame_data[idx00 + 1];
-            float b00 = frame_data[idx00 + 2];
-
-            float r10 = frame_data[idx10 + 0];
-            float g10 = frame_data[idx10 + 1];
-            float b10 = frame_data[idx10 + 2];
-
-            float r01 = frame_data[idx01 + 0];
-            float g01 = frame_data[idx01 + 1];
-            float b01 = frame_data[idx01 + 2];
-
-            float r11 = frame_data[idx11 + 0];
-            float g11 = frame_data[idx11 + 1];
-            float b11 = frame_data[idx11 + 2];
-
-            float r = r00 * (1 - fx) * (1 - fy) + r10 * fx * (1 - fy) + r01 * (1 - fx) * fy + r11 * fx * fy;
-            float g = g00 * (1 - fx) * (1 - fy) + g10 * fx * (1 - fy) + g01 * (1 - fx) * fy + g11 * fx * fy;
-            float b = b00 * (1 - fx) * (1 - fy) + b10 * fx * (1 - fy) + b01 * (1 - fx) * fy + b11 * fx * fy;
-
-            return ToRGBColor((uint8_t)(r + 0.5f), (uint8_t)(g + 0.5f), (uint8_t)(b + 0.5f));
-        }
     }
 
 }

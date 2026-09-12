@@ -2,7 +2,6 @@
 
 #include "TextureProjection.h"
 
-#include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
 #include "SpatialLayerCore.h"
 #include "TextureProjectionVolumeFieldGlsl.h"
@@ -24,10 +23,6 @@
 
 #include <algorithm>
 #include <cmath>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 TextureProjection::TextureProjection(QWidget* parent)
     : SpatialEffect3D(parent),

@@ -2,7 +2,6 @@
 
 #include "OmniShapeTexture.h"
 
-#include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
 #include "OmniShapeTextureVolumeFieldGlsl.h"
 #include "SpatialLayerCore.h"
@@ -23,7 +22,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <functional>
 
 namespace
 {
