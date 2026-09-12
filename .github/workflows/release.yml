@@ -287,8 +287,8 @@ jobs:
           | --- | --- |
           | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` |
           | **Linux** official AppImage/deb (Qt 6.8.x) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` |
-          | **CachyOS / Arch / Fedora** system OpenRGB (Qt 6.10) | \`OpenRGB3DSpatialPlugin_Linux_amd64_Qt6.10.3_plugin.tar.gz\`, or build with \`scripts/install-linux-user.sh\` |
-          | **Linux Flatpak** OpenRGB (Information shows KDE Flatpak runtime) | build \`packaging/flatpak/\` with \`scripts/build-flatpak-plugin.sh\` — do not Install Plugin a host \`.so\` |
+          | **CachyOS / Arch / Fedora** system OpenRGB (Qt 6.10) | \`OpenRGB3DSpatialPlugin_Linux_amd64_Qt6.10.3_plugin.tar.gz\` or the matching \`.deb\` |
+          | **Linux Flatpak** OpenRGB (Information shows KDE Flatpak runtime) | build \`flatpak/\` with \`scripts/build-flatpak-plugin.sh\` — do not Install Plugin a host \`.so\` |
           | **Linux** ARM64 | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` |
           | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` |
           | **macOS** Intel | \`OpenRGB3DSpatialPlugin_macOS_intel.zip\` |

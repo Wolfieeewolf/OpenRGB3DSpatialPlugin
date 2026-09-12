@@ -23,8 +23,8 @@ CI follows the **OpenRGBEffectsPlugin Qt6 pipeline matrix**: Windows 32/64, Linu
 | Your OpenRGB | What to install |
 | --- | --- |
 | **Windows** pipeline / 1.0 (Qt 6.8.3) | `Windows 64` `.dll` or MSI. Copy into OpenRGB `plugins`. |
-| **CachyOS / Arch** native OpenRGB (system Qt 6.10) | `scripts/install-linux-user.sh` or `cd packaging/arch && makepkg -si` so the plugin is built against *that* Qt. |
-| **Linux Flatpak** pipeline (`OS Version: KDE Flatpak runtime`) | `Linux amd64 Flatpak` artifact, or `scripts/build-flatpak-plugin.sh`. Do **not** Install Plugin a host `.so`. |
+| **CachyOS / Arch** native OpenRGB (system Qt 6.10) | GitHub `…_Linux_amd64_Qt6.10.3_plugin.tar.gz` or the matching `.deb`. Copy the `.so` into `~/.config/OpenRGB/plugins/`. |
+| **Linux Flatpak** pipeline (`OS Version: KDE Flatpak runtime`) | `Linux amd64 Flatpak` artifact, or `scripts/build-flatpak-plugin.sh` from `flatpak/`. Do **not** Install Plugin a host `.so`. |
 | **Linux** pipeline AppImage / Trixie `.deb` | matching `Linux amd64` `.so` or Trixie `.deb`. |
 | **Fedora 44** pipeline RPM | `openrgb-plugin-3d-spatial` RPM. |
 

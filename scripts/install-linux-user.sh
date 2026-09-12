@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the plugin with the system Qt 6 toolchain and copy it into the
-# per-user OpenRGB plugins folder (CachyOS / Arch / Fedora native OpenRGB).
+# Optional local rebuild against system Qt 6, then copy into
+# ~/.config/OpenRGB/plugins. Prefer a matching GitHub release .so when one exists.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
