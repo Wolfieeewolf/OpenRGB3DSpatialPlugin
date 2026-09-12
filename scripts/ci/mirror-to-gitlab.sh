@@ -19,12 +19,12 @@ git remote add gitlab-mirror "$REMOTE_URL"
 
 if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
   TAG_NAME="${GITHUB_REF#refs/tags/}"
-  echo "Mirroring tag ${TAG_NAME} to GitLab"
-  git push gitlab-mirror "refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}"
+  echo "Mirroring tag ${TAG_NAME} to GitLab (force so recut tags replace the old SHA)"
+  git push gitlab-mirror "refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}" --force
 else
   echo "Mirroring HEAD to GitLab ${TARGET_BRANCH}"
   git push gitlab-mirror "HEAD:${TARGET_BRANCH}" --force
-  git push gitlab-mirror --tags || true
+  git push gitlab-mirror --tags --force || true
 fi
 
 echo "GitLab mirror updated: https://gitlab.com/${GITLAB_REPO}"
