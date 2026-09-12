@@ -14,8 +14,19 @@ If you expect plug-and-play with zero reading, this will probably frustrate you�
 
 ## Requirements (practical)
 
-- Recent **OpenRGB** with plugins enabled (see this repo’s `OpenRGB/` submodule / CI for the tree we build against).
-- **Qt 6.8** and a GPU/driver that can run an **OpenGL 4.1 Core** context for the room viewport. Older Qt / no Core GL is not a supported dual path.
+- **OpenRGB pipeline / 1.0** (Plugin API **5**). The `OpenRGB/` submodule tracks [CalcProgrammer1/OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) `master` — the same tree pipeline builds use.
+- **Qt 6** matching that OpenRGB build (official pipeline Windows is **6.8.3**; CachyOS/Arch/KDE Flatpak is **6.10.x**). Check **Information → Software Info**. Room viewport needs **OpenGL 4.1 Core**.
+- Qt5 OpenRGB hosts are **not** supported (unlike Effects, which still ships Qt5 artifacts).
+
+CI follows the **OpenRGBEffectsPlugin Qt6 pipeline matrix**: Windows 32/64, Linux i386/amd64/armhf/arm64 `.so`, Debian Bookworm+Trixie `.deb` for those archs, Fedora 44 `.rpm`, Flatpak amd64/arm64 against OpenRGB `master`, macOS ARM64+Intel. GitHub Actions covers the public subset (Windows 64, Linux amd64/arm64, macOS). GitLab org runners cover the rest.
+
+| Your OpenRGB | What to install |
+| --- | --- |
+| **Windows** pipeline / 1.0 (Qt 6.8.3) | `Windows 64` `.dll` or MSI. Copy into OpenRGB `plugins`. |
+| **CachyOS / Arch** native OpenRGB (system Qt 6.10) | `scripts/install-linux-user.sh` or `cd packaging/arch && makepkg -si` so the plugin is built against *that* Qt. |
+| **Linux Flatpak** pipeline (`OS Version: KDE Flatpak runtime`) | `Linux amd64 Flatpak` artifact, or `scripts/build-flatpak-plugin.sh`. Do **not** Install Plugin a host `.so`. |
+| **Linux** pipeline AppImage / Trixie `.deb` | matching `Linux amd64` `.so` or Trixie `.deb`. |
+| **Fedora 44** pipeline RPM | `openrgb-plugin-3d-spatial` RPM. |
 
 Build and contribution detail lives in [CONTRIBUTING.md](CONTRIBUTING.md).
 

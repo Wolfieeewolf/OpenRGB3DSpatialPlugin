@@ -13,6 +13,10 @@ VERSION="$("$ROOT/scripts/ci/plugin-version.sh")"
 PKG_BASE="openrgb-3d-spatial-plugin"
 PKG_NAME="$PKG_BASE"
 VARIANT="$DEB_ARCH"
+QT_TAG=""
+if [ -n "${QT_AQT_VERSION:-}" ] && [ "${QT_AQT_VERSION}" != "6.8.3" ]; then
+  QT_TAG="_Qt${QT_AQT_VERSION}"
+fi
 
 mkdir -p dist
 
@@ -33,7 +37,7 @@ Section: misc
 Priority: optional
 EOF
 
-DEB_FILE="dist/${PKG_NAME}_${VERSION}_${DEB_ARCH}.deb"
+DEB_FILE="dist/${PKG_NAME}_${VERSION}_${DEB_ARCH}${QT_TAG}.deb"
 dpkg-deb --build "$STAGE" "$DEB_FILE"
 
 # Portable tarball (manual install to PREFIX/lib/openrgb/plugins/)
@@ -48,13 +52,18 @@ Extract and copy libOpenRGB3DSpatialPlugin.so to your OpenRGB plugins directory,
 typically /usr/lib/openrgb/plugins/ (system packages) or the plugins folder next
 to your OpenRGB AppImage/binary.
 
-Requires a Qt6 build of OpenRGB.
+Requires OpenRGB 1.0 (Plugin API 5) built against the same Qt major.minor as this
+plugin. Check OpenRGB → Information → Software Info (Qt Version / Plugin API).
+
+Do not install a host .so into Flatpak OpenRGB (KDE runtime). Use the Flatpak
+extension under packaging/flatpak/ instead.
+
 Restart OpenRGB after installing the plugin.
 EOF
 
 # OpenRGB CI uses *_deb* for .deb jobs and a plain Linux_* name for the .so artifact.
 # Name the portable archive with _plugin so it is not mistaken for the .deb.
-TAR_FILE="dist/OpenRGB3DSpatialPlugin_Linux_${VARIANT}_plugin.tar.gz"
+TAR_FILE="dist/OpenRGB3DSpatialPlugin_Linux_${VARIANT}${QT_TAG}_plugin.tar.gz"
 tar -czf "$TAR_FILE" -C "$TAR_ROOT" .
 
 echo "Packaged: $DEB_FILE"

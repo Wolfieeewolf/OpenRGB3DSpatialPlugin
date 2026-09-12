@@ -631,9 +631,17 @@ unix:!macx {
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/
-    INSTALLS += target
+    metainfo.path = $$PREFIX/share/metainfo/
+    metainfo.files += flatpak/org.openrgb.OpenRGB.Plugin.Spatial.metainfo.xml
+    INSTALLS += target metainfo
     LIBS += -lGL
 }
 
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
 macx:LIBS += -framework OpenGL -framework CoreFoundation -framework IOKit
+
+message("VERSION_NUM: "$$VERSION_NUM)
+message("VERSION_STR: "$$VERSION_STR)
+message("VERSION_DEB: "$$VERSION_DEB)
+message("VERSION_RPM: "$$VERSION_RPM)
+message("QT_VERSION:  "$$QT_VERSION)

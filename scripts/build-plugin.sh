@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
-# OpenRGB Effects Plugin–style entry point for Linux CI (Qt6).
-# Usage: build-plugin.sh [qt6|Qt6]
+# Linux pipeline build (same entry as OpenRGBEffectsPlugin).
+# Usage: ./scripts/build-plugin.sh qt6
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-QT_MAJOR=6
-exec bash "$ROOT/scripts/ci/build-linux.sh" "$QT_MAJOR" release
+cd "$(dirname "$0")/.."
+
+if [ "${1:-qt6}" != "qt6" ] && [ "${1:-}" != "Qt6" ]; then
+  echo "Only Qt6 pipeline builds are supported (OpenRGB 1.0 / Plugin API 5)."
+  echo "Qt5 OpenRGB hosts are not a target for this plugin."
+  exit 1
+fi
+
+export QT_SELECT=qt6
+QMAKE="$(command -v qmake6 || command -v qmake-qt6 || command -v qmake)"
+"$QMAKE" OpenRGB3DSpatialPlugin.pro PREFIX=/usr CONFIG+=release CONFIG-=debug_and_release
+make -j"$(nproc)"

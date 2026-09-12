@@ -1,0 +1,26 @@
+Source: openrgb-plugin-3d-spatial
+Maintainer: Wolfieeewolf <noreply@openrgb.org>
+Section: misc
+Priority: optional
+Standards-Version: 3.9.2
+Build-Depends:
+ debhelper (>= 9),
+ pkg-config,
+ qt6-base-dev,
+ qt6-base-dev-tools,
+ qt6-tools-dev-tools,
+ qmake6,
+ libusb-1.0-0-dev,
+ libhidapi-dev,
+ libgl1-mesa-dev,
+Homepage: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin
+
+Package: openrgb-plugin-3d-spatial
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ openrgb,
+Description: 3D Spatial LED Control plugin for OpenRGB
+ Organize RGB devices in a 3D room and run spatial effects.
+ Built for OpenRGB 1.0 pipeline (Plugin API 5, Qt6).

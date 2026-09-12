@@ -1,0 +1,59 @@
+# Maintainer: Wolfieeewolf
+# CachyOS / Arch: builds against system Qt 6 so the plugin matches distro OpenRGB.
+#
+# From this repo (preferred on CachyOS):
+#   git submodule update --init --depth 1 OpenRGB
+#   cd packaging/arch && makepkg -si
+#
+# In-tree without packaging:
+#   sudo pacman -S --needed qt6-base qt6-tools mesa glu
+#   qmake6 OpenRGB3DSpatialPlugin.pro PREFIX=/usr CONFIG+=release
+#   make -j$(nproc)
+#   mkdir -p ~/.config/OpenRGB/plugins
+#   cp libOpenRGB3DSpatialPlugin.so ~/.config/OpenRGB/plugins/
+
+pkgname=openrgb-plugin-3d-spatial
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="3D spatial LED control plugin for OpenRGB 1.0 (Plugin API 5)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin"
+license=('GPL-2.0-only')
+depends=('openrgb' 'qt6-base')
+makedepends=('git' 'qt6-tools' 'mesa' 'glu')
+
+if [[ -f "${startdir:-}/../../OpenRGB3DSpatialPlugin.pro" ]]; then
+  _intree=1
+  source=()
+  sha256sums=()
+else
+  source=("$pkgname::git+$url.git")
+  sha256sums=('SKIP')
+fi
+
+_srcroot() {
+  if [[ -n ${_intree:-} ]]; then
+    cd "${startdir}/../.." && pwd
+  else
+    echo "$srcdir/$pkgname"
+  fi
+}
+
+prepare() {
+  if [[ -n ${_intree:-} ]]; then
+    return 0
+  fi
+  cd "$pkgname"
+  git submodule update --init --depth 1 OpenRGB
+}
+
+build() {
+  cd "$(_srcroot)"
+  qmake6 OpenRGB3DSpatialPlugin.pro PREFIX=/usr CONFIG+=release
+  make
+}
+
+package() {
+  cd "$(_srcroot)"
+  make INSTALL_ROOT="$pkgdir" install
+}

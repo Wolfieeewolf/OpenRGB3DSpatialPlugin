@@ -2,8 +2,9 @@
 # Install Linux build dependencies for the plugin CI image (Qt6).
 # Usage: install-linux-deps.sh [6]
 #
-# When QT_AQT_VERSION is set (default in CI: 6.8.3), Qt is installed via aqtinstall
-# to match OpenRGB 1.0. Otherwise falls back to distro qt6-base-dev for local dev.
+# When QT_AQT_VERSION is set (CI: 6.8.3 for official Windows/AppImage OpenRGB,
+# 6.10.3 for CachyOS/Arch/Flatpak-style hosts), Qt is installed via aqtinstall.
+# Otherwise falls back to distro qt6-base-dev for local dev.
 set -euo pipefail
 
 QT_MAJOR="${1:-6}"
@@ -37,7 +38,10 @@ if [ -n "$QT_AQT_VERSION" ]; then
 
   QT_BIN_DIR="${QT_INSTALL_DIR}/${QT_AQT_VERSION}/gcc_64/bin"
   if [ ! -x "${QT_BIN_DIR}/qmake" ]; then
-    echo "aqtinstall did not produce qmake at ${QT_BIN_DIR}/qmake"
+    QT_BIN_DIR="${QT_INSTALL_DIR}/${QT_AQT_VERSION}/linux_gcc_64/bin"
+  fi
+  if [ ! -x "${QT_BIN_DIR}/qmake" ]; then
+    echo "aqtinstall did not produce qmake under ${QT_INSTALL_DIR}/${QT_AQT_VERSION}"
     exit 1
   fi
   export PATH="${QT_BIN_DIR}:${PATH}"

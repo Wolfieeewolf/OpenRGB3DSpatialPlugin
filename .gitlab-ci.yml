@@ -1,6 +1,8 @@
-#-----------------------------------------------------------#
-# OpenRGB 3D Spatial Plugin — GitLab CI                       #
-#-----------------------------------------------------------#
+# GitLab CI — same Qt6 pipeline matrix as OpenRGBEffectsPlugin / OpenRGB master.
+# Target host: OpenRGB pipeline (Plugin API 5). Qt5 jobs are omitted on purpose.
+#
+# Org runner jobs need OpenRGBDevelopers linux/macos/shared-windows tags.
+# Personal GitLab (wolfieeewolf1) still has SaaS fallbacks at the bottom.
 
 .downstream_rules:
   rules:
@@ -8,11 +10,7 @@
       when: manual
       allow_failure: true
 
-# Builds burn shared-runner minutes. Default: do not auto-build on push/MR/tag.
-# Start a pipeline from the GitLab UI ("Run pipeline") or set RUN_CI=true (API/web variables)
-# when you actually want Linux/Windows jobs. GitHub is the source of truth; this
-# GitLab project is a mirror/backup (see .github/workflows/mirror-to-gitlab.yml).
-.upstream_build_rules:
+.upstream_rules:
   rules:
     - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && $RUN_CI == "true" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG || $CI_PIPELINE_SOURCE == "web")'
       when: on_success
@@ -23,24 +21,11 @@
       allow_failure: true
     - !reference [.downstream_rules, rules]
 
-# Back-compat alias used by older job references (if any).
-.upstream_rules:
-  rules:
-    - !reference [.upstream_build_rules, rules]
-
-# OpenRGB org private runners (OpenRGBDevelopers project only)
-.org_linux_runners:
-  tags: [linux, amd64]
-
-.org_windows_runners:
-  tags: [shared-windows, windows, windows-1809]
-
-# GitLab.com shared SaaS runners (personal fork)
-.saas_linux_runners:
-  tags: [saas-linux-small-amd64]
-
-.saas_windows_runners:
-  tags: [saas-windows-medium-amd64]
+.shared_windows_runners:
+  tags:
+    - shared-windows
+    - windows
+    - windows-1809
 
 stages:
   - build
@@ -53,95 +38,295 @@ variables:
 before_script:
   - echo "started by ${GITLAB_USER_NAME}"
 
-#-----------------------------------------------------------------------------
-# Linux — SaaS (Debian Trixie + aqt Qt 6.8.3) for personal fork — Qt6 only
-#-----------------------------------------------------------------------------
-.hidden_linux_saas:
-  stage: build
-  image: debian:trixie
-  tags: [saas-linux-small-amd64]
-  variables:
-    QT_AQT_VERSION: "6.8.3"
-    QT_AQT_ARCH: "linux_gcc_64"
-    QT_BIN_DIR: "/opt/qt/6.8.3/gcc_64/bin"
-  script:
-    - chmod +x scripts/ci/*.sh
-    - bash scripts/ci/install-linux-deps.sh ${QT_MAJOR}
-    - export PATH="${QT_BIN_DIR}:${PATH}"
-    - bash scripts/ci/build-linux.sh ${QT_MAJOR} release
-    - bash scripts/ci/package-linux.sh ${QT_MAJOR} amd64
-  artifacts:
-    name: "${CI_PROJECT_NAME}_${DIST_VARIANT}_${CI_COMMIT_SHORT_SHA}"
-    paths: [dist/, libOpenRGB3DSpatialPlugin.so]
-    expire_in: 30 days
-  rules:
-    - !reference [.upstream_rules, rules]
-
-"Linux amd64":
-  extends: .hidden_linux_saas
-  variables:
-    QT_MAJOR: "6"
-    DIST_VARIANT: Linux_amd64
-
-# OpenRGB org: bookworm image on private linux runners
 .ccache_init: &ccache_init
   before_script:
     - export APPIMAGE_EXTRACT_AND_RUN=1
     - echo "started by ${GITLAB_USER_NAME}"
 
-.hidden_linux_org:
-  <<: *ccache_init
+#-----------------------------------------------------------#
+# Linux portable .so — OpenRGB trixie CI images (pipeline)  #
+#-----------------------------------------------------------#
+.hidden_linux_script: &linux_script_steps
+  image: registry.gitlab.com/openrgbdevelopers/openrgb-linux-ci-deb-builder:trixie-${TGT_ARCH}
+  tags:
+    - linux
+    - ${TGT_ARCH}
   stage: build
-  image: registry.gitlab.com/openrgbdevelopers/openrgb-linux-ci-deb-builder:bookworm-amd64
-  tags: [linux, amd64]
   script:
     - export $(dpkg-architecture)
-    - chmod +x scripts/ci/*.sh scripts/build-plugin.sh
-    - ./scripts/build-plugin.sh ${TGT_QT}
-    - bash scripts/ci/package-linux.sh ${QT_MAJOR} amd64
+    - chmod +x scripts/build-plugin.sh
+    - ./scripts/build-plugin.sh qt6
   artifacts:
-    name: "${CI_PROJECT_NAME}_${DIST_VARIANT}_${CI_COMMIT_SHORT_SHA}"
-    paths: [dist/, libOpenRGB3DSpatialPlugin.so]
+    name: "${CI_PROJECT_NAME}_Linux_${TGT_NAME}_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - ./libOpenRGB3DSpatialPlugin.so
     expire_in: 30 days
   rules:
-    - if: '$CI_PROJECT_PATH == "OpenRGBDevelopers/OpenRGB3DSpatialPlugin" && $RUN_CI == "true" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG || $CI_PIPELINE_SOURCE == "web")'
-      when: on_success
-    - if: '$CI_PROJECT_PATH == "OpenRGBDevelopers/OpenRGB3DSpatialPlugin" && ($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")'
-      when: on_success
-    - if: '$CI_PROJECT_PATH == "OpenRGBDevelopers/OpenRGB3DSpatialPlugin" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG)'
-      when: manual
-      allow_failure: true
+    - !reference [.upstream_rules, rules]
 
-"Linux amd64 (org runners)":
-  extends: .hidden_linux_org
+"Linux i386":
   variables:
-    TGT_QT: qt6
-    QT_MAJOR: "6"
-    DIST_VARIANT: Linux_amd64_org
+    TGT_ARCH: "i386"
+    TGT_NAME: "${TGT_ARCH}"
+  <<: *linux_script_steps
 
-#-----------------------------------------------------------------------------
-# Windows 64 — GitLab SaaS — Qt6 only
-#-----------------------------------------------------------------------------
-.hidden_windows_saas:
+"Linux amd64":
+  variables:
+    TGT_ARCH: "amd64"
+    TGT_NAME: "${TGT_ARCH}"
+  <<: *linux_script_steps
+
+"Linux armhf":
+  variables:
+    TGT_ARCH: "armhf"
+    TGT_NAME: "${TGT_ARCH}"
+  <<: *linux_script_steps
+
+"Linux arm64":
+  variables:
+    TGT_ARCH: "arm64"
+    TGT_NAME: "${TGT_ARCH}"
+  <<: *linux_script_steps
+
+#-----------------------------------------------------------#
+# Debian Bookworm / Trixie .deb (same as OpenRGB pipeline)  #
+#-----------------------------------------------------------#
+.hidden_deb_script: &debian_script_steps
+  <<: *ccache_init
+  image: registry.gitlab.com/openrgbdevelopers/openrgb-linux-ci-deb-builder:$TGT_DEB-$TGT_ARCH
+  tags:
+    - linux
+    - $TGT_ARCH
   stage: build
-  tags: [saas-windows-medium-amd64]
-  cache:
-    key: "${CI_JOB_NAME}-deps"
-    paths:
-      - C:/Qt/
-      - C:/Program Files/Microsoft Visual Studio/
-      - C:/Program Files (x86)/Microsoft Visual Studio/
   script:
-    - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/gitlab-windows-build.ps1
+    - chmod +x scripts/build-package-files.sh
+    - ./scripts/build-package-files.sh debian/changelog
+    - dpkg-architecture -l
+    - dpkg-buildpackage -us -B
+    - rm -v ../openrgb-plugin-3d-spatial-dbgsym*.deb || true
+    - mv -v ../openrgb-plugin-3d-spatial*.deb ./
   artifacts:
-    name: "${CI_PROJECT_NAME}_${DIST_VARIANT}_${CI_COMMIT_SHORT_SHA}"
-    paths: [dist/, release/OpenRGB3DSpatialPlugin.dll]
+    name: "${CI_PROJECT_NAME}_Linux_${TGT_ARCH}_deb_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - openrgb-plugin-3d-spatial*.deb
+    exclude:
+      - openrgb-plugin-3d-spatial-dbgsym*.deb
+    expire_in: 30 days
+  rules:
+    - !reference [.upstream_rules, rules]
+
+"Linux i386 .deb (Debian Bookworm)":
+  variables:
+    TGT_ARCH: "i386"
+    TGT_DEB: "bookworm"
+  <<: *debian_script_steps
+
+"Linux i386 .deb (Debian Trixie)":
+  variables:
+    TGT_ARCH: "i386"
+    TGT_DEB: "trixie"
+  <<: *debian_script_steps
+
+"Linux amd64 .deb (Debian Bookworm)":
+  variables:
+    TGT_ARCH: "amd64"
+    TGT_DEB: "bookworm"
+  <<: *debian_script_steps
+
+"Linux amd64 .deb (Debian Trixie)":
+  variables:
+    TGT_ARCH: "amd64"
+    TGT_DEB: "trixie"
+  <<: *debian_script_steps
+
+"Linux armhf .deb (Debian Bookworm)":
+  variables:
+    TGT_ARCH: "armhf"
+    TGT_DEB: "bookworm"
+  <<: *debian_script_steps
+
+"Linux armhf .deb (Debian Trixie)":
+  variables:
+    TGT_ARCH: "armhf"
+    TGT_DEB: "trixie"
+  <<: *debian_script_steps
+
+"Linux arm64 .deb (Debian Bookworm)":
+  variables:
+    TGT_ARCH: "arm64"
+    TGT_DEB: "bookworm"
+  <<: *debian_script_steps
+
+"Linux arm64 .deb (Debian Trixie)":
+  variables:
+    TGT_ARCH: "arm64"
+    TGT_DEB: "trixie"
+  <<: *debian_script_steps
+
+#-----------------------------------------------------------#
+# Fedora 44 RPM (OpenRGB pipeline)                          #
+#-----------------------------------------------------------#
+"Linux amd64 .rpm (Fedora 44)":
+  image: fedora:44
+  stage: build
+  script:
+    - dnf install rpmdevtools dnf-plugins-core gcc-c++ qt6-qtbase-devel qt6-linguist mesa-libGL-devel git wget -y
+    - rpmdev-setuptree
+    - chmod +x scripts/build-package-files.sh
+    - ./scripts/build-package-files.sh fedora/OpenRGB3DSpatialPlugin.spec
+    - cp fedora/OpenRGB3DSpatialPlugin.spec /root/rpmbuild/SPECS
+    - cp -rp . /root/rpmbuild/SOURCES/OpenRGB3DSpatialPlugin
+    - cd /root/rpmbuild
+    - dnf builddep SPECS/OpenRGB3DSpatialPlugin.spec -y
+    - rpmbuild -ba SPECS/OpenRGB3DSpatialPlugin.spec
+    - cd RPMS/x86_64/
+    - mv openrgb*.rpm ${CI_PROJECT_DIR}/
+    - cd ${CI_PROJECT_DIR}
+  artifacts:
+    name: "${CI_PROJECT_NAME}_Linux_amd64_rpm_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - openrgb-plugin-3d-spatial*.rpm
+    expire_in: 30 days
+  rules:
+    - !reference [.upstream_rules, rules]
+
+#-----------------------------------------------------------#
+# Flatpak extension against OpenRGB pipeline master         #
+#-----------------------------------------------------------#
+.hidden_flatpak_script: &flatpak_script_steps
+  image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+  stage: build
+  tags:
+    - linux
+    - ${TGT_ARCH}
+  before_script:
+    - curl --location --output artifacts.zip ${TGT_UPSTREAM_URL}
+    - unzip artifacts.zip
+    - flatpak install --user --assumeyes org.openrgb.OpenRGB.flatpak
+  script:
+    - flatpak-builder --user --disable-rofiles-fuse --repo=build/repo build/flatpak-build flatpak/org.openrgb.OpenRGB.Plugin.Spatial.yaml
+    - flatpak build-bundle --runtime build/repo org.openrgb.OpenRGB.Plugin.Spatial.flatpak org.openrgb.OpenRGB.Plugin.Spatial 5
+  artifacts:
+    name: "${CI_PROJECT_NAME}_Linux_${TGT_ARCH}_Flatpak_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - org.openrgb.OpenRGB.Plugin.Spatial.flatpak
+    expire_in: 30 days
+  rules:
+    - !reference [.upstream_rules, rules]
+
+"Linux amd64 Flatpak":
+  variables:
+    TGT_UPSTREAM_URL: "https://gitlab.com/CalcProgrammer1/OpenRGB/-/jobs/artifacts/master/download?job=Linux+amd64+Flatpak"
+    TGT_ARCH: "amd64"
+  <<: *flatpak_script_steps
+
+"Linux arm64 Flatpak":
+  variables:
+    TGT_UPSTREAM_URL: "https://gitlab.com/CalcProgrammer1/OpenRGB/-/jobs/artifacts/master/download?job=Linux+arm64+Flatpak"
+    TGT_ARCH: "arm64"
+  <<: *flatpak_script_steps
+
+#-----------------------------------------------------------#
+# Windows pipeline (OpenRGB-Qt-Packages 6.8.3)              #
+#-----------------------------------------------------------#
+"Windows 32":
+  extends:
+    - .shared_windows_runners
+  stage: build
+  script:
+    - scripts\build-windows.bat 6.8.3 2022 32
+    - mv "OpenRGB3DSpatialPlugin Windows 32-bit\OpenRGB3DSpatialPlugin.dll" .
+  artifacts:
+    name: "${CI_PROJECT_NAME}_Windows_32_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - OpenRGB3DSpatialPlugin.dll
     expire_in: 30 days
   rules:
     - !reference [.upstream_rules, rules]
 
 "Windows 64":
-  extends: .hidden_windows_saas
+  extends:
+    - .shared_windows_runners
+  stage: build
+  script:
+    - scripts\build-windows.bat 6.8.3 2022 64
+    - mv "OpenRGB3DSpatialPlugin Windows 64-bit\OpenRGB3DSpatialPlugin.dll" .
+  artifacts:
+    name: "${CI_PROJECT_NAME}_Windows_64_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - OpenRGB3DSpatialPlugin.dll
+    expire_in: 30 days
+  rules:
+    - !reference [.upstream_rules, rules]
+
+#-----------------------------------------------------------#
+# macOS pipeline                                            #
+#-----------------------------------------------------------#
+"MacOS ARM64":
+  tags:
+    - macos
+  stage: build
+  script:
+    - chmod +x scripts/build-macos.sh
+    - ./scripts/build-macos.sh qt6 arm
+  artifacts:
+    name: "${CI_PROJECT_NAME}_MacOS_ARM64_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - libOpenRGB3DSpatialPlugin.dylib
+    expire_in: 30 days
+  rules:
+    - !reference [.upstream_rules, rules]
+
+"MacOS Intel":
+  tags:
+    - macos
+  stage: build
+  script:
+    - chmod +x scripts/build-macos.sh
+    - ./scripts/build-macos.sh qt6 intel
+  artifacts:
+    name: "${CI_PROJECT_NAME}_MacOS_Intel_${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - libOpenRGB3DSpatialPlugin.dylib
+    expire_in: 30 days
+  rules:
+    - !reference [.upstream_rules, rules]
+
+#-----------------------------------------------------------#
+# SaaS fallbacks for the personal GitLab mirror             #
+#-----------------------------------------------------------#
+"Linux amd64 (SaaS)":
+  stage: build
+  image: debian:trixie
+  tags: [saas-linux-small-amd64]
+  variables:
+    QT_MAJOR: "6"
+    QT_AQT_VERSION: "6.8.3"
+    QT_AQT_ARCH: "linux_gcc_64"
+    QT_BIN_DIR: "/opt/qt/6.8.3/gcc_64/bin"
+    DIST_VARIANT: Linux_amd64
+  script:
+    - chmod +x scripts/ci/*.sh
+    - |
+      set -euo pipefail
+      bash scripts/ci/install-linux-deps.sh "${QT_MAJOR}"
+      if [ ! -x "${QT_BIN_DIR}/qmake" ]; then
+        QT_BIN_DIR="/opt/qt/${QT_AQT_VERSION}/linux_gcc_64/bin"
+      fi
+      export PATH="${QT_BIN_DIR}:${PATH}"
+      qmake -v
+      bash scripts/ci/build-linux.sh "${QT_MAJOR}" release
+      bash scripts/ci/package-linux.sh "${QT_MAJOR}" amd64
+  artifacts:
+    name: "${CI_PROJECT_NAME}_Linux_amd64_saas_${CI_COMMIT_SHORT_SHA}"
+    paths: [dist/, libOpenRGB3DSpatialPlugin.so]
+    expire_in: 30 days
+  rules:
+    - !reference [.upstream_rules, rules]
+
+"Windows 64 (SaaS)":
+  stage: build
+  tags: [saas-windows-medium-amd64]
   variables:
     QT_MAJOR: "6"
     QT_AQT_VERSION: "6.8.3"
@@ -149,34 +334,11 @@ before_script:
     QT_BIN_DIR: "C:\\Qt\\6.8.3\\msvc2022_64\\bin"
     QT_MSVC_BOOTSTRAP_PACKAGE: "visualstudio2022buildtools"
     DIST_VARIANT: "Windows_64"
-
-#-----------------------------------------------------------------------------
-# Tag release
-#-----------------------------------------------------------------------------
-release:
-  stage: deploy
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  needs:
-    - job: "Windows 64"
-      artifacts: true
-      optional: true
-    - job: "Linux amd64"
-      artifacts: true
-      optional: true
   script:
-    - echo "Publishing GitLab release $CI_COMMIT_TAG"
-    - find dist -type f 2>/dev/null | sort || true
-    - |
-      release-cli create \
-        --name "${CI_COMMIT_TAG}" \
-        --tag-name "${CI_COMMIT_TAG}" \
-        --description "OpenRGB 3D Spatial Plugin ${CI_COMMIT_TAG} (Qt6). Windows: unzip the .dll into OpenRGB plugins. Linux: install the .deb or extract the .tar.gz to /usr/lib/openrgb/plugins/. Requires Qt6 OpenRGB." \
-        --assets-path dist/
+    - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/gitlab-windows-build.ps1
+  artifacts:
+    name: "${CI_PROJECT_NAME}_Windows_64_saas_${CI_COMMIT_SHORT_SHA}"
+    paths: [dist/, release/OpenRGB3DSpatialPlugin.dll]
+    expire_in: 30 days
   rules:
-    - if: '$CI_COMMIT_TAG && $RUN_CI == "true"'
-      when: on_success
-    - if: '$CI_COMMIT_TAG && ($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")'
-      when: on_success
-    - if: $CI_COMMIT_TAG
-      when: manual
-      allow_failure: true
+    - !reference [.upstream_rules, rules]

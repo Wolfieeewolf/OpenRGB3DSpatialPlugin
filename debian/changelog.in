@@ -1,0 +1,5 @@
+openrgb-plugin-3d-spatial (__VERSION__) UNRELEASED; urgency=medium
+
+  * Builds from git master against OpenRGB pipeline (Plugin API 5).
+
+ -- Wolfieeewolf <noreply@openrgb.org>  Sat, 12 Sep 2026 00:00:00 +0000

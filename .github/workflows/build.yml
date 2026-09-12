@@ -1,0 +1,133 @@
+name: Build
+
+# Public-runner subset of the OpenRGB 1.0 / Effects Qt6 pipeline matrix.
+# GitLab org CI additionally builds Win32, Linux i386/armhf, distro debs, Fedora,
+# and Flatpak against OpenRGB master.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Windows 64 Qt 6.8.3
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+          modules: ''
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build
+        shell: cmd
+        run: |
+          qmake -v
+          qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
+          nmake
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: Windows_64_Qt6.8.3
+          path: release/OpenRGB3DSpatialPlugin.dll
+          if-no-files-found: error
+
+  build-linux:
+    name: Linux amd64 Qt ${{ matrix.qt }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        qt: ['6.8.3', '6.10.3']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          chmod +x scripts/ci/*.sh
+          sudo bash scripts/ci/install-linux-deps.sh 6
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ matrix.qt }}
+          arch: linux_gcc_64
+          cache: true
+          modules: ''
+
+      - name: Build
+        run: bash scripts/ci/build-linux.sh 6 release
+
+      - name: Package
+        env:
+          QT_AQT_VERSION: ${{ matrix.qt }}
+        run: bash scripts/ci/package-linux.sh 6 amd64
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: Linux_amd64_Qt${{ matrix.qt }}
+          path: |
+            dist/*
+            libOpenRGB3DSpatialPlugin.so
+          if-no-files-found: error
+
+  build-fedora:
+    name: Fedora 44 RPM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build RPM in Fedora 44
+        run: |
+          chmod +x scripts/build-package-files.sh
+          docker run --rm -v "$PWD":/src -w /src fedora:44 bash -lc '
+            set -euo pipefail
+            dnf install -y rpmdevtools dnf-plugins-core gcc-c++ qt6-qtbase-devel qt6-linguist mesa-libGL-devel git make
+            ./scripts/build-package-files.sh fedora/OpenRGB3DSpatialPlugin.spec
+            rpmdev-setuptree
+            cp fedora/OpenRGB3DSpatialPlugin.spec /root/rpmbuild/SPECS
+            cp -rp . /root/rpmbuild/SOURCES/OpenRGB3DSpatialPlugin
+            cd /root/rpmbuild
+            dnf builddep -y SPECS/OpenRGB3DSpatialPlugin.spec
+            rpmbuild -ba SPECS/OpenRGB3DSpatialPlugin.spec
+            mkdir -p /src/dist
+            cp RPMS/x86_64/openrgb-plugin-3d-spatial*.rpm /src/dist/
+          '
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: Linux_amd64_Fedora44
+          path: dist/openrgb-plugin-3d-spatial*.rpm
+          if-no-files-found: error
