@@ -76,7 +76,7 @@ jobs:
           if-no-files-found: error
 
   build-linux:
-    name: Linux ${{ matrix.arch }} Qt ${{ matrix.qt }}
+    name: Linux ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -85,17 +85,10 @@ jobs:
           - arch: amd64
             runner: ubuntu-24.04
             qt_arch: linux_gcc_64
-            qt: '6.8.3'
             artifact: Linux_amd64
-          - arch: amd64
-            runner: ubuntu-24.04
-            qt_arch: linux_gcc_64
-            qt: '6.10.3'
-            artifact: Linux_amd64_Qt6.10.3
           - arch: arm64
             runner: ubuntu-24.04-arm
             qt_arch: linux_gcc_arm64
-            qt: '6.8.3'
             artifact: Linux_arm64
     steps:
       - name: Checkout
@@ -112,7 +105,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ matrix.qt }}
+          version: '6.8.3'
           arch: ${{ matrix.qt_arch }}
           cache: true
           modules: ''
@@ -122,7 +115,7 @@ jobs:
 
       - name: Package
         env:
-          QT_AQT_VERSION: ${{ matrix.qt }}
+          QT_AQT_VERSION: '6.8.3'
         run: bash scripts/ci/package-linux.sh 6 ${{ matrix.arch }}
 
       - name: Upload artifacts
@@ -286,8 +279,7 @@ jobs:
           | You have… | Download |
           | --- | --- |
           | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` |
-          | **Linux** official AppImage/deb (Qt 6.8.x) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` |
-          | **CachyOS / Arch / Fedora** system OpenRGB (Qt 6.10) | \`OpenRGB3DSpatialPlugin_Linux_amd64_Qt6.10.3_plugin.tar.gz\` or the matching \`.deb\` |
+          | **Linux** (AppImage, Debian, CachyOS/Arch, Fedora) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` |
           | **Linux Flatpak** OpenRGB (Information shows KDE Flatpak runtime) | build \`flatpak/\` with \`scripts/build-flatpak-plugin.sh\` — do not Install Plugin a host \`.so\` |
           | **Linux** ARM64 | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` |
           | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` |
@@ -302,6 +294,7 @@ jobs:
             gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
               case "$name" in
                 *.msi|\
+                *Qt6.10.3*|\
                 OpenRGB_3D_Spatial_Plugin_Windows_64.zip|\
                 OpenRGB3DSpatialPlugin_Linux_amd64.tar.gz|\
                 OpenRGB3DSpatialPlugin_Linux_arm64.tar.gz)
