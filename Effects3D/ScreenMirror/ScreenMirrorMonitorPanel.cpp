@@ -209,8 +209,8 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     ui->refPointCombo->setEnabled(has_capture_source);
     ui->refPointCombo->setToolTip(
         QStringLiteral("Falloff/wave origin for this display. Follow layer Spatial Anchor uses the same "
-                       "choices as other effects. Pick a layout point to measure from a saved marker "
-                       "(and remap screen UVs to that point)."));
+                       "choices as other effects. Pick a layout point to measure from a saved marker. "
+                       "Screen UVs always come from the display plane."));
     QObject::connect(ui->refPointCombo, qOverload<int>(&QComboBox::currentIndexChanged), effect,
                      &ScreenMirror::OnParameterChanged);
 

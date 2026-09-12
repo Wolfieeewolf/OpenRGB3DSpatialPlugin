@@ -8,6 +8,7 @@
 
 constexpr float kWaveTimeToEdgeEnableSec = 0.05f;
 constexpr float kWaveIntensityEnablePct = 5.0f;
+constexpr float kWaveHistoryDistanceMm = 5000.0f;
 constexpr int kRadialMapUiNeutral = 50;
 
 inline float RadialMapUiToInternal(int ui_0_100)

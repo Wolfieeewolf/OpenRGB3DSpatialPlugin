@@ -24,10 +24,8 @@ nlohmann::json ScreenMirror::SaveSettings() const
         const MonitorSettings& mon_settings = it->second;
         nlohmann::json mon;
         mon["enabled"] = mon_settings.enabled;
-        
         mon["scale"] = mon_settings.scale;
         mon["scale_inverted"] = mon_settings.scale_inverted;
-        
         mon["smoothing_time_ms"] = mon_settings.smoothing_time_ms;
         mon["brightness_multiplier"] = mon_settings.brightness_multiplier;
         mon["brightness_threshold"] = mon_settings.brightness_threshold;
@@ -38,7 +36,6 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["led_output_gain_b"] = mon_settings.led_output_gain_b;
         mon["black_bar_letterbox_percent"] = mon_settings.black_bar_letterbox_percent;
         mon["black_bar_pillarbox_percent"] = mon_settings.black_bar_pillarbox_percent;
-        
         mon["edge_softness"] = mon_settings.edge_softness;
         mon["propagation_speed_mm_per_ms"] = mon_settings.propagation_speed_mm_per_ms;
         mon["wave_decay_ms"] = mon_settings.wave_decay_ms;
@@ -47,7 +44,6 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["front_back_balance"] = mon_settings.front_back_balance;
         mon["left_right_balance"] = mon_settings.left_right_balance;
         mon["top_bottom_balance"] = mon_settings.top_bottom_balance;
-        
         mon["reference_point_id"] = mon_settings.reference_point_id;
         mon["show_calibration_pattern"] = mon_settings.show_calibration_pattern;
         mon["show_screen_preview"] = mon_settings.show_screen_preview;
@@ -775,7 +771,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
 
         settings.ref_point_combo->addItem("Follow layer Spatial Anchor", QVariant(-1));
         settings.ref_point_combo->setItemData(0,
-            "Falloff and mapping origin follow this layer's Spatial Anchor (mapped-lights center by default, like other effects).",
+            "Falloff origin follows this layer's Spatial Anchor (mapped-lights center by default, like other effects). Screen UVs stay on the display plane.",
             Qt::ToolTipRole);
 
         for(size_t i = 0; i < reference_points->size(); i++)
@@ -789,7 +785,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
             settings.ref_point_combo->addItem(display, QVariant(ref_point->GetId()));
             const int row = settings.ref_point_combo->count() - 1;
             settings.ref_point_combo->setItemData(row,
-                QStringLiteral("Measure reach/falloff from layout point \"%1\" instead of the layer Spatial Anchor. Also remaps screen UVs to that point.").arg(name),
+                QStringLiteral("Measure reach/falloff from layout point \"%1\" instead of the layer Spatial Anchor. Screen UVs stay on the display plane.").arg(name),
                 Qt::ToolTipRole);
         }
 

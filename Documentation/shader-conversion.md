@@ -79,6 +79,6 @@ Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a 
 
 ## GPU vs CPU
 
-GPU for room fields — including **audio visual fields** (Audio Level, Spectrum Bars, Strip Viz, Pulse) and **Screen Mirror** via `SpatialVolumeFieldAssist` + optional `u_media`. Screen Mirror pairs `TrySampleGpuRoomVolume01` (room UV, no atlas-face clamp) with plane `map_uv` and Spatial Anchor `falloff_uv`. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm` (no 3 m fallback). CPU keeps **analysis** (FFT / bands / onset in `AudioInputManager`), screen **capture** (not the room map), Minecraft, and cheap color finish after atlas sample (Screen Mirror: capture + LED temporal smoothing + 2D color grade before `u_media` upload).
+GPU for room fields — including **audio visual fields** (Audio Level, Spectrum Bars, Strip Viz, Pulse) via `SpatialVolumeFieldAssist`. **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen` (3D direction from the display plane, both hemispheres), nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.
 
 Pack/mapping self-check: `g++ -std=c++17 -O2 -o /tmp/sm_gpu_check tools/screen_mirror_gpu_check.cpp && /tmp/sm_gpu_check`
