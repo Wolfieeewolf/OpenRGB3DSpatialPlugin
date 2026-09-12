@@ -2,8 +2,8 @@
 # Install Linux build dependencies for the plugin CI image (Qt6).
 # Usage: install-linux-deps.sh [6]
 #
-# When QT_AQT_VERSION is set (CI: 6.8.3 for official Windows/AppImage OpenRGB,
-# 6.10.3 for CachyOS/Arch/Flatpak-style hosts), Qt is installed via aqtinstall.
+# When QT_AQT_VERSION is set (CI: 6.8.3, same as official pipeline OpenRGB),
+# Qt is installed via aqtinstall.
 # Otherwise falls back to distro qt6-base-dev for local dev.
 set -euo pipefail
 
