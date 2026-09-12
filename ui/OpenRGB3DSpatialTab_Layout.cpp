@@ -20,6 +20,23 @@ namespace
 constexpr int kLayoutVersion = 7;
 constexpr int kMinSupportedLayoutVersion = 7;
 
+void DestroyPluginOwnedController(RGBControllerInterface* controller)
+{
+    if(!controller)
+    {
+        return;
+    }
+    /* Plugin API identity objects are RGBControllerInterface with no virtual dtor. */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdelete-non-virtual-dtor"
+#endif
+    delete controller;
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+}
+
 std::string ValidateLayoutDocument(const nlohmann::json& j)
 {
     if(!j.is_object())
@@ -189,7 +206,7 @@ RGBControllerInterface* FindPhysicalControllerForLayoutEntry(OpenRGBPluginAPIInt
 
         RGBControllerInterface* identity_controller = api->SetDeviceDescriptionJSON(identity_json);
         const bool match = identity_controller && api->CompareControllers(identity_controller, candidate);
-        delete identity_controller;
+        DestroyPluginOwnedController(identity_controller);
 
         if(match)
         {

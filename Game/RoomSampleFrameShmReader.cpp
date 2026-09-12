@@ -27,6 +27,7 @@
 
 namespace
 {
+#ifdef _WIN32
 static unsigned long long NowMs()
 {
     return (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -34,7 +35,6 @@ static unsigned long long NowMs()
         .count();
 }
 
-#ifdef _WIN32
 static bool ReadMappedOrFileBytes(const std::wstring& path, std::vector<unsigned char>& out_bytes)
 {
     out_bytes.clear();

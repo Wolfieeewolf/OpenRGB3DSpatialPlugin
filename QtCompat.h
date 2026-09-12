@@ -13,7 +13,7 @@ inline constexpr int kScreenPreviewTimerIntervalMs = 50;
 
 inline QImage FlipImageVertical(const QImage& image)
 {
-    return image.mirrored(false, true);
+    return image.flipped(Qt::Vertical);
 }
 }
 

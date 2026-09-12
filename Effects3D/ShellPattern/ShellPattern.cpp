@@ -318,8 +318,6 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     EffectStratumBlend::InitStratumBreaks(strat_map_s);
     float swt[3];
     EffectStratumBlend::WeightsForYNorm(coord_y01, strat_map_s, swt);
-    const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), swt, GetStratumTuning());
     const float stratum_mot01 =
         ComputeStratumMotion01(swt, grid, x, y, z, origin, time);
 

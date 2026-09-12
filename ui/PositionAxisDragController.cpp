@@ -254,7 +254,7 @@ bool PositionAxisDragController::eventFilter(QObject* watched, QEvent* event)
                 return true;
             }
             dragging_      = true;
-            last_global_x_ = mouse->globalPos().x();
+            last_global_x_ = (int)mouse->globalPosition().x();
             return true;
         }
         case QEvent::MouseMove:
@@ -264,7 +264,7 @@ bool PositionAxisDragController::eventFilter(QObject* watched, QEvent* event)
                 break;
             }
             auto* mouse = static_cast<QMouseEvent*>(event);
-            const int   global_x = mouse->globalPos().x();
+            const int   global_x = (int)mouse->globalPosition().x();
             const int   delta_px = global_x - last_global_x_;
             last_global_x_       = global_x;
             onDragDelta(delta_px, mouse->modifiers());

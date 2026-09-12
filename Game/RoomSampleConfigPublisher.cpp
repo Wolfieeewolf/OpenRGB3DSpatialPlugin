@@ -28,18 +28,19 @@
 
 namespace
 {
+static std::mutex g_mu;
+static bool g_has_publish_room_grid = false;
+static GridContext3D g_publish_room_grid(0, 1, 0, 1, 0, 1, 10.0f);
+static std::vector<float> g_frame_led_xyz;
+static std::vector<std::uint32_t> g_last_important_cells;
+
+#ifdef _WIN32
 static unsigned long long NowMs()
 {
     return (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
-
-static std::mutex g_mu;
-static bool g_has_publish_room_grid = false;
-static GridContext3D g_publish_room_grid(0, 1, 0, 1, 0, 1, 10.0f);
-static std::vector<float> g_frame_led_xyz;
-static std::vector<std::uint32_t> g_last_important_cells;
 
 /** Cubemap texels covering each mapped LED direction (+ bilinear 2×2). */
 static void BuildImportantCubemapTexels(const RoomSampleFrameProtocol::ConfigHeader& hdr,
@@ -111,7 +112,6 @@ static void BuildImportantCubemapTexels(const RoomSampleFrameProtocol::ConfigHea
     std::sort(out.begin(), out.end());
 }
 
-#ifdef _WIN32
 static bool WriteConfigFile(const RoomSampleFrameProtocol::ConfigHeader& hdr,
                             const std::vector<std::uint32_t>& important_cells)
 {
@@ -154,7 +154,6 @@ static bool WriteConfigFile(const RoomSampleFrameProtocol::ConfigHeader& hdr,
     CloseHandle(file);
     return true;
 }
-#endif
 
 static std::uint32_t HashConfig(const RoomSampleFrameProtocol::ConfigHeader& h,
                                 const std::vector<std::uint32_t>& important_cells)
@@ -181,6 +180,7 @@ static std::uint32_t HashConfig(const RoomSampleFrameProtocol::ConfigHeader& h,
     }
     return hash;
 }
+#endif
 }
 
 namespace RoomSampleConfigPublisher

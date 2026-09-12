@@ -27,31 +27,6 @@
 namespace
 {
 
-bool TargetsEqual(const EffectPack::Target& a, const EffectPack::Target& b)
-{
-    if(a.kind != b.kind || a.flatten_leds != b.flatten_leds)
-    {
-        return false;
-    }
-    switch(a.kind)
-    {
-        case EffectPack::TargetKind::All:
-            return true;
-        case EffectPack::TargetKind::Device:
-            return a.device_name == b.device_name;
-        case EffectPack::TargetKind::Zone:
-            return a.device_name == b.device_name && a.zone_name == b.zone_name;
-        case EffectPack::TargetKind::Leds:
-            return a.device_name == b.device_name
-                && a.zone_name == b.zone_name
-                && a.led_indices == b.led_indices;
-        case EffectPack::TargetKind::SceneZone:
-            return a.scene_zone_name == b.scene_zone_name
-                && a.flatten_leds == b.flatten_leds;
-    }
-    return false;
-}
-
 QColor RgbToQColor(RGBColor c)
 {
     return QColor(RGBGetRValue(c), RGBGetGValue(c), RGBGetBValue(c));

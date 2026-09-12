@@ -52,16 +52,6 @@ bool TargetsEqual(const EffectPack::Target& a, const EffectPack::Target& b)
     return false;
 }
 
-QColor RgbToQColor(RGBColor c)
-{
-    return QColor(RGBGetRValue(c), RGBGetGValue(c), RGBGetBValue(c));
-}
-
-RGBColor QColorToRgb(const QColor& c)
-{
-    return ToRGBColor(c.red(), c.green(), c.blue());
-}
-
 } // namespace
 
 EffectPackTimelineWidget::EffectPackTimelineWidget(QWidget* parent)

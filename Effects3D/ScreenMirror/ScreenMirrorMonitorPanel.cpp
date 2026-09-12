@@ -384,7 +384,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     ui->calibrationPatternCheck->setChecked(settings.show_calibration_pattern);
     ui->calibrationPatternCheck->setToolTip(
         QStringLiteral("LEDs use a grid, rings, spokes, and quadrant colors (same as the zone preview)."));
-    QObject::connect(ui->calibrationPatternCheck, &QCheckBox::stateChanged, effect, [effect](int) {
+    QObject::connect(ui->calibrationPatternCheck, &QCheckBox::toggled, effect, [effect](bool) {
         effect->OnParameterChanged();
         effect->OnCalibrationPatternChanged();
     });
@@ -394,7 +394,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     ui->screenPreviewCheck->setChecked(settings.show_screen_preview);
     ui->screenPreviewCheck->setToolTip(
         QStringLiteral("Show captured screen on display planes in the 3D viewport. Turn off to save CPU/GPU."));
-    QObject::connect(ui->screenPreviewCheck, &QCheckBox::stateChanged, effect, [effect](int) {
+    QObject::connect(ui->screenPreviewCheck, &QCheckBox::toggled, effect, [effect](bool) {
         effect->OnParameterChanged();
         effect->OnScreenPreviewChanged();
     });

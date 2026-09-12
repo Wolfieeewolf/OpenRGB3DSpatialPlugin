@@ -46,16 +46,6 @@
 namespace
 {
 
-QColor RgbToQColor(RGBColor c)
-{
-    return QColor(RGBGetRValue(c), RGBGetGValue(c), RGBGetBValue(c));
-}
-
-RGBColor QColorToRgb(const QColor& c)
-{
-    return ToRGBColor(c.red(), c.green(), c.blue());
-}
-
 QString ControllerLabel(const ControllerTransform* transform, int index)
 {
     if(!transform)

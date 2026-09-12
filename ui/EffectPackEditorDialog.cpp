@@ -47,16 +47,6 @@
 namespace
 {
 
-QColor RgbToQColor(RGBColor c)
-{
-    return QColor(RGBGetRValue(c), RGBGetGValue(c), RGBGetBValue(c));
-}
-
-RGBColor QColorToRgb(const QColor& c)
-{
-    return ToRGBColor(c.red(), c.green(), c.blue());
-}
-
 QString ControllerLabel(const ControllerTransform* transform, int index)
 {
     if(!transform)
@@ -95,42 +85,6 @@ std::string ControllerKeyName(const ControllerTransform* transform, int index)
         return transform->controller->GetName();
     }
     return std::string("controller_") + std::to_string(index);
-}
-
-QString ZoneLabelForLed(RGBControllerInterface* rgb, unsigned int zone_idx)
-{
-    if(rgb && zone_idx < rgb->GetZoneCount())
-    {
-        QString name = QString::fromStdString(rgb->GetZoneDisplayName(zone_idx));
-        if(name.isEmpty())
-        {
-            name = QString::fromStdString(rgb->GetZoneName(zone_idx));
-        }
-        if(!name.isEmpty())
-        {
-            return name;
-        }
-    }
-    return QStringLiteral("Zone %1").arg(zone_idx);
-}
-
-bool TryGlobalLedIndex(RGBControllerInterface* rgb, unsigned int zone_idx, unsigned int led_idx, int* out)
-{
-    if(!rgb || !out || zone_idx >= rgb->GetZoneCount())
-    {
-        return false;
-    }
-    if(led_idx >= rgb->GetZoneLEDsCount(zone_idx))
-    {
-        return false;
-    }
-    const unsigned int global = rgb->GetZoneStartIndex(zone_idx) + led_idx;
-    if(global >= rgb->GetLEDCount())
-    {
-        return false;
-    }
-    *out = (int)global;
-    return true;
 }
 
 } // namespace
