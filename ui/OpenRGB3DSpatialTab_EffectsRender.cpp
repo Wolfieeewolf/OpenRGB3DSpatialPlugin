@@ -308,6 +308,10 @@ SpatialLighting::OccluderBuildOptions MergeStackOccluderOptions(const std::vecto
             continue;
         }
         const RoomSpatialLightingUi::RoomSpatialLightParams& params = effect_slot.effect->roomRelayParams();
+        if(effect_slot.effect->GetRoomOutputRole() != SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+        {
+            continue;
+        }
         if(!params.use_occlusion)
         {
             continue;
@@ -928,6 +932,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     {
                         return;
                     }
+                    EmitterRelayMirror::PointEmitter point{};
+                    point.room_position = led_position.room_position;
+                    point.r = r;
+                    point.g = g;
+                    point.b = b;
+                    mirror.point_emitters.push_back(point);
                     EmitterRelayMirror::LedColorSample sample{};
                     sample.u = (led_position.local_position.x - min_bounds.x) / span_x;
                     sample.v = (led_position.local_position.y - min_bounds.y) / span_y;
@@ -1109,14 +1119,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 if(IsRelayOnlyReceiver(relay_layer_effect, static_cast<int>(ctrl_idx)))
                 {
-                    const bool relay_use_world = relay_layer_effect->RequiresWorldSpaceCoordinates();
-                    const bool relay_world_bounds = relay_layer_effect->UseWorldGridBounds();
-                    const GridContext3D& relay_grid = relay_world_bounds ? world_grid : room_grid;
-                    float sample_x = relay_use_world ? world_x : room_x;
-                    float sample_y = relay_use_world ? world_y : room_y;
-                    float sample_z = relay_use_world ? world_z : room_z;
                     RGBColor final_color =
-                        relay_layer_effect->SampleRelayShadeAt(sample_x, sample_y, sample_z, relay_grid);
+                        relay_layer_effect->SampleRelayShadeAt(room_x, room_y, room_z, room_grid);
                     final_color = relay_layer_effect->PostProcessColorGrid(final_color);
                     transform->led_positions[led_pos_idx].preview_color = final_color;
 
@@ -1330,14 +1334,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 if(IsRelayOnlyReceiver(relay_layer_effect, static_cast<int>(ctrl_idx)))
                 {
-                    const bool relay_use_world = relay_layer_effect->RequiresWorldSpaceCoordinates();
-                    const bool relay_world_bounds = relay_layer_effect->UseWorldGridBounds();
-                    const GridContext3D& relay_grid = relay_world_bounds ? world_grid : room_grid;
-                    float sample_x = relay_use_world ? world_x : room_x;
-                    float sample_y = relay_use_world ? world_y : room_y;
-                    float sample_z = relay_use_world ? world_z : room_z;
                     RGBColor final_color =
-                        relay_layer_effect->SampleRelayShadeAt(sample_x, sample_y, sample_z, relay_grid);
+                        relay_layer_effect->SampleRelayShadeAt(room_x, room_y, room_z, room_grid);
                     final_color = relay_layer_effect->PostProcessColorGrid(final_color);
                     transform->led_positions[led_pos_idx].preview_color = final_color;
                     if(led_global_idx < controller->GetLEDCount())

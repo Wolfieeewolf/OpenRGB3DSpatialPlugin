@@ -140,6 +140,20 @@ void BuildOccluderAabbSpatialIndex(const std::vector<OccluderAabb>& aabbs,
                                    const GridContext3D& grid,
                                    OccluderSpatialIndex& out_index);
 
+/** Line-of-sight test. skip_controller = -1 tests every housing cell, including the emitter's. */
+bool SegmentIsOccluded(float ax,
+                       float ay,
+                       float az,
+                       float bx,
+                       float by,
+                       float bz,
+                       const std::vector<OccluderAabb>& aabbs,
+                       const std::vector<OccluderQuad>& quads,
+                       const std::vector<BlockerGridOccluder>& blocker_grids,
+                       const RoomBlockerField* room_blocker_field,
+                       const OccluderSpatialIndex* aabb_index,
+                       int skip_controller);
+
 } // namespace SpatialLighting
 
 #endif

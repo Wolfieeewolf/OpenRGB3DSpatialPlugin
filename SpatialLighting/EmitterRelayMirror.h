@@ -24,6 +24,15 @@ struct LedColorSample
     uint8_t b = 0;
 };
 
+/** Omnidirectional emitter LED in room grid units. */
+struct PointEmitter
+{
+    Vector3D room_position{};
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+};
+
 struct EmitterSurface
 {
     int controller_index = -1;
@@ -40,6 +49,7 @@ struct EmitterSurface
 struct MirrorFrame
 {
     std::vector<EmitterSurface> surfaces;
+    std::vector<PointEmitter> point_emitters;
     Vector3D room_center{};
     float grid_scale_mm = 10.0f;
     float light_reach_mm = 280.0f;

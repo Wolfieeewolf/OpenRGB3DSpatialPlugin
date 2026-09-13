@@ -167,6 +167,7 @@ static bool SegmentHitsOccluderSet(Vec3 a,
                                    const std::vector<OccluderAabb>& aabbs,
                                    const std::vector<OccluderQuad>& quads,
                                    int also_skip_controller,
+                                   int skip_controller,
                                    const OccluderSpatialIndex* aabb_index,
                                    const std::vector<BlockerGridOccluder>* blocker_grids,
                                    const RoomBlockerField* room_blocker_field)
@@ -189,7 +190,8 @@ static bool SegmentHitsOccluderSet(Vec3 a,
                                        b.y,
                                        b.z,
                                        *merged_field,
-                                       also_skip_controller))
+                                       also_skip_controller,
+                                       skip_controller))
         {
             return true;
         }
@@ -202,7 +204,7 @@ static bool SegmentHitsOccluderSet(Vec3 a,
             grids = &SpatialLightingSceneProvider::instance()->frameBlockerGrids();
         }
         if(grids && !grids->empty() &&
-           SegmentHitsBlockerGrids(a.x, a.y, a.z, b.x, b.y, b.z, *grids, also_skip_controller))
+           SegmentHitsBlockerGrids(a.x, a.y, a.z, b.x, b.y, b.z, *grids, also_skip_controller, skip_controller))
         {
             return true;
         }
@@ -221,8 +223,6 @@ static bool SegmentHitsOccluderSet(Vec3 a,
     {
         return false;
     }
-
-    const int skip_controller = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
     thread_local std::vector<uint16_t> candidate_indices;
     candidate_indices.clear();
 
@@ -296,7 +296,15 @@ static float ComputeAmbientOcclusion(Vec3 led,
     for(const Vec3& d : kDirs)
     {
         const Vec3 probe = Add(led, Scale(d, span));
-        if(SegmentHitsOccluderSet(led, probe, aabbs, quads, -1, aabb_index, blocker_grids, room_blocker_field))
+        if(SegmentHitsOccluderSet(led,
+                                  probe,
+                                  aabbs,
+                                  quads,
+                                  -1,
+                                  SpatialLightingSceneProvider::instance()->shadingControllerIndex(),
+                                  aabb_index,
+                                  blocker_grids,
+                                  room_blocker_field))
         {
             ++blocked;
         }
@@ -349,7 +357,15 @@ float ComputeRoomAmbientShadeFactor(float room_x,
     float shade_factor = 1.0f;
     const Vec3 led = {room_x, room_y, room_z};
     const Vec3 center = {room_center_x, room_center_y, room_center_z};
-    if(SegmentHitsOccluderSet(led, center, aabbs, quads, -1, index, grids, merged_field))
+    if(SegmentHitsOccluderSet(led,
+                             center,
+                             aabbs,
+                             quads,
+                             -1,
+                             SpatialLightingSceneProvider::instance()->shadingControllerIndex(),
+                             index,
+                             grids,
+                             merged_field))
     {
         shade_factor *= 0.18f;
     }
@@ -653,6 +669,7 @@ ShadeRgb ShadeLedFromSource(const RoomScene& scene,
                                             scene.occluder_aabbs,
                                             scene.occluders,
                                             -1,
+                                            SpatialLightingSceneProvider::instance()->shadingControllerIndex(),
                                             scene.occluder_aabb_index,
                                             scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids,
                                             scene.room_blocker_field.IsValid() ? &scene.room_blocker_field : nullptr)
@@ -682,7 +699,8 @@ ShadeRgb ShadeLedFromSource(const RoomScene& scene,
 RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
 {
     const Vec3 led = {led_x, led_y, led_z};
-    const bool has_occluders = !scene.occluders.empty() || !scene.occluder_aabbs.empty();
+    const bool has_occluders = !scene.occluders.empty() || !scene.occluder_aabbs.empty() ||
+                               !scene.blocker_grids.empty() || scene.room_blocker_field.IsValid();
 
     float ao = 1.0f;
     if(scene.shade.use_occlusion && scene.shade.use_ambient_occlusion && has_occluders &&
@@ -722,6 +740,36 @@ RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
     return ToRGBColor((int)(Clamp01(sum_r) * 255.0f + 0.5f),
                       (int)(Clamp01(sum_g) * 255.0f + 0.5f),
                       (int)(Clamp01(sum_b) * 255.0f + 0.5f));
+}
+
+bool SegmentIsOccluded(float ax,
+                       float ay,
+                       float az,
+                       float bx,
+                       float by,
+                       float bz,
+                       const std::vector<OccluderAabb>& aabbs,
+                       const std::vector<OccluderQuad>& quads,
+                       const std::vector<BlockerGridOccluder>& blocker_grids,
+                       const RoomBlockerField* room_blocker_field,
+                       const OccluderSpatialIndex* aabb_index,
+                       int skip_controller)
+{
+    const OccluderSpatialIndex* index = aabb_index;
+    if(!index)
+    {
+        index = ResolveAabbSpatialIndex(aabbs);
+    }
+    const std::vector<BlockerGridOccluder>* grids = blocker_grids.empty() ? nullptr : &blocker_grids;
+    return SegmentHitsOccluderSet({ax, ay, az},
+                                  {bx, by, bz},
+                                  aabbs,
+                                  quads,
+                                  -1,
+                                  skip_controller,
+                                  index,
+                                  grids,
+                                  room_blocker_field);
 }
 
 } // namespace SpatialLighting

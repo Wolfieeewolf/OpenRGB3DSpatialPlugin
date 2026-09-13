@@ -70,7 +70,7 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     ui->roomGridOverlayCheckbox->setToolTip(
         "Sample the effect stack at room grid points using the same shading as real LEDs "
-        "(occlusion, relay, falloff). Lower brightness only dims the preview dots.");
+        "(relay, blockers, falloff). Lower brightness only dims the preview dots.");
 
     ui->roomGuideLabelsCheckbox->setToolTip(
         "Wall, floor, ceiling, and origin hints in the 3D view. Gizmo rotate text while dragging is always shown.");

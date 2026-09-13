@@ -10,7 +10,6 @@
 #include "EffectColorPanel.h"
 #include "EffectCustomHost.h"
 #include "EffectControlsRoot.h"
-#include "EffectUiRows.h"
 #include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "Colors.h"
@@ -159,9 +158,12 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 
     surfaces_group = nullptr;
     surfaces_section = nullptr;
+    output_shaping_section = nullptr;
+    geometry_section = nullptr;
     colors_patterns_section = nullptr;
     band_modulation_section = nullptr;
     effect_specific_section = nullptr;
+    effect_advanced_section = nullptr;
     path_plane_group = nullptr;
     path_axis_combo = nullptr;
     plane_combo = nullptr;
@@ -183,23 +185,14 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         stop_effect_button  = layer_banner->stopEffectButton();
     }
 
-    surfaces_group = new EffectSurfacesPanel(effect_surface_mask, this);
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Surfaces"),
-                            QStringLiteral("Optional: only light LEDs near the selected room shells (floor, ceiling, walls). "
-                                           "All checked = no surface filter. "
-                                           "To run the effect on part of the room (strips, desk, one wall), set zone and bounds on this layer in the Effect Stack."),
-                            surfaces_group,
-                            &surfaces_section,
-                            false);
-
     auto* motion_pattern_group = new EffectMotionPanel(effect_speed,
-                                                                       effect_brightness,
-                                                                       effect_frequency,
-                                                                       effect_detail,
-                                                                       effect_size,
-                                                                       effect_scale,
-                                                                       scale_inverted,
-                                                                       effect_fps);
+                                                       effect_brightness,
+                                                       effect_frequency,
+                                                       effect_detail,
+                                                       effect_size,
+                                                       effect_scale,
+                                                       scale_inverted,
+                                                       effect_fps);
     motion_pattern_group->setToolTip(
         QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."));
 
@@ -223,10 +216,41 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                    QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."),
                    motion_pattern_group);
 
+    custom_effect_settings_host = new EffectCustomHost();
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
+                   QStringLiteral("Parameters unique to this effect type (e.g. plasma tweak, explosion type)."),
+                   custom_effect_settings_host,
+                   &effect_specific_section,
+                   false);
+
+    CreateColorControls();
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Colors and patterns"),
+                   QStringLiteral("Base colors (Rainbow/Stops) plus optional pattern-kernel color modifiers."),
+                   color_controls_group,
+                   &colors_patterns_section,
+                   false);
+
+    auto* advanced = new EffectCollapsibleSection(
+        QStringLiteral("Advanced"),
+        QStringLiteral("Surfaces, output shaping, geometry, and height motion bands."));
+    advanced->setExpanded(false);
+    main_layout->addWidget(advanced);
+    effect_advanced_section = advanced;
+    QVBoxLayout* advanced_body = advanced->bodyLayout();
+
+    surfaces_group = new EffectSurfacesPanel(effect_surface_mask, this);
+    PluginUiAddSectionBlock(advanced_body, QStringLiteral("Surfaces"),
+                            QStringLiteral("Optional: only light LEDs near the selected room shells (floor, ceiling, walls). "
+                                           "All checked = no surface filter. "
+                                           "To run the effect on part of the room (strips, desk, one wall), set zone and bounds on this layer in the Effect Stack."),
+                            surfaces_group,
+                            &surfaces_section,
+                            false);
+
     auto* output_shaping_group = new EffectOutputPanel(effect_intensity,
-                                                                       effect_sharpness,
-                                                                       effect_smoothing,
-                                                                       effect_sampling_resolution);
+                                                       effect_sharpness,
+                                                       effect_smoothing,
+                                                       effect_sampling_resolution);
     output_shaping_group->setToolTip(
         QStringLiteral("Final contrast and level before colors; pair with Brightness above."));
 
@@ -239,64 +263,24 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sampling_resolution_slider = output_shaping_group->samplingResolutionSlider();
     sampling_resolution_label = output_shaping_group->samplingResolutionLabel();
 
-    if(QVBoxLayout* output_layout = qobject_cast<QVBoxLayout*>(output_shaping_group->layout()))
-    {
-        EffectSliderRow* room_ao_row = EffectUiRows::AppendSliderRow(
-            output_layout,
-            QStringLiteral("Room ambient occlusion"),
-            0,
-            100,
-            static_cast<int>(std::clamp(effect_room_relay_params_.ao_strength, 0.0f, 100.0f)),
-            QStringLiteral("Layer-wide AO for room-mapped patterns and emitter/relay receivers when blockers are on."));
-        if(room_ao_row)
-        {
-            room_ao_slider = room_ao_row->slider();
-            room_ao_label = room_ao_row->valueLabel();
-            if(room_ao_label)
-            {
-                room_ao_label->setText(QString::number(static_cast<int>(effect_room_relay_params_.ao_strength)) +
-                                       QStringLiteral("%"));
-            }
-        }
-
-        EffectCheckRow* room_blockers_row = EffectUiRows::AppendCheckRow(
-            output_layout,
-            QStringLiteral("Blockers (shadows)"),
-            effect_room_relay_params_.use_occlusion,
-            QStringLiteral("Enable occlusion from controller blockers and other room blockers."));
-        if(room_blockers_row)
-        {
-            room_blockers_check = room_blockers_row->checkBox();
-        }
-
-        EffectCheckRow* room_walls_row = EffectUiRows::AppendCheckRow(
-            output_layout,
-            QStringLiteral("Include room walls as blockers"),
-            effect_room_relay_params_.use_room_walls,
-            QStringLiteral("Treat room bounds as occluding surfaces when shading relay receivers."));
-        if(room_walls_row)
-        {
-            room_walls_blockers_check = room_walls_row->checkBox();
-        }
-    }
-    UpdateRoomShadingControlVisibility();
-
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Output shaping"),
+    PluginUiAddSectionBlock(advanced_body, QStringLiteral("Output shaping"),
                    QStringLiteral("Final contrast and level before colors; pair with Brightness in Motion and pattern."),
-                   output_shaping_group);
+                   output_shaping_group,
+                   &output_shaping_section,
+                   false);
 
     auto* geometry_group = new EffectGeometryPanel(effect_scale_x,
-                                                            effect_scale_y,
-                                                            effect_scale_z,
-                                                            effect_axis_scale_rotation_yaw,
-                                                            effect_axis_scale_rotation_pitch,
-                                                            effect_axis_scale_rotation_roll,
-                                                            effect_offset_x,
-                                                            effect_offset_y,
-                                                            effect_offset_z,
-                                                            effect_rotation_yaw,
-                                                            effect_rotation_pitch,
-                                                            effect_rotation_roll);
+                                                   effect_scale_y,
+                                                   effect_scale_z,
+                                                   effect_axis_scale_rotation_yaw,
+                                                   effect_axis_scale_rotation_pitch,
+                                                   effect_axis_scale_rotation_roll,
+                                                   effect_offset_x,
+                                                   effect_offset_y,
+                                                   effect_offset_z,
+                                                   effect_rotation_yaw,
+                                                   effect_rotation_pitch,
+                                                   effect_rotation_roll);
     geometry_group->setToolTip(
         QStringLiteral("LED sampling uses this order: effect origin (room center or reference, plus center offset below) → "
                        "per-axis scale (X/Y/Z %) → scale-axis rotation → effect rotation (yaw/pitch/roll). "
@@ -335,7 +319,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     rotation_roll_label = geometry_group->rotationRollLabel();
     rotation_reset_button = geometry_group->rotationResetButton();
 
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect geometry"),
+    PluginUiAddSectionBlock(advanced_body, QStringLiteral("Effect geometry"),
                    QStringLiteral(
                        "LED sampling uses this order: effect origin (room center or reference, plus center offset below) → "
                        "per-axis scale (X/Y/Z %) → scale-axis rotation → effect rotation (yaw/pitch/roll). "
@@ -345,26 +329,12 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                    &geometry_section,
                    false);
 
-    CreateColorControls();
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Colors and patterns"),
-                   QStringLiteral("Base colors (Rainbow/Stops) plus optional pattern-kernel color modifiers."),
-                   color_controls_group,
-                   &colors_patterns_section,
-                   false);
-
     band_modulation_settings_host = new EffectCustomHost();
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Height motion bands"),
+    PluginUiAddSectionBlock(advanced_body, QStringLiteral("Height motion bands"),
                    QStringLiteral("Floor / mid / ceiling: blend pattern speed, tightness, and phase, plus optional per-band "
                                   "room scroll, phase drift, or roll so calm effects still move across the room."),
                    band_modulation_settings_host,
                    &band_modulation_section,
-                   false);
-
-    custom_effect_settings_host = new EffectCustomHost();
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
-                   QStringLiteral("Parameters unique to this effect type (e.g. plasma tweak, explosion type)."),
-                   custom_effect_settings_host,
-                   &effect_specific_section,
                    false);
 
     ConnectCommonEffectControlSignals(geometry_group);
@@ -454,24 +424,6 @@ void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geo
     connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(smoothing_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(sampling_resolution_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
-    if(room_ao_slider)
-    {
-        connect(room_ao_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
-    }
-    if(room_blockers_check)
-    {
-        connect(room_blockers_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
-    }
-    if(room_walls_blockers_check)
-    {
-        connect(room_walls_blockers_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
-    }
-    if(room_blockers_check)
-    {
-        connect(room_blockers_check, &QCheckBox::toggled, this, [this](bool) {
-            UpdateRoomShadingControlVisibility();
-        });
-    }
     connect(scale_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(offset_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(offset_y_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -998,6 +950,26 @@ void SpatialEffect3D::ApplyControlVisibility()
     {
         position_offset_group->setVisible(info.show_position_offset_control);
     }
+
+    RefreshAdvancedSectionVisibility();
+}
+
+void SpatialEffect3D::RefreshAdvancedSectionVisibility()
+{
+    if(!effect_advanced_section)
+    {
+        return;
+    }
+
+    const auto intended_visible = [](QWidget* section) {
+        return section && !section->isHidden();
+    };
+
+    effect_advanced_section->setVisible(
+        intended_visible(surfaces_section) ||
+        intended_visible(output_shaping_section) ||
+        intended_visible(geometry_section) ||
+        intended_visible(band_modulation_section));
 }
 
 void SpatialEffect3D::OnParameterChanged()
@@ -1078,25 +1050,7 @@ void SpatialEffect3D::OnParameterChanged()
             sampling_resolution_label->setText(QString::number(effect_sampling_resolution));
         }
     }
-    if(room_ao_slider)
-    {
-        effect_room_relay_params_.ao_strength = static_cast<float>(std::clamp(room_ao_slider->value(), 0, 100));
-        if(room_ao_label)
-        {
-            room_ao_label->setText(QString::number(static_cast<int>(effect_room_relay_params_.ao_strength)) +
-                                   QStringLiteral("%"));
-        }
-    }
-    if(room_blockers_check)
-    {
-        effect_room_relay_params_.use_occlusion = room_blockers_check->isChecked();
-    }
-    if(room_walls_blockers_check)
-    {
-        effect_room_relay_params_.use_room_walls = room_walls_blockers_check->isChecked();
-    }
     InvalidateRelayShadeCache();
-    UpdateRoomShadingControlVisibility();
     if(edge_profile_combo)
     {
         effect_edge_profile = std::clamp(edge_profile_combo->currentIndex(), 0, 4);
@@ -1137,19 +1091,6 @@ void SpatialEffect3D::OnRotationChanged()
         }
     }
     emit ParametersChanged();
-}
-
-void SpatialEffect3D::UpdateRoomShadingControlVisibility()
-{
-    const bool blockers_on = room_blockers_check && room_blockers_check->isChecked();
-    if(room_walls_blockers_check && room_walls_blockers_check->parentWidget())
-    {
-        room_walls_blockers_check->parentWidget()->setVisible(blockers_on);
-    }
-    if(room_ao_slider && room_ao_slider->parentWidget())
-    {
-        room_ao_slider->parentWidget()->setVisible(blockers_on);
-    }
 }
 
 void SpatialEffect3D::OnRotationResetClicked()

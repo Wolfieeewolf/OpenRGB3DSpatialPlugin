@@ -56,6 +56,9 @@ void BuildRoomBlockerField(RoomBlockerField& out,
                            float grid_scale_mm,
                            const GridContext3D* clip_grid = nullptr);
 
+/** Pass as skip_controller to skip the device currently being shaded. */
+constexpr int kSkipShadedController = -2;
+
 bool SegmentHitsRoomBlockerField(float ax,
                                  float ay,
                                  float az,
@@ -63,7 +66,8 @@ bool SegmentHitsRoomBlockerField(float ax,
                                  float by,
                                  float bz,
                                  const RoomBlockerField& field,
-                                 int also_skip_controller = -1);
+                                 int also_skip_controller = -1,
+                                 int skip_controller = kSkipShadedController);
 
 bool SegmentHitsBlockerGrids(float ax,
                              float ay,
@@ -72,7 +76,8 @@ bool SegmentHitsBlockerGrids(float ax,
                              float by,
                              float bz,
                              const std::vector<BlockerGridOccluder>& grids,
-                             int also_skip_controller = -1);
+                             int also_skip_controller = -1,
+                             int skip_controller = kSkipShadedController);
 
 } // namespace SpatialLighting
 

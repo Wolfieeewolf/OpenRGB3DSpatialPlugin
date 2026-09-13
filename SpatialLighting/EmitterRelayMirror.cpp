@@ -8,10 +8,12 @@
 #include "LEDPosition3D.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
+#include "SpatialLighting/OccluderSpatialIndex.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <vector>
 
 namespace EmitterRelayMirror
 {
@@ -204,55 +206,116 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
                         float room_z,
                         const MirrorShadeContext* shade_ctx)
 {
-    if(frame.surfaces.empty())
+    const bool use_points = !frame.point_emitters.empty();
+    if(!use_points && frame.surfaces.empty())
     {
         return 0x00000000;
     }
 
     const Vector3D led_pos = {room_x, room_y, room_z};
     const float scale_mm = SafeGridScaleMm(frame.grid_scale_mm);
+    const float effective_range = std::max(frame.light_reach_mm, 40.0f);
+    const float feather_percent = std::clamp(frame.glow_feather_percent, 5.0f, 90.0f);
 
-    const bool shade_enabled = shade_ctx && shade_ctx->shade && shade_ctx->occluder_aabbs && shade_ctx->occluders;
+    SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
+    const bool shade_enabled = shade_ctx && shade_ctx->shade;
+    const bool use_occlusion = shade_enabled && shade_ctx->shade->use_occlusion;
+    static const std::vector<SpatialLighting::OccluderAabb> kEmptyAabbs;
+    static const std::vector<SpatialLighting::OccluderQuad> kEmptyQuads;
+    static const std::vector<SpatialLighting::BlockerGridOccluder> kEmptyGrids;
+    const SpatialLighting::RoomBlockerField* room_blocker_field =
+        (provider && provider->frameRoomBlockerField().IsValid()) ? &provider->frameRoomBlockerField() : nullptr;
+    const std::vector<SpatialLighting::OccluderAabb>& aabbs =
+        (shade_ctx && shade_ctx->occluder_aabbs) ? *shade_ctx->occluder_aabbs : kEmptyAabbs;
+    const std::vector<SpatialLighting::OccluderQuad>& quads =
+        (shade_ctx && shade_ctx->occluders) ? *shade_ctx->occluders : kEmptyQuads;
+    const std::vector<SpatialLighting::BlockerGridOccluder>& blocker_grids =
+        provider ? provider->frameBlockerGrids() : kEmptyGrids;
+    const SpatialLighting::OccluderSpatialIndex* aabb_index =
+        provider ? &provider->frameOccluderSpatialIndex() : nullptr;
     const bool has_occluders =
-        shade_enabled && (!shade_ctx->occluder_aabbs->empty() || !shade_ctx->occluders->empty());
+        use_occlusion &&
+        (!aabbs.empty() || !quads.empty() || !blocker_grids.empty() ||
+         (room_blocker_field && room_blocker_field->IsValid()));
+
+    const auto emitter_visible = [&](float src_x, float src_y, float src_z) -> bool {
+        if(!has_occluders)
+        {
+            return true;
+        }
+        return !SpatialLighting::SegmentIsOccluded(src_x,
+                                                   src_y,
+                                                   src_z,
+                                                   room_x,
+                                                   room_y,
+                                                   room_z,
+                                                   aabbs,
+                                                   quads,
+                                                   blocker_grids,
+                                                   room_blocker_field,
+                                                   aabb_index,
+                                                   -1);
+    };
 
     float total_r = 0.0f;
     float total_g = 0.0f;
     float total_b = 0.0f;
     float total_w = 0.0f;
 
-    for(const EmitterSurface& surface : frame.surfaces)
+    if(use_points)
     {
-        const EmitterReceiverProjection proj = ProjectReceiverOntoEmitterSurface(led_pos, surface, scale_mm);
-        if(!proj.is_valid)
+        for(const PointEmitter& src : frame.point_emitters)
         {
-            continue;
+            const float dx = room_x - src.room_position.x;
+            const float dy = room_y - src.room_position.y;
+            const float dz = room_z - src.room_position.z;
+            const float dist_u = std::sqrt(dx * dx + dy * dy + dz * dz);
+            const float dist_mm = GridUnitsToMM(dist_u, scale_mm);
+            const float weight = Geometry3D::ComputeFalloff(dist_mm, effective_range, feather_percent);
+            if(weight < 0.001f)
+            {
+                continue;
+            }
+            if(!emitter_visible(src.room_position.x, src.room_position.y, src.room_position.z))
+            {
+                continue;
+            }
+            total_r += static_cast<float>(src.r) * weight;
+            total_g += static_cast<float>(src.g) * weight;
+            total_b += static_cast<float>(src.b) * weight;
+            total_w += weight;
         }
-
-        const float u = proj.u;
-        const float v = proj.v;
-
-        RGBColor sampled = SampleBilinearWeighted(surface, u, v);
-        const float rf = static_cast<float>(sampled & 0xFF);
-        const float gf = static_cast<float>((sampled >> 8) & 0xFF);
-        const float bf = static_cast<float>((sampled >> 16) & 0xFF);
-        if(rf + gf + bf < 0.5f)
+    }
+    else
+    {
+        for(const EmitterSurface& surface : frame.surfaces)
         {
-            continue;
-        }
+            const EmitterReceiverProjection proj = ProjectReceiverOntoEmitterSurface(led_pos, surface, scale_mm);
+            if(!proj.is_valid)
+            {
+                continue;
+            }
 
-        const float effective_range = std::max(frame.light_reach_mm, 40.0f);
-        const float feather_percent = std::clamp(frame.glow_feather_percent, 5.0f, 90.0f);
-        const float weight = Geometry3D::ComputeFalloff(proj.distance_mm, effective_range, feather_percent);
-        if(weight < 0.001f)
-        {
-            continue;
-        }
+            RGBColor sampled = SampleBilinearWeighted(surface, proj.u, proj.v);
+            const float rf = static_cast<float>(sampled & 0xFF);
+            const float gf = static_cast<float>((sampled >> 8) & 0xFF);
+            const float bf = static_cast<float>((sampled >> 16) & 0xFF);
+            if(rf + gf + bf < 0.5f)
+            {
+                continue;
+            }
 
-        total_r += rf * weight;
-        total_g += gf * weight;
-        total_b += bf * weight;
-        total_w += weight;
+            const float weight = Geometry3D::ComputeFalloff(proj.distance_mm, effective_range, feather_percent);
+            if(weight < 0.001f)
+            {
+                continue;
+            }
+
+            total_r += rf * weight;
+            total_g += gf * weight;
+            total_b += bf * weight;
+            total_w += weight;
+        }
     }
 
     if(total_w < 1e-5f)
@@ -266,31 +329,26 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     total_g = total_g / total_w * bright * fill_mul;
     total_b = total_b / total_w * bright * fill_mul;
 
-    float shade_factor = 1.0f;
-    if(shade_enabled && shade_ctx->shade->use_occlusion && has_occluders)
+    if(use_occlusion && shade_ctx->shade->use_ambient_occlusion && shade_ctx->shade->ao_strength > 0.01f &&
+       has_occluders)
     {
-        const float ao_strength = shade_ctx->shade->use_ambient_occlusion ? shade_ctx->shade->ao_strength : 0.0f;
-        const SpatialLighting::RoomBlockerField& room_blocker_field =
-            SpatialLightingSceneProvider::instance()->frameRoomBlockerField();
-        shade_factor = SpatialLighting::ComputeRoomAmbientShadeFactor(room_x,
-                                                                        room_y,
-                                                                        room_z,
-                                                                        frame.room_center.x,
-                                                                        frame.room_center.y,
-                                                                        frame.room_center.z,
-                                                                        *shade_ctx->occluder_aabbs,
-                                                                        *shade_ctx->occluders,
-                                                                        {},
-                                                                        ao_strength,
-                                                                        shade_ctx->shade->ao_probe_span,
-                                                                        nullptr,
-                                                                        room_blocker_field.IsValid() ? &room_blocker_field
-                                                                                                     : nullptr);
+        const float shade_factor = SpatialLighting::ComputeRoomAmbientShadeFactor(room_x,
+                                                                                room_y,
+                                                                                room_z,
+                                                                                frame.room_center.x,
+                                                                                frame.room_center.y,
+                                                                                frame.room_center.z,
+                                                                                aabbs,
+                                                                                quads,
+                                                                                blocker_grids,
+                                                                                shade_ctx->shade->ao_strength,
+                                                                                shade_ctx->shade->ao_probe_span,
+                                                                                aabb_index,
+                                                                                room_blocker_field);
+        total_r *= shade_factor;
+        total_g *= shade_factor;
+        total_b *= shade_factor;
     }
-
-    total_r *= shade_factor;
-    total_g *= shade_factor;
-    total_b *= shade_factor;
 
     return ToRGBColor(static_cast<uint8_t>(std::clamp(total_r, 0.0f, 255.0f)),
                       static_cast<uint8_t>(std::clamp(total_g, 0.0f, 255.0f)),

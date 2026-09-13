@@ -100,61 +100,15 @@ RGBColor SpatialEffect3D::SampleRelayShadeAt(float x, float y, float z, const Gr
     return ShadeRelayReceiversAt(x, y, z, grid);
 }
 
-RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float room_x,
-                                                       float room_y,
-                                                       float room_z,
+RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float /*room_x*/,
+                                                       float /*room_y*/,
+                                                       float /*room_z*/,
                                                        RGBColor color,
-                                                       const GridContext3D& grid,
-                                                       int shade_slot) const
+                                                       const GridContext3D& /*grid*/,
+                                                       int /*shade_slot*/) const
 {
-    if(color == 0x00000000)
-    {
-        return color;
-    }
-    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
-    {
-        return color;
-    }
-    if(!effect_room_relay_params_.use_occlusion)
-    {
-        return color;
-    }
-
-    SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
-    const std::vector<SpatialLighting::OccluderQuad>& occluders = provider->frameOccluderQuads();
-    const std::vector<SpatialLighting::OccluderAabb>& occluder_aabbs = provider->frameOccluderAabbs();
-    const SpatialLighting::RoomBlockerField& room_blocker_field = provider->frameRoomBlockerField();
-    if(occluder_aabbs.empty() && occluders.empty() && !room_blocker_field.IsValid())
-    {
-        return color;
-    }
-
-    const float ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-    const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
-    const float room_diag =
-        std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
-    const float probe_span = std::clamp(std::max(reach_u * 0.4f, room_diag * 0.05f), 0.5f, 18.0f);
-
-    const float shade_factor = provider->ComputeAmbientShadeFactorCached(shade_slot,
-                                                                       room_x,
-                                                                       room_y,
-                                                                       room_z,
-                                                                       grid.center_x,
-                                                                       grid.center_y,
-                                                                       grid.center_z,
-                                                                       ao_strength,
-                                                                       probe_span);
-    if(shade_factor >= 0.999f)
-    {
-        return color;
-    }
-
-    const float rf = static_cast<float>(color & 0xFF) * shade_factor;
-    const float gf = static_cast<float>((color >> 8) & 0xFF) * shade_factor;
-    const float bf = static_cast<float>((color >> 16) & 0xFF) * shade_factor;
-    return ToRGBColor(static_cast<uint8_t>(std::clamp(rf, 0.0f, 255.0f)),
-                      static_cast<uint8_t>(std::clamp(gf, 0.0f, 255.0f)),
-                      static_cast<uint8_t>(std::clamp(bf, 0.0f, 255.0f)));
+    /* Direct patterns sample the grid only. Housing blockers are for emitter + relay. */
+    return color;
 }
 
 SpatialRoom::SpatialRoomMode SpatialEffect3D::GetSpatialRoomMode() const
@@ -595,24 +549,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         }
     }
     RoomSpatialLightingUi::LoadParamsFromJson(settings, "room_relay_light", effect_room_relay_params_);
-    if(room_ao_slider)
-    {
-        const int ao_pct = std::clamp(static_cast<int>(effect_room_relay_params_.ao_strength), 0, 100);
-        room_ao_slider->setValue(ao_pct);
-        if(room_ao_label)
-        {
-            room_ao_label->setText(QString::number(ao_pct) + QStringLiteral("%"));
-        }
-    }
-    if(room_blockers_check)
-    {
-        room_blockers_check->setChecked(effect_room_relay_params_.use_occlusion);
-    }
-    if(room_walls_blockers_check)
-    {
-        room_walls_blockers_check->setChecked(effect_room_relay_params_.use_room_walls);
-    }
-    UpdateRoomShadingControlVisibility();
     effect_emitter_controller_indices_.clear();
     if(settings.contains("room_emitter_controllers") && settings["room_emitter_controllers"].is_array())
     {

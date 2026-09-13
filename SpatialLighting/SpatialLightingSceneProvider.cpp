@@ -35,7 +35,7 @@ void SpatialLightingSceneProvider::SetEmitterRelayMirrorFrame(
     EmitterRelayMirror::MirrorFrame frame,
     std::unordered_set<int> emitter_controller_indices)
 {
-    emitter_relay_mirror_active_ = !frame.surfaces.empty();
+    emitter_relay_mirror_active_ = !frame.surfaces.empty() || !frame.point_emitters.empty();
     emitter_relay_mirror_ = std::move(frame);
     emitter_controller_indices_ = std::move(emitter_controller_indices);
 }

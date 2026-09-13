@@ -119,7 +119,7 @@
       <set>Qt::AlignRight|Qt::AlignTop</set>
      </property>
      <property name="toolTip">
-      <string>How this layer paints the room: direct on its zone, or emitter + relay mirror. Use Spatial anchor above for effect-origin vs room-mapped coordinates.</string>
+      <string>How this layer paints the room: direct on its zone, or emitter + relay (360° wash, or real housing when Blockers are on). Use Spatial anchor above for effect-origin vs room-mapped coordinates.</string>
      </property>
     </widget>
    </item>

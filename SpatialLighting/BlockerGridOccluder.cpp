@@ -70,13 +70,23 @@ void BuildAxisEdges(const VirtualController3D* layout,
                     std::vector<float>& out_edges)
 {
     out_edges.assign(static_cast<size_t>(axis_count) + 1u, 0.0f);
+    const float min_cell = MMToGridUnits(2.0f, grid_scale_mm);
     float acc = 0.0f;
     for(int index = 0; index < axis_count; ++index)
     {
         out_edges[static_cast<size_t>(index)] = acc;
-        acc += MMToGridUnits((layout->*size_fn)(index), grid_scale_mm);
+        acc += std::max(min_cell, MMToGridUnits((layout->*size_fn)(index), grid_scale_mm));
     }
     out_edges[static_cast<size_t>(axis_count)] = acc;
+}
+
+int ResolveSkipController(int skip_controller)
+{
+    if(skip_controller == kSkipShadedController)
+    {
+        return SpatialLightingSceneProvider::instance()->shadingControllerIndex();
+    }
+    return skip_controller;
 }
 
 bool SegmentIntersectsAabb(Vec3 a,
@@ -176,7 +186,8 @@ void BuildUniformAxisEdges(float origin,
 bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
                                      Vec3 b_world,
                                      const RoomBlockerField& field,
-                                     int also_skip_controller)
+                                     int also_skip_controller,
+                                     int skip_controller)
 {
     if(!field.IsValid())
     {
@@ -198,7 +209,6 @@ bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
     BuildUniformAxisEdges(field.origin_y, field.cell_size, field.height, y_edges);
     BuildUniformAxisEdges(field.origin_z, field.cell_size, field.depth, z_edges);
 
-    const int skip_controller = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
     const auto cell_blocks = [&](int x, int y, int z) {
         return RoomBlockerCellBlocks(field, x, y, z, skip_controller, also_skip_controller);
     };
@@ -476,11 +486,12 @@ bool SegmentHitsBlockerGridsImpl(Vec3 a,
                                  Vec3 b,
                                  const std::vector<BlockerGridOccluder>& grids,
                                  int also_skip_controller,
+                                 int skip_controller,
                                  const RoomBlockerField* merged_field)
 {
     if(merged_field && merged_field->IsValid())
     {
-        return SegmentHitsRoomBlockerFieldImpl(a, b, *merged_field, also_skip_controller);
+        return SegmentHitsRoomBlockerFieldImpl(a, b, *merged_field, also_skip_controller, skip_controller);
     }
 
     const std::vector<std::unique_ptr<::ControllerTransform>>* transforms =
@@ -489,8 +500,6 @@ bool SegmentHitsBlockerGridsImpl(Vec3 a,
     {
         return false;
     }
-
-    const int skip_controller = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
     for(const BlockerGridOccluder& grid : grids)
     {
         if((skip_controller >= 0 && grid.controller_index == skip_controller) ||
@@ -749,9 +758,14 @@ bool SegmentHitsRoomBlockerField(float ax,
                                  float by,
                                  float bz,
                                  const RoomBlockerField& field,
-                                 int also_skip_controller)
+                                 int also_skip_controller,
+                                 int skip_controller)
 {
-    return SegmentHitsRoomBlockerFieldImpl({ax, ay, az}, {bx, by, bz}, field, also_skip_controller);
+    return SegmentHitsRoomBlockerFieldImpl({ax, ay, az},
+                                           {bx, by, bz},
+                                           field,
+                                           also_skip_controller,
+                                           ResolveSkipController(skip_controller));
 }
 
 void BuildBlockerGridOccluders(std::vector<BlockerGridOccluder>& out, float grid_scale_mm)
@@ -845,7 +859,8 @@ bool SegmentHitsBlockerGrids(float ax,
                              float by,
                              float bz,
                              const std::vector<BlockerGridOccluder>& grids,
-                             int also_skip_controller)
+                             int also_skip_controller,
+                             int skip_controller)
 {
     const RoomBlockerField* merged_field = nullptr;
     SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
@@ -853,7 +868,12 @@ bool SegmentHitsBlockerGrids(float ax,
     {
         merged_field = &provider->frameRoomBlockerField();
     }
-    return SegmentHitsBlockerGridsImpl({ax, ay, az}, {bx, by, bz}, grids, also_skip_controller, merged_field);
+    return SegmentHitsBlockerGridsImpl({ax, ay, az},
+                                       {bx, by, bz},
+                                       grids,
+                                       also_skip_controller,
+                                       ResolveSkipController(skip_controller),
+                                       merged_field);
 }
 
 } // namespace SpatialLighting

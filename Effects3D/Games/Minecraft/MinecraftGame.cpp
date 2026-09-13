@@ -874,6 +874,8 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     {
         effect->path_plane_group->setVisible(false);
     }
+
+    effect->RefreshAdvancedSectionVisibility();
 }
 
 }

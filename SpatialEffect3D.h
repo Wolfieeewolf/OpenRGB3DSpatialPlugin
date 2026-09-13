@@ -574,6 +574,7 @@ signals:
 
 protected:
     void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
+    void RefreshAdvancedSectionVisibility();
 
     friend void MinecraftGame::ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
 
@@ -603,10 +604,6 @@ protected:
     QLabel*             smoothing_label;
     QSlider*            sampling_resolution_slider;
     QLabel*             sampling_resolution_label;
-    QSlider*            room_ao_slider = nullptr;
-    QLabel*             room_ao_label = nullptr;
-    QCheckBox*          room_blockers_check = nullptr;
-    QCheckBox*          room_walls_blockers_check = nullptr;
     QGroupBox*          edge_shape_group;
     QComboBox*          edge_profile_combo;
     QSlider*            edge_thickness_slider;
@@ -710,10 +707,12 @@ protected:
 
     QWidget*            surfaces_group;
     QWidget*            surfaces_section;
+    QWidget*            output_shaping_section = nullptr;
     QWidget*            geometry_section = nullptr;
     QWidget*            colors_patterns_section = nullptr;
     QWidget*            band_modulation_section = nullptr;
     QWidget*            effect_specific_section = nullptr;
+    QWidget*            effect_advanced_section = nullptr;
     class EffectRoomOutputPanel* room_output_panel_ = nullptr;
 
     SpatialRoom::SpatialRoomCoordinateMode effect_room_coordinate_mode_ =
@@ -821,7 +820,6 @@ private slots:
     void OnAxisScaleRotationResetClicked();
 
 private:
-    void UpdateRoomShadingControlVisibility();
     void CreateColorControls();
     void ConnectCommonEffectControlSignals(EffectGeometryPanel* geometry_panel);
     void CreateColorButton(RGBColor color);

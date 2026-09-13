@@ -15,6 +15,8 @@ struct RoomSpatialLightParams;
 }
 
 class SpatialEffect3D;
+class EffectCheckRow;
+class EffectSliderRow;
 class QComboBox;
 class QGroupBox;
 class QLabel;
@@ -50,6 +52,7 @@ protected:
 
 private:
     void refreshRolePanels();
+    void updateBlockerChildVisibility();
     void rebuildControllerLists();
     void clearLayout(QVBoxLayout* layout);
     bool isEmitterIndex(int index) const;
@@ -60,6 +63,9 @@ private:
                           bool emitter_role);
 
     QComboBox* output_combo_ = nullptr;
+    EffectCheckRow* blockers_row_ = nullptr;
+    EffectCheckRow* walls_row_ = nullptr;
+    EffectSliderRow* ao_row_ = nullptr;
     QLabel* zone_hint_ = nullptr;
     QGroupBox* emitters_group_ = nullptr;
     QScrollArea* emitters_scroll_ = nullptr;
@@ -70,6 +76,7 @@ private:
     QWidget* receivers_host_ = nullptr;
     QVBoxLayout* receivers_layout_ = nullptr;
     RoomSpatialLightSettingsPanel* relay_panel_ = nullptr;
+    RoomSpatialLightingUi::RoomSpatialLightParams* bound_relay_params_ = nullptr;
     SpatialRoom::SpatialRoomOutputRole* bound_role_ = nullptr;
     std::vector<int>* bound_emitters_ = nullptr;
     std::vector<int>* bound_receivers_ = nullptr;
