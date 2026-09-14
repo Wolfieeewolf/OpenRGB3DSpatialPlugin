@@ -56,7 +56,7 @@ Requires OpenRGB 1.0 (Plugin API 5) built against the same Qt major.minor as thi
 plugin. Check OpenRGB → Information → Software Info (Qt Version / Plugin API).
 
 Do not install a host .so into Flatpak OpenRGB (KDE runtime). Use the Flatpak
-extension under packaging/flatpak/ instead.
+extension under flatpak/ instead.
 
 Restart OpenRGB after installing the plugin.
 EOF
