@@ -14,7 +14,7 @@ Day-to-day work is on **GitHub** (free Actions builds and releases). GitLab is a
 
 If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can flip the arrow. Until then, GitHub is canonical.
 
-**Plugin docs** live under [`Documentation/`](Documentation/) (single folder):
+**Plugin docs:** browsable **[Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki)** (user + developer). Contracts reviewed with PRs live under [`Documentation/`](Documentation/):
 
 | Doc | Use it for |
 | --- | --- |
@@ -22,6 +22,8 @@ If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can
 | [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry — RoomGrid → game world; read when changing SHM, scale publish, or mod mapping |
 | [effect-event-maker.md](Documentation/effect-event-maker.md) | Effect packs + Event Bindings |
 | [shader-conversion.md](Documentation/shader-conversion.md) | Porting shaders into Shader Field / volume / strip kernels |
+
+To refresh the GitHub wiki from the local seed: `.\scripts\publish-wiki.ps1` (after the wiki has been created once in the GitHub UI).
 
 ### GitHub secrets (maintainers)
 

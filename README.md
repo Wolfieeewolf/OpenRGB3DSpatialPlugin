@@ -33,7 +33,9 @@ None of this is “done for everyone”—only a map of areas that have code:
 
 ## Documentation
 
-Plugin docs live under **[Documentation/](Documentation/)** (one folder):
+Browsable guide: **[Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki)** (user + developer pages).
+
+Contracts that ship with the code live under **[Documentation/](Documentation/)**:
 
 | Doc | When to read it |
 | --- | --- |
