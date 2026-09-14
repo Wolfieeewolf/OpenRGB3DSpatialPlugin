@@ -529,7 +529,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                               manual_room_width,
                                                               manual_room_height,
                                                               manual_room_depth);
-    // room_position equals world_position today (PluginSpatialMeasurement.md §4), so one bounds/centroid pass.
+    // room_position equals world_position today (Documentation/PluginSpatialMeasurement.md §4), so one bounds/centroid pass.
     GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
     const GridBounds& room_bounds = world_bounds;
 

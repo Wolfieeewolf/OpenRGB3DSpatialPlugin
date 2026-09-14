@@ -14,9 +14,14 @@ Day-to-day work is on **GitHub** (free Actions builds and releases). GitLab is a
 
 If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can flip the arrow. Until then, GitHub is canonical.
 
-**Spatial layout (plugin):** mm, grid units, RoomGrid, viewport, effects, spacing — see local `docs/PluginSpatialMeasurement.md` if present on your machine (gitignored). Read before changing layout math, reference points, or LED placement.
+**Plugin docs** live under [`Documentation/`](Documentation/) (single folder):
 
-**Game bridge (Minecraft / telemetry):** RoomGrid → game world — see local `docs/SpatialMeasurement.md` if present. Read when changing SHM, scale publish, or mod mapping.
+| Doc | Use it for |
+| --- | --- |
+| [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | mm, grid units, RoomGrid, viewport, effects, spacing — read before changing layout math, reference points, or LED placement |
+| [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry — RoomGrid → game world; read when changing SHM, scale publish, or mod mapping |
+| [effect-event-maker.md](Documentation/effect-event-maker.md) | Effect packs + Event Bindings |
+| [shader-conversion.md](Documentation/shader-conversion.md) | Porting shaders into Shader Field / volume / strip kernels |
 
 ### GitHub secrets (maintainers)
 
@@ -191,8 +196,6 @@ Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`Ef
 - **Spectrum bin effects** (Spectrum Bars, Audio Strip Visualizer) use frequency band + response only; they sample raw FFT bins in the Hz range.
 - **Level-driven effects** (Audio Level) use Role / Hz band + Feel (smoothing, sensitivity, falloff) + Color mode.
 - **Audio Pulse** (and Bass Punch) use the full beat-wave section for beat-triggered shockwaves from the origin.
-
-Optional local notes may live in a gitignored **`docs/`** folder on your machine; they are not part of the published repo.
 
 - Keep signal wiring/disconnect paths symmetrical for dynamically created effect UI widgets.
 - Keep list, combo, and selection state synchronized.
