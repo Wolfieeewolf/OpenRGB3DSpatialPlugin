@@ -12,11 +12,7 @@ Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cube
 
 ## Triage
 
-```bash
-python tools/shader_triage/triage_shaders.py "C:\Users\wolfi\Downloads\effect-shaders" --out tools/shader_triage/last_triage.csv
-```
-
-Reject: `iChannel`, `iMouse`, raymarch, audio/webcam. Prefer soft plasma / noise / ripples / aurora for 2D; strip chase/comet for 1D; true density fields for 3D.
+When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/webcam. Prefer soft plasma / noise / ripples / aurora for 2D; strip chase/comet for 1D; true density fields for 3D.
 
 ## Adapters
 
@@ -80,5 +76,3 @@ Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a 
 ## GPU vs CPU
 
 GPU for room fields — including **audio visual fields** (Audio Level, Spectrum Bars, Strip Viz, Pulse) via `SpatialVolumeFieldAssist`. **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen` (3D direction from the display plane, both hemispheres), nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.
-
-Pack/mapping self-check: `g++ -std=c++17 -O2 -o /tmp/sm_gpu_check tools/screen_mirror_gpu_check.cpp && /tmp/sm_gpu_check`
