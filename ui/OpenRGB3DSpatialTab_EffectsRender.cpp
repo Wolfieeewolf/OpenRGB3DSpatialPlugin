@@ -6,6 +6,8 @@
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ScreenCaptureManager.h"
+#include "ReactiveInputManager.h"
+#include "ReactiveInputTypes.h"
 #include "PluginLog.h"
 #include "ControllerLayout3D.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
@@ -23,7 +25,9 @@
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
 #include <set>
+#include <string>
 #include <vector>
 #include <memory>
 
@@ -36,6 +40,43 @@ struct EffectSlotGridOverride
     std::unique_ptr<GridContext3D> room_grid_local;
     std::unique_ptr<GridContext3D> world_grid_local;
 };
+
+std::string PreferReactiveLedName(RGBControllerInterface* ctrl, const LEDPosition3D& led)
+{
+    if(!ctrl)
+    {
+        return {};
+    }
+    auto score = [](const std::string& n) -> int {
+        if(n.empty())
+        {
+            return 0;
+        }
+        if(n.size() >= 4 && (n.compare(0, 4, "Key:") == 0 || n.compare(0, 4, "key:") == 0))
+        {
+            return 3;
+        }
+        return 1;
+    };
+    auto better = [&score](const std::string& a, const std::string& b) -> std::string {
+        return (score(b) > score(a)) ? b : a;
+    };
+    auto named = [ctrl, &better](unsigned int idx) -> std::string {
+        if(idx >= ctrl->GetLEDCount())
+        {
+            return {};
+        }
+        return better(ctrl->GetLEDName(idx), ctrl->GetLEDDisplayName(idx));
+    };
+    std::string as_global;
+    std::string as_zone;
+    as_global = named(led.led_idx);
+    if(led.zone_idx < ctrl->GetZoneCount())
+    {
+        as_zone = named(ctrl->GetZoneStartIndex(led.zone_idx) + led.led_idx);
+    }
+    return (score(as_zone) >= score(as_global)) ? as_zone : as_global;
+}
 
 void ApplyZoneAnchorMetadata(GridContext3D& grid,
                              ReferenceMode origin_mode,
@@ -456,6 +497,7 @@ static bool TryGetGlobalLedIndex(RGBControllerInterface* controller,
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
     MinecraftGame::ClearRenderSampleIndexContext();
+    SyncReactiveInputSession();
 
     if(controller_transforms.empty())
     {
@@ -979,6 +1021,40 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     const float shade_cache_quant = MMToGridUnits(24.0f, room_grid.grid_scale_mm);
     SpatialLightingSceneProvider::instance()->BeginAmbientShadeCacheFrame(shade_cache_quant);
+
+    if(ReactiveInputManager* reactive_mgr = ReactiveInputManager::instance())
+    {
+        if(reactive_mgr->isRunning())
+        {
+            std::vector<ReactiveLedSample> samples;
+            samples.reserve(256);
+            for(const std::unique_ptr<ControllerTransform>& transform : controller_transforms)
+            {
+                if(!transform || transform->hidden_by_virtual)
+                {
+                    continue;
+                }
+                ControllerLayout3D::UpdateWorldPositions(transform.get());
+                for(const LEDPosition3D& led : transform->led_positions)
+                {
+                    RGBControllerInterface* ctrl = led.controller;
+                    if(!ctrl)
+                    {
+                        continue;
+                    }
+                    ReactiveLedSample sample{};
+                    sample.type = ctrl->GetDeviceType();
+                    sample.name = PreferReactiveLedName(ctrl, led);
+                    sample.room_position = led.room_position;
+                    sample.local_position = led.local_position;
+                    sample.device_id = reinterpret_cast<std::uintptr_t>(ctrl);
+                    ParseHidVidPid(ctrl->GetLocation(), &sample.vid, &sample.pid);
+                    samples.push_back(std::move(sample));
+                }
+            }
+            reactive_mgr->SetLayoutSnapshot(std::move(samples));
+        }
+    }
 
     // Prepare GPU atlases against the same per-slot active grid used for LED eval
     // (zone / target-bounds / world), not always the full room.

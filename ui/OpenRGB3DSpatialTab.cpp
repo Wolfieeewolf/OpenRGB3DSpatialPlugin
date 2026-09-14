@@ -144,6 +144,14 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
         disconnect(audio, nullptr, this, nullptr);
     }
 
+    if(effect_timer)
+    {
+        effect_timer->stop();
+    }
+    effect_running = false;
+    SyncScreenCaptureSession();
+    SyncReactiveInputSession();
+
     SavePluginUiSettings();
 
     DisplayPlaneManager::instance()->SetEditCallback({});
@@ -836,6 +844,7 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     }
     effect_running = false;
     SyncScreenCaptureSession();
+    SyncReactiveInputSession();
 
     if(current_effect_ui)
     {

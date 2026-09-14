@@ -119,7 +119,8 @@ INCLUDEPATH += \
     SpatialRoom \
     SpatialLighting \
     Shaders \
-    Audio
+    Audio \
+    Input
 
 HEADERS += \
     OpenRGB3DSpatialPlugin.h \
@@ -328,6 +329,10 @@ HEADERS += \
     Effects3D/NoteSparkle/NoteSparkle.h \
     Effects3D/NoteSparkle/NoteSparkleVolumeFieldGlsl.h \
     Audio/AudioInputManager.h \
+    Input/ReactiveInputTypes.h \
+    Input/ReactiveKeyMap.h \
+    Input/ReactiveInputManager.h \
+    Effects3D/Reactive/Reactive.h \
     Effects3D/Plasma/Plasma.h \
     Effects3D/Spiral/Spiral.h \
     Effects3D/TravelingLight/TravelingLight.h \
@@ -517,6 +522,9 @@ SOURCES += \
     Effects3D/AudioPulse/AudioPulse.cpp \
     Effects3D/BassPunch/BassPunch.cpp \
     Effects3D/NoteSparkle/NoteSparkle.cpp \
+    Effects3D/Reactive/Reactive.cpp \
+    Input/ReactiveKeyMap.cpp \
+    Input/ReactiveInputManager.cpp \
     Effects3D/PulseRing/PulseRing.cpp \
     Effects3D/SurfaceAmbient/SurfaceAmbient.cpp \
     Effects3D/Starfield/Starfield.cpp \

@@ -196,8 +196,12 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   Screen Mirror samples the 2D capture per LED; occupancy still uses
  *   EffectGridSampleOutsideVolume.
  *
- * ORIGIN-LOCAL UV — SampleGpuVolumeOriginLocal01 (+ GLSL `l = p01 * 2.0 - 1.0`):
+ * ORIGIN-LOCAL UV — EffectGpuAtlasUvFromGrid / SampleGpuVolumeOriginLocal01
+ *   (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
+ *   X→right, Y→up, Z→back. Atlas readback has no Y/Z flip.
+ *   Pack GPU origins with EffectGpuAtlasUvFromGrid (unclamped). Sample LEDs with
+ *   SampleGpuVolumeOriginLocal01 so samples outside the scaled box are unlit.
    *   Half-extents are origin → farthest *active grid* face, multiplied by Scale
  *   (occupancy in the room; 100% Scale = 1.0). Scale < 1 makes the effect smaller inside the layout;
  *   samples outside that box are unlit — do not clamp UV onto atlas faces
@@ -253,6 +257,22 @@ inline float SampleStratumYNorm01(float y, const GridContext3D& grid, const Vect
     return std::clamp(NormalizeGridAxis01(y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
 }
 
+/** Canonical origin-local atlas UV. Grid X=right, Y=up, Z=back. No axis flips.
+ *  Inverse in GLSL: `l = p01 * 2.0 - 1.0; pos = l * vec3(hw,hh,hd)` (offset from anchor).
+ *  Unclamped so wave origins / samples outside occupancy stay in the same space. */
+inline void EffectGpuAtlasUvFromGrid(float x, float y, float z,
+                                     const Vector3D& origin,
+                                     const EffectGridAxisHalfExtents& e,
+                                     float* u, float* v, float* w)
+{
+    const float hw = std::max(e.hw, 1e-5f);
+    const float hh = std::max(e.hh, 1e-5f);
+    const float hd = std::max(e.hd, 1e-5f);
+    *u = 0.5f + 0.5f * (x - origin.x) / hw;
+    *v = 0.5f + 0.5f * (y - origin.y) / hh;
+    *w = 0.5f + 0.5f * (z - origin.z) / hd;
+}
+
 /** In-box origin-local UV with face clamp. Occupancy lookups must use
  *  SampleGpuVolumeOriginLocal01 so samples outside the scaled box stay unlit. */
 inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
@@ -260,12 +280,10 @@ inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
                                       const EffectGridAxisHalfExtents& e,
                                       float* c1, float* c2, float* c3)
 {
-    const float hw = std::max(e.hw, 1e-5f);
-    const float hh = std::max(e.hh, 1e-5f);
-    const float hd = std::max(e.hd, 1e-5f);
-    *c1 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_x - origin.x) / hw));
-    *c2 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_y - origin.y) / hh));
-    *c3 = std::max(0.0f, std::min(1.0f, 0.5f + 0.5f * (rot_z - origin.z) / hd));
+    EffectGpuAtlasUvFromGrid(rot_x, rot_y, rot_z, origin, e, c1, c2, c3);
+    *c1 = std::max(0.0f, std::min(1.0f, *c1));
+    *c2 = std::max(0.0f, std::min(1.0f, *c2));
+    *c3 = std::max(0.0f, std::min(1.0f, *c3));
 }
 
 /** Canonical GPU volume atlas lookup. Pair with GLSL `l = p01 * 2.0 - 1.0`.
@@ -278,12 +296,8 @@ inline bool SampleGpuVolumeOriginLocal01(float x, float y, float z,
                                          float* c1, float* c2, float* c3)
 {
     EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, normalized_scale);
-    const float hw = std::max(e.hw, 1e-5f);
-    const float hh = std::max(e.hh, 1e-5f);
-    const float hd = std::max(e.hd, 1e-5f);
-    const float u = 0.5f + 0.5f * (x - origin.x) / hw;
-    const float v = 0.5f + 0.5f * (y - origin.y) / hh;
-    const float w = 0.5f + 0.5f * (z - origin.z) / hd;
+    float u = 0.0f, v = 0.0f, w = 0.0f;
+    EffectGpuAtlasUvFromGrid(x, y, z, origin, e, &u, &v, &w);
     constexpr float kEps = 1e-4f;
     if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
     {

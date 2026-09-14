@@ -364,6 +364,8 @@ private:
     void RefreshAmbilightReferencePointDropdowns();
     bool PlaybackUsesScreenMirror() const;
     void SyncScreenCaptureSession();
+    bool PlaybackUsesReactive() const;
+    void SyncReactiveInputSession();
     void UpdateAudioPanelVisibility();
     bool IsAudioEffectClass(const std::string& class_name) const;
     void PopulateEffectLibraryCategories();

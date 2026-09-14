@@ -7,7 +7,9 @@
 #include "EffectListManager3D.h"
 #include "ZoneGrid3D.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
+#include "Effects3D/Reactive/Reactive.h"
 #include "ScreenCaptureManager.h"
+#include "ReactiveInputManager.h"
 #include "PluginLog.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
@@ -724,6 +726,43 @@ void OpenRGB3DSpatialTab::SyncScreenCaptureSession()
     capture_mgr.SetCaptureSessionActive(want_capture);
 }
 
+bool OpenRGB3DSpatialTab::PlaybackUsesReactive() const
+{
+    for(size_t i = 0; i < effect_stack.size(); i++)
+    {
+        const std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
+        if(inst && inst->enabled && inst->effect_class_name == "Reactive")
+        {
+            return true;
+        }
+    }
+
+    if(effect_stack.empty() && current_effect_ui)
+    {
+        return dynamic_cast<Reactive*>(current_effect_ui) != nullptr;
+    }
+
+    return false;
+}
+
+void OpenRGB3DSpatialTab::SyncReactiveInputSession()
+{
+    ReactiveInputManager* mgr = ReactiveInputManager::instance();
+    if(!mgr)
+    {
+        return;
+    }
+    const bool want = effect_running && PlaybackUsesReactive();
+    if(want)
+    {
+        mgr->start();
+    }
+    else
+    {
+        mgr->stop();
+    }
+}
+
 void OpenRGB3DSpatialTab::RefreshAmbilightReferencePointDropdowns()
 {
     for(unsigned int i = 0; i < effect_stack.size(); i++)
@@ -832,6 +871,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
         if(stop_effect_button) stop_effect_button->setEnabled(true);
         UpdateStartStopAllButtons();
         SyncScreenCaptureSession();
+        SyncReactiveInputSession();
         return;
     }
 
@@ -873,6 +913,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
     if(start_effect_button) start_effect_button->setEnabled(false);
     if(stop_effect_button) stop_effect_button->setEnabled(true);
     SyncScreenCaptureSession();
+    SyncReactiveInputSession();
 }
 
 void OpenRGB3DSpatialTab::stopEffectClicked()
@@ -883,6 +924,7 @@ void OpenRGB3DSpatialTab::stopEffectClicked()
         viewport->SetEffectRenderOwnsScreenPreviewUploads(false);
     }
     SyncScreenCaptureSession();
+    SyncReactiveInputSession();
     if(effect_timer && effect_timer->isActive())
     {
         effect_timer->stop();
