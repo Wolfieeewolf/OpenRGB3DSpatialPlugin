@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "GridSpaceUtils.h"
+
+#include "ControllerLayout3D.h"
+#include <algorithm>
+#include <cstdint>
+
+namespace
+{
+
+    GridBounds ComputeBoundsInternal(const ManualRoomSettings& settings,
+                                     float grid_scale_mm,
+                                     const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
+    {
+        GridBounds bounds{};
+
+        if(settings.use_manual)
+        {
+            bounds.min_x = 0.0f;
+            bounds.max_x = MMToGridUnits(settings.width_mm, grid_scale_mm);
+            bounds.min_y = 0.0f;
+            bounds.max_y = MMToGridUnits(settings.height_mm, grid_scale_mm);
+            bounds.min_z = 0.0f;
+            bounds.max_z = MMToGridUnits(settings.depth_mm, grid_scale_mm);
+            return bounds;
+        }
+
+        bool has_leds = false;
+
+        for(unsigned int i = 0; i < transforms.size(); i++)
+        {
+            ControllerTransform* transform = transforms[i].get();
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+
+            if(transform->world_positions_dirty)
+            {
+                ControllerLayout3D::UpdateWorldPositions(transform);
+            }
+
+            for(unsigned int j = 0; j < transform->led_positions.size(); j++)
+            {
+                const LEDPosition3D& led = transform->led_positions[j];
+                const Vector3D& pos = led.world_position;
+
+                if(!has_leds)
+                {
+                    bounds.min_x = bounds.max_x = pos.x;
+                    bounds.min_y = bounds.max_y = pos.y;
+                    bounds.min_z = bounds.max_z = pos.z;
+                    has_leds = true;
+                }
+                else
+                {
+                    if(pos.x < bounds.min_x) bounds.min_x = pos.x;
+                    if(pos.x > bounds.max_x) bounds.max_x = pos.x;
+                    if(pos.y < bounds.min_y) bounds.min_y = pos.y;
+                    if(pos.y > bounds.max_y) bounds.max_y = pos.y;
+                    if(pos.z < bounds.min_z) bounds.min_z = pos.z;
+                    if(pos.z > bounds.max_z) bounds.max_z = pos.z;
+                }
+            }
+        }
+
+        if(!has_leds)
+        {
+            float default_units = MMToGridUnits(DEFAULT_ROOM_SIZE_MM, grid_scale_mm);
+            bounds.min_x = 0.0f;
+            bounds.max_x = default_units;
+            bounds.min_y = 0.0f;
+            bounds.max_y = default_units;
+            bounds.min_z = 0.0f;
+            bounds.max_z = default_units;
+        }
+
+        return bounds;
+    }
+}
+
+float SafeGridScaleMm(float grid_scale_mm)
+{
+    return (grid_scale_mm > 0.001f) ? grid_scale_mm : DEFAULT_GRID_SCALE_MM;
+}
+
+float MMToGridUnits(float mm, float grid_scale_mm)
+{
+    return mm / SafeGridScaleMm(grid_scale_mm);
+}
+
+float GridUnitsToMM(float units, float grid_scale_mm)
+{
+    return units * SafeGridScaleMm(grid_scale_mm);
+}
+
+GridExtents ResolveGridExtents(const ManualRoomSettings& settings,
+                               float grid_scale_mm,
+                               const GridDimensionDefaults& defaults)
+{
+    GridExtents extents{};
+
+    const int safe_grid_x = std::max(defaults.grid_x, 0);
+    const int safe_grid_y = std::max(defaults.grid_y, 0);
+    const int safe_grid_z = std::max(defaults.grid_z, 0);
+
+    if(settings.use_manual)
+    {
+        extents.width_units  = MMToGridUnits(settings.width_mm, grid_scale_mm);
+        extents.height_units = MMToGridUnits(settings.height_mm, grid_scale_mm);
+        extents.depth_units  = MMToGridUnits(settings.depth_mm, grid_scale_mm);
+    }
+    else
+    {
+        extents.width_units  = static_cast<float>(safe_grid_x);
+        extents.height_units = static_cast<float>(safe_grid_y);
+        extents.depth_units  = static_cast<float>(safe_grid_z);
+    }
+
+    return extents;
+}
+
+GridBounds ComputeGridBounds(const ManualRoomSettings& settings,
+                             float grid_scale_mm,
+                             const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
+{
+    return ComputeBoundsInternal(settings, grid_scale_mm, transforms);
+}
+
+bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
+                           bool room_aligned,
+                           Vector3D* out_centroid)
+{
+    if(!out_centroid)
+    {
+        return false;
+    }
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    std::uint64_t count = 0;
+    for(unsigned int i = 0; i < transforms.size(); i++)
+    {
+        ControllerTransform* transform = transforms[i].get();
+        if(!transform || transform->hidden_by_virtual)
+        {
+            continue;
+        }
+        if(transform->world_positions_dirty)
+        {
+            ControllerLayout3D::UpdateWorldPositions(transform);
+        }
+        for(unsigned int j = 0; j < transform->led_positions.size(); j++)
+        {
+            const LEDPosition3D& led = transform->led_positions[j];
+            const Vector3D& pos = room_aligned ? led.room_position : led.world_position;
+            sx += pos.x;
+            sy += pos.y;
+            sz += pos.z;
+            count++;
+        }
+    }
+    if(count == 0)
+    {
+        return false;
+    }
+    const double inv = 1.0 / static_cast<double>(count);
+    out_centroid->x = static_cast<float>(sx * inv);
+    out_centroid->y = static_cast<float>(sy * inv);
+    out_centroid->z = static_cast<float>(sz * inv);
+    return true;
+}

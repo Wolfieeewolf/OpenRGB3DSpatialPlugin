@@ -1,0 +1,312 @@
+name: Release builds
+
+# Multi-platform Qt6 pipeline builds for OpenRGB 1.0 / Plugin API 5.
+# GitHub covers the public runner subset. GitLab org CI (see .gitlab-ci.yml)
+# matches OpenRGBEffectsPlugin Qt6: Win32/64, Linux i386/amd64/armhf/arm64,
+# Debian Bookworm+Trixie debs, Fedora 44 rpm, Flatpak vs OpenRGB master, macOS.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create/update a GitHub release from this run (tag pushes always release)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Windows 64
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+          modules: ''
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build
+        shell: cmd
+        run: |
+          qmake -v
+          qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
+          nmake
+
+      - name: Package
+        shell: pwsh
+        env:
+          QT_MAJOR: '6'
+          DIST_VARIANT: Windows_64
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/package-windows.ps1
+
+      - name: Build MSI installer
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/build-msi.ps1
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: Windows_64
+          path: |
+            dist/*.zip
+            release/OpenRGB3DSpatialPlugin.dll
+          if-no-files-found: error
+
+  build-linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            qt_arch: linux_gcc_64
+            artifact: Linux_amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            qt_arch: linux_gcc_arm64
+            artifact: Linux_arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          chmod +x scripts/ci/*.sh
+          sudo bash scripts/ci/install-linux-deps.sh 6
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: ${{ matrix.qt_arch }}
+          cache: true
+          modules: ''
+
+      - name: Build
+        run: bash scripts/ci/build-linux.sh 6 release
+
+      - name: Package
+        env:
+          QT_AQT_VERSION: '6.8.3'
+        run: bash scripts/ci/package-linux.sh 6 ${{ matrix.arch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/*
+            libOpenRGB3DSpatialPlugin.so
+          if-no-files-found: error
+
+  build-macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: intel
+            runner: macos-15-intel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build
+        run: |
+          chmod +x scripts/ci/*.sh
+          bash scripts/ci/build-macos.sh 6 release
+
+      - name: Package
+        env:
+          DIST_VARIANT: macOS_${{ matrix.arch }}
+        run: bash scripts/ci/package-macos.sh 6 ${{ matrix.arch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: macOS_${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            libOpenRGB3DSpatialPlugin.dylib
+          if-no-files-found: error
+
+  build-minecraft:
+    name: Minecraft Fabric sender
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Build Fabric mod
+        working-directory: integrations/minecraft
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          # Terraformers maven sometimes times out from Actions — retry a few times.
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            echo "Fabric build attempt ${attempt}/5"
+            if ./gradlew --no-daemon build; then
+              ok=1
+              break
+            fi
+            echo "Build failed; waiting before retry..."
+            sleep $((attempt * 20))
+          done
+          if [[ "$ok" -ne 1 ]]; then
+            echo "Fabric mod build failed after retries"
+            exit 1
+          fi
+          ls -la build/libs/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: Minecraft_Fabric
+          path: |
+            integrations/minecraft/build/libs/openrgb-minecraft-sender-*.jar
+            !integrations/minecraft/build/libs/*-sources.jar
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [build-windows, build-linux, build-macos, build-minecraft]
+    if: >-
+      always() &&
+      !cancelled() &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       (github.event_name == 'workflow_dispatch' && inputs.create_release))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Collect release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          # Packaged plugin downloads + Minecraft companion JAR (exclude *-sources.jar).
+          find artifacts -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.tar.gz' -o -name 'openrgb-minecraft-sender-*.jar' \) -print0 \
+            | while IFS= read -r -d '' f; do
+                base="$(basename "$f")"
+                case "$base" in
+                  *-sources.jar) continue ;;
+                esac
+                cp -v "$f" "release-assets/$base"
+              done
+          echo "files=$(find release-assets -type f | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          ls -la release-assets
+
+      - name: Fail if no packages
+        if: steps.assets.outputs.files == '0'
+        run: |
+          echo "No packaged artifacts found — at least one OS build must succeed."
+          exit 1
+
+      - name: Resolve tag name
+        id: tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=v0.0.0-ci-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.name }}"
+          NOTES="$(cat <<EOF
+          ## OpenRGB 3D Spatial Plugin ${TAG}
+
+          Pre-built **Qt6** plugins. Filenames follow OpenRGB-style suffixes so the package type is obvious.
+
+          ### Which file do I want?
+
+          | You have… | Download |
+          | --- | --- |
+          | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` |
+          | **Linux** AppImage / Debian pipeline (Qt 6.8.x) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` |
+          | **CachyOS / Arch / Fedora** system OpenRGB | rebuild with \`scripts/install-linux-user.sh\` (pipeline \`.so\` is for AppImage; may not match distro Qt) |
+          | **Linux Flatpak** OpenRGB (KDE Flatpak runtime) | Flatpak extension via \`scripts/build-flatpak-plugin.sh\` / \`flatpak/\` — do not Install Plugin a host \`.so\` |
+          | **Linux** ARM64 | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` |
+          | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` |
+          | **macOS** Intel | \`OpenRGB3DSpatialPlugin_macOS_intel.zip\` |
+          | **Minecraft** (Fabric) Room Ambilight + vitals | \`openrgb-minecraft-sender-*.jar\` |
+
+          Match **OpenRGB → Information → Qt Version**. Restart OpenRGB after installing.
+          EOF
+          )"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Drop legacy asset names from earlier v0.1.0 uploads.
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
+              case "$name" in
+                *.msi|\
+                *Qt6.10.3*|\
+                OpenRGB_3D_Spatial_Plugin_Windows_64.zip|\
+                OpenRGB3DSpatialPlugin_Linux_amd64.tar.gz|\
+                OpenRGB3DSpatialPlugin_Linux_arm64.tar.gz)
+                  gh release delete-asset "$TAG" "$name" --yes || true
+                  ;;
+              esac
+            done
+            gh release edit "$TAG" --notes "$NOTES"
+            gh release upload "$TAG" release-assets/* --clobber
+          else
+            gh release create "$TAG" release-assets/* \
+              --title "$TAG" \
+              --notes "$NOTES"
+          fi

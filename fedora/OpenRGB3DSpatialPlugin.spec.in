@@ -1,0 +1,35 @@
+%global _name OpenRGB3DSpatialPlugin
+
+Name: openrgb-plugin-3d-spatial
+Version: __VERSION__
+Release: 0%{?dist}
+Summary: 3D Spatial LED Control plugin for OpenRGB
+
+License: GPLv2
+URL: https://github.com/Wolfieeewolf/%{_name}
+
+BuildRequires: gcc-c++ libusbx-devel libstdc++-devel qt6-qtbase-devel qt6-linguist mesa-libGL-devel
+Requires: qt6-qtbase openrgb
+
+%description
+3D Spatial LED Control plugin for OpenRGB 1.0 pipeline (Plugin API 5, Qt6).
+
+%prep
+cp -r %{_sourcedir}/%{_name}/. %{_builddir}
+
+%build
+cd %{_builddir}
+export CXXFLAGS=${CXXFLAGS/-pipe}
+%qmake_qt6 PREFIX=%{_prefix}
+%make_build
+
+%install
+%make_install INSTALL_ROOT=%{buildroot}
+
+%files
+%{_exec_prefix}/lib/openrgb/plugins/libOpenRGB3DSpatialPlugin.so
+%{_datadir}/metainfo/org.openrgb.OpenRGB.Plugin.Spatial.metainfo.xml
+
+%changelog
+* Sat Sep 12 2026 Wolfieeewolf <noreply@openrgb.org> - 0.0.0-0
+- Pipeline package for OpenRGB 1.0 / Plugin API 5

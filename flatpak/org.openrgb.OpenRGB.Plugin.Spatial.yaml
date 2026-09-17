@@ -1,0 +1,25 @@
+# Flatpak extension for OpenRGB pipeline (master / Plugin API 5).
+# Same layout as OpenRGBEffectsPlugin: runtime-version master, KDE SDK 6.10.
+id: org.openrgb.OpenRGB.Plugin.Spatial
+branch: '5'
+extension-tag: org.openrgb.OpenRGB.Plugin
+build-extension: true
+separate-locales: false
+
+runtime: org.openrgb.OpenRGB
+runtime-version: 'master'
+sdk: org.kde.Sdk//6.10
+
+build-options:
+  prefix: /app/lib/openrgb/plugins/Spatial
+
+modules:
+  - name: openrgb-plugin-spatial
+    buildsystem: qmake
+    post-install:
+      - mv ${FLATPAK_DEST}/lib/openrgb/plugins/libOpenRGB3DSpatialPlugin.so ${FLATPAK_DEST}/libOpenRGB3DSpatialPlugin.so
+      - rm -rf ${FLATPAK_DEST}/lib
+      - install -Dm644 flatpak/org.openrgb.OpenRGB.Plugin.Spatial.metainfo.xml ${FLATPAK_DEST}/share/metainfo/org.openrgb.OpenRGB.Plugin.Spatial.metainfo.xml
+    sources:
+      - type: dir
+        path: ../

@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>StratumBandPanel</class>
+ <widget class="QWidget" name="StratumBandPanel">
+  <layout class="QVBoxLayout" name="outerLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" name="layoutRow">
+     <item>
+      <widget class="QLabel" name="layoutCaption">
+       <property name="text">
+        <string>Height bands:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="layoutCombo">
+       <property name="toolTip">
+        <string>Per band: blend speed / tightness / phase for one pattern pass, plus optional spatial motion (scroll room axes, phase spin, roll) so calm effects still drift across the room.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="bandTuningGroup">
+     <property name="title">
+      <string>Band tuning</string>
+     </property>
+     <property name="toolTip">
+      <string>Speed % scales time motion in that band. Tightness % scales spatial detail in the pattern. Phase ° adds pattern phase offset per band.</string>
+     </property>
+     <layout class="QGridLayout" name="bandGrid">
+      <item row="0" column="0">
+       <widget class="QLabel" name="bandHeaderSpacer"/>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="speedHeader">
+        <property name="text">
+         <string>Speed %</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QLabel" name="tightHeader">
+        <property name="text">
+         <string>Tight %</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="5">
+       <widget class="QLabel" name="phaseHeader">
+        <property name="text">
+         <string>Phase °</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="floorBandCaption"/>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSlider" name="speedSliderFloor">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="maximum">
+         <number>200</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="speedLabelFloor">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QSlider" name="tightSliderFloor">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="minimum">
+         <number>25</number>
+        </property>
+        <property name="maximum">
+         <number>300</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="4">
+       <widget class="QLabel" name="tightLabelFloor">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5">
+       <widget class="QSlider" name="phaseSliderFloor">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="minimum">
+         <number>-180</number>
+        </property>
+        <property name="maximum">
+         <number>180</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="6">
+       <widget class="QLabel" name="phaseLabelFloor">
+        <property name="minimumSize">
+         <size>
+          <width>32</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="midBandCaption"/>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSlider" name="speedSliderMid">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="maximum">
+         <number>200</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="speedLabelMid">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QSlider" name="tightSliderMid">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="minimum">
+         <number>25</number>
+        </property>
+        <property name="maximum">
+         <number>300</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="4">
+       <widget class="QLabel" name="tightLabelMid">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="5">
+       <widget class="QSlider" name="phaseSliderMid">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="minimum">
+         <number>-180</number>
+        </property>
+        <property name="maximum">
+         <number>180</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="6">
+       <widget class="QLabel" name="phaseLabelMid">
+        <property name="minimumSize">
+         <size>
+          <width>32</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="ceilingBandCaption"/>
+      </item>
+      <item row="3" column="1">
+       <widget class="QSlider" name="speedSliderCeiling">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="maximum">
+         <number>200</number>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="speedLabelCeiling">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QSlider" name="tightSliderCeiling">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="minimum">
+         <number>25</number>
+        </property>
+        <property name="maximum">
+         <number>300</number>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="4">
+       <widget class="QLabel" name="tightLabelCeiling">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="5">
+       <widget class="QSlider" name="phaseSliderCeiling">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="minimum">
+         <number>-180</number>
+        </property>
+        <property name="maximum">
+         <number>180</number>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="6">
+       <widget class="QLabel" name="phaseLabelCeiling">
+        <property name="minimumSize">
+         <size>
+          <width>32</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="motionGroup">
+     <property name="title">
+      <string>Spatial motion by band</string>
+     </property>
+     <property name="toolTip">
+      <string>When height bands are on: each floor / mid / ceiling row can add scroll along room X/Y/Z, clockwise or counter-clockwise phase drift, or horizontal roll around the effect origin. Rate scales strength.</string>
+     </property>
+     <layout class="QGridLayout" name="motionGrid">
+      <item row="0" column="0">
+       <widget class="QLabel" name="motionHeaderSpacer"/>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="motionKindHeader">
+        <property name="text">
+         <string>Motion</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QLabel" name="motionRateHeader">
+        <property name="text">
+         <string>Rate %</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="motionFloorCaption"/>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QComboBox" name="motionKindFloor"/>
+      </item>
+      <item row="1" column="3">
+       <widget class="QSlider" name="motionRateSliderFloor">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="maximum">
+         <number>200</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="4">
+       <widget class="QLabel" name="motionRateLabelFloor">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="motionMidCaption"/>
+      </item>
+      <item row="2" column="1" colspan="2">
+       <widget class="QComboBox" name="motionKindMid"/>
+      </item>
+      <item row="2" column="3">
+       <widget class="QSlider" name="motionRateSliderMid">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="maximum">
+         <number>200</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="4">
+       <widget class="QLabel" name="motionRateLabelMid">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="motionCeilingCaption"/>
+      </item>
+      <item row="3" column="1" colspan="2">
+       <widget class="QComboBox" name="motionKindCeiling"/>
+      </item>
+      <item row="3" column="3">
+       <widget class="QSlider" name="motionRateSliderCeiling">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="maximum">
+         <number>200</number>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="4">
+       <widget class="QLabel" name="motionRateLabelCeiling">
+        <property name="minimumSize">
+         <size>
+          <width>28</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

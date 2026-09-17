@@ -1,0 +1,39 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/spatial_shaders">
+        <file alias="room_plasma.fs">spatial_shaders/room_plasma.fs</file>
+        <file alias="slow_waves.fs">spatial_shaders/slow_waves.fs</file>
+        <file alias="spectrum_glow.fs">spatial_shaders/spectrum_glow.fs</file>
+        <file alias="ember_field.fs">spatial_shaders/ember_field.fs</file>
+        <file alias="soft_aurora.fs">spatial_shaders/soft_aurora.fs</file>
+        <file alias="soft_ripples.fs">spatial_shaders/soft_ripples.fs</file>
+        <file alias="hex_drift.fs">spatial_shaders/hex_drift.fs</file>
+        <file alias="lobe_plasma.fs">spatial_shaders/lobe_plasma.fs</file>
+        <file alias="noise_contour.fs">spatial_shaders/noise_contour.fs</file>
+        <file alias="corner_waves.fs">spatial_shaders/corner_waves.fs</file>
+        <file alias="aurora_ridge.fs">spatial_shaders/aurora_ridge.fs</file>
+        <file alias="neon_warp.fs">spatial_shaders/neon_warp.fs</file>
+        <file alias="soft_blobs.fs">spatial_shaders/soft_blobs.fs</file>
+        <file alias="atom_plasma.fs">spatial_shaders/atom_plasma.fs</file>
+        <file alias="cell_bloom.fs">spatial_shaders/cell_bloom.fs</file>
+        <file alias="voronoi_wash.fs">spatial_shaders/voronoi_wash.fs</file>
+        <file alias="gyroid_mist.fs">spatial_shaders/gyroid_mist.fs</file>
+        <file alias="vortex_swirl.fs">spatial_shaders/vortex_swirl.fs</file>
+        <file alias="wave_mesh.fs">spatial_shaders/wave_mesh.fs</file>
+        <file alias="melt_petals.fs">spatial_shaders/melt_petals.fs</file>
+        <file alias="oozy_flow.fs">spatial_shaders/oozy_flow.fs</file>
+        <file alias="plasmic_ribbons.fs">spatial_shaders/plasmic_ribbons.fs</file>
+        <file alias="dense_chroma.fs">spatial_shaders/dense_chroma.fs</file>
+        <file alias="rainbow_drip.fs">spatial_shaders/rainbow_drip.fs</file>
+        <file alias="neon_space.fs">spatial_shaders/neon_space.fs</file>
+        <file alias="fluid_swirl.fs">spatial_shaders/fluid_swirl.fs</file>
+        <file alias="psyche_grid.fs">spatial_shaders/psyche_grid.fs</file>
+        <file alias="blau_waves.fs">spatial_shaders/blau_waves.fs</file>
+        <file alias="oil_slick.fs">spatial_shaders/oil_slick.fs</file>
+        <file alias="jewel_scatter.fs">spatial_shaders/jewel_scatter.fs</file>
+        <file alias="potential_rings.fs">spatial_shaders/potential_rings.fs</file>
+        <file alias="fog_drift.fs">spatial_shaders/fog_drift.fs</file>
+        <file alias="arc_static.fs">spatial_shaders/arc_static.fs</file>
+        <file alias="petal_spin.fs">spatial_shaders/petal_spin.fs</file>
+    </qresource>
+</RCC>

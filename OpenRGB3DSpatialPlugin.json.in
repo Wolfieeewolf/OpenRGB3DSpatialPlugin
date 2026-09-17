@@ -1,0 +1,11 @@
+{
+    "Id" : "org.openrgb.openrgb3dspatialplugin",
+    "Name" : "PROJECT_NAME",
+    "VendorId" : "openrgb",
+    "Version" : "VERSION_NUM",
+    "VersionStr" : "VERSION_STR",
+    "Url" : "PROJECT_URL",
+    "Commit" : "GIT_COMMIT_ID",
+    "Description" : "PROJECT_DESC",
+    "OpenRGBPluginAPIVersion" : 5
+}

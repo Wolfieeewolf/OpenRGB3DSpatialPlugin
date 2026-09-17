@@ -1,0 +1,843 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#ifndef SPATIALEFFECT3D_H
+#define SPATIALEFFECT3D_H
+
+#include <QWidget>
+#include <QLabel>
+#include <QSlider>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QGridLayout>
+#include <QPushButton>
+
+#include "RGBController.h"
+
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <functional>
+#include <QString>
+
+#include "LEDPosition3D.h"
+#include "SpatialEffectTypes.h"
+#include "GridSpaceUtils.h"
+#include "SpatialRoom/SpatialRoomTypes.h"
+#include "SpatialLighting/SpatialLightingEngine.h"
+#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "SpatialLayerCore.h"
+#include "EffectStratumBlend.h"
+#include "Effects3D/AudioReactiveCommon.h"
+#include "Shaders/SpatialStripFieldAssist.h"
+#include <nlohmann/json.hpp>
+#include <cstdint>
+
+class EffectGeometryPanel;
+class StratumBandPanel;
+class StripKernelColormapPanel;
+
+struct GridContext3D
+{
+    float min_x, max_x;
+    float min_y, max_y;
+    float min_z, max_z;
+    float width, height, depth;
+    float center_x, center_y, center_z;
+    float grid_scale_mm;
+
+    float led_centroid_x = 0.0f;
+    float led_centroid_y = 0.0f;
+    float led_centroid_z = 0.0f;
+    bool has_led_centroid = false;
+
+    float anchor_override_x = 0.0f;
+    float anchor_override_y = 0.0f;
+    float anchor_override_z = 0.0f;
+    bool has_anchor_override = false;
+
+    uint64_t render_sequence = 0;
+
+    GridContext3D(float minX,
+                  float maxX,
+                  float minY,
+                  float maxY,
+                  float minZ,
+                  float maxZ,
+                  float scale_mm = DEFAULT_GRID_SCALE_MM)
+        : min_x(minX), max_x(maxX),
+          min_y(minY), max_y(maxY),
+          min_z(minZ), max_z(maxZ),
+          grid_scale_mm(scale_mm)
+    {
+        width = max_x - min_x;
+        height = max_y - min_y;
+        depth = max_z - min_z;
+
+        center_x = (min_x + max_x) / 2.0f;
+        center_y = (min_y + max_y) / 2.0f;
+        center_z = (min_z + max_z) / 2.0f;
+    }
+
+    void SetLedCentroid(float cx, float cy, float cz)
+    {
+        led_centroid_x = cx;
+        led_centroid_y = cy;
+        led_centroid_z = cz;
+        has_led_centroid = true;
+    }
+
+    void SetAnchorOverride(float ax, float ay, float az)
+    {
+        anchor_override_x = ax;
+        anchor_override_y = ay;
+        anchor_override_z = az;
+        has_anchor_override = true;
+    }
+};
+
+struct AudioReactiveColorParams
+{
+    float gradient_pos01 = 0.5f;
+    float intensity = 1.0f;
+    uint32_t beat_color_slot = 0;
+    float time = 0.0f;
+    float grid_x = 0.0f;
+    float grid_y = 0.0f;
+    float grid_z = 0.0f;
+    const GridContext3D* grid = nullptr;
+    Vector3D origin{};
+    Vector3D rotated_pos{};
+    float y_norm01 = 0.0f;
+    float stratum_mot01 = 0.0f;
+    const EffectStratumBlend::BandBlendScalars* band_scalars = nullptr;
+};
+
+struct EffectGridAxisHalfExtents
+{
+    float hw;
+    float hh;
+    float hd;
+};
+
+inline EffectGridAxisHalfExtents MakeEffectGridAxisHalfExtents(const GridContext3D& grid, float normalized_scale)
+{
+    float s = std::max(0.05f, normalized_scale);
+    float hw = grid.width * 0.5f * s;
+    float hh = grid.height * 0.5f * s;
+    float hd = grid.depth * 0.5f * s;
+    if(hw < 1e-6f) hw = 1.0f;
+    if(hh < 1e-6f) hh = 1.0f;
+    if(hd < 1e-6f) hd = 1.0f;
+    return {hw, hh, hd};
+}
+
+/** GPU atlas coverage from an arbitrary Spatial Anchor: each axis reaches the farther grid face. */
+inline EffectGridAxisHalfExtents MakeEffectGridOriginLocalHalfExtents(const GridContext3D& grid,
+                                                                      const Vector3D& origin,
+                                                                      float normalized_scale)
+{
+    float s = std::max(0.05f, normalized_scale);
+    float hw = std::max(std::fabs(origin.x - grid.min_x), std::fabs(origin.x - grid.max_x)) * s;
+    float hh = std::max(std::fabs(origin.y - grid.min_y), std::fabs(origin.y - grid.max_y)) * s;
+    float hd = std::max(std::fabs(origin.z - grid.min_z), std::fabs(origin.z - grid.max_z)) * s;
+    if(hw < 1e-6f) hw = 1.0f;
+    if(hh < 1e-6f) hh = 1.0f;
+    if(hd < 1e-6f) hd = 1.0f;
+    return {hw, hh, hd};
+}
+
+/** Half-extents for origin-local GPU UV. Scale shrinks/grows this domain (effect occupancy). */
+inline EffectGridAxisHalfExtents MakeEffectGpuAtlasHalfExtents(const GridContext3D& grid,
+                                                              const Vector3D& origin,
+                                                              float normalized_scale)
+{
+    return MakeEffectGridOriginLocalHalfExtents(grid, origin, std::max(0.05f, normalized_scale));
+}
+
+inline float EffectGridBoundingRadius(const GridContext3D& grid, float normalized_scale)
+{
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
+    return std::sqrt(e.hw * e.hw + e.hh * e.hh + e.hd * e.hd);
+}
+
+inline float EffectGridHorizontalRadialNormXZ(float rx, float rz, float hw, float hd)
+{
+    float lx = rx / hw;
+    float lz = rz / hd;
+    return std::sqrt(lx * lx + lz * lz);
+}
+
+inline float EffectGridHorizontalRadialNorm01(float r_xz_corner_sqrt2)
+{
+    constexpr float inv_sqrt2 = 0.70710678f;
+    return std::min(1.0f, r_xz_corner_sqrt2 * inv_sqrt2);
+}
+
+inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
+{
+    const float mx = std::max(grid.max_x - grid.min_x, 1e-4f);
+    const float mz = std::max(grid.max_z - grid.min_z, 1e-4f);
+    const float tx = std::fabs((x - grid.min_x) / mx - 0.5f) * 2.0f;
+    const float tz = std::fabs((z - grid.min_z) / mz - 0.5f) * 2.0f;
+    return std::clamp(std::max(tx, tz), 0.0f, 1.0f);
+}
+
+/* --- Spatial coordinate contract (single source of truth) ---
+ *
+ * ROOM UV — NormalizeGridAxis01:
+ *   Maps world position into the active GridContext3D AABB [0,1]^3
+ *   (front-left floor = 0,0,0 → right / ceiling / back = 1,1,1).
+ *   Target zone bounds change that AABB. Use only for wall/floor/ceiling
+ *   surface fields (Surface Ambient) and room-edge fade.
+ *   Sample those GPU atlases with SampleGpuRoomVolume01 — no axis flips.
+ *   Screen Mirror samples the 2D capture per LED; occupancy still uses
+ *   EffectGridSampleOutsideVolume.
+ *
+ * ORIGIN-LOCAL UV — EffectGpuAtlasUvFromGrid / SampleGpuVolumeOriginLocal01
+ *   (+ GLSL `l = p01 * 2.0 - 1.0`):
+ *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
+ *   X→right, Y→up, Z→back. Atlas readback has no Y/Z flip.
+ *   Pack GPU origins with EffectGpuAtlasUvFromGrid (unclamped). Sample LEDs with
+ *   SampleGpuVolumeOriginLocal01 so samples outside the scaled box are unlit.
+   *   Half-extents are origin → farthest *active grid* face, multiplied by Scale
+ *   (occupancy in the room; 100% Scale = 1.0). Scale < 1 makes the effect smaller inside the layout;
+ *   samples outside that box are unlit — do not clamp UV onto atlas faces
+ *   (that is the four-quadrant artifact). Size is feature size (ring width, etc.)
+ *   via u_params, not atlas coverage. Reconstruct world distance with
+ *   MakeEffectGpuAtlasHalfExtents (same extents as the UV lookup).
+ *   All origin-centric GPU volumes and Shader Field projections use this helper.
+ *
+ * STRATUM Y — SampleStratumYNorm01:
+ *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).
+ *
+ * Anchor resolution: GetEffectOriginGrid(grid) only. Target zone bounds change grid, not a
+ * second origin path. Do not reintroduce room-UV origin packing for GPU volumes.
+ *
+ * --- Slider feel (shared by every effect) ---
+ * Defaults: Speed / Frequency / Detail = 0 (no motion, no flashing).
+ *   Size 100 = 100% feature size. Scale 100 = 100% occupancy.
+ * Speed 0–200: GetMotionHz(). 0 stops all time-based motion. 100 ≈ 0.33 Hz,
+ *   200 ≈ 0.85 Hz. CalculateProgress(t) is elapsed cycles (t * GetMotionHz).
+ *   Do not add constant floors (0.02/0.05/0.35) that keep animating at Speed 0.
+ * Frequency 0–200: GetColorCycleHz() for hue/palette scroll (~0.11 Hz at 100).
+ *   Frequency 0 stops hue cycling. GetNormalizedFrequency() for spatial density.
+ * Size 0–200: GetNormalizedSize() is 1.0 at 100 (feature size, not occupancy).
+ * Scale 0–300: occupancy only. 100 = fill the grid from the Spatial Anchor.
+ *   Never mix Scale into Size/zoom/tile math.
+ */
+
+inline float NormalizeGridAxis01(float value, float min_v, float max_v)
+{
+    float range = max_v - min_v;
+    if(range <= 1e-5f)
+    {
+        return 0.5f;
+    }
+    return std::max(0.0f, std::min(1.0f, (value - min_v) / range));
+}
+
+/** Unit UV along a grid axis; not clamped — anchors may sit outside the LED AABB. */
+inline float GridAxisToUnitUnclamped(float value, float min_v, float max_v)
+{
+    float range = max_v - min_v;
+    if(range <= 1e-5f)
+    {
+        return 0.5f;
+    }
+    return (value - min_v) / range;
+}
+
+/** Stratum band Y: room height with Spatial Anchor at 0.5. */
+inline float SampleStratumYNorm01(float y, const GridContext3D& grid, const Vector3D& origin)
+{
+    const float oy = GridAxisToUnitUnclamped(origin.y, grid.min_y, grid.max_y);
+    return std::clamp(NormalizeGridAxis01(y, grid.min_y, grid.max_y) - oy + 0.5f, 0.0f, 1.0f);
+}
+
+/** Canonical origin-local atlas UV. Grid X=right, Y=up, Z=back. No axis flips.
+ *  Inverse in GLSL: `l = p01 * 2.0 - 1.0; pos = l * vec3(hw,hh,hd)` (offset from anchor).
+ *  Unclamped so wave origins / samples outside occupancy stay in the same space. */
+inline void EffectGpuAtlasUvFromGrid(float x, float y, float z,
+                                     const Vector3D& origin,
+                                     const EffectGridAxisHalfExtents& e,
+                                     float* u, float* v, float* w)
+{
+    const float hw = std::max(e.hw, 1e-5f);
+    const float hh = std::max(e.hh, 1e-5f);
+    const float hd = std::max(e.hd, 1e-5f);
+    *u = 0.5f + 0.5f * (x - origin.x) / hw;
+    *v = 0.5f + 0.5f * (y - origin.y) / hh;
+    *w = 0.5f + 0.5f * (z - origin.z) / hd;
+}
+
+/** In-box origin-local UV with face clamp. Occupancy lookups must use
+ *  SampleGpuVolumeOriginLocal01 so samples outside the scaled box stay unlit. */
+inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
+                                      const Vector3D& origin,
+                                      const EffectGridAxisHalfExtents& e,
+                                      float* c1, float* c2, float* c3)
+{
+    EffectGpuAtlasUvFromGrid(rot_x, rot_y, rot_z, origin, e, c1, c2, c3);
+    *c1 = std::max(0.0f, std::min(1.0f, *c1));
+    *c2 = std::max(0.0f, std::min(1.0f, *c2));
+    *c3 = std::max(0.0f, std::min(1.0f, *c3));
+}
+
+/** Canonical GPU volume atlas lookup. Pair with GLSL `l = p01 * 2.0 - 1.0`.
+ *  Returns false when the sample is outside the scaled effect box — caller must
+ *  leave the LED unlit. Never clamp those samples onto the atlas faces. */
+inline bool SampleGpuVolumeOriginLocal01(float x, float y, float z,
+                                         const GridContext3D& grid,
+                                         const Vector3D& origin,
+                                         float normalized_scale,
+                                         float* c1, float* c2, float* c3)
+{
+    EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, normalized_scale);
+    float u = 0.0f, v = 0.0f, w = 0.0f;
+    EffectGpuAtlasUvFromGrid(x, y, z, origin, e, &u, &v, &w);
+    constexpr float kEps = 1e-4f;
+    if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
+    {
+        return false;
+    }
+    *c1 = std::max(0.0f, std::min(1.0f, u));
+    *c2 = std::max(0.0f, std::min(1.0f, v));
+    *c3 = std::max(0.0f, std::min(1.0f, w));
+    return true;
+}
+
+/** Room-fixed GPU atlas lookup (front-left floor = 0). Pair with GLSL that reads p01 as room UV. */
+inline void SampleGpuRoomVolume01(float x, float y, float z,
+                                  const GridContext3D& grid,
+                                  float* c1, float* c2, float* c3)
+{
+    *c1 = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
+    *c2 = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+    *c3 = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
+}
+
+/** Room UV that does not clamp onto atlas faces (four-quadrant artifact).
+ *  Occupancy is a sphere around the Spatial Anchor, so samples can sit outside
+ *  the grid AABB; those must stay unlit instead of snapping to a cube face. */
+inline bool TrySampleGpuRoomVolume01(float x, float y, float z,
+                                     const GridContext3D& grid,
+                                     float* c1, float* c2, float* c3)
+{
+    const float u = GridAxisToUnitUnclamped(x, grid.min_x, grid.max_x);
+    const float v = GridAxisToUnitUnclamped(y, grid.min_y, grid.max_y);
+    const float w = GridAxisToUnitUnclamped(z, grid.min_z, grid.max_z);
+    constexpr float kEps = 1e-4f;
+    if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
+    {
+        return false;
+    }
+    *c1 = std::max(0.0f, std::min(1.0f, u));
+    *c2 = std::max(0.0f, std::min(1.0f, v));
+    *c3 = std::max(0.0f, std::min(1.0f, w));
+    return true;
+}
+
+inline float EffectGridMedianOfHalfExtents(const EffectGridAxisHalfExtents& e)
+{
+    float extents[3] = {e.hw, e.hh, e.hd};
+    std::sort(extents, extents + 3);
+    const float med = extents[1];
+    const float max_e = extents[2];
+    constexpr float kDominantAxisFraction = 0.2f;
+    return std::max(med, kDominantAxisFraction * max_e);
+}
+
+inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
+{
+    return EffectGridMedianOfHalfExtents(MakeEffectGridAxisHalfExtents(grid, normalized_scale));
+}
+
+inline float EffectGridGpuAtlasMedianHalfExtent(const GridContext3D& grid,
+                                               const Vector3D& origin,
+                                               float normalized_scale)
+{
+    return EffectGridMedianOfHalfExtents(MakeEffectGpuAtlasHalfExtents(grid, origin, normalized_scale));
+}
+
+struct EffectInfo3D
+{
+    const char*         effect_name;
+    const char*         effect_description;
+    const char*         category;
+    SpatialEffectType   effect_type;
+    bool                is_reversible;
+    bool                supports_random;
+    unsigned int        max_speed;
+    unsigned int        min_speed;
+    unsigned int        user_colors;
+    bool                has_custom_settings;
+    bool                needs_3d_origin;
+    bool                needs_direction;
+    bool                needs_thickness;
+    bool                needs_arms;
+    bool                needs_frequency;
+
+    /* Legacy metadata. Speed/frequency rates come from GetMotionHz /
+     * GetColorCycleHz, not these fields. Keep at 10 so old readers stay sane. */
+    float               default_speed_scale;
+    float               default_frequency_scale;
+    float               default_detail_scale = 10.0f;
+    bool                use_size_parameter;
+
+    bool                show_speed_control = true;
+    bool                show_brightness_control = true;
+    bool                show_frequency_control = true;
+    bool                show_detail_control = true;
+    bool                show_size_control = true;
+    bool                show_scale_control = true;
+    bool                show_fps_control = true;
+    bool                show_axis_control = true;
+    bool                show_color_controls = true;
+    bool                show_surface_control = true;
+    bool                show_path_axis_control = false;
+    bool                show_plane_control = false;
+    bool                show_position_offset_control = true;
+    bool                supports_height_bands = false;
+    bool                supports_strip_colormap = false;
+    bool                show_room_output_control = true;
+};
+
+class SpatialEffect3D;
+
+enum class SpatialEffectSettingsLayout : uint8_t
+{
+    FullWithTransport = 0,
+    CommonNoTransport = 1,
+    CustomOnly = 2,
+};
+
+namespace MinecraftGame {
+void ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
+}
+
+class SpatialEffect3D : public QWidget
+{
+    Q_OBJECT
+
+public:
+    enum EffectBoundsMode
+    {
+        BOUNDS_MODE_GLOBAL = 0,
+        BOUNDS_MODE_TARGET_ZONE = 1
+    };
+
+    explicit SpatialEffect3D(QWidget* parent = nullptr);
+    virtual ~SpatialEffect3D();
+
+    virtual EffectInfo3D GetEffectInfo() const = 0;
+    virtual void SetupCustomUI(QWidget* parent) = 0;
+    virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
+
+    /** Once-per-frame GPU atlas/strip rebuild. Default no-op; LED samples only in CalculateColorGrid. */
+    virtual void PrepareGpuFields(std::uint64_t /*render_sequence*/, float /*time_sec*/, const GridContext3D& /*grid*/) {}
+    RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
+    static const SpatialEffect3D* GetEvaluatingEffect();
+    virtual bool UsesSpatialSamplingQuantization() const { return true; }
+
+    bool EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const;
+
+    virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
+    void MountSettingsUi(QWidget* parent, SpatialEffectSettingsLayout layout);
+    virtual void ApplyControlVisibility();
+
+    virtual void SetEffectEnabled(bool enabled) { effect_enabled = enabled; }
+    virtual bool IsEffectEnabled() { return effect_enabled; }
+
+    virtual void SetSpeed(unsigned int speed) { effect_speed = speed; }
+    virtual unsigned int GetSpeed() { return effect_speed; }
+    unsigned int GetTargetFPS() const;
+
+    virtual void SetBrightness(unsigned int brightness) { effect_brightness = brightness; }
+    virtual unsigned int GetBrightness() { return effect_brightness; }
+
+    virtual void SetColors(const std::vector<RGBColor>& colors);
+    virtual std::vector<RGBColor> GetColors() const;
+    virtual void SetRainbowMode(bool enabled);
+    virtual bool GetRainbowMode() const;
+    bool UseSpatialRoomTint() const { return spatial_mapping_mode != SpatialMappingMode::Off; }
+
+    void SetSpatialMappingMode(SpatialMappingMode mode);
+    virtual void SetFrequency(unsigned int frequency);
+    virtual unsigned int GetFrequency() const;
+    virtual void SetDetail(unsigned int detail);
+    virtual unsigned int GetDetail() const;
+    float GetScaledFrequency() const;
+    float GetScaledDetail() const;
+    virtual unsigned int GetSmoothing() const { return effect_smoothing; }
+    virtual unsigned int GetSamplingResolution() const { return effect_sampling_resolution; }
+    unsigned int CombineMediaSampling(unsigned int local_detail_percent) const;
+
+    virtual void SetReferenceMode(ReferenceMode mode);
+    virtual int GetPathAxis() const { return effect_path_axis; }
+    virtual int GetPlane() const { return effect_plane; }
+    virtual int GetSurfaceMask() const { return effect_surface_mask; }
+    void SetSurfaceMaskFlag(int flag, bool enabled);
+    Vector3D GetReferencePointGrid(const GridContext3D& grid) const;
+    virtual bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const;
+    virtual ReferenceMode GetReferenceMode() const;
+    virtual void SetGlobalReferencePoint(const Vector3D& point);
+    virtual Vector3D GetGlobalReferencePoint() const;
+    virtual void SetCustomReferencePoint(const Vector3D& point);
+    virtual void SetUseCustomReference(bool use_custom);
+
+    QPushButton* GetStartButton() { return start_effect_button; }
+    QPushButton* GetStopButton() { return stop_effect_button; }
+
+    QWidget* GetCustomSettingsHost() const { return custom_effect_settings_host; }
+    void AddColorPatternWidget(QWidget* widget);
+    void AddBandModulationWidget(QWidget* widget);
+
+    int GetStratumLayoutMode() const { return effect_stratum_layout_mode; }
+    const EffectStratumBlend::BandTuningPct& GetStratumTuning() const { return effect_stratum_tuning_; }
+
+    float ComputeStratumMotion01(const float layer_weights[3],
+                                 const GridContext3D& grid,
+                                 float x,
+                                 float y,
+                                 float z,
+                                 const Vector3D& origin,
+                                 float time_sec) const;
+
+    bool UseEffectStripColormap() const { return effect_strip_cmap_on; }
+    int GetEffectStripColormapKernel() const { return effect_strip_cmap_kernel; }
+    float GetEffectStripColormapRepeats() const { return effect_strip_cmap_rep; }
+    int GetEffectStripColormapUnfold() const { return effect_strip_cmap_unfold; }
+    float GetEffectStripColormapDirectionDeg() const { return effect_strip_cmap_dir; }
+
+    /** Once-per-frame: rebuild 1D strip-colormap atlas when Surface Look Pattern is on. */
+    void PrepareStripColormapAssist(std::uint64_t render_sequence, float time_sec);
+
+    /** GPU 8-family strip sample (CPU unfold); falls back to full CPU Eval if assist unavailable. */
+    float SampleEffectStripColormap01(float kernel_rep,
+                                      int unfold_mode,
+                                      float dir_deg,
+                                      float phase01,
+                                      float time_sec,
+                                      const GridContext3D& grid,
+                                      float normalized_scale,
+                                      const Vector3D& origin,
+                                      const Vector3D& rot) const;
+
+    float GetRotationYaw() const { return effect_rotation_yaw; }
+    float GetRotationPitch() const { return effect_rotation_pitch; }
+    float GetRotationRoll() const { return effect_rotation_roll; }
+
+    RGBColor PostProcessColorGrid(RGBColor color) const;
+
+    Vector3D GetEffectOriginGrid(const GridContext3D& grid) const;
+    float GetBoundaryMultiplier(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
+    float ApplyEdgeToIntensity(float normalized_dist) const;
+
+    virtual void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;
+    virtual void ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const;
+
+    /** When true, stack pre-sample axis scale / effect rotation are skipped (room-fixed patterns, lighting). */
+    virtual bool SkipsSpatialSampleWarp() const;
+
+    SpatialRoom::SpatialRoomOutputRole GetRoomOutputRole() const { return effect_room_output_role_; }
+    const std::vector<int>& roomEmitterControllerIndices() const { return effect_emitter_controller_indices_; }
+    void setRoomEmitterControllerIndex(int index, bool enabled);
+    void setRoomReceiverControllerIndex(int index, bool enabled);
+    bool isRoomEmitterController(int index) const;
+    bool isRoomReceiverController(int index) const;
+    bool appliesRoomOutputToController(int controller_index) const;
+    RGBColor SampleRelayShadeAt(float x, float y, float z, const GridContext3D& grid) const;
+    bool UsesRoomMappedCoordinates() const
+    {
+        return effect_room_coordinate_mode_ == SpatialRoom::SpatialRoomCoordinateMode::RoomMapped;
+    }
+    const RoomSpatialLightingUi::RoomSpatialLightParams& roomRelayParams() const { return effect_room_relay_params_; }
+    RGBColor ApplyLayerRoomAmbientShading(float room_x,
+                                          float room_y,
+                                          float room_z,
+                                          RGBColor color,
+                                          const GridContext3D& grid,
+                                          int shade_slot = -1) const;
+
+    /** Room evaluation family (see SpatialRoom/). */
+    virtual SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const;
+
+    virtual bool RequiresWorldSpaceCoordinates() const;
+    virtual bool RequiresWorldSpaceGridBounds() const { return false; }
+    virtual bool UseWorldGridBounds() const;
+    virtual bool UseZoneGrid() const;
+    int GetEffectBoundsMode() const { return effect_bounds_mode; }
+    void SetEffectBoundsMode(int mode) { effect_bounds_mode = std::clamp(mode, (int)BOUNDS_MODE_GLOBAL, (int)BOUNDS_MODE_TARGET_ZONE); }
+
+    virtual nlohmann::json SaveSettings() const;
+    virtual void LoadSettings(const nlohmann::json& settings);
+
+    void RefreshRoomOutputControllerLists();
+    void ConnectStackRoomOutputPanel(class EffectRoomOutputPanel* panel,
+                                     const std::function<void()>& on_changed,
+                                     const std::function<QString(int)>& transform_label = {});
+    void DisconnectStackRoomOutputPanel();
+    void InvalidateRelayShadeCache();
+    void SyncRoomCoordinateModeFromReference();
+
+signals:
+    void ParametersChanged();
+
+protected:
+    void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
+    void RefreshAdvancedSectionVisibility();
+
+    friend void MinecraftGame::ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
+
+    QWidget*            effect_controls_group;
+    QWidget*            custom_effect_settings_host;
+    QSlider*            speed_slider;
+    QSlider*            brightness_slider;
+    QSlider*            frequency_slider;
+    QSlider*            detail_slider;
+    QSlider*            size_slider;
+    QSlider*            scale_slider;
+    QCheckBox*          scale_invert_check;
+    QSlider*            fps_slider;
+    QLabel*             speed_label;
+    QLabel*             brightness_label;
+    QLabel*             frequency_label;
+    QLabel*             detail_label;
+    QLabel*             size_label;
+    QLabel*             scale_label;
+    QLabel*             fps_label;
+
+    QSlider*            intensity_slider;
+    QLabel*             intensity_label;
+    QSlider*            sharpness_slider;
+    QLabel*             sharpness_label;
+    QSlider*            smoothing_slider;
+    QLabel*             smoothing_label;
+    QSlider*            sampling_resolution_slider;
+    QLabel*             sampling_resolution_label;
+    QGroupBox*          edge_shape_group;
+    QComboBox*          edge_profile_combo;
+    QSlider*            edge_thickness_slider;
+    QLabel*             edge_thickness_label;
+    QSlider*            glow_level_slider;
+    QLabel*             glow_level_label;
+
+    QSlider*            scale_x_slider;
+    QLabel*             scale_x_label;
+    QSlider*            scale_y_slider;
+    QLabel*             scale_y_label;
+    QSlider*            scale_z_slider;
+    QLabel*             scale_z_label;
+    QPushButton*        axis_scale_reset_button;
+
+    QSlider*            rotation_yaw_slider;
+    QSlider*            rotation_pitch_slider;
+    QSlider*            rotation_roll_slider;
+    QLabel*             rotation_yaw_label;
+    QLabel*             rotation_pitch_label;
+    QLabel*             rotation_roll_label;
+    QPushButton*        rotation_reset_button;
+
+    QSlider*            axis_scale_rot_yaw_slider;
+    QSlider*            axis_scale_rot_pitch_slider;
+    QSlider*            axis_scale_rot_roll_slider;
+    QLabel*             axis_scale_rot_yaw_label;
+    QLabel*             axis_scale_rot_pitch_label;
+    QLabel*             axis_scale_rot_roll_label;
+    QPushButton*        axis_scale_rot_reset_button;
+
+    QWidget*            color_controls_group;
+    QWidget*            color_pattern_settings_host;
+    QWidget*            band_modulation_settings_host;
+    StripKernelColormapPanel* shared_strip_cmap_panel = nullptr;
+    QCheckBox*          rainbow_mode_check;
+
+    QWidget*            color_buttons_widget;
+    QHBoxLayout*        color_buttons_layout;
+    QPushButton*        add_color_button;
+    QPushButton*        remove_color_button;
+    std::vector<QPushButton*> color_buttons;
+    std::vector<RGBColor> colors;
+
+    QPushButton*        start_effect_button;
+    QPushButton*        stop_effect_button;
+
+    bool                effect_enabled;
+    unsigned int        effect_speed;
+    unsigned int        effect_brightness;
+    unsigned int        effect_frequency;
+    unsigned int        effect_detail;
+    unsigned int        effect_size;
+    unsigned int        effect_scale;
+    bool                scale_inverted;
+    int                 effect_bounds_mode;
+    unsigned int        effect_fps;
+    bool                rainbow_mode;
+    SpatialMappingMode  spatial_mapping_mode;
+    int                 compass_layer_spin_preset;
+    float               rainbow_progress;
+
+    int                 effect_sampler_influence_centi;
+    int                 effect_sampler_compass_north_offset_deg;
+    bool                effect_compass_discrete_zones;
+
+    unsigned int        effect_intensity;
+    unsigned int        effect_sharpness;
+    unsigned int        effect_smoothing;
+    unsigned int        effect_sampling_resolution;
+    int                 effect_edge_profile;
+    unsigned int        effect_edge_thickness;
+    unsigned int        effect_glow_level;
+    unsigned int        effect_scale_x;
+    unsigned int        effect_scale_y;
+    unsigned int        effect_scale_z;
+
+    float               effect_rotation_yaw;
+    float               effect_rotation_pitch;
+    float               effect_rotation_roll;
+
+    float               effect_axis_scale_rotation_yaw;
+    float               effect_axis_scale_rotation_pitch;
+    float               effect_axis_scale_rotation_roll;
+
+    int                 effect_path_axis;
+    int                 effect_plane;
+    int                 effect_surface_mask;
+
+    int                 effect_offset_x;
+    int                 effect_offset_y;
+    int                 effect_offset_z;
+
+    QGroupBox*          position_offset_group;
+    QSlider*            offset_x_slider;
+    QSlider*            offset_y_slider;
+    QSlider*            offset_z_slider;
+    QLabel*             offset_x_label;
+    QLabel*             offset_y_label;
+    QLabel*             offset_z_label;
+
+    QWidget*            surfaces_group;
+    QWidget*            surfaces_section;
+    QWidget*            output_shaping_section = nullptr;
+    QWidget*            geometry_section = nullptr;
+    QWidget*            colors_patterns_section = nullptr;
+    QWidget*            band_modulation_section = nullptr;
+    QWidget*            effect_specific_section = nullptr;
+    QWidget*            effect_advanced_section = nullptr;
+    class EffectRoomOutputPanel* room_output_panel_ = nullptr;
+
+    SpatialRoom::SpatialRoomCoordinateMode effect_room_coordinate_mode_ =
+        SpatialRoom::SpatialRoomCoordinateMode::EffectOrigin;
+    SpatialRoom::SpatialRoomOutputRole effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::Direct;
+    RoomSpatialLightingUi::RoomSpatialLightParams effect_room_relay_params_{};
+    std::vector<int> effect_emitter_controller_indices_;
+    std::vector<int> effect_receiver_controller_indices_;
+
+    mutable SpatialLighting::ShadeSettings relay_shade_{};
+
+    void ApplyRelayShadeSettings(const GridContext3D& grid) const;
+    RGBColor ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const;
+    QGroupBox*          path_plane_group;
+    QComboBox*          path_axis_combo;
+    QComboBox*          plane_combo;
+
+    ReferenceMode       reference_mode;
+    Vector3D            global_reference_point;
+    Vector3D            custom_reference_point;
+    bool                use_custom_reference;
+
+    void AddWidgetToParent(QWidget* w, QWidget* container);
+    QWidget* CustomSettingsPanelWidget() const;
+    void SyncColorControlVisibilityForPatternMode();
+    void EnsureHeightBandsPanel();
+    void LoadEffectStratumSettings(const nlohmann::json& settings);
+    void SaveEffectStratumSettings(nlohmann::json& j) const;
+    void SyncEffectStratumPanelFromModel();
+    void EnsureStripColormapPanel();
+    void LoadEffectStripColormapSettings(const nlohmann::json& settings);
+    void SaveEffectStripColormapSettings(nlohmann::json& j) const;
+    void SyncEffectStripColormapPanelFromModel();
+
+    int effect_stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct effect_stratum_tuning_{};
+    StratumBandPanel* effect_stratum_panel = nullptr;
+
+    bool effect_strip_cmap_on = false;
+    int effect_strip_cmap_kernel = 0;
+    float effect_strip_cmap_rep = 4.0f;
+    int effect_strip_cmap_unfold = 0;
+    float effect_strip_cmap_dir = 0.0f;
+    StripKernelColormapPanel* effect_strip_cmap_panel = nullptr;
+    SpatialStripFieldAssist strip_cmap_assist_;
+    bool strip_cmap_body_ready_ = false;
+
+    Vector3D GetEffectOrigin() const;
+    RGBColor GetRainbowColor(float hue) const;
+    RGBColor GetColorAtPosition(float position) const;
+    RGBColor GetPerBeatPulseColor(uint32_t color_slot) const;
+    RGBColor ResolveAudioReactiveColor(const AudioReactiveSettings3D& cfg,
+                                       const AudioReactiveColorParams& params) const;
+
+    float GetNormalizedSpeed() const;
+    float GetNormalizedFrequency() const;
+    float GetNormalizedDetail() const;
+    float GetNormalizedSize() const;
+    float GetNormalizedScale() const;
+    void SetScaleInverted(bool inverted);
+
+    /** Speed slider → animation rate in cycles/sec. Speed 100 ≈ 0.33 Hz. */
+    float GetMotionHz() const;
+    /** Frequency slider → hue/palette cycle rate. Frequency 100 ≈ 0.11 Hz. */
+    float GetColorCycleHz() const;
+    /** Same as GetMotionHz (legacy name). */
+    float GetScaledSpeed() const;
+    /** Elapsed motion cycles: time * GetMotionHz(). */
+    float CalculateProgress(float time) const;
+    /** Fractional cycle in [0,1). */
+    float GetMotionCycle01(float time) const;
+
+    float ApplySpatialPalette01(float base_pos01,
+                                const SpatialLayerCore::Basis& basis,
+                                const SpatialLayerCore::SamplePoint& sp,
+                                const SpatialLayerCore::MapperSettings& map,
+                                float time,
+                                const GridContext3D* grid = nullptr) const;
+    float ApplySpatialRainbowHue(float hue_deg,
+                                 float plane_pos01,
+                                 const SpatialLayerCore::Basis& basis,
+                                 const SpatialLayerCore::SamplePoint& sp,
+                                 const SpatialLayerCore::MapperSettings& map,
+                                 float time,
+                                 const GridContext3D* grid = nullptr) const;
+
+    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
+
+    Vector3D TransformPointByRotation(float x, float y, float z,
+                                      const Vector3D& origin) const;
+    static Vector3D RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg);
+    float ApplySharpness(float value) const;
+
+private slots:
+    void OnParameterChanged();
+    void OnRainbowModeChanged();
+    void OnEffectStratumBandChanged();
+    void OnEffectStripColormapChanged();
+    void OnAddColorClicked();
+    void OnRemoveColorClicked();
+    void OnColorButtonClicked();
+    void OnRotationChanged();
+    void OnRotationResetClicked();
+    void OnAxisScaleResetClicked();
+    void OnAxisScaleRotationResetClicked();
+
+private:
+    void CreateColorControls();
+    void ConnectCommonEffectControlSignals(EffectGeometryPanel* geometry_panel);
+    void CreateColorButton(RGBColor color);
+    void RemoveLastColorButton();
+};
+
+#endif

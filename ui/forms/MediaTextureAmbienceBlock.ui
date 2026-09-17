@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MediaTextureAmbienceBlock</class>
+ <widget class="QWidget" name="MediaTextureAmbienceBlock">
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin"><number>0</number></property>
+   <property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property>
+   <property name="bottomMargin"><number>0</number></property>
+   <item>
+    <widget class="QGroupBox" name="ambienceGroup">
+     <property name="title">
+      <string>Ambience (Screen Mirror–style)</string>
+     </property>
+     <layout class="QVBoxLayout" name="ambienceLayout">
+      <property name="leftMargin"><number>4</number></property>
+      <property name="topMargin"><number>8</number></property>
+      <property name="rightMargin"><number>4</number></property>
+      <property name="bottomMargin"><number>4</number></property>
+      <item>
+       <widget class="EffectSliderRow" name="ambienceDistRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="ambienceCurveRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="ambienceEdgeRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="ambiencePropRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="motionGroup">
+     <property name="title">
+      <string>Motion tuning</string>
+     </property>
+     <layout class="QVBoxLayout" name="motionLayout">
+      <property name="leftMargin"><number>4</number></property>
+      <property name="topMargin"><number>8</number></property>
+      <property name="rightMargin"><number>4</number></property>
+      <property name="bottomMargin"><number>4</number></property>
+      <item>
+       <widget class="EffectSliderRow" name="motionScrollRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="motionWarpRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="motionPhaseRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="mediaGroup">
+     <property name="title">
+      <string>Media sampling</string>
+     </property>
+     <layout class="QVBoxLayout" name="mediaLayout">
+      <property name="leftMargin"><number>4</number></property>
+      <property name="topMargin"><number>8</number></property>
+      <property name="rightMargin"><number>4</number></property>
+      <property name="bottomMargin"><number>4</number></property>
+      <item>
+       <widget class="EffectCheckRow" name="tileRepeatRow" native="true"/>
+      </item>
+      <item>
+       <widget class="EffectSliderRow" name="mediaResolutionRow" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectSliderRow</class>
+   <extends>QWidget</extends>
+   <header>EffectSliderRow.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectCheckRow</class>
+   <extends>QWidget</extends>
+   <header>EffectCheckRow.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

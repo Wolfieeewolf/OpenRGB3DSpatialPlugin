@@ -1,0 +1,311 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#ifndef GEOMETRY3DUTILS_H
+#define GEOMETRY3DUTILS_H
+
+#include "LEDPosition3D.h"
+#include "DisplayPlane3D.h"
+#include "GridSpaceUtils.h"
+#include <algorithm>
+#include <cmath>
+
+namespace Geometry3D
+{
+    struct PlaneProjection
+    {
+        float   u;
+        float   v;
+        bool    is_valid;
+    };
+
+    inline void ComputeRotationMatrix(const Rotation3D& rotation_deg, float matrix[9])
+    {
+        const float deg_to_rad = 3.14159265359f / 180.0f;
+        float rx = rotation_deg.x * deg_to_rad;
+        float ry = rotation_deg.y * deg_to_rad;
+        float rz = rotation_deg.z * deg_to_rad;
+
+        float cx = cosf(rx), sx = sinf(rx);
+        float cy = cosf(ry), sy = sinf(ry);
+        float cz = cosf(rz), sz = sinf(rz);
+
+        matrix[0] = cy * cz;
+        matrix[1] = -cy * sz;
+        matrix[2] = sy;
+
+        matrix[3] = cx * sz + sx * sy * cz;
+        matrix[4] = cx * cz - sx * sy * sz;
+        matrix[5] = -sx * cy;
+
+        matrix[6] = sx * sz - cx * sy * cz;
+        matrix[7] = sx * cz + cx * sy * sz;
+        matrix[8] = cx * cy;
+    }
+
+    inline Vector3D RotateVector(const Vector3D& v, const float matrix[9])
+    {
+        Vector3D result;
+        result.x = matrix[0] * v.x + matrix[1] * v.y + matrix[2] * v.z;
+        result.y = matrix[3] * v.x + matrix[4] * v.y + matrix[5] * v.z;
+        result.z = matrix[6] * v.x + matrix[7] * v.y + matrix[8] * v.z;
+        return result;
+    }
+
+    /** Matches controller LED layout (matrix rotation + scale). */
+    inline Vector3D TransformLocalToWorldScaled(const Vector3D& local_pos, const Transform3D& transform)
+    {
+        const Vector3D scaled = {
+            local_pos.x * transform.scale.x,
+            local_pos.y * transform.scale.y,
+            local_pos.z * transform.scale.z,
+        };
+
+        float rotation_matrix[9];
+        ComputeRotationMatrix(transform.rotation, rotation_matrix);
+        const Vector3D rotated = RotateVector(scaled, rotation_matrix);
+
+        return {
+            rotated.x + transform.position.x,
+            rotated.y + transform.position.y,
+            rotated.z + transform.position.z,
+        };
+    }
+
+    /** Inverse of TransformLocalToWorldScaled (controller-local grid units). */
+    inline Vector3D TransformWorldToLocalScaled(const Vector3D& world_pos, const Transform3D& transform)
+    {
+        const Vector3D translated = {
+            world_pos.x - transform.position.x,
+            world_pos.y - transform.position.y,
+            world_pos.z - transform.position.z,
+        };
+
+        float rotation_matrix[9];
+        ComputeRotationMatrix(transform.rotation, rotation_matrix);
+        const Vector3D rotated = {
+            rotation_matrix[0] * translated.x + rotation_matrix[3] * translated.y + rotation_matrix[6] * translated.z,
+            rotation_matrix[1] * translated.x + rotation_matrix[4] * translated.y + rotation_matrix[7] * translated.z,
+            rotation_matrix[2] * translated.x + rotation_matrix[5] * translated.y + rotation_matrix[8] * translated.z,
+        };
+
+        return {
+            (std::fabs(transform.scale.x) > 1e-8f) ? rotated.x / transform.scale.x : 0.0f,
+            (std::fabs(transform.scale.y) > 1e-8f) ? rotated.y / transform.scale.y : 0.0f,
+            (std::fabs(transform.scale.z) > 1e-8f) ? rotated.z / transform.scale.z : 0.0f,
+        };
+    }
+
+    /** Matches display-plane viewport orientation (Euler XYZ + scale). */
+    inline Vector3D TransformDisplayPlaneLocalToWorld(const Vector3D& local_pos, const Transform3D& transform)
+    {
+        Vector3D scaled = {
+            local_pos.x * transform.scale.x,
+            local_pos.y * transform.scale.y,
+            local_pos.z * transform.scale.z,
+        };
+
+        Vector3D rotated = scaled;
+
+        const float rx = transform.rotation.x * 3.14159265359f / 180.0f;
+        const float ry = transform.rotation.y * 3.14159265359f / 180.0f;
+        const float rz = transform.rotation.z * 3.14159265359f / 180.0f;
+
+        float temp_y = rotated.y * std::cos(rx) - rotated.z * std::sin(rx);
+        float temp_z = rotated.y * std::sin(rx) + rotated.z * std::cos(rx);
+        rotated.y = temp_y;
+        rotated.z = temp_z;
+
+        float temp_x = rotated.x * std::cos(ry) + rotated.z * std::sin(ry);
+        temp_z = -rotated.x * std::sin(ry) + rotated.z * std::cos(ry);
+        rotated.x = temp_x;
+        rotated.z = temp_z;
+
+        temp_x = rotated.x * std::cos(rz) - rotated.y * std::sin(rz);
+        temp_y = rotated.x * std::sin(rz) + rotated.y * std::cos(rz);
+        rotated.x = temp_x;
+        rotated.y = temp_y;
+
+        return {
+            rotated.x + transform.position.x,
+            rotated.y + transform.position.y,
+            rotated.z + transform.position.z,
+        };
+    }
+
+    /** Inverse of TransformDisplayPlaneLocalToWorld (same Euler XYZ formulas, reverse order). */
+    inline Vector3D TransformDisplayPlaneWorldToLocal(const Vector3D& world_pos, const Transform3D& transform)
+    {
+        Vector3D p{
+            world_pos.x - transform.position.x,
+            world_pos.y - transform.position.y,
+            world_pos.z - transform.position.z,
+        };
+
+        const float deg = 3.14159265359f / 180.0f;
+        const float rx = -transform.rotation.x * deg;
+        const float ry = -transform.rotation.y * deg;
+        const float rz = -transform.rotation.z * deg;
+
+        float temp_x = p.x * std::cos(rz) - p.y * std::sin(rz);
+        float temp_y = p.x * std::sin(rz) + p.y * std::cos(rz);
+        p.x = temp_x;
+        p.y = temp_y;
+
+        temp_x = p.x * std::cos(ry) + p.z * std::sin(ry);
+        float temp_z = -p.x * std::sin(ry) + p.z * std::cos(ry);
+        p.x = temp_x;
+        p.z = temp_z;
+
+        temp_y = p.y * std::cos(rx) - p.z * std::sin(rx);
+        temp_z = p.y * std::sin(rx) + p.z * std::cos(rx);
+        p.y = temp_y;
+        p.z = temp_z;
+
+        const float inv_sx = (std::fabs(transform.scale.x) > 1e-8f) ? 1.0f / transform.scale.x : 1.0f;
+        const float inv_sy = (std::fabs(transform.scale.y) > 1e-8f) ? 1.0f / transform.scale.y : 1.0f;
+        const float inv_sz = (std::fabs(transform.scale.z) > 1e-8f) ? 1.0f / transform.scale.z : 1.0f;
+        return {p.x * inv_sx, p.y * inv_sy, p.z * inv_sz};
+    }
+
+    inline float ComputeFalloff(float distance, float max_range, float feather_percent = 30.0f)
+    {
+        if (max_range <= 0.0f)
+        {
+            return 1.0f;
+        }
+
+        float feather_width = max_range * (feather_percent / 100.0f);
+        float core_range = max_range - feather_width;
+
+        if (distance <= core_range)
+        {
+            return 1.0f;
+        }
+
+        if (distance >= max_range)
+        {
+            return 0.0f;
+        }
+
+        float t = (distance - core_range) / feather_width;
+        t = fmaxf(0.0f, fminf(1.0f, t));
+
+        float fade = 1.0f - (t * t * (3.0f - 2.0f * t));
+
+        return fade;
+    }
+
+    inline float RadialCornerQuadWeightTL(float u, float v)
+    {
+        if(u > 0.5f || v > 0.5f) return 0.f;
+        return (1.f - 2.f * u) * (1.f - 2.f * v);
+    }
+    inline float RadialCornerQuadWeightTR(float u, float v)
+    {
+        if(u < 0.5f || v > 0.5f) return 0.f;
+        return (2.f * u - 1.f) * (1.f - 2.f * v);
+    }
+    inline float RadialCornerQuadWeightBL(float u, float v)
+    {
+        if(u > 0.5f || v < 0.5f) return 0.f;
+        return (1.f - 2.f * u) * (2.f * v - 1.f);
+    }
+    inline float RadialCornerQuadWeightBR(float u, float v)
+    {
+        if(u < 0.5f || v < 0.5f) return 0.f;
+        return (2.f * u - 1.f) * (2.f * v - 1.f);
+    }
+
+    inline void ApplyRadialCornerMapping01(float& u, float& v,
+                                          float expansion_pct,
+                                          float bias_tl_pct, float bias_tr_pct, float bias_bl_pct, float bias_br_pct)
+    {
+        const bool idle = (expansion_pct > -0.05f && expansion_pct < 0.05f &&
+                           bias_tl_pct > -0.05f && bias_tl_pct < 0.05f &&
+                           bias_tr_pct > -0.05f && bias_tr_pct < 0.05f &&
+                           bias_bl_pct > -0.05f && bias_bl_pct < 0.05f &&
+                           bias_br_pct > -0.05f && bias_br_pct < 0.05f);
+        if(idle)
+        {
+            return;
+        }
+
+        float du = u - 0.5f;
+        float dv = v - 0.5f;
+        const float wexp = 4.0f * std::fabs(du) * std::fabs(dv);
+        const float g = expansion_pct / 100.0f;
+        u = 0.5f + du * (1.0f + wexp * g);
+        v = 0.5f + dv * (1.0f + wexp * g);
+
+        const float k = 0.28f / 100.0f;
+        const float wtl = RadialCornerQuadWeightTL(u, v);
+        const float wtr = RadialCornerQuadWeightTR(u, v);
+        const float wbl = RadialCornerQuadWeightBL(u, v);
+        const float wbr = RadialCornerQuadWeightBR(u, v);
+
+        u += k * (-wtl * bias_tl_pct + wtr * bias_tr_pct - wbl * bias_bl_pct + wbr * bias_br_pct);
+        v += k * (-wtl * bias_tl_pct - wtr * bias_tr_pct + wbl * bias_bl_pct + wbr * bias_br_pct);
+
+        u = std::clamp(u, 0.0f, 1.0f);
+        v = std::clamp(v, 0.0f, 1.0f);
+    }
+
+    inline void ApplyUVRotationDegrees01(float& u, float& v, float roll_deg)
+    {
+        if(roll_deg > -0.005f && roll_deg < 0.005f)
+        {
+            return;
+        }
+        const float rad = roll_deg * 3.14159265359f / 180.0f;
+        const float c = std::cos(rad);
+        const float s = std::sin(rad);
+        const float du = u - 0.5f;
+        const float dv = v - 0.5f;
+        u = std::clamp(0.5f + c * du - s * dv, 0.0f, 1.0f);
+        v = std::clamp(0.5f + s * du + c * dv, 0.0f, 1.0f);
+    }
+
+    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position,
+                                              const DisplayPlane3D& plane,
+                                              float grid_scale_mm = DEFAULT_GRID_SCALE_MM)
+    {
+        PlaneProjection result;
+        const Vector3D local = TransformDisplayPlaneWorldToLocal(led_position, plane.GetTransform());
+        const float width_units = std::max(MMToGridUnits(plane.GetWidthMM(), grid_scale_mm), 1e-4f);
+        const float height_units = std::max(MMToGridUnits(plane.GetHeightMM(), grid_scale_mm), 1e-4f);
+        const float half_w = 0.5f * width_units;
+        const float half_h = 0.5f * height_units;
+        const float half_d = std::max(half_w, half_h);
+        const float nx = local.x / half_w;
+        const float ny = local.y / half_h;
+        const float nz = local.z / half_d;
+        const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+        if(len < 1e-6f)
+        {
+            result.u = 0.5f;
+            result.v = 0.5f;
+        }
+        else
+        {
+            static constexpr float kScreenEdgeAt45Deg = 1.414213562373095f;
+            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * nx / len, 0.0f, 1.0f);
+            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * ny / len, 0.0f, 1.0f);
+        }
+        result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
+        return result;
+    }
+
+    inline void QuantizeNormalizedAxis01(float& t, unsigned int resolution_pct, int virtual_cells = 128)
+    {
+        if(resolution_pct >= 100u)
+        {
+            return;
+        }
+        const float q = resolution_pct / 100.0f;
+        const float steps = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, virtual_cells) - 4));
+        t = std::floor(t * steps) / steps;
+    }
+
+}
+
+#endif

@@ -1,0 +1,551 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EffectGeometryPanel</class>
+ <widget class="QWidget" name="EffectGeometryPanel">
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="axisScaleGroup">
+     <property name="title">
+      <string>Effect scale (X / Y / Z %)</string>
+     </property>
+     <property name="toolTip">
+      <string>Scale the effect along each axis. 100% = normal. Does not move scene objects or the camera.</string>
+     </property>
+     <layout class="QVBoxLayout" name="axisScaleLayout">
+      <item>
+       <layout class="QHBoxLayout" name="scaleXRow">
+        <item>
+         <widget class="QLabel" name="scaleXCaption">
+          <property name="text">
+           <string>X:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="scaleXSlider">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>400</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect scale along X (left ↔ right). 100% = normal.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="scaleXLabel">
+          <property name="minimumSize">
+           <size>
+            <width>45</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="scaleYRow">
+        <item>
+         <widget class="QLabel" name="scaleYCaption">
+          <property name="text">
+           <string>Y:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="scaleYSlider">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>400</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect scale along Y (floor ↔ ceiling). 100% = normal.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="scaleYLabel">
+          <property name="minimumSize">
+           <size>
+            <width>45</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="scaleZRow">
+        <item>
+         <widget class="QLabel" name="scaleZCaption">
+          <property name="text">
+           <string>Z:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="scaleZSlider">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>400</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect scale along Z (front ↔ back). 100% = normal.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="scaleZLabel">
+          <property name="minimumSize">
+           <size>
+            <width>45</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="axisScaleResetButton">
+        <property name="text">
+         <string>Reset to defaults</string>
+        </property>
+        <property name="toolTip">
+         <string>Reset effect scale X, Y, Z to 100%</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="axisScaleRotGroup">
+     <property name="title">
+      <string>Effect scale rotation (°)</string>
+     </property>
+     <property name="toolTip">
+      <string>Rotate the direction of the effect scale axes. Per-axis scale is applied in this orientation (before effect rotation below).</string>
+     </property>
+     <layout class="QVBoxLayout" name="axisScaleRotLayout">
+      <item>
+       <layout class="QHBoxLayout" name="asrYawRow">
+        <item>
+         <widget class="QLabel" name="asrYawCaption">
+          <property name="text">
+           <string>Yaw:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="axisScaleRotYawSlider">
+          <property name="minimum">
+           <number>-180</number>
+          </property>
+          <property name="maximum">
+           <number>180</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Yaw: rotate scale axes horizontally. Scale is applied in this frame.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="axisScaleRotYawLabel">
+          <property name="minimumSize">
+           <size>
+            <width>40</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="asrPitchRow">
+        <item>
+         <widget class="QLabel" name="asrPitchCaption">
+          <property name="text">
+           <string>Pitch:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="axisScaleRotPitchSlider">
+          <property name="minimum">
+           <number>-180</number>
+          </property>
+          <property name="maximum">
+           <number>180</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="axisScaleRotPitchLabel">
+          <property name="minimumSize">
+           <size>
+            <width>40</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="asrRollRow">
+        <item>
+         <widget class="QLabel" name="asrRollCaption">
+          <property name="text">
+           <string>Roll:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="axisScaleRotRollSlider">
+          <property name="minimum">
+           <number>-180</number>
+          </property>
+          <property name="maximum">
+           <number>180</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="axisScaleRotRollLabel">
+          <property name="minimumSize">
+           <size>
+            <width>40</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="axisScaleRotResetButton">
+        <property name="text">
+         <string>Reset to defaults</string>
+        </property>
+        <property name="toolTip">
+         <string>Reset effect scale rotation (yaw, pitch, roll) to 0°</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="positionOffsetGroup">
+     <property name="title">
+      <string>Effect center offset (%)</string>
+     </property>
+     <property name="toolTip">
+      <string>Shift the effect origin from room center or the chosen reference point. Percent of half-room size per axis. Does not move scene objects or the camera.</string>
+     </property>
+     <layout class="QVBoxLayout" name="offsetLayout">
+      <item>
+       <layout class="QHBoxLayout" name="offsetXRow">
+        <item>
+         <widget class="QLabel" name="offsetXCaption">
+          <property name="text">
+           <string>X:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="offsetXSlider">
+          <property name="minimum">
+           <number>-100</number>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect offset left (-) or right (+) as % of half-room width</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="offsetXLabel">
+          <property name="minimumSize">
+           <size>
+            <width>45</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="offsetYRow">
+        <item>
+         <widget class="QLabel" name="offsetYCaption">
+          <property name="text">
+           <string>Y:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="offsetYSlider">
+          <property name="minimum">
+           <number>-100</number>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect offset down (-) or up (+) as % of half-room height</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="offsetYLabel">
+          <property name="minimumSize">
+           <size>
+            <width>45</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="offsetZRow">
+        <item>
+         <widget class="QLabel" name="offsetZCaption">
+          <property name="text">
+           <string>Z:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="offsetZSlider">
+          <property name="minimum">
+           <number>-100</number>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect offset forward (-) or back (+) as % of half-room depth</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="offsetZLabel">
+          <property name="minimumSize">
+           <size>
+            <width>45</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="offsetCenterResetButton">
+        <property name="text">
+         <string>Reset to center</string>
+        </property>
+        <property name="toolTip">
+         <string>Set effect position offset X, Y, Z to 0%</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="rotationGroup">
+     <property name="title">
+      <string>Effect rotation (°)</string>
+     </property>
+     <property name="toolTip">
+      <string>Rotate the pattern around the effect origin (after per-axis scale and scale-axis rotation). Does not move the camera or scene objects.</string>
+     </property>
+     <layout class="QVBoxLayout" name="rotationLayout">
+      <item>
+       <layout class="QHBoxLayout" name="rotYawRow">
+        <item>
+         <widget class="QLabel" name="rotYawCaption">
+          <property name="text">
+           <string>Yaw:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="rotationYawSlider">
+          <property name="minimum">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <number>360</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect rotation around Y (horizontal). 0–360°.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="rotationYawLabel">
+          <property name="minimumSize">
+           <size>
+            <width>50</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="rotPitchRow">
+        <item>
+         <widget class="QLabel" name="rotPitchCaption">
+          <property name="text">
+           <string>Pitch:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="rotationPitchSlider">
+          <property name="minimum">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <number>360</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect rotation around X (vertical). 0–360°.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="rotationPitchLabel">
+          <property name="minimumSize">
+           <size>
+            <width>50</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="rotRollRow">
+        <item>
+         <widget class="QLabel" name="rotRollCaption">
+          <property name="text">
+           <string>Roll:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="rotationRollSlider">
+          <property name="minimum">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <number>360</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>Effect rotation around Z (twist). 0–360°.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="rotationRollLabel">
+          <property name="minimumSize">
+           <size>
+            <width>50</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="rotationResetButton">
+        <property name="text">
+         <string>Reset rotation</string>
+        </property>
+        <property name="toolTip">
+         <string>Reset effect rotation (yaw, pitch, roll) to 0°</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

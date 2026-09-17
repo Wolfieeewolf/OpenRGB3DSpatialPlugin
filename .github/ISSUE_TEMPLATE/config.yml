@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Controller preset JSON (separate repo)
+    url: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues/new
+    about: Layout JSON files only — not plugin source code
+  - name: OpenRGB upstream
+    url: https://gitlab.com/CalcProgrammer1/OpenRGB/-/issues
+    about: Core OpenRGB — device detection, drivers, host application
