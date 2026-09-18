@@ -7,6 +7,7 @@
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ScreenCaptureManager.h"
 #include "ReactiveInputManager.h"
+#include "ControllerTiltManager.h"
 #include "ReactiveInputTypes.h"
 #include "PluginLog.h"
 #include "ControllerLayout3D.h"
@@ -499,10 +500,20 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 {
     MinecraftGame::ClearRenderSampleIndexContext();
     SyncReactiveInputSession();
+    SyncControllerTiltSession();
 
     if(controller_transforms.empty())
     {
         return;
+    }
+
+    if(ControllerTiltManager* tilt = ControllerTiltManager::instance())
+    {
+        if(tilt->isRunning())
+        {
+            tilt->UpdateLayoutOrigins(controller_transforms);
+            tilt->Poll();
+        }
     }
 
     SpatialLightingSceneProvider::instance()->SetControllers(&controller_transforms);

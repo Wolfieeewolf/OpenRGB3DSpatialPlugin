@@ -191,8 +191,12 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 ## Game / Minecraft and similar effects
 
 - Telemetry (UDP on localhost for pose/vitals/damage) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
-- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room Ambilight**. Room Ambilight colours come from the Fabric mod under **`integrations/minecraft/`** over **sparse cubemap SHM** (LED texels only; no dense/LZ4 dual path), not UDP colour streams. Treat the bridge as **vanilla-shaped alpha** â€” modpacks / texture packs / HD UV are largely untested (stutter and breakage expected).
-- Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistentâ€”see **UI** below.
+- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room Ambilight**. Room Ambilight colours come from the Fabric mod under **`integrations/minecraft/`** over **sparse cubemap SHM** (LED texels only; no dense/LZ4 dual path), not UDP colour streams. Treat the bridge as **vanilla-shaped alpha** — modpacks / texture packs / HD UV are largely untested (stutter and breakage expected).
+- **Controller tilt / IMU:** `Input/ControllerTiltManager` is the single place for motion devices (DualSense first). Effects such as **Controller Torch** consume that API only — add new pads/Wii remotes there, not inside each effect. Game integrations should prefer in-game look/aim telemetry over stealing HID while a game holds the pad.
+  - **Windows + Linux share one path:** raw DualSense HID input reports via **hidapi** (USB `0x01` / BT enhanced `0x31`), gyro scale **~16.384 LSB/°/s** on raw bytes. Do **not** use Linux `hid-playstation`’s post-calibration 1024 LSB/°/s ABS scale unless you switch to an evdev backend.
+  - **Fusion:** Madgwick IMU (6-axis) for pitch/roll vs gravity; yaw is relative to Recenter (no magnetometer). See `Documentation/dualsense-torch-notes.md`.
+  - **Linux build:** `libhidapi-dev` (pkg-config `hidapi-hidraw` preferred). User needs read access to the DualSense `hidraw` node; Steam/another exclusive opener can block us — log and fail soft.
+- Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
 
 ## UI
 

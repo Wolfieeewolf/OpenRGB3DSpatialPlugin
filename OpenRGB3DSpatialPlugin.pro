@@ -89,7 +89,6 @@ INCLUDEPATH += \
     OpenRGB/ \
     OpenRGB/SPDAccessor \
     OpenRGB/hidapi_wrapper \
-    OpenRGB/dependencies/hidapi-win/include \
     OpenRGB/i2c_smbus \
     OpenRGB/RGBController \
     OpenRGB/net_port \
@@ -320,6 +319,8 @@ HEADERS += \
     Input/ReactiveInputTypes.h \
     Input/ReactiveKeyMap.h \
     Input/ReactiveInputManager.h \
+    Input/ControllerTiltManager.h \
+    Input/ControllerTiltTypes.h \
     Effects3D/Reactive/Reactive.h \
     Effects3D/FolderVolume/FolderVolumeEffect.h \
     Effects3D/ScreenMirror/ScreenMirror.h \
@@ -329,6 +330,8 @@ HEADERS += \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.h \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.h \
+    Effects3D/ControllerTorch/ControllerTorch.h \
+    Input/MadgwickImu.h
 
 SOURCES += \
     OpenRGB3DSpatialPlugin.cpp \
@@ -504,12 +507,14 @@ SOURCES += \
     Effects3D/Reactive/Reactive.cpp \
     Input/ReactiveKeyMap.cpp \
     Input/ReactiveInputManager.cpp \
+    Input/ControllerTiltManager.cpp \
     Effects3D/ScreenMirror/ScreenMirror.cpp \
     Effects3D/ScreenMirror/ScreenMirror_Render.cpp \
     Effects3D/ScreenMirror/ScreenMirror_Settings.cpp \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.cpp \
+    Effects3D/ControllerTorch/ControllerTorch.cpp \
     Audio/AudioInputManager.cpp
 
 win32:CONFIG += QTPLUGIN
@@ -547,6 +552,28 @@ unix:!macx {
 macx {
     DEFINES += ASSIMP_STATIC
     LIBS += -L$$ASSIMP_DIR/lib -lassimp -lz
+}
+
+# ControllerTilt DualSense IMU: same raw HID report path on Windows and Linux.
+win32 {
+    contains(QT_ARCH, x86_64)|contains(QT_ARCH, amd64) {
+        LIBS += -L$$PWD/OpenRGB/dependencies/hidapi-hotplug-win/x64 -lhidapi-hotplug
+    } else {
+        LIBS += -L$$PWD/OpenRGB/dependencies/hidapi-hotplug-win/x86 -lhidapi-hotplug
+    }
+}
+unix:!macx {
+    CONFIG += link_pkgconfig
+    packagesExist(hidapi-hidraw) {
+        PKGCONFIG += hidapi-hidraw
+    } else:packagesExist(hidapi-libusb) {
+        PKGCONFIG += hidapi-libusb
+    } else:packagesExist(hidapi) {
+        PKGCONFIG += hidapi
+    } else {
+        warning("ControllerTilt: hidapi not found via pkg-config — DualSense IMU disabled")
+        DEFINES += CONTROLLER_TILT_NO_HIDAPI
+    }
 }
 
 win32:CONFIG(debug, debug|release): DESTDIR = debug

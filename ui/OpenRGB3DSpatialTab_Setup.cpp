@@ -1214,6 +1214,7 @@ void OpenRGB3DSpatialTab::SyncControllerLinkedReferencePoint(int transform_index
 
     ControllerLayout3D::UpdateWorldPositions(transform);
     ref_point->SetPosition(ControllerLayout3D::GetControllerCenterWorld(transform));
+    ref_point->SetRotation(transform->transform.rotation);
 }
 
 void OpenRGB3DSpatialTab::SyncAllControllerLinkedReferencePoints()

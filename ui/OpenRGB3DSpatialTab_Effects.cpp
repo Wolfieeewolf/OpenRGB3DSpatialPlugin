@@ -8,8 +8,10 @@
 #include "ZoneGrid3D.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "Effects3D/Reactive/Reactive.h"
+#include "Effects3D/ControllerTorch/ControllerTorch.h"
 #include "ScreenCaptureManager.h"
 #include "ReactiveInputManager.h"
+#include "ControllerTiltManager.h"
 #include "PluginLog.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
@@ -800,6 +802,43 @@ void OpenRGB3DSpatialTab::SyncReactiveInputSession()
     }
 }
 
+bool OpenRGB3DSpatialTab::PlaybackUsesControllerTorch() const
+{
+    for(size_t i = 0; i < effect_stack.size(); i++)
+    {
+        const std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
+        if(inst && inst->enabled && inst->effect_class_name == "ControllerTorch")
+        {
+            return true;
+        }
+    }
+
+    if(effect_stack.empty() && current_effect_ui)
+    {
+        return dynamic_cast<ControllerTorch*>(current_effect_ui) != nullptr;
+    }
+
+    return false;
+}
+
+void OpenRGB3DSpatialTab::SyncControllerTiltSession()
+{
+    ControllerTiltManager* mgr = ControllerTiltManager::instance();
+    if(!mgr)
+    {
+        return;
+    }
+    const bool want = effect_running && PlaybackUsesControllerTorch();
+    if(want)
+    {
+        mgr->start();
+    }
+    else
+    {
+        mgr->stop();
+    }
+}
+
 void OpenRGB3DSpatialTab::RefreshAmbilightReferencePointDropdowns()
 {
     for(unsigned int i = 0; i < effect_stack.size(); i++)
@@ -909,6 +948,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
         UpdateStartStopAllButtons();
         SyncScreenCaptureSession();
         SyncReactiveInputSession();
+        SyncControllerTiltSession();
         return;
     }
 
@@ -951,6 +991,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
     if(stop_effect_button) stop_effect_button->setEnabled(true);
     SyncScreenCaptureSession();
     SyncReactiveInputSession();
+    SyncControllerTiltSession();
 }
 
 void OpenRGB3DSpatialTab::stopEffectClicked()
@@ -963,6 +1004,7 @@ void OpenRGB3DSpatialTab::stopEffectClicked()
     }
     SyncScreenCaptureSession();
     SyncReactiveInputSession();
+    SyncControllerTiltSession();
     if(effect_timer && effect_timer->isActive())
     {
         effect_timer->stop();
