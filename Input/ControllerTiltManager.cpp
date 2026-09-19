@@ -10,6 +10,9 @@
 #include <cmath>
 #include <cstring>
 #include <chrono>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 #if !defined(CONTROLLER_TILT_NO_HIDAPI)
 #include <hidapi.h>
@@ -31,6 +34,8 @@ constexpr unsigned char kBtInputReportId = 0x31;
 constexpr unsigned char kUsbInputReportId = 0x01;
 constexpr unsigned char kFeatureCalibrationId = 0x05;
 constexpr int kFeatureCalibrationSize = 41;
+/** dualsense_input_report: le32 sensor clock after accel (Linux: ticks/3 → µs). */
+constexpr int kReportSensorTimestampOffset = 27;
 
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegToRad = kPi / 180.0f;
@@ -41,6 +46,127 @@ constexpr float kDegToRad = kPi / 180.0f;
  */
 constexpr float kGyroLsbPerDegS = 16.384f;
 constexpr float kAccelLsbPerG = 8192.0f;
+
+std::int16_t ReadI16LE(const unsigned char* p)
+{
+    return (std::int16_t)((unsigned)p[0] | ((unsigned)p[1] << 8));
+}
+
+std::uint32_t ReadU32LE(const unsigned char* p)
+{
+    return (std::uint32_t)p[0]
+           | ((std::uint32_t)p[1] << 8)
+           | ((std::uint32_t)p[2] << 16)
+           | ((std::uint32_t)p[3] << 24);
+}
+
+struct ImuAxisCalib
+{
+    /** Subtract from raw le16 before scale (0 for gyro — Linux treats report as pre-biased). */
+    float bias_raw = 0.0f;
+    /** Multiply (raw - bias) → physical units (deg/s or g). */
+    float scale = 1.0f;
+};
+
+struct DualSenseImuCalib
+{
+    ImuAxisCalib gyro[3];  // pitch, yaw, roll
+    ImuAxisCalib accel[3]; // x, y, z
+    bool loaded = false;
+};
+
+void SetDefaultImuCalib(DualSenseImuCalib* c)
+{
+    for(int i = 0; i < 3; ++i)
+    {
+        c->gyro[i] = {0.0f, 1.0f / kGyroLsbPerDegS};
+        c->accel[i] = {0.0f, 1.0f / kAccelLsbPerG};
+    }
+    c->loaded = false;
+}
+
+/**
+ * Parse feature 0x05 (Linux hid-playstation dualsense_get_calibration_data).
+ * Gyro: dps = raw * speed_2x / denom (factory bias field unused — firmware pre-biases).
+ * Accel: g = 2 * (raw - bias) / range_2g.
+ */
+bool ParseFeatureCalibration(const unsigned char* buf, int len, DualSenseImuCalib* out)
+{
+    if(!buf || !out || len < 35 || buf[0] != kFeatureCalibrationId)
+    {
+        return false;
+    }
+
+    const std::int16_t gyro_pitch_bias = ReadI16LE(buf + 1);
+    const std::int16_t gyro_yaw_bias = ReadI16LE(buf + 3);
+    const std::int16_t gyro_roll_bias = ReadI16LE(buf + 5);
+    const std::int16_t gyro_pitch_plus = ReadI16LE(buf + 7);
+    const std::int16_t gyro_pitch_minus = ReadI16LE(buf + 9);
+    const std::int16_t gyro_yaw_plus = ReadI16LE(buf + 11);
+    const std::int16_t gyro_yaw_minus = ReadI16LE(buf + 13);
+    const std::int16_t gyro_roll_plus = ReadI16LE(buf + 15);
+    const std::int16_t gyro_roll_minus = ReadI16LE(buf + 17);
+    const std::int16_t gyro_speed_plus = ReadI16LE(buf + 19);
+    const std::int16_t gyro_speed_minus = ReadI16LE(buf + 21);
+    const std::int16_t acc_x_plus = ReadI16LE(buf + 23);
+    const std::int16_t acc_x_minus = ReadI16LE(buf + 25);
+    const std::int16_t acc_y_plus = ReadI16LE(buf + 27);
+    const std::int16_t acc_y_minus = ReadI16LE(buf + 29);
+    const std::int16_t acc_z_plus = ReadI16LE(buf + 31);
+    const std::int16_t acc_z_minus = ReadI16LE(buf + 33);
+
+    const int speed_2x = (int)gyro_speed_plus + (int)gyro_speed_minus;
+    const std::int16_t gyro_bias[3] = {gyro_pitch_bias, gyro_yaw_bias, gyro_roll_bias};
+    const std::int16_t gyro_plus[3] = {gyro_pitch_plus, gyro_yaw_plus, gyro_roll_plus};
+    const std::int16_t gyro_minus[3] = {gyro_pitch_minus, gyro_yaw_minus, gyro_roll_minus};
+
+    DualSenseImuCalib parsed{};
+    SetDefaultImuCalib(&parsed);
+
+    for(int i = 0; i < 3; ++i)
+    {
+        const int denom = std::abs((int)gyro_plus[i] - (int)gyro_bias[i])
+                          + std::abs((int)gyro_minus[i] - (int)gyro_bias[i]);
+        if(denom > 0 && speed_2x != 0)
+        {
+            // Matches Linux: (speed_2x * raw / denom) deg/s — gyro bias left at 0.
+            parsed.gyro[i].bias_raw = 0.0f;
+            parsed.gyro[i].scale = (float)speed_2x / (float)denom;
+        }
+    }
+
+    const std::int16_t acc_plus[3] = {acc_x_plus, acc_y_plus, acc_z_plus};
+    const std::int16_t acc_minus[3] = {acc_x_minus, acc_y_minus, acc_z_minus};
+    for(int i = 0; i < 3; ++i)
+    {
+        const int range_2g = (int)acc_plus[i] - (int)acc_minus[i];
+        if(range_2g != 0)
+        {
+            parsed.accel[i].bias_raw = (float)((int)acc_plus[i] - range_2g / 2);
+            parsed.accel[i].scale = 2.0f / (float)range_2g;
+        }
+    }
+
+    parsed.loaded = true;
+    *out = parsed;
+    return true;
+}
+
+float ApplyAxisCalib(const ImuAxisCalib& c, std::int16_t raw)
+{
+    return ((float)raw - c.bias_raw) * c.scale;
+}
+
+/** DualSense sensor clock delta → seconds (Linux: ticks / 3 = µs). */
+float SensorTimestampDeltaSeconds(std::uint32_t prev, std::uint32_t next)
+{
+    const std::uint32_t delta_ticks = next - prev; // uint wrap-safe
+    if(delta_ticks == 0)
+    {
+        return 0.0f;
+    }
+    return (float)delta_ticks / (3.0f * 1.0e6f);
+}
 
 float Length3(const Vector3D& v)
 {
@@ -72,13 +198,13 @@ Vector3D Cross3(const Vector3D& a, const Vector3D& b)
     };
 }
 
-float DeadzoneScalar(float v, float dz)
+float SoftDeadzone(float v, float dz)
 {
     if(v > -dz && v < dz)
     {
         return 0.0f;
     }
-    return v;
+    return (v > 0.0f) ? (v - dz) : (v + dz);
 }
 
 Vector3D RotateAroundAxis(Vector3D v, Vector3D axis, float angle_rad)
@@ -110,27 +236,84 @@ void OrthonormalizeBasis(Vector3D* aim_inout, Vector3D* up_inout)
     }
 }
 
-/** Room home: DualSense flat on desk, light bar toward the front wall (−Z). */
-void ResetRestBasis(Vector3D* aim_out, Vector3D* up_out)
+/** Room home aim/up are built by BasisFromPadEulerDeg(0,0,0). */
+
+constexpr float kRadToDeg = 180.0f / kPi;
+
+/**
+ * Same Euler XYZ (degrees) as Geometry3DUtils / controller transforms:
+ * rotate about X, then Y, then Z.
+ */
+Vector3D ApplyRoomEulerXYZDeg(Vector3D v, float rx_deg, float ry_deg, float rz_deg)
 {
-    *aim_out = {0.0f, 0.0f, -1.0f};
-    *up_out = {0.0f, 1.0f, 0.0f};
+    const float rx = rx_deg * kDegToRad;
+    const float ry = ry_deg * kDegToRad;
+    const float rz = rz_deg * kDegToRad;
+
+    float temp_y = v.y * std::cos(rx) - v.z * std::sin(rx);
+    float temp_z = v.y * std::sin(rx) + v.z * std::cos(rx);
+    v.y = temp_y;
+    v.z = temp_z;
+
+    float temp_x = v.x * std::cos(ry) + v.z * std::sin(ry);
+    temp_z = -v.x * std::sin(ry) + v.z * std::cos(ry);
+    v.x = temp_x;
+    v.z = temp_z;
+
+    temp_x = v.x * std::cos(rz) - v.y * std::sin(rz);
+    temp_y = v.x * std::sin(rz) + v.y * std::cos(rz);
+    v.x = temp_x;
+    v.y = temp_y;
+    return v;
 }
 
 /**
- * Rigid-body IMU step. Torch aim is always DualSense forward (light bar / front).
- *
- * Two stages so a left/right roll cannot yank heading:
- *  1) Gyro only — the whole pad rotates as a rigid body (pitch/yaw/roll).
- *  2) Gravity tilt — rotate about a *horizontal* axis to match pitch/roll.
- *     World-Y (heading) is then restored so accel never changes yaw.
+ * Absolute pitch / roll from accelerometer (degrees).
+ * Body: +X right, +Y face/buttons, +Z toward light bar.
+ * Uses a stable form so large left/right rolls don't blow up atan2.
  */
-void IntegrateRigidImu(float gx_rad, float gy_rad, float gz_rad,
-                       float ax, float ay, float az, float dt,
-                       Vector3D* mahony_i, Vector3D* aim_inout, Vector3D* up_inout)
+bool PitchRollDegFromAccel(float ax, float ay, float az, float* pitch_deg, float* roll_deg)
 {
-    OrthonormalizeBasis(aim_inout, up_inout);
-    Vector3D right = Cross3(*up_inout, *aim_inout);
+    const float amag = std::sqrt(ax * ax + ay * ay + az * az);
+    if(amag < 1e-4f)
+    {
+        return false;
+    }
+    if(std::fabs(amag - 1.0f) > 0.25f)
+    {
+        return false;
+    }
+    // Tip (pitch): light bar up = positive. Roll: right side down = positive
+    // (matches +rotation about torch aim / forward).
+    const float pitch_den = std::sqrt(ax * ax + ay * ay);
+    if(pitch_den < 0.12f)
+    {
+        return false; // nearly vertical on an edge — angles undefined
+    }
+    *pitch_deg = std::atan2(-az, pitch_den) * kRadToDeg;
+    *roll_deg = std::atan2(-ax, ay) * kRadToDeg;
+    // Clamp away from ±90° singularity where noise becomes spin.
+    *pitch_deg = std::clamp(*pitch_deg, -80.0f, 80.0f);
+    *roll_deg = std::clamp(*roll_deg, -80.0f, 80.0f);
+    return true;
+}
+
+/**
+ * Pad-native basis: yaw about world up, pitch about right, roll about aim.
+ * (Not RoomGrid Rx→Ry→Rz — that gimbal-locks and spins when rolling left/right.)
+ * (0,0,0) = flat, light bar toward front wall (−Z).
+ */
+void BasisFromPadEulerDeg(float pitch_deg, float yaw_deg, float roll_deg,
+                          Vector3D* aim_out, Vector3D* up_out)
+{
+    Vector3D aim{0.0f, 0.0f, -1.0f};
+    Vector3D up{0.0f, 1.0f, 0.0f};
+    const Vector3D world_up{0.0f, 1.0f, 0.0f};
+
+    aim = RotateAroundAxis(aim, world_up, yaw_deg * kDegToRad);
+    up = RotateAroundAxis(up, world_up, yaw_deg * kDegToRad);
+
+    Vector3D right = Cross3(aim, up);
     if(Length3(right) < 1e-5f)
     {
         right = {1.0f, 0.0f, 0.0f};
@@ -139,115 +322,45 @@ void IntegrateRigidImu(float gx_rad, float gy_rad, float gz_rad,
     {
         right = Normalize3(right);
     }
+    aim = RotateAroundAxis(aim, right, pitch_deg * kDegToRad);
+    up = RotateAroundAxis(up, right, pitch_deg * kDegToRad);
 
-    // 1) Gyro: DualSense X=pitch, Y=yaw, Z=roll, applied in the pad's body frame.
-    const Vector3D omega{
-        right.x * gx_rad + up_inout->x * gy_rad + aim_inout->x * gz_rad,
-        right.y * gx_rad + up_inout->y * gy_rad + aim_inout->y * gz_rad,
-        right.z * gx_rad + up_inout->z * gy_rad + aim_inout->z * gz_rad
-    };
-    const float wlen = Length3(omega);
-    if(wlen > 1e-6f)
-    {
-        const Vector3D axis = Normalize3(omega);
-        const float angle = wlen * dt;
-        *aim_inout = RotateAroundAxis(*aim_inout, axis, angle);
-        *up_inout = RotateAroundAxis(*up_inout, axis, angle);
-        OrthonormalizeBasis(aim_inout, up_inout);
-        right = Normalize3(Cross3(*up_inout, *aim_inout));
-    }
-
-    // Integrator from the old mixed filter — decay so it cannot dump leftover yaw.
-    mahony_i->x *= 0.90f;
-    mahony_i->y *= 0.90f;
-    mahony_i->z *= 0.90f;
-
-    const float amag = std::sqrt(ax * ax + ay * ay + az * az);
-    if(amag < 1e-4f)
-    {
-        return;
-    }
-    const float dev = std::fabs(amag - 1.0f);
-    constexpr float k_lin_reject = 0.18f;
-    if(dev >= k_lin_reject)
-    {
-        return;
-    }
-
-    // Gyro owns fast combined motion; gravity only assists slow tilt.
-    const float gyro_mag = wlen;
-    constexpr float k_gyro_fade_rad = 1.2f; // ~70 deg/s → half weight
-    float grav_w = (1.0f - (dev / k_lin_reject)) * (1.0f / (1.0f + gyro_mag / k_gyro_fade_rad));
-    if(grav_w < 0.02f)
-    {
-        return;
-    }
-
-    // Specific force → room "up". DualSense at rest is +Y through the face.
-    Vector3D up_meas = {
-        right.x * ax + up_inout->x * ay + aim_inout->x * az,
-        right.y * ax + up_inout->y * ay + aim_inout->y * az,
-        right.z * ax + up_inout->z * ay + aim_inout->z * az
-    };
-    up_meas = Normalize3(up_meas);
-
-    Vector3D tilt = Cross3(*up_inout, up_meas);
-    tilt.y = 0.0f; // no rotation about world up — heading stays gyro-only
-    const float tlen = Length3(tilt);
-    if(tlen < 1e-5f)
-    {
-        return;
-    }
-
-    const float hx = aim_inout->x;
-    const float hz = aim_inout->z;
-    const float hlen = std::sqrt(hx * hx + hz * hz);
-
-    constexpr float k_kp = 1.6f;
-    constexpr float k_max_step = 0.025f; // ~1.4° per frame
-    float step = k_kp * tlen * dt * grav_w;
-    if(step > k_max_step)
-    {
-        step = k_max_step;
-    }
-    const Vector3D tilt_axis = Normalize3(tilt);
-    *aim_inout = RotateAroundAxis(*aim_inout, tilt_axis, step);
-    *up_inout = RotateAroundAxis(*up_inout, tilt_axis, step);
-    OrthonormalizeBasis(aim_inout, up_inout);
-
-    // Belt-and-braces: put compass heading back if the tilt step leaked any yaw.
-    if(hlen > 0.20f)
-    {
-        const float hx2 = aim_inout->x;
-        const float hz2 = aim_inout->z;
-        const float hlen2 = std::sqrt(hx2 * hx2 + hz2 * hz2);
-        if(hlen2 > 0.20f)
-        {
-            const float h0 = std::atan2(hx, -hz);
-            const float h1 = std::atan2(hx2, -hz2);
-            float dyaw = h0 - h1;
-            while(dyaw > kPi)
-            {
-                dyaw -= 2.0f * kPi;
-            }
-            while(dyaw < -kPi)
-            {
-                dyaw += 2.0f * kPi;
-            }
-            if(std::fabs(dyaw) > 1e-5f)
-            {
-                const Vector3D world_up{0.0f, 1.0f, 0.0f};
-                *aim_inout = RotateAroundAxis(*aim_inout, world_up, dyaw);
-                *up_inout = RotateAroundAxis(*up_inout, world_up, dyaw);
-                OrthonormalizeBasis(aim_inout, up_inout);
-            }
-        }
-    }
+    // Left/right tilt = roll the face about the beam (aim), not world Z.
+    up = RotateAroundAxis(up, aim, roll_deg * kDegToRad);
+    OrthonormalizeBasis(&aim, &up);
+    *aim_out = aim;
+    *up_out = up;
 }
 
-std::int16_t ReadI16LE(const unsigned char* p)
+float WrapAngleDeg(float a)
 {
-    return (std::int16_t)((unsigned)p[0] | ((unsigned)p[1] << 8));
+    while(a > 180.0f)
+    {
+        a -= 360.0f;
+    }
+    while(a < -180.0f)
+    {
+        a += 360.0f;
+    }
+    return a;
+}
+
+float BlendAngleDeg(float current, float target, float accel_weight)
+{
+    const float w = std::clamp(accel_weight, 0.0f, 1.0f);
+    const float err = WrapAngleDeg(target - current);
+    return WrapAngleDeg(current + err * w);
+}
+
+/** Ignore sub-degree wobble; ease larger corrections. */
+float HoldOrBlendDeg(float current, float target, float hold_deg, float blend)
+{
+    const float err = WrapAngleDeg(target - current);
+    if(std::fabs(err) < hold_deg)
+    {
+        return current;
+    }
+    return BlendAngleDeg(current, target, blend);
 }
 
 std::uint64_t NowMs()
@@ -327,48 +440,123 @@ public:
     mutable QMutex mutex;
     bool running = false;
     ControllerTiltSample sample{};
+    ControllerTiltLinkStatus link_status = ControllerTiltLinkStatus::Stopped;
     bool open_failed_logged = false;
     bool open_ok_logged = false;
     bool enhanced_logged = false;
     bool limited_bt_logged = false;
+    bool calib_logged = false;
     bool has_dualsense_origin = false;
     Vector3D dualsense_origin{0.0f, 0.0f, 0.0f};
     Rotation3D layout_rotation{0.0f, 0.0f, 0.0f};
     bool is_bluetooth = false;
     std::uint64_t last_enhanced_request_ms = 0;
+    std::uint64_t last_open_attempt_ms = 0;
+    DualSenseImuCalib imu_calib{};
+    bool sensor_ts_ready = false;
+    std::uint32_t last_sensor_ts = 0;
+    int empty_polls = 0;
+    bool ever_got_imu = false;
+    bool calib_attempted = false;
 
-    /** Rigid IMU: aim is DualSense forward; gravity holds pitch/roll. */
+    /** Absolute spatial pose in RoomGrid Euler XYZ degrees (same as controller transforms). */
     bool have_pose = false;
+    float pitch_deg = 0.0f; // X — tip
+    float yaw_deg = 0.0f;   // Y — twist
+    float roll_deg = 0.0f;  // Z — tilt left/right
     Vector3D fused_aim{0.0f, 0.0f, -1.0f};
     Vector3D fused_up{0.0f, 1.0f, 0.0f};
-    Vector3D mahony_i{0.0f, 0.0f, 0.0f};
+    /** Low-pass accel (g) — kills micro shake before angle extract. */
+    float filt_ax = 0.0f;
+    float filt_ay = 1.0f;
+    float filt_az = 0.0f;
+    bool filt_accel_ready = false;
     std::uint64_t last_fusion_ms = 0;
     bool gyro_bias_ready = false;
     Vector3D gyro_bias_dps{0.0f, 0.0f, 0.0f};
     int gyro_bias_samples = 0;
     int still_frames = 0;
-    bool pad_moving = false;
     bool fusion_logged = false;
+
+    Impl()
+    {
+        SetDefaultImuCalib(&imu_calib);
+    }
+
+    void SetLink(ControllerTiltLinkStatus s)
+    {
+        link_status = s;
+        sample.link = s;
+    }
 
     void ResetFusion()
     {
         have_pose = false;
+        pitch_deg = 0.0f;
+        yaw_deg = 0.0f;
+        roll_deg = 0.0f;
         fused_aim = {0.0f, 0.0f, -1.0f};
         fused_up = {0.0f, 1.0f, 0.0f};
-        mahony_i = {0.0f, 0.0f, 0.0f};
+        filt_ax = 0.0f;
+        filt_ay = 1.0f;
+        filt_az = 0.0f;
+        filt_accel_ready = false;
         last_fusion_ms = 0;
         gyro_bias_ready = false;
         gyro_bias_dps = {0.0f, 0.0f, 0.0f};
         gyro_bias_samples = 0;
         still_frames = 0;
-        pad_moving = false;
         fusion_logged = false;
+        sensor_ts_ready = false;
+        last_sensor_ts = 0;
+        empty_polls = 0;
+    }
+
+    void RebuildBasis()
+    {
+        // Pad-native euler (stable for left/right roll) → room aim/up.
+        BasisFromPadEulerDeg(pitch_deg, yaw_deg, roll_deg, &fused_aim, &fused_up);
+        // Then place into the room using the DualSense layout object's rotation.
+        if(has_dualsense_origin)
+        {
+            fused_aim = ApplyRoomEulerXYZDeg(fused_aim,
+                                             layout_rotation.x,
+                                             layout_rotation.y,
+                                             layout_rotation.z);
+            fused_up = ApplyRoomEulerXYZDeg(fused_up,
+                                            layout_rotation.x,
+                                            layout_rotation.y,
+                                            layout_rotation.z);
+            OrthonormalizeBasis(&fused_aim, &fused_up);
+        }
+    }
+
+    void RecenterPose()
+    {
+        gyro_bias_ready = false;
+        gyro_bias_dps = {0.0f, 0.0f, 0.0f};
+        gyro_bias_samples = 0;
+        still_frames = 0;
+        pitch_deg = 0.0f;
+        yaw_deg = 0.0f;
+        roll_deg = 0.0f;
+        filt_ax = 0.0f;
+        filt_ay = 1.0f;
+        filt_az = 0.0f;
+        filt_accel_ready = false;
+        RebuildBasis();
+        have_pose = true;
+        sample.aim = fused_aim;
+        sample.up = fused_up;
+        sample.euler_deg = {0.0f, 0.0f, 0.0f};
     }
 
 #if defined(CONTROLLER_TILT_HAS_HIDAPI)
     hid_device* device = nullptr;
+    std::string open_path_owned;
 #endif
 
+    /** Drop the HID handle immediately — never I/O a dead DualSense after unplug. */
     void CloseDevice()
     {
 #if defined(CONTROLLER_TILT_HAS_HIDAPI)
@@ -377,47 +565,114 @@ public:
             hid_close(device);
             device = nullptr;
         }
+        open_path_owned.clear();
 #endif
         is_bluetooth = false;
         enhanced_logged = false;
         limited_bt_logged = false;
+        calib_logged = false;
+        calib_attempted = false;
+        ever_got_imu = false;
+        empty_polls = 0;
         last_enhanced_request_ms = 0;
+        // Keep last_open_attempt_ms so reconnect is backoff-throttled.
+        SetDefaultImuCalib(&imu_calib);
         ResetFusion();
+        sample.valid = false;
+        sample.kind = ControllerTiltDeviceKind::None;
     }
 
-    /** DualSense over BT stays on limited 0x01 until calibration feature 0x05 is read. */
-    void RequestBluetoothEnhancedReports()
+    void HandleDisconnect(const char* reason)
     {
 #if defined(CONTROLLER_TILT_HAS_HIDAPI)
-        if(!device || !is_bluetooth)
+        if(device)
         {
-            return;
+            LOG_WARNING("[3DSpatial] ControllerTilt: DualSense HID dropped (%s) — closing handle",
+                        reason ? reason : "unknown");
+        }
+#else
+        (void)reason;
+#endif
+        CloseDevice();
+        open_ok_logged = false;
+        last_open_attempt_ms = NowMs(); // throttle reconnect during unplug/rescan storms
+        SetLink(ControllerTiltLinkStatus::NoDevice);
+        sample.link = link_status;
+    }
+
+    /**
+     * Read feature 0x05: factory IMU calibration (USB + BT) and BT enhanced unlock.
+     * Returns false if the device died during the call (handle already closed).
+     */
+    bool LoadCalibrationFeature(bool force)
+    {
+#if defined(CONTROLLER_TILT_HAS_HIDAPI)
+        if(!device)
+        {
+            return true;
+        }
+        // USB: one attempt is enough. BT: retry while waiting for enhanced 0x31.
+        if(!force && calib_attempted && !is_bluetooth)
+        {
+            return true;
         }
         const std::uint64_t now = NowMs();
-        if(last_enhanced_request_ms != 0 && (now - last_enhanced_request_ms) < 1500u)
+        if(!force && last_enhanced_request_ms != 0 && (now - last_enhanced_request_ms) < 1500u)
         {
-            return;
+            return true;
         }
         last_enhanced_request_ms = now;
+        calib_attempted = true;
 
         unsigned char calib[64];
         std::memset(calib, 0, sizeof(calib));
         calib[0] = kFeatureCalibrationId;
         const int got = hid_get_feature_report(device, calib, kFeatureCalibrationSize);
-        if(got >= 1 && !enhanced_logged)
+        if(got < 0)
         {
-            LOG_INFO("[3DSpatial] ControllerTilt: DualSense BT enhanced reports requested "
-                     "(feature 0x05, %d bytes)",
-                     got);
-            enhanced_logged = true;
+            HandleDisconnect("feature 0x05 failed");
+            return false;
         }
-        else if(got < 1 && !limited_bt_logged)
+        if(got >= 35 && ParseFeatureCalibration(calib, got, &imu_calib))
+        {
+            if(!calib_logged)
+            {
+                LOG_INFO("[3DSpatial] ControllerTilt: DualSense factory IMU calib loaded "
+                         "(gyro scale %.5f/%.5f/%.5f dps/LSB)",
+                         imu_calib.gyro[0].scale,
+                         imu_calib.gyro[1].scale,
+                         imu_calib.gyro[2].scale);
+                calib_logged = true;
+            }
+            if(is_bluetooth && !enhanced_logged)
+            {
+                LOG_INFO("[3DSpatial] ControllerTilt: DualSense BT enhanced reports requested "
+                         "(feature 0x05, %d bytes)",
+                         got);
+                enhanced_logged = true;
+            }
+        }
+        else if(got >= 1)
+        {
+            if(is_bluetooth && !enhanced_logged)
+            {
+                LOG_INFO("[3DSpatial] ControllerTilt: DualSense BT feature 0x05 ok (%d bytes) "
+                         "but calib parse skipped — using default scale",
+                         got);
+                enhanced_logged = true;
+            }
+        }
+        else if(is_bluetooth && !limited_bt_logged)
         {
             LOG_WARNING("[3DSpatial] ControllerTilt: DualSense BT calibration feature failed — "
                         "IMU needs enhanced report 0x31 (got %d)",
                         got);
             limited_bt_logged = true;
         }
+        return true;
+#else
+        (void)force;
+        return true;
 #endif
     }
 
@@ -429,73 +684,114 @@ public:
             return true;
         }
 
-        hid_device_info* list = hid_enumerate(kSonyVid, 0);
-        hid_device_info* it = list;
-        const char* open_path = nullptr;
-        bool path_is_bt = false;
-
-        // Prefer Bluetooth when present (same report layout Win/Linux once enhanced).
-        while(it)
+        // Never re-enumerate every render frame — that freezes OpenRGB's UI when the
+        // pad is missing or held by another app / mid-rescan.
+        const std::uint64_t now = NowMs();
+        constexpr std::uint64_t k_open_retry_ms = 2000u;
+        if(last_open_attempt_ms != 0 && (now - last_open_attempt_ms) < k_open_retry_ms)
         {
-            if(it->product_id == kDualSensePid || it->product_id == kDualSenseEdgePid)
-            {
-                const bool bt = DualSenseInfoIsBluetooth(it);
-                if(!open_path || (bt && !path_is_bt))
-                {
-                    open_path = it->path;
-                    path_is_bt = bt;
-                }
-                if(bt)
-                {
-                    break;
-                }
-            }
-            it = it->next;
+            return false;
         }
+        last_open_attempt_ms = now;
 
-        if(open_path)
+        struct Candidate
         {
-            device = hid_open_path(open_path);
-            is_bluetooth = path_is_bt;
+            std::string path;
+            bool bt = false;
+            int interface_number = -1;
+        };
+        std::vector<Candidate> candidates;
+        bool saw_dualsense = false;
+
+        hid_device_info* list = hid_enumerate(kSonyVid, 0);
+        for(hid_device_info* it = list; it; it = it->next)
+        {
+            if(it->product_id != kDualSensePid && it->product_id != kDualSenseEdgePid)
+            {
+                continue;
+            }
+            if(!it->path)
+            {
+                continue;
+            }
+            saw_dualsense = true;
+            Candidate c;
+            c.path = it->path; // own a copy — list is freed before open
+            c.bt = DualSenseInfoIsBluetooth(it);
+            c.interface_number = it->interface_number;
+            candidates.push_back(std::move(c));
         }
         hid_free_enumeration(list);
 
-        if(!device)
-        {
-            device = hid_open(kSonyVid, kDualSensePid, nullptr);
-            if(!device)
+        // Prefer BT, then USB vendor iface 3 (gamepad/IMU) when present.
+        std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+            if(a.bt != b.bt)
             {
-                device = hid_open(kSonyVid, kDualSenseEdgePid, nullptr);
+                return a.bt && !b.bt;
             }
-            is_bluetooth = false;
+            const int score_a = (a.interface_number == 3) ? 0 : 1;
+            const int score_b = (b.interface_number == 3) ? 0 : 1;
+            return score_a < score_b;
+        });
+
+        for(const Candidate& c : candidates)
+        {
+            hid_device* try_dev = hid_open_path(c.path.c_str());
+            if(!try_dev)
+            {
+                continue;
+            }
+            hid_set_nonblocking(try_dev, 1);
+            device = try_dev;
+            open_path_owned = c.path;
+            is_bluetooth = c.bt;
+            break;
         }
+
+        // Do NOT fall back to hid_open(vid,pid) — that grabs an arbitrary interface and
+        // races OpenRGB's Sony DualSense RGB driver on the same node.
 
         if(!device)
         {
+            SetLink(saw_dualsense ? ControllerTiltLinkStatus::DeviceBusy
+                                  : ControllerTiltLinkStatus::NoDevice);
             if(!open_failed_logged)
             {
-                LOG_WARNING("[3DSpatial] ControllerTilt: DualSense HID open failed "
-                            "(another app may hold the device, or Linux hidraw permissions)");
+                if(saw_dualsense)
+                {
+                    LOG_WARNING("[3DSpatial] ControllerTilt: DualSense present but HID open failed — "
+                                "pad may be held by OpenRGB rescan / Steam / another app "
+                                "(or Linux hidraw permissions)");
+                }
+                else
+                {
+                    LOG_WARNING("[3DSpatial] ControllerTilt: DualSense HID open failed "
+                                "(no pad found, or Linux hidraw permissions)");
+                }
                 open_failed_logged = true;
             }
             return false;
         }
 
-        hid_set_nonblocking(device, 1);
         if(!open_ok_logged)
         {
-            LOG_INFO("[3DSpatial] ControllerTilt: DualSense opened (%s) for IMU torch",
+            LOG_INFO("[3DSpatial] ControllerTilt: DualSense opened (%s, iface path ok) for IMU torch",
                      is_bluetooth ? "Bluetooth" : "USB");
             open_ok_logged = true;
         }
         open_failed_logged = false;
+        empty_polls = 0;
+        ever_got_imu = false;
+        SetLink(is_bluetooth ? ControllerTiltLinkStatus::WaitingEnhancedBt
+                             : ControllerTiltLinkStatus::Ok);
 
-        if(is_bluetooth)
+        if(!LoadCalibrationFeature(true))
         {
-            RequestBluetoothEnhancedReports();
+            return false;
         }
-        return true;
+        return device != nullptr;
 #else
+        SetLink(ControllerTiltLinkStatus::NoHidapi);
         if(!open_failed_logged)
         {
             LOG_WARNING("[3DSpatial] ControllerTilt: DualSense IMU disabled "
@@ -508,18 +804,33 @@ public:
 
     void PollDualSense()
     {
+        // Hold mutex for the whole poll so stop() cannot hid_close under us.
+        QMutexLocker lock(&mutex);
+        if(!running)
+        {
+            SetLink(ControllerTiltLinkStatus::Stopped);
+            return;
+        }
 #if defined(CONTROLLER_TILT_HAS_HIDAPI)
         if(!EnsureDevice())
         {
-            QMutexLocker lock(&mutex);
             sample.valid = false;
             sample.kind = ControllerTiltDeviceKind::None;
+            sample.link = link_status;
             return;
         }
 
-        if(is_bluetooth)
+        // Refresh calib / BT unlock only while needed (never on a dead handle).
+        if(is_bluetooth || !imu_calib.loaded)
         {
-            RequestBluetoothEnhancedReports();
+            if(!LoadCalibrationFeature(false))
+            {
+                return;
+            }
+            if(!device)
+            {
+                return;
+            }
         }
 
         unsigned char buf[128];
@@ -531,11 +842,20 @@ public:
         float sum_gz = 0.0f;
         int packet_count = 0;
         bool saw_limited_bt = false;
+        bool have_batch_ts = false;
+        std::uint32_t batch_last_ts = 0;
 
-        for(;;)
+        // Cap drain — a disconnect storm must not spin the UI thread.
+        constexpr int k_max_reads_per_poll = 48;
+        for(int n = 0; n < k_max_reads_per_poll; ++n)
         {
             const int got = hid_read(device, buf, sizeof(buf));
-            if(got <= 0)
+            if(got < 0)
+            {
+                HandleDisconnect("hid_read error");
+                return;
+            }
+            if(got == 0)
             {
                 break;
             }
@@ -563,29 +883,57 @@ public:
                 continue;
             }
 
-            sum_ax += (float)ReadI16LE(buf + accel_off) / kAccelLsbPerG;
-            sum_ay += (float)ReadI16LE(buf + accel_off + 2) / kAccelLsbPerG;
-            sum_az += (float)ReadI16LE(buf + accel_off + 4) / kAccelLsbPerG;
-            sum_gx += (float)ReadI16LE(buf + gyro_off) / kGyroLsbPerDegS;
-            sum_gy += (float)ReadI16LE(buf + gyro_off + 2) / kGyroLsbPerDegS;
-            sum_gz += (float)ReadI16LE(buf + gyro_off + 4) / kGyroLsbPerDegS;
+            const int body_base = accel_off - kReportAccelOffset;
+            const int ts_off = body_base + kReportSensorTimestampOffset;
+            if(ts_off >= 0 && ts_off + 4 <= got)
+            {
+                batch_last_ts = ReadU32LE(buf + ts_off);
+                have_batch_ts = true;
+            }
+
+            sum_ax += ApplyAxisCalib(imu_calib.accel[0], ReadI16LE(buf + accel_off));
+            sum_ay += ApplyAxisCalib(imu_calib.accel[1], ReadI16LE(buf + accel_off + 2));
+            sum_az += ApplyAxisCalib(imu_calib.accel[2], ReadI16LE(buf + accel_off + 4));
+            sum_gx += ApplyAxisCalib(imu_calib.gyro[0], ReadI16LE(buf + gyro_off));
+            sum_gy += ApplyAxisCalib(imu_calib.gyro[1], ReadI16LE(buf + gyro_off + 2));
+            sum_gz += ApplyAxisCalib(imu_calib.gyro[2], ReadI16LE(buf + gyro_off + 4));
             ++packet_count;
         }
 
         if(packet_count <= 0)
         {
+            ++empty_polls;
             if(saw_limited_bt)
             {
+                SetLink(ControllerTiltLinkStatus::WaitingEnhancedBt);
                 if(!limited_bt_logged)
                 {
                     LOG_WARNING("[3DSpatial] ControllerTilt: DualSense BT still on limited report 0x01 "
                                 "(no IMU). Waiting for enhanced 0x31 after calibration request.");
                     limited_bt_logged = true;
                 }
-                RequestBluetoothEnhancedReports();
+                if(!LoadCalibrationFeature(false))
+                {
+                    return;
+                }
             }
+            // After we had IMU, prolonged silence usually means unplug / OpenRGB rescan
+            // stole the node — drop the handle instead of I/O on a zombie.
+            constexpr int k_zombie_empty_polls = 90; // ~3s at 30 FPS
+            if(ever_got_imu && empty_polls >= k_zombie_empty_polls)
+            {
+                HandleDisconnect("no IMU reports (likely unplugged or rescanned)");
+                return;
+            }
+            sample.valid = false;
+            sample.kind = ControllerTiltDeviceKind::None;
+            sample.link = link_status;
             return;
         }
+
+        empty_polls = 0;
+        ever_got_imu = true;
+        SetLink(ControllerTiltLinkStatus::Ok);
 
         const float inv_n = 1.0f / (float)packet_count;
         const float ax = sum_ax * inv_n;
@@ -624,7 +972,7 @@ public:
                 if(gyro_bias_samples >= 40)
                 {
                     gyro_bias_ready = true;
-                    LOG_INFO("[3DSpatial] ControllerTilt: DualSense gyro bias ready "
+                    LOG_INFO("[3DSpatial] ControllerTilt: DualSense residual gyro bias ready "
                              "(%.2f, %.2f, %.2f deg/s)",
                              gyro_bias_dps.x, gyro_bias_dps.y, gyro_bias_dps.z);
                 }
@@ -649,42 +997,35 @@ public:
             gz_dps -= gyro_bias_dps.z;
         }
 
-        // Idle noise floor after bias subtract.
-        constexpr float k_gyro_deadzone_dps = 0.8f;
-        gx_dps = DeadzoneScalar(gx_dps, k_gyro_deadzone_dps);
-        gy_dps = DeadzoneScalar(gy_dps, k_gyro_deadzone_dps);
-        gz_dps = DeadzoneScalar(gz_dps, k_gyro_deadzone_dps);
+        // Kill micro-shake / hand tremor so axes don't cross-talk into each other.
+        constexpr float k_gyro_deadzone_dps = 2.5f;
+        gx_dps = SoftDeadzone(gx_dps, k_gyro_deadzone_dps);
+        gy_dps = SoftDeadzone(gy_dps, k_gyro_deadzone_dps);
+        gz_dps = SoftDeadzone(gz_dps, k_gyro_deadzone_dps);
 
-        // Real-torch behaviour: nothing moves the beam unless the pad is actually
-        // turning. Detect rotation with hysteresis (enter high, exit low) so a still
-        // pad is fully frozen — no gyro, no gravity nudging — and there is no flicker
-        // at the threshold. When frozen the pose is held exactly; only real rotation
-        // (or the pod being picked up / tilted, |a| off 1g) wakes the filter.
-        const float gyro_mag_dz =
-            std::sqrt(gx_dps * gx_dps + gy_dps * gy_dps + gz_dps * gz_dps);
-        const float accel_dev = std::fabs(accel_mag - 1.0f);
-        constexpr float k_move_enter_dps = 3.0f;
-        constexpr float k_move_exit_dps = 1.2f;
-        constexpr float k_move_accel_g = 0.06f; // translation / tilt-in-hand wakes it
-        if(gyro_mag_dz > k_move_enter_dps || accel_dev > k_move_accel_g)
+        // Smooth accel before angle math (noisy axes → false pitch while rolling).
+        constexpr float k_accel_lpf = 0.12f;
+        if(!filt_accel_ready)
         {
-            pad_moving = true;
+            filt_ax = ax;
+            filt_ay = ay;
+            filt_az = az;
+            filt_accel_ready = true;
         }
-        else if(gyro_mag_dz < k_move_exit_dps && accel_dev < k_move_accel_g)
+        else
         {
-            pad_moving = false;
-        }
-
-        if(!pad_moving)
-        {
-            gx_dps = 0.0f;
-            gy_dps = 0.0f;
-            gz_dps = 0.0f;
+            filt_ax += (ax - filt_ax) * k_accel_lpf;
+            filt_ay += (ay - filt_ay) * k_accel_lpf;
+            filt_az += (az - filt_az) * k_accel_lpf;
         }
 
         const std::uint64_t now = NowMs();
         float dt = 0.0f;
-        if(last_fusion_ms != 0 && now > last_fusion_ms)
+        if(have_batch_ts && sensor_ts_ready)
+        {
+            dt = SensorTimestampDeltaSeconds(last_sensor_ts, batch_last_ts);
+        }
+        else if(last_fusion_ms != 0 && now > last_fusion_ms)
         {
             dt = (float)(now - last_fusion_ms) * 0.001f;
         }
@@ -693,51 +1034,105 @@ public:
             dt = 1.0f / 60.0f;
         }
         last_fusion_ms = now;
+        if(have_batch_ts)
+        {
+            last_sensor_ts = batch_last_ts;
+            sensor_ts_ready = true;
+        }
+
+        const float agx = std::fabs(gx_dps);
+        const float agy = std::fabs(gy_dps);
+        const float agz = std::fabs(gz_dps);
+        constexpr float k_dom_min_dps = 10.0f;
+        constexpr float k_dom_ratio = 1.5f;
+        const bool pitch_dominant = agx >= k_dom_min_dps && agx >= agy * k_dom_ratio && agx >= agz * k_dom_ratio;
+        const bool yaw_dominant = agy >= k_dom_min_dps && agy >= agx * k_dom_ratio && agy >= agz * k_dom_ratio;
+        const bool roll_dominant = agz >= k_dom_min_dps && agz >= agx * k_dom_ratio && agz >= agy * k_dom_ratio;
 
         if(!have_pose)
         {
-            ResetRestBasis(&fused_aim, &fused_up);
+            pitch_deg = 0.0f;
+            yaw_deg = 0.0f;
+            roll_deg = 0.0f;
+            float p0 = 0.0f;
+            float r0 = 0.0f;
+            if(PitchRollDegFromAccel(filt_ax, filt_ay, filt_az, &p0, &r0))
+            {
+                pitch_deg = p0;
+                roll_deg = r0;
+            }
             have_pose = true;
         }
-        else if(gyro_bias_ready && pad_moving)
+        else if(gyro_bias_ready)
         {
-            // Only touch the pose while the pad is actually moving. A still pad is
-            // frozen: gyro AND gravity are skipped, so the torch holds dead still.
-            IntegrateRigidImu(
-                gx_dps * kDegToRad,
-                gy_dps * kDegToRad,
-                gz_dps * kDegToRad,
-                ax,
-                ay,
-                az,
-                dt,
-                &mahony_i,
-                &fused_aim,
-                &fused_up);
+            float pitch_acc = 0.0f;
+            float roll_acc = 0.0f;
+            const bool grav_ok = PitchRollDegFromAccel(filt_ax, filt_ay, filt_az, &pitch_acc, &roll_acc);
+
+            if(grav_ok)
+            {
+                // While rolling, don't also chase pitch from noisy accel (and vice versa).
+                constexpr float k_hold_deg = 2.0f;
+                const float blend = (still_frames > 4) ? 0.45f : 0.18f;
+                if(roll_dominant && !pitch_dominant)
+                {
+                    roll_deg = HoldOrBlendDeg(roll_deg, roll_acc, k_hold_deg, blend);
+                }
+                else if(pitch_dominant && !roll_dominant)
+                {
+                    pitch_deg = HoldOrBlendDeg(pitch_deg, pitch_acc, k_hold_deg, blend);
+                }
+                else
+                {
+                    pitch_deg = HoldOrBlendDeg(pitch_deg, pitch_acc, k_hold_deg, blend);
+                    roll_deg = HoldOrBlendDeg(roll_deg, roll_acc, k_hold_deg, blend);
+                }
+            }
+            else
+            {
+                if(pitch_dominant)
+                {
+                    pitch_deg = WrapAngleDeg(pitch_deg + gx_dps * dt);
+                    pitch_deg = std::clamp(pitch_deg, -80.0f, 80.0f);
+                }
+                if(roll_dominant)
+                {
+                    roll_deg = WrapAngleDeg(roll_deg + gz_dps * dt);
+                    roll_deg = std::clamp(roll_deg, -80.0f, 80.0f);
+                }
+            }
+
+            if(yaw_dominant && !pitch_dominant && !roll_dominant)
+            {
+                yaw_deg = WrapAngleDeg(yaw_deg + gy_dps * dt);
+            }
         }
+
+        RebuildBasis();
 
         if(!fusion_logged)
         {
-            LOG_INFO("[3DSpatial] ControllerTilt: DualSense rigid IMU "
-                     "(torch = pad forward; frozen when still, follows only real motion)");
+            LOG_INFO("[3DSpatial] ControllerTilt: pad-native spatial IMU "
+                     "(roll about beam; smoothed gravity pitch/roll)");
             fusion_logged = true;
         }
 
         ControllerTiltSample next{};
         next.kind = ControllerTiltDeviceKind::DualSense;
         next.valid = true;
-        next.accel = Normalize3({ax, ay, az}); // debug only
+        next.accel = Normalize3({filt_ax, filt_ay, filt_az});
         next.gyro_dps = {gx_dps, gy_dps, gz_dps};
         next.aim = fused_aim;
         next.up = fused_up;
+        next.euler_deg = {pitch_deg, yaw_deg, roll_deg};
         next.timestamp_ms = now;
+        next.link = link_status;
 
-        QMutexLocker lock(&mutex);
         sample = next;
 #else
-        QMutexLocker lock(&mutex);
         sample.valid = false;
         sample.kind = ControllerTiltDeviceKind::None;
+        SetLink(ControllerTiltLinkStatus::NoHidapi);
 #endif
     }
 };
@@ -762,16 +1157,20 @@ ControllerTiltManager::ControllerTiltManager()
 ControllerTiltManager::~ControllerTiltManager()
 {
     stop();
-#if defined(CONTROLLER_TILT_HAS_HIDAPI)
-    hid_exit();
-#endif
+    // Do NOT call hid_exit() — OpenRGB owns the process-wide hidapi lifetime.
+    // Exiting from a plugin tears down HID under DetectionManager and crashes the UI.
     delete impl_;
     impl_ = nullptr;
 }
 
 void ControllerTiltManager::start()
 {
-    if(!impl_ || impl_->running)
+    if(!impl_)
+    {
+        return;
+    }
+    QMutexLocker lock(&impl_->mutex);
+    if(impl_->running)
     {
         return;
     }
@@ -780,7 +1179,12 @@ void ControllerTiltManager::start()
     impl_->open_ok_logged = false;
     impl_->enhanced_logged = false;
     impl_->limited_bt_logged = false;
+    impl_->calib_logged = false;
+    impl_->calib_attempted = false;
     impl_->last_enhanced_request_ms = 0;
+    impl_->last_open_attempt_ms = 0;
+    SetDefaultImuCalib(&impl_->imu_calib);
+    impl_->SetLink(ControllerTiltLinkStatus::NoDevice);
     impl_->ResetFusion();
 }
 
@@ -790,10 +1194,11 @@ void ControllerTiltManager::stop()
     {
         return;
     }
+    QMutexLocker lock(&impl_->mutex);
     impl_->running = false;
     impl_->CloseDevice();
-    QMutexLocker lock(&impl_->mutex);
     impl_->sample = ControllerTiltSample{};
+    impl_->SetLink(ControllerTiltLinkStatus::Stopped);
 }
 
 bool ControllerTiltManager::isRunning() const
@@ -821,6 +1226,16 @@ ControllerTiltSample ControllerTiltManager::Latest() const
     return impl_->sample;
 }
 
+ControllerTiltLinkStatus ControllerTiltManager::LinkStatus() const
+{
+    if(!impl_)
+    {
+        return ControllerTiltLinkStatus::Stopped;
+    }
+    QMutexLocker lock(&impl_->mutex);
+    return impl_->link_status;
+}
+
 void ControllerTiltManager::RecenterHeading()
 {
     if(!impl_)
@@ -828,16 +1243,8 @@ void ControllerTiltManager::RecenterHeading()
         return;
     }
     QMutexLocker lock(&impl_->mutex);
-    impl_->gyro_bias_ready = false;
-    impl_->gyro_bias_dps = {0.0f, 0.0f, 0.0f};
-    impl_->gyro_bias_samples = 0;
-    impl_->mahony_i = {0.0f, 0.0f, 0.0f};
-    impl_->still_frames = 0;
-    ResetRestBasis(&impl_->fused_aim, &impl_->fused_up);
-    impl_->have_pose = true;
-    impl_->sample.aim = impl_->fused_aim;
-    impl_->sample.up = impl_->fused_up;
-    LOG_INFO("[3DSpatial] ControllerTilt: pose recentered (front-wall home + bias resampling)");
+    impl_->RecenterPose();
+    LOG_INFO("[3DSpatial] ControllerTilt: recentered (yaw=0 home; pitch/roll follow gravity)");
 }
 
 bool ControllerTiltManager::ResolveDualSenseOrigin(

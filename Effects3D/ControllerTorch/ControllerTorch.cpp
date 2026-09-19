@@ -2,6 +2,7 @@
 
 #include "ControllerTorch.h"
 #include "ControllerTiltManager.h"
+#include "ControllerTiltTypes.h"
 #include "EffectColorUtils.h"
 #include "EffectSliderRow.h"
 #include "EffectUiRows.h"
@@ -10,6 +11,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSlider>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -100,24 +102,36 @@ void ControllerTorch::SetupCustomUI(QWidget* parent)
         QStringLiteral(
             "Add a DualSense to the room — its layout position is the torch apex. "
             "Start flat on the desk, light bar toward the front wall, then Recenter. "
-            "The beam stays locked to the front of the pad and holds still until you "
-            "move it. Gravity holds up/tilt with no drift; desk slides are ignored. "
-            "Recenter to set home / clear any heading offset."),
+            "Place the DualSense in the room like the real pad (flat = rotation 0,0,0, "
+            "light bar toward the front wall). Recenter while it sits that way. "
+            "Then real tilts match the room: X tip, Y twist, Z roll — same Euler as other objects."),
         w);
     hint->setWordWrap(true);
     layout->addWidget(hint);
+
+    status_label_ = new QLabel(QStringLiteral("Status: …"), w);
+    status_label_->setWordWrap(true);
+    layout->addWidget(status_label_);
+    status_timer_ = new QTimer(w);
+    status_timer_->setInterval(500);
+    QObject::connect(status_timer_, &QTimer::timeout, this, [this]() {
+        RefreshStatusLabel();
+    });
+    status_timer_->start();
+    RefreshStatusLabel();
 
     QPushButton* recenter_btn = new QPushButton(
         QStringLiteral("Recenter pose"), w);
     recenter_btn->setToolTip(
         QStringLiteral(
             "Hold the DualSense still in the home pose, then click. "
-            "Resets the beam and resamples gyro bias (gyro drifts slowly over time)."));
-    QObject::connect(recenter_btn, &QPushButton::clicked, this, []() {
+            "Resets the beam and resamples residual gyro bias."));
+    QObject::connect(recenter_btn, &QPushButton::clicked, this, [this]() {
         if(ControllerTiltManager* tilt = ControllerTiltManager::instance())
         {
             tilt->RecenterHeading();
         }
+        RefreshStatusLabel();
     });
     layout->addWidget(recenter_btn);
 
@@ -269,10 +283,33 @@ void ControllerTorch::SetupCustomUI(QWidget* parent)
         [this](int) { return QString::number(split_soft_, 'f', 2); },
         on_changed);
 
-    if(parent && parent->layout())
+    AddWidgetToParent(w, parent);
+}
+
+void ControllerTorch::RefreshStatusLabel()
+{
+    if(!status_label_)
     {
-        parent->layout()->addWidget(w);
+        return;
     }
+    ControllerTiltManager* tilt = ControllerTiltManager::instance();
+    if(!tilt)
+    {
+        status_label_->setText(QStringLiteral("Status: tilt manager unavailable"));
+        return;
+    }
+    const ControllerTiltLinkStatus link = tilt->LinkStatus();
+    const ControllerTiltSample sample = tilt->Latest();
+    QString text = QStringLiteral("Status: %1")
+                       .arg(QString::fromUtf8(ControllerTiltLinkStatusText(link)));
+    if(link == ControllerTiltLinkStatus::Ok && sample.valid)
+    {
+        text += QStringLiteral("\nOrientation X:%1°  Y:%2°  Z:%3°  (0,0,0 = flat desk home)")
+                    .arg(sample.euler_deg.x, 0, 'f', 1)
+                    .arg(sample.euler_deg.y, 0, 'f', 1)
+                    .arg(sample.euler_deg.z, 0, 'f', 1);
+    }
+    status_label_->setText(text);
 }
 
 void ControllerTorch::CapturePose(const GridContext3D& grid)
@@ -290,7 +327,7 @@ void ControllerTorch::CapturePose(const GridContext3D& grid)
         return;
     }
 
-    tilt->Poll();
+    // Session Poll runs once per render frame in RenderEffectStack.
     const ControllerTiltSample sample = tilt->Latest();
     Vector3D origin{};
     const bool have_origin = tilt->DualSenseOrigin(origin);

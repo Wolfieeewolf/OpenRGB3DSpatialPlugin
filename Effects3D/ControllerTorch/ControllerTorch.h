@@ -8,7 +8,9 @@
 #include "LEDPosition3D.h"
 
 class QCheckBox;
+class QLabel;
 class QSlider;
+class QTimer;
 
 /** Showcase torch: DualSense IMU aim from the DualSense controller's layout position. */
 class ControllerTorch : public SpatialEffect3D
@@ -66,9 +68,12 @@ private:
     QSlider* split_soft_slider_ = nullptr;
     QSlider* boost_slider_ = nullptr;
     QCheckBox* split_check_ = nullptr;
+    QLabel* status_label_ = nullptr;
+    QTimer* status_timer_ = nullptr;
 
     void CapturePose(const GridContext3D& grid);
     void SyncSlidersFromState();
+    void RefreshStatusLabel();
 };
 
 #endif

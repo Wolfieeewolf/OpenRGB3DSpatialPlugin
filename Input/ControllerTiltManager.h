@@ -11,12 +11,12 @@
 
 /**
  * Singleton that polls supported motion controllers and exposes a RoomGrid aim vector.
- * DualSense (USB/BT HID via hidapi on Windows and Linux): rigid IMU.
- * Torch is always pad-forward. Gravity holds pitch/roll while moving; heading is gyro
- * (no magnetometer). Like a real torch, a still pad is fully frozen — gyro AND gravity
- * are skipped, so the beam holds dead still and only follows real pad motion (rotation
- * with hysteresis, or |a| off 1g). Home is flat, facing front wall (−Z).
- * Layout position is the apex only.
+ * DualSense IMU maps 1:1 into the room:
+ *   (0,0,0)° = flat on desk, light bar toward the front wall (−Z) — same as a DualSense
+ *   controller transform at identity. X/Y/Z degrees use the same Euler XYZ convention as
+ *   every other object in the room. Pitch (X) and roll (Z) come from gravity (real tilt);
+ *   yaw (Y) is gyro from Recenter (no magnetometer). Layout DualSense rotation is applied
+ *   on top so a pad you placed in the grid matches the physical one.
  */
 class ControllerTiltManager
 {
@@ -33,9 +33,12 @@ public:
     /** Latest fused sample (may be invalid if no device / open failed). */
     ControllerTiltSample Latest() const;
 
+    /** Current DualSense link reason (Ok / busy / missing / …). */
+    ControllerTiltLinkStatus LinkStatus() const;
+
     /**
-     * Reset beam to front-wall home (flat, light bar toward −Z) and resample gyro bias.
-     * Hold the DualSense still in that pose, then click. Use if twist heading wanders.
+     * Reset to RoomGrid (0,0,0): hold DualSense flat, light bar toward front wall, then click.
+     * Sets yaw home; pitch/roll then track real gravity tilt from that pose.
      */
     void RecenterHeading();
 
