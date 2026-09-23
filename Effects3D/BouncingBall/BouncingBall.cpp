@@ -24,8 +24,8 @@ EffectInfo3D BouncingBall::GetEffectInfo() const
     EffectInfo3D info;
     info.effect_name = "Bouncing Ball";
     info.effect_description =
-        "Independent balls bouncing in the room with GPU assist (no ball–ball collisions). "
-        "Speed sets motion rate; Frequency scrolls hue; Size sets ball radius.";
+        "Independent balls bouncing off every wall of the occupancy box (floor, ceiling, and sides). "
+        "Speed sets travel rate; Size is ball radius; Detail/Frequency tighten rainbow bands.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
@@ -89,10 +89,11 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
     const float size_m = GetNormalizedSize();
-    const float detail = std::max(0.05f, GetScaledDetail());
-    const float radius01 = std::clamp(0.045f + 0.12f * size_m, 0.03f, 0.26f);
+    const float hue_dens = GetHueBandDensity();
+    /* Size 100 ≈ clear ball (not a room-filling blob); still readable on sparse LEDs. */
+    const float radius01 = std::clamp(0.045f + 0.11f * size_m, 0.03f, 0.22f);
     const float motion = GetNormalizedSpeed();
-    const float sim_phase_rate = GetMotionHz() * 3.5f * bb.speed_mul;
+    const float sim_phase_rate = GetMotionHz() * 2.8f * bb.speed_mul;
     const float sim_t = time_sec * sim_phase_rate;
     const float hue_scroll =
         std::fmod(time_sec * GetColorCycleHz() * bb.speed_mul + 1000.0f, 1.0f);
@@ -103,7 +104,7 @@ void BouncingBall::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         1.0f,
         motion,
         hue_scroll,
-        detail
+        hue_dens
     };
     volume_assist_.prepare(render_sequence, time_sec, vp, 7);
 }

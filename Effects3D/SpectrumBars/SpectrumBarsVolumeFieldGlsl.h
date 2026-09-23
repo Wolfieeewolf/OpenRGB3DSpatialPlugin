@@ -25,7 +25,9 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 
     float axis = p01.x;
     float center = 0.5;
-    axis = clamp(center + (axis - center) * (0.6 + 0.4 * size_m) * (0.7 + 0.3 * detail * tight_mul), 0.0, 1.0);
+    /* Size 100 = full X span; below 100 shrinks toward Anchor; above expands slightly. */
+    float span = max(1.0, 0.70 + 0.50 * size_m);
+    axis = clamp(center + (axis - center) * span, 0.0, 1.0);
     float axis_rolled = fract(axis + roll_phase + 1.0);
 
     float u = (floor(axis_rolled * band_count) + 0.5) / band_count;

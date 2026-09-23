@@ -138,6 +138,16 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
         return LerpBGR(PackBGR(255, 120, 40), PackBGR(255, 230, 160), p01);
     case SpatialPatternKernel::Meteor:
         return LerpBGR(PackBGR(255, 200, 80), PackBGR(40, 20, 80), 1.0f - p01);
+    case SpatialPatternKernel::FrequencySaws:
+        return HsvToBgr(p01 * 200.0f + time_sec * 18.0f, 0.78f, 0.9f);
+    case SpatialPatternKernel::DistortionWaves:
+        return HsvToBgr(p01 * 280.0f + time_sec * 10.0f, 0.7f, 0.88f);
+    case SpatialPatternKernel::Lissajous1D:
+        return LerpBGR(PackBGR(40, 180, 255), PackBGR(255, 80, 200), p01);
+    case SpatialPatternKernel::Blackhole1D:
+        return LerpBGR(PackBGR(10, 0, 30), PackBGR(180, 120, 255), std::pow(p01, 1.4f));
+    case SpatialPatternKernel::Sin3:
+        return HsvToBgr(p01 * 160.0f + time_sec * 12.0f, 0.65f, 0.92f);
     case SpatialPatternKernel::SparkleDark:
     case SpatialPatternKernel::TwinkleSparse:
     case SpatialPatternKernel::GlitterBurst:

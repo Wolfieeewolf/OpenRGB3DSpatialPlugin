@@ -52,10 +52,13 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float hue_scroll = fract(u_params[9]);
     vec3 p = p01 * 2.0 - 1.0;
     float inv_size = 1.0 / max(size_scale, 0.25);
-    float usable = max(0.12, 1.0 - hole_r);
+    /* Sphere corners sit near length≈1.73; flat shapes near ≈1.0 on the faces.
+       Expand far enough at Size 100 that the pulse reaches the room edges. */
+    float extent = (shape == 1) ? 1.55 : 1.12;
+    float usable = max(0.12, extent - hole_r);
 
     float half_w = max(0.010, sigma * mix(0.55, 0.18, detail));
-    float y_half = mix(0.28, 0.07, detail);
+    float y_half = mix(0.34, 0.10, detail);
 
     float d = 0.0;
     float height_mul = 1.0;
@@ -77,7 +80,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     if(style == 1)
     {
         float fill = smoothstep(hole_r - 0.02, hole_r + 0.01, d);
-        float outer = 1.0 - smoothstep(1.02, 1.20, d);
+        float outer_end = (shape == 1) ? 1.65 : 1.22;
+        float outer = 1.0 - smoothstep(extent * 0.92, outer_end, d);
         intensity = fill * outer * height_mul;
         color_drv = az01;
     }

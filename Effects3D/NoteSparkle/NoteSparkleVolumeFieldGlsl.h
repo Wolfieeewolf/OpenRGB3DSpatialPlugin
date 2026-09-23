@@ -37,7 +37,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float drive = clamp(u_params[0], 0.0, 1.0);
     float particle01 = clamp(u_params[1], 0.0, 1.0);
     float turbulence = clamp(u_params[2], 0.0, 1.0);
-    float hull_size = clamp(u_params[3], 0.08, 0.72);
+    float hull_size = clamp(u_params[3], 0.12, 0.85);
     float low01 = clamp(u_params[4], 0.0, 1.0);
     float mid01 = clamp(u_params[5], 0.0, 1.0);
     float high01 = clamp(u_params[6], 0.0, 1.0);
@@ -62,7 +62,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 
     /* Soft hull: sphere shell that breathes with bass + note energy. */
     float breathe = 1.0 + 0.28 * low01 + 0.18 * drive;
-    float hull_r = hull_size * breathe * (0.55 + 0.45 * size_m);
+    float hull_r = hull_size * breathe * (0.72 + 0.48 * size_m);
     float shell_w = (0.035 + 0.055 / falloff) * size_m / tight;
     shell_w *= (0.85 + 0.25 * detail);
     float hull = 1.0 - sparkSmoothstep(0.0, shell_w, abs(radial - hull_r));

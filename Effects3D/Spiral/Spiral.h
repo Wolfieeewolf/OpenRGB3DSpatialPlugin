@@ -32,7 +32,7 @@ public:
 private slots:
     void OnSpiralParameterChanged();
 private:
-    static constexpr int kSpiralPatternCount = 6;
+    static constexpr int kSpiralPatternCount = 7;
 
     QSlider*   arms_slider = nullptr;
     QComboBox* pattern_combo = nullptr;

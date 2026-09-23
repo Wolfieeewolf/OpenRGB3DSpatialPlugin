@@ -34,9 +34,9 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 
     for(int i = 0; i < 48; i++)
     {
-        if(i >= count)
-            break;
         float fi = float(i);
+        /* Avoid identifier "active" — reserved on some GLSL 1.10 drivers. */
+        float slot_on = 1.0 - step(float(count), fi);
         float seed = fi * 265.443 + 101.390;
         float cycle_mul = (1.0 + 0.35 * launch_jitter) + (2.0 * launch_jitter) * hash01(seed, 11.0);
         float active_frac = (0.52 - 0.26 * launch_jitter) + (0.06 + 0.22 * launch_jitter) * hash01(seed, 12.0);
@@ -44,15 +44,14 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         float active_window = max(0.04, cycle_i * active_frac);
         float offset_i = cycle_i * hash01(seed, 13.0);
         float phase_i = mod(time_sec * rise_rate + offset_i, cycle_i);
-        if(phase_i > active_window)
-            continue;
+        float in_window = 1.0 - step(active_window, phase_i);
 
         float radius_phase = phase_i / active_window;
-        float radius = (0.18 + 0.82 * radius_phase) * max_r * 0.55;
+        float radius = (0.22 + 0.78 * radius_phase) * max_r;
         float ring = sqrt((fi + 0.5) / float(count));
         float ang = fi * golden;
         // Centers in origin-local UV: XZ spread by fill + spacing, Y rises 0→1 of room.
-        float spread = 0.50 * fill * (0.55 + 0.45 * spacing);
+        float spread = 0.72 * fill * (0.55 + 0.45 * spacing);
         vec3 c;
         c.x = 0.5 + cos(ang) * ring * spread;
         c.y = radius_phase;
@@ -61,7 +60,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 
         float d = length(p01 - c);
         float shallow = abs(d - radius) / thick;
-        float value = 1.0 / (1.0 + shallow * shallow);
+        float value = (1.0 / (1.0 + shallow * shallow)) * slot_on * in_window;
         if(value > intensity)
         {
             intensity = value;

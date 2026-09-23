@@ -39,7 +39,7 @@ DNAHelix::DNAHelix(QWidget* parent) : SpatialEffect3D(parent)
     };
     if(GetColors().empty())
         SetColors(dna_colors);
-    SetRainbowMode(false);
+    SetRainbowMode(true);
     volume_assist_.setFragmentBody(QString::fromUtf8(DNAHelixVolumeFieldGlsl()));
     volume_assist_.setResolution(24);
 }
@@ -118,24 +118,25 @@ void DNAHelix::SetupCustomUI(QWidget* parent)
         layout,
         QStringLiteral("Twists:"),
         50,
-        600,
+        2400,
         (int)std::lround(twist_amount * 100.0f),
-        QStringLiteral("How many turns from floor to ceiling (also boosted by Frequency/Detail)."));
+        QStringLiteral(
+            "Turns from floor to ceiling. High values (12–24) give tight rainbow bands along the helix."));
     twist_row->setObjectName(QStringLiteral("twistsRow"));
     twist_slider = twist_row->slider();
     twist_row->bindValueChanged(
         this,
-        [this](int v) { twist_amount = std::clamp(v / 100.0f, 0.5f, 6.0f); },
+        [this](int v) { twist_amount = std::clamp(v / 100.0f, 0.5f, 24.0f); },
         [this](int) { return QString::number(twist_amount, 'f', 2); },
         on_changed);
 
     EffectSliderRow* thick_row = EffectUiRows::AppendSliderRow(
         layout,
         QStringLiteral("Strand thickness:"),
-        8,
+        2,
         70,
         (int)std::lround(strand_thickness_pct),
-        QStringLiteral("Tube width — raise this if the helix disappears on sparse LED layouts."));
+        QStringLiteral("Tube width. Low (~2–8%) ≈ one LED line; raise if strands vanish on sparse layouts."));
     thick_row->setObjectName(QStringLiteral("thicknessRow"));
     thickness_slider = thick_row->slider();
     thick_row->bindValueChanged(
@@ -170,11 +171,13 @@ void DNAHelix::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, c
     const float progress = std::fmod(CalculateProgress(time_sec) * bb.speed_mul + 1.0f, 1.0f);
     const int shape = std::clamp(helix_shape_mode, 0, SHAPE_COUNT - 1);
     const float radius01 =
-        std::clamp((helix_radius_pct / 100.0f) * (0.55f + 0.55f * size_m), 0.08f, 0.85f);
+        std::clamp((helix_radius_pct / 100.0f) * (0.75f + 0.50f * size_m), 0.10f, 0.95f);
     const float twists =
-        std::clamp(twist_amount * (0.55f + 0.75f * detail) * (0.45f + 0.55f * GetNormalizedFrequency()), 0.4f, 8.0f);
+        std::clamp(twist_amount * (0.85f + 0.55f * detail) * (0.55f + 0.90f * GetNormalizedFrequency()),
+                   0.4f,
+                   28.0f);
     const float thickness =
-        std::clamp((strand_thickness_pct / 100.0f) * (0.65f + 0.40f * size_m), 0.055f, 0.48f);
+        std::clamp((strand_thickness_pct / 100.0f) * (0.55f + 0.55f * size_m), 0.012f, 0.52f);
     const float rung_amount = std::clamp(rung_amount_pct / 100.0f, 0.0f, 1.0f);
     const float vp[6] = {
         progress,
@@ -313,9 +316,9 @@ void DNAHelix::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("dna_helix_radius_pct") && settings["dna_helix_radius_pct"].is_number())
         helix_radius_pct = std::clamp(settings["dna_helix_radius_pct"].get<float>(), 15.0f, 90.0f);
     if(settings.contains("dna_helix_twists") && settings["dna_helix_twists"].is_number())
-        twist_amount = std::clamp(settings["dna_helix_twists"].get<float>(), 0.5f, 6.0f);
+        twist_amount = std::clamp(settings["dna_helix_twists"].get<float>(), 0.5f, 24.0f);
     if(settings.contains("dna_helix_thickness_pct") && settings["dna_helix_thickness_pct"].is_number())
-        strand_thickness_pct = std::clamp(settings["dna_helix_thickness_pct"].get<float>(), 8.0f, 70.0f);
+        strand_thickness_pct = std::clamp(settings["dna_helix_thickness_pct"].get<float>(), 2.0f, 70.0f);
     if(settings.contains("dna_helix_rung_pct") && settings["dna_helix_rung_pct"].is_number())
         rung_amount_pct = std::clamp(settings["dna_helix_rung_pct"].get<float>(), 0.0f, 100.0f);
 

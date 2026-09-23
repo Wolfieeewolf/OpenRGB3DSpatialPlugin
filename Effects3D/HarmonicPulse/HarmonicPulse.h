@@ -45,7 +45,7 @@ private:
     float zoom_wobble_strength = 0.55f;
     float flow_amount = 1.15f;
     float pulse_contrast = 0.85f;
-    float spatial_amount = 0.55f;
+    float spatial_amount = 0.85f;
 
     QComboBox* color_mode_combo = nullptr;
     QSlider* wobble_slider = nullptr;

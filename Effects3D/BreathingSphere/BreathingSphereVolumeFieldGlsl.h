@@ -16,7 +16,6 @@ float smstep(float e0, float e1, float x)
 }
 float polyRadialXZ(vec2 p, float n)
 {
-    /* Iso-value 1 on the regular n-gon with inradius 1. */
     float an = 6.2831853 / max(n, 3.0);
     float a = atan(p.y, p.x);
     float r = length(p);
@@ -49,7 +48,6 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float pulse_strength = clamp(u_params[9], 0.0, 1.0);
     vec3 s = max(vec3(u_params[10], u_params[11], u_params[12]), vec3(0.25));
 
-    /* p01 is origin-local (0.5 = Spatial Anchor). Keep world-isotropic scale via s. */
     vec3 l = (p01 - vec3(0.5)) * s;
 
     if(shape == 5)
@@ -57,14 +55,16 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         float dist_norm = clamp(length(l) * 0.5, 0.0, 1.5);
         float inhale = sin(breath_phase) * pulse_strength;
         float exhale = sin(breath_phase + 1.2) * pulse_strength;
-        /* Spatial coeffs match CPU (l = rel/med); detail is pre-scaled by 1/tight_mul. */
-        float wave = sin(inhale * 3.14159265 * 1.15 - dist_norm * (9.0 + 5.0 * detail)) * pulse_strength;
+        /* Spatial wave density follows Detail only — no time inside hue fract (avoids flash). */
+        float spat = 9.0 + 5.0 * detail;
+        float wave = sin(inhale * 3.14159265 * 1.15 - dist_norm * spat) * pulse_strength;
         float ripple = sin(breath_phase * 2.1 - dist_norm * 6.2831853 * 2.2 + l.y * 0.02 * detail) * pulse_strength;
         float rush = sin(exhale * 1.7 + (l.x + l.z) * 0.015 * detail) * 0.4 * pulse_strength;
         float air = 0.78 + 0.22 * (0.5 + 0.5 * sin(breath_phase * 1.05)) * (0.55 + 0.45 * pulse_strength);
         if(pulse_strength < 0.001)
             air = 0.85;
-        float hue01 = fract(0.38 + 0.32 * inhale + 0.24 * wave + 0.12 * ripple + rush * 0.1 + progress * 0.04);
+        /* Stable radial driver; CPU applies hue_wraps for tight rings when Detail/Freq raised. */
+        float hue01 = clamp(dist_norm, 0.0, 1.0);
         out_color = vec4(clamp(air, 0.0, 1.0), hue01, 0.0, 1.0);
         return;
     }
@@ -73,13 +73,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float sphere_intensity = 0.0;
     float norm_in_shell = 0.0;
 
-    /* Soft = wider falloff; Crisp = tight silhouette. */
     float band = (edge == 1) ? 0.018 : 0.16;
     band = max(band * (0.7 + 0.3 / max(detail, 0.2)), (edge == 1) ? 0.012 : 0.02);
 
     if(hole_frac <= 0.001)
     {
-        /* Filled shape: hard inside, zero outside the shape metric (no sphere bloom). */
         if(edge == 1)
         {
             float inside = 1.0 - smstep(R - band * 0.12, R + band * 0.55, distance);
@@ -119,6 +117,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         norm_in_shell = clamp((distance - r_in) / max(R - r_in, 1e-4), 0.0, 1.2);
     }
 
+    /* Raw radial 0..1 — hue wraps applied on CPU from Detail/Frequency (spatial only, no flash). */
     out_color = vec4(clamp(sphere_intensity, 0.0, 1.0), clamp(norm_in_shell, 0.0, 1.0), 0.0, 1.0);
 }
 )";

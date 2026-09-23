@@ -49,11 +49,17 @@ enum class SpatialPatternKernel : int
     SpectrumWaves,
     CandleSoft,
     Meteor,
+    /* MoonLight / WLED-MM inspired 1D looks (CPU full; GPU still 8 families). */
+    FrequencySaws,
+    DistortionWaves,
+    Lissajous1D,
+    Blackhole1D,
+    Sin3,
 };
 
 inline int SpatialPatternKernelCount()
 {
-    return (int)SpatialPatternKernel::Meteor + 1;
+    return (int)SpatialPatternKernel::Sin3 + 1;
 }
 
 int SpatialPatternKernelClamp(int id);

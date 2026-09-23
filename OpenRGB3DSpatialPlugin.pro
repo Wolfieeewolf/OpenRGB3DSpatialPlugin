@@ -301,6 +301,8 @@ HEADERS += \
     Effects3D/Wave/WaveSurfaceVolumeFieldGlsl.h \
     Effects3D/HexLattice/HexLatticeVolumeFieldGlsl.h \
     Effects3D/PulseRing/PulseRingVolumeFieldGlsl.h \
+    Effects3D/GridKit/GridKitVolumeFieldGlsl.h \
+    Effects3D/AudioPaintBrush/AudioPaintBrushVolumeFieldGlsl.h \
     Effects3D/DepthTone/DepthToneVolumeFieldGlsl.h \
     Effects3D/ColorWheel/ColorWheelVolumeFieldGlsl.h \
     Effects3D/BreathingSphere/BreathingSphereVolumeFieldGlsl.h \
@@ -340,6 +342,8 @@ HEADERS += \
     Effects3D/DNAHelix/DNAHelix.h \
     Effects3D/BouncingBall/BouncingBall.h \
     Effects3D/PulseRing/PulseRing.h \
+    Effects3D/GridKit/GridKit.h \
+    Effects3D/AudioPaintBrush/AudioPaintBrush.h \
     Effects3D/SurfaceAmbient/SurfaceAmbient.h \
     Effects3D/Starfield/Starfield.h \
     Effects3D/ParticleField/ParticleField.h \
@@ -524,6 +528,8 @@ SOURCES += \
     Input/ReactiveKeyMap.cpp \
     Input/ReactiveInputManager.cpp \
     Effects3D/PulseRing/PulseRing.cpp \
+    Effects3D/GridKit/GridKit.cpp \
+    Effects3D/AudioPaintBrush/AudioPaintBrush.cpp \
     Effects3D/SurfaceAmbient/SurfaceAmbient.cpp \
     Effects3D/Starfield/Starfield.cpp \
     Effects3D/ParticleField/ParticleField.cpp \

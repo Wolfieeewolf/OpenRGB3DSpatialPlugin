@@ -120,9 +120,9 @@ void Bubbles::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, co
         std::max(0.1f, std::min(4.0f, rise_speed)) * speed_scale * bb.speed_mul;
     const float interval = std::max(0.25f, std::min(2.5f, spawn_interval))
                            / std::max(0.85f, 0.85f + 0.45f * GetNormalizedSpeed());
-    // Unit-cube radius (fraction of room diagonal-ish).
+    // Unit-cube radius — Size 100 should reach most of the room, not a tiny core.
     const float max_r01 =
-        std::clamp(std::max(0.5f, std::min(3.5f, max_radius)) * size_m * 0.18f, 0.04f, 0.55f);
+        std::clamp(std::max(0.5f, std::min(3.5f, max_radius)) * size_m * 0.28f, 0.06f, 0.72f);
     const float thick01 =
         std::clamp(std::max(0.02f, bubble_thickness) * 0.11f / std::max(0.35f, detail), 0.014f, 0.14f);
     const float hue_scroll = std::fmod(time_sec * GetColorCycleHz() * bb.speed_mul + 1000.0f, 1.0f);

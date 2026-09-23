@@ -7,7 +7,7 @@
  *  Families still change with kid; CPU EvalSpatialPatternKernel keeps full looks
  *  for colormap / fallback.
  */
-inline constexpr int kSpatialStripGpuKernelMaxId = 43;
+inline constexpr int kSpatialStripGpuKernelMaxId = 48;
 
 inline const char* SpatialStripKernelEvalGlsl()
 {

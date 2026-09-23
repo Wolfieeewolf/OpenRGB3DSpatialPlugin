@@ -48,6 +48,10 @@ const char* Starfield::ModeName(int m)
     case MODE_HYPERDRIVE: return "Hyperdrive";
     case MODE_BLACKHOLE: return "Blackhole";
     case MODE_WORMHOLE: return "Wormhole";
+    case MODE_POINT_TUNNEL: return "Point Tunnel";
+    case MODE_FIBO_SPHERE: return "Fibonacci Sphere";
+    case MODE_CRYSTAL: return "Crystal";
+    case MODE_PLASMA_GLOBE: return "Plasma Globe";
     default: return "Stars";
     }
 }
@@ -56,8 +60,7 @@ Starfield::Starfield(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     volume_assist_.setFragmentBody(QString::fromUtf8(StarfieldVolumeFieldGlsl()));
-    // Sparse particles need more atlas cells than soft fills (Plasma) or they vanish on LEDs/viewport.
-    volume_assist_.setResolution(22);
+    volume_assist_.setResolution(26);
 }
 
 EffectInfo3D Starfield::GetEffectInfo() const
@@ -65,8 +68,10 @@ EffectInfo3D Starfield::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Space";
     info.effect_description =
-        "Cockpit-window space field (GPU volume): stars, warp streaks, blackhole, and wormhole. "
-        "Spatial Anchor is the viewpoint; rotate to aim into the room.";
+        "Room-filling space field (GPU volume): stars, twinkle, warp, hyperdrive, "
+        "blackhole, wormhole, tunnels, Fibonacci Sphere, Crystal, Plasma Globe. "
+        "Scale = occupancy; Size = feature span (100 fills the box); "
+        "Spatial Anchor is the viewpoint.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_STARFIELD;
     info.is_reversible = false;
@@ -104,7 +109,13 @@ void Starfield::SetupCustomUI(QWidget* parent)
         mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::clamp(this->mode, 0, MODE_COUNT - 1));
     mode_combo->setToolTip(QStringLiteral(
-        "Looking out a starship window. Spatial Anchor is the viewpoint; rotate to aim into the room."));
+        "Stars = points filling the room.\n"
+        "Twinkle = flashing diffraction crosses.\n"
+        "Warp / Hyperdrive = fly-through streaks (Hyperdrive is longer/hotter).\n"
+        "Blackhole = accretion disk + event horizon.\n"
+        "Wormhole = tunnel through the volume.\n"
+        "Point Tunnel / Fibonacci Sphere / Crystal / Plasma Globe = structured volumes.\n"
+        "Scale fills the room; Size ~100 reaches the walls."));
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         this->mode = std::clamp(idx, 0, MODE_COUNT - 1);
         emit ParametersChanged();
@@ -115,29 +126,32 @@ void Starfield::SetupCustomUI(QWidget* parent)
 
     EffectSliderRow* star_count_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Particles:"), 12, kMaxGpuParticles, num_stars,
-        QStringLiteral("Star / streak count (GPU-capped). Higher is denser but heavier."));
+        QStringLiteral(
+            "Star/streak count, tunnel dots per ring, sphere/crystal point count, "
+            "or plasma arc count (GPU-capped)."));
     star_count_row->setObjectName(QStringLiteral("starCountRow"));
     star_count_row->bindValueChanged(
         this, [this](int v) { num_stars = std::clamp(v, 12, kMaxGpuParticles); },
         [](int v) { return QString::number(v); }, on_changed);
 
     EffectSliderRow* star_size_row = EffectUiRows::AppendSliderRow(
-        layout, QStringLiteral("Thickness:"), 2, 100, (int)(star_size * 100.0f),
-        QStringLiteral("Particle size / streak width / tunnel wall thickness."));
+        layout, QStringLiteral("Thickness:"), 5, 100, (int)(star_size * 100.0f),
+        QStringLiteral(
+            "Star / streak / tunnel / crystal / sphere point size, or plasma bolt thickness."));
     star_size_row->setObjectName(QStringLiteral("starSizeRow"));
     star_size_row->bindValueChanged(
         this, [this](int v) { star_size = v / 100.0f; }, pct, on_changed);
 
     EffectSliderRow* fill_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Field of view:"), 40, 100, (int)(fill_amount * 100.0f),
-        QStringLiteral("How wide the cockpit view spreads through the room."));
+        QStringLiteral("How wide the view spreads through the occupancy box (100 = full room)."));
     fill_row->setObjectName(QStringLiteral("fillRow"));
     fill_row->bindValueChanged(
         this, [this](int v) { fill_amount = v / 100.0f; }, pct, on_changed);
 
     EffectSliderRow* drift_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Sway:"), 0, 100, (int)(drift_amount * 100.0f),
-        QStringLiteral("Subtle ship sway / roll on the view."));
+        QStringLiteral("Ship sway, tunnel path weave, or crystal/sphere tumble amount."));
     drift_row->setObjectName(QStringLiteral("driftRow"));
     drift_row->bindValueChanged(
         this, [this](int v) { drift_amount = v / 100.0f; }, pct, on_changed);
@@ -215,6 +229,20 @@ RGBColor Starfield::FinishSample(const EvalContext& ctx, float intensity, float 
         cg *= 1.0f - cool * 0.15f;
         cb = std::min(1.0f, cb + cool * 0.35f);
     }
+    else if(mode_i == MODE_POINT_TUNNEL || mode_i == MODE_FIBO_SPHERE || mode_i == MODE_CRYSTAL)
+    {
+        const float hot = saturate(hotness);
+        cr = cr * (1.0f - hot) + hot;
+        cg = cg * (1.0f - hot) + hot * 0.92f;
+        cb = cb * (1.0f - hot) + hot * 0.85f;
+    }
+    else if(mode_i == MODE_PLASMA_GLOBE)
+    {
+        const float hot = saturate(hotness);
+        cr = cr * (1.0f - hot * 0.35f) + hot * 0.55f;
+        cg = cg * (1.0f - hot * 0.20f) + hot * 0.85f;
+        cb = std::min(1.0f, cb * (1.0f - hot * 0.10f) + hot);
+    }
 
     return PackRGB(cr, cg, cb, intensity);
 }
@@ -224,8 +252,8 @@ void Starfield::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, 
     const float progress = CalculateProgress(time_sec);
     const int mode_i = std::clamp(mode, 0, MODE_COUNT - 1);
     const int count = std::clamp(num_stars, 12, kMaxGpuParticles);
-    const float thickness = std::max(0.02f, star_size);
-    const float size_m = std::max(0.25f, GetNormalizedSize());
+    const float thickness = std::max(0.05f, star_size);
+    const float size_m = std::clamp(GetNormalizedSize(), 0.35f, 2.5f);
     const float fill = std::clamp(fill_amount, 0.4f, 1.0f);
     const float anim_t = (GetSpeed() == 0) ? 0.0f : time_sec;
     const float hue_scroll = std::fmod(anim_t * GetColorCycleHz() + 1.0f, 1.0f);

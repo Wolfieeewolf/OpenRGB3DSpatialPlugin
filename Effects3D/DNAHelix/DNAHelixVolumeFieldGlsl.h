@@ -18,8 +18,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 {
     float progress = u_params[0];
     float twists = max(u_params[1], 0.35);
-    float radius01 = clamp(u_params[2], 0.06, 0.85);
-    float thickness = clamp(u_params[3], 0.04, 0.48);
+    float radius01 = clamp(u_params[2], 0.08, 0.95);
+    float thickness = clamp(u_params[3], 0.012, 0.55);
     float rung_amount = clamp(u_params[4], 0.0, 1.0);
     int shape = int(clamp(u_params[5], 0.0, 3.0) + 0.5);
     float lx = p01.x * 2.0 - 1.0;
@@ -42,20 +42,19 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float d_strand = min(d1, d2);
 
     float core_w = thickness * ((shape == 1) ? 1.65 : 1.0);
-    float glow_w = core_w * ((shape == 2) ? 2.8 : 2.2);
+    float glow_w = core_w * ((shape == 2) ? 2.2 : 1.55);
     float strand = 1.0 - smstep(0.0, core_w, d_strand);
-    float glow = (1.0 - smstep(core_w, glow_w, d_strand)) * 0.55;
+    float glow = (1.0 - smstep(core_w, glow_w, d_strand)) * 0.40;
     float intensity = strand + glow;
 
     if(shape == 2)
     {
-        // Soft angular ribbons instead of tubes — more LEDs catch light.
         float a = atan(lz, lx);
         float da1 = abs(mod(a - phase + 3.14159265, 6.2831853) - 3.14159265);
         float da2 = abs(mod(a - phase - 3.14159265 + 3.14159265, 6.2831853) - 3.14159265);
         float ang = min(da1, da2);
         float rad = length(vec2(lx, lz));
-        float ribbon = (1.0 - smstep(0.0, 0.55 + thickness, ang)) *
+        float ribbon = (1.0 - smstep(0.0, 0.40 + thickness, ang)) *
                        (1.0 - smstep(radius01 * 0.35, radius01 * 1.35, abs(rad - radius01)));
         intensity = max(intensity, ribbon);
     }
@@ -66,8 +65,6 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         float rung_phase = fract(ly * twists * 2.0 + progress * 0.5);
         float rung_gate = 1.0 - smstep(0.0, 0.12 + 0.08 * (1.0 - rung_amount), abs(rung_phase - 0.5));
         float rad = length(vec2(lx, lz));
-        float along = abs(rad - radius01 * 0.5) ; // mid-span between strands
-        // Bridge between the two strand angles: light a segment across the diameter.
         float bridge = 1.0 - smstep(0.0, thickness * 1.1, abs(rad - radius01 * 0.55));
         float between = 1.0 - smstep(radius01 * 0.15, radius01 * 1.05, rad);
         rung = bridge * between * rung_gate * rung_amount;
@@ -76,11 +73,10 @@ void volumeMain(out vec4 out_color, in vec3 p01)
         intensity = max(intensity, rung);
     }
 
-    // Soft axis glow so sparse grids still read motion.
-    float axis_glow = 0.14 * (1.0 - smstep(0.0, radius01 * 1.55, length(vec2(lx, lz))));
-    intensity = clamp(intensity + axis_glow, 0.0, 1.0);
+    intensity = clamp(intensity, 0.0, 1.0);
 
-    float palette01 = fract(ly * twists * 0.35 + progress + (d1 < d2 ? 0.0 : 0.5));
+    /* Hue follows twists 1:1 along height so rainbow reads as tight bands on the strand. */
+    float palette01 = fract(ly * twists + progress * 0.25 + (d1 < d2 ? 0.0 : 0.5));
     float rung_hint = (rung > strand * 0.45) ? 1.0 : 0.0;
     out_color = vec4(intensity, palette01, rung_hint, 1.0);
 }

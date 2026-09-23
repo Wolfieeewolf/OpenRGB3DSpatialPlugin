@@ -4,7 +4,7 @@
 /** Color wheel: R=(cos(hue_ang)+1)/2, G=(sin(hue_ang)+1)/2 — the RGBA8 atlas clamps
  *  to [0,1], so signed cos/sin must be range-encoded. Decode to signed and reconstruct
  *  with atan2 after sample so atlas filtering does not paint a fake seam across ±π.
- *  u_params: [0]=progress [1]=dir(+1/-1) [2]=hue_repeats [3]=plane [4]=geom
+ *  u_params: [0]=progress [1]=dir(+1/-1) [2]=hue_repeats(0.1..100) [3]=plane [4]=geom
  *            [5]=freq_spin [6]=size_scale (default 1; larger = wider rings/bands)
  *  geom: 0 Radial, 1 Shear, 2 Rings, 3 Pie
  */
@@ -15,7 +15,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
 {
     float progress = u_params[0];
     float dir = u_params[1];
-    float wrap = clamp(u_params[2], 0.1, 3.0);
+    /* wrap = rainbow cycles across one radial/turn span; 100 ≈ LED-thin coverage. */
+    float wrap = clamp(u_params[2], 0.1, 100.0);
     int pl = int(u_params[3] + 0.5);
     int geom = int(u_params[4] + 0.5);
     float freq_spin = u_params[5];

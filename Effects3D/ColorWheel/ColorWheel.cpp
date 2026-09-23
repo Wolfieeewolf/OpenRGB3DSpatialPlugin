@@ -18,7 +18,7 @@ ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     volume_assist_.setFragmentBody(QString::fromUtf8(ColorWheelVolumeFieldGlsl()));
-    volume_assist_.setResolution(32);
+    volume_assist_.setResolution(48);
 }
 
 EffectInfo3D ColorWheel::GetEffectInfo() const
@@ -108,15 +108,17 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
     EffectSliderRow* hue_repeats_row = EffectUiRows::AppendSliderRow(
         layout,
         QStringLiteral("Hue repeats:"),
-        10,
-        300,
-        (int)std::lround(hue_repeats * 100.0f),
-        QStringLiteral("How many times the rainbow wraps around one turn. 100% = one smooth wheel."));
+        1,
+        100,
+        (int)std::lround(std::clamp(hue_repeats, 1.0f, 100.0f)),
+        QStringLiteral(
+            "Rainbow cycles across one turn / radius. 1 = smooth wheel; 100 = dense LED-tight "
+            "coverage. Lower Size also tightens rings."));
     hue_repeats_row->setObjectName(QStringLiteral("hueRepeatsRow"));
     hue_repeats_row->bindValueChanged(
         this,
-        [this](int v) { hue_repeats = std::clamp(v / 100.0f, 0.1f, 3.0f); },
-        [](int v) { return QString::number(v) + QStringLiteral("%"); },
+        [this](int v) { hue_repeats = std::clamp((float)v, 0.1f, 100.0f); },
+        [](int v) { return QString::number(v); },
         on_changed);
 
     AddWidgetToParent(w, parent);
@@ -134,7 +136,7 @@ void ColorWheel::PrepareGpuFields(std::uint64_t render_sequence, float time_sec,
 
     const float progress = CalculateProgress(time_sec) * bb.speed_mul;
     const float dir = (direction == 0) ? 1.0f : -1.0f;
-    const float wrap = std::clamp(hue_repeats, 0.1f, 3.0f);
+    const float wrap = std::clamp(hue_repeats, 0.1f, 100.0f);
     const float freq_spin = time_sec * GetColorCycleHz() * 6.2831853f * bb.speed_mul;
     const float size_scale = std::max(0.2f, GetNormalizedSize());
     const float vp[7] = {
@@ -262,7 +264,7 @@ void ColorWheel::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("hue_geometry_mode") && settings["hue_geometry_mode"].is_number_integer())
         hue_geometry_mode = std::clamp(settings["hue_geometry_mode"].get<int>(), 0, 3);
     if(settings.contains("hue_repeats") && settings["hue_repeats"].is_number())
-        hue_repeats = std::clamp(settings["hue_repeats"].get<float>(), 0.1f, 3.0f);
+        hue_repeats = std::clamp(settings["hue_repeats"].get<float>(), 0.1f, 100.0f);
 
     if(QWidget* panel = CustomSettingsPanelWidget())
     {
@@ -270,8 +272,8 @@ void ColorWheel::LoadSettings(const nlohmann::json& settings)
         {
             EffectUiSync::setComboIndex(fx, "directionRow", direction);
             EffectUiSync::setComboIndex(fx, "hueGeometryRow", hue_geometry_mode);
-            const auto pct = [](int v) { return QString::number(v) + QStringLiteral("%"); };
-            EffectUiSync::setSliderValue(fx, "hueRepeatsRow", (int)std::lround(hue_repeats * 100.0f), pct);
+            EffectUiSync::setSliderValue(fx, "hueRepeatsRow", (int)std::lround(std::clamp(hue_repeats, 1.0f, 100.0f)),
+                                         [](int v) { return QString::number(v); });
         }
     }
 }

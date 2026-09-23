@@ -201,7 +201,7 @@ void NoteSparkle::PrepareGpuFields(std::uint64_t render_sequence, float time_sec
     vp[0] = drive;
     vp[1] = std::clamp(particle_amount, 0.0f, 1.0f);
     vp[2] = std::clamp(turbulence, 0.0f, 1.0f);
-    vp[3] = std::clamp(hull_size, 0.08f, 0.72f);
+    vp[3] = std::clamp(hull_size, 0.12f, 0.85f);
     vp[4] = low01;
     vp[5] = mid01;
     vp[6] = high01;
@@ -329,7 +329,7 @@ void NoteSparkle::LoadSettings(const nlohmann::json& settings)
     };
     load01("particle_amount", particle_amount, 0.0f, 1.0f);
     load01("turbulence", turbulence, 0.0f, 1.0f);
-    load01("hull_size", hull_size, 0.08f, 0.72f);
+    load01("hull_size", hull_size, 0.12f, 0.85f);
 
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();

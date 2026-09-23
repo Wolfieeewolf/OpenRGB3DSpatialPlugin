@@ -32,6 +32,10 @@ private:
         MODE_HYPERDRIVE,
         MODE_BLACKHOLE,
         MODE_WORMHOLE,
+        MODE_POINT_TUNNEL,
+        MODE_FIBO_SPHERE,
+        MODE_CRYSTAL,
+        MODE_PLASMA_GLOBE,
         MODE_COUNT
     };
     static constexpr int kMaxGpuParticles = 48;
@@ -54,10 +58,10 @@ private:
     RGBColor FinishSample(const EvalContext& ctx, float intensity, float palette01, float hotness, int mode_i) const;
 
     int mode = MODE_STARS;
-    int num_stars = 40;
-    float star_size = 0.20f;
-    float drift_amount = 0.12f;
-    float twinkle_speed = 0.0f;
+    int num_stars = 42;
+    float star_size = 0.32f;
+    float drift_amount = 0.18f;
+    float twinkle_speed = 0.25f;
     float fill_amount = 1.0f;
     SpatialVolumeFieldAssist volume_assist_;
 };

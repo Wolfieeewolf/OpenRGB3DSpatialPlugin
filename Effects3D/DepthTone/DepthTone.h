@@ -36,10 +36,10 @@ private:
     static const char* AxisName(int a);
     static const char* LayoutName(int L);
 
-    int depth_tone_count = 6;
+    int depth_tone_count = 12;
     int depth_axis = AXIS_Z;
     int depth_layout = LAYOUT_LINEAR;
-    float dim_amount = 0.72f;
+    float dim_amount = 0.22f;
 
     QSlider* depth_tones_slider = nullptr;
     QSlider* dim_slider = nullptr;

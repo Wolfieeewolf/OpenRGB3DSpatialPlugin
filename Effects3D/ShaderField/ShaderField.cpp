@@ -377,7 +377,7 @@ void ShaderField::SyncUniforms(float time)
     u.time_sec = time * GetMotionHz() * (float)(2.0 * M_PI);
     // Size → zoom, Detail → density, Frequency → hue scroll, local contrast/hue.
     // Scale is occupancy (atlas box), not shader zoom.
-    const float zoom = std::clamp(GetNormalizedSize() * 0.85f, 0.25f, 3.0f);
+    const float zoom = std::clamp(GetNormalizedSize(), 0.25f, 3.0f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float hue = std::fmod(hue_shift + time * GetColorCycleHz() + 1.0f, 1.0f);
     u.params[0] = zoom;

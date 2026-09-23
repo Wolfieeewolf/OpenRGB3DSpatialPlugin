@@ -33,16 +33,17 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float t1 = u_time * motion * TWO_PI;
     float t2 = u_time * motion * 0.73 * TWO_PI;
     float field = 0.5 + 0.5 * (
-        0.45 * sin(xf * 6.2831853 + t1) +
-        0.30 * cos(yf * 6.2831853 + t2) +
-        0.25 * sin(zf * 6.2831853 + t1 - t2));
+        0.45 * sin(xf * TWO_PI + t1) +
+        0.30 * cos(yf * TWO_PI + t2) +
+        0.25 * sin(zf * TWO_PI + t1 - t2));
     field = clamp(field, 0.0, 1.0);
 
     float val = mix(master, field * (0.35 + 0.65 * master), pulse_mix);
     val = pow(clamp(val, 0.0, 1.0), contrast);
-    val = clamp(0.12 + 0.88 * val, 0.0, 1.0);
+    val = clamp(0.18 + 0.82 * val, 0.0, 1.0);
 
-    float phase01 = fract(master * 0.5 + field * 0.35 + u_time * motion * 0.15);
+    /* Hue follows spatial cycles tightly (≈ spatial_freq bands across the room). */
+    float phase01 = fract(xf + yf * 0.71 + zf * 0.43 + master * 0.08 + u_time * motion * 0.12);
     out_color = vec4(val, phase01, master, 1.0);
 }
 )";

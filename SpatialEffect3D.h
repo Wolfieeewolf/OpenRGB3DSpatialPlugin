@@ -219,11 +219,13 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  * --- Slider feel (shared by every effect) ---
  * Defaults: Speed / Frequency / Detail = 0 (no motion, no flashing).
  *   Size 100 = 100% feature size. Scale 100 = 100% occupancy.
- * Speed 0–200: GetMotionHz(). 0 stops all time-based motion. 100 ≈ 0.33 Hz,
- *   200 ≈ 0.85 Hz. CalculateProgress(t) is elapsed cycles (t * GetMotionHz).
+ * Speed 0–200: GetMotionHz(). 0 stops all time-based motion. 100 ≈ 0.42 Hz,
+ *   200 ≈ 1.06 Hz. CalculateProgress(t) is elapsed cycles (t * GetMotionHz).
  *   Do not add constant floors (0.02/0.05/0.35) that keep animating at Speed 0.
  * Frequency 0–200: GetColorCycleHz() for hue/palette scroll (~0.11 Hz at 100).
  *   Frequency 0 stops hue cycling. GetNormalizedFrequency() for spatial density.
+ * Detail + Frequency → GetHueBandDensity(): soft blends at low (≈1 wrap) up to
+ *   LED-tight overlapping rainbow ("unicorn vomit") at high Detail/Frequency.
  * Size 0–200: GetNormalizedSize() is 1.0 at 100 (feature size, not occupancy).
  * Scale 0–300: occupancy only. 100 = fill the grid from the Spatial Anchor.
  *   Never mix Scale into Size/zoom/tile math.
@@ -471,6 +473,9 @@ public:
     virtual unsigned int GetDetail() const;
     float GetScaledFrequency() const;
     float GetScaledDetail() const;
+    /** Spatial rainbow / ring density from Detail + Frequency.
+     *  ~1 at low (soft blend), ~12 at mid, up to ~56 at max (LED-tight overlapping bands). */
+    float GetHueBandDensity() const;
     virtual unsigned int GetSmoothing() const { return effect_smoothing; }
     virtual unsigned int GetSamplingResolution() const { return effect_sampling_resolution; }
     unsigned int CombineMediaSampling(unsigned int local_detail_percent) const;

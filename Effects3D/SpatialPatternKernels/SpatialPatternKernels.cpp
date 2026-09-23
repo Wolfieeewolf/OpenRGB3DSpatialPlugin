@@ -75,6 +75,11 @@ const char* SpatialPatternKernelDisplayName(int kernel_id)
     case SpatialPatternKernel::SpectrumWaves: return "Spectrum waves (smooth)";
     case SpatialPatternKernel::CandleSoft: return "Candle (soft warm flicker)";
     case SpatialPatternKernel::Meteor: return "Meteor (head + tail)";
+    case SpatialPatternKernel::FrequencySaws: return "Frequency saws";
+    case SpatialPatternKernel::DistortionWaves: return "Distortion waves";
+    case SpatialPatternKernel::Lissajous1D: return "Lissajous (1D)";
+    case SpatialPatternKernel::Blackhole1D: return "Blackhole (center pull)";
+    case SpatialPatternKernel::Sin3: return "Triple sine (Sin3)";
     default: return "Sine";
     }
 }
@@ -383,6 +388,52 @@ float EvalSpatialPatternKernel(int kernel_id, float s01, float phase01, float re
         tail = tail * tail * 0.92f;
         float v = std::max(head, tail);
         return std::clamp(v * 2.0f - 1.0f, -1.0f, 1.0f);
+    }
+    case SpatialPatternKernel::FrequencySaws:
+    {
+        /* MoonLight Frequency Saws — stacked saw teeth at harmonic rates. */
+        float a = fractf(s01 * r * 2.0f + tsec * 0.18f + ph);
+        float b = fractf(s01 * r * 3.5f - tsec * 0.11f + ph * 1.3f);
+        float c = fractf(s01 * r * 5.0f + tsec * 0.07f + ph * 0.6f);
+        float v = (a * 0.55f + b * 0.30f + c * 0.15f);
+        return std::clamp(v * 2.0f - 1.0f, -1.0f, 1.0f);
+    }
+    case SpatialPatternKernel::DistortionWaves:
+    {
+        /* Warped multi-sine like WLED Distortion Waves. */
+        float warp = 0.18f * std::sin(TWO_PI * (s01 * r * 0.7f + tsec * 0.09f));
+        float u = s01 * r + warp + ph;
+        float v = std::sin(TWO_PI * u) * std::sin(TWO_PI * (u * 1.7f - tsec * 0.06f));
+        v += 0.35f * std::sin(TWO_PI * (u * 0.4f + tsec * 0.12f));
+        return std::clamp(v * 0.85f, -1.0f, 1.0f);
+    }
+    case SpatialPatternKernel::Lissajous1D:
+    {
+        /* Projection of a 2:3 Lissajous onto the strip. */
+        float a = TWO_PI * (s01 * r + tsec * 0.10f + ph);
+        float x = std::sin(a * 2.0f);
+        float y = std::sin(a * 3.0f + 1.2f);
+        float v = 0.5f * (x + y);
+        return std::clamp(v, -1.0f, 1.0f);
+    }
+    case SpatialPatternKernel::Blackhole1D:
+    {
+        /* Bright rim pulled toward strip center (MoonLight Blackhole vibe). */
+        float d = std::fabs(s01 - 0.5f) * 2.0f;
+        float pulse = 0.55f + 0.45f * std::sin(TWO_PI * (tsec * 0.14f + ph));
+        float hole = smoothstep(0.0f, 0.22f * pulse, d);
+        float rim_center = 0.42f * pulse;
+        float rim = 1.0f - smoothstep(0.0f, 0.10f, std::fabs(d - rim_center));
+        rim = rim * rim;
+        float v = rim * 0.85f + (1.0f - hole) * 0.15f;
+        return std::clamp(v * 2.0f - 1.0f, -1.0f, 1.0f);
+    }
+    case SpatialPatternKernel::Sin3:
+    {
+        /* MoonLight Wave type Sin3 — three phase-offset sines. */
+        float a = TWO_PI * (s01 * r + tsec * 0.09f + ph);
+        float v = std::sin(a) + std::sin(a * 1.0f + 2.094f) + std::sin(a * 1.0f + 4.189f);
+        return std::clamp(v * 0.42f, -1.0f, 1.0f);
     }
     case SpatialPatternKernel::Sine:
     default:

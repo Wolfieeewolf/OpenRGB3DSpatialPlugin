@@ -40,7 +40,7 @@ protected:
 
     float particle_amount = 0.72f; /* 0..1 */
     float turbulence = 0.45f;      /* 0..1 */
-    float hull_size = 0.32f;       /* relative shell radius */
+    float hull_size = 0.52f;       /* relative shell radius — fills room at default */
 
     SpatialVolumeFieldAssist volume_assist_;
 };

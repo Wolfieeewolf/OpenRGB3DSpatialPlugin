@@ -14,7 +14,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float hue_span = u_params[1];
     float percent_dim = u_params[2];
     int axis = int(clamp(u_params[3], 0.0, 2.0) + 0.5);
-    int layout = int(clamp(u_params[4], 0.0, 1.0) + 0.5);
+    int map_mode = int(clamp(u_params[4], 0.0, 1.0) + 0.5);
     float size_zoom = max(u_params[5], 0.15);
     float detail = clamp(u_params[6], 0.05, 1.0);
 
@@ -23,19 +23,19 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     else if(axis == 1) linear01 = p01.y;
 
     float d01 = linear01;
-    if(layout == 1)
+    if(map_mode == 1)
     {
         vec3 c = p01 - vec3(0.5);
         d01 = clamp(length(c) / 0.8660254, 0.0, 1.0);
     }
 
     float d_mapped;
-    if(layout == 0)
+    if(map_mode == 0)
         d_mapped = clamp((d01 - 0.5) / size_zoom + 0.5, 0.0, 1.0);
     else
         d_mapped = clamp(d01 / size_zoom, 0.0, 1.0);
 
-    float tones = max(2.0, 2.0 + hue_span * 32.0);
+    float tones = max(2.0, hue_span);
     float soft = clamp(detail, 0.0, 1.0);
     float phase = pos + d_mapped * hue_span;
     float stepped = floor(phase * tones + 1e-4) / tones;
@@ -44,7 +44,8 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     float hue_turns = fract(phase_use + 1.0);
     float ang = hue_turns * 6.2831853;
     float center = 1.0 - abs(d_mapped - 0.5) * 2.0;
-    float v = clamp(1.0 - percent_dim * center, 0.0, 1.0);
+    /* Keep a bright floor so center-dim never kills the room. */
+    float v = clamp(1.0 - percent_dim * center * 0.85, 0.42, 1.0);
     out_color = vec4(cos(ang) * 0.5 + 0.5, sin(ang) * 0.5 + 0.5, v, 1.0);
 }
 )";

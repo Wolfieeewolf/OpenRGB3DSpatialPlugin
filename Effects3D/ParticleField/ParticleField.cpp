@@ -39,57 +39,57 @@ void ParticleField::ApplyModeDefaults(int mode_id)
     {
     case MODE_SNOW:
         particle_count = 40;
-        particle_size = 0.48f;
-        thickness = 0.78f;
+        particle_size = 0.55f;
+        thickness = 0.82f;
         motion_amount = 0.85f;
         noise_amount = 0.32f;
         fill_amount = 1.05f;
         break;
     case MODE_EMBERS:
-        particle_count = 32;
-        particle_size = 0.58f;
+        particle_count = 34;
+        particle_size = 0.50f;
         thickness = 0.88f;
-        motion_amount = 0.90f;
+        motion_amount = 0.95f;
         noise_amount = 0.28f;
         fill_amount = 0.95f;
         break;
     case MODE_SPARKLE:
-        particle_count = 26;
-        particle_size = 0.36f;
-        thickness = 0.64f;
+        particle_count = 28;
+        particle_size = 0.40f;
+        thickness = 0.70f;
         motion_amount = 0.80f;
         noise_amount = 0.12f;
         fill_amount = 1.00f;
         break;
     case MODE_ATTRACT:
         particle_count = 36;
-        particle_size = 0.78f;
-        thickness = 1.00f;
-        motion_amount = 0.90f;
-        noise_amount = 0.45f;
+        particle_size = 0.62f;
+        thickness = 0.95f;
+        motion_amount = 0.95f;
+        noise_amount = 0.40f;
         fill_amount = 0.90f;
         break;
     case MODE_RAIN:
         particle_count = 44;
-        particle_size = 0.40f;
-        thickness = 0.72f;
-        motion_amount = 1.10f;
-        noise_amount = 0.18f;
+        particle_size = 0.38f;
+        thickness = 0.75f;
+        motion_amount = 1.15f;
+        noise_amount = 0.16f;
         fill_amount = 1.10f;
         break;
     case MODE_FIREWORKS:
         particle_count = 36;
-        particle_size = 0.58f;
+        particle_size = 0.52f;
         thickness = 0.88f;
-        motion_amount = 0.95f;
-        noise_amount = 0.22f;
+        motion_amount = 1.00f;
+        noise_amount = 0.20f;
         fill_amount = 0.95f;
         break;
     case MODE_FLOAT:
     default:
         particle_count = 28;
-        particle_size = 0.82f;
-        thickness = 1.08f;
+        particle_size = 0.70f;
+        thickness = 1.00f;
         motion_amount = 0.70f;
         noise_amount = 0.30f;
         fill_amount = 0.90f;
@@ -120,7 +120,7 @@ ParticleField::ParticleField(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     volume_assist_.setFragmentBody(QString::fromUtf8(ParticleFieldVolumeFieldGlsl()));
-    volume_assist_.setResolution(22);
+    volume_assist_.setResolution(26);
 }
 
 EffectInfo3D ParticleField::GetEffectInfo() const
@@ -128,8 +128,9 @@ EffectInfo3D ParticleField::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Particle Field";
     info.effect_description =
-        "Occupancy-local particles (float, snow, embers, sparkle, attract, rain, fireworks). "
-        "Spatial Anchor is the hub; Scale is occupancy; Size is particle radius.";
+        "Occupancy-local particles with per-mode shapes (wisps, flakes, ember streaks, "
+        "spark stars, rain needles, firework trails). Spatial Anchor is the hub; Scale is "
+        "occupancy; Size is particle scale.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_PARTICLE_FIELD;
     info.is_reversible = false;
@@ -167,10 +168,10 @@ void ParticleField::SetupCustomUI(QWidget* parent)
         mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::clamp(mode, 0, MODE_COUNT - 1));
     mode_combo->setToolTip(QStringLiteral(
-        "How particles move inside the occupancy box (Scale from the Spatial Anchor).\n"
-        "Float / Fuzzy = slow drifting blobs (not a strobe).\n"
-        "Snow falls, Embers rise, Rain streaks, Sparkle twinkles, Attract orbits the Anchor, "
-        "Fireworks burst.\n"
+        "How particles move and what they look like inside the occupancy box.\n"
+        "Float = soft wisps · Snow = falling flakes · Embers = rising sparks with trails\n"
+        "Sparkle = twinkling stars · Attract = orbiting points · Rain = thin needles\n"
+        "Fireworks = radial burst streaks.\n"
         "Changing mode applies Size / Count / Softness presets (you can still tweak after)."));
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         mode = std::clamp(idx, 0, MODE_COUNT - 1);
@@ -191,13 +192,13 @@ void ParticleField::SetupCustomUI(QWidget* parent)
 
     EffectSliderRow* size_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Particle size:"), 15, 140, (int)std::lround(particle_size * 100.0f),
-        QStringLiteral("Soft kernel radius of each particle."));
+        QStringLiteral("Scale of each particle kernel (flakes / streaks / stars)."));
     size_row->setObjectName(QStringLiteral("sizeRow"));
     size_row->bindValueChanged(this, [this](int v) { particle_size = v / 100.0f; }, pct, on_changed);
 
     EffectSliderRow* thick_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Softness:"), 20, 140, (int)std::lround(thickness * 100.0f),
-        QStringLiteral("Falloff softness — higher = fluffier blobs (fills empty rooms better)."));
+        QStringLiteral("Falloff softness — higher fills empty rooms better; lower = sharper points."));
     thick_row->setObjectName(QStringLiteral("thickRow"));
     thick_row->bindValueChanged(this, [this](int v) { thickness = v / 100.0f; }, pct, on_changed);
 
@@ -234,10 +235,11 @@ void ParticleField::PrepareGpuFields(std::uint64_t render_sequence, float time_s
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
 
+    /* Keep kernels large enough that sparse LED grids still sample them. */
     const float size01 =
-        std::clamp(std::max(0.15f, particle_size) * size_m * 0.22f, 0.025f, 0.28f);
+        std::clamp(std::max(0.15f, particle_size) * size_m * 0.26f, 0.030f, 0.30f);
     const float thick01 =
-        std::clamp(std::max(0.20f, thickness) * 0.125f, 0.018f, 0.20f);
+        std::clamp(std::max(0.20f, thickness) * 0.130f, 0.022f, 0.22f);
     const float anim_hz = std::max(0.0f, GetMotionHz() * bb.speed_mul);
     const float motion_clock = time_sec * anim_hz;
     const float hue_scroll =

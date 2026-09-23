@@ -56,7 +56,7 @@ private:
     static const char* MotionName(int m);
     bool HasLockedPreset() const { return style > STYLE_NONE && style < STYLE_COUNT; }
     void UpdateMotionUiEnabled();
-    RGBColor PresetColor(float plasma01, float time, float speed_mul, float stratum_phase01) const;
+    RGBColor PresetColor(float plasma01, float hotness01, float time, float speed_mul, float stratum_phase01) const;
 
     int style = STYLE_FIRE;
     int motion = MOTION_SOFT;

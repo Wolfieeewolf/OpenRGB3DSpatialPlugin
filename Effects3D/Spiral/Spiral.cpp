@@ -34,7 +34,7 @@ Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
     volume_assist_.setFragmentBody(QString::fromUtf8(SpiralVolumeFieldGlsl()));
-    volume_assist_.setResolution(18);
+    volume_assist_.setResolution(24);
 }
 
 Spiral::~Spiral() = default;
@@ -68,7 +68,10 @@ EffectInfo3D Spiral::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.effect_name = "Spiral";
-    info.effect_description = "Spiral pattern with arms/gap; GPU volume assist when available; optional per-height-band speed, tightness, and phase";
+    info.effect_description =
+        "Spin / spiral arms with soft glow plus crisp ridges. Coil bends straight "
+        "rays into swirls; Height coil adds helix / tornado lift. Patterns: Smooth, "
+        "Pinwheel, Saw Blade, Swirl Circles, Hypnotic, Simple Spin, Tornado.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_SPIRAL;
     info.is_reversible = true;
@@ -111,20 +114,23 @@ void Spiral::SetupCustomUI(QWidget* parent)
     pattern_combo = pattern_row->combo();
     pattern_combo->addItem(QStringLiteral("Smooth Spiral"));
     pattern_combo->addItem(QStringLiteral("Pinwheel"));
-    pattern_combo->addItem(QStringLiteral("Sharp Blades"));
+    pattern_combo->addItem(QStringLiteral("Saw Blade"));
     pattern_combo->addItem(QStringLiteral("Swirl Circles"));
     pattern_combo->addItem(QStringLiteral("Hypnotic"));
     pattern_combo->addItem(QStringLiteral("Simple Spin"));
+    pattern_combo->addItem(QStringLiteral("Tornado / Twister"));
     pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, kSpiralPatternCount - 1));
     pattern_combo->setToolTip(QStringLiteral(
-        "Spiral field recipe (changes both shape and rainbow hue layout). "
-        "Arms and Gap matter for pinwheel and blade styles; use Scale and zone bounds on sparse layouts."));
-    pattern_combo->setItemData(0, QStringLiteral("Classic logarithmic spiral—smooth color roll-off."), Qt::ToolTipRole);
-    pattern_combo->setItemData(1, QStringLiteral("Radial wedges like a pinwheel; pair with Arms."), Qt::ToolTipRole);
-    pattern_combo->setItemData(2, QStringLiteral("High-contrast blades; Gap Size sets dark spacing."), Qt::ToolTipRole);
-    pattern_combo->setItemData(3, QStringLiteral("Concentric rings with twist—strong center read."), Qt::ToolTipRole);
-    pattern_combo->setItemData(4, QStringLiteral("Multi-frequency twist; busy, hypnotic motion."), Qt::ToolTipRole);
-    pattern_combo->setItemData(5, QStringLiteral("Lightweight angular spin—fewer features, very legible."), Qt::ToolTipRole);
+        "Spin field recipe. Coil 0 = straight arms; raise Coil to twist into a spiral.\n"
+        "Height coil adds vertical helix / tornado lift. Soft glow is kept; crisp ridges "
+        "make arms readable. Arms + Gap shape blades and teeth."));
+    pattern_combo->setItemData(0, QStringLiteral("Soft spiral ribbons with a bright crisp centerline."), Qt::ToolTipRole);
+    pattern_combo->setItemData(1, QStringLiteral("Filled pinwheel wedges — straight rays when Coil is low."), Qt::ToolTipRole);
+    pattern_combo->setItemData(2, QStringLiteral("Saw blade with serrated teeth along each arm."), Qt::ToolTipRole);
+    pattern_combo->setItemData(3, QStringLiteral("Concentric rings that Coil twists into swirls."), Qt::ToolTipRole);
+    pattern_combo->setItemData(4, QStringLiteral("Busy multi-frequency twist with crisp interference ridges."), Qt::ToolTipRole);
+    pattern_combo->setItemData(5, QStringLiteral("Clean rotating rays — most legible spin; Coil bends them."), Qt::ToolTipRole);
+    pattern_combo->setItemData(6, QStringLiteral("Funnel wall + wind ribbons climbing the room (tornado / twister)."), Qt::ToolTipRole);
     pattern_type = pattern_combo->currentIndex();
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral::OnSpiralParameterChanged);
 
@@ -156,7 +162,7 @@ void Spiral::SetupCustomUI(QWidget* parent)
 
     EffectSliderRow* coil_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Coil:"), 0, 100, (int)coil_amount,
-        QStringLiteral("0 = straight spin rays; higher = tighter spiral bend center→edge."));
+        QStringLiteral("0 = straight spin arms; higher = tighter spiral / swirl bend."));
     coil_row->setObjectName(QStringLiteral("coilRow"));
     coil_slider = coil_row->slider();
     coil_row->bindValueChanged(
@@ -170,7 +176,7 @@ void Spiral::SetupCustomUI(QWidget* parent)
 
     EffectSliderRow* height_coil_row = EffectUiRows::AppendSliderRow(
         layout, QStringLiteral("Height coil:"), 0, 100, (int)height_coil_amount,
-        QStringLiteral("0 = flat spin; higher = stronger vertical helix twist."));
+        QStringLiteral("0 = flat spin; higher = vertical helix (Tornado uses this as funnel lift)."));
     height_coil_row->setObjectName(QStringLiteral("heightCoilRow"));
     height_coil_slider = height_coil_row->slider();
     height_coil_row->bindValueChanged(
@@ -311,7 +317,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
         float p01v = textured_p01;
         final_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), p01v, time);
     }
-    else if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
+    else if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5 || pattern_type == 6) && !GetRainbowMode())
     {
         float arm_index = fmod(spiral_angle / (6.28318f / num_arms), (float)num_arms);
         if(arm_index < 0) arm_index += num_arms;

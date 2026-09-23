@@ -47,8 +47,8 @@ private:
 
     int mode = MODE_FLOAT;
     int particle_count = 28;
-    float particle_size = 0.82f;
-    float thickness = 1.08f;
+    float particle_size = 0.70f;
+    float thickness = 1.00f;
     float motion_amount = 0.70f;
     float noise_amount = 0.30f;
     float fill_amount = 0.90f;

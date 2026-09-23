@@ -38,13 +38,7 @@ RGBColor HarmonicPulse::ScaleColor(RGBColor c, float bright)
 
 HarmonicPulse::HarmonicPulse(QWidget* parent) : SpatialEffect3D(parent)
 {
-    SetRainbowMode(false);
-    std::vector<RGBColor> cols = {
-        0x000000FF,
-        0x00FF0000
-    };
-    if(GetColors().empty())
-        SetColors(cols);
+    SetRainbowMode(true);
     volume_assist_.setFragmentBody(QString::fromUtf8(HarmonicPulseVolumeFieldGlsl()));
     volume_assist_.setResolution(18);
 }
@@ -56,8 +50,9 @@ EffectInfo3D HarmonicPulse::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Harmonic Pulse";
     info.effect_description =
-        "Room-wide beat with optional spatial waves. Color modes: one-color brightness, two-color snap/soft A↔B, "
-        "or multi-color chase. Speed sets the pulse rate; Detail densifies the waves; Size zooms the field.";
+        "Room-wide beat with optional spatial waves. Speed sets pulse rate; Frequency tightens "
+        "rainbow bands across the room; Detail densifies waves; Size zooms. Enable Rainbow for "
+        "tight multi-hue looks.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_HARMONIC_PULSE;
     info.is_reversible = true;
@@ -172,11 +167,15 @@ void HarmonicPulse::PrepareGpuFields(std::uint64_t render_sequence, float time_s
     const float size_m = std::max(0.25f, GetNormalizedSize());
     const float flow = std::clamp(flow_amount, 0.4f, 2.5f);
     const float motion = std::clamp(GetMotionHz() * flow, 0.0f, 2.5f);
-    const float spatial_freq = std::clamp(1.1f + detail * 4.5f * size_m, 0.6f, 9.0f);
+    /* Frequency + Detail drive band count; Size zooms. Cap high for LED-thin rainbow. */
+    const float spatial_freq = std::clamp(
+        (1.2f + GetNormalizedFrequency() * 22.0f + detail * 10.0f) * (0.65f + 0.55f * size_m),
+        0.6f,
+        32.0f);
     const float pulse_mix = std::clamp(spatial_amount, 0.0f, 1.0f);
     const float contrast = std::clamp(pulse_contrast, 0.35f, 2.0f);
     const float wobble = std::clamp(zoom_wobble_strength, 0.0f, 3.0f);
-    const float size_density = std::clamp(0.75f + 0.55f * size_m, 0.4f, 2.2f);
+    const float size_density = std::clamp(0.85f + 0.65f * size_m, 0.4f, 2.4f);
     const float vp[6] = {motion, spatial_freq, wobble, contrast, size_density, pulse_mix};
     volume_assist_.prepare(render_sequence, time_sec, vp, 6);
 }

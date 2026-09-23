@@ -182,12 +182,11 @@ void volumeMain(out vec4 out_color, in vec3 p01)
             // Expanding rings: each crest at progress/crests offsets
             for(int r = 0; r < 4; r++)
             {
-                if(float(r) >= crests) break;
+                float slot_on = 1.0 - step(crests, float(r));
                 float front = fract(progress + float(r) / crests);
                 // Also previous cycle so the ring doesn't pop when wrapping
-                d = min(d, abs(pos01 - front));
-                d = min(d, abs(pos01 - (front - 1.0)));
-                d = min(d, abs(pos01 - (front + 1.0)));
+                float dr = min(abs(pos01 - front), min(abs(pos01 - (front - 1.0)), abs(pos01 - (front + 1.0))));
+                d = min(d, mix(1.0, dr, slot_on));
             }
         }
         else
@@ -195,9 +194,9 @@ void volumeMain(out vec4 out_color, in vec3 p01)
             // Sweeping planes with wrap
             for(int r = 0; r < 4; r++)
             {
-                if(float(r) >= crests) break;
+                float slot_on = 1.0 - step(crests, float(r));
                 float front = fract(progress + float(r) / crests);
-                d = min(d, wrapDist01(pos01, front));
+                d = min(d, mix(1.0, wrapDist01(pos01, front), slot_on));
             }
         }
 

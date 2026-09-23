@@ -180,7 +180,6 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     float progress_v = CalculateProgress(time_sec);
     const float detail = std::max(0.05f, GetScaledDetail());
     const float size_multiplier = GetNormalizedSize();
-    const float base_scale = 0.45f;
     const float breath_t = breath_pulse_pct / 100.0f;
     const float breath_amp = breath_t * 0.92f;
 
@@ -193,7 +192,6 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
 
     progress_v *= bb.speed_mul;
     float breath_phase = progress_v * 6.283185307f;
-    const float R_l = base_scale * size_multiplier * (1.0f + breath_amp * sinf(breath_phase));
     const int edge = NormalizeEdgeProfile(edge_profile);
     const int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
 
@@ -205,6 +203,53 @@ void BreathingSphere::PrepareGpuFields(std::uint64_t render_sequence, float time
     const float sx = std::max(0.25f, 2.0f * he.hw / med);
     const float sy = std::max(0.25f, 2.0f * he.hh / med);
     const float sz = std::max(0.25f, 2.0f * he.hd / med);
+
+    /* Size 100 fills the occupancy box. Polygon metric (GLSL polyRadialXZ) needs a
+     * larger R than cube/sphere face cover — evaluate the atlas XZ corners. */
+    auto poly_radial_xz = [](float px, float pz, float n) -> float {
+        constexpr float kPi = 3.14159265f;
+        const float an = 6.2831853f / std::max(n, 3.0f);
+        const float a = std::atan2(pz, px);
+        const float r = std::sqrt(px * px + pz * pz);
+        const float sector = std::floor(0.5f + a / an) * an;
+        return std::cos(sector - a) * r / std::cos(kPi / n);
+    };
+
+    const float hx = 0.5f * sx;
+    const float hy = 0.5f * sy;
+    const float hz = 0.5f * sz;
+    float cover = 1.0f;
+    if(shape == SHAPE_SPHERE || shape == SHAPE_WHOLE_ROOM)
+    {
+        cover = 0.5f * std::sqrt(sx * sx + sy * sy + sz * sz);
+    }
+    else if(shape == SHAPE_TRIANGLE || shape == SHAPE_PENTAGON)
+    {
+        const float n = (shape == SHAPE_TRIANGLE) ? 3.0f : 5.0f;
+        const float corners[4][2] = {{-hx, -hz}, {-hx, hz}, {hx, -hz}, {hx, hz}};
+        float max_poly = 0.0f;
+        for(const auto& c : corners)
+            max_poly = std::max(max_poly, poly_radial_xz(c[0], c[1], n));
+        cover = std::max(max_poly, hy);
+    }
+    else if(shape == SHAPE_RECTANGLE)
+    {
+        /* Rectangle metric: max(|lx|/ax, |ly|, |lz|/az) with ax,az from room aspect. */
+        float aspect_med = std::max(he.hw, he.hd);
+        if(aspect_med < 1e-4f)
+            aspect_med = 1.0f;
+        const float ax = std::clamp(he.hw / aspect_med, 0.15f, 1.0f);
+        const float az = std::clamp(he.hd / aspect_med, 0.15f, 1.0f);
+        cover = std::max({hx / ax, hy, hz / az});
+    }
+    else
+    {
+        /* Square / box: Chebyshev — faces of the atlas. */
+        cover = std::max({hx, hy, hz});
+    }
+    cover = std::max(cover, 1.0f);
+
+    const float R_l = cover * size_multiplier * (1.0f + breath_amp * sinf(breath_phase));
 
     float aspect_med = std::max(he.hw, he.hd);
     if(aspect_med < 1e-4f)
@@ -258,7 +303,6 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
 
     progress = CalculateProgress(time * bb.speed_mul);
-    const float detail = std::max(0.05f, GetScaledDetail());
     const float cmap_phase01 = std::fmod(progress + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
     float strip_p01 = 0.0f;
     if(UseEffectStripColormap())
@@ -280,13 +324,19 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         return 0x00000000;
 
     float sphere_intensity = 0.0f;
-    float norm_in_shell = 0.0f;
+    float radial01 = 0.0f;
     if(volume_assist_.isAvailable())
     {
         const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
         sphere_intensity = samp.x();
-        norm_in_shell = samp.y();
+        radial01 = std::clamp(samp.y(), 0.0f, 1.0f);
     }
+
+    /* Detail/Frequency → tighter spatial hue bands only (no time inside the wrap). */
+    const float wraps = GetHueBandDensity();
+    float band01 = radial01;
+    if(wraps > 1.001f)
+        band01 = std::fmod(radial01 * wraps + 1000.0f, 1.0f);
 
     RGBColor final_color;
     if(UseEffectStripColormap())
@@ -305,15 +355,16 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         sp.origin_y = origin.y;
         sp.origin_z = origin.z;
         sp.y_norm = coord2;
-        float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f
+        /* Calm breath tint; Frequency slider alone scrolls hue via GetColorCycleHz. */
+        float hue = band01 * 360.0f + breath_phase * 24.0f
                     + time * GetColorCycleHz() * 360.0f * bb.speed_mul
                     + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
-        hue = ApplySpatialRainbowHue(hue, norm_in_shell, basis, sp, map, time, &grid);
+        hue = ApplySpatialRainbowHue(hue, band01, basis, sp, map, time, &grid);
         final_color = GetRainbowColor(hue);
     }
     else
     {
-        float pos = fmodf(fmin(1.0f, norm_in_shell) * (0.6f + 0.4f * detail) + breath_phase * 0.1f, 1.0f);
+        float pos = fmodf(band01 + breath_phase * 0.05f, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
         final_color = GetColorAtPosition(pos);
     }

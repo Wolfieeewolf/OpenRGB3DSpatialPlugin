@@ -643,8 +643,10 @@ float SpatialEffect3D::GetMotionHz() const
     {
         return 0.0f;
     }
-    /* Speed 100 → ~0.33 Hz, Speed 200 → 0.85 Hz. Same curve for every effect. */
-    return std::max(0.02f, GetNormalizedSpeed()) * 0.85f;
+    /* Speed 100 → ~0.42 Hz, Speed 200 → ~1.06 Hz. Same curve for every effect.
+     * (~25% faster than the prior 0.85 scale so mid slider feels lively without
+     * needing per-effect speed hacks.) */
+    return std::max(0.02f, GetNormalizedSpeed()) * 1.06f;
 }
 
 float SpatialEffect3D::GetColorCycleHz() const
@@ -699,6 +701,15 @@ float SpatialEffect3D::GetScaledDetail() const
 {
     /* Detail 100 → ~3.1, same for every effect (no per-effect default_detail_scale). */
     return GetNormalizedDetail() * 8.0f;
+}
+
+float SpatialEffect3D::GetHueBandDensity() const
+{
+    /* Spatial hue/ring density from Detail + Frequency only (no time/flash).
+     * Both at 0 → 1.0 (soft single blend). High → many overlapping radial bands. */
+    const float d01 = std::clamp(effect_detail / 200.0f, 0.0f, 1.0f);
+    const float f01 = std::clamp(effect_frequency / 200.0f, 0.0f, 1.0f);
+    return 1.0f + d01 * 40.0f + f01 * 24.0f + d01 * f01 * 16.0f;
 }
 
 float SpatialEffect3D::CalculateProgress(float time) const

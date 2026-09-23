@@ -202,7 +202,7 @@ void volumeMain(out vec4 out_color, in vec3 p01)
     else if(disp == 2)
     {
         float k01 = clamp((k + 1.0) * 0.5, 0.0, 1.0);
-        float r_span = (0.65 + 0.55 * clamp(amp, 0.2, 2.5) / 2.0) * size_m;
+        float r_span = (0.82 + 0.40 * clamp(amp, 0.2, 2.5) / 2.0) * max(size_m, 0.75);
         float surface_r = (0.15 + 0.85 * k01) * r_span;
         intensity = shellIntensityGaussian(length(vec2(l.x, l.z)), surface_r, sigma, max(1.0, amp));
     }

@@ -117,15 +117,15 @@ void DepthTone::SetupCustomUI(QWidget* parent)
         layout,
         QStringLiteral("Depth tones:"),
         2,
-        32,
-        std::clamp(depth_tone_count, 2, 32),
+        64,
+        std::clamp(depth_tone_count, 2, 64),
         QStringLiteral(
-            "How many tone steps span the layout. 2 ~ complementary pair; higher = more hues across depth."));
+            "How many tone steps span the layout. Higher = tighter rainbow bands across depth."));
     depth_tones_row->setObjectName(QStringLiteral("depthTonesRow"));
     depth_tones_slider = depth_tones_row->slider();
     depth_tones_row->bindValueChanged(
         this,
-        [this](int v) { depth_tone_count = std::clamp(v, 2, 32); },
+        [this](int v) { depth_tone_count = std::clamp(v, 2, 64); },
         [](int v) { return QString::number(v); },
         on_changed);
 
@@ -150,8 +150,9 @@ void DepthTone::SetupCustomUI(QWidget* parent)
 void DepthTone::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
 {
     const float pos = std::fmod(CalculateProgress(time_sec) + time_sec * GetColorCycleHz() * 0.35f + 1000.0f, 1.0f);
-    const int dc = std::clamp(depth_tone_count, 2, 32);
-    const float hue_span = (float)(dc - 1) / (float)dc;
+    const int dc = std::clamp(depth_tone_count, 2, 64);
+    /* hue_span = full rainbow cycles across the layout (was <1, so rooms looked flat). */
+    const float hue_span = (float)dc;
     const float percent_dim = std::clamp(dim_amount, 0.0f, 1.0f);
     const int axis = std::clamp(depth_axis, 0, AXIS_COUNT - 1);
     const int layout_i = std::clamp(depth_layout, 0, LAYOUT_COUNT - 1);
@@ -276,7 +277,7 @@ void DepthTone::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("depth_tone_count") && settings["depth_tone_count"].is_number_integer())
-        depth_tone_count = std::clamp(settings["depth_tone_count"].get<int>(), 2, 32);
+        depth_tone_count = std::clamp(settings["depth_tone_count"].get<int>(), 2, 64);
     if(settings.contains("depth_axis") && settings["depth_axis"].is_number_integer())
         depth_axis = std::clamp(settings["depth_axis"].get<int>(), 0, AXIS_COUNT - 1);
     if(settings.contains("depth_layout") && settings["depth_layout"].is_number_integer())

@@ -45,7 +45,7 @@ const char* SurfaceAmbient::MotionName(int m)
 SurfaceAmbient::SurfaceAmbient(QWidget* parent) : SpatialEffect3D(parent)
 {
     volume_assist_.setFragmentBody(QString::fromUtf8(SurfaceAmbientVolumeFieldGlsl()));
-    volume_assist_.setResolution(28);
+    volume_assist_.setResolution(30);
 }
 
 void SurfaceAmbient::UpdateMotionUiEnabled()
@@ -116,9 +116,9 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Surface Ambient";
     info.effect_description =
-        "Room-shell ambience: locked presets (fire, water, …) with their own look, or Preset None "
-        "to drive Motion with your Colors / Patterns. Use Speed / Size / Scale / Detail / Frequency "
-        "in Motion controls — only Thickness is effect-specific.";
+        "Room-shell materials with Shadertoy-style structure (domain warp, caustics, "
+        "cellular blobs, ridge crust, hot cores). Locked presets (fire, water, slime, …) "
+        "or Preset None + Motion. Scale = shell depth; Size = feature scale.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_SURFACE_AMBIENT;
     info.is_reversible = false;
@@ -210,9 +210,10 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
-RGBColor SurfaceAmbient::PresetColor(float plasma01, float time, float speed_mul, float stratum_phase01) const
+RGBColor SurfaceAmbient::PresetColor(float plasma01, float hotness01, float time, float speed_mul, float stratum_phase01) const
 {
     const float p = std::clamp(plasma01, 0.0f, 1.0f);
+    const float hot = std::clamp(hotness01, 0.0f, 1.0f);
     /* Frequency widens the palette; slight shimmer keeps color alive without a full rainbow wash. */
     const float spread = std::clamp(0.9f + GetNormalizedFrequency() * 0.9f, 0.9f, 2.6f);
     const float shimmer =
@@ -221,13 +222,13 @@ RGBColor SurfaceAmbient::PresetColor(float plasma01, float time, float speed_mul
 
     if(style == STYLE_STEAM)
     {
-        /* Cool mist → warm haze instead of flat grey. */
+        /* Cool mist → warm haze; hotness adds brighter vapor cores. */
         const float cool = 150.0f + p * 70.0f;
         const float warm = 190.0f + p * 50.0f;
-        const float mix = std::clamp(0.35f + 0.5f * p, 0.0f, 1.0f);
-        const unsigned char r = (unsigned char)std::clamp((int)(cool * (1.0f - mix) + warm * mix), 0, 255);
-        const unsigned char g = (unsigned char)std::clamp((int)(cool * 0.95f + p * 40.0f), 0, 255);
-        const unsigned char b = (unsigned char)std::clamp((int)(cool + (1.0f - p) * 35.0f), 0, 255);
+        const float mix = std::clamp(0.35f + 0.5f * p + hot * 0.25f, 0.0f, 1.0f);
+        const unsigned char r = (unsigned char)std::clamp((int)(cool * (1.0f - mix) + warm * mix + hot * 40.0f), 0, 255);
+        const unsigned char g = (unsigned char)std::clamp((int)(cool * 0.95f + p * 40.0f + hot * 35.0f), 0, 255);
+        const unsigned char b = (unsigned char)std::clamp((int)(cool + (1.0f - p) * 35.0f + hot * 25.0f), 0, 255);
         return (RGBColor)((b << 16) | (g << 8) | r);
     }
 
@@ -235,19 +236,49 @@ RGBColor SurfaceAmbient::PresetColor(float plasma01, float time, float speed_mul
     float span = 60.0f;
     switch(style)
     {
-    case STYLE_FIRE:  hue0 = 8.0f;   span = 52.0f; break;
-    case STYLE_WATER: hue0 = 165.0f; span = 75.0f; break;  /* teal → blue → cyan */
-    case STYLE_SLIME: hue0 = 70.0f;  span = 70.0f; break;  /* yellow-green → lime */
-    case STYLE_LAVA:  hue0 = 0.0f;   span = 62.0f; break;  /* red → orange → yellow */
-    case STYLE_EMBER: hue0 = 4.0f;   span = 50.0f; break;  /* deep red coals → orange wisps */
-    case STYLE_OCEAN: hue0 = 175.0f; span = 70.0f; break;  /* deep blue → aqua */
+    case STYLE_FIRE:  hue0 = 6.0f;   span = 58.0f; break;
+    case STYLE_WATER: hue0 = 165.0f; span = 75.0f; break;
+    case STYLE_SLIME: hue0 = 70.0f;  span = 70.0f; break;
+    case STYLE_LAVA:  hue0 = 0.0f;   span = 68.0f; break;
+    case STYLE_EMBER: hue0 = 4.0f;   span = 52.0f; break;
+    case STYLE_OCEAN: hue0 = 175.0f; span = 70.0f; break;
     default: hue0 = p * 360.0f; span = 0.0f; break;
     }
-    float hue = hue0 + p * span * spread + shimmer + stratum_phase01 * 14.0f;
+    /* Hot cores push toward yellow/white (fire/lava/embers) or bright specular (water). */
+    float hue = hue0 + p * span * spread + shimmer + stratum_phase01 * 14.0f + hot * 18.0f;
     hue = std::fmod(hue, 360.0f);
     if(hue < 0.0f)
         hue += 360.0f;
-    return GetRainbowColor(hue);
+    RGBColor base = GetRainbowColor(hue);
+
+    if(style == STYLE_FIRE || style == STYLE_LAVA || style == STYLE_EMBER)
+    {
+        /* Mix toward white-hot on cores — Shadertoy flame tip feel. */
+        const float whiten = std::clamp(hot * hot * 0.92f, 0.0f, 1.0f);
+        const int r = (int)((base & 0xFF) * (1.0f - whiten) + 255.0f * whiten);
+        const int g = (int)(((base >> 8) & 0xFF) * (1.0f - whiten) + 235.0f * whiten);
+        const int b = (int)(((base >> 16) & 0xFF) * (1.0f - whiten) + 160.0f * whiten);
+        return (RGBColor)((std::clamp(b, 0, 255) << 16) | (std::clamp(g, 0, 255) << 8) | std::clamp(r, 0, 255));
+    }
+    if(style == STYLE_WATER || style == STYLE_OCEAN)
+    {
+        /* Specular glints: add cool white sparkle without washing the teal. */
+        const float glint = std::clamp(hot * 0.75f, 0.0f, 1.0f);
+        const int r = (int)((base & 0xFF) * (1.0f - glint * 0.55f) + 220.0f * glint);
+        const int g = (int)(((base >> 8) & 0xFF) * (1.0f - glint * 0.35f) + 240.0f * glint);
+        const int b = (int)(((base >> 16) & 0xFF) * (1.0f - glint * 0.15f) + 255.0f * glint);
+        return (RGBColor)((std::clamp(b, 0, 255) << 16) | (std::clamp(g, 0, 255) << 8) | std::clamp(r, 0, 255));
+    }
+    if(style == STYLE_SLIME)
+    {
+        /* Glossy highlight on blob crowns. */
+        const float gloss = std::clamp(hot * 0.85f, 0.0f, 1.0f);
+        const int r = (int)((base & 0xFF) * (1.0f - gloss * 0.4f) + 210.0f * gloss);
+        const int g = (int)(((base >> 8) & 0xFF) * (1.0f - gloss * 0.25f) + 255.0f * gloss);
+        const int b = (int)(((base >> 16) & 0xFF) * (1.0f - gloss * 0.45f) + 160.0f * gloss);
+        return (RGBColor)((std::clamp(b, 0, 255) << 16) | (std::clamp(g, 0, 255) << 8) | std::clamp(r, 0, 255));
+    }
+    return base;
 }
 
 RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -278,6 +309,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     const QVector3D samp = volume_assist_.sample01(c1, c2, c3);
     float best_intensity = samp.x();
     float best_plasma = samp.y();
+    float best_hot = samp.z();
     if(GetStratumLayoutMode() == 1)
         best_intensity = EffectStratumBlend::ApplyMotionToUnit01(best_intensity, stratum_mot01, 0.18f);
 
@@ -289,7 +321,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
 
     if(HasLockedPreset())
     {
-        c = PresetColor(best_plasma, time, bb.speed_mul, phase01);
+        c = PresetColor(best_plasma, best_hot, time, bb.speed_mul, phase01);
     }
     else
     {
