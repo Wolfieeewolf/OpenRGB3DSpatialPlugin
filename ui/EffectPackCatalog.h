@@ -7,10 +7,10 @@
 #include <QList>
 #include <QMimeData>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QString>
 #include <QVariant>
-#include <algorithm>
 
 /** Shared Basic / Pixel / Volume catalog for toolbar + right-click menus. */
 namespace EffectPackCatalog
@@ -70,6 +70,8 @@ inline QList<Entry> AllEntries()
         {"Candle Flicker", "Warm irregular flicker", Category::Basic, EffectPack::BlockType::Candle, QColor(255, 140, 40)},
         {"Dissolve", "Reveal LEDs by random threshold", Category::Basic, EffectPack::BlockType::Dissolve, QColor(160, 120, 255)},
         {"Wave", "Soft sine brightness along an axis", Category::Basic, EffectPack::BlockType::Wave, QColor(100, 180, 255)},
+        {"Cycle", "Loop the gradient on every LED", Category::Basic, EffectPack::BlockType::Cycle, QColor(180, 120, 255)},
+        {"Blink", "Whole set on and off", Category::Basic, EffectPack::BlockType::Blink, QColor(255, 255, 220)},
 
         {"ColorWash", "Scrolling gradient wash", Category::Pixel, EffectPack::BlockType::ColorWash, QColor(200, 90, 220)},
         {"Plasma", "Animated noise field", Category::Pixel, EffectPack::BlockType::Plasma, QColor(255, 80, 200)},
@@ -78,6 +80,8 @@ inline QList<Entry> AllEntries()
         {"Balls", "Bouncing bright blobs", Category::Pixel, EffectPack::BlockType::Balls, QColor(80, 255, 160)},
         {"Bars", "Stepped bars along an axis", Category::Pixel, EffectPack::BlockType::Bars, QColor(100, 160, 255)},
         {"Scanner", "Ping-pong chase head (Larson)", Category::Pixel, EffectPack::BlockType::Scanner, QColor(255, 60, 60)},
+        {"Confetti", "Random LEDs pop in gradient colours", Category::Pixel, EffectPack::BlockType::Confetti, QColor(255, 80, 160)},
+        {"Comet", "Bright head with a fading trail", Category::Pixel, EffectPack::BlockType::Comet, QColor(120, 220, 255)},
 
         {"Sphere Wipe", "Sphere expands through the volume", Category::Volume, EffectPack::BlockType::SphereWipe, QColor(120, 255, 200)},
         {"Orbit", "Comet orbiting around an axis", Category::Volume, EffectPack::BlockType::Orbit, QColor(80, 180, 255)},
@@ -85,6 +89,8 @@ inline QList<Entry> AllEntries()
         {"Meteor", "Streaks along an axis", Category::Volume, EffectPack::BlockType::Meteor, QColor(255, 220, 120)},
         {"Noise 3D", "Volumetric noise field", Category::Volume, EffectPack::BlockType::Noise3D, QColor(180, 100, 255)},
         {"Burst", "Expanding flash from the center", Category::Volume, EffectPack::BlockType::Burst, QColor(255, 240, 160)},
+        {"Helix", "Spiral band around an axis", Category::Volume, EffectPack::BlockType::Helix, QColor(80, 255, 200)},
+        {"Fill", "Closes in from the outside", Category::Volume, EffectPack::BlockType::Fill, QColor(255, 180, 80)},
     };
 }
 
@@ -234,22 +240,271 @@ inline QPixmap MakeGradientPreview(const char* id, int w = 34, int h = 16)
     return pm;
 }
 
+inline void PaintEffectGlyph(QPainter& p, const QRect& r, EffectPack::BlockType type, const QColor& ink)
+{
+    const QColor dim = ink.darker(165);
+    const QColor hot = ink.lighter(145);
+    p.setPen(Qt::NoPen);
+    p.setBrush(ink);
+
+    switch(type)
+    {
+        case EffectPack::BlockType::Solid:
+            p.drawRoundedRect(r.adjusted(1, 1, -1, -1), 2, 2);
+            break;
+        case EffectPack::BlockType::Fade:
+        {
+            QLinearGradient g(r.topLeft(), r.topRight());
+            g.setColorAt(0.0, dim);
+            g.setColorAt(1.0, hot);
+            p.setBrush(g);
+            p.drawRoundedRect(r.adjusted(1, 3, -1, -3), 2, 2);
+            break;
+        }
+        case EffectPack::BlockType::Pulse:
+        {
+            QRadialGradient g(r.center(), r.width() * 0.55);
+            g.setColorAt(0.0, hot);
+            g.setColorAt(1.0, dim);
+            p.setBrush(g);
+            p.drawEllipse(r.adjusted(2, 2, -2, -2));
+            break;
+        }
+        case EffectPack::BlockType::Wipe:
+            p.setBrush(dim);
+            p.drawRect(r.adjusted(1, 3, -1, -3));
+            p.setBrush(hot);
+            p.drawRect(QRect(r.left() + 1, r.top() + 3, r.width() / 2, r.height() - 6));
+            break;
+        case EffectPack::BlockType::Chase:
+            for(int i = 0; i < 4; ++i)
+            {
+                p.setBrush(i == 2 ? hot : dim);
+                const int s = r.height() / 5;
+                p.drawEllipse(r.left() + 2 + i * (s + 1), r.center().y() - s / 2, s, s);
+            }
+            break;
+        case EffectPack::BlockType::Twinkle:
+            p.setBrush(hot);
+            p.drawEllipse(r.left() + 3, r.top() + 4, 3, 3);
+            p.drawEllipse(r.right() - 7, r.top() + 6, 2, 2);
+            p.setBrush(ink);
+            p.drawEllipse(r.center().x() - 1, r.center().y(), 4, 4);
+            p.drawEllipse(r.left() + 6, r.bottom() - 6, 2, 2);
+            break;
+        case EffectPack::BlockType::Alternating:
+            p.setBrush(hot);
+            p.drawRect(r.left() + 2, r.top() + 3, r.width() / 2 - 2, r.height() - 6);
+            p.setBrush(dim);
+            p.drawRect(r.center().x() + 1, r.top() + 3, r.width() / 2 - 3, r.height() - 6);
+            break;
+        case EffectPack::BlockType::Strobe:
+            p.setBrush(QColor(24, 24, 28));
+            p.drawRoundedRect(r.adjusted(1, 1, -1, -1), 2, 2);
+            p.setBrush(hot);
+            p.drawEllipse(r.adjusted(5, 5, -5, -5));
+            break;
+        case EffectPack::BlockType::Spin:
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(dim, 2));
+            p.drawEllipse(r.adjusted(3, 3, -3, -3));
+            p.setPen(Qt::NoPen);
+            p.setBrush(hot);
+            p.drawPie(r.adjusted(3, 3, -3, -3), 40 * 16, 70 * 16);
+            break;
+        case EffectPack::BlockType::Candle:
+        {
+            QPainterPath flame;
+            const QPointF c = r.center();
+            flame.moveTo(c.x(), r.top() + 2);
+            flame.quadTo(r.right() - 2, c.y(), c.x(), r.bottom() - 2);
+            flame.quadTo(r.left() + 2, c.y(), c.x(), r.top() + 2);
+            p.setBrush(ink);
+            p.drawPath(flame);
+            p.setBrush(hot);
+            p.drawEllipse(QRectF(c.x() - 2, c.y() - 1, 4, 5));
+            break;
+        }
+        case EffectPack::BlockType::Dissolve:
+            for(int y = 0; y < 4; ++y)
+            {
+                for(int x = 0; x < 4; ++x)
+                {
+                    p.setBrush(((x + y) % 3 == 0) ? hot : dim);
+                    p.drawRect(r.left() + 3 + x * 4, r.top() + 3 + y * 4, 3, 3);
+                }
+            }
+            break;
+        case EffectPack::BlockType::Wave:
+        {
+            QPainterPath wave;
+            wave.moveTo(r.left() + 2, r.center().y());
+            wave.cubicTo(r.left() + r.width() * 0.3, r.top() + 2,
+                         r.left() + r.width() * 0.7, r.bottom() - 2,
+                         r.right() - 2, r.center().y());
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(hot, 2));
+            p.drawPath(wave);
+            break;
+        }
+        case EffectPack::BlockType::ColorWash:
+        {
+            QLinearGradient g(r.topLeft(), r.bottomRight());
+            g.setColorAt(0.0, QColor(255, 80, 80));
+            g.setColorAt(0.5, ink);
+            g.setColorAt(1.0, QColor(80, 140, 255));
+            p.setBrush(g);
+            p.drawRoundedRect(r.adjusted(1, 1, -1, -1), 2, 2);
+            break;
+        }
+        case EffectPack::BlockType::Plasma:
+            p.setBrush(dim);
+            p.drawEllipse(r.left() + 2, r.top() + 3, 9, 9);
+            p.setBrush(hot);
+            p.drawEllipse(r.right() - 11, r.top() + 2, 8, 8);
+            p.setBrush(ink);
+            p.drawEllipse(r.left() + 6, r.bottom() - 10, 8, 8);
+            break;
+        case EffectPack::BlockType::Snow:
+            p.setPen(QPen(hot, 1));
+            for(const QPoint c : {QPoint(r.left() + 6, r.top() + 5), QPoint(r.right() - 6, r.top() + 8), QPoint(r.center().x(), r.bottom() - 6)})
+            {
+                p.drawLine(c.x() - 2, c.y(), c.x() + 2, c.y());
+                p.drawLine(c.x(), c.y() - 2, c.x(), c.y() + 2);
+            }
+            break;
+        case EffectPack::BlockType::Fire:
+        {
+            QLinearGradient g(r.topLeft(), r.bottomLeft());
+            g.setColorAt(0.0, hot);
+            g.setColorAt(1.0, QColor(180, 30, 0));
+            p.setBrush(g);
+            p.drawRoundedRect(r.left() + 4, r.top() + 3, 4, r.height() - 5, 2, 2);
+            p.drawRoundedRect(r.left() + 10, r.top() + 7, 4, r.height() - 9, 2, 2);
+            break;
+        }
+        case EffectPack::BlockType::Balls:
+            p.setBrush(hot);
+            p.drawEllipse(r.left() + 2, r.top() + 3, 8, 8);
+            p.setBrush(ink);
+            p.drawEllipse(r.right() - 10, r.bottom() - 10, 8, 8);
+            break;
+        case EffectPack::BlockType::Bars:
+            for(int i = 0; i < 4; ++i)
+            {
+                const int h = 4 + (i % 3) * 4;
+                p.setBrush(i == 2 ? hot : ink);
+                p.drawRect(r.left() + 3 + i * 4, r.bottom() - 2 - h, 3, h);
+            }
+            break;
+        case EffectPack::BlockType::Scanner:
+            p.setBrush(dim);
+            p.drawRect(r.left() + 2, r.center().y() - 2, r.width() - 4, 4);
+            p.setBrush(hot);
+            p.drawRect(r.center().x() - 2, r.top() + 4, 5, r.height() - 8);
+            break;
+        case EffectPack::BlockType::SphereWipe:
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(dim, 1));
+            p.drawEllipse(r.adjusted(2, 2, -2, -2));
+            p.setBrush(hot);
+            p.setPen(Qt::NoPen);
+            p.drawEllipse(r.adjusted(6, 6, -6, -6));
+            break;
+        case EffectPack::BlockType::Orbit:
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(dim, 1));
+            p.drawEllipse(r.adjusted(3, 3, -3, -3));
+            p.setPen(Qt::NoPen);
+            p.setBrush(hot);
+            p.drawEllipse(r.right() - 7, r.center().y() - 2, 4, 4);
+            break;
+        case EffectPack::BlockType::Ripple:
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(ink, 1));
+            p.drawEllipse(r.adjusted(2, 2, -2, -2));
+            p.setPen(QPen(hot, 1));
+            p.drawEllipse(r.adjusted(6, 6, -6, -6));
+            break;
+        case EffectPack::BlockType::Meteor:
+        {
+            QLinearGradient g(r.topLeft(), r.bottomRight());
+            g.setColorAt(0.0, QColor(0, 0, 0, 0));
+            g.setColorAt(1.0, hot);
+            p.setBrush(g);
+            p.drawRoundedRect(r.left() + 3, r.center().y() - 2, r.width() - 6, 4, 2, 2);
+            p.setBrush(hot);
+            p.drawEllipse(r.right() - 7, r.center().y() - 3, 5, 5);
+            break;
+        }
+        case EffectPack::BlockType::Noise3D:
+            for(int i = 0; i < 9; ++i)
+            {
+                p.setBrush((i % 2) ? hot : dim);
+                p.drawEllipse(r.left() + 3 + (i % 3) * 5, r.top() + 3 + (i / 3) * 5, 3, 3);
+            }
+            break;
+        case EffectPack::BlockType::Burst:
+            p.setPen(QPen(hot, 1));
+            p.drawLine(r.center(), QPoint(r.center().x(), r.top() + 2));
+            p.drawLine(r.center(), QPoint(r.right() - 2, r.center().y()));
+            p.drawLine(r.center(), QPoint(r.center().x(), r.bottom() - 2));
+            p.drawLine(r.center(), QPoint(r.left() + 2, r.center().y()));
+            p.setPen(Qt::NoPen);
+            p.setBrush(ink);
+            p.drawEllipse(r.center().x() - 2, r.center().y() - 2, 5, 5);
+            break;
+        case EffectPack::BlockType::Cycle:
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(hot, 2));
+            p.drawArc(r.adjusted(3, 3, -3, -3), 30 * 16, 280 * 16);
+            break;
+        case EffectPack::BlockType::Blink:
+            p.setBrush(hot);
+            p.drawRoundedRect(r.adjusted(3, 4, -3, -4), 2, 2);
+            break;
+        case EffectPack::BlockType::Confetti:
+            p.setBrush(hot);
+            p.drawRect(r.left() + 4, r.top() + 4, 3, 3);
+            p.setBrush(ink);
+            p.drawRect(r.right() - 8, r.top() + 7, 3, 3);
+            p.setBrush(dim);
+            p.drawRect(r.left() + 8, r.bottom() - 7, 3, 3);
+            break;
+        case EffectPack::BlockType::Comet:
+        {
+            QLinearGradient g(r.topLeft(), r.topRight());
+            g.setColorAt(0.0, QColor(0, 0, 0, 0));
+            g.setColorAt(1.0, hot);
+            p.setBrush(g);
+            p.drawRoundedRect(r.left() + 2, r.center().y() - 2, r.width() - 6, 4, 2, 2);
+            break;
+        }
+        case EffectPack::BlockType::Helix:
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(hot, 2));
+            p.drawArc(r.adjusted(3, 2, -3, -10), 0, 180 * 16);
+            p.drawArc(r.adjusted(3, 8, -3, -2), 180 * 16, 180 * 16);
+            break;
+        case EffectPack::BlockType::Fill:
+            p.setBrush(dim);
+            p.drawEllipse(r.adjusted(2, 2, -2, -2));
+            p.setBrush(hot);
+            p.drawEllipse(r.adjusted(6, 6, -6, -6));
+            break;
+    }
+}
+
 inline QIcon MakeEffectIcon(const Entry& e, int size = 22)
 {
     QPixmap pm(size, size);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing, true);
-    p.setPen(QColor(20, 20, 24));
-    p.setBrush(e.swatch);
-    p.drawRoundedRect(1, 1, size - 2, size - 2, 3, 3);
-    p.setPen(QColor(15, 15, 18));
-    QFont f = p.font();
-    f.setBold(true);
-    f.setPixelSize(std::max(8, size / 2 - 1));
-    p.setFont(f);
-    const QChar ch = e.name && e.name[0] ? QChar(e.name[0]) : QChar('?');
-    p.drawText(QRect(0, 0, size, size), Qt::AlignCenter, QString(ch));
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(32, 32, 36));
+    p.drawRoundedRect(0, 0, size, size, 3, 3);
+    PaintEffectGlyph(p, QRect(1, 1, size - 2, size - 2), e.type, e.swatch);
     return QIcon(pm);
 }
 

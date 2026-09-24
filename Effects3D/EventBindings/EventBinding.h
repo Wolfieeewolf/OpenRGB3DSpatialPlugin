@@ -16,8 +16,8 @@ struct Binding
 {
     std::string id;
     bool enabled = true;
-    std::string source;   // manual | windows | …
-    std::string event;    // fire | session_lock | …
+    std::string source;
+    std::string event;
     std::string pack_id;
 };
 

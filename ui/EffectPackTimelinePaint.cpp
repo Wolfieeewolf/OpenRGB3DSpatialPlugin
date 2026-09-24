@@ -323,8 +323,6 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
 
     p.fillRect(0, 0, gutter_width_, height(), QColor(40, 40, 44));
     p.fillRect(gutter_width_, 0, width() - gutter_width_, header_height_, QColor(45, 45, 50));
-    p.setPen(QColor(70, 70, 78));
-    p.drawLine(gutter_width_, 0, gutter_width_, height());
 
     p.setPen(QColor(160, 160, 170));
     QFont font = p.font();
@@ -346,6 +344,22 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
         const QColor gutter_bg = (selected_row_ == row) ? QColor(55, 55, 70) : bg;
         p.fillRect(0, y, gutter_width_, row_height_, gutter_bg);
         p.fillRect(gutter_width_, y, width() - gutter_width_, row_height_, bg);
+        const int second_px = timeToX(1000) - timeToX(0);
+        p.setPen(QColor(255, 255, 255, 28));
+        for(int sec = 1; sec * 1000 <= duration_ms_; ++sec)
+        {
+            const int x = timeToX(sec * 1000);
+            p.drawLine(x, y, x, y + row_height_);
+        }
+        if(second_px >= 48)
+        {
+            p.setPen(QColor(255, 255, 255, 14));
+            for(int half = 1; half * 500 <= duration_ms_; half += 2)
+            {
+                const int x = timeToX(half * 500);
+                p.drawLine(x, y, x, y + row_height_);
+            }
+        }
         p.setPen(QColor(55, 55, 60));
         p.drawLine(0, y + row_height_ - 1, width(), y + row_height_ - 1);
 
@@ -393,6 +407,9 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
             paintBlockVisual(p, blockRect(row, *pb.block), pb, selected);
         }
     }
+
+    p.setPen(QPen(QColor(168, 168, 176), 2));
+    p.drawLine(gutter_width_, 0, gutter_width_, height());
 
     const int px = timeToX(playhead_ms_);
     p.setPen(QPen(QColor(255, 80, 80), 2));

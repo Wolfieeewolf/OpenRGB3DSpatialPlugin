@@ -31,11 +31,13 @@ public:
     }
 
     void OnEvent(const std::string& source, const std::string& event, bool active, EventEdge edge);
+    void StopBinding(const std::string& binding_id);
     void StopAll();
 
     bool Tick(int dt_ms);
 
     bool IsPlaying() const { return !plays_.empty(); }
+    const std::string& lastError() const { return last_error_; }
 
 private:
     struct ActivePlay
@@ -58,6 +60,8 @@ private:
     PrepareFn prepare_;
     ApplyFn apply_;
     bool prepared_ = false;
+    bool push_hw_ = false;
+    std::string last_error_;
 };
 
 } // namespace EffectBinding

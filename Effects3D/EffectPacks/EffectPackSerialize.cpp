@@ -120,6 +120,12 @@ std::string BlockTypeToString(BlockType t)
         case BlockType::Meteor: return "meteor";
         case BlockType::Noise3D: return "noise3d";
         case BlockType::Burst: return "burst";
+        case BlockType::Cycle: return "cycle";
+        case BlockType::Blink: return "blink";
+        case BlockType::Confetti: return "confetti";
+        case BlockType::Comet: return "comet";
+        case BlockType::Helix: return "helix";
+        case BlockType::Fill: return "fill";
         default:
         {
             const BlockType unused = t;
@@ -156,6 +162,12 @@ bool BlockTypeFromString(const std::string& s, BlockType* out)
     if(s == "meteor") { *out = BlockType::Meteor; return true; }
     if(s == "noise3d" || s == "plasma3d") { *out = BlockType::Noise3D; return true; }
     if(s == "burst") { *out = BlockType::Burst; return true; }
+    if(s == "cycle") { *out = BlockType::Cycle; return true; }
+    if(s == "blink") { *out = BlockType::Blink; return true; }
+    if(s == "confetti") { *out = BlockType::Confetti; return true; }
+    if(s == "comet") { *out = BlockType::Comet; return true; }
+    if(s == "helix") { *out = BlockType::Helix; return true; }
+    if(s == "fill") { *out = BlockType::Fill; return true; }
     return false;
 }
 

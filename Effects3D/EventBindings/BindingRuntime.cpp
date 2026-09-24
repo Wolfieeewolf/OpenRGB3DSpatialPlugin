@@ -14,6 +14,7 @@ void BindingRuntime::OnEvent(const std::string& source,
                              bool active,
                              EventEdge edge)
 {
+    last_error_.clear();
     if(source.empty() || event.empty())
     {
         return;
@@ -49,6 +50,7 @@ void BindingRuntime::OnEvent(const std::string& source,
         if(plays_.empty())
         {
             prepared_ = false;
+            push_hw_ = false;
         }
         return;
     }
@@ -73,10 +75,13 @@ void BindingRuntime::StartBinding(const Binding& binding, bool event_active, Eve
     std::string err;
     if(!EffectPack::LoadPackById(packs_dir_, binding.pack_id, &pack, &err))
     {
-        LOG_WARNING("[3DSpatial] Effect binding '%s': failed to load pack '%s': %s",
-                    binding.id.c_str(),
-                    binding.pack_id.c_str(),
-                    err.c_str());
+        last_error_ = "Pack '" + binding.pack_id + "' failed to load: " + err;
+        LOG_WARNING("[3DSpatial] Effect binding '%s': %s", binding.id.c_str(), last_error_.c_str());
+        if(plays_.empty())
+        {
+            prepared_ = false;
+            push_hw_ = false;
+        }
         return;
     }
 
@@ -95,6 +100,7 @@ void BindingRuntime::StartBinding(const Binding& binding, bool event_active, Eve
     play.player.SetPack(play.pack);
     play.player.Play();
     plays_.push_back(std::move(play));
+    push_hw_ = true;
 
     if(!prepared_ && prepare_)
     {
@@ -113,6 +119,23 @@ void BindingRuntime::StopMatching(const std::string& source, const std::string& 
     if(plays_.empty())
     {
         prepared_ = false;
+        push_hw_ = false;
+    }
+}
+
+void BindingRuntime::StopBinding(const std::string& binding_id)
+{
+    if(binding_id.empty())
+    {
+        return;
+    }
+    plays_.erase(std::remove_if(plays_.begin(), plays_.end(),
+                                [&](const ActivePlay& p) { return p.binding_id == binding_id; }),
+                 plays_.end());
+    if(plays_.empty())
+    {
+        prepared_ = false;
+        push_hw_ = false;
     }
 }
 
@@ -120,6 +143,7 @@ void BindingRuntime::StopAll()
 {
     plays_.clear();
     prepared_ = false;
+    push_hw_ = false;
 }
 
 void BindingRuntime::ApplyPlays(bool force_hw)
@@ -166,10 +190,13 @@ bool BindingRuntime::Tick(int dt_ms)
     if(plays_.empty())
     {
         prepared_ = false;
+        push_hw_ = false;
         return false;
     }
 
-    ApplyPlays(false);
+    const bool force_hw = push_hw_;
+    push_hw_ = false;
+    ApplyPlays(force_hw);
     return true;
 }
 

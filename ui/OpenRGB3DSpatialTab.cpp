@@ -9,7 +9,6 @@
 #include "EffectPackPanel.h"
 #include "EffectPacks/EffectPackApplier.h"
 #include "EffectStackPanel.h"
-#include "EventBindingsPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
 #include "SceneTransformPanel.h"
@@ -50,7 +49,6 @@
 #include <exception>
 #include <map>
 #include <QList>
-#include <QMessageBox>
 #include <QSignalBlocker>
 #include <QColor>
 #include <QFont>
@@ -181,10 +179,6 @@ void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
     if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->effectPackPanel())
     {
         ui->objectCreatorTabPanel->effectPackPanel()->stopPreview();
-    }
-    if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->eventBindingsPanel())
-    {
-        ui->objectCreatorTabPanel->eventBindingsPanel()->stopAll();
     }
     if(viewport)
     {
@@ -1230,20 +1224,10 @@ nlohmann::json OpenRGB3DSpatialTab::GetPluginSettings() const
 
 void OpenRGB3DSpatialTab::OnProfileAboutToLoad()
 {
-    if(layout_dirty)
-    {
-        QMessageBox::warning(
-            this,
-            tr("Unsaved Spatial Changes"),
-            tr("Loading an OpenRGB profile will replace your current Spatial layout and effects.\n\n"
-               "Save the current OpenRGB profile first if you want to keep these changes."));
-    }
-
     if(effect_running)
     {
         stopEffectClicked();
     }
-    SavePluginUiSettings();
 }
 
 void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& profile_data)
@@ -1275,32 +1259,28 @@ void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& profile_data)
             return;
         }
 
+        if(!profile_data.contains("layout") || !profile_data["layout"].is_object()
+        || !profile_data.contains("effects") || !profile_data["effects"].is_object())
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] OpenRGB profile missing required layout/effects objects");
+            return;
+        }
+
         if(effect_running)
         {
             stopEffectClicked();
         }
 
-        /* Layout virtual entries resolve against virtual_controllers. OpenRGB may
-           deliver the profile before deferred startup, so load custom controllers
-           synchronously before applying the layout. */
         LoadCustomControllers();
 
-        if(profile_data.contains("layout") && profile_data["layout"].is_object())
-        {
-            cached_profile_layout_ = profile_data["layout"];
-            LoadLayoutFromJSON(profile_data["layout"]);
-        }
-        else
-        {
-            cached_profile_layout_ = nlohmann::json();
-        }
+        cached_profile_layout_ = profile_data["layout"];
+        LoadLayoutFromJSON(profile_data["layout"]);
 
-        if(profile_data.contains("effects") && profile_data["effects"].is_object())
+        if(!ApplyEffectProfileJson(profile_data["effects"]))
         {
-            if(!ApplyEffectProfileJson(profile_data["effects"]))
-            {
-                LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to apply effects from OpenRGB profile");
-            }
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to apply effects from OpenRGB profile");
+            SetLayoutDirty();
+            return;
         }
 
         ClearLayoutDirty();
@@ -1311,7 +1291,7 @@ void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& profile_data)
     }
 }
 
-nlohmann::json OpenRGB3DSpatialTab::OnProfileSave() const
+nlohmann::json OpenRGB3DSpatialTab::OnProfileSave()
 {
     try
     {
@@ -1319,6 +1299,7 @@ nlohmann::json OpenRGB3DSpatialTab::OnProfileSave() const
         payload["profile_version"] = 1;
         payload["layout"] = BuildLayoutJson();
         payload["effects"] = BuildEffectProfileJson();
+        ClearLayoutDirty();
         return payload;
     }
     catch(const std::exception& e)
@@ -1326,11 +1307,6 @@ nlohmann::json OpenRGB3DSpatialTab::OnProfileSave() const
         LOG_ERROR("[OpenRGB3DSpatialPlugin] OnProfileSave failed: %s", e.what());
         return nlohmann::json::object();
     }
-}
-
-void OpenRGB3DSpatialTab::MarkProfileSyncedWithOpenRgb()
-{
-    ClearLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::SetPluginSettings(const nlohmann::json& settings)

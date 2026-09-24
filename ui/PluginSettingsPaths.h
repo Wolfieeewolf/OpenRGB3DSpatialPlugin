@@ -32,6 +32,11 @@ inline filesystem::path EffectPacksDir(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "effect-packs";
 }
 
+inline filesystem::path UserGradientsFile(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "user-gradients.json";
+}
+
 inline filesystem::path EffectBindingsFile(OpenRGBPluginAPIInterface* rm)
 {
     return PluginRoot(rm) / "effect-bindings.json";

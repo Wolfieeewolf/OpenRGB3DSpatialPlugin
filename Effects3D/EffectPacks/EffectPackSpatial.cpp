@@ -420,6 +420,8 @@ bool BlockNeedsWorldEval(BlockType t)
         case BlockType::Fire:
         case BlockType::Balls:
         case BlockType::Bars:
+        case BlockType::Helix:
+        case BlockType::Fill:
             return true;
         default:
             return false;
@@ -440,6 +442,8 @@ bool BlockNeedsDirection(BlockType t)
         case BlockType::Meteor:
         case BlockType::Bars:
         case BlockType::Scanner:
+        case BlockType::Comet:
+        case BlockType::Helix:
             return true;
         default:
             return false;
@@ -690,6 +694,55 @@ bool EvalBurst(WorldCtx& ctx)
     return true;
 }
 
+bool EvalHelix(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float along = SampleAxisPos(block, ctx.x, ctx.y, ctx.z,
+                                      ctx.min_x, ctx.max_x, ctx.min_y, ctx.max_y, ctx.min_z, ctx.max_z);
+    float ux = 0.0f;
+    float uy = 0.0f;
+    float uz = 0.0f;
+    AxisUnitVector(block, &ux, &uy, &uz);
+    const float side = ctx.dx * uz - ctx.dz * ux;
+    float ang = side * 0.5f + 0.5f;
+    ang -= std::floor(ang);
+    const float twist = std::fmod(along * 3.0f + ctx.progress + 1.0f, 1.0f);
+    float delta = std::fabs(ang - twist);
+    delta = std::min(delta, 1.0f - delta);
+    const float band = std::clamp(block.pulse_length, 0.06f, 0.4f);
+    if(delta > band)
+    {
+        return false;
+    }
+    ctx.intensity *= 1.0f - (delta / band);
+    ctx.color = SampleGradient(block, along);
+    return true;
+}
+
+bool EvalFill(WorldCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float edge = 0.12f;
+    const float front = (1.0f - ctx.progress) * (1.0f + edge);
+    const float d = ctx.s.radius - front;
+    float cover = 0.0f;
+    if(d >= edge)
+    {
+        cover = 1.0f;
+    }
+    else if(d > -edge)
+    {
+        cover = (d + edge) / (2.0f * edge);
+    }
+    if(cover <= 0.001f)
+    {
+        return false;
+    }
+    ctx.intensity *= cover;
+    ctx.color = SampleGradient(block, ctx.s.radius);
+    return true;
+}
+
 bool EvalWorldDefault(WorldCtx& ctx)
 {
     float t = ctx.progress + ctx.s.nx * 0.25f + ctx.s.ny * 0.25f + ctx.s.nz * 0.25f;
@@ -713,6 +766,8 @@ WorldFn WorldFnFor(BlockType type)
         case BlockType::Balls: return &EvalBalls;
         case BlockType::Bars: return &EvalBars;
         case BlockType::Burst: return &EvalBurst;
+        case BlockType::Helix: return &EvalHelix;
+        case BlockType::Fill: return &EvalFill;
         default: return &EvalWorldDefault;
     }
 }

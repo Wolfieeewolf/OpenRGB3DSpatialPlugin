@@ -65,6 +65,8 @@ private slots:
     void onPickColorTo();
     void onGradientPreset();
     void onGradientStopsChanged();
+    void onSaveUserGradient();
+    void onDeleteUserGradient();
     void onSave();
     void onPreview();
     void onTick();
@@ -90,6 +92,7 @@ private:
     int currentTimelineRow() const;
     EffectPack::Block* selectedBlock();
     void applyGradientPresetToBlock(EffectPack::Block* block, const QString& preset_id);
+    void refillGradientPresets();
 
     OpenRGB3DSpatialTab* tab_ = nullptr;
     filesystem::path packs_dir_;
@@ -123,6 +126,9 @@ private:
     QPushButton* color_to_button_ = nullptr;
     QPushButton* remove_block_button_ = nullptr;
     QComboBox* gradient_preset_ = nullptr;
+    QPushButton* save_gradient_button_ = nullptr;
+    QPushButton* delete_gradient_button_ = nullptr;
+    QLabel* props_hint_ = nullptr;
     EffectPackGradientBar* gradient_bar_ = nullptr;
     QWidget* direction_section_ = nullptr;
     QWidget* speed_section_ = nullptr;

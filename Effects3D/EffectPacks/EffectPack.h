@@ -68,6 +68,12 @@ enum class BlockType
     Meteor,
     Noise3D,
     Burst,
+    Cycle,
+    Blink,
+    Confetti,
+    Comet,
+    Helix,
+    Fill,
 };
 
 enum class Direction

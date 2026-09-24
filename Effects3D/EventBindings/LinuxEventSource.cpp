@@ -9,7 +9,9 @@
 
 #include <QDBusConnection>
 #include <QDBusInterface>
+#include <QDBusObjectPath>
 #include <QDBusReply>
+#include <QDBusVariant>
 #include <QVariant>
 #include <unistd.h>
 #endif
@@ -22,6 +24,15 @@ namespace EffectBinding
 LinuxLoginWatcher::LinuxLoginWatcher(LinuxEventSource* owner)
     : owner_(owner)
 {
+}
+
+QVariant UnwrapDBusVariant(const QVariant& value)
+{
+    if(value.canConvert<QDBusVariant>())
+    {
+        return value.value<QDBusVariant>().variant();
+    }
+    return value;
 }
 
 bool LinuxLoginWatcher::ResolveSessionPath()
@@ -123,11 +134,12 @@ void LinuxLoginWatcher::PollLockedHint()
     {
         return;
     }
-    const bool now_locked = reply.value().toBool();
-    if(now_locked == locked_)
+    const bool now_locked = UnwrapDBusVariant(reply.value()).toBool();
+    if(have_lock_ && now_locked == locked_)
     {
         return;
     }
+    have_lock_ = true;
     locked_ = now_locked;
     owner_->NotifyLock(locked_);
 }
@@ -144,12 +156,22 @@ void LinuxLoginWatcher::onSessionPropertiesChanged(const QString& interface,
                                                    const QVariantMap& changed,
                                                    const QStringList& invalidated)
 {
-    (void)invalidated;
     if(interface != QStringLiteral("org.freedesktop.login1.Session"))
     {
         return;
     }
     if(changed.contains(QStringLiteral("LockedHint")))
+    {
+        const bool now_locked = UnwrapDBusVariant(changed.value(QStringLiteral("LockedHint"))).toBool();
+        if(owner_ && (!have_lock_ || now_locked != locked_))
+        {
+            have_lock_ = true;
+            locked_ = now_locked;
+            owner_->NotifyLock(locked_);
+        }
+        return;
+    }
+    if(invalidated.contains(QStringLiteral("LockedHint")))
     {
         PollLockedHint();
     }

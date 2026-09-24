@@ -116,6 +116,12 @@ const char* BlockTypeDisplayName(BlockType t)
         case BlockType::Meteor: return "Meteor";
         case BlockType::Noise3D: return "Noise 3D";
         case BlockType::Burst: return "Burst";
+        case BlockType::Cycle: return "Cycle";
+        case BlockType::Blink: return "Blink";
+        case BlockType::Confetti: return "Confetti";
+        case BlockType::Comet: return "Comet";
+        case BlockType::Helix: return "Helix";
+        case BlockType::Fill: return "Fill";
         default: return "Effect";
     }
 }

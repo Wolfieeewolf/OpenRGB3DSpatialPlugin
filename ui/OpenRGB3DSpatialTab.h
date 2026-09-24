@@ -97,13 +97,9 @@ public:
 
     void SavePluginUiSettings();
 
-    /*-----------------------------------------------------*\
-    | OpenRGB profile integration (Plugin API v5+)          |
-    \*-----------------------------------------------------*/
     void OnProfileAboutToLoad();
     void OnProfileLoad(const nlohmann::json& profile_data);
-    nlohmann::json OnProfileSave() const;
-    void MarkProfileSyncedWithOpenRgb();
+    nlohmann::json OnProfileSave();
 
     double EffectiveGridScaleMm() const;
     void SetScenePositionControlsMm(double x_mm, double y_mm, double z_mm);
@@ -250,7 +246,6 @@ private:
 
     void SetLayoutDirty(bool dirty = true);
     void ClearLayoutDirty();
-    bool IsLayoutDirty() const { return layout_dirty; }
     void UpdateProfileDirtyBanner();
     bool SaveCustomController(unsigned int index);
     int  IndexOfVirtualController(const VirtualController3D* controller) const;

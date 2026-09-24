@@ -129,6 +129,8 @@ bool LoadFromFile(const filesystem::path& path, Document* out, std::string* erro
 
 bool SaveToFile(const filesystem::path& path, const Document& doc, std::string* error)
 {
+    std::error_code ec;
+    filesystem::create_directories(path.parent_path(), ec);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if(!out)
     {

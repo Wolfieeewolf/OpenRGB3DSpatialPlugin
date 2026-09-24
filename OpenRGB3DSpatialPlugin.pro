@@ -441,6 +441,7 @@ SOURCES += \
     ui/EffectPackTimelinePaint.cpp \
     ui/EffectPackTimelineInteract.cpp \
     ui/EffectPackGradientBar.cpp \
+    ui/EffectPackUserGradients.cpp \
     ui/EffectPackToolBar.cpp \
     ui/EffectStackPanel.cpp \
     ui/ZonesPanel.cpp \

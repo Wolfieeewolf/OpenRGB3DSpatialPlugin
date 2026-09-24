@@ -381,6 +381,71 @@ bool EvalColorWash(AxisCtx& ctx)
     return true;
 }
 
+bool EvalCycle(AxisCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float speed = std::max(0.05f, block.speed);
+    const int period = std::max(1, (int)std::lround((float)std::max(1, block.period_ms) / speed));
+    const float phase = (float)((ctx.local_ms - block.start_ms) % period) / (float)period;
+    ctx.color = SampleGradient(block, phase);
+    return true;
+}
+
+bool EvalBlink(AxisCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float speed = std::max(0.05f, block.speed);
+    const int period = std::max(40, (int)std::lround((float)std::max(40, block.period_ms) / speed));
+    const float phase = (float)((ctx.local_ms - block.start_ms) % period) / (float)period;
+    if(phase >= 0.5f)
+    {
+        return false;
+    }
+    ctx.color = SampleGradient(block, 0.0f);
+    return true;
+}
+
+bool EvalConfetti(AxisCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    const float speed = std::max(0.05f, block.speed);
+    const int period = std::max(60, (int)std::lround((float)std::max(60, block.period_ms) / speed));
+    const int local = std::max(0, ctx.local_ms - block.start_ms);
+    const int epoch = local / period;
+    const unsigned int h = HashLed(ctx.twinkle_seed ^ 0xC0FFEE, epoch, period);
+    const float roll = (float)(h & 0xFF) / 255.0f;
+    const float density = 0.25f + 0.5f * std::clamp(block.intensity, 0.0f, 1.0f);
+    if(roll > density)
+    {
+        return false;
+    }
+    const float pick = (float)((h >> 8) & 0xFF) / 255.0f;
+    ctx.color = SampleGradient(block, pick);
+    return true;
+}
+
+bool EvalComet(AxisCtx& ctx)
+{
+    const Block& block = *ctx.block;
+    float head = ctx.progress;
+    float along = ctx.axis;
+    if(DirectionInvertsAxis(block.direction))
+    {
+        head = 1.0f - head;
+        along = 1.0f - along;
+    }
+    const float trail = std::clamp(block.pulse_length, 0.08f, 0.7f);
+    const float delta = head - along;
+    if(delta < 0.0f || delta > trail)
+    {
+        return false;
+    }
+    const float cover = 1.0f - (delta / trail);
+    ctx.intensity *= cover;
+    ctx.color = SampleGradient(block, cover);
+    return true;
+}
+
 AxisFn AxisFnFor(BlockType type)
 {
     switch(type)
@@ -399,6 +464,10 @@ AxisFn AxisFnFor(BlockType type)
         case BlockType::Wave: return &EvalWave;
         case BlockType::Scanner: return &EvalScanner;
         case BlockType::ColorWash: return &EvalColorWash;
+        case BlockType::Cycle: return &EvalCycle;
+        case BlockType::Blink: return &EvalBlink;
+        case BlockType::Confetti: return &EvalConfetti;
+        case BlockType::Comet: return &EvalComet;
         default: return nullptr;
     }
 }

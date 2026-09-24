@@ -5,6 +5,8 @@
 #include "EffectPackGradientBar.h"
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackToolBar.h"
+#include "EffectPackUserGradients.h"
+#include "PluginSettingsPaths.h"
 #include "EffectPacks/EffectPackApplier.h"
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
@@ -24,6 +26,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -65,6 +68,10 @@ void EffectPackEditorDialog::onToolbarColorClicked(unsigned int rgb)
     EffectPack::Block* b = selectedBlock();
     if(!b)
     {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Select a timeline block first"));
+        }
         return;
     }
     b->color = (RGBColor)rgb;
@@ -89,6 +96,10 @@ void EffectPackEditorDialog::onToolbarCurveClicked(const QString& preset_id)
     EffectPack::Block* b = selectedBlock();
     if(!b)
     {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Select a timeline block first"));
+        }
         return;
     }
     if(preset_id.isEmpty() || preset_id == QStringLiteral("flat"))
@@ -159,12 +170,18 @@ void EffectPackEditorDialog::applyGradientPresetToBlock(EffectPack::Block* b, co
 {
     if(!b || preset.isEmpty())
     {
+        if(!b && status_label_)
+        {
+            status_label_->setText(QStringLiteral("Select a timeline block first"));
+        }
         return;
     }
     const RGBColor accent = color_button_
         ? colorFromButton(color_button_)
         : ToRGBColor(255, 80, 40);
-    if(!EffectPack::ApplyGradientPresetId(b, preset.toUtf8().constData(), accent))
+    const filesystem::path user_path = PluginSettingsPaths::UserGradientsFile(tab_ ? tab_->resource_manager : nullptr);
+    if(!EffectPackUserGradients::Apply(b, preset, user_path)
+       && !EffectPack::ApplyGradientPresetId(b, preset.toUtf8().constData(), accent))
     {
         return;
     }
@@ -177,6 +194,140 @@ void EffectPackEditorDialog::applyGradientPresetToBlock(EffectPack::Block* b, co
     if(timeline_)
     {
         timeline_->update();
+    }
+}
+
+void EffectPackEditorDialog::refillGradientPresets()
+{
+    if(!gradient_preset_)
+    {
+        return;
+    }
+    const QString current = gradient_preset_->currentData().toString();
+    gradient_preset_->blockSignals(true);
+    gradient_preset_->clear();
+    gradient_preset_->addItem(QStringLiteral("Preset…"), QString());
+    for(const EffectPackCatalog::GradientEntry& g : EffectPackCatalog::GradientEntries())
+    {
+        gradient_preset_->addItem(QString::fromUtf8(g.label ? g.label : g.id),
+                                  QString::fromUtf8(g.id ? g.id : ""));
+    }
+    const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_ ? tab_->resource_manager : nullptr);
+    const std::vector<EffectPackUserGradients::Entry> saved = EffectPackUserGradients::Load(path);
+    if(!saved.empty())
+    {
+        gradient_preset_->insertSeparator(gradient_preset_->count());
+    }
+    for(const EffectPackUserGradients::Entry& entry : saved)
+    {
+        gradient_preset_->addItem(entry.label, entry.id);
+    }
+    const int idx = gradient_preset_->findData(current);
+    gradient_preset_->setCurrentIndex(idx >= 0 ? idx : 0);
+    gradient_preset_->blockSignals(false);
+    updateSelectionActions();
+}
+
+void EffectPackEditorDialog::onSaveUserGradient()
+{
+    EffectPack::Block* b = selectedBlock();
+    if(!b || b->gradient.size() < 2)
+    {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Add at least two gradient stops before saving"));
+        }
+        return;
+    }
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, QStringLiteral("Save gradient"),
+                                                QStringLiteral("Preset name"),
+                                                QLineEdit::Normal, QString(), &ok).trimmed();
+    if(!ok || name.isEmpty() || !tab_)
+    {
+        return;
+    }
+    const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_->resource_manager);
+    std::vector<EffectPackUserGradients::Entry> entries = EffectPackUserGradients::Load(path);
+    const QString id = EffectPackUserGradients::MakeId(name);
+    bool replaced = false;
+    for(EffectPackUserGradients::Entry& entry : entries)
+    {
+        if(entry.id == id)
+        {
+            entry.label = name;
+            entry.stops = b->gradient;
+            replaced = true;
+            break;
+        }
+    }
+    if(!replaced)
+    {
+        entries.push_back({id, name, b->gradient});
+    }
+    if(!EffectPackUserGradients::Save(path, entries))
+    {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Could not save gradient preset"));
+        }
+        return;
+    }
+    refillGradientPresets();
+    if(effect_toolbar_)
+    {
+        effect_toolbar_->reloadUserGradients();
+    }
+    if(status_label_)
+    {
+        status_label_->setText(replaced
+            ? QStringLiteral("Updated gradient preset %1").arg(name)
+            : QStringLiteral("Saved gradient preset %1").arg(name));
+    }
+}
+
+void EffectPackEditorDialog::onDeleteUserGradient()
+{
+    if(!gradient_preset_ || !tab_)
+    {
+        return;
+    }
+    const QString id = gradient_preset_->currentData().toString();
+    const QString label = gradient_preset_->currentText();
+    if(!id.startsWith(QStringLiteral("user_")))
+    {
+        return;
+    }
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        QStringLiteral("Delete gradient"),
+        QStringLiteral("Remove saved gradient \"%1\"?").arg(label));
+    if(answer != QMessageBox::Yes)
+    {
+        return;
+    }
+    const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_->resource_manager);
+    std::vector<EffectPackUserGradients::Entry> entries = EffectPackUserGradients::Load(path);
+    entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const EffectPackUserGradients::Entry& entry) {
+        return entry.id == id;
+    }), entries.end());
+    if(!EffectPackUserGradients::Save(path, entries))
+    {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Could not delete gradient preset"));
+        }
+        return;
+    }
+    refillGradientPresets();
+    if(effect_toolbar_)
+    {
+        effect_toolbar_->reloadUserGradients();
+    }
+    updateSelectionActions();
+    if(status_label_)
+    {
+        status_label_->setText(QStringLiteral("Removed gradient preset %1").arg(label));
     }
 }
 
@@ -199,18 +350,28 @@ void EffectPackEditorDialog::updatePropVisibility()
     const bool chase = type == EffectPack::BlockType::Chase || type == EffectPack::BlockType::Scanner;
     const bool colorwash = type == EffectPack::BlockType::ColorWash;
     const bool worldish = EffectPack::BlockNeedsWorldEval(type);
-    const bool needs_period = pulse_twinkle || alternating || strobe;
+    const bool needs_period = pulse_twinkle || alternating || strobe
+        || type == EffectPack::BlockType::Cycle
+        || type == EffectPack::BlockType::Blink
+        || type == EffectPack::BlockType::Confetti;
     const bool needs_speed = wipe_chase || colorwash || pulse_twinkle || alternating || strobe || spin
-        || dissolve || worldish;
+        || dissolve || worldish
+        || type == EffectPack::BlockType::Cycle
+        || type == EffectPack::BlockType::Blink
+        || type == EffectPack::BlockType::Confetti
+        || type == EffectPack::BlockType::Comet;
     const bool needs_direction = EffectPack::BlockNeedsDirection(type);
     const bool needs_pulse_length = chase || spin || strobe
+        || type == EffectPack::BlockType::Comet
+        || type == EffectPack::BlockType::Helix
         || type == EffectPack::BlockType::Wave
         || type == EffectPack::BlockType::Orbit
         || type == EffectPack::BlockType::Ripple
         || type == EffectPack::BlockType::Meteor
         || type == EffectPack::BlockType::Balls
         || type == EffectPack::BlockType::Burst;
-    const bool needs_min_intensity = pulse_twinkle || candle;
+    const bool needs_min_intensity = pulse_twinkle || candle
+        || type == EffectPack::BlockType::Confetti;
     const bool custom_axis = axis_mode_combo_
         && (EffectPack::AxisMode)axis_mode_combo_->currentData().toInt() == EffectPack::AxisMode::Custom;
 
@@ -330,6 +491,10 @@ void EffectPackEditorDialog::applyBlockToForm()
         gradient_bar_->setEnabled(ok);
     }
     gradient_preset_->setEnabled(ok);
+    if(save_gradient_button_)
+    {
+        save_gradient_button_->setEnabled(ok);
+    }
     if(!ok)
     {
         suppress_ui_ = false;
@@ -536,10 +701,8 @@ void EffectPackEditorDialog::onGradientPreset()
         return;
     }
     const QString preset = gradient_preset_->currentData().toString();
-    gradient_preset_->blockSignals(true);
-    gradient_preset_->setCurrentIndex(0);
-    gradient_preset_->blockSignals(false);
     applyGradientPresetToBlock(selectedBlock(), preset);
+    updateSelectionActions();
 }
 
 void EffectPackEditorDialog::onBlockFieldChanged()
