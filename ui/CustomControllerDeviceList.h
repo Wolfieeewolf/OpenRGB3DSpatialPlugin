@@ -7,7 +7,6 @@
 #include <QWidget>
 #include <vector>
 
-class QScrollArea;
 class QVBoxLayout;
 class CustomControllerDeviceWidget;
 class CustomControllerDialog;
@@ -27,6 +26,7 @@ public:
 
     void rebuild(OpenRGBPluginAPIInterface* resource_manager, CustomControllerDialog* host);
     void refreshFromHost(int only_controller_index = -1);
+    void refreshEnableButtonsOnly();
 
     CustomControllerSourceRef selectedSource() const;
     void                      setSelectedControllerIndex(int controller_index);
@@ -41,7 +41,6 @@ private:
     CustomControllerDeviceWidget* widgetForController(int controller_index) const;
 
     Ui::CustomControllerDeviceList*            ui = nullptr;
-    QScrollArea*                               scroll_area_;
     QWidget*                                   content_widget_;
     QVBoxLayout*                               content_layout_;
     std::vector<CustomControllerDeviceWidget*> device_widgets_;

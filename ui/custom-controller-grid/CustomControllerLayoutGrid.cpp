@@ -6,6 +6,8 @@
 #include "GridSpaceUtils.h"
 #include <QHelpEvent>
 #include <QContextMenuEvent>
+#include <QFocusEvent>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QRubberBand>
 #include <QResizeEvent>
@@ -20,8 +22,8 @@ constexpr qreal kFitMarginPx      = 20.0;
 constexpr qreal kMinCellPx        = 22.0;
 constexpr qreal kMaxCellPx        = 32.0;
 constexpr int   kMinViewportPx    = 80;
-constexpr qreal kMinHitSlopScene  = 0.12;
-constexpr qreal kMaxHitSlopScene  = 0.55;
+constexpr qreal kResizeHitSlopPx  = 3.0;
+constexpr qreal kCellDragSlopPx   = 10.0;
 using namespace CustomControllerGridLayoutMath;
 } // namespace
 CustomControllerLayoutGrid::CustomControllerLayoutGrid(QWidget* parent)
@@ -36,6 +38,7 @@ CustomControllerLayoutGrid::CustomControllerLayoutGrid(QWidget* parent)
     setResizeAnchor(QGraphicsView::AnchorViewCenter);
     setInteractive(true);
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
     setAlignment(Qt::AlignCenter);
     setBackgroundBrush(palette().window());
     setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
@@ -58,9 +61,34 @@ void CustomControllerLayoutGrid::SyncSceneRect()
 qreal CustomControllerLayoutGrid::HitSlopScene() const
 {
     const QTransform view_to_scene = transform().inverted();
-    const QPointF slop_px(6.0, 0.0);
-    const QPointF slop_scene = view_to_scene.map(slop_px) - view_to_scene.map(QPointF(0.0, 0.0));
-    return std::clamp(std::abs(slop_scene.x()), kMinHitSlopScene, kMaxHitSlopScene);
+    const QPointF slop_scene =
+        view_to_scene.map(QPointF(kResizeHitSlopPx, 0.0)) - view_to_scene.map(QPointF(0.0, 0.0));
+    qreal slop = std::abs(slop_scene.x());
+
+    if(grid_item_)
+    {
+        const QVector<float> widths  = grid_item_->ColumnWidthsMm();
+        const QVector<float> heights = grid_item_->RowHeightsMm();
+        float min_mm = CustomControllerGridLayoutMath::kDefaultCellSizeMm;
+        for(float w : widths)
+        {
+            if(w > 0.0f)
+            {
+                min_mm = std::min(min_mm, w);
+            }
+        }
+        for(float h : heights)
+        {
+            if(h > 0.0f)
+            {
+                min_mm = std::min(min_mm, h);
+            }
+        }
+        const qreal min_cell_scene = MmToScene(min_mm, MmPerSceneUnit());
+        slop = std::min(slop, min_cell_scene * 0.2);
+    }
+
+    return std::max(0.02, slop);
 }
 float CustomControllerLayoutGrid::MmPerSceneUnit() const
 {
@@ -118,10 +146,6 @@ void CustomControllerLayoutGrid::SetRowHeightsMm(const QVector<float>& heights_m
     }
     SyncSceneRect();
 }
-void CustomControllerLayoutGrid::RequestFitOnNextResize()
-{
-    needs_fit_ = true;
-}
 void CustomControllerLayoutGrid::SetCells(const QVector<CustomControllerGridCellVisual>& cells)
 {
     if(grid_item_)
@@ -133,6 +157,14 @@ void CustomControllerLayoutGrid::SetSelectedCells(const std::set<std::pair<int, 
 {
     selected_cells_ = cells;
     ApplySelectionToItem();
+}
+void CustomControllerLayoutGrid::SetDraggableCells(const std::set<std::pair<int, int>>& cells)
+{
+    draggable_cells_ = cells;
+}
+bool CustomControllerLayoutGrid::CellIsDraggable(int column, int row) const
+{
+    return draggable_cells_.count(std::make_pair(column, row)) > 0;
 }
 std::set<std::pair<int, int>> CustomControllerLayoutGrid::SelectedCells() const
 {
@@ -245,6 +277,15 @@ bool CustomControllerLayoutGrid::HeaderAtViewPos(const QPoint& view_pos, int* co
     }
     return col_hdr_idx >= 0 || row_hdr_idx >= 0;
 }
+
+bool CustomControllerLayoutGrid::InteractionInProgress() const
+{
+    return left_button_pressed_
+           || cell_drag_active_
+           || resize_mode_ != ResizeMode::None
+           || QWidget::mouseGrabber() == this;
+}
+
 void CustomControllerLayoutGrid::ApplySelectionToItem()
 {
     if(grid_item_)
@@ -314,6 +355,75 @@ void CustomControllerLayoutGrid::FinishRubberBandSelection(bool add_to_selection
     }
     SelectRect(col_a, row_a, col_b, row_b, !add_to_selection);
 }
+void CustomControllerLayoutGrid::EndGridLineResize(bool emit_ended)
+{
+    const bool was_resizing = (resize_mode_ != ResizeMode::None);
+    resize_mode_  = ResizeMode::None;
+    resize_index_ = -1;
+    QToolTip::hideText();
+    if(was_resizing && emit_ended)
+    {
+        emit gridLineResizeEnded();
+    }
+}
+
+void CustomControllerLayoutGrid::EndPointerGesture()
+{
+    if(cell_drag_active_)
+    {
+        EndCellContentDrag(false, -1, -1);
+    }
+    const bool was_resizing = (resize_mode_ != ResizeMode::None);
+    EndGridLineResize(was_resizing);
+    left_button_pressed_ = false;
+    rubber_band_active_  = false;
+    pressed_cell_col_    = -1;
+    pressed_cell_row_    = -1;
+    pressed_header_col_  = -1;
+    pressed_header_row_  = -1;
+    if(rubber_band_overlay_)
+    {
+        rubber_band_overlay_->hide();
+    }
+    if(QWidget::mouseGrabber() == this)
+    {
+        releaseMouse();
+    }
+    unsetCursor();
+}
+
+void CustomControllerLayoutGrid::EndCellContentDrag(bool commit_drop, int drop_col, int drop_row)
+{
+    const int from_col = pressed_cell_col_;
+    const int from_row = pressed_cell_row_;
+    cell_drag_active_    = false;
+    cell_drag_hover_col_ = -1;
+    cell_drag_hover_row_ = -1;
+    if(QWidget::mouseGrabber() == this)
+    {
+        releaseMouse();
+    }
+    unsetCursor();
+    if(commit_drop
+       && from_col >= 0 && from_row >= 0
+       && drop_col >= 0 && drop_row >= 0
+       && (from_col != drop_col || from_row != drop_row))
+    {
+        emit cellContentsDropped(from_col, from_row, drop_col, drop_row);
+    }
+    else if(from_col >= 0 && from_row >= 0)
+    {
+        SelectSingleCell(from_col, from_row);
+    }
+}
+
+void CustomControllerLayoutGrid::PreviewCellDragHover(int column, int row)
+{
+    selected_cells_.clear();
+    selected_cells_.insert(std::make_pair(column, row));
+    ApplySelectionToItem();
+}
+
 void CustomControllerLayoutGrid::UpdateResizeCursor(const QPoint& view_pos)
 {
     if(!grid_item_)
@@ -321,6 +431,22 @@ void CustomControllerLayoutGrid::UpdateResizeCursor(const QPoint& view_pos)
         unsetCursor();
         return;
     }
+
+    int hover_col = -1;
+    int hover_row = -1;
+    if(CellAtViewPos(view_pos, &hover_col, &hover_row))
+    {
+        if(CellIsDraggable(hover_col, hover_row))
+        {
+            setCursor(Qt::OpenHandCursor);
+        }
+        else
+        {
+            unsetCursor();
+        }
+        return;
+    }
+
     const QPointF scene_pos = mapToScene(view_pos);
     const qreal slop        = HitSlopScene();
     if(grid_item_->ColumnBorderIndexAtScenePos(scene_pos, slop) >= 0)
@@ -380,21 +506,37 @@ void CustomControllerLayoutGrid::mousePressEvent(QMouseEvent* event)
 {
     if(event->button() == Qt::LeftButton && grid_item_)
     {
+        if(left_button_pressed_ || cell_drag_active_ || resize_mode_ != ResizeMode::None)
+        {
+            EndPointerGesture();
+        }
+
+        setFocus(Qt::MouseFocusReason);
         const QPointF scene_pos = mapToScene(event->pos());
         const qreal slop        = HitSlopScene();
-        const int col_resize    = grid_item_->ColumnResizeIndexAtScenePos(scene_pos, slop);
-        const int row_resize    = grid_item_->RowResizeIndexAtScenePos(scene_pos, slop);
-        if(col_resize >= 0)
+
+        int press_col = -1;
+        int press_row = -1;
+        const bool on_cell = CellAtViewPos(event->pos(), &press_col, &press_row);
+        const int col_resize = grid_item_->ColumnResizeIndexAtScenePos(scene_pos, slop);
+        const int row_resize = grid_item_->RowResizeIndexAtScenePos(scene_pos, slop);
+
+        const bool allow_col_resize = !on_cell && col_resize >= 0;
+        const bool allow_row_resize = !on_cell && row_resize >= 0;
+
+        if(allow_col_resize)
         {
             resize_mode_            = ResizeMode::Column;
             resize_index_           = col_resize;
             resize_start_size_      = grid_item_->ColumnWidthsMm()[col_resize];
             resize_start_scene_pos_ = scene_pos.x();
             left_button_pressed_    = true;
+            grabMouse();
+            setCursor(Qt::SplitHCursor);
             event->accept();
             return;
         }
-        if(row_resize >= 0)
+        if(allow_row_resize)
         {
             resize_mode_            = ResizeMode::Row;
             resize_index_           = row_resize;
@@ -403,6 +545,8 @@ void CustomControllerLayoutGrid::mousePressEvent(QMouseEvent* event)
             left_button_pressed_    = true;
             pressed_header_col_     = -1;
             pressed_header_row_     = -1;
+            grabMouse();
+            setCursor(Qt::SplitVCursor);
             event->accept();
             return;
         }
@@ -421,15 +565,28 @@ void CustomControllerLayoutGrid::mousePressEvent(QMouseEvent* event)
         left_button_pressed_ = true;
         rubber_band_origin_  = event->pos();
         rubber_band_active_  = false;
+        cell_drag_active_    = false;
+        pressed_cell_col_    = on_cell ? press_col : -1;
+        pressed_cell_row_    = on_cell ? press_row : -1;
         if(rubber_band_overlay_)
         {
             rubber_band_overlay_->hide();
         }
+        event->accept();
+        return;
     }
     QGraphicsView::mousePressEvent(event);
 }
 void CustomControllerLayoutGrid::mouseMoveEvent(QMouseEvent* event)
 {
+    if(left_button_pressed_ && !(event->buttons() & Qt::LeftButton))
+    {
+        EndPointerGesture();
+        UpdateResizeCursor(event->pos());
+        QGraphicsView::mouseMoveEvent(event);
+        return;
+    }
+
     if(left_button_pressed_ && resize_mode_ != ResizeMode::None && grid_item_)
     {
         const QPointF scene_pos = mapToScene(event->pos());
@@ -468,11 +625,50 @@ void CustomControllerLayoutGrid::mouseMoveEvent(QMouseEvent* event)
         event->accept();
         return;
     }
-    if(left_button_pressed_
-       && (event->pos() - rubber_band_origin_).manhattanLength() > 4)
+
+    if(left_button_pressed_ && cell_drag_active_)
     {
+        int hover_col = -1;
+        int hover_row = -1;
+        if(CellAtViewPos(event->pos(), &hover_col, &hover_row))
+        {
+            if(hover_col != cell_drag_hover_col_ || hover_row != cell_drag_hover_row_)
+            {
+                cell_drag_hover_col_ = hover_col;
+                cell_drag_hover_row_ = hover_row;
+                PreviewCellDragHover(hover_col, hover_row);
+            }
+            QToolTip::showText(mapToGlobal(event->pos()),
+                               tr("Move here — release to drop\n(swaps if the target cell is occupied)"),
+                               this);
+        }
+        event->accept();
+        return;
+    }
+
+    if(left_button_pressed_
+       && !rubber_band_active_
+       && !cell_drag_active_
+       && (event->pos() - rubber_band_origin_).manhattanLength() > kCellDragSlopPx)
+    {
+        const bool force_select = (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier));
+        if(!force_select
+           && pressed_cell_col_ >= 0
+           && pressed_cell_row_ >= 0
+           && CellIsDraggable(pressed_cell_col_, pressed_cell_row_))
+        {
+            cell_drag_active_    = true;
+            cell_drag_hover_col_ = pressed_cell_col_;
+            cell_drag_hover_row_ = pressed_cell_row_;
+            grabMouse();
+            setCursor(Qt::ClosedHandCursor);
+            PreviewCellDragHover(pressed_cell_col_, pressed_cell_row_);
+            event->accept();
+            return;
+        }
         rubber_band_active_ = true;
     }
+
     if(rubber_band_active_ && rubber_band_overlay_)
     {
         rubber_band_overlay_->setGeometry(QRect(rubber_band_origin_, event->pos()).normalized());
@@ -492,11 +688,26 @@ void CustomControllerLayoutGrid::mouseReleaseEvent(QMouseEvent* event)
     {
         if(resize_mode_ != ResizeMode::None)
         {
-            resize_mode_          = ResizeMode::None;
-            resize_index_         = -1;
-            QToolTip::hideText();
-            left_button_pressed_  = false;
+            EndGridLineResize(true);
+            left_button_pressed_ = false;
+            if(QWidget::mouseGrabber() == this)
+            {
+                releaseMouse();
+            }
             unsetCursor();
+            event->accept();
+            return;
+        }
+        if(cell_drag_active_)
+        {
+            int drop_col = -1;
+            int drop_row = -1;
+            CellAtViewPos(event->pos(), &drop_col, &drop_row);
+            left_button_pressed_ = false;
+            EndCellContentDrag(true, drop_col, drop_row);
+            pressed_cell_col_ = -1;
+            pressed_cell_row_ = -1;
+            QToolTip::hideText();
             event->accept();
             return;
         }
@@ -551,8 +762,71 @@ void CustomControllerLayoutGrid::mouseReleaseEvent(QMouseEvent* event)
             }
             emit cellClicked(col, row);
         }
+        pressed_cell_col_ = -1;
+        pressed_cell_row_ = -1;
     }
     QGraphicsView::mouseReleaseEvent(event);
+}
+void CustomControllerLayoutGrid::keyPressEvent(QKeyEvent* event)
+{
+    if(!event)
+    {
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+
+    if(event->key() == Qt::Key_Escape && (cell_drag_active_ || left_button_pressed_))
+    {
+        EndPointerGesture();
+        event->accept();
+        return;
+    }
+
+    int dx = 0;
+    int dy = 0;
+    switch(event->key())
+    {
+    case Qt::Key_Left:  dx = -1; break;
+    case Qt::Key_Right: dx =  1; break;
+    case Qt::Key_Up:    dy = -1; break;
+    case Qt::Key_Down:  dy =  1; break;
+    default:
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+
+    if(selected_cells_.size() != 1)
+    {
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+
+    const std::pair<int, int> cell = *selected_cells_.begin();
+    if(!CellIsDraggable(cell.first, cell.second))
+    {
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+
+    emit cellContentsNudged(dx, dy);
+    event->accept();
+}
+void CustomControllerLayoutGrid::leaveEvent(QEvent* event)
+{
+    if(!left_button_pressed_ && resize_mode_ == ResizeMode::None)
+    {
+        unsetCursor();
+        QToolTip::hideText();
+    }
+    QGraphicsView::leaveEvent(event);
+}
+void CustomControllerLayoutGrid::focusOutEvent(QFocusEvent* event)
+{
+    if(left_button_pressed_ || resize_mode_ != ResizeMode::None)
+    {
+        EndPointerGesture();
+    }
+    QGraphicsView::focusOutEvent(event);
 }
 void CustomControllerLayoutGrid::mouseDoubleClickEvent(QMouseEvent* event)
 {
@@ -611,6 +885,14 @@ void CustomControllerLayoutGrid::contextMenuEvent(QContextMenuEvent* event)
 }
 bool CustomControllerLayoutGrid::event(QEvent* event)
 {
+    if(event->type() == QEvent::WindowDeactivate
+       || event->type() == QEvent::Hide)
+    {
+        if(left_button_pressed_ || resize_mode_ != ResizeMode::None)
+        {
+            EndPointerGesture();
+        }
+    }
     if(event->type() == QEvent::ToolTip)
     {
         const QHelpEvent* help = static_cast<QHelpEvent*>(event);

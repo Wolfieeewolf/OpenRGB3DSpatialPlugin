@@ -38,7 +38,7 @@
    <item>
     <widget class="EffectInfoLabel" name="helpLabel" native="true">
      <property name="text">
-      <string>Select cells on the layer grid, assign LEDs from the device list, or use Add light blocker on selected cells to stop spatial light passing through (e.g. keyboard base). Double-click a layer tab to rename it.</string>
+      <string>Select a cell, then enable a device/zone. Drag occupied cells to move/swap LEDs (arrow keys nudge one step). You will be asked to import OpenRGB's matrix map or pick a strip wiring order. Undo/Redo on the toolbar. Use Add light blocker for occlusion. Double-click a layer tab to rename it.</string>
      </property>
     </widget>
    </item>
@@ -357,6 +357,26 @@
          <property name="spacing">
           <number>6</number>
          </property>
+         <item>
+          <widget class="QPushButton" name="undoButton">
+           <property name="text">
+            <string>Undo</string>
+           </property>
+           <property name="toolTip">
+            <string>Undo the last grid edit (Ctrl+Z).</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="redoButton">
+           <property name="text">
+            <string>Redo</string>
+           </property>
+           <property name="toolTip">
+            <string>Redo the last undone edit (Ctrl+Y).</string>
+           </property>
+          </widget>
+         </item>
          <item>
           <widget class="QPushButton" name="copyButton">
            <property name="text">

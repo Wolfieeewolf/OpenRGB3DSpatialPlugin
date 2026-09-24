@@ -16,7 +16,6 @@ struct GridLEDMapping
     unsigned int zone_idx = 0;
     unsigned int led_idx = 0;
     int granularity = 0;
-    /** Persisted identity for rebind after OpenRGB device rescan. */
     std::string controller_name;
     std::string controller_location;
 };

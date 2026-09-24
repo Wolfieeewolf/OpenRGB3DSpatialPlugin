@@ -9,6 +9,8 @@
 #include "CustomControllerGridCell.h"
 class CustomControllerGridItem;
 class CustomControllerGridScene;
+class QFocusEvent;
+class QKeyEvent;
 class QRubberBand;
 class CustomControllerLayoutGrid : public QGraphicsView
 {
@@ -24,12 +26,13 @@ public:
     std::set<std::pair<int, int>> SelectedCells() const;
     void SetSelectionColor(const QColor& color);
     void SetAnchorCell(int column, int row);
+    void SetDraggableCells(const std::set<std::pair<int, int>>& cells);
     void FitGridInView();
-    void RequestFitOnNextResize();
     void ClearSelection();
     void SelectCellAt(int column, int row);
     bool CellAtViewPos(const QPoint& view_pos, int* column, int* row) const;
     bool HeaderAtViewPos(const QPoint& view_pos, int* column_header, int* row_header) const;
+    bool InteractionInProgress() const;
 signals:
     void cellClicked(int column, int row);
     void cellDoubleClicked(int column, int row);
@@ -39,12 +42,18 @@ signals:
     void contextMenuRequested(const QPoint& global_pos);
     void columnWidthChanged(int column, float width_mm);
     void rowHeightChanged(int row, float height_mm);
+    void gridLineResizeEnded();
+    void cellContentsDropped(int from_column, int from_row, int to_column, int to_row);
+    void cellContentsNudged(int delta_column, int delta_row);
 protected:
     void wheelEvent(QWheelEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void leaveEvent(QEvent* event) override;
+    void focusOutEvent(QFocusEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
@@ -60,10 +69,16 @@ private:
     CustomControllerGridItem*  grid_item_ = nullptr;
     QRubberBand*               rubber_band_overlay_ = nullptr;
     std::set<std::pair<int, int>> selected_cells_;
+    std::set<std::pair<int, int>> draggable_cells_;
     int anchor_col_ = -1;
     int anchor_row_ = -1;
     bool left_button_pressed_  = false;
     bool rubber_band_active_   = false;
+    bool cell_drag_active_     = false;
+    int  pressed_cell_col_     = -1;
+    int  pressed_cell_row_     = -1;
+    int  cell_drag_hover_col_  = -1;
+    int  cell_drag_hover_row_  = -1;
     QPoint rubber_band_origin_;
     QRect rubber_band_rect_;
     bool needs_fit_     = true;
@@ -80,6 +95,11 @@ private:
     float MmPerSceneUnit() const;
     void ShowResizeSizeTooltip(const QPoint& view_pos, const QString& text);
     void UpdateResizeCursor(const QPoint& view_pos);
+    void EndGridLineResize(bool emit_ended);
+    void EndPointerGesture();
+    void EndCellContentDrag(bool commit_drop, int drop_col, int drop_row);
+    void PreviewCellDragHover(int column, int row);
+    bool CellIsDraggable(int column, int row) const;
     void ApplySelectionToItem();
     void SelectSingleCell(int column, int row);
     void ToggleCellInSelection(int column, int row);

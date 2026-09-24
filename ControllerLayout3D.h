@@ -7,14 +7,29 @@
 #include <memory>
 #include "RGBController.h"
 #include "LEDPosition3D.h"
+#include "MatrixWiringOrder.h"
 
 struct ControllerTransform;
 
 class ControllerLayout3D
 {
 public:
-    static std::vector<LEDPosition3D> GenerateCustomGridLayout(RGBControllerInterface* controller, int grid_x, int grid_y, bool center_layout = true);
-    static std::vector<LEDPosition3D> GenerateCustomGridLayoutWithSpacing(RGBControllerInterface* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm, bool center_layout = true);
+    static std::vector<LEDPosition3D> GenerateCustomGridLayout(RGBControllerInterface* controller,
+                                                              int grid_x,
+                                                              int grid_y,
+                                                              bool center_layout = true,
+                                                              MatrixWiringOrder linear_order = MatrixWiringOrder::HorizontalTopLeftZigzag,
+                                                              bool use_openrgb_matrix_maps = true);
+    static std::vector<LEDPosition3D> GenerateCustomGridLayoutWithSpacing(RGBControllerInterface* controller,
+                                                                          int grid_x,
+                                                                          int grid_y,
+                                                                          float spacing_mm_x,
+                                                                          float spacing_mm_y,
+                                                                          float spacing_mm_z,
+                                                                          float grid_scale_mm,
+                                                                          bool center_layout = true,
+                                                                          MatrixWiringOrder linear_order = MatrixWiringOrder::HorizontalTopLeftZigzag,
+                                                                          bool use_openrgb_matrix_maps = true);
     static Vector3D CalculateWorldPosition(Vector3D local_pos, Transform3D transform);
     static Vector3D GetControllerCenterWorld(const ControllerTransform* ctrl_transform);
     /** LED AABB center in local layout space — same pivot UpdateWorldPositions / effects use. */

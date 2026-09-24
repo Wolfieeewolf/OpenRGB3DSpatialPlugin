@@ -5,17 +5,15 @@
 #include "CustomControllerClipboard.h"
 #include "CustomControllerMappingUtils.h"
 #include "CustomControllerGridKeys.h"
-#include "ControllerDisplayUtils.h"
 #include "ui_CustomControllerDialog.h"
 #include "CustomControllerDeviceList.h"
 #include "CustomControllerPreviewDialog.h"
 #include "custom-controller-grid/CustomControllerLayoutGrid.h"
 #include "custom-controller-grid/CustomControllerGridCell.h"
 #include "custom-controller-grid/CustomControllerGridLayoutMath.h"
-#include "ControllerLayout3D.h"
+#include "MatrixWiringOrder.h"
 #include "PluginUiUtils.h"
 
-#include <QCheckBox>
 #include <QCloseEvent>
 #include <QHideEvent>
 #include <QShowEvent>
@@ -39,7 +37,6 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QShortcut>
-#include <QSplitter>
 #include <QFrame>
 #include <QInputDialog>
 #include <QTabBar>
@@ -119,8 +116,11 @@ void CustomControllerDialog::showEvent(QShowEvent* event)
         std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
         CustomControllerMapping::RebindAll(led_mappings, controllers);
         UpdateGridDisplay();
-    UpdateCellInfo();
+        UpdateCellInfo();
     }
+
+    EnsureGridAnchorSelected();
+    refreshDeviceList();
 
     if(color_refresh_timer && !color_refresh_timer->isActive())
     {
@@ -192,6 +192,27 @@ void CustomControllerDialog::SetupUI()
     EnsureDialogGridSizeArrays();
 
     PluginUiApplyBoldLabel(ui->devicesHeading);
+
+    QLabel* fill_order_caption = new QLabel(tr("Strip fill (default for linear zones):"), ui->leftPanel);
+    fill_order_caption->setObjectName(QStringLiteral("fillOrderCaption"));
+    PluginUiApplyMutedSecondaryLabel(fill_order_caption);
+
+    fill_order_combo = new QComboBox(ui->leftPanel);
+    fill_order_combo->setObjectName(QStringLiteral("fillOrderCombo"));
+    for(int o = 0; o < (int)MatrixWiringOrder::Count; o++)
+    {
+        fill_order_combo->addItem(QString::fromUtf8(MatrixWiringOrderName(static_cast<MatrixWiringOrder>(o))));
+    }
+    fill_order_combo->setCurrentIndex((int)MatrixWiringOrder::HorizontalTopLeftZigzag);
+    fill_order_combo->setToolTip(tr(
+        "Default serpentine order when adding a linear / strip zone.\n"
+        "You are also asked when you assign a device or zone.\n"
+        "Same presets as OpenRGB's Matrix Map Editor.\n"
+        "Zones with an OpenRGB matrix map import that layout instead (key labels, unused holes)."));
+    const int device_list_index = ui->leftLayout->indexOf(ui->deviceListHost);
+    ui->leftLayout->insertWidget(device_list_index, fill_order_caption);
+    ui->leftLayout->insertWidget(device_list_index + 1, fill_order_combo);
+
     device_list = new CustomControllerDeviceList(ui->leftPanel);
     ui->deviceListLayout->addWidget(device_list, 1);
     connect(device_list, &CustomControllerDeviceList::selectionChanged, this,
@@ -206,11 +227,21 @@ void CustomControllerDialog::SetupUI()
     copy_button             = ui->copyButton;
     cut_button              = ui->cutButton;
     paste_button            = ui->pasteButton;
+    undo_button_            = ui->undoButton;
+    redo_button_            = ui->redoButton;
     remove_from_grid_button = ui->removeFromGridButton;
     connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::clearCellClicked);
     connect(copy_button, &QPushButton::clicked, this, &CustomControllerDialog::copySelectionClicked);
     connect(cut_button, &QPushButton::clicked, this, &CustomControllerDialog::cutSelectionClicked);
     connect(paste_button, &QPushButton::clicked, this, &CustomControllerDialog::pasteSelectionClicked);
+    if(undo_button_)
+    {
+        connect(undo_button_, &QPushButton::clicked, this, &CustomControllerDialog::undoClicked);
+    }
+    if(redo_button_)
+    {
+        connect(redo_button_, &QPushButton::clicked, this, &CustomControllerDialog::redoClicked);
+    }
     connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::removeAllLedsClicked);
     connect(ui->addLightBlockerButton, &QPushButton::clicked, this, &CustomControllerDialog::addLightBlockerClicked);
 
@@ -240,6 +271,12 @@ void CustomControllerDialog::SetupUI()
             this, &CustomControllerDialog::gridColumnWidthChanged);
     connect(layout_grid, &CustomControllerLayoutGrid::rowHeightChanged,
             this, &CustomControllerDialog::gridRowHeightChanged);
+    connect(layout_grid, &CustomControllerLayoutGrid::gridLineResizeEnded,
+            this, &CustomControllerDialog::gridLineResizeEnded);
+    connect(layout_grid, &CustomControllerLayoutGrid::cellContentsDropped,
+            this, &CustomControllerDialog::cellContentsDropped);
+    connect(layout_grid, &CustomControllerLayoutGrid::cellContentsNudged,
+            this, &CustomControllerDialog::cellContentsNudged);
     connect(layout_grid, &CustomControllerLayoutGrid::columnHeaderClicked,
             this, &CustomControllerDialog::gridColumnHeaderClicked);
     connect(layout_grid, &CustomControllerLayoutGrid::rowHeaderClicked,
@@ -299,14 +336,23 @@ void CustomControllerDialog::SetupUI()
     connect(cut_shortcut, &QShortcut::activated, this, &CustomControllerDialog::cutSelectionClicked);
     QShortcut* paste_shortcut = new QShortcut(QKeySequence::Paste, this);
     connect(paste_shortcut, &QShortcut::activated, this, &CustomControllerDialog::pasteSelectionClicked);
+    QShortcut* undo_shortcut = new QShortcut(QKeySequence::Undo, this);
+    connect(undo_shortcut, &QShortcut::activated, this, &CustomControllerDialog::undoClicked);
+    QShortcut* redo_shortcut = new QShortcut(QKeySequence::Redo, this);
+    connect(redo_shortcut, &QShortcut::activated, this, &CustomControllerDialog::redoClicked);
+    QShortcut* redo_shortcut_y = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Y), this);
+    connect(redo_shortcut_y, &QShortcut::activated, this, &CustomControllerDialog::redoClicked);
 
     if(paste_button)
     {
         paste_button->setEnabled(false);
     }
 
+    EnsureGridAnchorSelected();
     UpdateGridDisplay();
     UpdateIdentifyButtonUi();
+    refreshDeviceList();
+    ResetHistoryFromCurrent();
 }
 
 void CustomControllerDialog::addLayerClicked()
@@ -344,6 +390,10 @@ void CustomControllerDialog::layerTabChanged(int index)
     SyncLayerDepthSpinFromCurrentLayer();
     UpdateGridDisplay();
     UpdateIdentifyButtonUi();
+    if(device_list)
+    {
+        device_list->refreshEnableButtonsOnly();
+    }
 }
 
 void CustomControllerDialog::layerTabDoubleClicked(int index)
@@ -378,13 +428,20 @@ void CustomControllerDialog::layerTabDoubleClicked(int index)
         return;
     }
 
+    RecordUndoPoint();
     layer_names_[static_cast<size_t>(index)] = trimmed.toStdString();
     layer_tabs->setTabText(index, trimmed);
     UpdateSummaryLabel();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::dimensionChanged()
 {
+    if(!applying_history_)
+    {
+        RecordUndoPoint();
+    }
+
     const int new_width = width_spin->value();
     const int new_height = height_spin->value();
     const int new_depth = depth_spin->value();
@@ -408,7 +465,7 @@ void CustomControllerDialog::dimensionChanged()
     };
 
     size_t removed = trim_out_of_bounds(led_mappings);
-    if(removed > 0)
+    if(removed > 0 && !applying_history_)
     {
         QMessageBox::information(this, "Grid Resized",
             QString("%1 mapping(s) were outside the new grid and were removed.").arg(static_cast<qlonglong>(removed)));
@@ -416,13 +473,14 @@ void CustomControllerDialog::dimensionChanged()
 
     const size_t blockers_before = light_blocker_cells_.size();
     TrimLightBlockerCells(new_width, new_height, new_depth);
-    if(light_blocker_cells_.size() < blockers_before)
+    if(light_blocker_cells_.size() < blockers_before && !applying_history_)
     {
         QMessageBox::information(this,
                                  tr("Grid resized"),
                                  tr("%1 light blocker cell(s) outside the new grid were removed.")
                                      .arg(static_cast<qlonglong>(blockers_before - light_blocker_cells_.size())));
     }
+    TrimMatrixHoleCells(new_width, new_height, new_depth);
 
     if(current_layer >= new_depth)
     {
@@ -443,6 +501,11 @@ void CustomControllerDialog::dimensionChanged()
     UpdateGridDisplay();
     UpdateCellInfo();
     refreshDeviceList();
+
+    if(!applying_history_)
+    {
+        CommitHistoryBaseline();
+    }
 }
 
 void CustomControllerDialog::AttachLayoutGridToLayerTab(int layer_index)
@@ -764,8 +827,16 @@ void CustomControllerDialog::layerDepthChanged(double value_mm)
         return;
     }
 
+    if(!applying_history_)
+    {
+        RecordUndoPoint();
+    }
     layer_depths_mm_[static_cast<size_t>(current_layer)] = static_cast<float>(value_mm);
     syncPreviewLayoutIfVisible();
+    if(!applying_history_)
+    {
+        CommitHistoryBaseline();
+    }
 }
 
 void CustomControllerDialog::gridColumnWidthChanged(int column, float width_mm)
@@ -776,8 +847,12 @@ void CustomControllerDialog::gridColumnWidthChanged(int column, float width_mm)
         return;
     }
 
+    if(!applying_history_ && !resize_history_pushed_)
+    {
+        RecordUndoPoint();
+        resize_history_pushed_ = true;
+    }
     column_widths_mm_[static_cast<size_t>(column)] = width_mm;
-    syncPreviewLayoutIfVisible();
 }
 
 void CustomControllerDialog::gridRowHeightChanged(int row, float height_mm)
@@ -788,8 +863,306 @@ void CustomControllerDialog::gridRowHeightChanged(int row, float height_mm)
         return;
     }
 
+    if(!applying_history_ && !resize_history_pushed_)
+    {
+        RecordUndoPoint();
+        resize_history_pushed_ = true;
+    }
     row_heights_mm_[static_cast<size_t>(row)] = height_mm;
+}
+
+void CustomControllerDialog::gridLineResizeEnded()
+{
+    if(resize_history_pushed_)
+    {
+        CommitHistoryBaseline();
+        resize_history_pushed_ = false;
+    }
     syncPreviewLayoutIfVisible();
+}
+
+void CustomControllerDialog::cellContentsDropped(int from_column, int from_row, int to_column, int to_row)
+{
+    if(MoveCellContents(from_column, from_row, to_column, to_row))
+    {
+        if(layout_grid)
+        {
+            layout_grid->SelectCellAt(to_column, to_row);
+        }
+        selected_col = to_column;
+        selected_row = to_row;
+    }
+    else if(layout_grid)
+    {
+        layout_grid->SelectCellAt(from_column, from_row);
+        selected_col = from_column;
+        selected_row = from_row;
+        RefreshSelectionFillTints();
+        UpdateCellInfo();
+        if(device_list)
+        {
+            device_list->refreshEnableButtonsOnly();
+        }
+    }
+}
+
+void CustomControllerDialog::cellContentsNudged(int delta_column, int delta_row)
+{
+    const std::set<std::pair<int, int>> selected = SelectedGridCells();
+    if(selected.size() != 1)
+    {
+        return;
+    }
+    const std::pair<int, int> from = *selected.begin();
+    const int to_col = from.first + delta_column;
+    const int to_row = from.second + delta_row;
+    if(to_col < 0 || to_row < 0
+       || to_col >= width_spin->value()
+       || to_row >= height_spin->value())
+    {
+        return;
+    }
+    if(MoveCellContents(from.first, from.second, to_col, to_row) && layout_grid)
+    {
+        layout_grid->SelectCellAt(to_col, to_row);
+        selected_col = to_col;
+        selected_row = to_row;
+    }
+}
+
+bool CustomControllerDialog::MoveCellContents(int from_col, int from_row, int to_col, int to_row)
+{
+    if(from_col == to_col && from_row == to_row)
+    {
+        return false;
+    }
+    if(from_col < 0 || from_row < 0 || to_col < 0 || to_row < 0
+       || !width_spin || !height_spin
+       || from_col >= width_spin->value() || from_row >= height_spin->value()
+       || to_col >= width_spin->value() || to_row >= height_spin->value())
+    {
+        return false;
+    }
+    if(IsMatrixHoleCell(to_col, to_row))
+    {
+        return false;
+    }
+
+    std::vector<GridLEDMapping> from_mappings;
+    std::vector<GridLEDMapping> to_mappings;
+    CollectMappingsAtCell(led_mappings, from_col, from_row, current_layer, from_mappings);
+    CollectMappingsAtCell(led_mappings, to_col, to_row, current_layer, to_mappings);
+
+    const bool from_blocker = IsLightBlockerCell(from_col, from_row, current_layer);
+    const bool to_blocker = IsLightBlockerCell(to_col, to_row, current_layer);
+
+    if(from_mappings.empty() && !from_blocker)
+    {
+        return false;
+    }
+
+    RecordUndoPoint();
+
+    RemoveMappingsAtCell(led_mappings, from_col, from_row, current_layer);
+    RemoveMappingsAtCell(led_mappings, to_col, to_row, current_layer);
+    light_blocker_cells_.erase(GridCellKey3D(from_col, from_row, current_layer));
+    light_blocker_cells_.erase(GridCellKey3D(to_col, to_row, current_layer));
+
+    for(GridLEDMapping mapping : from_mappings)
+    {
+        mapping.x = to_col;
+        mapping.y = to_row;
+        mapping.z = current_layer;
+        led_mappings.push_back(mapping);
+    }
+    for(GridLEDMapping mapping : to_mappings)
+    {
+        mapping.x = from_col;
+        mapping.y = from_row;
+        mapping.z = current_layer;
+        led_mappings.push_back(mapping);
+    }
+    if(from_blocker)
+    {
+        light_blocker_cells_.insert(GridCellKey3D(to_col, to_row, current_layer));
+    }
+    if(to_blocker)
+    {
+        light_blocker_cells_.insert(GridCellKey3D(from_col, from_row, current_layer));
+    }
+
+    CommitHistoryBaseline();
+    UpdateGridDisplay();
+    UpdateCellInfo();
+    if(device_list)
+    {
+        device_list->refreshEnableButtonsOnly();
+    }
+    UpdateIdentifyButtonUi();
+    return true;
+}
+
+CustomControllerHistorySnapshot CustomControllerDialog::CaptureHistorySnapshot() const
+{
+    CustomControllerHistorySnapshot snap;
+    snap.mappings = led_mappings;
+    snap.matrix_holes = matrix_hole_cells;
+    snap.light_blockers = light_blocker_cells_;
+    snap.column_widths_mm = column_widths_mm_;
+    snap.row_heights_mm = row_heights_mm_;
+    snap.layer_depths_mm = layer_depths_mm_;
+    snap.layer_names = layer_names_;
+    snap.width = width_spin ? width_spin->value() : 1;
+    snap.height = height_spin ? height_spin->value() : 1;
+    snap.depth = depth_spin ? depth_spin->value() : 1;
+    snap.leds_per_cluster = GetLedsPerCluster();
+    snap.current_layer = current_layer;
+    snap.name = name_edit ? name_edit->text().toStdString() : std::string();
+    return snap;
+}
+
+void CustomControllerDialog::ApplyHistorySnapshot(const CustomControllerHistorySnapshot& snapshot)
+{
+    applying_history_ = true;
+
+    if(name_edit)
+    {
+        name_edit->setText(QString::fromStdString(snapshot.name));
+    }
+
+    {
+        const QSignalBlocker width_block(width_spin);
+        const QSignalBlocker height_block(height_spin);
+        const QSignalBlocker depth_block(depth_spin);
+        const QSignalBlocker leds_block(leds_per_section_combo);
+        if(width_spin)
+        {
+            width_spin->setValue(std::max(1, snapshot.width));
+        }
+        if(height_spin)
+        {
+            height_spin->setValue(std::max(1, snapshot.height));
+        }
+        if(depth_spin)
+        {
+            depth_spin->setValue(std::max(1, snapshot.depth));
+        }
+        if(leds_per_section_combo)
+        {
+            leds_per_section_combo->setCurrentIndex(snapshot.leds_per_cluster > 1 ? 1 : 0);
+        }
+    }
+
+    led_mappings = snapshot.mappings;
+    if(resource_manager)
+    {
+        std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
+        CustomControllerMapping::RebindAll(led_mappings, controllers);
+    }
+    matrix_hole_cells = snapshot.matrix_holes;
+    light_blocker_cells_ = snapshot.light_blockers;
+    column_widths_mm_ = snapshot.column_widths_mm;
+    row_heights_mm_ = snapshot.row_heights_mm;
+    layer_depths_mm_ = snapshot.layer_depths_mm;
+    layer_names_ = snapshot.layer_names;
+    current_layer = std::clamp(snapshot.current_layer, 0, std::max(0, snapshot.depth - 1));
+
+    EnsureDialogGridSizeArrays();
+    EnsureLayerNamesArray();
+    RebuildLayerTabs();
+    if(layer_tabs)
+    {
+        layer_tabs->setCurrentIndex(current_layer);
+    }
+    AttachLayoutGridToLayerTab(current_layer);
+    SyncLayerDepthSpinFromCurrentLayer();
+    EnsureGridAnchorSelected();
+    UpdateGridDisplay();
+    UpdateCellInfo();
+    UpdateIdentifyButtonUi();
+    refreshDeviceList();
+
+    applying_history_ = false;
+}
+
+void CustomControllerDialog::RecordUndoPoint()
+{
+    if(applying_history_)
+    {
+        return;
+    }
+    history_.PushUndoFromBaseline();
+    UpdateUndoRedoUi();
+}
+
+void CustomControllerDialog::CommitHistoryBaseline()
+{
+    if(applying_history_)
+    {
+        return;
+    }
+    history_.CommitBaseline(CaptureHistorySnapshot());
+    UpdateUndoRedoUi();
+}
+
+void CustomControllerDialog::ResetHistoryFromCurrent()
+{
+    history_.Clear();
+    history_.PushBaseline(CaptureHistorySnapshot());
+    resize_history_pushed_ = false;
+    UpdateUndoRedoUi();
+}
+
+void CustomControllerDialog::UpdateUndoRedoUi()
+{
+    if(undo_button_)
+    {
+        undo_button_->setEnabled(history_.CanUndo());
+    }
+    if(redo_button_)
+    {
+        redo_button_->setEnabled(history_.CanRedo());
+    }
+}
+
+void CustomControllerDialog::undoClicked()
+{
+    if(resize_history_pushed_)
+    {
+        CommitHistoryBaseline();
+        resize_history_pushed_ = false;
+    }
+    if(!history_.CanUndo())
+    {
+        return;
+    }
+    CustomControllerHistorySnapshot restore;
+    if(!history_.Undo(CaptureHistorySnapshot(), &restore))
+    {
+        return;
+    }
+    ApplyHistorySnapshot(restore);
+    UpdateUndoRedoUi();
+}
+
+void CustomControllerDialog::redoClicked()
+{
+    if(resize_history_pushed_)
+    {
+        CommitHistoryBaseline();
+        resize_history_pushed_ = false;
+    }
+    if(!history_.CanRedo())
+    {
+        return;
+    }
+    CustomControllerHistorySnapshot restore;
+    if(!history_.Redo(CaptureHistorySnapshot(), &restore))
+    {
+        return;
+    }
+    ApplyHistorySnapshot(restore);
+    UpdateUndoRedoUi();
 }
 
 ColorComboDelegate::ColorComboDelegate(QObject *parent)

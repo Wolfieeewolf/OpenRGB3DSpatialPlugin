@@ -9,6 +9,9 @@
 #include "OpenRGBPluginInterface.h"
 #include "RGBController.h"
 
+#include <QRegularExpression>
+#include <QString>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -392,9 +395,186 @@ inline bool MappingHasZoneLed(const GridLEDMapping& mapping)
     return mapping.led_idx < mapping.controller->GetZoneLEDsCount(mapping.zone_idx);
 }
 
+inline bool TryResolveZoneLedFromMatrixValue(const zone* current_zone,
+                                             unsigned int map_val,
+                                             unsigned int* out_led_idx)
+{
+    if(!current_zone || !out_led_idx || map_val == kMatrixMapUnused)
+    {
+        return false;
+    }
+
+    if(map_val < current_zone->leds_count)
+    {
+        *out_led_idx = map_val;
+        return true;
+    }
+
+    if(map_val >= current_zone->start_idx && (map_val - current_zone->start_idx) < current_zone->leds_count)
+    {
+        *out_led_idx = map_val - current_zone->start_idx;
+        return true;
+    }
+
+    return false;
+}
+
 inline unsigned int MappingDisplayLedNumber(const GridLEDMapping& mapping)
 {
     return mapping.led_idx + 1;
+}
+
+inline QString ShortOpenRgbLedCellLabel(RGBControllerInterface* controller,
+                                        unsigned int zone_idx,
+                                        unsigned int led_idx)
+{
+    const QString index_label = QString::number(led_idx + 1);
+    if(!controller)
+    {
+        return index_label;
+    }
+
+    unsigned int global_led_idx = 0;
+    if(!TryGetDialogGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx)
+       || global_led_idx >= controller->GetLEDCount())
+    {
+        return index_label;
+    }
+
+    QString name = QString::fromStdString(controller->GetLEDDisplayName(global_led_idx));
+    if(name.isEmpty())
+    {
+        name = QString::fromStdString(controller->GetLEDName(global_led_idx));
+    }
+    if(name.isEmpty())
+    {
+        return index_label;
+    }
+
+    if(name.startsWith(QStringLiteral("Key:"), Qt::CaseInsensitive))
+    {
+        name = name.mid(4).trimmed();
+
+        if(name.startsWith(QStringLiteral("Number Pad "), Qt::CaseInsensitive))
+        {
+            const QString rest = name.mid(11).trimmed();
+            if(rest.size() == 1)
+            {
+                return QStringLiteral("N%1").arg(rest);
+            }
+            if(rest.compare(QStringLiteral("Enter"), Qt::CaseInsensitive) == 0)
+            {
+                return QStringLiteral("NEnt");
+            }
+            if(rest.compare(QStringLiteral("Plus"), Qt::CaseInsensitive) == 0)
+            {
+                return QStringLiteral("N+");
+            }
+            return QStringLiteral("N%1").arg(rest.left(3));
+        }
+
+        static const struct { const char* full; const char* short_label; } kAbbrev[] = {
+            {"Left Control", "LCtl"}, {"Right Control", "RCtl"},
+            {"Left Shift", "LSh"}, {"Right Shift", "RSh"},
+            {"Left Alt", "LAlt"}, {"Right Alt", "RAlt"},
+            {"Left Windows", "LWin"}, {"Right Windows", "RWin"},
+            {"Backspace", "Bksp"}, {"Caps Lock", "Caps"},
+            {"Print Screen", "Prt"}, {"Scroll Lock", "Scr"},
+            {"Pause/Break", "Brk"}, {"Page Up", "PgUp"}, {"Page Down", "PgDn"},
+            {"Left Arrow", "Lt"}, {"Right Arrow", "Rt"}, {"Up Arrow", "Up"}, {"Down Arrow", "Dn"},
+            {"Space", "Sp"}, {"Escape", "Esc"}, {"Delete", "Del"}, {"Insert", "Ins"},
+            {"Num Lock", "Num"}, {"Enter", "Ent"}, {"Tab", "Tab"},
+        };
+        for(const auto& entry : kAbbrev)
+        {
+            if(name.compare(QString::fromUtf8(entry.full), Qt::CaseInsensitive) == 0)
+            {
+                return QString::fromUtf8(entry.short_label);
+            }
+        }
+
+        if(name.size() <= 4)
+        {
+            return name;
+        }
+        return name.left(4);
+    }
+
+    QString zone_name;
+    if(zone_idx < controller->GetZoneCount())
+    {
+        zone_name = QString::fromStdString(controller->GetZoneName(zone_idx));
+    }
+
+    const bool name_is_zone = !zone_name.isEmpty()
+                              && name.compare(zone_name, Qt::CaseInsensitive) == 0;
+    const bool name_is_generic =
+        name.compare(QStringLiteral("LED"), Qt::CaseInsensitive) == 0
+        || name.compare(QStringLiteral("Led"), Qt::CaseInsensitive) == 0
+        || name.startsWith(QStringLiteral("LED "), Qt::CaseInsensitive)
+        || name.startsWith(QStringLiteral("Led "), Qt::CaseInsensitive);
+
+    if(name_is_zone || name_is_generic)
+    {
+        return index_label;
+    }
+
+    static const QRegularExpression numbered(QStringLiteral("^(.+?)\\s*([0-9]+)$"));
+    const QRegularExpressionMatch match = numbered.match(name);
+    if(match.hasMatch())
+    {
+        const QString prefix = match.captured(1).trimmed();
+        const QString number = match.captured(2);
+        if(prefix.size() <= 2)
+        {
+            return prefix + number;
+        }
+        return prefix.left(2) + number;
+    }
+
+    if(name.size() <= 3)
+    {
+        return name + index_label;
+    }
+    return name.left(2) + index_label;
+}
+
+inline bool ZoneHasOpenRgbMatrixMap(RGBControllerInterface* controller, unsigned int zone_idx)
+{
+    if(!controller || zone_idx >= controller->GetZoneCount())
+    {
+        return false;
+    }
+    if(controller->GetZoneType(zone_idx) != ZONE_TYPE_MATRIX)
+    {
+        return false;
+    }
+    const matrix_map_type map = controller->GetZoneMatrixMap(zone_idx);
+    return !map.map.empty() && map.width > 0 && map.height > 0
+           && map.map.size() >= static_cast<size_t>(map.width) * static_cast<size_t>(map.height);
+}
+
+inline bool SourceHasOpenRgbMatrixMap(RGBControllerInterface* controller, int granularity, int item_idx)
+{
+    if(!controller)
+    {
+        return false;
+    }
+    if(granularity == 1)
+    {
+        return ZoneHasOpenRgbMatrixMap(controller, static_cast<unsigned int>(item_idx));
+    }
+    if(granularity == 0)
+    {
+        for(unsigned int z = 0; z < controller->GetZoneCount(); z++)
+        {
+            if(ZoneHasOpenRgbMatrixMap(controller, z))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 #endif // CUSTOMCONTROLLERDIALOG_INTERNAL_H

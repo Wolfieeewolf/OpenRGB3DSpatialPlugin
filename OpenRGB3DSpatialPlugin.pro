@@ -125,6 +125,7 @@ HEADERS += \
     OpenRGB3DSpatialPlugin.h \
     LEDPosition3D.h \
     ControllerLayout3D.h \
+    MatrixWiringOrder.h \
     GridSpaceUtils.h \
     ZoneGrid3D.h \
     SpatialEffectTypes.h \
@@ -220,6 +221,7 @@ HEADERS += \
     ui/CustomControllerMappingUtils.h \
     ui/CustomControllerGridKeys.h \
     ui/CustomControllerClipboard.h \
+    ui/CustomControllerHistory.h \
     ui/CustomControllerDialog.h \
     ui/CustomControllerDialog_Internal.h \
     ui/ReferencePointDialog.h \
@@ -367,6 +369,7 @@ HEADERS += \
 SOURCES += \
     OpenRGB3DSpatialPlugin.cpp \
     ControllerLayout3D.cpp \
+    MatrixWiringOrder.cpp \
     GridSpaceUtils.cpp \
     ZoneGrid3D.cpp \
     SpatialEffect3D.cpp \

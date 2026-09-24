@@ -109,6 +109,11 @@ void CustomControllerDialog::refresh_colors()
         return;
     }
 
+    if(layout_grid && layout_grid->InteractionInProgress())
+    {
+        return;
+    }
+
     if(resource_manager)
     {
         const int unresolved_before = CustomControllerMapping::UnresolvedCount(led_mappings);
@@ -191,6 +196,7 @@ void CustomControllerDialog::rotateGrid90()
         return;
     }
 
+    RecordUndoPoint();
     const int width = width_spin->value();
     const int height = height_spin->value();
 
@@ -203,6 +209,14 @@ void CustomControllerDialog::rotateGrid90()
     }
 
     TransformLightBlockerCells([&](int& x, int& y, int& z) {
+        (void)z;
+        const int old_x = x;
+        const int old_y = y;
+        x = old_y;
+        y = width - 1 - old_x;
+    });
+
+    TransformMatrixHoleCells([&](int& x, int& y, int& z) {
         (void)z;
         const int old_x = x;
         const int old_y = y;
@@ -238,9 +252,9 @@ void CustomControllerDialog::rotateGrid90()
     width_spin->blockSignals(false);
     height_spin->blockSignals(false);
 
-    matrix_hole_cells.clear();
     UpdateGridDisplay();
     WarnIfMappingCollisions();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::rotateGrid180()
@@ -251,6 +265,7 @@ void CustomControllerDialog::rotateGrid180()
         return;
     }
 
+    RecordUndoPoint();
     const int width = width_spin->value();
     const int height = height_spin->value();
 
@@ -266,12 +281,18 @@ void CustomControllerDialog::rotateGrid180()
         y = height - 1 - y;
     });
 
+    TransformMatrixHoleCells([&](int& x, int& y, int& z) {
+        (void)z;
+        x = width - 1 - x;
+        y = height - 1 - y;
+    });
+
     ReverseFloatVector(&column_widths_mm_);
     ReverseFloatVector(&row_heights_mm_);
 
-    matrix_hole_cells.clear();
     UpdateGridDisplay();
     WarnIfMappingCollisions();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::rotateGrid270()
@@ -282,6 +303,7 @@ void CustomControllerDialog::rotateGrid270()
         return;
     }
 
+    RecordUndoPoint();
     const int width = width_spin->value();
     const int height = height_spin->value();
 
@@ -294,6 +316,14 @@ void CustomControllerDialog::rotateGrid270()
     }
 
     TransformLightBlockerCells([&](int& x, int& y, int& z) {
+        (void)z;
+        const int old_x = x;
+        const int old_y = y;
+        x = height - 1 - old_y;
+        y = old_x;
+    });
+
+    TransformMatrixHoleCells([&](int& x, int& y, int& z) {
         (void)z;
         const int old_x = x;
         const int old_y = y;
@@ -329,9 +359,9 @@ void CustomControllerDialog::rotateGrid270()
     width_spin->blockSignals(false);
     height_spin->blockSignals(false);
 
-    matrix_hole_cells.clear();
     UpdateGridDisplay();
     WarnIfMappingCollisions();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::flipGridHorizontal()
@@ -342,6 +372,7 @@ void CustomControllerDialog::flipGridHorizontal()
         return;
     }
 
+    RecordUndoPoint();
     const int width = width_spin->value();
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
@@ -354,10 +385,17 @@ void CustomControllerDialog::flipGridHorizontal()
         x = width - 1 - x;
     });
 
+    TransformMatrixHoleCells([&](int& x, int& y, int& z) {
+        (void)y;
+        (void)z;
+        x = width - 1 - x;
+    });
+
     ReverseFloatVector(&column_widths_mm_);
 
     UpdateGridDisplay();
     WarnIfMappingCollisions();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::flipGridVertical()
@@ -368,6 +406,7 @@ void CustomControllerDialog::flipGridVertical()
         return;
     }
 
+    RecordUndoPoint();
     const int height = height_spin->value();
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
@@ -380,9 +419,16 @@ void CustomControllerDialog::flipGridVertical()
         y = height - 1 - y;
     });
 
+    TransformMatrixHoleCells([&](int& x, int& y, int& z) {
+        (void)x;
+        (void)z;
+        y = height - 1 - y;
+    });
+
     ReverseFloatVector(&row_heights_mm_);
 
     UpdateGridDisplay();
     WarnIfMappingCollisions();
+    CommitHistoryBaseline();
 }
 
