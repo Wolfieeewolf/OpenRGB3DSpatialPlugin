@@ -320,6 +320,72 @@ void CustomControllerDialog::RefreshLayoutGridVisuals()
     selection_fill_cache_ = selected_cells;
 }
 
+void CustomControllerDialog::RefreshCellsVisuals(const std::set<std::pair<int, int>>& cells)
+{
+    if(!layout_grid || cells.empty())
+    {
+        return;
+    }
+
+    if(!LayoutCellsCacheMatchesGrid())
+    {
+        RefreshLayoutGridVisuals();
+        return;
+    }
+
+    const LayerCellIndex layer_index = BuildLayerCellIndex(led_mappings, current_layer);
+    const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
+
+    for(const std::pair<int, int>& cell : cells)
+    {
+        const int col = cell.first;
+        const int row = cell.second;
+        const int cache_index = row * layout_cells_cache_w_ + col;
+        if(cache_index < 0 || cache_index >= layout_cells_cache_.size())
+        {
+            continue;
+        }
+
+        std::vector<GridLEDMapping> cell_mappings;
+        const auto cell_it = layer_index.find(GridCellKey(col, row));
+        if(cell_it != layer_index.end())
+        {
+            cell_mappings.reserve(cell_it->second.size());
+            for(size_t mapping_index : cell_it->second)
+            {
+                cell_mappings.push_back(led_mappings[mapping_index]);
+            }
+        }
+
+        CustomControllerGridCellVisual& visual = layout_cells_cache_[cache_index];
+        const bool is_selected = selected_cells.count(cell) > 0;
+        PopulateCellVisual(col, row, cell_mappings, visual, is_selected);
+        layout_grid->SetCellAt(col, row, visual);
+    }
+
+    std::set<std::pair<int, int>> draggable;
+    for(const GridLEDMapping& mapping : led_mappings)
+    {
+        if(mapping.z == current_layer)
+        {
+            draggable.insert(std::make_pair(mapping.x, mapping.y));
+        }
+    }
+    for(const uint64_t key : light_blocker_cells_)
+    {
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(key, &x, &y, &z);
+        if(z == current_layer)
+        {
+            draggable.insert(std::make_pair(x, y));
+        }
+    }
+    layout_grid->SetDraggableCells(draggable);
+    selection_fill_cache_ = selected_cells;
+}
+
 void CustomControllerDialog::RefreshSelectionFillTints()
 {
     if(!layout_grid)

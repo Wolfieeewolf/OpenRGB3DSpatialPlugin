@@ -992,13 +992,11 @@ bool CustomControllerDialog::MoveCellContents(int from_col, int from_row, int to
     }
 
     CommitHistoryBaseline();
-    UpdateGridDisplay();
+    RefreshCellsVisuals({std::make_pair(from_col, from_row), std::make_pair(to_col, to_row)});
+    UpdateSummaryLabel();
     UpdateCellInfo();
-    if(device_list)
-    {
-        device_list->refreshEnableButtonsOnly();
-    }
     UpdateIdentifyButtonUi();
+    syncPreviewLayoutIfVisible();
     return true;
 }
 

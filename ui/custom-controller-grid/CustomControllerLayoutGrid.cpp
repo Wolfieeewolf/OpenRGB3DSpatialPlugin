@@ -9,6 +9,7 @@
 #include <QFocusEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QLabel>
 #include <QRubberBand>
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -151,6 +152,13 @@ void CustomControllerLayoutGrid::SetCells(const QVector<CustomControllerGridCell
     if(grid_item_)
     {
         grid_item_->SetCells(cells);
+    }
+}
+void CustomControllerLayoutGrid::SetCellAt(int column, int row, const CustomControllerGridCellVisual& visual)
+{
+    if(grid_item_)
+    {
+        grid_item_->SetCellAt(column, row, visual);
     }
 }
 void CustomControllerLayoutGrid::SetSelectedCells(const std::set<std::pair<int, int>>& cells)
@@ -385,11 +393,100 @@ void CustomControllerLayoutGrid::EndPointerGesture()
     {
         rubber_band_overlay_->hide();
     }
-    if(QWidget::mouseGrabber() == this)
-    {
-        releaseMouse();
-    }
+    ReleasePointer();
     unsetCursor();
+}
+
+void CustomControllerLayoutGrid::GrabPointer()
+{
+    QWidget* target = viewport() ? viewport() : static_cast<QWidget*>(this);
+    if(QWidget::mouseGrabber() != target)
+    {
+        target->grabMouse();
+    }
+}
+
+void CustomControllerLayoutGrid::ReleasePointer()
+{
+    QWidget* grabbed = QWidget::mouseGrabber();
+    if(grabbed && (grabbed == this || grabbed == viewport()))
+    {
+        grabbed->releaseMouse();
+    }
+}
+
+void CustomControllerLayoutGrid::ShowDragGhost(const QPoint& view_pos)
+{
+    if(!viewport() || !grid_item_)
+    {
+        return;
+    }
+
+    CustomControllerGridCellVisual visual;
+    if(!grid_item_->CellVisualAt(pressed_cell_col_, pressed_cell_row_, &visual))
+    {
+        return;
+    }
+
+    if(!drag_ghost_)
+    {
+        drag_ghost_ = new QLabel(viewport());
+        drag_ghost_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        drag_ghost_->setAlignment(Qt::AlignCenter);
+    }
+    else if(drag_ghost_->parentWidget() != viewport())
+    {
+        drag_ghost_->setParent(viewport());
+    }
+
+    const QColor fill = visual.fill.isValid() ? visual.fill : QColor(80, 80, 80);
+    const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
+    const QColor text = luminance > 150 ? QColor(16, 16, 18) : QColor(245, 245, 245);
+    const QString label = visual.label.isEmpty() ? QStringLiteral("LED") : visual.label;
+
+    drag_ghost_->setText(label);
+    drag_ghost_->setStyleSheet(QStringLiteral(
+        "QLabel { background-color: %1; color: %2; border: 2px solid rgba(255,255,255,220);"
+        " border-radius: 6px; padding: 2px 6px; font-weight: 600; }")
+                                   .arg(fill.name(), text.name()));
+    drag_ghost_->adjustSize();
+    drag_ghost_->setMinimumSize(36, 28);
+    drag_ghost_->resize(qMax(36, drag_ghost_->sizeHint().width()), qMax(28, drag_ghost_->sizeHint().height()));
+    drag_ghost_->show();
+    drag_ghost_->raise();
+    MoveDragGhost(view_pos);
+}
+
+void CustomControllerLayoutGrid::MoveDragGhost(const QPoint& view_pos)
+{
+    if(!drag_ghost_ || drag_ghost_->isHidden() || !viewport())
+    {
+        return;
+    }
+    const QRect bounds = viewport()->rect();
+    int x = view_pos.x() + 14;
+    int y = view_pos.y() + 16;
+    const int max_x = qMax(0, bounds.width() - drag_ghost_->width());
+    const int max_y = qMax(0, bounds.height() - drag_ghost_->height());
+    x = qBound(0, x, max_x);
+    y = qBound(0, y, max_y);
+    drag_ghost_->move(x, y);
+}
+
+void CustomControllerLayoutGrid::HideDragGhost()
+{
+    if(drag_ghost_)
+    {
+        drag_ghost_->hide();
+    }
+}
+
+void CustomControllerLayoutGrid::PreviewCellDragHover(int column, int row)
+{
+    if(grid_item_)
+    {
+        grid_item_->SetDragHoverCell(column, row);
+    }
 }
 
 void CustomControllerLayoutGrid::EndCellContentDrag(bool commit_drop, int drop_col, int drop_row)
@@ -399,10 +496,12 @@ void CustomControllerLayoutGrid::EndCellContentDrag(bool commit_drop, int drop_c
     cell_drag_active_    = false;
     cell_drag_hover_col_ = -1;
     cell_drag_hover_row_ = -1;
-    if(QWidget::mouseGrabber() == this)
+    if(grid_item_)
     {
-        releaseMouse();
+        grid_item_->SetDragHoverCell(-1, -1);
     }
+    HideDragGhost();
+    ReleasePointer();
     unsetCursor();
     if(commit_drop
        && from_col >= 0 && from_row >= 0
@@ -415,13 +514,6 @@ void CustomControllerLayoutGrid::EndCellContentDrag(bool commit_drop, int drop_c
     {
         SelectSingleCell(from_col, from_row);
     }
-}
-
-void CustomControllerLayoutGrid::PreviewCellDragHover(int column, int row)
-{
-    selected_cells_.clear();
-    selected_cells_.insert(std::make_pair(column, row));
-    ApplySelectionToItem();
 }
 
 void CustomControllerLayoutGrid::UpdateResizeCursor(const QPoint& view_pos)
@@ -531,7 +623,7 @@ void CustomControllerLayoutGrid::mousePressEvent(QMouseEvent* event)
             resize_start_size_      = grid_item_->ColumnWidthsMm()[col_resize];
             resize_start_scene_pos_ = scene_pos.x();
             left_button_pressed_    = true;
-            grabMouse();
+            GrabPointer();
             setCursor(Qt::SplitHCursor);
             event->accept();
             return;
@@ -545,7 +637,7 @@ void CustomControllerLayoutGrid::mousePressEvent(QMouseEvent* event)
             left_button_pressed_    = true;
             pressed_header_col_     = -1;
             pressed_header_row_     = -1;
-            grabMouse();
+            GrabPointer();
             setCursor(Qt::SplitVCursor);
             event->accept();
             return;
@@ -630,18 +722,14 @@ void CustomControllerLayoutGrid::mouseMoveEvent(QMouseEvent* event)
     {
         int hover_col = -1;
         int hover_row = -1;
-        if(CellAtViewPos(event->pos(), &hover_col, &hover_row))
+        if(CellAtViewPos(event->pos(), &hover_col, &hover_row)
+           && (hover_col != cell_drag_hover_col_ || hover_row != cell_drag_hover_row_))
         {
-            if(hover_col != cell_drag_hover_col_ || hover_row != cell_drag_hover_row_)
-            {
-                cell_drag_hover_col_ = hover_col;
-                cell_drag_hover_row_ = hover_row;
-                PreviewCellDragHover(hover_col, hover_row);
-            }
-            QToolTip::showText(mapToGlobal(event->pos()),
-                               tr("Move here — release to drop\n(swaps if the target cell is occupied)"),
-                               this);
+            cell_drag_hover_col_ = hover_col;
+            cell_drag_hover_row_ = hover_row;
+            PreviewCellDragHover(hover_col, hover_row);
         }
+        MoveDragGhost(event->pos());
         event->accept();
         return;
     }
@@ -660,9 +748,10 @@ void CustomControllerLayoutGrid::mouseMoveEvent(QMouseEvent* event)
             cell_drag_active_    = true;
             cell_drag_hover_col_ = pressed_cell_col_;
             cell_drag_hover_row_ = pressed_cell_row_;
-            grabMouse();
+            GrabPointer();
             setCursor(Qt::ClosedHandCursor);
             PreviewCellDragHover(pressed_cell_col_, pressed_cell_row_);
+            ShowDragGhost(event->pos());
             event->accept();
             return;
         }
@@ -690,10 +779,7 @@ void CustomControllerLayoutGrid::mouseReleaseEvent(QMouseEvent* event)
         {
             EndGridLineResize(true);
             left_button_pressed_ = false;
-            if(QWidget::mouseGrabber() == this)
-            {
-                releaseMouse();
-            }
+            ReleasePointer();
             unsetCursor();
             event->accept();
             return;
@@ -885,10 +971,15 @@ void CustomControllerLayoutGrid::contextMenuEvent(QContextMenuEvent* event)
 }
 bool CustomControllerLayoutGrid::event(QEvent* event)
 {
+    if(event->type() == QEvent::MouseButtonRelease && left_button_pressed_)
+    {
+        mouseReleaseEvent(static_cast<QMouseEvent*>(event));
+        return true;
+    }
     if(event->type() == QEvent::WindowDeactivate
        || event->type() == QEvent::Hide)
     {
-        if(left_button_pressed_ || resize_mode_ != ResizeMode::None)
+        if(left_button_pressed_ || cell_drag_active_ || resize_mode_ != ResizeMode::None)
         {
             EndPointerGesture();
         }

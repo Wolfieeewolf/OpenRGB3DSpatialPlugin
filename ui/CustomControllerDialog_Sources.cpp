@@ -1380,10 +1380,25 @@ bool CustomControllerDialog::IsItemAssigned(RGBControllerInterface* controller, 
     }
 
     const std::vector<GridLEDMapping>& mappings = led_mappings;
+    std::vector<RGBControllerInterface*> controllers;
+    bool controllers_loaded = false;
 
     auto mapping_owned_by_controller = [&](const GridLEDMapping& mapping) -> bool
     {
-        return mapping.controller == controller;
+        if(mapping.controller == controller)
+        {
+            return true;
+        }
+        if(mapping.controller || !resource_manager)
+        {
+            return false;
+        }
+        if(!controllers_loaded)
+        {
+            controllers = resource_manager->GetRGBControllers();
+            controllers_loaded = true;
+        }
+        return CustomControllerMapping::MappingOwnedByController(mapping, controller, controllers);
     };
 
     if(granularity == 0)

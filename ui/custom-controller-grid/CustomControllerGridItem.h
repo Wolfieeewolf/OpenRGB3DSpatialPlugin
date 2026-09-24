@@ -20,7 +20,9 @@ public:
     void SetMmPerSceneUnit(float mm_per_unit);
     float MmPerSceneUnit() const { return mm_per_unit_; }
     void SetCells(const QVector<CustomControllerGridCellVisual>& cells);
+    void SetCellAt(int column, int row, const CustomControllerGridCellVisual& visual);
     void SetSelectedCells(const std::set<std::pair<int, int>>& cells);
+    void SetDragHoverCell(int column, int row);
     void SetSelectionColor(const QColor& color);
     int  GridWidth() const { return grid_width_; }
     int  GridHeight() const { return grid_height_; }
@@ -35,6 +37,7 @@ public:
     int  RowHeaderIndexAtScenePos(const QPointF& scene_pos) const;
     QRectF CellRectScene(int column, int row) const;
     QString TooltipAt(int column, int row) const;
+    bool CellVisualAt(int column, int row, CustomControllerGridCellVisual* out) const;
 private:
     int grid_width_  = 0;
     int grid_height_ = 0;
@@ -43,9 +46,12 @@ private:
     QVector<float> row_heights_mm_;
     QVector<CustomControllerGridCellVisual> cells_;
     std::set<std::pair<int, int>> selected_cells_;
+    int drag_hover_col_ = -1;
+    int drag_hover_row_ = -1;
     QColor selection_color_;
     void EnsureSizeArrays();
     const CustomControllerGridCellVisual* CellVisual(int column, int row) const;
     bool IsCellSelected(int column, int row) const;
+    void UpdateCellDirtyRect(int column, int row);
 };
 #endif

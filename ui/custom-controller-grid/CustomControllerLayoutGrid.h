@@ -11,6 +11,7 @@ class CustomControllerGridItem;
 class CustomControllerGridScene;
 class QFocusEvent;
 class QKeyEvent;
+class QLabel;
 class QRubberBand;
 class CustomControllerLayoutGrid : public QGraphicsView
 {
@@ -22,6 +23,7 @@ public:
     void SetRowHeightsMm(const QVector<float>& heights_mm);
     void SetMmPerSceneUnit(float mm_per_unit);
     void SetCells(const QVector<CustomControllerGridCellVisual>& cells);
+    void SetCellAt(int column, int row, const CustomControllerGridCellVisual& visual);
     void SetSelectedCells(const std::set<std::pair<int, int>>& cells);
     std::set<std::pair<int, int>> SelectedCells() const;
     void SetSelectionColor(const QColor& color);
@@ -68,6 +70,7 @@ private:
     CustomControllerGridScene* scene_ = nullptr;
     CustomControllerGridItem*  grid_item_ = nullptr;
     QRubberBand*               rubber_band_overlay_ = nullptr;
+    QLabel*                    drag_ghost_ = nullptr;
     std::set<std::pair<int, int>> selected_cells_;
     std::set<std::pair<int, int>> draggable_cells_;
     int anchor_col_ = -1;
@@ -106,5 +109,10 @@ private:
     void SelectRect(int col_a, int row_a, int col_b, int row_b, bool replace);
     void FinishRubberBandSelection(bool add_to_selection);
     void UpdateHoverTooltip(const QPoint& view_pos);
+    void GrabPointer();
+    void ReleasePointer();
+    void ShowDragGhost(const QPoint& view_pos);
+    void MoveDragGhost(const QPoint& view_pos);
+    void HideDragGhost();
 };
 #endif

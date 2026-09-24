@@ -161,6 +161,7 @@ private:
     void UpdateUndoRedoUi();
     bool MoveCellContents(int from_col, int from_row, int to_col, int to_row);
     void RefreshLayoutGridVisuals();
+    void RefreshCellsVisuals(const std::set<std::pair<int, int>>& cells);
     void RefreshSelectionFillTints();
     void ShowGridContextMenu(const QPoint& global_pos);
     void ShowGridHeaderContextMenu(const QPoint& global_pos, int column_header, int row_header);
