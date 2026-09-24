@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectPackGradientBar.h"
+#include "EffectPackCatalog.h"
 
 #include <QColorDialog>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -29,6 +33,8 @@ EffectPackGradientBar::EffectPackGradientBar(QWidget* parent)
     : QWidget(parent)
 {
     setMouseTracking(true);
+    setAcceptDrops(true);
+    setToolTip(QStringLiteral("Drop a colour to recolour the stop under the cursor. Ctrl+drop adds a stop."));
     setMinimumHeight(bar_h_ + marker_h_ + 8);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     stops_ = {
@@ -102,6 +108,84 @@ int EffectPackGradientBar::hitTestStop(const QPoint& pos) const
     return -1;
 }
 
+int EffectPackGradientBar::nearestStop(const QPoint& pos) const
+{
+    if(stops_.empty())
+    {
+        return -1;
+    }
+    int best = 0;
+    int best_dist = std::abs(posToX(stops_.front().pos) - pos.x());
+    for(int i = 1; i < (int)stops_.size(); ++i)
+    {
+        const int dist = std::abs(posToX(stops_[(size_t)i].pos) - pos.x());
+        if(dist < best_dist)
+        {
+            best = i;
+            best_dist = dist;
+        }
+    }
+    return best;
+}
+
+void EffectPackGradientBar::dragEnterEvent(QDragEnterEvent* event)
+{
+    RGBColor color = 0;
+    if(EffectPackCatalog::ColorFromMime(event->mimeData(), &color))
+    {
+        event->acceptProposedAction();
+        return;
+    }
+    event->ignore();
+}
+
+void EffectPackGradientBar::dragMoveEvent(QDragMoveEvent* event)
+{
+    RGBColor color = 0;
+    if(EffectPackCatalog::ColorFromMime(event->mimeData(), &color))
+    {
+        event->acceptProposedAction();
+        return;
+    }
+    event->ignore();
+}
+
+void EffectPackGradientBar::dropEvent(QDropEvent* event)
+{
+    RGBColor color = 0;
+    if(!EffectPackCatalog::ColorFromMime(event->mimeData(), &color))
+    {
+        event->ignore();
+        return;
+    }
+    const QPoint pt = event->position().toPoint();
+    if(event->modifiers() & Qt::ControlModifier)
+    {
+        EffectPack::GradientStop stop;
+        stop.pos = xToPos(pt.x());
+        stop.color = color;
+        stops_.push_back(stop);
+        sortStops();
+    }
+    else
+    {
+        int index = hitTestStop(pt);
+        if(index < 0)
+        {
+            index = nearestStop(pt);
+        }
+        if(index < 0)
+        {
+            event->ignore();
+            return;
+        }
+        stops_[(size_t)index].color = color;
+    }
+    emit stopsChanged();
+    update();
+    event->acceptProposedAction();
+}
+
 void EffectPackGradientBar::editStopColor(int index)
 {
     if(index < 0 || index >= (int)stops_.size())
@@ -172,7 +256,7 @@ void EffectPackGradientBar::mousePressEvent(QMouseEvent* event)
     if(event->button() == Qt::RightButton)
     {
         const int hit = hitTestStop(pt);
-        if(hit >= 0 && stops_.size() > 2)
+        if(hit >= 0 && stops_.size() > 1)
         {
             stops_.erase(stops_.begin() + hit);
             emit stopsChanged();

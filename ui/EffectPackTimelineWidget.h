@@ -95,6 +95,8 @@ signals:
     /** Gradient preset id dropped or applied onto a block (e.g. "rainbow"). */
     void gradientPresetApplied(int track_index, int block_index, const QString& preset_id);
     void curvePresetApplied(int track_index, int block_index, const QString& preset_id);
+    void colorDropped(int row_index, int ms, unsigned int rgb);
+    void gradientDropped(int row_index, int ms, const QString& preset_id);
     void rowSelected(int row_index);
     void contentHeightChanged(int height);
     void modelExpandedChanged();
@@ -175,6 +177,7 @@ private:
     void paintBlockGradientBar(QPainter& p, const QRect& br, const EffectPack::Block& block, int alpha) const;
     void paintBlockSpatialRaster(QPainter& p, const QRect& br, const PaintBlock& pb,
                                  const EffectPack::Block& sample) const;
+    void paintBlockIntensityCurve(QPainter& p, const QRect& br, const EffectPack::Block& block) const;
 
     EffectPack::Pack* pack_ = nullptr;
     std::vector<std::unique_ptr<ControllerTransform>>* transforms_ = nullptr;

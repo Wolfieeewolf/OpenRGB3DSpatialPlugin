@@ -143,25 +143,26 @@ EffectPackTimelineWidget::Node EffectPackEditorDialog::buildControllerNode(Contr
     for(const LEDPosition3D& led : transform->led_positions)
     {
         RGBControllerInterface* rgb = led.controller ? led.controller : transform->controller;
-        if(!rgb)
-        {
-            continue;
-        }
         const auto zone_key = std::make_pair(rgb, led.zone_idx);
         ZoneBucket& bucket = zones[zone_key];
         if(bucket.zone_name.isEmpty())
         {
-            bucket.zone_name = ZoneLabelForLed(rgb, led.zone_idx);
+            bucket.zone_name = rgb ? ZoneLabelForLed(rgb, led.zone_idx) : QStringLiteral("LEDs");
             bucket.label = bucket.zone_name;
         }
         int global = -1;
-        if(TryGlobalLedIndex(rgb, led.zone_idx, led.led_idx, &global))
+        if(rgb && TryGlobalLedIndex(rgb, led.zone_idx, led.led_idx, &global))
         {
             if(std::find(bucket.led_globals.begin(), bucket.led_globals.end(), global) == bucket.led_globals.end())
             {
                 bucket.led_globals.push_back(global);
                 bucket.led_in_zone.push_back(led.led_idx);
             }
+        }
+        else if(std::find(bucket.led_in_zone.begin(), bucket.led_in_zone.end(), led.led_idx) == bucket.led_in_zone.end())
+        {
+            bucket.led_globals.push_back((int)led.led_idx);
+            bucket.led_in_zone.push_back(led.led_idx);
         }
     }
 
@@ -255,6 +256,7 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
                 return;
             }
             EffectPackTimelineWidget::Node ctrl = buildControllerNode(transform, i);
+            ctrl.expanded = !ctrl.children.isEmpty();
             ctrl.transform_index = i;
             ctrl.scene_zone_name = scene_zone_name;
             ctrl.reorderable = reorderable;
@@ -361,7 +363,24 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
                     zone_node.children.push_back(std::move(all_leds));
                 }
 
-                for(int ci : zone->GetControllers())
+                std::vector<int> zone_order(zone->GetControllers().begin(), zone->GetControllers().end());
+                std::stable_sort(zone_order.begin(), zone_order.end(), [&](int a, int b) {
+                    auto rank = [&](int idx) {
+                        if(idx < 0 || idx >= (int)transforms.size() || !transforms[(size_t)idx])
+                        {
+                            return 100000 + idx;
+                        }
+                        const std::string key = ControllerKeyName(transforms[(size_t)idx].get(), idx);
+                        const auto it = std::find(pack_.devices.begin(), pack_.devices.end(), key);
+                        if(it == pack_.devices.end())
+                        {
+                            return 100000 + idx;
+                        }
+                        return (int)std::distance(pack_.devices.begin(), it);
+                    };
+                    return rank(a) < rank(b);
+                });
+                for(int ci : zone_order)
                 {
                     append_controller(ci, &zone_node, zone_node.label, true);
                 }
@@ -378,13 +397,34 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
         ungrouped.label = QStringLiteral("Ungrouped");
         ungrouped.target.kind = EffectPack::TargetKind::All; // not used for painting; containers only
         ungrouped.expanded = true;
+        std::vector<int> loose;
         for(int i = 0; i < (int)transforms.size(); ++i)
         {
-            if(claimed[(size_t)i])
+            if(!claimed[(size_t)i])
             {
-                continue;
+                loose.push_back(i);
             }
-            append_controller(i, &ungrouped, QString(), false);
+        }
+        std::stable_sort(loose.begin(), loose.end(), [&](int a, int b) {
+            auto rank = [&](int idx) {
+                ControllerTransform* transform = transforms[(size_t)idx].get();
+                if(!transform)
+                {
+                    return 100000 + idx;
+                }
+                const std::string key = ControllerKeyName(transform, idx);
+                const auto it = std::find(pack_.devices.begin(), pack_.devices.end(), key);
+                if(it == pack_.devices.end())
+                {
+                    return 100000 + idx;
+                }
+                return (int)std::distance(pack_.devices.begin(), it);
+            };
+            return rank(a) < rank(b);
+        });
+        for(int i : loose)
+        {
+            append_controller(i, &ungrouped, QString(), true);
         }
         // Prefer real device targets under Ungrouped — if we used a fake All target on the
         // folder itself, only promote children to roots when the folder has no identity.
@@ -413,32 +453,58 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
 void EffectPackEditorDialog::onSceneZoneControllersReordered(const QString& scene_zone_name,
                                                              const QVector<int>& controller_indices)
 {
-    if(!tab_ || scene_zone_name.isEmpty() || scene_zone_name == QStringLiteral("__ungrouped__"))
+    if(!tab_ || scene_zone_name == QStringLiteral("__ungrouped__"))
     {
         return;
     }
-    ZoneManager3D* zones = tab_->GetZoneManager();
-    if(!zones)
-    {
-        return;
-    }
-    Zone3D* zone = zones->GetZoneByName(scene_zone_name.toStdString());
-    if(!zone)
-    {
-        return;
-    }
-    std::vector<int> order;
-    order.reserve((size_t)controller_indices.size());
+    const auto& transforms = tab_->GetControllerTransforms();
+    std::vector<std::string> group;
+    group.reserve((size_t)controller_indices.size());
     for(int idx : controller_indices)
     {
-        order.push_back(idx);
+        if(idx < 0 || idx >= (int)transforms.size() || !transforms[(size_t)idx])
+        {
+            continue;
+        }
+        group.push_back(ControllerKeyName(transforms[(size_t)idx].get(), idx));
     }
-    zone->SetControllers(std::move(order));
+    if(group.empty())
+    {
+        return;
+    }
+    if(pack_.devices.empty())
+    {
+        for(int i = 0; i < (int)transforms.size(); ++i)
+        {
+            ControllerTransform* transform = transforms[(size_t)i].get();
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+            const std::string key = ControllerKeyName(transform, i);
+            if(deviceSelectedForPack(key))
+            {
+                pack_.devices.push_back(key);
+            }
+        }
+    }
+    std::vector<size_t> device_indexes;
+    for(size_t i = 0; i < pack_.devices.size(); ++i)
+    {
+        if(std::find(group.begin(), group.end(), pack_.devices[i]) != group.end())
+        {
+            device_indexes.push_back(i);
+        }
+    }
+    for(size_t i = 0; i < device_indexes.size() && i < group.size(); ++i)
+    {
+        pack_.devices[device_indexes[i]] = group[i];
+    }
     onRebuildTimelineModel();
     if(status_label_)
     {
-        status_label_->setText(QStringLiteral("Reordered controllers in “%1” (Sequence space uses this order)")
-                                   .arg(scene_zone_name));
+        status_label_->setText(QStringLiteral(
+            "All / Sequence order updated. Left-to-right wipes still follow the 3D layout."));
     }
 }
 

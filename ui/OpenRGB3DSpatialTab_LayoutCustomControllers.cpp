@@ -601,6 +601,7 @@ void OpenRGB3DSpatialTab::deleteCustomControllerClicked()
         UpdateAvailableControllersList();
         UpdateAvailableItemCombo();
         RefreshHiddenControllerStates();
+        SetLayoutDirty();
     }
     else
     {

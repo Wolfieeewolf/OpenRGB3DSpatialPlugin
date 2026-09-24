@@ -74,13 +74,11 @@ void EffectPackEditorDialog::onToolbarColorClicked(unsigned int rgb)
         }
         return;
     }
-    b->color = (RGBColor)rgb;
-    b->color_from = (RGBColor)rgb;
-    if(!b->gradient.empty())
-    {
-        b->gradient.front().color = (RGBColor)rgb;
-    }
-    EffectPack::EnsureBlockGradient(b);
+    const RGBColor color = (RGBColor)rgb;
+    b->color = color;
+    b->color_from = color;
+    b->color_to = color;
+    b->gradient = {{0.0f, color}};
     setColorButton(color_button_, b->color);
     syncGradientBar();
     timeline_->update();
@@ -207,19 +205,15 @@ void EffectPackEditorDialog::refillGradientPresets()
     gradient_preset_->blockSignals(true);
     gradient_preset_->clear();
     gradient_preset_->addItem(QStringLiteral("Preset…"), QString());
-    for(const EffectPackCatalog::GradientEntry& g : EffectPackCatalog::GradientEntries())
-    {
-        gradient_preset_->addItem(QString::fromUtf8(g.label ? g.label : g.id),
-                                  QString::fromUtf8(g.id ? g.id : ""));
-    }
     const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_ ? tab_->resource_manager : nullptr);
-    const std::vector<EffectPackUserGradients::Entry> saved = EffectPackUserGradients::Load(path);
-    if(!saved.empty())
+    bool separated = false;
+    for(const EffectPackUserGradients::Entry& entry : EffectPackUserGradients::Visible(path))
     {
-        gradient_preset_->insertSeparator(gradient_preset_->count());
-    }
-    for(const EffectPackUserGradients::Entry& entry : saved)
-    {
+        if(!separated && !EffectPackUserGradients::IsBuiltin(entry.id))
+        {
+            gradient_preset_->insertSeparator(gradient_preset_->count());
+            separated = true;
+        }
         gradient_preset_->addItem(entry.label, entry.id);
     }
     const int idx = gradient_preset_->findData(current);
@@ -231,11 +225,11 @@ void EffectPackEditorDialog::refillGradientPresets()
 void EffectPackEditorDialog::onSaveUserGradient()
 {
     EffectPack::Block* b = selectedBlock();
-    if(!b || b->gradient.size() < 2)
+    if(!b || b->gradient.empty())
     {
         if(status_label_)
         {
-            status_label_->setText(QStringLiteral("Add at least two gradient stops before saving"));
+            status_label_->setText(QStringLiteral("Set a gradient on the selected block before saving"));
         }
         return;
     }
@@ -288,30 +282,78 @@ void EffectPackEditorDialog::onSaveUserGradient()
 
 void EffectPackEditorDialog::onDeleteUserGradient()
 {
-    if(!gradient_preset_ || !tab_)
+    if(!gradient_preset_)
     {
         return;
     }
-    const QString id = gradient_preset_->currentData().toString();
-    const QString label = gradient_preset_->currentText();
-    if(!id.startsWith(QStringLiteral("user_")))
+    onDeleteGradientPreset(gradient_preset_->currentData().toString());
+}
+
+void EffectPackEditorDialog::onOverwriteGradientPreset(const QString& preset_id)
+{
+    EffectPack::Block* b = selectedBlock();
+    if(!b || b->gradient.empty() || preset_id.isEmpty() || !tab_)
+    {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Select a block with a gradient, then double-click a preset to replace it"));
+        }
+        return;
+    }
+    QString label = preset_id;
+    const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_->resource_manager);
+    for(const EffectPackUserGradients::Entry& entry : EffectPackUserGradients::Visible(path))
+    {
+        if(entry.id == preset_id)
+        {
+            label = entry.label;
+            break;
+        }
+    }
+    if(!EffectPackUserGradients::Replace(path, preset_id, label, b->gradient))
+    {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Could not update gradient preset"));
+        }
+        return;
+    }
+    refillGradientPresets();
+    if(effect_toolbar_)
+    {
+        effect_toolbar_->reloadUserGradients();
+    }
+    if(status_label_)
+    {
+        status_label_->setText(QStringLiteral("Updated gradient preset %1").arg(label));
+    }
+}
+
+void EffectPackEditorDialog::onDeleteGradientPreset(const QString& preset_id)
+{
+    if(preset_id.isEmpty() || !tab_)
     {
         return;
+    }
+    QString label = preset_id;
+    const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_->resource_manager);
+    for(const EffectPackUserGradients::Entry& entry : EffectPackUserGradients::Visible(path))
+    {
+        if(entry.id == preset_id)
+        {
+            label = entry.label;
+            break;
+        }
     }
     const QMessageBox::StandardButton answer = QMessageBox::question(
         this,
         QStringLiteral("Delete gradient"),
-        QStringLiteral("Remove saved gradient \"%1\"?").arg(label));
+        QStringLiteral("Remove gradient \"%1\"?").arg(label));
     if(answer != QMessageBox::Yes)
     {
         return;
     }
-    const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_->resource_manager);
-    std::vector<EffectPackUserGradients::Entry> entries = EffectPackUserGradients::Load(path);
-    entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const EffectPackUserGradients::Entry& entry) {
-        return entry.id == id;
-    }), entries.end());
-    if(!EffectPackUserGradients::Save(path, entries))
+    if(!EffectPackUserGradients::Remove(path, preset_id))
     {
         if(status_label_)
         {
@@ -327,7 +369,35 @@ void EffectPackEditorDialog::onDeleteUserGradient()
     updateSelectionActions();
     if(status_label_)
     {
-        status_label_->setText(QStringLiteral("Removed gradient preset %1").arg(label));
+        status_label_->setText(EffectPackUserGradients::IsBuiltin(preset_id)
+            ? QStringLiteral("Removed gradient preset %1. Right-click the faded preset to restore it.").arg(label)
+            : QStringLiteral("Removed gradient preset %1").arg(label));
+    }
+}
+
+void EffectPackEditorDialog::onResetGradientPreset(const QString& preset_id)
+{
+    if(!tab_ || !EffectPackUserGradients::IsBuiltin(preset_id))
+    {
+        return;
+    }
+    const filesystem::path path = PluginSettingsPaths::UserGradientsFile(tab_->resource_manager);
+    if(!EffectPackUserGradients::Reset(path, preset_id))
+    {
+        if(status_label_)
+        {
+            status_label_->setText(QStringLiteral("Could not reset gradient preset"));
+        }
+        return;
+    }
+    refillGradientPresets();
+    if(effect_toolbar_)
+    {
+        effect_toolbar_->reloadUserGradients();
+    }
+    if(status_label_)
+    {
+        status_label_->setText(QStringLiteral("Restored the default gradient"));
     }
 }
 
@@ -478,6 +548,14 @@ void EffectPackEditorDialog::applyBlockToForm()
     type_combo_->setEnabled(ok);
     start_spin_->setEnabled(ok);
     end_spin_->setEnabled(ok);
+    if(start_slider_)
+    {
+        start_slider_->setEnabled(ok);
+    }
+    if(end_slider_)
+    {
+        end_slider_->setEnabled(ok);
+    }
     color_button_->setEnabled(ok);
     color_to_button_->setEnabled(ok);
     intensity_spin_->setEnabled(ok);

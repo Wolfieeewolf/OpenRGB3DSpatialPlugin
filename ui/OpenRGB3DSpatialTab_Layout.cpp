@@ -699,6 +699,9 @@ bool OpenRGB3DSpatialTab::AppendLayoutControllerEntry(
 
         ctrl_transform->controller         = nullptr;
         ctrl_transform->virtual_controller = virtual_ctrl;
+        ctrl_transform->led_spacing_mm_x   = virtual_ctrl->GetSpacingX();
+        ctrl_transform->led_spacing_mm_y   = virtual_ctrl->GetSpacingY();
+        ctrl_transform->led_spacing_mm_z   = virtual_ctrl->GetSpacingZ();
         ctrl_transform->led_positions      = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
     }
     else

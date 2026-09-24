@@ -136,6 +136,56 @@ filesystem::path EventBindingsPanel::packsDir() const
     return PluginSettingsPaths::EffectPacksDir(tab_->resource_manager);
 }
 
+filesystem::path EventBindingsPanel::catalogDir() const
+{
+    if(!tab_ || !tab_->resource_manager)
+    {
+        return {};
+    }
+    return PluginSettingsPaths::BindingCatalogDir(tab_->resource_manager);
+}
+
+bool EventBindingsPanel::catalogEnabled(const std::string& id) const
+{
+    for(const std::string& have : user_.catalog_enabled)
+    {
+        if(have == id)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool EventBindingsPanel::isCatalogItem(const QListWidgetItem* item) const
+{
+    return item && item->data(Qt::UserRole + 1).toString() == QStringLiteral("catalog");
+}
+
+void EventBindingsPanel::syncRuntime()
+{
+    EffectBinding::Document play = user_;
+    for(EffectBinding::Binding b : catalog_)
+    {
+        bool owned = false;
+        for(const EffectBinding::Binding& user_binding : user_.bindings)
+        {
+            if(user_binding.id == b.id)
+            {
+                owned = true;
+                break;
+            }
+        }
+        if(owned || !catalogEnabled(b.id))
+        {
+            continue;
+        }
+        b.enabled = true;
+        play.bindings.push_back(std::move(b));
+    }
+    runtime_.SetDocument(std::move(play));
+}
+
 void EventBindingsPanel::reloadDocument()
 {
     EffectBinding::Document doc;
@@ -145,15 +195,23 @@ void EventBindingsPanel::reloadDocument()
         setStatus(QStringLiteral("Load failed: %1").arg(QString::fromStdString(err)));
         return;
     }
-    runtime_.SetDocument(std::move(doc));
+    user_ = std::move(doc);
+    std::vector<std::string> warnings;
+    EffectBinding::LoadCatalog(catalogDir(), &catalog_, &warnings);
+    syncRuntime();
     populateList();
+    if(!warnings.empty())
+    {
+        setStatus(QString::fromStdString(warnings.front()));
+        return;
+    }
     setStatus(QStringLiteral("Idle"));
 }
 
 void EventBindingsPanel::saveDocument()
 {
     std::string err;
-    if(!EffectBinding::SaveToFile(bindingsPath(), runtime_.document(), &err))
+    if(!EffectBinding::SaveToFile(bindingsPath(), user_, &err))
     {
         setStatus(QStringLiteral("Save failed: %1").arg(QString::fromStdString(err)));
         return;
@@ -175,12 +233,21 @@ void EventBindingsPanel::populateList()
     ui->bindingsList->blockSignals(true);
     ui->bindingsList->clear();
     int restore_row = -1;
-    for(const EffectBinding::Binding& b : runtime_.document().bindings)
-    {
+    auto add_row = [&](const EffectBinding::Binding& b, bool catalog) {
         EffectBinding::EventSource* src = registry_.Find(b.source);
         if(!src)
         {
-            continue;
+            return;
+        }
+        if(catalog)
+        {
+            for(const EffectBinding::Binding& user_binding : user_.bindings)
+            {
+                if(user_binding.id == b.id)
+                {
+                    return;
+                }
+            }
         }
         QString pack_label = QString::fromStdString(b.pack_id);
         for(const EffectPack::PackListEntry& p : packs)
@@ -200,16 +267,30 @@ void EventBindingsPanel::populateList()
                 break;
             }
         }
-        const QString label = QStringLiteral("%1  →  %2 / %3")
-                                  .arg(pack_label, QString::fromUtf8(src->displayName()), event_label);
+        QString label = QStringLiteral("%1  →  %2 / %3")
+                            .arg(pack_label, QString::fromUtf8(src->displayName()), event_label);
+        if(catalog)
+        {
+            label += QStringLiteral("  (catalog)");
+        }
         auto* item = new QListWidgetItem(label, ui->bindingsList);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(b.enabled ? Qt::Checked : Qt::Unchecked);
+        const bool on = catalog ? catalogEnabled(b.id) : b.enabled;
+        item->setCheckState(on ? Qt::Checked : Qt::Unchecked);
         item->setData(Qt::UserRole, QString::fromStdString(b.id));
+        item->setData(Qt::UserRole + 1, catalog ? QStringLiteral("catalog") : QStringLiteral("user"));
         if(item->data(Qt::UserRole).toString() == selected)
         {
             restore_row = ui->bindingsList->row(item);
         }
+    };
+    for(const EffectBinding::Binding& b : user_.bindings)
+    {
+        add_row(b, false);
+    }
+    for(const EffectBinding::Binding& b : catalog_)
+    {
+        add_row(b, true);
     }
     ui->bindingsList->blockSignals(false);
     if(restore_row >= 0)
@@ -226,7 +307,7 @@ void EventBindingsPanel::setStatus(const QString& text)
 
 void EventBindingsPanel::onSelectionChanged()
 {
-    const bool ok = ui->bindingsList->currentRow() >= 0;
+    const bool ok = ui->bindingsList->currentRow() >= 0 && !isCatalogItem(ui->bindingsList->currentItem());
     ui->editButton->setEnabled(ok);
     ui->deleteButton->setEnabled(ok);
 }
@@ -238,24 +319,38 @@ void EventBindingsPanel::onItemChanged(QListWidgetItem* item)
         return;
     }
     const std::string id = item->data(Qt::UserRole).toString().toStdString();
-    for(EffectBinding::Binding& b : runtime_.mutableDocument()->bindings)
+    const bool on = item->checkState() == Qt::Checked;
+    if(isCatalogItem(item))
     {
-        if(b.id == id)
+        auto& ids = user_.catalog_enabled;
+        ids.erase(std::remove(ids.begin(), ids.end(), id), ids.end());
+        if(on)
         {
-            b.enabled = item->checkState() == Qt::Checked;
-            if(!b.enabled)
-            {
-                runtime_.StopBinding(b.id);
-                if(!runtime_.IsPlaying())
-                {
-                    timer_->stop();
-                    setStatus(QStringLiteral("Idle"));
-                }
-            }
-            saveDocument();
-            return;
+            ids.push_back(id);
         }
     }
+    else
+    {
+        for(EffectBinding::Binding& b : user_.bindings)
+        {
+            if(b.id == id)
+            {
+                b.enabled = on;
+                break;
+            }
+        }
+    }
+    if(!on)
+    {
+        runtime_.StopBinding(id);
+        if(!runtime_.IsPlaying())
+        {
+            timer_->stop();
+            setStatus(QStringLiteral("Idle"));
+        }
+    }
+    syncRuntime();
+    saveDocument();
 }
 
 bool EventBindingsPanel::editBindingDialog(EffectBinding::Binding* binding)
@@ -390,7 +485,8 @@ void EventBindingsPanel::onAdd()
     {
         return;
     }
-    runtime_.mutableDocument()->bindings.push_back(std::move(b));
+    user_.bindings.push_back(std::move(b));
+    syncRuntime();
     saveDocument();
     populateList();
 }
@@ -402,8 +498,12 @@ void EventBindingsPanel::onEdit()
     {
         return;
     }
+    if(isCatalogItem(item))
+    {
+        return;
+    }
     const std::string id = item->data(Qt::UserRole).toString().toStdString();
-    for(EffectBinding::Binding& b : runtime_.mutableDocument()->bindings)
+    for(EffectBinding::Binding& b : user_.bindings)
     {
         if(b.id == id)
         {
@@ -414,6 +514,7 @@ void EventBindingsPanel::onEdit()
                 {
                     timer_->stop();
                 }
+                syncRuntime();
                 saveDocument();
                 populateList();
             }
@@ -429,6 +530,10 @@ void EventBindingsPanel::onDelete()
     {
         return;
     }
+    if(isCatalogItem(item))
+    {
+        return;
+    }
     const std::string id = item->data(Qt::UserRole).toString().toStdString();
     if(QMessageBox::question(this, tr("Delete binding"), tr("Delete this event binding?"))
        != QMessageBox::Yes)
@@ -440,10 +545,11 @@ void EventBindingsPanel::onDelete()
     {
         timer_->stop();
     }
-    auto& bindings = runtime_.mutableDocument()->bindings;
+    auto& bindings = user_.bindings;
     bindings.erase(std::remove_if(bindings.begin(), bindings.end(),
                                   [&](const EffectBinding::Binding& b) { return b.id == id; }),
                    bindings.end());
+    syncRuntime();
     saveDocument();
     populateList();
 }

@@ -184,11 +184,8 @@ void EffectPackTimelineWidget::applyColorToBlock(int track, int block, RGBColor 
     }
     b->color = color;
     b->color_from = color;
-    if(!b->gradient.empty())
-    {
-        b->gradient.front().color = color;
-    }
-    EffectPack::EnsureBlockGradient(b);
+    b->color_to = color;
+    b->gradient = {{0.0f, color}};
     selected_track_ = track;
     selected_block_ = block;
     emit blockSelected(track, block);
@@ -238,16 +235,29 @@ bool EffectPackTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
     int block = -1;
     if(!hitTestBlock(pos.x(), pos.y(), &row, &track, &block))
     {
-        // Prefer currently selected block when dropping on empty space of its row.
-        if(selected_track_ >= 0 && selected_block_ >= 0)
-        {
-            track = selected_track_;
-            block = selected_block_;
-        }
-        else
+        if(has_curve)
         {
             return false;
         }
+        if(pos.y() < header_height_ || pos.x() < gutter_width_)
+        {
+            return false;
+        }
+        const int drop_row = (pos.y() - header_height_) / row_height_;
+        if(drop_row < 0 || drop_row >= visible_rows_.size())
+        {
+            return false;
+        }
+        const int ms = xToTime(pos.x());
+        selected_row_ = drop_row;
+        emit rowSelected(drop_row);
+        if(has_color)
+        {
+            emit colorDropped(drop_row, ms, color);
+            return true;
+        }
+        emit gradientDropped(drop_row, ms, preset);
+        return true;
     }
     if(has_color)
     {
@@ -433,7 +443,7 @@ void EffectPackTimelineWidget::mousePressEvent(QMouseEvent* event)
                 return;
             }
         }
-        if(r.reorderable && !r.scene_zone_name.isEmpty() && r.transform_index >= 0)
+        if(r.reorderable && r.transform_index >= 0)
         {
             row_reorder_from_ = row;
             row_reorder_hover_ = row;
@@ -543,8 +553,7 @@ void EffectPackTimelineWidget::mouseReleaseEvent(QMouseEvent* event)
                 const Row& a = visible_rows_[from];
                 const Row& b = visible_rows_[to];
                 if(a.reorderable && b.reorderable
-                   && a.scene_zone_name == b.scene_zone_name
-                   && !a.scene_zone_name.isEmpty())
+                   && a.scene_zone_name == b.scene_zone_name)
                 {
                     QVector<int> order;
                     for(const Row& r : visible_rows_)

@@ -8,6 +8,9 @@
 #include "PluginUiUtils.h"
 #include "ui_EffectPackPanel.h"
 
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
@@ -35,6 +38,11 @@ filesystem::path QStringToPath(const QString& s)
 #else
     return filesystem::path(s.toStdString());
 #endif
+}
+
+bool IsEffectPackFilename(const QString& name)
+{
+    return name.endsWith(QString::fromUtf8(EffectPack::kFileSuffix), Qt::CaseInsensitive);
 }
 } // namespace
 
@@ -76,6 +84,8 @@ void EffectPackPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->stopButton, &QPushButton::clicked, this, &EffectPackPanel::onStop);
     connect(ui->newButton, &QPushButton::clicked, this, &EffectPackPanel::onNew);
     connect(ui->editButton, &QPushButton::clicked, this, &EffectPackPanel::onEdit);
+    connect(ui->importButton, &QPushButton::clicked, this, &EffectPackPanel::onImport);
+    connect(ui->exportButton, &QPushButton::clicked, this, &EffectPackPanel::onExport);
     connect(ui->seedExampleButton, &QPushButton::clicked, this, &EffectPackPanel::onSeedExample);
     connect(ui->packList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) {
         onEdit();
@@ -152,6 +162,8 @@ void EffectPackPanel::setPlayingUi(bool playing)
     ui->seedExampleButton->setEnabled(!playing);
     ui->newButton->setEnabled(!playing);
     ui->editButton->setEnabled(!playing);
+    ui->importButton->setEnabled(!playing);
+    ui->exportButton->setEnabled(!playing);
 }
 
 void EffectPackPanel::stopPreview()
@@ -215,6 +227,145 @@ void EffectPackPanel::onSeedExample()
     populateList();
     selectPathInList(PathToQString(out));
     ui->statusLabel->setText(QStringLiteral("Wrote %1").arg(PathToQString(out.filename())));
+}
+
+void EffectPackPanel::onExport()
+{
+    QListWidgetItem* item = ui->packList->currentItem();
+    if(!item)
+    {
+        QMessageBox::information(this, QStringLiteral("Effect Packs"),
+                                 QStringLiteral("Select a pack to export."));
+        return;
+    }
+
+    const filesystem::path src = QStringToPath(pathFromItem(item));
+    const QString default_name = PathToQString(src.filename());
+    const QString dest_q = QFileDialog::getSaveFileName(
+        this,
+        QStringLiteral("Export effect pack"),
+        PathToQString(packsDir() / src.filename()),
+        QStringLiteral("Effect pack (*%1);;All Files (*)").arg(QString::fromUtf8(EffectPack::kFileSuffix)));
+    if(dest_q.isEmpty())
+    {
+        return;
+    }
+
+    QString dest_path = dest_q;
+    if(!IsEffectPackFilename(QFileInfo(dest_path).fileName()))
+    {
+        dest_path += QString::fromUtf8(EffectPack::kFileSuffix);
+    }
+
+    const QString src_q = PathToQString(src);
+    if(QFileInfo(src_q).canonicalFilePath().compare(QFileInfo(dest_path).canonicalFilePath(), Qt::CaseInsensitive) == 0)
+    {
+        ui->statusLabel->setText(QStringLiteral("Already at %1").arg(default_name));
+        return;
+    }
+
+    if(QFile::exists(dest_path))
+    {
+        QFile::remove(dest_path);
+    }
+    if(!QFile::copy(src_q, dest_path))
+    {
+        QMessageBox::warning(this, QStringLiteral("Effect Packs"),
+                             QStringLiteral("Failed to export:\n%1").arg(dest_path));
+        return;
+    }
+    ui->statusLabel->setText(QStringLiteral("Exported %1").arg(QFileInfo(dest_path).fileName()));
+}
+
+void EffectPackPanel::onImport()
+{
+    const filesystem::path dir = packsDir();
+    if(dir.empty())
+    {
+        return;
+    }
+    std::error_code ec;
+    filesystem::create_directories(dir, ec);
+
+    const QStringList sources = QFileDialog::getOpenFileNames(
+        this,
+        QStringLiteral("Import effect packs"),
+        PathToQString(dir),
+        QStringLiteral("Effect pack (*%1);;All Files (*)").arg(QString::fromUtf8(EffectPack::kFileSuffix)));
+    if(sources.isEmpty())
+    {
+        return;
+    }
+
+    int copied = 0;
+    int failed = 0;
+    QString last_path;
+    for(const QString& src_q : sources)
+    {
+        const QFileInfo src_info(src_q);
+        if(!src_info.exists() || !src_info.isFile() || !IsEffectPackFilename(src_info.fileName()))
+        {
+            ++failed;
+            continue;
+        }
+
+        EffectPack::Pack pack;
+        std::string err;
+        if(!EffectPack::LoadPackByPath(QStringToPath(src_q), &pack, &err))
+        {
+            ++failed;
+            continue;
+        }
+
+        const filesystem::path dest = dir / QStringToPath(src_info.fileName());
+        const QString dest_q = PathToQString(dest);
+        if(src_info.canonicalFilePath().compare(QFileInfo(dest_q).canonicalFilePath(), Qt::CaseInsensitive) == 0)
+        {
+            last_path = dest_q;
+            ++copied;
+            continue;
+        }
+
+        if(QFile::exists(dest_q))
+        {
+            const auto reply = QMessageBox::question(
+                this,
+                QStringLiteral("Replace pack?"),
+                QStringLiteral("%1 is already in effect-packs.\n\nReplace it?").arg(src_info.fileName()),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+            if(reply != QMessageBox::Yes)
+            {
+                continue;
+            }
+            QFile::remove(dest_q);
+        }
+
+        if(!QFile::copy(src_q, dest_q))
+        {
+            ++failed;
+            continue;
+        }
+        last_path = dest_q;
+        ++copied;
+    }
+
+    populateList();
+    if(!last_path.isEmpty())
+    {
+        selectPathInList(last_path);
+    }
+    ui->statusLabel->setText(QStringLiteral("Imported %1 pack(s).").arg(copied)
+                              + (failed > 0 ? QStringLiteral(" %1 failed.").arg(failed) : QString()));
+
+    if(copied == 1 && !last_path.isEmpty())
+    {
+        stopPreview();
+        if(EffectPackEditorDialog* editor = ensureEditor())
+        {
+            editor->EditPack(QStringToPath(last_path));
+        }
+    }
 }
 
 void EffectPackPanel::onNew()

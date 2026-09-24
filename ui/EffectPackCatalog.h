@@ -150,6 +150,7 @@ inline QList<ColorEntry> ColorEntries()
 inline QList<GradientEntry> GradientEntries()
 {
     return {
+        {"Color", "solid"},
         {"Rainbow", "rainbow"},
         {"Red→Blue", "red_blue"},
         {"White→Color", "white_color"},
@@ -180,7 +181,12 @@ inline QPixmap MakeGradientPreview(const char* id, int w = 34, int h = 16)
     QPainter p(&pm);
     QLinearGradient grad(0, 0, w, 0);
     const QString sid = QString::fromUtf8(id ? id : "");
-    if(sid == QStringLiteral("rainbow"))
+    if(sid == QStringLiteral("solid"))
+    {
+        grad.setColorAt(0.0, QColor(255, 80, 40));
+        grad.setColorAt(1.0, QColor(255, 80, 40));
+    }
+    else if(sid == QStringLiteral("rainbow"))
     {
         grad.setColorAt(0.0, QColor(255, 0, 0));
         grad.setColorAt(0.2, QColor(255, 128, 0));

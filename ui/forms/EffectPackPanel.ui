@@ -74,6 +74,26 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="importButton">
+       <property name="text">
+        <string>Import…</string>
+       </property>
+       <property name="toolTip">
+        <string>Copy effect pack files into effect-packs and open them to map controllers</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="exportButton">
+       <property name="text">
+        <string>Export…</string>
+       </property>
+       <property name="toolTip">
+        <string>Save the selected effect pack somewhere you can share</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="seedExampleButton">
        <property name="text">
         <string>Rainbow</string>

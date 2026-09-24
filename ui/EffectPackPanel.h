@@ -32,6 +32,8 @@ private slots:
     void onStop();
     void onNew();
     void onEdit();
+    void onImport();
+    void onExport();
     void onSeedExample();
     void onTick();
     void onEditorSaved(const QString& path);

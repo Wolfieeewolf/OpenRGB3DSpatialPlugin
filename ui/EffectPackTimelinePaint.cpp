@@ -253,6 +253,32 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
     }
 }
 
+void EffectPackTimelineWidget::paintBlockIntensityCurve(QPainter& p, const QRect& br,
+                                                        const EffectPack::Block& block) const
+{
+    if(block.intensity_curve.empty() || br.width() < 4)
+    {
+        return;
+    }
+    const int steps = std::max(8, br.width());
+    QPolygon line;
+    line.reserve(steps);
+    for(int i = 0; i < steps; ++i)
+    {
+        const float t = ((float)i + 0.5f) / (float)steps;
+        const float level = std::clamp(EffectPack::SampleCurve(block.intensity_curve, t), 0.0f, 1.0f);
+        const int x0 = br.left() + (i * br.width()) / steps;
+        const int x1 = br.left() + ((i + 1) * br.width()) / steps;
+        const int shade = (int)std::lround((1.0f - level) * 210.0f);
+        p.fillRect(x0, br.top(), std::max(1, x1 - x0), br.height(), QColor(0, 0, 0, shade));
+        const int y = br.bottom() - (int)std::lround(level * (float)(br.height() - 1));
+        line << QPoint(x0, y);
+    }
+    p.setPen(QPen(QColor(255, 255, 255, 180), 1));
+    p.setBrush(Qt::NoBrush);
+    p.drawPolyline(line);
+}
+
 void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, const PaintBlock& pb, bool selected) const
 {
     if(!pb.block || br.width() < 2 || br.height() < 2)
@@ -309,6 +335,8 @@ void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, co
         p.fillRect(br.left(), br.top(), grip, br.height(), QColor(255, 255, 255, 28));
         p.fillRect(br.right() - grip + 1, br.top(), grip, br.height(), QColor(255, 255, 255, 28));
     }
+
+    paintBlockIntensityCurve(p, br, sample);
 
     p.setBrush(Qt::NoBrush);
     p.setPen(selected ? QColor(255, 220, 80) : QColor(70, 70, 78));

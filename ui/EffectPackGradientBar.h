@@ -26,11 +26,15 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
 
 private:
     int hitTestStop(const QPoint& pos) const;
+    int nearestStop(const QPoint& pos) const;
     float xToPos(int x) const;
     int posToX(float pos) const;
     QRect barRect() const;

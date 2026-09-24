@@ -37,9 +37,19 @@ inline filesystem::path UserGradientsFile(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "user-gradients.json";
 }
 
+inline filesystem::path UserColorsFile(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "user-colors.json";
+}
+
 inline filesystem::path EffectBindingsFile(OpenRGBPluginAPIInterface* rm)
 {
     return PluginRoot(rm) / "effect-bindings.json";
+}
+
+inline filesystem::path BindingCatalogDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "binding-catalog";
 }
 
 inline filesystem::path StackPresetFile(OpenRGBPluginAPIInterface* rm, const std::string& preset_name)

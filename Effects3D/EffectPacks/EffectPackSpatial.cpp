@@ -248,7 +248,14 @@ bool ApplyGradientPresetId(Block* block, const char* preset_id, RGBColor accent)
         return false;
     }
     const std::string id(preset_id);
-    if(id == "rainbow")
+    if(id == "solid")
+    {
+        block->color = accent;
+        block->color_from = accent;
+        block->color_to = accent;
+        block->gradient = {{0.0f, accent}};
+    }
+    else if(id == "rainbow")
     {
         block->gradient = {
             {0.0f, ToRGBColor(255, 0, 0)},
