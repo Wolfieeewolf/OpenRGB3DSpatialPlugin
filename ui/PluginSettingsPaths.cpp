@@ -25,6 +25,8 @@ void EnsureSpatialShadersFolder(OpenRGBPluginAPIInterface* rm)
 
     std::error_code ec;
     filesystem::create_directories(SpatialShadersDir(rm), ec);
+    filesystem::create_directories(SpatialEffectsDir(rm), ec);
+    filesystem::create_directories(PatternKernelsDir(rm), ec);
 }
 
 void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
@@ -37,7 +39,10 @@ void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
     std::error_code ec;
     filesystem::create_directories(ControllersDir(rm), ec);
     filesystem::create_directories(SpatialShadersDir(rm), ec);
+    filesystem::create_directories(SpatialEffectsDir(rm), ec);
+    filesystem::create_directories(PatternKernelsDir(rm), ec);
     filesystem::create_directories(EffectPacksDir(rm), ec);
+    filesystem::create_directories(EffectPackEffectsDir(rm), ec);
     filesystem::create_directories(BindingCatalogDir(rm), ec);
     filesystem::create_directories(PluginRoot(rm), ec);
 }

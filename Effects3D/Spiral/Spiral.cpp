@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Spiral.h"
-#include "SpiralVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "EffectStratumBlend.h"
 #include "SpatialLayerCore.h"
@@ -33,7 +33,7 @@ Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x0000FF00);
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
-    volume_assist_.setFragmentBody(QString::fromUtf8(SpiralVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("spiral"));
     volume_assist_.setResolution(24);
 }
 
@@ -86,8 +86,6 @@ EffectInfo3D Spiral::GetEffectInfo() const
     info.needs_arms = true;
     info.needs_frequency = false;
 
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -112,25 +110,18 @@ void Spiral::SetupCustomUI(QWidget* parent)
     EffectLabeledComboRow* pattern_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Pattern:"));
     pattern_row->setObjectName(QStringLiteral("patternRow"));
     pattern_combo = pattern_row->combo();
-    pattern_combo->addItem(QStringLiteral("Smooth Spiral"));
-    pattern_combo->addItem(QStringLiteral("Pinwheel"));
-    pattern_combo->addItem(QStringLiteral("Saw Blade"));
-    pattern_combo->addItem(QStringLiteral("Swirl Circles"));
-    pattern_combo->addItem(QStringLiteral("Hypnotic"));
-    pattern_combo->addItem(QStringLiteral("Simple Spin"));
-    pattern_combo->addItem(QStringLiteral("Tornado / Twister"));
-    pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, kSpiralPatternCount - 1));
-    pattern_combo->setToolTip(QStringLiteral(
-        "Spin field recipe. Coil 0 = straight arms; raise Coil to twist into a spiral.\n"
-        "Height coil adds vertical helix / tornado lift. Soft glow is kept; crisp ridges "
-        "make arms readable. Arms + Gap shape blades and teeth."));
-    pattern_combo->setItemData(0, QStringLiteral("Soft spiral ribbons with a bright crisp centerline."), Qt::ToolTipRole);
-    pattern_combo->setItemData(1, QStringLiteral("Filled pinwheel wedges — straight rays when Coil is low."), Qt::ToolTipRole);
-    pattern_combo->setItemData(2, QStringLiteral("Saw blade with serrated teeth along each arm."), Qt::ToolTipRole);
-    pattern_combo->setItemData(3, QStringLiteral("Concentric rings that Coil twists into swirls."), Qt::ToolTipRole);
-    pattern_combo->setItemData(4, QStringLiteral("Busy multi-frequency twist with crisp interference ridges."), Qt::ToolTipRole);
-    pattern_combo->setItemData(5, QStringLiteral("Clean rotating rays — most legible spin; Coil bends them."), Qt::ToolTipRole);
-    pattern_combo->setItemData(6, QStringLiteral("Funnel wall + wind ribbons climbing the room (tornado / twister)."), Qt::ToolTipRole);
+    const QList<SpatialShaderCatalog::EffectShaderPattern> patterns =
+        SpatialShaderCatalog::EffectShaderPatterns(QStringLiteral("spiral"));
+    for(int i = 0; i < patterns.size(); ++i)
+    {
+        pattern_combo->addItem(patterns[i].name);
+        if(!patterns[i].tip.isEmpty())
+        {
+            pattern_combo->setItemData(i, patterns[i].tip, Qt::ToolTipRole);
+        }
+    }
+    const int pattern_count = std::max(1, pattern_combo->count());
+    pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, pattern_count - 1));
     pattern_type = pattern_combo->currentIndex();
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral::OnSpiralParameterChanged);
 
@@ -194,7 +185,7 @@ void Spiral::SetupCustomUI(QWidget* parent)
 void Spiral::OnSpiralParameterChanged()
 {
     if(pattern_combo)
-        pattern_type = std::clamp(pattern_combo->currentIndex(), 0, kSpiralPatternCount - 1);
+        pattern_type = std::clamp(pattern_combo->currentIndex(), 0, std::max(0, pattern_combo->count() - 1));
     if(arms_slider)
         num_arms = (unsigned int)arms_slider->value();
     if(gap_slider)
@@ -381,7 +372,9 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
     }
     if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
     {
-        pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, kSpiralPatternCount - 1);
+        const int listed = SpatialShaderCatalog::EffectShaderPatterns(QStringLiteral("spiral")).size();
+        const int pattern_count = std::max(1, pattern_combo ? pattern_combo->count() : listed);
+        pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, pattern_count - 1);
         if(pattern_combo)
         {
             pattern_combo->setCurrentIndex(pattern_type);

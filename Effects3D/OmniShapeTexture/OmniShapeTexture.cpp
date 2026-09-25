@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OmniShapeTexture.h"
+#include "Shaders/SpatialShaderCatalog.h"
 
 #include "MediaTextureEffectUtils.h"
-#include "OmniShapeTextureVolumeFieldGlsl.h"
 #include "SpatialLayerCore.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -58,7 +58,7 @@ OmniShapeTexture::OmniShapeTexture(QWidget* parent)
     connect(gif_frame_timer, &QTimer::timeout, this, &OmniShapeTexture::OnGifFrameTimerTimeout);
     SetRainbowMode(false);
     /* Speed is GIF frames/sec. Default 0 = paused (no flashing). */
-    volume_assist_.setFragmentBody(QString::fromUtf8(OmniShapeTextureVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("omni-shape-texture"));
     volume_assist_.setResolution(28);
 }
 
@@ -92,10 +92,7 @@ EffectInfo3D OmniShapeTexture::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 10.0f;
     info.use_size_parameter = true;
-    info.default_frequency_scale = 10.0f;
-    info.default_detail_scale = 10.0f;
 
     info.show_speed_control = true;
     info.show_brightness_control = true;

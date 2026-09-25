@@ -72,6 +72,8 @@ private:
     QLabel* compile_log_label = nullptr;
 
     std::vector<QString> preset_ids;
+    std::vector<QString> preset_titles;
+    std::vector<QString> preset_paths;
     int active_preset_index = 0;
     int projection_mode = 0;
     float contrast = 1.0f;

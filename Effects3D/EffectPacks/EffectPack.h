@@ -38,44 +38,6 @@ enum class TargetKind
     SceneZone,  // left-panel ZoneManager3D group (Desk / Wall / …)
 };
 
-enum class BlockType
-{
-    // Basic
-    Solid,
-    Fade,
-    Pulse,
-    Wipe,
-    Chase,
-    Twinkle,
-    Alternating,
-    Strobe,
-    Spin,
-    Candle,
-    Dissolve,
-    Wave,
-    // Pixel (plane)
-    ColorWash,
-    Plasma,
-    Snow,
-    Fire,
-    Balls,
-    Bars,
-    Scanner,
-    // Volume (3D)
-    SphereWipe,
-    Orbit,
-    Ripple,
-    Meteor,
-    Noise3D,
-    Burst,
-    Cycle,
-    Blink,
-    Confetti,
-    Comet,
-    Helix,
-    Fill,
-};
-
 enum class Direction
 {
     Left,
@@ -111,12 +73,10 @@ struct Target
     std::string device_name;
     std::string zone_name;
     std::string scene_zone_name; // TargetKind::SceneZone
-    /** Under a scene zone: synthetic “All LEDs” row (same LED set, distinct track). */
     bool flatten_leds = false;
     std::vector<int> led_indices;
 };
 
-/** True for All / SceneZone group rows (default Room space). */
 inline bool TargetIsMultiDeviceGroup(const Target& t)
 {
     return t.kind == TargetKind::All || t.kind == TargetKind::SceneZone;
@@ -136,7 +96,7 @@ struct CurvePoint
 
 struct Block
 {
-    BlockType type = BlockType::Solid;
+    std::string effect_id;
     int start_ms = 0;
     int end_ms = 1000;
     RGBColor color = ToRGBColor(255, 0, 0);
@@ -182,7 +142,6 @@ float SampleCurve(const std::vector<CurvePoint>& curve, float t);
 void EnsureBlockGradient(Block* block);
 void ApplyBuiltinIntensityCurve(Block* block, const char* preset_id);
 const char* MatchBuiltinIntensityCurve(const std::vector<CurvePoint>& curve);
-/** Fill block gradient from a shared catalog preset id. accent used by white_color. */
 bool ApplyGradientPresetId(Block* block, const char* preset_id, RGBColor accent = ToRGBColor(255, 80, 40));
 float BlockProgress(const Block& block, int local_ms);
 
@@ -195,7 +154,6 @@ bool EvaluateBlockAtAxis(const Block& block,
                          RGBColor* out_color,
                          float* out_intensity);
 
-/** Sample-space position + AABB (device-local or room). Flat axes are treated as centered. */
 bool EvaluateBlockAtWorld(const Block& block,
                           int local_ms,
                           float x, float y, float z,
@@ -252,14 +210,8 @@ float SampleSpinAngle(const Block& block,
                       float min_y, float max_y,
                       float min_z, float max_z);
 
-bool BlockNeedsWorldEval(BlockType t);
-bool BlockNeedsDirection(BlockType t);
-/** Room, or Sequence with a Volume/Pixel type (falls back to room XYZ). */
 bool BlockUsesSharedWorldBounds(const Block& block);
-/** Sequence space on axis-style effects (Wipe/Chase/…). */
 bool BlockUsesSequenceAxis(const Block& block);
-
-const char* BlockTypeDisplayName(BlockType t);
 
 nlohmann::json ToJson(const Pack& pack);
 bool FromJson(const nlohmann::json& j, Pack* out, std::string* error);

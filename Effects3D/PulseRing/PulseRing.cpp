@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "PulseRing.h"
-#include "PulseRingVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "EffectHelpers.h"
 #include "SpatialLayerCore.h"
@@ -51,7 +51,7 @@ const char* PulseRing::ShapeName(int s)
 PulseRing::PulseRing(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(PulseRingVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("pulse-ring"));
     // Hex/square corners need enough voxels, but 28×28×28 was a major frame cost.
     volume_assist_.setResolution(20);
 }
@@ -73,9 +73,7 @@ EffectInfo3D PulseRing::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

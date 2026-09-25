@@ -2,6 +2,7 @@
 
 #include "EffectPackEditorDialog.h"
 #include "EffectPackCatalog.h"
+#include "EffectPackUserCurves.h"
 #include "EffectPackGradientBar.h"
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackToolBar.h"
@@ -106,7 +107,7 @@ void EffectPackEditorDialog::onToolbarCurveClicked(const QString& preset_id)
     }
     else
     {
-        EffectPack::ApplyBuiltinIntensityCurve(b, preset_id.toUtf8().constData());
+        EffectPackUserCurves::Apply(b, preset_id, PluginSettingsPaths::UserCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     }
     if(curve_combo_)
     {
@@ -140,7 +141,7 @@ void EffectPackEditorDialog::onCurvePresetApplied(int track_index, int block_ind
     }
     else
     {
-        EffectPack::ApplyBuiltinIntensityCurve(b, preset_id.toUtf8().constData());
+        EffectPackUserCurves::Apply(b, preset_id, PluginSettingsPaths::UserCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     }
     applyBlockToForm();
     timeline_->update();
@@ -401,47 +402,45 @@ void EffectPackEditorDialog::onResetGradientPreset(const QString& preset_id)
     }
 }
 
+namespace
+{
+
+EffectPackCatalog::Entry KnobsForSelection(const EffectPack::Block* block, QComboBox* type_combo, const filesystem::path& dir)
+{
+    const QList<EffectPackCatalog::Entry> entries = EffectPackCatalog::LoadEntries(dir);
+    QString id;
+    if(block && !block->effect_id.empty())
+    {
+        id = QString::fromStdString(block->effect_id);
+    }
+    else if(type_combo)
+    {
+        id = type_combo->currentData().toString();
+    }
+    for(const EffectPackCatalog::Entry& entry : entries)
+    {
+        if(!id.isEmpty() && entry.id == id)
+        {
+            return entry;
+        }
+    }
+    return {};
+}
+
+}
+
 void EffectPackEditorDialog::updatePropVisibility()
 {
     EffectPack::Block* b = selectedBlock();
     const bool ok = b != nullptr;
-    const EffectPack::BlockType type = b
-        ? b->type
-        : (EffectPack::BlockType)type_combo_->currentData().toInt();
-    const bool fade = type == EffectPack::BlockType::Fade;
-    const bool wipe_chase = type == EffectPack::BlockType::Wipe || type == EffectPack::BlockType::Chase
-        || type == EffectPack::BlockType::Wave || type == EffectPack::BlockType::Scanner;
-    const bool pulse_twinkle = type == EffectPack::BlockType::Pulse || type == EffectPack::BlockType::Twinkle;
-    const bool alternating = type == EffectPack::BlockType::Alternating;
-    const bool strobe = type == EffectPack::BlockType::Strobe;
-    const bool spin = type == EffectPack::BlockType::Spin;
-    const bool candle = type == EffectPack::BlockType::Candle;
-    const bool dissolve = type == EffectPack::BlockType::Dissolve;
-    const bool chase = type == EffectPack::BlockType::Chase || type == EffectPack::BlockType::Scanner;
-    const bool colorwash = type == EffectPack::BlockType::ColorWash;
-    const bool worldish = EffectPack::BlockNeedsWorldEval(type);
-    const bool needs_period = pulse_twinkle || alternating || strobe
-        || type == EffectPack::BlockType::Cycle
-        || type == EffectPack::BlockType::Blink
-        || type == EffectPack::BlockType::Confetti;
-    const bool needs_speed = wipe_chase || colorwash || pulse_twinkle || alternating || strobe || spin
-        || dissolve || worldish
-        || type == EffectPack::BlockType::Cycle
-        || type == EffectPack::BlockType::Blink
-        || type == EffectPack::BlockType::Confetti
-        || type == EffectPack::BlockType::Comet;
-    const bool needs_direction = EffectPack::BlockNeedsDirection(type);
-    const bool needs_pulse_length = chase || spin || strobe
-        || type == EffectPack::BlockType::Comet
-        || type == EffectPack::BlockType::Helix
-        || type == EffectPack::BlockType::Wave
-        || type == EffectPack::BlockType::Orbit
-        || type == EffectPack::BlockType::Ripple
-        || type == EffectPack::BlockType::Meteor
-        || type == EffectPack::BlockType::Balls
-        || type == EffectPack::BlockType::Burst;
-    const bool needs_min_intensity = pulse_twinkle || candle
-        || type == EffectPack::BlockType::Confetti;
+    const filesystem::path effect_dir = PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr);
+    const EffectPackCatalog::Entry knobs = KnobsForSelection(b, type_combo_, effect_dir);
+    const bool fade = knobs.knob_color_to;
+    const bool needs_period = knobs.knob_period;
+    const bool needs_speed = knobs.knob_speed;
+    const bool needs_direction = knobs.knob_direction;
+    const bool needs_pulse_length = knobs.knob_pulse;
+    const bool needs_min_intensity = knobs.knob_min_intensity;
     const bool custom_axis = axis_mode_combo_
         && (EffectPack::AxisMode)axis_mode_combo_->currentData().toInt() == EffectPack::AxisMode::Custom;
 
@@ -580,7 +579,8 @@ void EffectPackEditorDialog::applyBlockToForm()
         return;
     }
     EffectPack::EnsureBlockGradient(b);
-    const int type_idx = type_combo_->findData((int)b->type);
+    const QString effect_id = QString::fromStdString(b->effect_id);
+    int type_idx = effect_id.isEmpty() ? -1 : type_combo_->findData(effect_id);
     type_combo_->setCurrentIndex(type_idx >= 0 ? type_idx : 0);
     start_spin_->setValue(b->start_ms);
     end_spin_->setValue(b->end_ms);
@@ -616,7 +616,8 @@ void EffectPackEditorDialog::applyBlockToForm()
         const int cidx = curve_combo_->findData(id);
         curve_combo_->setCurrentIndex(cidx >= 0 ? cidx : curve_combo_->findData(QStringLiteral("custom")));
     }
-    setColorButton(color_button_, b->type == EffectPack::BlockType::Fade ? b->color_from : b->color);
+    const EffectPackCatalog::Entry shown = KnobsForSelection(b, type_combo_, PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr));
+    setColorButton(color_button_, shown.knob_color_to ? b->color_from : b->color);
     setColorButton(color_to_button_, b->color_to);
     suppress_ui_ = false;
     syncGradientBar();
@@ -634,7 +635,11 @@ void EffectPackEditorDialog::applyFormToSelectedBlock()
     {
         return;
     }
-    b->type = (EffectPack::BlockType)type_combo_->currentData().toInt();
+    const QString picked_id = type_combo_->currentData().toString();
+    if(!picked_id.isEmpty())
+    {
+        b->effect_id = picked_id.toStdString();
+    }
     b->start_ms = start_spin_->value();
     b->end_ms = std::max(b->start_ms + 1, end_spin_->value());
     if(end_spin_->value() != b->end_ms)
@@ -678,7 +683,7 @@ void EffectPackEditorDialog::applyFormToSelectedBlock()
         }
         else
         {
-            EffectPack::ApplyBuiltinIntensityCurve(b, cid.toUtf8().constData());
+            EffectPackUserCurves::Apply(b, cid, PluginSettingsPaths::UserCurvesFile(tab_ ? tab_->resource_manager : nullptr));
         }
     }
     const RGBColor c = colorFromButton(color_button_);
@@ -686,7 +691,8 @@ void EffectPackEditorDialog::applyFormToSelectedBlock()
     b->color = c;
     b->color_from = c;
     b->color_to = c2;
-    if(b->type == EffectPack::BlockType::Fade)
+    const EffectPackCatalog::Entry edited = KnobsForSelection(b, type_combo_, PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr));
+    if(edited.knob_color_to)
     {
         if(b->gradient.size() < 2)
         {
@@ -698,13 +704,12 @@ void EffectPackEditorDialog::applyFormToSelectedBlock()
             b->gradient.back().color = c2;
         }
     }
-    else if(b->type == EffectPack::BlockType::Solid || b->gradient.empty() || b->gradient.size() == 1)
+    else if(b->gradient.empty() || b->gradient.size() == 1)
     {
         b->gradient = {{0.0f, c}, {1.0f, c}};
     }
     else
     {
-        // Multi-stop: keep shape, sync primary colour to the first stop.
         b->gradient.front().color = c;
     }
     timeline_->update();
@@ -720,31 +725,9 @@ void EffectPackEditorDialog::onTypeChanged()
     EffectPack::Block* b = selectedBlock();
     if(b)
     {
-        const bool spatial = b->type == EffectPack::BlockType::Wipe
-            || b->type == EffectPack::BlockType::Chase
-            || b->type == EffectPack::BlockType::Wave
-            || b->type == EffectPack::BlockType::Scanner
-            || b->type == EffectPack::BlockType::ColorWash
-            || b->type == EffectPack::BlockType::Spin
-            || b->type == EffectPack::BlockType::Alternating
-            || b->type == EffectPack::BlockType::Dissolve
-            || EffectPack::BlockNeedsWorldEval(b->type);
-        if(b->type == EffectPack::BlockType::Twinkle)
-        {
-            // Floor between flashes — keep sparky by default when switching type.
-            if(b->min_intensity > 0.25f)
-            {
-                b->min_intensity = 0.0f;
-                min_intensity_spin_->blockSignals(true);
-                min_intensity_spin_->setValue(0);
-                min_intensity_spin_->blockSignals(false);
-            }
-            if(b->period_ms < 80)
-            {
-                b->period_ms = 700;
-            }
-        }
-        if(spatial && b->gradient.size() >= 2)
+        const EffectPackCatalog::Entry picked = KnobsForSelection(b, type_combo_, PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr));
+        const bool travels = picked.knob_speed || picked.knob_direction || picked.knob_pulse;
+        if(travels && b->gradient.size() >= 2)
         {
             const bool flat = b->gradient.front().color == b->gradient.back().color
                 && b->gradient.size() <= 2;
@@ -786,7 +769,6 @@ void EffectPackEditorDialog::onGradientPreset()
 void EffectPackEditorDialog::onBlockFieldChanged()
 {
     applyFormToSelectedBlock();
-    // Keep gradient bar + timeline preview live for both new and existing blocks.
     if(!suppress_ui_)
     {
         syncGradientBar();
@@ -801,7 +783,6 @@ void EffectPackEditorDialog::setColorButton(QPushButton* button, RGBColor color)
         return;
     }
     button->setProperty("rgbColor", (uint)color);
-    // Compact leading swatch + hex label (do not use full-button swatch sizing).
     const QColor qc = RgbToQColor(color);
     QPixmap pm(22, 16);
     pm.fill(qc);

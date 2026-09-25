@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SurfaceAmbient.h"
-#include "SurfaceAmbientVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "PluginLog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
@@ -44,7 +44,7 @@ const char* SurfaceAmbient::MotionName(int m)
 
 SurfaceAmbient::SurfaceAmbient(QWidget* parent) : SpatialEffect3D(parent)
 {
-    volume_assist_.setFragmentBody(QString::fromUtf8(SurfaceAmbientVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("surface-ambient"));
     volume_assist_.setResolution(30);
 }
 
@@ -128,9 +128,6 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
-    info.default_detail_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

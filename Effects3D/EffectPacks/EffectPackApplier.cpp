@@ -90,7 +90,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
     const bool use_transforms = transforms && !transforms->empty();
     const RGBColor off = ToRGBColor(0, 0, 0);
 
-    // Viewport clear only — avoid a full hardware black frame every tick (USB hitch).
     if(use_transforms)
     {
         for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
@@ -141,7 +140,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                     {
                         applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
                     }
-                    // Never fall back to per-device AABB for Room/Sequence-volume on groups.
                     if(!shared_bounds.valid && TargetIsMultiDeviceGroup(track.target))
                     {
                         continue;
@@ -235,7 +233,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 }
                 break;
             case TargetKind::SceneZone:
-                // Without transforms, scene zones cannot resolve controller indices.
                 break;
             default:
             {
@@ -246,7 +243,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         }
     }
 
-    // Also push blacks for scoped LEDs that were cleared in viewport but not touched by a track.
     if(use_transforms)
     {
         for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
@@ -267,7 +263,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         }
     }
 
-    // Throttle device I/O — SetColor fills buffers every frame; USB flush ~20 Hz.
     static std::int64_t s_last_hw_ms = 0;
     const std::int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();

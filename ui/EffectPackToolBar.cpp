@@ -2,6 +2,7 @@
 
 #include "EffectPackToolBar.h"
 #include "EffectPackCatalog.h"
+#include "EffectPackUserCurves.h"
 #include "EffectPackUserGradients.h"
 
 #include <QAction>
@@ -172,7 +173,7 @@ QWidget* WrapPalette(QWidget* inner)
     return scroll;
 }
 
-QWidget* BuildEffectsPage(QWidget* owner, const std::function<void(EffectPack::BlockType)>& on_click)
+QWidget* BuildEffectsPage(QWidget* owner, const filesystem::path& effect_dir, const std::function<void(const QString&)>& on_click)
 {
     auto* page = new QWidget(owner);
     auto* row = new QHBoxLayout(page);
@@ -183,17 +184,12 @@ QWidget* BuildEffectsPage(QWidget* owner, const std::function<void(EffectPack::B
     auto* cats = new QButtonGroup(page);
     cats->setExclusive(true);
 
-    const EffectPackCatalog::Category order[] = {
-        EffectPackCatalog::Category::Basic,
-        EffectPackCatalog::Category::Pixel,
-        EffectPackCatalog::Category::Volume,
-    };
-
-    for(EffectPackCatalog::Category cat : order)
+    const QList<EffectPackCatalog::Entry> entries = EffectPackCatalog::LoadEntries(effect_dir);
+    for(const QString& section : EffectPackCatalog::SectionOrder(entries))
     {
         auto* tab = new QToolButton(page);
-        const QString full = EffectPackCatalog::CategoryLabel(cat);
-        tab->setText(full.section(QLatin1Char(' '), 0, 0));
+        const QString full = EffectPackCatalog::SectionLabel(section);
+        tab->setText(full);
         tab->setToolTip(full);
         tab->setCheckable(true);
         tab->setAutoRaise(true);
@@ -205,20 +201,20 @@ QWidget* BuildEffectsPage(QWidget* owner, const std::function<void(EffectPack::B
         auto* icons_row = new QHBoxLayout(icons);
         icons_row->setContentsMargins(0, 0, 0, 0);
         icons_row->setSpacing(1);
-        for(const EffectPackCatalog::Entry& e : EffectPackCatalog::EntriesFor(cat))
+        for(const EffectPackCatalog::Entry& e : EffectPackCatalog::EntriesFor(entries, section))
         {
             auto* btn = new DragToolButton(icons);
             StylePaletteButton(btn);
             btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-            btn->setText(QString::fromUtf8(e.name ? e.name : "Effect"));
+            btn->setText(e.name.isEmpty() ? QStringLiteral("Effect") : e.name);
             btn->setIcon(EffectPackCatalog::MakeEffectIcon(e, 16));
             btn->setIconSize(QSize(16, 16));
             btn->setToolTip(EffectPackCatalog::EffectTooltip(e));
-            btn->setMimeFactory([type = e.type]() {
-                return EffectPackCatalog::MakeEffectMime(type);
+            btn->setMimeFactory([id = e.id]() {
+                return EffectPackCatalog::MakeEffectMime(id);
             });
-            QObject::connect(btn, &QToolButton::clicked, owner, [on_click, type = e.type]() {
-                on_click(type);
+            QObject::connect(btn, &QToolButton::clicked, owner, [on_click, id = e.id]() {
+                on_click(id);
             });
             icons_row->addWidget(btn);
         }
@@ -273,18 +269,22 @@ QVector<Swatch> LoadSwatches(const filesystem::path& path)
         return defaults;
     }
     const QJsonArray arr = QJsonDocument::fromJson(file.readAll()).object().value(QStringLiteral("colors")).toArray();
-    if(arr.size() != defaults.size())
+    QVector<Swatch> loaded;
+    for(const QJsonValue& item : arr)
     {
-        return defaults;
+        const QJsonObject obj = item.toObject();
+        if(!obj.contains(QStringLiteral("r")))
+        {
+            continue;
+        }
+        Swatch swatch;
+        swatch.label = obj.value(QStringLiteral("label")).toString(QStringLiteral("Color"));
+        swatch.color = QColor(obj.value(QStringLiteral("r")).toInt(),
+                               obj.value(QStringLiteral("g")).toInt(),
+                               obj.value(QStringLiteral("b")).toInt());
+        loaded.push_back(swatch);
     }
-    for(int i = 0; i < defaults.size(); ++i)
-    {
-        const QJsonObject obj = arr.at(i).toObject();
-        defaults[i].color = QColor(obj.value(QStringLiteral("r")).toInt(defaults[i].color.red()),
-                                    obj.value(QStringLiteral("g")).toInt(defaults[i].color.green()),
-                                    obj.value(QStringLiteral("b")).toInt(defaults[i].color.blue()));
-    }
-    return defaults;
+    return loaded.isEmpty() ? defaults : loaded;
 }
 
 void SaveSwatches(const filesystem::path& path, const QVector<Swatch>& swatches)
@@ -442,18 +442,18 @@ QWidget* BuildGradientsPage(QWidget* owner, const std::function<void(const QStri
     return WrapPalette(page);
 }
 
-QWidget* BuildCurvesPage(QWidget* owner, const std::function<void(const QString&)>& on_click)
+QWidget* BuildCurvesPage(QWidget* owner, const filesystem::path& curves_path, const std::function<void(const QString&)>& on_click)
 {
     auto* page = new QWidget();
     auto* row = new QHBoxLayout(page);
     row->setContentsMargins(2, 2, 2, 2);
     row->setSpacing(4);
-    for(const EffectPackCatalog::CurveEntry& c : EffectPackCatalog::CurveEntries())
+    for(const EffectPackUserCurves::Entry& c : EffectPackUserCurves::Load(curves_path))
     {
         auto* btn = new DragToolButton(page);
         StylePaletteButton(btn);
-        const QString label = QString::fromUtf8(c.label ? c.label : "Curve");
-        const QString id = QString::fromUtf8(c.id ? c.id : "");
+        const QString label = c.label.isEmpty() ? c.id : c.label;
+        const QString id = c.id;
         btn->setText(label);
         btn->setToolTip(label + QStringLiteral(" — drag onto a block"));
         btn->setMimeFactory([id]() {
@@ -472,10 +472,14 @@ QWidget* BuildCurvesPage(QWidget* owner, const std::function<void(const QString&
 
 EffectPackToolBar::EffectPackToolBar(const filesystem::path& user_gradients_path,
                                        const filesystem::path& user_colors_path,
+                                       const filesystem::path& effect_files_dir,
+                                       const filesystem::path& user_curves_path,
                                        QWidget* parent)
     : QWidget(parent)
     , user_gradients_path_(user_gradients_path)
     , user_colors_path_(user_colors_path)
+    , effect_files_dir_(effect_files_dir)
+    , user_curves_path_(user_curves_path)
 {
     buildUi();
 }
@@ -498,7 +502,7 @@ void EffectPackToolBar::buildUi()
 
     const Page defs[] = {
         {"Effects", "Drag onto a timeline row, or click to add at the playhead.",
-         BuildEffectsPage(this, [this](EffectPack::BlockType type) { emit effectClicked((int)type); })},
+         BuildEffectsPage(this, effect_files_dir_, [this](const QString& id) { emit effectClicked(id); })},
         {"Colors", "Drag onto the timeline. Double-click a swatch to change that quick pick.",
          BuildColorsPage(this, user_colors_path_, [this](unsigned int rgb) { emit colorClicked(rgb); })},
         {"Gradients", "Drag onto the timeline. Double-click to replace that preset with the selected gradient. Right-click to delete or reset.",
@@ -509,7 +513,7 @@ void EffectPackToolBar::buildUi()
                             [this](const QString& id) { emit gradientPresetResetRequested(id); },
                             user_gradients_path_)},
         {"Curves", "Drag onto a block once the timeline has one.",
-         BuildCurvesPage(this, [this](const QString& id) { emit curvePresetClicked(id); })},
+         BuildCurvesPage(this, user_curves_path_, [this](const QString& id) { emit curvePresetClicked(id); })},
     };
 
     for(const Page& page : defs)

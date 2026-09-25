@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "RotatingConeSpotlights.h"
-#include "RotatingConeVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "PluginLog.h"
 #include "EffectColorUtils.h"
 #include "SpatialKernelColormap.h"
@@ -281,7 +281,7 @@ void RotatingConeSpotlights::SyncUiFromState()
 RotatingConeSpotlights::RotatingConeSpotlights(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(false);
-    volume_assist_.setFragmentBody(QString::fromUtf8(RotatingConeVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("rotating-cone"));
     volume_assist_.setResolution(24);
     ApplyLayoutPreset(LAYOUT_AUTO);
 }
@@ -309,8 +309,6 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

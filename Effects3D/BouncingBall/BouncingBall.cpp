@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BouncingBall.h"
-#include "BouncingBallVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "EffectUiRows.h"
@@ -13,7 +13,7 @@ BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
     count_slider = nullptr;
     ball_count = 4;
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(BouncingBallVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("bouncing-ball"));
     volume_assist_.setResolution(20);
 }
 
@@ -40,8 +40,6 @@ EffectInfo3D BouncingBall::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;

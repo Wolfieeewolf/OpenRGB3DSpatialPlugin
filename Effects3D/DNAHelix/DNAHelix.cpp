@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "DNAHelix.h"
-#include "DNAHelixVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
@@ -40,7 +40,7 @@ DNAHelix::DNAHelix(QWidget* parent) : SpatialEffect3D(parent)
     if(GetColors().empty())
         SetColors(dna_colors);
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(DNAHelixVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("dna-helix"));
     volume_assist_.setResolution(24);
 }
 
@@ -66,8 +66,6 @@ EffectInfo3D DNAHelix::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

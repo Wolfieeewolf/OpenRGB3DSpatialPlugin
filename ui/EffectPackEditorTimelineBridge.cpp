@@ -6,6 +6,7 @@
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackToolBar.h"
 #include "EffectPacks/EffectPackApplier.h"
+#include "EffectPacks/EffectScript.h"
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
@@ -282,7 +283,6 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
                 {
                     continue;
                 }
-                // Only show zones that intersect pack devices.
                 bool any = false;
                 for(int ci : zone->GetControllers())
                 {
@@ -309,7 +309,6 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
                 zone_node.expanded = true;
                 zone_node.led_count = 0;
 
-                // All LEDs — flat list of every LED under the zone.
                 EffectPackTimelineWidget::Node all_leds;
                 all_leds.label = QStringLiteral("All LEDs");
                 all_leds.target.kind = EffectPack::TargetKind::SceneZone;
@@ -334,7 +333,6 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
                     {
                         continue;
                     }
-                    // Individual LED children under All LEDs.
                     int led_slot = 0;
                     for(const LEDPosition3D& led : transform->led_positions)
                     {
@@ -426,18 +424,10 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
         {
             append_controller(i, &ungrouped, QString(), true);
         }
-        // Prefer real device targets under Ungrouped — if we used a fake All target on the
-        // folder itself, only promote children to roots when the folder has no identity.
         if(!ungrouped.children.isEmpty())
         {
-            // Re-parent: Ungrouped is a UI folder; children keep Device targets.
-            // Use a distinct scene_zone_name marker so we don't collide with All.
             ungrouped.target.kind = EffectPack::TargetKind::SceneZone;
             ungrouped.target.scene_zone_name = std::string("__ungrouped__");
-            // Don't allow placing blocks on the fake ungrouped zone — strip by making
-            // it non-trackable: keep as folder only via empty scene zone that applier ignores.
-            // Blocks on Ungrouped row would not match any Zone3D — skip creating that track
-            // by not exposing a paintable target. Use Device-less label folder:
             for(EffectPackTimelineWidget::Node& child : ungrouped.children)
             {
                 roots.push_back(std::move(child));
@@ -528,13 +518,12 @@ int EffectPackEditorDialog::ensureTrackForTarget(const EffectPack::Target& targe
     return (int)pack_.tracks.size() - 1;
 }
 
-void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::BlockType type)
+void EffectPackEditorDialog::addBlockAt(int row_index, int ms, const QString& effect_id)
 {
     if(timeline_)
     {
         timeline_->cancelDrag();
     }
-    // Flush props into the previously selected block before creating another.
     applyFormToSelectedBlock();
 
     const QVector<EffectPackTimelineWidget::Row>& built = timeline_->rows();
@@ -550,10 +539,9 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
     const auto& row = built[row_index];
     const int track = ensureTrackForTarget(row.target, row.label);
     EffectPack::Block block;
-    block.type = type;
+    block.effect_id = effect_id.toStdString();
     block.start_ms = std::clamp(ms, 0, std::max(0, pack_.duration_ms - 1));
-    const int default_len = (type == EffectPack::BlockType::Fade || type == EffectPack::BlockType::ColorWash) ? 2000 : 1000;
-    block.end_ms = std::min(pack_.duration_ms, block.start_ms + default_len);
+    block.end_ms = std::min(pack_.duration_ms, block.start_ms + 1000);
     if(block.end_ms <= block.start_ms)
     {
         block.end_ms = block.start_ms + 1;
@@ -562,7 +550,7 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
     block.color_from = ToRGBColor(255, 0, 0);
     block.color_to = ToRGBColor(0, 128, 255);
     block.period_ms = 800;
-    block.min_intensity = (type == EffectPack::BlockType::Twinkle) ? 0.0f : 0.15f;
+    block.min_intensity = 0.15f;
     block.max_intensity = 1.0f;
     block.intensity = 1.0f;
     block.direction = EffectPack::Direction::Right;
@@ -574,148 +562,7 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
     block.axis_pitch_deg = 0.0f;
     block.speed = 1.0f;
     block.pulse_length = 0.25f;
-    if(type == EffectPack::BlockType::Twinkle)
-    {
-        block.period_ms = 700;
-        block.gradient = {
-            {0.0f, ToRGBColor(255, 220, 120)},
-            {0.5f, ToRGBColor(255, 255, 255)},
-            {1.0f, ToRGBColor(120, 180, 255)},
-        };
-        block.color = block.gradient.front().color;
-        block.color_from = block.color;
-        block.color_to = block.gradient.back().color;
-    }
-    else if(type == EffectPack::BlockType::Candle)
-    {
-        block.period_ms = 120;
-        block.min_intensity = 0.35f;
-        block.gradient = {
-            {0.0f, ToRGBColor(180, 40, 0)},
-            {0.45f, ToRGBColor(255, 120, 20)},
-            {1.0f, ToRGBColor(255, 220, 80)},
-        };
-        block.color = block.gradient[1].color;
-    }
-    else if(type == EffectPack::BlockType::Strobe)
-    {
-        block.period_ms = 120;
-        block.pulse_length = 0.35f;
-        block.gradient = {
-            {0.0f, ToRGBColor(255, 255, 255)},
-            {1.0f, ToRGBColor(255, 255, 255)},
-        };
-        block.color = block.gradient.front().color;
-    }
-    else if(type == EffectPack::BlockType::Alternating)
-    {
-        block.period_ms = 400;
-        block.gradient = {
-            {0.0f, ToRGBColor(255, 40, 40)},
-            {1.0f, ToRGBColor(40, 80, 255)},
-        };
-        block.color = block.gradient.front().color;
-        block.color_to = block.gradient.back().color;
-    }
-    else if(type == EffectPack::BlockType::Spin)
-    {
-        block.direction = EffectPack::Direction::Up; // spin around room vertical
-        block.pulse_length = 0.18f;
-        block.speed = 1.5f;
-        block.gradient = {
-            {0.0f, ToRGBColor(40, 200, 255)},
-            {0.5f, ToRGBColor(255, 255, 255)},
-            {1.0f, ToRGBColor(40, 80, 255)},
-        };
-        block.color = block.gradient.front().color;
-    }
-    else if(type == EffectPack::BlockType::Dissolve)
-    {
-        const int default_dissolve = 2500;
-        block.end_ms = std::min(pack_.duration_ms, block.start_ms + default_dissolve);
-        block.gradient = {
-            {0.0f, ToRGBColor(255, 0, 0)},
-            {0.5f, ToRGBColor(255, 128, 0)},
-            {1.0f, ToRGBColor(255, 255, 120)},
-        };
-        block.color = block.gradient.front().color;
-    }
-    else if(type == EffectPack::BlockType::Fire)
-    {
-        block.gradient = {
-            {0.0f, ToRGBColor(20, 0, 0)},
-            {0.35f, ToRGBColor(255, 40, 0)},
-            {0.7f, ToRGBColor(255, 160, 0)},
-            {1.0f, ToRGBColor(255, 255, 180)},
-        };
-        block.color = block.gradient[2].color;
-    }
-    else if(type == EffectPack::BlockType::Snow)
-    {
-        block.gradient = {
-            {0.0f, ToRGBColor(200, 220, 255)},
-            {1.0f, ToRGBColor(255, 255, 255)},
-        };
-        block.color = block.gradient.back().color;
-    }
-    else if(type == EffectPack::BlockType::Wave)
-    {
-        block.end_ms = std::min(pack_.duration_ms, block.start_ms + 2500);
-        block.pulse_length = 0.35f;
-        block.speed = 1.25f;
-        EffectPack::ApplyGradientPresetId(&block, "cyber");
-    }
-    else if(type == EffectPack::BlockType::Scanner)
-    {
-        block.end_ms = std::min(pack_.duration_ms, block.start_ms + 2200);
-        block.pulse_length = 0.12f;
-        block.speed = 1.0f;
-        EffectPack::ApplyGradientPresetId(&block, "fire");
-    }
-    else if(type == EffectPack::BlockType::Burst)
-    {
-        block.end_ms = std::min(pack_.duration_ms, block.start_ms + 1800);
-        block.pulse_length = 0.2f;
-        EffectPack::ApplyGradientPresetId(&block, "sunset");
-        EffectPack::ApplyBuiltinIntensityCurve(&block, "snap");
-    }
-    else if(type == EffectPack::BlockType::SphereWipe || type == EffectPack::BlockType::Ripple
-            || type == EffectPack::BlockType::Orbit || type == EffectPack::BlockType::Meteor
-            || type == EffectPack::BlockType::Noise3D || type == EffectPack::BlockType::Plasma
-            || type == EffectPack::BlockType::Balls || type == EffectPack::BlockType::Bars
-            || type == EffectPack::BlockType::ColorWash || type == EffectPack::BlockType::Wipe
-            || type == EffectPack::BlockType::Chase)
-    {
-        if(type == EffectPack::BlockType::SphereWipe || type == EffectPack::BlockType::Ripple)
-        {
-            block.end_ms = std::min(pack_.duration_ms, block.start_ms + 2500);
-        }
-        if(type == EffectPack::BlockType::Meteor)
-        {
-            block.direction = EffectPack::Direction::Down;
-            block.pulse_length = 0.2f;
-        }
-        if(type == EffectPack::BlockType::Balls)
-        {
-            block.pulse_length = 0.28f;
-            block.end_ms = std::min(pack_.duration_ms, block.start_ms + 3000);
-        }
-        if(type == EffectPack::BlockType::Bars)
-        {
-            block.pulse_length = 0.2f;
-            block.end_ms = std::min(pack_.duration_ms, block.start_ms + 2000);
-        }
-        if(type == EffectPack::BlockType::Plasma || type == EffectPack::BlockType::Noise3D
-           || type == EffectPack::BlockType::ColorWash)
-        {
-            block.end_ms = std::min(pack_.duration_ms, block.start_ms + 3000);
-        }
-        EffectPack::ApplyGradientPresetId(&block, "rainbow");
-    }
-    else
-    {
-        EffectPack::EnsureBlockGradient(&block);
-    }
+    EffectPack::EnsureBlockGradient(&block);
     pack_.tracks[(size_t)track].blocks.push_back(block);
     selected_track_ = track;
     selected_block_ = (int)pack_.tracks[(size_t)track].blocks.size() - 1;
@@ -743,9 +590,8 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, EffectPack::Block
         {
             space_tip = QStringLiteral("Device space — per-controller local axes");
         }
-        status_label_->setText(QStringLiteral("Added %1 — %2")
-            .arg(QString::fromUtf8(EffectPack::BlockTypeDisplayName(type)))
-            .arg(space_tip));
+        const QString title = effect_id.isEmpty() ? QString::fromStdString(EffectPack::BlockFileId(block)) : effect_id;
+        status_label_->setText(QStringLiteral("Added %1 — %2").arg(title, space_tip));
     }
 }
 

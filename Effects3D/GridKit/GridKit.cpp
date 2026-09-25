@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "GridKit.h"
-#include "GridKitVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "EffectHelpers.h"
 #include "PluginLog.h"
@@ -41,7 +41,7 @@ const char* GridKit::ModeName(int m)
 GridKit::GridKit(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(GridKitVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("grid-kit"));
     volume_assist_.setResolution(26);
 }
 
@@ -62,9 +62,7 @@ EffectInfo3D GridKit::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 12.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 8.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

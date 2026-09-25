@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ShellPattern.h"
-#include "ShellPatternVolumeFieldGlsl.h"
-#include "SpatialPatternKernels/SpatialStripKernelEvalGlsl.h"
-#include "SpatialPatternKernels/StripUnfoldFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "PluginLog.h"
@@ -52,16 +50,6 @@ const char* ShellPattern::DisplayModeLabel(int d)
     }
 }
 
-namespace
-{
-QString ShellPatternFullVolumeBody()
-{
-    return QString::fromUtf8(SpatialStripKernelEvalGlsl())
-           + QString::fromUtf8(StripUnfoldFieldGlsl())
-           + QString::fromUtf8(ShellPatternVolumeFieldGlsl());
-}
-} // namespace
-
 ShellPattern::ShellPattern(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(false);
@@ -70,7 +58,7 @@ ShellPattern::ShellPattern(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x0000FF00);
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
-    volume_assist_.setFragmentBody(ShellPatternFullVolumeBody());
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("shell-pattern"));
     volume_assist_.setResolution(22);
 }
 
@@ -96,9 +84,6 @@ EffectInfo3D ShellPattern::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
-    info.default_detail_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -280,7 +265,7 @@ void ShellPattern::PrepareGpuFields(std::uint64_t render_sequence, float time_se
         detail,
         size_m,
         freq_n,
-        (float)std::clamp(pat, 0, kSpatialStripGpuKernelMaxId),
+        (float)SpatialPatternKernelClamp(pat),
         motion_clock,
         std::max(1.0f, reps),
         (float)std::clamp(unfold_i, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1),

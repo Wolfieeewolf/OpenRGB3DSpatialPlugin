@@ -106,7 +106,6 @@ HEADERS += \
     PluginLog.h
 
 RESOURCES += \
-    resources/spatial_shaders.qrc \
     resources/plugin_ui.qrc
 
 INCLUDEPATH += \
@@ -283,11 +282,8 @@ HEADERS += \
     ui/widgets/AudioEqBandColumn.h \
     ui/widgets/EffectControlsRoot.h \
     Effects3D/SpectrumBars/SpectrumBars.h \
-    Effects3D/SpectrumBars/SpectrumBarsVolumeFieldGlsl.h \
     Effects3D/AudioStripVisualizer/AudioStripVisualizer.h \
-    Effects3D/AudioStripVisualizer/AudioStripVisualizerVolumeFieldGlsl.h \
     Effects3D/ShaderField/ShaderField.h \
-    Effects3D/ShaderField/ShaderFieldPresets.h \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
     Shaders/SpatialShaderCatalog.h \
@@ -298,39 +294,11 @@ HEADERS += \
     Shaders/SpatialVolumeFieldAssist.h \
     Shaders/SpatialStripFieldEngine.h \
     Shaders/SpatialStripFieldAssist.h \
-    Effects3D/Plasma/PlasmaVolumeFieldGlsl.h \
-    Effects3D/Spiral/SpiralVolumeFieldGlsl.h \
-    Effects3D/Wave/WaveSurfaceVolumeFieldGlsl.h \
-    Effects3D/HexLattice/HexLatticeVolumeFieldGlsl.h \
-    Effects3D/PulseRing/PulseRingVolumeFieldGlsl.h \
-    Effects3D/GridKit/GridKitVolumeFieldGlsl.h \
-    Effects3D/AudioPaintBrush/AudioPaintBrushVolumeFieldGlsl.h \
-    Effects3D/DepthTone/DepthToneVolumeFieldGlsl.h \
-    Effects3D/ColorWheel/ColorWheelVolumeFieldGlsl.h \
-    Effects3D/BreathingSphere/BreathingSphereVolumeFieldGlsl.h \
-    Effects3D/HarmonicPulse/HarmonicPulseVolumeFieldGlsl.h \
-    Effects3D/DNAHelix/DNAHelixVolumeFieldGlsl.h \
-    Effects3D/RotatingConeSpotlights/RotatingConeVolumeFieldGlsl.h \
-    Effects3D/Bubbles/BubblesVolumeFieldGlsl.h \
-    Effects3D/BouncingBall/BouncingBallVolumeFieldGlsl.h \
-    Effects3D/Starfield/StarfieldVolumeFieldGlsl.h \
-    Effects3D/ParticleField/ParticleFieldVolumeFieldGlsl.h \
-    Effects3D/TextureProjection/TextureProjectionVolumeFieldGlsl.h \
-    Effects3D/OmniShapeTexture/OmniShapeTextureVolumeFieldGlsl.h \
-    Effects3D/TravelingLight/TravelingLightVolumeFieldGlsl.h \
-    Effects3D/SurfaceAmbient/SurfaceAmbientVolumeFieldGlsl.h \
-    Effects3D/ShellPattern/ShellPatternVolumeFieldGlsl.h \
-    Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h \
-    Effects3D/SpatialPatternKernels/SpatialStripKernelFieldGlsl.h \
-    Effects3D/SpatialPatternKernels/StripUnfoldFieldGlsl.h \
     Effects3D/AudioReactiveUi.h \
     Effects3D/AudioLevel/AudioLevel.h \
-    Effects3D/AudioLevel/AudioLevelVolumeFieldGlsl.h \
     Effects3D/AudioPulse/AudioPulse.h \
-    Effects3D/AudioPulse/AudioPulseVolumeFieldGlsl.h \
     Effects3D/BassPunch/BassPunch.h \
     Effects3D/NoteSparkle/NoteSparkle.h \
-    Effects3D/NoteSparkle/NoteSparkleVolumeFieldGlsl.h \
     Audio/AudioInputManager.h \
     Input/ReactiveInputTypes.h \
     Input/ReactiveKeyMap.h \
@@ -403,6 +371,7 @@ SOURCES += \
     Effects3D/EffectPacks/EffectPackBlockEvalAxis.cpp \
     Effects3D/EffectPacks/EffectPackExamples.cpp \
     Effects3D/EffectPacks/EffectPackSpatial.cpp \
+    Effects3D/EffectPacks/EffectScript.cpp \
     Effects3D/EffectPacks/EffectPackApplier.cpp \
     Effects3D/EffectPacks/EffectPackApplierMatch.cpp \
     Effects3D/EffectPacks/EffectPackApplierSpatial.cpp \
@@ -442,6 +411,8 @@ SOURCES += \
     ui/EffectPackTimelineInteract.cpp \
     ui/EffectPackGradientBar.cpp \
     ui/EffectPackUserGradients.cpp \
+    ui/EffectPackEffectFiles.cpp \
+    ui/EffectPackUserCurves.cpp \
     ui/EffectPackToolBar.cpp \
     ui/EffectStackPanel.cpp \
     ui/ZonesPanel.cpp \

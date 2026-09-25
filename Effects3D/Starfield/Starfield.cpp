@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Starfield.h"
-#include "StarfieldVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
@@ -59,7 +59,7 @@ const char* Starfield::ModeName(int m)
 Starfield::Starfield(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(StarfieldVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("starfield"));
     volume_assist_.setResolution(26);
 }
 
@@ -81,9 +81,7 @@ EffectInfo3D Starfield::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
-    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

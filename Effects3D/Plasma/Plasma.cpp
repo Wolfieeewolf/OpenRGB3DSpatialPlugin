@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Plasma.h"
-#include "PlasmaVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 
@@ -10,10 +10,6 @@ REGISTER_EFFECT_3D(Plasma);
 #include "EffectUiRows.h"
 #include <algorithm>
 #include <cmath>
-
-namespace {
-constexpr int kPlasmaPatternCount = 6;
-}
 
 Plasma::Plasma(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -31,7 +27,7 @@ Plasma::Plasma(QWidget* parent) : SpatialEffect3D(parent)
         SetColors(plasma_colors);
     }
     SetRainbowMode(false);
-    volume_assist_.setFragmentBody(QString::fromUtf8(PlasmaVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("plasma"));
     volume_assist_.setResolution(18);
 }
 
@@ -55,8 +51,6 @@ EffectInfo3D Plasma::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -80,34 +74,18 @@ void Plasma::SetupCustomUI(QWidget* parent)
     EffectLabeledComboRow* pattern_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Pattern:"));
     pattern_row->setObjectName(QStringLiteral("patternRow"));
     pattern_combo = pattern_row->combo();
-    pattern_combo->addItem("Classic");
-    pattern_combo->addItem("Swirl");
-    pattern_combo->addItem("Ripple");
-    pattern_combo->addItem("Organic");
-    pattern_combo->addItem("Noise");
-    pattern_combo->addItem("CubeFire");
-    pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, kPlasmaPatternCount - 1));
-    pattern_combo->setToolTip(
-        "How the plasma field is built from normalized room coordinates. "
-        "Detail and Size tune spatial frequency; Target zone bounds in the stack helps strips or partial rooms.");
-    pattern_combo->setItemData(0,
-        "Layered sines in X/Y plus mild radial and Z terms—balanced default.",
-        Qt::ToolTipRole);
-    pattern_combo->setItemData(1,
-        "Polar swirl in the horizontal plane with Z modulation.",
-        Qt::ToolTipRole);
-    pattern_combo->setItemData(2,
-        "Radial rings from center—reads clearly on floors and wide walls.",
-        Qt::ToolTipRole);
-    pattern_combo->setItemData(3,
-        "Coupled flows with nested sines—softer, cloud-like motion.",
-        Qt::ToolTipRole);
-    pattern_combo->setItemData(4,
-        "High-frequency grain—busy texture; works best with lower Detail.",
-        Qt::ToolTipRole);
-    pattern_combo->setItemData(5,
-        "3D radial shells from room center—strong depth cue in volumetric layouts.",
-        Qt::ToolTipRole);
+    const QList<SpatialShaderCatalog::EffectShaderPattern> patterns =
+        SpatialShaderCatalog::EffectShaderPatterns(QStringLiteral("plasma"));
+    for(int i = 0; i < patterns.size(); ++i)
+    {
+        pattern_combo->addItem(patterns[i].name);
+        if(!patterns[i].tip.isEmpty())
+        {
+            pattern_combo->setItemData(i, patterns[i].tip, Qt::ToolTipRole);
+        }
+    }
+    const int pattern_count = std::max(1, pattern_combo->count());
+    pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, pattern_count - 1));
     pattern_type = pattern_combo->currentIndex();
     AddWidgetToParent(plasma_widget, parent);
 
@@ -118,7 +96,7 @@ void Plasma::SetupCustomUI(QWidget* parent)
 void Plasma::OnPlasmaParameterChanged()
 {
     if(pattern_combo)
-        pattern_type = std::clamp(pattern_combo->currentIndex(), 0, kPlasmaPatternCount - 1);
+        pattern_type = std::clamp(pattern_combo->currentIndex(), 0, std::max(0, pattern_combo->count() - 1));
     emit ParametersChanged();
 }
 
@@ -274,7 +252,11 @@ void Plasma::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
-        pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, kPlasmaPatternCount - 1);
+    {
+        const int listed = SpatialShaderCatalog::EffectShaderPatterns(QStringLiteral("plasma")).size();
+        const int pattern_count = std::max(1, pattern_combo ? pattern_combo->count() : listed);
+        pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, pattern_count - 1);
+    }
     if(pattern_combo)
         pattern_combo->setCurrentIndex(pattern_type);
 }

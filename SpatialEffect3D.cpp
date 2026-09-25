@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpatialEffect3D.h"
+#include "Shaders/SpatialShaderCatalog.h"
 
 #include "EffectMotionPanel.h"
 #include "EffectOutputPanel.h"
@@ -18,8 +19,6 @@
 #include "PluginUiUtils.h"
 #include "PluginLog.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
-#include "Effects3D/SpatialPatternKernels/SpatialStripKernelFieldGlsl.h"
-#include "Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h"
 #include "Game/StripPatternSurface.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
@@ -1190,7 +1189,7 @@ void SpatialEffect3D::PrepareStripColormapAssist(std::uint64_t render_sequence, 
 
     if(!strip_cmap_body_ready_)
     {
-        strip_cmap_assist_.setFragmentBody(SpatialStripKernelFieldGlsl());
+        strip_cmap_assist_.setFragmentBody(SpatialPatternKernelShader());
         strip_cmap_assist_.setWidth(256);
         strip_cmap_body_ready_ = true;
     }
@@ -1212,7 +1211,7 @@ void SpatialEffect3D::PrepareStripColormapAssist(std::uint64_t render_sequence, 
     }
 
     const float vp[4] = {
-        (float)std::clamp(GetEffectStripColormapKernel(), 0, kSpatialStripGpuKernelMaxId),
+        (float)SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
         phase_eff,
         kernel_rep_eff,
         time_eff
@@ -1263,7 +1262,6 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     if(strip_cmap_assist_.isAvailable())
         return std::clamp(strip_cmap_assist_.sample01(s01), 0.0f, 1.0f);
 
-    /* Assist failed — full CPU twin for this pass only. */
     float k = EvalSpatialPatternKernel(GetEffectStripColormapKernel(), s01, phase_use,
                                        kernel_rep_eff, time_use);
     return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);

@@ -382,11 +382,6 @@ struct EffectInfo3D
     bool                needs_arms;
     bool                needs_frequency;
 
-    /* Legacy metadata. Speed/frequency rates come from GetMotionHz /
-     * GetColorCycleHz, not these fields. Keep at 10 so old readers stay sane. */
-    float               default_speed_scale;
-    float               default_frequency_scale;
-    float               default_detail_scale = 10.0f;
     bool                use_size_parameter;
 
     bool                show_speed_control = true;
@@ -471,7 +466,6 @@ public:
     virtual unsigned int GetFrequency() const;
     virtual void SetDetail(unsigned int detail);
     virtual unsigned int GetDetail() const;
-    float GetScaledFrequency() const;
     float GetScaledDetail() const;
     /** Spatial rainbow / ring density from Detail + Frequency.
      *  ~1 at low (soft blend), ~12 at mid, up to ~56 at max (LED-tight overlapping bands). */
@@ -520,7 +514,6 @@ public:
     /** Once-per-frame: rebuild 1D strip-colormap atlas when Surface Look Pattern is on. */
     void PrepareStripColormapAssist(std::uint64_t render_sequence, float time_sec);
 
-    /** GPU 8-family strip sample (CPU unfold); falls back to full CPU Eval if assist unavailable. */
     float SampleEffectStripColormap01(float kernel_rep,
                                       int unfold_mode,
                                       float dir_deg,
@@ -797,8 +790,6 @@ protected:
     float GetMotionHz() const;
     /** Frequency slider → hue/palette cycle rate. Frequency 100 ≈ 0.11 Hz. */
     float GetColorCycleHz() const;
-    /** Same as GetMotionHz (legacy name). */
-    float GetScaledSpeed() const;
     /** Elapsed motion cycles: time * GetMotionHz(). */
     float CalculateProgress(float time) const;
     /** Fractional cycle in [0,1). */

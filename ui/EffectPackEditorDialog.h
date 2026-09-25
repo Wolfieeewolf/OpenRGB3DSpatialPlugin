@@ -51,8 +51,8 @@ private slots:
     void onDurationChanged(int value);
     void onPlayheadChanged(int ms);
     void onBlockSelected(int track_index, int block_index);
-    void onEffectAddRequested(int row_index, int ms, int block_type);
-    void onToolbarEffectClicked(int block_type);
+    void onEffectAddRequested(int row_index, int ms, const QString& effect_id);
+    void onToolbarEffectClicked(const QString& effect_id);
     void onToolbarColorClicked(unsigned int rgb);
     void onToolbarGradientClicked(const QString& preset_id);
     void onGradientPresetApplied(int track_index, int block_index, const QString& preset_id);
@@ -98,7 +98,7 @@ private:
     RGBColor colorFromButton(QPushButton* button) const;
     QString sanitizeId(const QString& name) const;
     void setPlayingUi(bool playing);
-    void addBlockAt(int row_index, int ms, EffectPack::BlockType type);
+    void addBlockAt(int row_index, int ms, const QString& effect_id = QString());
     int currentTimelineRow() const;
     EffectPack::Block* selectedBlock();
     void applyGradientPresetToBlock(EffectPack::Block* block, const QString& preset_id);

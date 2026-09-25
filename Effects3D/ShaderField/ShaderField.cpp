@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ShaderField.h"
-#include "ShaderFieldPresets.h"
 #include "Shaders/SpatialShaderCatalog.h"
 #include "MediaTextureEffectUtils.h"
 #include "PluginUiUtils.h"
@@ -24,6 +23,72 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+namespace
+{
+
+QString ShaderTitle(const QString& path, const QString& fallback)
+{
+    QFile file(path);
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return fallback;
+    }
+    QTextStream stream(&file);
+    while(!stream.atEnd())
+    {
+        const QString line = stream.readLine().trimmed();
+        if(line.isEmpty() || line.startsWith(QLatin1Char('#')))
+        {
+            continue;
+        }
+        if(line.startsWith(QStringLiteral("name:")))
+        {
+            return line.mid(5).trimmed();
+        }
+        break;
+    }
+    return fallback;
+}
+
+QString ShaderBody(const QString& path)
+{
+    QFile file(path);
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return QString();
+    }
+    QString body;
+    QTextStream stream(&file);
+    bool header = true;
+    while(!stream.atEnd())
+    {
+        const QString line = stream.readLine();
+        const QString trimmed = line.trimmed();
+        if(header)
+        {
+            if(trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('#')))
+            {
+                continue;
+            }
+            const int colon = trimmed.indexOf(QLatin1Char(':'));
+            if(colon > 0)
+            {
+                const QString key = trimmed.left(colon).trimmed();
+                if(key == QStringLiteral("name") || key == QStringLiteral("description") || key == QStringLiteral("section"))
+                {
+                    continue;
+                }
+            }
+            header = false;
+        }
+        body += line;
+        body += QLatin1Char('\n');
+    }
+    return body;
+}
+
+}
+
 ShaderField::ShaderField(QWidget* parent)
     : SpatialEffect3D(parent)
 {
@@ -35,10 +100,11 @@ ShaderField::ShaderField(QWidget* parent)
             &ShaderField::OnCompileMessage,
             Qt::QueuedConnection);
 
-    // Always install a working body first so Size/Contrast/Hue respond even if qrc presets miss.
-    shader_engine->setFragmentBody(QString::fromUtf8(ShaderFieldPresets::kBundled[0].source));
     RebuildPresetList();
-    LoadPresetAtIndex(0);
+    if(!preset_ids.empty())
+    {
+        LoadPresetAtIndex(0);
+    }
 
     connect(this, &SpatialEffect3D::ParametersChanged, this, [this]() {
         last_uniform_sequence = 0;
@@ -106,8 +172,6 @@ EffectInfo3D ShaderField::GetEffectInfo() const
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -134,9 +198,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     QLabel* help = new QLabel(
         QStringLiteral(
             "Shader Field paints a moving 2D pattern, then samples it onto LEDs.\n"
-            "Presets are bundled patterns (waves, plasma, checker, ember, aurora…). "
-            "\"Open user shaders folder\" is only for your own .fs files — bundled presets "
-            "live inside the plugin, not that folder.\n"
+            "Presets are .fs files in the spatial-shaders folder. Each file defines spatialMain().\n"
             "Projection picks which room plane is mapped; Size/Detail/Contrast/Hue drive the shader."),
         w);
     help->setWordWrap(true);
@@ -151,15 +213,10 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     preset_combo = preset_row->combo();
     preset_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     preset_combo->clear();
-    for(const QString& id : preset_ids)
+    for(size_t i = 0; i < preset_ids.size(); ++i)
     {
-        const ShaderFieldPresets::Bundled* b = ShaderFieldPresets::Find(id);
-        preset_combo->addItem(b ? QString::fromUtf8(b->title) : id, id);
-    }
-    if(preset_ids.empty())
-    {
-        preset_combo->addItem(QStringLiteral("Slow Waves — soft blue bands"), QStringLiteral("slow_waves"));
-        preset_ids.push_back(QStringLiteral("slow_waves"));
+        const QString title = i < preset_titles.size() ? preset_titles[i] : preset_ids[i];
+        preset_combo->addItem(title, preset_ids[i]);
     }
     preset_combo->setEnabled(true);
     preset_combo->setCurrentIndex(0);
@@ -230,7 +287,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     auto* open_folder_button = new QPushButton(QStringLiteral("Open user shaders folder"), w);
     open_folder_button->setObjectName(QStringLiteral("openFolderButton"));
     open_folder_button->setToolTip(QStringLiteral(
-        "Opens OpenRGB3DSpatialPlugin/spatial-shaders/ — drop custom .fs files that define spatialMain()."));
+        "Opens the spatial-shaders folder. Drop .fs files that define spatialMain()."));
     shader_layout->addWidget(open_folder_button);
     connect(open_folder_button, &QPushButton::clicked, this, &ShaderField::OnOpenShadersFolder);
 
@@ -246,8 +303,8 @@ void ShaderField::SetupCustomUI(QWidget* parent)
 void ShaderField::RebuildPresetList()
 {
     preset_ids.clear();
-    for(int i = 0; i < ShaderFieldPresets::kBundledCount; ++i)
-        preset_ids.push_back(QString::fromUtf8(ShaderFieldPresets::kBundled[i].id));
+    preset_titles.clear();
+    preset_paths.clear();
 
     SpatialShaderCatalog::EnsureUserShadersFolder();
     const QString custom_root = SpatialShaderCatalog::UserShadersFolderPath();
@@ -259,7 +316,11 @@ void ShaderField::RebuildPresetList()
             const QFileInfoList files =
                 custom_dir.entryInfoList(QStringList() << QStringLiteral("*.fs"), QDir::Files, QDir::Name);
             for(const QFileInfo& fi : files)
-                preset_ids.push_back(fi.absoluteFilePath());
+            {
+                preset_ids.push_back(fi.completeBaseName());
+                preset_titles.push_back(ShaderTitle(fi.absoluteFilePath(), fi.completeBaseName()));
+                preset_paths.push_back(fi.absoluteFilePath());
+            }
         }
     }
 
@@ -272,13 +333,10 @@ void ShaderField::RebuildPresetList()
             : QString();
     preset_combo->blockSignals(true);
     preset_combo->clear();
-    for(const QString& id : preset_ids)
+    for(size_t i = 0; i < preset_ids.size(); ++i)
     {
-        const ShaderFieldPresets::Bundled* b = ShaderFieldPresets::Find(id);
-        if(b)
-            preset_combo->addItem(QString::fromUtf8(b->title), id);
-        else
-            preset_combo->addItem(QFileInfo(id).fileName(), id);
+        const QString title = i < preset_titles.size() ? preset_titles[i] : preset_ids[i];
+        preset_combo->addItem(title, preset_ids[i]);
     }
     int idx = 0;
     if(!prev.isEmpty())
@@ -302,28 +360,17 @@ void ShaderField::LoadPresetAtIndex(int index)
     {
         RebuildPresetList();
     }
-    if(index < 0 || index >= (int)preset_ids.size())
+    if(preset_ids.empty() || index < 0 || index >= (int)preset_ids.size())
     {
-        index = 0;
+        return;
     }
     active_preset_index = index;
 
-    QString body;
-    const ShaderFieldPresets::Bundled* b = ShaderFieldPresets::Find(preset_ids[(size_t)index]);
-    if(b)
-    {
-        body = QString::fromUtf8(b->source);
-    }
-    else
-    {
-        QFile file(preset_ids[(size_t)index]);
-        if(file.open(QIODevice::ReadOnly | QIODevice::Text))
-            body = QTextStream(&file).readAll();
-    }
+    const QString path = index < (int)preset_paths.size() ? preset_paths[(size_t)index] : QString();
+    const QString body = ShaderBody(path);
     if(body.trimmed().isEmpty())
     {
-        body = QString::fromUtf8(ShaderFieldPresets::kBundled[0].source);
-        active_preset_index = 0;
+        return;
     }
     {
         QMutexLocker lock(&display_mutex);
@@ -577,17 +624,6 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
         const auto it = std::find(preset_ids.begin(), preset_ids.end(), want);
         if(it != preset_ids.end())
             idx = (int)std::distance(preset_ids.begin(), it);
-        else
-        {
-            for(size_t i = 0; i < preset_ids.size(); ++i)
-            {
-                if(QFileInfo(preset_ids[i]).fileName() == QFileInfo(want).fileName())
-                {
-                    idx = (int)i;
-                    break;
-                }
-            }
-        }
     }
     if(preset_combo)
     {

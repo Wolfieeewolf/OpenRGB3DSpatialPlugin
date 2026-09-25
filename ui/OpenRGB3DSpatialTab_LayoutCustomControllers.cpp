@@ -874,7 +874,7 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
     {
         try
         {
-            for(const filesystem::directory_entry& entry : filesystem::directory_iterator(dir_path))
+            for(const filesystem::directory_entry& entry : filesystem::recursive_directory_iterator(dir_path))
             {
                 if(entry.is_regular_file() && entry.path().extension() == ".json")
                 {

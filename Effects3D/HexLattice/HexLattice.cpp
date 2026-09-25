@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "HexLattice.h"
-#include "HexLatticeVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
@@ -16,7 +16,7 @@ REGISTER_EFFECT_3D(HexLattice);
 HexLattice::HexLattice(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(HexLatticeVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("hex-lattice"));
     volume_assist_.setResolution(22);
 }
 
@@ -38,8 +38,6 @@ EffectInfo3D HexLattice::GetEffectInfo() const
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

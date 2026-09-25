@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioLevel.h"
-#include "AudioLevelVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "AudioReactiveUi.h"
 #include "PluginLog.h"
 #include "SpatialLayerCore.h"
@@ -31,7 +31,7 @@ float AudioLevel::EvaluateIntensity(float amplitude, float time)
 AudioLevel::AudioLevel(QWidget* parent)
     : SpatialEffect3D(parent)
 {
-    volume_assist_.setFragmentBody(QString::fromUtf8(AudioLevelVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("audio-level"));
     volume_assist_.setResolution(20);
 }
 
@@ -56,8 +56,6 @@ EffectInfo3D AudioLevel::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;

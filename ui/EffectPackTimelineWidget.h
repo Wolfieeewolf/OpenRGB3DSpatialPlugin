@@ -3,6 +3,7 @@
 
 #include "EffectPacks/EffectPack.h"
 #include "LEDPosition3D.h"
+#include "filesystem.h"
 #include <QMenu>
 #include <QSet>
 #include <QString>
@@ -59,6 +60,7 @@ public:
     explicit EffectPackTimelineWidget(QWidget* parent = nullptr);
 
     void setPack(EffectPack::Pack* pack);
+    void setEffectFilesDir(const filesystem::path& dir);
     /** Scene transforms for world-space wipe/chase preview inside blocks. */
     void setControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms);
     void setZoneManager(ZoneManager3D* zone_manager);
@@ -91,7 +93,7 @@ signals:
     void blockEdited(int track_index, int block_index);
     void blockDeleteRequested(int track_index, int block_index);
     /** Place a new effect on a row at time (from right-click menu / effects palette / drag-drop). */
-    void effectAddRequested(int row_index, int ms, int block_type);
+    void effectAddRequested(int row_index, int ms, const QString& effect_id);
     /** Gradient preset id dropped or applied onto a block (e.g. "rainbow"). */
     void gradientPresetApplied(int track_index, int block_index, const QString& preset_id);
     void curvePresetApplied(int track_index, int block_index, const QString& preset_id);
@@ -186,6 +188,7 @@ private:
     QVector<Row> visible_rows_;
     int duration_ms_ = 5000;
     int playhead_ms_ = 0;
+    filesystem::path effect_files_dir_;
     double pixels_per_second_ = 80.0;
     int row_height_ = 28;
     int header_height_ = 24;

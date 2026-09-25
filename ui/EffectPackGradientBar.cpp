@@ -244,7 +244,6 @@ void EffectPackGradientBar::paintEvent(QPaintEvent*)
             p.setBrush(QColor(220, 200, 90));
         }
         p.drawPath(path);
-        // Color tip
         p.setBrush(ToQc(stops_[(size_t)i].color));
         p.drawRect(x - 4, top + marker_h_ - 5, 8, 4);
     }
@@ -279,7 +278,6 @@ void EffectPackGradientBar::mousePressEvent(QMouseEvent* event)
     {
         EffectPack::GradientStop stop;
         stop.pos = xToPos(pt.x());
-        // Sample current gradient colour at click
         EffectPack::Block tmp;
         tmp.gradient = stops_;
         stop.color = EffectPack::SampleGradient(tmp, stop.pos);
@@ -302,7 +300,6 @@ void EffectPackGradientBar::mouseMoveEvent(QMouseEvent* event)
         return;
     }
     stops_[(size_t)drag_index_].pos = xToPos(event->position().toPoint().x());
-    // Keep sorted while preserving the dragged stop identity (no nearest-pos hop).
     while(drag_index_ > 0
           && stops_[(size_t)drag_index_].pos < stops_[(size_t)drag_index_ - 1].pos)
     {

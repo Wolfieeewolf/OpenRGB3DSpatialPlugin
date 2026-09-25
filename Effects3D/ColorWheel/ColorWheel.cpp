@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ColorWheel.h"
-#include "ColorWheelVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "EffectStratumBlend.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
@@ -17,7 +17,7 @@ REGISTER_EFFECT_3D(ColorWheel);
 ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(ColorWheelVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("color-wheel"));
     volume_assist_.setResolution(48);
 }
 
@@ -37,9 +37,7 @@ EffectInfo3D ColorWheel::GetEffectInfo() const
     info.user_colors = 0;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

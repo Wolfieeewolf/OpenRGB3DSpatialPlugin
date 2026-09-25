@@ -8,6 +8,7 @@
 #include "EffectLibraryPanel.h"
 #include "EffectPackPanel.h"
 #include "EffectPacks/EffectPackApplier.h"
+#include "EffectPacks/EffectScript.h"
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
@@ -202,6 +203,7 @@ void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pa
     {
         return;
     }
+    EffectPack::SetEffectScriptDirectory(PluginSettingsPaths::EffectPackEffectsDir(resource_manager));
     EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
                                force_hw_update, zone_manager.get());
     if(viewport)

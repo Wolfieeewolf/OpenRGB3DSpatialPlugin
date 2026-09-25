@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioPulse.h"
-#include "AudioPulseVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "AudioReactiveUi.h"
 #include "PluginLog.h"
 #include "SpatialLayerCore.h"
@@ -65,7 +65,7 @@ void AudioPulse::TickPulses(float time)
 AudioPulse::AudioPulse(QWidget* parent)
     : SpatialEffect3D(parent)
 {
-    volume_assist_.setFragmentBody(QString::fromUtf8(AudioPulseVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("audio-pulse"));
     volume_assist_.setResolution(24);
 }
 
@@ -89,8 +89,6 @@ EffectInfo3D AudioPulse::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

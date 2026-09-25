@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectPackApplier.h"
+#include "EffectScript.h"
 #include "EffectPackApplierDetail.h"
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"
@@ -152,7 +153,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                 }
                 on = EvaluateBlockAtAxis(*top, local_ms, axis, seed, &color, &intensity);
             }
-            else if(have_bounds && BlockNeedsWorldEval(top->type) && !BlockUsesSequenceAxis(*top))
+            else if(have_bounds && script::UsesWorld(script::FileId(*top)))
             {
                 on = EvaluateBlockAtWorld(*top, local_ms,
                                           p.x, p.y, p.z,
@@ -164,7 +165,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                 float axis = 0.0f;
                 if(have_bounds)
                 {
-                    if(top->type == BlockType::Spin)
+                    if(EffectAxisAngle(BlockFileId(*top)))
                     {
                         axis = SampleSpinAngle(*top, p.x, p.y, p.z, min_x, max_x, min_y, max_y, min_z, max_z);
                     }
@@ -346,7 +347,7 @@ void BuildSpatialAxesForTarget(const Pack& pack,
     const bool use_device = sample.axis_space == AxisSpace::Device;
     const bool use_sequence = BlockUsesSequenceAxis(sample);
     const bool use_shared = BlockUsesSharedWorldBounds(sample);
-    const bool angular = sample.type == BlockType::Spin && !use_sequence;
+    const bool angular = EffectAxisAngle(BlockFileId(sample)) && !use_sequence;
 
     std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
     applier_detail::BuildOrderedSequenceLeds(pack, probe, transforms, zone_manager, &ordered);
@@ -380,7 +381,6 @@ void BuildSpatialAxesForTarget(const Pack& pack,
         return;
     }
 
-    // Group by transform while preserving ordered LED appearance for nx/ny/nz.
     for(int ti = 0; ti < (int)transforms->size(); ++ti)
     {
         ControllerTransform* transform = (*transforms)[(size_t)ti].get();

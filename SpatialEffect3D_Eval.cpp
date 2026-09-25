@@ -643,9 +643,6 @@ float SpatialEffect3D::GetMotionHz() const
     {
         return 0.0f;
     }
-    /* Speed 100 → ~0.42 Hz, Speed 200 → ~1.06 Hz. Same curve for every effect.
-     * (~25% faster than the prior 0.85 scale so mid slider feels lively without
-     * needing per-effect speed hacks.) */
     return std::max(0.02f, GetNormalizedSpeed()) * 1.06f;
 }
 
@@ -655,23 +652,7 @@ float SpatialEffect3D::GetColorCycleHz() const
     {
         return 0.0f;
     }
-    /* Frequency 100 → ~0.11 Hz hue/palette scroll. */
     return std::max(0.02f, GetNormalizedFrequency()) * 0.28f;
-}
-
-float SpatialEffect3D::GetScaledSpeed() const
-{
-    return GetMotionHz();
-}
-
-float SpatialEffect3D::GetScaledFrequency() const
-{
-    if(effect_frequency == 0)
-    {
-        return 0.0f;
-    }
-    /* Legacy spatial-density driver. Mid slider ≈ 3. Hue scroll should use GetColorCycleHz. */
-    return std::max(0.05f, GetNormalizedFrequency()) * 8.0f;
 }
 
 bool SpatialEffect3D::RequiresWorldSpaceCoordinates() const
@@ -699,7 +680,6 @@ bool SpatialEffect3D::UseWorldGridBounds() const
 
 float SpatialEffect3D::GetScaledDetail() const
 {
-    /* Detail 100 → ~3.1, same for every effect (no per-effect default_detail_scale). */
     return GetNormalizedDetail() * 8.0f;
 }
 

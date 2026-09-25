@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioStripVisualizer.h"
-#include "AudioStripVisualizerVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "AudioReactiveUi.h"
 #include "PluginLog.h"
 #include "SpatialLayerCore.h"
@@ -38,7 +38,7 @@ inline int MapHzToColumn(float hz, int columns, float f_min, float f_max)
 AudioStripVisualizer::AudioStripVisualizer(QWidget* parent)
     : SpatialEffect3D(parent)
 {
-    volume_assist_.setFragmentBody(QString::fromUtf8(AudioStripVisualizerVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("audio-strip-visualizer"));
     volume_assist_.setResolution(22);
     RefreshSpectrumColumns();
 }
@@ -60,8 +60,6 @@ EffectInfo3D AudioStripVisualizer::GetEffectInfo() const
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

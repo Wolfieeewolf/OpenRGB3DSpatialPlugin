@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "TravelingLight.h"
-#include "TravelingLightVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "EffectColorUtils.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
@@ -46,7 +46,7 @@ TravelingLight::TravelingLight(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x000000FF);
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
-    volume_assist_.setFragmentBody(QString::fromUtf8(TravelingLightVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("traveling-light"));
     volume_assist_.setResolution(22);
 }
 
@@ -101,8 +101,6 @@ EffectInfo3D TravelingLight::GetEffectInfo() const
     info.user_colors = 2;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.needs_frequency = true;
     info.show_speed_control = true;

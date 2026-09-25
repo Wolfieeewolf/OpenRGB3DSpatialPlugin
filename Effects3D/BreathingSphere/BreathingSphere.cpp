@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BreathingSphere.h"
-#include "BreathingSphereVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 
@@ -54,7 +54,7 @@ BreathingSphere::BreathingSphere(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x0000FF00);
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
-    volume_assist_.setFragmentBody(QString::fromUtf8(BreathingSphereVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("breathing-sphere"));
     volume_assist_.setResolution(28);
 }
 
@@ -81,8 +81,6 @@ EffectInfo3D BreathingSphere::GetEffectInfo() const
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;

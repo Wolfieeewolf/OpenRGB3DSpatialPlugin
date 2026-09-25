@@ -441,7 +441,6 @@ void EffectPackPanel::onPreview()
         return;
     }
 
-    // Preview owns the devices — pause the spatial effect stack.
     tab_->PrepareEffectPackPreview();
 
     const auto controllers = tab_->resource_manager->GetRGBControllers();

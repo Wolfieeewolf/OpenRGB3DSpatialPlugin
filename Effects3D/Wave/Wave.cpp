@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Wave.h"
-#include "WaveSurfaceVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include <QComboBox>
@@ -36,7 +36,7 @@ Wave::Wave(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x0000FF00);
     default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
-    surface_volume_assist_.setFragmentBody(QString::fromUtf8(WaveSurfaceVolumeFieldGlsl()));
+    surface_volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("wave"));
     surface_volume_assist_.setResolution(18); // was 28 — wave surface is soft; lower atlas = less lag
 }
 
@@ -61,8 +61,6 @@ EffectInfo3D Wave::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

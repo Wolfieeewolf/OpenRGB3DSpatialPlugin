@@ -3,6 +3,7 @@
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackCatalog.h"
 #include "EffectPacks/EffectPackApplier.h"
+#include "EffectPacks/EffectScript.h"
 #include "ZoneManager3D.h"
 
 #include <QColorDialog>
@@ -10,6 +11,7 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QHash>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QMenu>
@@ -146,23 +148,22 @@ void EffectPackTimelineWidget::populateAddEffectMenu(QMenu* menu, int row, int m
     {
         return;
     }
-    QMenu* basic = menu->addMenu(EffectPackCatalog::CategoryLabel(EffectPackCatalog::Category::Basic));
-    QMenu* pixel = menu->addMenu(EffectPackCatalog::CategoryLabel(EffectPackCatalog::Category::Pixel));
-    QMenu* volume = menu->addMenu(EffectPackCatalog::CategoryLabel(EffectPackCatalog::Category::Volume));
-    for(const EffectPackCatalog::Entry& e : EffectPackCatalog::AllEntries())
+    const QList<EffectPackCatalog::Entry> entries = EffectPackCatalog::LoadEntries(effect_files_dir_);
+    QHash<QString, QMenu*> menus;
+    for(const QString& section : EffectPackCatalog::SectionOrder(entries))
     {
-        QMenu* dest = basic;
-        if(e.category == EffectPackCatalog::Category::Pixel)
+        menus.insert(section.toLower(), menu->addMenu(EffectPackCatalog::SectionLabel(section)));
+    }
+    for(const EffectPackCatalog::Entry& e : entries)
+    {
+        QMenu* dest = menus.value(e.section.toLower());
+        if(!dest)
         {
-            dest = pixel;
+            continue;
         }
-        else if(e.category == EffectPackCatalog::Category::Volume)
-        {
-            dest = volume;
-        }
-        QAction* act = dest->addAction(EffectPackCatalog::MakeEffectIcon(e), QString::fromUtf8(e.name));
-        connect(act, &QAction::triggered, this, [this, row, ms, type = e.type]() {
-            emit effectAddRequested(row, ms, (int)type);
+        QAction* act = dest->addAction(EffectPackCatalog::MakeEffectIcon(e), e.name);
+        connect(act, &QAction::triggered, this, [this, row, ms, id = e.id]() {
+            emit effectAddRequested(row, ms, id);
         });
     }
 }
@@ -200,8 +201,8 @@ bool EffectPackTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
         return false;
     }
 
-    EffectPack::BlockType type = EffectPack::BlockType::Solid;
-    if(EffectPackCatalog::EffectTypeFromMime(mime, &type))
+    const QString effect_id = EffectPackCatalog::EffectIdFromMime(mime);
+    if(!effect_id.isEmpty())
     {
         if(pos.y() < header_height_ || pos.x() < gutter_width_)
         {
@@ -215,7 +216,7 @@ bool EffectPackTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
         const int ms = xToTime(pos.x());
         selected_row_ = row;
         emit rowSelected(row);
-        emit effectAddRequested(row, ms, (int)type);
+        emit effectAddRequested(row, ms, effect_id);
         return true;
     }
 
@@ -325,7 +326,7 @@ void EffectPackTimelineWidget::editBlockColorAt(int track, int block, const QPoi
     selected_block_ = block;
     emit blockSelected(track, block);
 
-    const RGBColor current = (b->type == EffectPack::BlockType::Fade) ? b->color_from : b->color;
+    const RGBColor current = EffectPack::EffectColorEnds(EffectPack::BlockFileId(*b)) ? b->color_from : b->color;
     const QColor picked = QColorDialog::getColor(RgbToQColor(current), this, QStringLiteral("Block color"));
     if(!picked.isValid())
     {
@@ -495,7 +496,6 @@ void EffectPackTimelineWidget::mousePressEvent(QMouseEvent* event)
         return;
     }
 
-    // Empty cell: select row + move playhead; clear block selection.
     selected_row_ = row;
     selected_track_ = -1;
     selected_block_ = -1;

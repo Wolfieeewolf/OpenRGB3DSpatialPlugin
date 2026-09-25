@@ -27,9 +27,24 @@ inline filesystem::path SpatialShadersDir(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "spatial-shaders";
 }
 
+inline filesystem::path SpatialEffectsDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "spatial-effects";
+}
+
+inline filesystem::path PatternKernelsDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "pattern-kernels";
+}
+
 inline filesystem::path EffectPacksDir(OpenRGBPluginAPIInterface* rm)
 {
     return PluginRoot(rm) / "effect-packs";
+}
+
+inline filesystem::path EffectPackEffectsDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "effect-pack-effects";
 }
 
 inline filesystem::path UserGradientsFile(OpenRGBPluginAPIInterface* rm)
@@ -40,6 +55,11 @@ inline filesystem::path UserGradientsFile(OpenRGBPluginAPIInterface* rm)
 inline filesystem::path UserColorsFile(OpenRGBPluginAPIInterface* rm)
 {
     return PluginRoot(rm) / "user-colors.json";
+}
+
+inline filesystem::path UserCurvesFile(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "user-curves.json";
 }
 
 inline filesystem::path EffectBindingsFile(OpenRGBPluginAPIInterface* rm)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Bubbles.h"
-#include "BubblesVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
@@ -19,7 +19,7 @@ REGISTER_EFFECT_3D(Bubbles);
 Bubbles::Bubbles(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(BubblesVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("bubbles"));
     // Thin shells need enough atlas cells or rings vanish between voxels.
     volume_assist_.setResolution(20);
 }
@@ -39,9 +39,7 @@ EffectInfo3D Bubbles::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;

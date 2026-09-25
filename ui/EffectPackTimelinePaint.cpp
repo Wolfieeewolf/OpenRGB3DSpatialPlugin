@@ -3,6 +3,7 @@
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackCatalog.h"
 #include "EffectPacks/EffectPackApplier.h"
+#include "EffectPacks/EffectScript.h"
 #include "ZoneManager3D.h"
 
 #include <QCursor>
@@ -95,12 +96,7 @@ void EffectPackTimelineWidget::paintBlockSpatialRaster(QPainter& p, const QRect&
     img.fill(Qt::transparent);
 
     const int dur = std::max(1, sample.end_ms - sample.start_ms);
-    const float floor_i = std::clamp(sample.min_intensity, 0.0f, 1.0f);
-    const bool twinkle = (sample.type == EffectPack::BlockType::Twinkle);
-    const bool chase = (sample.type == EffectPack::BlockType::Chase
-                        || sample.type == EffectPack::BlockType::Spin
-                        || sample.type == EffectPack::BlockType::Orbit);
-    const bool world_eval = EffectPack::BlockNeedsWorldEval(sample.type);
+    const bool world_eval = EffectPack::EffectScriptUsesWorld(EffectPack::BlockFileId(sample));
 
     auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
         constexpr float k0 = 0.0f;
@@ -168,14 +164,6 @@ void EffectPackTimelineWidget::paintBlockSpatialRaster(QPainter& p, const QRect&
             {
                 continue;
             }
-            if(twinkle && intens <= floor_i + 0.05f)
-            {
-                continue;
-            }
-            if(chase && intens < 0.12f)
-            {
-                continue;
-            }
             if(intens < 0.02f)
             {
                 continue;
@@ -203,7 +191,7 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
         grad.setColorAt(0.0, c);
         grad.setColorAt(1.0, c);
     }
-    else if(sample.type == EffectPack::BlockType::Solid && sample.gradient.size() <= 2
+    else if(sample.gradient.size() <= 2
             && sample.gradient.front().color == sample.gradient.back().color)
     {
         QColor c = RgbToQColor(sample.gradient.front().color);
@@ -219,7 +207,6 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
             c.setAlpha(alpha);
             grad.setColorAt(std::clamp(s.pos, 0.0f, 1.0f), c);
         }
-        // Guard: QLinearGradient needs at least one stop.
         if(sample.gradient.empty())
         {
             QColor c = RgbToQColor(sample.color);
@@ -232,7 +219,7 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
     p.setBrush(grad);
     p.drawRect(br);
 
-    if(sample.type == EffectPack::BlockType::Pulse && br.width() > 8)
+    if(EffectPack::EffectPreviewPulse(EffectPack::BlockFileId(sample)) && br.width() > 8)
     {
         const float speed = std::max(0.05f, sample.speed);
         const int period = std::max(1, (int)std::lround((float)std::max(1, sample.period_ms) / speed));
@@ -297,37 +284,13 @@ void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, co
     p.setBrush(QColor(8, 8, 10));
     p.drawRect(br);
 
-    switch(sample.type)
+    if(EffectPack::EffectScriptLoaded(EffectPack::BlockFileId(sample)))
     {
-        case EffectPack::BlockType::Solid:
-        case EffectPack::BlockType::Fade:
-        case EffectPack::BlockType::Pulse:
-        case EffectPack::BlockType::Strobe:
-        case EffectPack::BlockType::Candle:
-            paintBlockGradientBar(p, br, sample, alpha);
-            break;
-        case EffectPack::BlockType::Wipe:
-        case EffectPack::BlockType::Chase:
-        case EffectPack::BlockType::Twinkle:
-        case EffectPack::BlockType::ColorWash:
-        case EffectPack::BlockType::Alternating:
-        case EffectPack::BlockType::Spin:
-        case EffectPack::BlockType::Dissolve:
-        case EffectPack::BlockType::Plasma:
-        case EffectPack::BlockType::Snow:
-        case EffectPack::BlockType::Fire:
-        case EffectPack::BlockType::Balls:
-        case EffectPack::BlockType::Bars:
-        case EffectPack::BlockType::SphereWipe:
-        case EffectPack::BlockType::Orbit:
-        case EffectPack::BlockType::Ripple:
-        case EffectPack::BlockType::Meteor:
-        case EffectPack::BlockType::Noise3D:
-            paintBlockSpatialRaster(p, br, pb, sample);
-            break;
-        default:
-            paintBlockGradientBar(p, br, sample, alpha);
-            break;
+        paintBlockSpatialRaster(p, br, pb, sample);
+    }
+    else
+    {
+        paintBlockGradientBar(p, br, sample, alpha);
     }
 
     {

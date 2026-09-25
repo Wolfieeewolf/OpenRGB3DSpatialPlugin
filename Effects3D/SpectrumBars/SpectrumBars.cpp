@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpectrumBars.h"
-#include "SpectrumBarsVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "AudioReactiveUi.h"
 #include "PluginLog.h"
 #include "SpatialLayerCore.h"
@@ -33,7 +33,7 @@ namespace
 SpectrumBars::SpectrumBars(QWidget* parent)
     : SpatialEffect3D(parent)
 {
-    volume_assist_.setFragmentBody(QString::fromUtf8(SpectrumBarsVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("spectrum-bars"));
     volume_assist_.setResolution(22);
     RefreshBandRange();
 }
@@ -60,8 +60,6 @@ EffectInfo3D SpectrumBars::GetEffectInfo() const
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = false;
     info.show_brightness_control = true;

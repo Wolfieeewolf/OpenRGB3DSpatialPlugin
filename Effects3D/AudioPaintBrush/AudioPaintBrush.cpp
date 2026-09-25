@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioPaintBrush.h"
-#include "AudioPaintBrushVolumeFieldGlsl.h"
+#include "Shaders/SpatialShaderCatalog.h"
 #include "AudioReactiveUi.h"
 #include "PluginLog.h"
 #include "SpatialLayerCore.h"
@@ -25,7 +25,7 @@ float SmoothToward(float cur, float target, float alpha)
 AudioPaintBrush::AudioPaintBrush(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    volume_assist_.setFragmentBody(QString::fromUtf8(AudioPaintBrushVolumeFieldGlsl()));
+    volume_assist_.setFragmentBody(SpatialShaderCatalog::LoadEffectShader("audio-paint-brush"));
     volume_assist_.setResolution(20);
 }
 
@@ -45,9 +45,7 @@ EffectInfo3D AudioPaintBrush::GetEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.default_speed_scale = 14.0f;
     info.needs_frequency = true;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
