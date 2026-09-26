@@ -18,10 +18,13 @@ If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can
 
 | Doc | Use it for |
 | --- | --- |
+| [effects-engines.md](Documentation/effects-engines.md) | Engines vs file content; FolderVolume / Audio / Media / Shader Field / Kernel — read before adding or converting an effect |
 | [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | mm, grid units, RoomGrid, viewport, effects, spacing — read before changing layout math, reference points, or LED placement |
 | [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry — RoomGrid → game world, sparse cubemap SHM; read when changing SHM, scale publish, or mod mapping |
 | [effect-event-maker.md](Documentation/effect-event-maker.md) | Effect packs + Event Bindings |
 | [shader-conversion.md](Documentation/shader-conversion.md) | Porting shaders into Shader Field / volume / strip kernels |
+
+Stock layouts and effect `.fs` / `.kernel` files: **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)**.
 
 To refresh the GitHub wiki from the local seed: `.\scripts\publish-wiki.ps1` (after the wiki has been created once in the GitHub UI).
 
@@ -47,8 +50,8 @@ We use **GitHub issue templates** under `.github/ISSUE_TEMPLATE/` (GitLab copies
 
 | Topic | Open an issue in |
 | ----- | ---------------- |
-| Plugin bugs, effects, UI, screen mirror, game telemetry | **[OpenRGB3DSpatialPlugin on GitHub](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues)** |
-| Controller layout JSON files | **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)** |
+| Plugin bugs, engines, UI, screen mirror, game telemetry | **[OpenRGB3DSpatialPlugin on GitHub](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues)** |
+| Controller layouts, stock `.fs` / `.kernel` / timeline content | **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)** |
 
 ### Templates on GitHub (plugin)
 
