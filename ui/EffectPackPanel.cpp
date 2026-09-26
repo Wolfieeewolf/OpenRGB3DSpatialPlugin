@@ -100,7 +100,7 @@ filesystem::path EffectPackPanel::packsDir() const
     {
         return {};
     }
-    return PluginSettingsPaths::EffectPacksDir(tab_->resource_manager);
+    return PluginSettingsPaths::TimelinesDir(tab_->resource_manager);
 }
 
 QString EffectPackPanel::pathFromItem(QListWidgetItem* item) const
@@ -146,11 +146,11 @@ void EffectPackPanel::populateList()
 
     if(packs.empty())
     {
-        ui->statusLabel->setText(QStringLiteral("No packs found in effect-packs/"));
+        ui->statusLabel->setText(QStringLiteral("No packs found in timelines/"));
     }
     else if(!player_.IsPlaying())
     {
-        ui->statusLabel->setText(QStringLiteral("%1 pack(s) in effect-packs/").arg((int)packs.size()));
+        ui->statusLabel->setText(QStringLiteral("%1 pack(s) in timelines/").arg((int)packs.size()));
     }
 }
 
@@ -331,7 +331,7 @@ void EffectPackPanel::onImport()
             const auto reply = QMessageBox::question(
                 this,
                 QStringLiteral("Replace pack?"),
-                QStringLiteral("%1 is already in effect-packs.\n\nReplace it?").arg(src_info.fileName()),
+                QStringLiteral("%1 is already in timelines.\n\nReplace it?").arg(src_info.fileName()),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::No);
             if(reply != QMessageBox::Yes)

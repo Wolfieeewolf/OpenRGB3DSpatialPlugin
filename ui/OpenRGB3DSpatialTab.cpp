@@ -203,7 +203,7 @@ void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pa
     {
         return;
     }
-    EffectPack::SetEffectScriptDirectory(PluginSettingsPaths::EffectPackEffectsDir(resource_manager));
+    EffectPack::SetEffectScriptDirectory(PluginSettingsPaths::TimelineBlocksDir(resource_manager));
     EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
                                force_hw_update, zone_manager.get());
     if(viewport)

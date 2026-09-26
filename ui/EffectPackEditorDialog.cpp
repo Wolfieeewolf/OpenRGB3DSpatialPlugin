@@ -117,7 +117,7 @@ void EffectPackEditorDialog::buildUi()
 {
     auto* root = new QVBoxLayout(this);
 
-    const filesystem::path effect_files_dir = PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr);
+    const filesystem::path effect_files_dir = PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr);
     effect_toolbar_ = new EffectPackToolBar(
         PluginSettingsPaths::UserGradientsFile(tab_ ? tab_->resource_manager : nullptr),
         PluginSettingsPaths::UserColorsFile(tab_ ? tab_->resource_manager : nullptr),
@@ -1051,7 +1051,7 @@ void EffectPackEditorDialog::updateSelectionActions()
         {
             title = QString::fromStdString(EffectPack::BlockFileId(*block));
             const QList<EffectPackCatalog::Entry> entries = EffectPackCatalog::LoadEntries(
-                PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr));
+                PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr));
             for(const EffectPackCatalog::Entry& entry : entries)
             {
                 if(entry.id == title)

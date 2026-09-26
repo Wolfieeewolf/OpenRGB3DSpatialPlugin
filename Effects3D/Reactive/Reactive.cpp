@@ -60,33 +60,6 @@ QString FormatTravel(int pct)
     return QString::number(v) + QStringLiteral(" · ") + QString::fromUtf8(label);
 }
 
-QString FormatRingWidth(int pct)
-{
-    const int v = std::clamp(pct, 0, 100);
-    const char* label = "Medium";
-    if(v <= 8)
-    {
-        label = "Hairline";
-    }
-    else if(v <= 22)
-    {
-        label = "Thin";
-    }
-    else if(v <= 55)
-    {
-        label = "Medium";
-    }
-    else if(v <= 82)
-    {
-        label = "Thick";
-    }
-    else
-    {
-        label = "Solid";
-    }
-    return QString::number(v) + QStringLiteral(" · ") + QString::fromUtf8(label);
-}
-
 float TravelRadius(float travel01, float spacing, float spread, float zone_diag)
 {
     const float one = std::max(spacing * 1.15f, 1.0e-4f);
@@ -671,7 +644,7 @@ const char* Reactive::ShapeName(int mode)
 uint64_t Reactive::OriginKey(const Vector3D& p)
 {
     const auto q = [](float v) -> uint64_t {
-        return static_cast<uint64_t>(static_cast<uint32_t>(std::lround(v * 40.0f)));
+        return static_cast<uint64_t>(static_cast<uint32_t>(std::lround(v * 200.0f)));
     };
     return (q(p.x) << 42) ^ (q(p.y) << 21) ^ q(p.z);
 }
@@ -708,10 +681,10 @@ EffectInfo3D Reactive::GetEffectInfo() const
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
-    info.show_axis_control = false;
     info.show_color_controls = true;
     info.supports_height_bands = true;
     info.supports_strip_colormap = true;
+    info.show_thickness_control = true;
     return info;
 }
 
@@ -886,22 +859,6 @@ void Reactive::SetupCustomUI(QWidget* parent)
         FormatTravel,
         on_changed);
 
-    EffectSliderRow* ring_row = EffectUiRows::AppendSliderRow(
-        layout,
-        QStringLiteral("Thickness:"),
-        0,
-        100,
-        ring_width_pct_,
-        QStringLiteral(
-            "Width of the glowing band or wall. Hairline is a thin pulse; Solid is so wide "
-            "it almost fills in. Applies to every spread and look."));
-    ring_row->setObjectName(QStringLiteral("ringWidthRow"));
-    ring_row->bindValueChanged(
-        this,
-        [this](int v) { ring_width_pct_ = std::clamp(v, 0, 100); },
-        FormatRingWidth,
-        on_changed);
-
     const auto repopulate_orient = [orient_combo, this]() {
         orient_combo->blockSignals(true);
         orient_combo->clear();
@@ -1043,7 +1000,7 @@ void Reactive::SpawnWave(const Vector3D& origin,
     last_spawn_time_[OriginKey(origin)] = time;
 }
 
-void Reactive::TickWaves(float time, const GridContext3D& grid)
+void Reactive::TickWaves(float time, const GridContext3D& grid, std::uint64_t frame_key)
 {
     ReactiveInputManager* mgr = ReactiveInputManager::instance();
     if(!mgr || !mgr->isRunning())
@@ -1053,6 +1010,13 @@ void Reactive::TickWaves(float time, const GridContext3D& grid)
         spawn_counts_.clear();
         have_tick_time_ = false;
         return;
+    }
+
+    if(have_tick_time_ && time + 1e-4f < last_tick_time_)
+    {
+        waves_.clear();
+        last_spawn_time_.clear();
+        spawn_counts_.clear();
     }
 
     if(have_tick_time_ && std::fabs(time - last_tick_time_) < 1e-5f)
@@ -1065,8 +1029,10 @@ void Reactive::TickWaves(float time, const GridContext3D& grid)
     const float speed01 = GetNormalizedSpeed();
     const float zone_diag = std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
 
+    const std::uint64_t key = frame_key != 0 ? frame_key
+        : (static_cast<std::uint64_t>(std::llround(time * 240.0)) | (1ull << 63));
     std::vector<ReactiveOriginEvent> edges;
-    mgr->DrainOriginEdges(edges);
+    mgr->CopyOriginEdgesForFrame(key, edges);
     for(const ReactiveOriginEvent& edge : edges)
     {
         if(!SourceEnabled(edge.kind))
@@ -1079,6 +1045,10 @@ void Reactive::TickWaves(float time, const GridContext3D& grid)
             if(edge.down)
             {
                 spawn_counts_[OriginKey(edge.room_position)] = 1;
+            }
+            else
+            {
+                spawn_counts_.erase(OriginKey(edge.room_position));
             }
         }
     }
@@ -1096,23 +1066,23 @@ void Reactive::TickWaves(float time, const GridContext3D& grid)
             {
                 continue;
             }
-            const uint64_t key = OriginKey(h.room_position);
-            held_keys.insert(key);
+            const uint64_t key_h = OriginKey(h.room_position);
+            held_keys.insert(key_h);
             if(budget > 0)
             {
-                const auto count_found = spawn_counts_.find(key);
+                const auto count_found = spawn_counts_.find(key_h);
                 if(count_found != spawn_counts_.end() && count_found->second >= budget)
                 {
                     continue;
                 }
             }
-            const auto found = last_spawn_time_.find(key);
+            const auto found = last_spawn_time_.find(key_h);
             if(found != last_spawn_time_.end() && (time - found->second) < interval)
             {
                 continue;
             }
             SpawnWave(h.room_position, time, 0.85f, h.device_spread, h.led_spacing);
-            spawn_counts_[key] += 1;
+            spawn_counts_[key_h] += 1;
         }
         for(auto it = spawn_counts_.begin(); it != spawn_counts_.end();)
         {
@@ -1130,33 +1100,28 @@ void Reactive::TickWaves(float time, const GridContext3D& grid)
     waves_.erase(std::remove_if(waves_.begin(),
                                 waves_.end(),
                                 [time, speed01, zone_diag, this](const WaveImpact& w) {
+                                    const float age = time - w.birth_time;
+                                    if(age < 0.0f)
+                                    {
+                                        return true;
+                                    }
                                     const float life = WaveTravelLifetime(
                                         w.spacing, w.spread, zone_diag, speed01, travel_pct_, look_mode_);
-                                    return (time - w.birth_time) > life;
+                                    return age > life;
                                 }),
                  waves_.end());
 }
 
 void Reactive::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
-    (void)render_sequence;
-    TickWaves(time_sec, grid);
+    TickWaves(time_sec, grid, render_sequence);
 }
 
 RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    TickWaves(time, grid);
+    TickWaves(time, grid, grid.render_sequence);
 
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
-    {
-        return 0x00000000;
-    }
-
-    Vector3D anchor = GetEffectOriginGrid(grid);
-    const float rel_x = x - anchor.x;
-    const float rel_y = y - anchor.y;
-    const float rel_z = z - anchor.z;
-    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
     {
         return 0x00000000;
     }
@@ -1190,7 +1155,7 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
                                               look_mode_,
                                               footprint_shape_,
                                               travel_pct_,
-                                              ring_width_pct_,
+                                              GetBandThickness(),
                                               zone_diag);
         if(energy > best)
         {
@@ -1219,7 +1184,7 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
     }
 
     const float bright = std::clamp(GetBrightness() / 100.0f, 0.0f, 1.0f);
-    const float intensity = std::min(1.0f, best * (0.85f + 0.55f * bright));
+    const float intensity = std::min(1.0f, best * bright);
 
     const float radial01 =
         std::clamp(best_along / std::max(best_travel, 1.0e-4f), 0.0f, 1.0f);
@@ -1228,6 +1193,7 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
     const float color_driver =
         std::fmod(radial01 * rainbow_cycles + slot_phase + GetColorCycleHz() * time + 2.0f, 1.0f);
 
+    Vector3D anchor = GetEffectOriginGrid(grid);
     Vector3D sample_pos{x, y, z};
     const float coord_y01 = SampleStratumYNorm01(y, grid, anchor);
     SpatialLayerCore::Basis basis{};
@@ -1303,7 +1269,6 @@ nlohmann::json Reactive::SaveSettings() const
     j["look_mode"] = look_mode_;
     j["footprint_shape"] = footprint_shape_;
     j["travel_pct"] = travel_pct_;
-    j["ring_width_pct"] = ring_width_pct_;
     return j;
 }
 
@@ -1356,10 +1321,10 @@ void Reactive::LoadSettings(const nlohmann::json& settings)
     {
         travel_pct_ = std::clamp(settings["travel_pct"].get<int>(), 0, 100);
     }
-    if(settings.contains("ring_width_pct"))
-    {
-        ring_width_pct_ = std::clamp(settings["ring_width_pct"].get<int>(), 0, 100);
-    }
+    if(!settings.contains("band_thickness") && settings.contains("ring_width_pct") && settings["ring_width_pct"].is_number())
+        effect_band_thickness = (unsigned int)std::clamp(settings["ring_width_pct"].get<int>(), 0, 100);
+    if(thickness_slider)
+        thickness_slider->setValue((int)effect_band_thickness);
 
     if(QWidget* panel = CustomSettingsPanelWidget())
     {
@@ -1375,7 +1340,6 @@ void Reactive::LoadSettings(const nlohmann::json& settings)
             EffectUiSync::setComboIndex(fx, "shapeRow", footprint_shape_);
             EffectUiSync::setSliderValue(fx, "repeatRateRow", repeat_rate_deci_hz_, FormatRepeatRate);
             EffectUiSync::setSliderValue(fx, "travelRow", travel_pct_, FormatTravel);
-            EffectUiSync::setSliderValue(fx, "ringWidthRow", ring_width_pct_, FormatRingWidth);
             if(EffectSliderRow* rate_row = EffectUiSync::sliderRow(fx, "repeatRateRow"))
             {
                 rate_row->setEnabled(wave_mode_ != WAVE_ONCE);

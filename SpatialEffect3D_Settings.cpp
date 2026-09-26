@@ -335,6 +335,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["fps"] = effect_fps;
 
     j["path_axis"] = effect_path_axis;
+    j["band_thickness"] = effect_band_thickness;
+    j["edge_fade"] = effect_edge_fade;
+    j["instance_count"] = effect_instance_count;
     j["plane"] = effect_plane;
     j["surface_mask"] = effect_surface_mask;
     j["offset_x"] = effect_offset_x;
@@ -360,10 +363,7 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
         SaveEffectStratumSettings(j);
     }
 
-    if(GetEffectInfo().supports_strip_colormap)
-    {
-        SaveEffectStripColormapSettings(j);
-    }
+    SaveEffectStripColormapSettings(j);
 
     return j;
 }
@@ -585,6 +585,12 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("path_axis") && settings["path_axis"].is_number_integer())
         effect_path_axis = std::clamp(settings["path_axis"].get<int>(), 0, 2);
+    if(settings.contains("band_thickness") && settings["band_thickness"].is_number())
+        effect_band_thickness = (unsigned int)std::clamp((int)std::lround(settings["band_thickness"].get<double>()), 0, 100);
+    if(settings.contains("edge_fade") && settings["edge_fade"].is_number())
+        effect_edge_fade = (unsigned int)std::clamp((int)std::lround(settings["edge_fade"].get<double>()), 0, 100);
+    if(settings.contains("instance_count") && settings["instance_count"].is_number())
+        effect_instance_count = (unsigned int)std::clamp((int)std::lround(settings["instance_count"].get<double>()), 1, 48);
     if(settings.contains("plane") && settings["plane"].is_number_integer())
         effect_plane = std::clamp(settings["plane"].get<int>(), 0, 2);
     if(settings.contains("surface_mask") && settings["surface_mask"].is_number_integer())
@@ -599,6 +605,18 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_offset_z = std::clamp(settings["offset_z"].get<int>(), -100, 100);
     if(path_axis_combo)
         path_axis_combo->setCurrentIndex(effect_path_axis);
+    if(thickness_slider)
+        thickness_slider->setValue((int)effect_band_thickness);
+    if(thickness_label)
+        thickness_label->setText(QString::number(effect_band_thickness) + QStringLiteral("%"));
+    if(edge_fade_slider)
+        edge_fade_slider->setValue((int)effect_edge_fade);
+    if(edge_fade_label)
+        edge_fade_label->setText(QString::number(effect_edge_fade) + QStringLiteral("%"));
+    if(count_slider)
+        count_slider->setValue((int)effect_instance_count);
+    if(count_label)
+        count_label->setText(QString::number(effect_instance_count));
     if(plane_combo)
         plane_combo->setCurrentIndex(effect_plane);
     if(offset_x_slider)
@@ -778,10 +796,7 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         LoadEffectStratumSettings(settings);
     }
 
-    if(GetEffectInfo().supports_strip_colormap)
-    {
-        LoadEffectStripColormapSettings(settings);
-    }
+    LoadEffectStripColormapSettings(settings);
 }
 
 void SpatialEffect3D::SetScaleInverted(bool inverted)

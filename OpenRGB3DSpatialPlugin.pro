@@ -281,8 +281,6 @@ HEADERS += \
     ui/widgets/MediaTextureAmbienceBlock.h \
     ui/widgets/AudioEqBandColumn.h \
     ui/widgets/EffectControlsRoot.h \
-    Effects3D/SpectrumBars/SpectrumBars.h \
-    Effects3D/AudioStripVisualizer/AudioStripVisualizer.h \
     Effects3D/ShaderField/ShaderField.h \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
@@ -295,44 +293,19 @@ HEADERS += \
     Shaders/SpatialStripFieldEngine.h \
     Shaders/SpatialStripFieldAssist.h \
     Effects3D/AudioReactiveUi.h \
-    Effects3D/AudioLevel/AudioLevel.h \
-    Effects3D/AudioPulse/AudioPulse.h \
-    Effects3D/BassPunch/BassPunch.h \
-    Effects3D/NoteSparkle/NoteSparkle.h \
     Audio/AudioInputManager.h \
     Input/ReactiveInputTypes.h \
     Input/ReactiveKeyMap.h \
     Input/ReactiveInputManager.h \
     Effects3D/Reactive/Reactive.h \
-    Effects3D/Plasma/Plasma.h \
-    Effects3D/Spiral/Spiral.h \
-    Effects3D/TravelingLight/TravelingLight.h \
-    Effects3D/Wave/Wave.h \
-    Effects3D/BreathingSphere/BreathingSphere.h \
-    Effects3D/DNAHelix/DNAHelix.h \
-    Effects3D/BouncingBall/BouncingBall.h \
-    Effects3D/PulseRing/PulseRing.h \
-    Effects3D/GridKit/GridKit.h \
-    Effects3D/AudioPaintBrush/AudioPaintBrush.h \
-    Effects3D/SurfaceAmbient/SurfaceAmbient.h \
-    Effects3D/Starfield/Starfield.h \
-    Effects3D/ParticleField/ParticleField.h \
-    Effects3D/Bubbles/Bubbles.h \
-    Effects3D/ColorWheel/ColorWheel.h \
+    Effects3D/FolderVolume/FolderVolumeEffect.h \
     Effects3D/ScreenMirror/ScreenMirror.h \
     Effects3D/ScreenMirror/ScreenMirror_Internal.h \
     Effects3D/ScreenMirror/ScreenMirrorWaveMath.h \
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
-    Effects3D/TextureProjection/TextureProjection.h \
-    Effects3D/OmniShapeTexture/OmniShapeTexture.h \
-    Effects3D/ShellPattern/ShellPattern.h \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.h \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.h \
-    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights.h \
-    Effects3D/HarmonicPulse/HarmonicPulse.h \
-    Effects3D/HexLattice/HexLattice.h \
-    Effects3D/DepthTone/DepthTone.h
 
 SOURCES += \
     OpenRGB3DSpatialPlugin.cpp \
@@ -478,15 +451,7 @@ SOURCES += \
     ui/widgets/EffectTransportRow.cpp \
     ui/widgets/MediaTextureAmbienceBlock.cpp \
     ui/widgets/AudioEqBandColumn.cpp \
-    Effects3D/Plasma/Plasma.cpp \
-    Effects3D/Spiral/Spiral.cpp \
-    Effects3D/TravelingLight/TravelingLight.cpp \
-    Effects3D/Wave/Wave.cpp \
-    Effects3D/BreathingSphere/BreathingSphere.cpp \
-    Effects3D/DNAHelix/DNAHelix.cpp \
-    Effects3D/BouncingBall/BouncingBall.cpp \
-    Effects3D/SpectrumBars/SpectrumBars.cpp \
-    Effects3D/AudioStripVisualizer/AudioStripVisualizer.cpp \
+    Effects3D/FolderVolume/FolderVolumeEffect.cpp \
     Effects3D/ShaderField/ShaderField.cpp \
     Shaders/SpatialShaderEngine.cpp \
     Shaders/SpatialShaderCatalog.cpp \
@@ -495,34 +460,15 @@ SOURCES += \
     Shaders/SpatialVolumeFieldAssist.cpp \
     Shaders/SpatialStripFieldEngine.cpp \
     Shaders/SpatialStripFieldAssist.cpp \
-    Effects3D/AudioLevel/AudioLevel.cpp \
-    Effects3D/AudioPulse/AudioPulse.cpp \
-    Effects3D/BassPunch/BassPunch.cpp \
-    Effects3D/NoteSparkle/NoteSparkle.cpp \
     Effects3D/Reactive/Reactive.cpp \
     Input/ReactiveKeyMap.cpp \
     Input/ReactiveInputManager.cpp \
-    Effects3D/PulseRing/PulseRing.cpp \
-    Effects3D/GridKit/GridKit.cpp \
-    Effects3D/AudioPaintBrush/AudioPaintBrush.cpp \
-    Effects3D/SurfaceAmbient/SurfaceAmbient.cpp \
-    Effects3D/Starfield/Starfield.cpp \
-    Effects3D/ParticleField/ParticleField.cpp \
-    Effects3D/Bubbles/Bubbles.cpp \
-    Effects3D/ColorWheel/ColorWheel.cpp \
     Effects3D/ScreenMirror/ScreenMirror.cpp \
     Effects3D/ScreenMirror/ScreenMirror_Render.cpp \
     Effects3D/ScreenMirror/ScreenMirror_Settings.cpp \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.cpp \
-    Effects3D/TextureProjection/TextureProjection.cpp \
-    Effects3D/OmniShapeTexture/OmniShapeTexture.cpp \
-    Effects3D/ShellPattern/ShellPattern.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.cpp \
-    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights.cpp \
-    Effects3D/HarmonicPulse/HarmonicPulse.cpp \
-    Effects3D/HexLattice/HexLattice.cpp \
-    Effects3D/DepthTone/DepthTone.cpp \
     Audio/AudioInputManager.cpp
 
 win32:CONFIG += QTPLUGIN

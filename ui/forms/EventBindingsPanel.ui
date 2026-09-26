@@ -12,7 +12,7 @@
    <item>
     <widget class="EffectInfoLabel" name="helpLabel" native="true">
      <property name="text">
-      <string>Map system or manual events to effect packs. Drop extra .json recipes in binding-catalog. Only sources for this OS are listed.</string>
+      <string>Map system or manual events to timelines. Drop extra .json recipes in bindings/. Only sources for this OS are listed.</string>
      </property>
     </widget>
    </item>

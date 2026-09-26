@@ -79,7 +79,7 @@
         <string>Import…</string>
        </property>
        <property name="toolTip">
-        <string>Copy effect pack files into effect-packs and open them to map controllers</string>
+        <string>Copy timeline files into timelines/ and open them to map controllers</string>
        </property>
       </widget>
      </item>

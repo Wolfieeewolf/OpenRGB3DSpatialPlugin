@@ -5,6 +5,8 @@
 
 #include <QWidget>
 
+class QComboBox;
+
 class QCheckBox;
 class QLabel;
 class QSlider;
@@ -42,6 +44,13 @@ public:
     QCheckBox* scaleInvertCheck() const;
     QSlider* fpsSlider() const;
     QLabel* fpsLabel() const;
+    QComboBox* pathAxisCombo() const;
+    QSlider* thicknessSlider() const;
+    QLabel* thicknessLabel() const;
+    QSlider* edgeFadeSlider() const;
+    QLabel* edgeFadeLabel() const;
+    QSlider* countSlider() const;
+    QLabel* countLabel() const;
 
 private:
     Ui::EffectMotionPanel* ui = nullptr;

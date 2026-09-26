@@ -36,7 +36,7 @@ void LoadKernels()
     g_loaded = true;
     PluginSettingsPaths::EnsurePluginDataLayout(OpenRGB3DSpatialPlugin::APIPointer);
     const QString root = QString::fromStdString(
-        PluginSettingsPaths::PatternKernelsDir(OpenRGB3DSpatialPlugin::APIPointer).string());
+        PluginSettingsPaths::PatternsDir(OpenRGB3DSpatialPlugin::APIPointer).string());
     QDir dir(root);
     if(!dir.exists())
     {

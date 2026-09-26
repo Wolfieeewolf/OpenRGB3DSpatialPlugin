@@ -2,6 +2,7 @@
 
 #include "OpenRGB3DSpatialPlugin.h"
 #include "OpenRGB3DSpatialTab.h"
+#include "Effects3D/FolderVolume/FolderVolumeEffect.h"
 #include "Game/GameTelemetryBridge.h"
 #include "ResourceManagerCallback.h"
 #include "ProfileManager.h"
@@ -71,6 +72,7 @@ void OpenRGB3DSpatialPlugin::Load(OpenRGBPluginAPIInterface* plugin_api_ptr)
         game_telemetry_bridge = std::make_unique<GameTelemetryBridge>();
     }
     game_telemetry_bridge->Register(APIPointer);
+    RegisterFolderVolumeEffects();
 
     ui = new OpenRGB3DSpatialTab(APIPointer);
     ui->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);

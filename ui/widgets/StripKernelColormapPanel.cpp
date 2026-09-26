@@ -150,13 +150,18 @@ void StripKernelColormapPanel::refreshSecondaryEnabled()
         unfold_idx == (int)StripPatternSurface::UnfoldMode::DiagonalXYZ ||
         unfold_idx == (int)StripPatternSurface::UnfoldMode::Manhattan01;
 
-    ui->secondaryPanel->setVisible(on);
+    ui->secondaryPanel->setVisible(true);
+    ui->kernelCaption->setVisible(on);
+    ui->kernelCombo->setVisible(on);
     ui->kernelCombo->setEnabled(on);
-    ui->unfoldCombo->setEnabled(on);
+    ui->repeatsCaption->setVisible(on);
+    ui->repeatsSlider->setVisible(on);
     ui->repeatsSlider->setEnabled(on);
+    ui->repeatsLabel->setVisible(on);
     ui->repeatsLabel->setEnabled(on);
-    ui->dirSlider->setEnabled(on && !disable_angle);
-    ui->dirLabel->setEnabled(on && !disable_angle);
+    ui->unfoldCombo->setEnabled(true);
+    ui->dirSlider->setEnabled(!disable_angle);
+    ui->dirLabel->setEnabled(!disable_angle);
 }
 
 void StripKernelColormapPanel::onSourceChanged(int)

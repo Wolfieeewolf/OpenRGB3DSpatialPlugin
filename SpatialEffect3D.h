@@ -378,8 +378,6 @@ struct EffectInfo3D
     bool                has_custom_settings;
     bool                needs_3d_origin;
     bool                needs_direction;
-    bool                needs_thickness;
-    bool                needs_arms;
     bool                needs_frequency;
 
     bool                use_size_parameter;
@@ -391,10 +389,12 @@ struct EffectInfo3D
     bool                show_size_control = true;
     bool                show_scale_control = true;
     bool                show_fps_control = true;
-    bool                show_axis_control = true;
     bool                show_color_controls = true;
     bool                show_surface_control = true;
     bool                show_path_axis_control = false;
+    bool                show_thickness_control = false;
+    bool                show_edge_fade_control = false;
+    bool                show_count_control = false;
     bool                show_plane_control = false;
     bool                show_position_offset_control = true;
     bool                supports_height_bands = false;
@@ -449,7 +449,7 @@ public:
     virtual bool IsEffectEnabled() { return effect_enabled; }
 
     virtual void SetSpeed(unsigned int speed) { effect_speed = speed; }
-    virtual unsigned int GetSpeed() { return effect_speed; }
+    virtual unsigned int GetSpeed() const { return effect_speed; }
     unsigned int GetTargetFPS() const;
 
     virtual void SetBrightness(unsigned int brightness) { effect_brightness = brightness; }
@@ -476,6 +476,9 @@ public:
 
     virtual void SetReferenceMode(ReferenceMode mode);
     virtual int GetPathAxis() const { return effect_path_axis; }
+    int GetBandThickness() const { return (int)effect_band_thickness; }
+    int GetEdgeFade() const { return (int)effect_edge_fade; }
+    int GetInstanceCount() const { return (int)effect_instance_count; }
     virtual int GetPlane() const { return effect_plane; }
     virtual int GetSurfaceMask() const { return effect_surface_mask; }
     void SetSurfaceMaskFlag(int flag, bool enabled);
@@ -595,6 +598,12 @@ protected:
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
     QSlider*            frequency_slider;
+    QSlider*            thickness_slider = nullptr;
+    QLabel*             thickness_label = nullptr;
+    QSlider*            edge_fade_slider = nullptr;
+    QLabel*             edge_fade_label = nullptr;
+    QSlider*            count_slider = nullptr;
+    QLabel*             count_label = nullptr;
     QSlider*            detail_slider;
     QSlider*            size_slider;
     QSlider*            scale_slider;
@@ -667,6 +676,9 @@ protected:
     unsigned int        effect_speed;
     unsigned int        effect_brightness;
     unsigned int        effect_frequency;
+    unsigned int        effect_band_thickness = 15;
+    unsigned int        effect_edge_fade = 0;
+    unsigned int        effect_instance_count = 12;
     unsigned int        effect_detail;
     unsigned int        effect_size;
     unsigned int        effect_scale;

@@ -22,29 +22,29 @@ inline filesystem::path ControllersDir(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "controllers";
 }
 
-inline filesystem::path SpatialShadersDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path EffectsDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "spatial-shaders";
+    return PluginRoot(rm) / "effects";
 }
 
-inline filesystem::path SpatialEffectsDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path ShaderFieldDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "spatial-effects";
+    return EffectsDir(rm) / "shader-field";
 }
 
-inline filesystem::path PatternKernelsDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path PatternsDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "pattern-kernels";
+    return PluginRoot(rm) / "patterns";
 }
 
-inline filesystem::path EffectPacksDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path TimelinesDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "effect-packs";
+    return PluginRoot(rm) / "timelines";
 }
 
-inline filesystem::path EffectPackEffectsDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path TimelineBlocksDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "effect-pack-effects";
+    return TimelinesDir(rm) / "blocks";
 }
 
 inline filesystem::path UserGradientsFile(OpenRGBPluginAPIInterface* rm)
@@ -62,14 +62,14 @@ inline filesystem::path UserCurvesFile(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "user-curves.json";
 }
 
-inline filesystem::path EffectBindingsFile(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path BindingsDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "effect-bindings.json";
+    return PluginRoot(rm) / "bindings";
 }
 
-inline filesystem::path BindingCatalogDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path EffectBindingsFile(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "binding-catalog";
+    return BindingsDir(rm) / "effect-bindings.json";
 }
 
 inline filesystem::path StackPresetFile(OpenRGBPluginAPIInterface* rm, const std::string& preset_name)

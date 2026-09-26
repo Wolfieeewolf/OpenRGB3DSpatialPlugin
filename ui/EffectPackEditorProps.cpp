@@ -433,7 +433,7 @@ void EffectPackEditorDialog::updatePropVisibility()
 {
     EffectPack::Block* b = selectedBlock();
     const bool ok = b != nullptr;
-    const filesystem::path effect_dir = PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr);
+    const filesystem::path effect_dir = PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr);
     const EffectPackCatalog::Entry knobs = KnobsForSelection(b, type_combo_, effect_dir);
     const bool fade = knobs.knob_color_to;
     const bool needs_period = knobs.knob_period;
@@ -616,7 +616,7 @@ void EffectPackEditorDialog::applyBlockToForm()
         const int cidx = curve_combo_->findData(id);
         curve_combo_->setCurrentIndex(cidx >= 0 ? cidx : curve_combo_->findData(QStringLiteral("custom")));
     }
-    const EffectPackCatalog::Entry shown = KnobsForSelection(b, type_combo_, PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr));
+    const EffectPackCatalog::Entry shown = KnobsForSelection(b, type_combo_, PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr));
     setColorButton(color_button_, shown.knob_color_to ? b->color_from : b->color);
     setColorButton(color_to_button_, b->color_to);
     suppress_ui_ = false;
@@ -691,7 +691,7 @@ void EffectPackEditorDialog::applyFormToSelectedBlock()
     b->color = c;
     b->color_from = c;
     b->color_to = c2;
-    const EffectPackCatalog::Entry edited = KnobsForSelection(b, type_combo_, PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr));
+    const EffectPackCatalog::Entry edited = KnobsForSelection(b, type_combo_, PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr));
     if(edited.knob_color_to)
     {
         if(b->gradient.size() < 2)
@@ -725,7 +725,7 @@ void EffectPackEditorDialog::onTypeChanged()
     EffectPack::Block* b = selectedBlock();
     if(b)
     {
-        const EffectPackCatalog::Entry picked = KnobsForSelection(b, type_combo_, PluginSettingsPaths::EffectPackEffectsDir(tab_ ? tab_->resource_manager : nullptr));
+        const EffectPackCatalog::Entry picked = KnobsForSelection(b, type_combo_, PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr));
         const bool travels = picked.knob_speed || picked.knob_direction || picked.knob_pulse;
         if(travels && b->gradient.size() >= 2)
         {

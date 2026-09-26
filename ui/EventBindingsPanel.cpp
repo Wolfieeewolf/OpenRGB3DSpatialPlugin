@@ -133,7 +133,7 @@ filesystem::path EventBindingsPanel::packsDir() const
     {
         return {};
     }
-    return PluginSettingsPaths::EffectPacksDir(tab_->resource_manager);
+    return PluginSettingsPaths::TimelinesDir(tab_->resource_manager);
 }
 
 filesystem::path EventBindingsPanel::catalogDir() const
@@ -142,7 +142,7 @@ filesystem::path EventBindingsPanel::catalogDir() const
     {
         return {};
     }
-    return PluginSettingsPaths::BindingCatalogDir(tab_->resource_manager);
+    return PluginSettingsPaths::BindingsDir(tab_->resource_manager);
 }
 
 bool EventBindingsPanel::catalogEnabled(const std::string& id) const

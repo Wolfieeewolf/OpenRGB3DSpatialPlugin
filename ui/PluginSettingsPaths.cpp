@@ -24,9 +24,11 @@ void EnsureSpatialShadersFolder(OpenRGBPluginAPIInterface* rm)
     }
 
     std::error_code ec;
-    filesystem::create_directories(SpatialShadersDir(rm), ec);
-    filesystem::create_directories(SpatialEffectsDir(rm), ec);
-    filesystem::create_directories(PatternKernelsDir(rm), ec);
+    filesystem::create_directories(EffectsDir(rm) / "spatial", ec);
+    filesystem::create_directories(EffectsDir(rm) / "audio", ec);
+    filesystem::create_directories(EffectsDir(rm) / "media", ec);
+    filesystem::create_directories(ShaderFieldDir(rm), ec);
+    filesystem::create_directories(PatternsDir(rm), ec);
 }
 
 void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
@@ -38,12 +40,14 @@ void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
 
     std::error_code ec;
     filesystem::create_directories(ControllersDir(rm), ec);
-    filesystem::create_directories(SpatialShadersDir(rm), ec);
-    filesystem::create_directories(SpatialEffectsDir(rm), ec);
-    filesystem::create_directories(PatternKernelsDir(rm), ec);
-    filesystem::create_directories(EffectPacksDir(rm), ec);
-    filesystem::create_directories(EffectPackEffectsDir(rm), ec);
-    filesystem::create_directories(BindingCatalogDir(rm), ec);
+    filesystem::create_directories(EffectsDir(rm) / "spatial", ec);
+    filesystem::create_directories(EffectsDir(rm) / "audio", ec);
+    filesystem::create_directories(EffectsDir(rm) / "media", ec);
+    filesystem::create_directories(ShaderFieldDir(rm), ec);
+    filesystem::create_directories(PatternsDir(rm), ec);
+    filesystem::create_directories(TimelinesDir(rm), ec);
+    filesystem::create_directories(TimelineBlocksDir(rm), ec);
+    filesystem::create_directories(BindingsDir(rm), ec);
     filesystem::create_directories(PluginRoot(rm), ec);
 }
 

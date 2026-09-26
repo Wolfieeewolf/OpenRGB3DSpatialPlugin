@@ -118,7 +118,7 @@ private:
                    float strength,
                    float spread,
                    float spacing);
-    void TickWaves(float time, const GridContext3D& grid);
+    void TickWaves(float time, const GridContext3D& grid, std::uint64_t frame_key);
 
     bool listen_keyboard_ = true;
     bool listen_mouse_ = true;
@@ -131,7 +131,6 @@ private:
     int  footprint_shape_ = SHAPE_SPHERE;
     int  repeat_rate_deci_hz_ = 5;
     int  travel_pct_ = 40;
-    int  ring_width_pct_ = 8;
 
     std::vector<WaveImpact> waves_;
     std::unordered_map<uint64_t, float> last_spawn_time_;

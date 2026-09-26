@@ -104,6 +104,7 @@ When changing plugin behavior—especially anything that touches devices, colors
 
 - Plugin rules apply to plugin-owned code in this repository (e.g. `Effects3D/`, `ui/`, `Game/`, root `.pro`).
 - Do not modify files under `OpenRGB/` (upstream subtree) unless explicitly requested.
+- **Effects engines** (Volume, Shader Field, Kernel, Media, Audio, Reactive, Ambilight, Games): authoring contracts in `Documentation/effects-engines.md`. Prefer thin content on an existing engine over a new per-effect C++ class.
 
 ## Code quality
 
@@ -130,9 +131,9 @@ When changing plugin behavior—especially anything that touches devices, colors
 
 **GPU volume/strip field assists:** when an effect uses `SpatialVolumeFieldAssist` / `SpatialStripFieldAssist`, the atlas is the source of truth. Do not keep parallel CPU formula fallbacks. Sample coords reaching `CalculateColorGrid` are already axis-scaled and rotated by the render path (`ApplyEffectRotation`) unless `SkipsSpatialSampleWarp()` is true. Origin-centric volumes (including audio fill/spectrum/sparkle/strip viz) sample with `SampleGpuVolumeOriginLocal01`: origin→farthest face of the current `GridContext3D` (global room or **target-zone AABB**), multiplied by **Scale** (occupancy). Scale below 100% makes the effect smaller; samples outside that box return unlit — do **not** clamp UV onto atlas faces (four-quadrant artifact). **Size** is feature size inside the effect (`u_params`), not atlas coverage. Reconstruct world distances with `MakeEffectGpuAtlasHalfExtents`. Wall/floor/ceiling surface fields (Surface Ambient) use `SampleGpuRoomVolume01` on the same active grid. Shader Field projections use origin-local unit UV. Single-atlas height bands bake mid-band stratum scalars at `PrepareGpuFields` — full per-LED multi-atlas stratum is out of scope until designed deliberately.
 
-**Shell Pattern / Surface Ambient:** both are volume-atlas source of truth. The shader text lives in `spatial-effects/<id>.fs`. Shell loads `shell-pattern`. Palette / stratum / edge-fade finish stays on CPU. Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
+**Shell Pattern / Surface Ambient:** both are volume-atlas source of truth. The shader text lives in `effects/<category>/<id>.fs`. Shell loads `shell-pattern`. Palette / stratum finish stays on CPU. Thickness and edge fade use the shared motion controls (`global: thickness` / `edge`). Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
 
-**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `pattern-kernels/*.kernel` via `SpatialPatternKernelShader()`. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. `EvalSpatialPatternKernel` is a single sine if the GPU assist fails. Shell Pattern does not use this assist.
+**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `patterns/*.kernel` via `SpatialPatternKernelShader()`. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. `EvalSpatialPatternKernel` is a single sine if the GPU assist fails. Shell Pattern does not use this assist.
 
 When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.

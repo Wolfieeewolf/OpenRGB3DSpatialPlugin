@@ -21,6 +21,7 @@ public:
     void SetLayoutSnapshot(std::vector<ReactiveLedSample> samples);
 
     void DrainOriginEdges(std::vector<ReactiveOriginEvent>& out_edges);
+    void CopyOriginEdgesForFrame(std::uint64_t frame_key, std::vector<ReactiveOriginEvent>& out_edges);
     void CopyHeldOrigins(std::vector<ReactiveHeldOrigin>& out_held);
 
 private:

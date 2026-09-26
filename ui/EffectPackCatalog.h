@@ -16,7 +16,7 @@
 #include <QStringList>
 #include <QVariant>
 
-/** Effect-pack toolbar catalog. Entries come from effect-pack-effects/<section>/*.json. */
+/** Effect-pack toolbar catalog. Entries come from timelines/blocks/<section>/*.fx. */
 namespace EffectPackCatalog
 {
 

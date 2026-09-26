@@ -2,13 +2,17 @@
 
 Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cubes. This plugin’s edge is **Spatial Anchor + volume atlas + strip kernels unfolded into the room** — not copying cube demos.
 
-## Contracts
+**Engine contracts (authoring rules):** [effects-engines.md](effects-engines.md) — read that first when adding or converting an effect.
+
+## Contracts (lanes → engines)
 
 | Lane | Entry point | Engine |
 |------|-------------|--------|
-| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | `pattern-kernels/*.kernel`, composed by `SpatialPatternKernelShader()`. Shell Pattern loads `spatial-effects/shell-pattern.fs`. Surface Look Pattern uses `PrepareStripColormapAssist` + `SampleEffectStripColormap01`. CPU fallback is a single sine. |
-| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field loads `spatial-shaders/*.fs` |
-| **3D** | `volumeMain(out, p01)` soft field | `spatial-effects/<id>.fs` via `SpatialVolumeFieldAssist` |
+| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Kernel — `patterns/*.kernel` |
+| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field — `effects/shader-field/*.fs` |
+| **3D** | `volumeMain(out, p01)` soft field | Volume — `effects/<category>/<id>.fs` via FolderVolume |
+
+Also: **Media** (Volume + texture), **Audio** (FFT service + Volume content), **Reactive** / **Ambilight** (built-in), **Games** (programmed packs). Details in [effects-engines.md](effects-engines.md).
 
 ## Triage
 
@@ -16,11 +20,11 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 ## Adapters
 
-**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `spatial-shaders/`.
+**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`.
 
-**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `spatial-effects/`.
+**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `effects/spatial/` (or audio/media) with a `class:` header for FolderVolume.
 
-**Strip → 1D:** drop a `pattern-kernels/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
+**Strip → 1D:** drop a `patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
 
 **Pattern labels:** a combo fed by `pattern:` lines in the effect `.fs` file. Order is the saved index. Text after `|` is the item tooltip.
 

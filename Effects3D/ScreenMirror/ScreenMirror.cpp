@@ -58,8 +58,6 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.has_custom_settings    = true;
     info.needs_3d_origin        = true;
     info.needs_direction        = false;
-    info.needs_thickness        = false;
-    info.needs_arms             = false;
     info.needs_frequency        = false;
     info.use_size_parameter     = false;
 
@@ -69,7 +67,6 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.show_frequency_control = false;
     info.show_size_control      = false;
     info.show_scale_control     = false;
-    info.show_axis_control      = false;
 
     return info;
 }
