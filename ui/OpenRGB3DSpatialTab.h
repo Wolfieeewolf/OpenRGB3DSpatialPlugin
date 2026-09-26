@@ -195,6 +195,8 @@ private slots:
     void effectLibraryAddClicked();
     void effectLibraryItemDoubleClicked(QListWidgetItem* item);
     void effectLibrarySelectionChanged(int row);
+    void effectLibraryInstallStockPackClicked();
+    void effectLibraryInstallStockZipClicked();
 
     void startAllEffectsClicked();
     void stopAllEffectsClicked();

@@ -16,6 +16,7 @@
 #include "ui/widgets/EffectRoomOutputPanel.h"
 #include "ZonesPanel.h"
 #include "PluginSettingsPaths.h"
+#include "StockPackInstaller.h"
 #include "SpatialControllerCardList.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QCheckBox>
@@ -57,6 +58,9 @@
 #include <QFrame>
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QProgressDialog>
 #include <QTimer>
 
 #ifdef _WIN32
@@ -795,6 +799,149 @@ void OpenRGB3DSpatialTab::effectLibraryAddClicked()
         return;
     }
     AddEffectInstanceToStack(class_name, ui_name);
+}
+
+void OpenRGB3DSpatialTab::effectLibraryInstallStockPackClicked()
+{
+    const QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        tr("Install Stock Pack"),
+        tr("Download and install stock effects, patterns, and related content from "
+           "OpenRGB3DSpatialPresets into this plugin's data folder?\n\n"
+           "Same-named files will be updated. Your other custom files are kept."),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+    if(reply != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    if(ui && ui->effectLibraryPanel)
+    {
+        if(QPushButton* b = ui->effectLibraryPanel->installStockPackButton())
+        {
+            b->setEnabled(false);
+        }
+        if(QPushButton* b = ui->effectLibraryPanel->installStockZipButton())
+        {
+            b->setEnabled(false);
+        }
+    }
+
+    auto* progress = new QProgressDialog(tr("Downloading stock pack…"), QString(), 0, 0, this);
+    progress->setWindowTitle(tr("Stock Pack"));
+    progress->setWindowModality(Qt::ApplicationModal);
+    progress->setMinimumDuration(0);
+    progress->setCancelButton(nullptr);
+    progress->show();
+
+    auto* installer = new StockPackInstaller(resource_manager, this);
+    connect(installer, &StockPackInstaller::Progress, this, [progress](const QString& msg) {
+        progress->setLabelText(msg);
+    });
+    connect(installer, &StockPackInstaller::Finished, this,
+            [this, progress, installer](bool ok, const QString& message) {
+                progress->close();
+                progress->deleteLater();
+                installer->deleteLater();
+                if(ui && ui->effectLibraryPanel)
+                {
+                    if(QPushButton* b = ui->effectLibraryPanel->installStockPackButton())
+                    {
+                        b->setEnabled(true);
+                    }
+                    if(QPushButton* b = ui->effectLibraryPanel->installStockZipButton())
+                    {
+                        b->setEnabled(true);
+                    }
+                }
+                if(ok)
+                {
+                    PopulateEffectLibraryCategories();
+                    QMessageBox::information(this, tr("Stock Pack"), message);
+                }
+                else
+                {
+                    QMessageBox::warning(this, tr("Stock Pack"), message);
+                }
+            });
+    installer->InstallFromNetwork();
+}
+
+void OpenRGB3DSpatialTab::effectLibraryInstallStockZipClicked()
+{
+    const QString zip_path = QFileDialog::getOpenFileName(
+        this,
+        tr("Install Stock Pack from Zip"),
+        QString(),
+        tr("Zip archives (*.zip);;All files (*)"));
+    if(zip_path.isEmpty())
+    {
+        return;
+    }
+
+    const QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        tr("Install Stock Pack"),
+        tr("Install stock content from this zip into the plugin data folder?\n\n"
+           "Same-named files will be updated. Your other custom files are kept."),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+    if(reply != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    if(ui && ui->effectLibraryPanel)
+    {
+        if(QPushButton* b = ui->effectLibraryPanel->installStockPackButton())
+        {
+            b->setEnabled(false);
+        }
+        if(QPushButton* b = ui->effectLibraryPanel->installStockZipButton())
+        {
+            b->setEnabled(false);
+        }
+    }
+
+    auto* progress = new QProgressDialog(tr("Installing stock pack…"), QString(), 0, 0, this);
+    progress->setWindowTitle(tr("Stock Pack"));
+    progress->setWindowModality(Qt::ApplicationModal);
+    progress->setMinimumDuration(0);
+    progress->setCancelButton(nullptr);
+    progress->show();
+
+    auto* installer = new StockPackInstaller(resource_manager, this);
+    connect(installer, &StockPackInstaller::Progress, this, [progress](const QString& msg) {
+        progress->setLabelText(msg);
+    });
+    connect(installer, &StockPackInstaller::Finished, this,
+            [this, progress, installer](bool ok, const QString& message) {
+                progress->close();
+                progress->deleteLater();
+                installer->deleteLater();
+                if(ui && ui->effectLibraryPanel)
+                {
+                    if(QPushButton* b = ui->effectLibraryPanel->installStockPackButton())
+                    {
+                        b->setEnabled(true);
+                    }
+                    if(QPushButton* b = ui->effectLibraryPanel->installStockZipButton())
+                    {
+                        b->setEnabled(true);
+                    }
+                }
+                if(ok)
+                {
+                    PopulateEffectLibraryCategories();
+                    QMessageBox::information(this, tr("Stock Pack"), message);
+                }
+                else
+                {
+                    QMessageBox::warning(this, tr("Stock Pack"), message);
+                }
+            });
+    installer->InstallFromZipFile(zip_path);
 }
 
 void OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked(QListWidgetItem* item)

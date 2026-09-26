@@ -33,7 +33,7 @@ Stock files live under the plugin data folder (and in [OpenRGB3DSpatialPresets](
   timelines/       shows + blocks/
 ```
 
-Install stock content by copying from the presets repo into those folders (see that repo’s README). Contracts: [Documentation/effects-engines.md](Documentation/effects-engines.md).
+Install stock content with **Effect Library → Install Stock Pack** (downloads from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)), or **Install from Zip…** for an offline archive. You can also copy folders manually (see that repo’s README). Contracts: [Documentation/effects-engines.md](Documentation/effects-engines.md).
 
 Library categories **are** the engine names. The folder `effects/spatial/` is Volume content on disk — not a separate “Spatial effects” product bucket.
 

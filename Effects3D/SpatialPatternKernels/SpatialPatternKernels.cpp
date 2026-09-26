@@ -125,6 +125,13 @@ const KernelFile* KernelAt(int id)
 
 } // namespace
 
+void SpatialPatternKernelsReload()
+{
+    g_kernels.clear();
+    g_loaded = false;
+    LoadKernels();
+}
+
 int SpatialPatternKernelCount()
 {
     LoadKernels();

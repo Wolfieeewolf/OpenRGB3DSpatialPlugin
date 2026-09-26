@@ -42,6 +42,10 @@ void EffectLibraryPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->libraryList, &QListWidget::itemDoubleClicked, tab,
             &OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked);
     connect(ui->addToStackButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::effectLibraryAddClicked);
+    connect(ui->installStockPackButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::effectLibraryInstallStockPackClicked);
+    connect(ui->installStockZipButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::effectLibraryInstallStockZipClicked);
 
     tab->PopulateEffectLibraryCategories();
     tab->PopulateEffectLibrary();
@@ -53,3 +57,5 @@ QComboBox* EffectLibraryPanel::gameCombo() const { return ui->gameCombo; }
 QLineEdit* EffectLibraryPanel::searchEdit() const { return ui->searchEdit; }
 QListWidget* EffectLibraryPanel::libraryList() const { return ui->libraryList; }
 QPushButton* EffectLibraryPanel::addToStackButton() const { return ui->addToStackButton; }
+QPushButton* EffectLibraryPanel::installStockPackButton() const { return ui->installStockPackButton; }
+QPushButton* EffectLibraryPanel::installStockZipButton() const { return ui->installStockZipButton; }
