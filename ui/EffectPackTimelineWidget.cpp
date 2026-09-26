@@ -65,6 +65,11 @@ EffectPackTimelineWidget::EffectPackTimelineWidget(QWidget* parent)
     updateGeometrySize();
 }
 
+void EffectPackTimelineWidget::setEffectFilesDir(const filesystem::path& dir)
+{
+    effect_files_dir_ = dir;
+}
+
 void EffectPackTimelineWidget::setPack(EffectPack::Pack* pack)
 {
     pack_ = pack;
@@ -310,7 +315,6 @@ QVector<EffectPackTimelineWidget::PaintBlock> EffectPackTimelineWidget::paintBlo
         return out;
     }
     const Row& r = visible_rows_[row];
-    // Exact target only — no ghosting onto child zone/LED rows.
     for(int ti = 0; ti < (int)pack_->tracks.size(); ++ti)
     {
         const EffectPack::Track& track = pack_->tracks[(size_t)ti];

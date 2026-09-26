@@ -169,16 +169,6 @@ const char* KeypadPaddedNameForVk(unsigned int vk)
 {
     switch(vk)
     {
-    case 0x30: return "Key: 00";
-    case 0x31: return "Key: 01";
-    case 0x32: return "Key: 02";
-    case 0x33: return "Key: 03";
-    case 0x34: return "Key: 04";
-    case 0x35: return "Key: 05";
-    case 0x36: return "Key: 06";
-    case 0x37: return "Key: 07";
-    case 0x38: return "Key: 08";
-    case 0x39: return "Key: 09";
     case 0x60: return "Key: 00";
     case 0x61: return "Key: 01";
     case 0x62: return "Key: 02";
@@ -189,26 +179,6 @@ const char* KeypadPaddedNameForVk(unsigned int vk)
     case 0x67: return "Key: 07";
     case 0x68: return "Key: 08";
     case 0x69: return "Key: 09";
-    case 0x70: return "Key: 01";
-    case 0x71: return "Key: 02";
-    case 0x72: return "Key: 03";
-    case 0x73: return "Key: 04";
-    case 0x74: return "Key: 05";
-    case 0x75: return "Key: 06";
-    case 0x76: return "Key: 07";
-    case 0x77: return "Key: 08";
-    case 0x78: return "Key: 09";
-    case 0x79: return "Key: 10";
-    case 0x7A: return "Key: 11";
-    case 0x7B: return "Key: 12";
-    case 0x7C: return "Key: 13";
-    case 0x7D: return "Key: 14";
-    case 0x7E: return "Key: 15";
-    case 0x7F: return "Key: 16";
-    case 0x80: return "Key: 17";
-    case 0x81: return "Key: 18";
-    case 0x82: return "Key: 19";
-    case 0x83: return "Key: 20";
     default:   return nullptr;
     }
 }

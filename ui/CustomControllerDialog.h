@@ -18,11 +18,12 @@
 #include "CustomControllerSourceRef.h"
 #include "OpenRGBPluginInterface.h"
 #include "LEDPosition3D.h"
+#include "MatrixWiringOrder.h"
 #include "CustomControllerClipboard.h"
+#include "CustomControllerHistory.h"
 #include "CustomControllerTypes.h"
 #include "custom-controller-grid/CustomControllerGridCell.h"
 
-class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QGroupBox;
@@ -104,7 +105,6 @@ public:
     bool IsSourceItemAvailable(const CustomControllerSourceRef& source) const;
     bool CanAddSourceToGrid(const CustomControllerSourceRef& source) const;
     bool IsSourceItemOnGrid(const CustomControllerSourceRef& source) const;
-    QColor SourceItemColor(const CustomControllerSourceRef& source) const;
     bool selectedGridCellValid() const;
 
     void PopulateDeviceItemCombo(int controller_index, int granularity, QComboBox* combo) const;
@@ -127,6 +127,11 @@ private slots:
     void copySelectionClicked();
     void cutSelectionClicked();
     void pasteSelectionClicked();
+    void undoClicked();
+    void redoClicked();
+    void gridLineResizeEnded();
+    void cellContentsDropped(int from_column, int from_row, int to_column, int to_row);
+    void cellContentsNudged(int delta_column, int delta_row);
     void gridContextMenuRequested(const QPoint& global_pos);
     void gridColumnHeaderClicked(int column);
     void gridRowHeaderClicked(int row);
@@ -148,8 +153,15 @@ private slots:
 
 private:
     void SetupUI();
-    void RebuildMatrixHoleMask(RGBControllerInterface* controller, int anchor_x, int anchor_y);
+    CustomControllerHistorySnapshot CaptureHistorySnapshot() const;
+    void ApplyHistorySnapshot(const CustomControllerHistorySnapshot& snapshot);
+    void RecordUndoPoint();
+    void CommitHistoryBaseline();
+    void ResetHistoryFromCurrent();
+    void UpdateUndoRedoUi();
+    bool MoveCellContents(int from_col, int from_row, int to_col, int to_row);
     void RefreshLayoutGridVisuals();
+    void RefreshCellsVisuals(const std::set<std::pair<int, int>>& cells);
     void RefreshSelectionFillTints();
     void ShowGridContextMenu(const QPoint& global_pos);
     void ShowGridHeaderContextMenu(const QPoint& global_pos, int column_header, int row_header);
@@ -184,15 +196,39 @@ private:
     bool IsLightBlockerCell(int x, int y, int layer) const;
     void TransformLightBlockerCells(const std::function<void(int& x, int& y, int& z)>& transform_fn);
     void TrimLightBlockerCells(int max_width, int max_height, int max_depth);
+    void TransformMatrixHoleCells(const std::function<void(int& x, int& y, int& z)>& transform_fn);
+    void TrimMatrixHoleCells(int max_width, int max_height, int max_depth);
     void EnsureDialogGridSizeArrays() const;
     void EnsureLayerNamesArray() const;
     QString LayerTabLabel(int layer_index) const;
     void SyncLayerDepthSpinFromCurrentLayer() const;
     QVector<float> ColumnWidthsQVector() const;
     QVector<float> RowHeightsQVector() const;
-    bool PlaceProfileLayout(RGBControllerInterface* controller, int granularity, int item_idx, int start_x, int start_y);
+
+    struct PlaceLayoutChoice
+    {
+        bool cancelled = false;
+        bool use_openrgb_matrix = true;
+        MatrixWiringOrder wiring = MatrixWiringOrder::HorizontalTopLeftZigzag;
+    };
+    PlaceLayoutChoice PromptPlaceLayoutChoice(bool has_openrgb_matrix) const;
+    bool EnsureGridFitsFrom(int start_x, int start_y, int span_w, int span_h);
+    bool PlaceOpenRgbMatrixMaps(RGBControllerInterface* controller, int granularity, int item_idx, int start_x, int start_y);
+    bool PlaceLinearWiringLayout(RGBControllerInterface* controller,
+                                 int granularity,
+                                 int item_idx,
+                                 int start_x,
+                                 int start_y,
+                                 MatrixWiringOrder fill_order);
+    bool PlaceProfileLayout(RGBControllerInterface* controller,
+                            int granularity,
+                            int item_idx,
+                            int start_x,
+                            int start_y,
+                            const PlaceLayoutChoice& layout_choice);
     void UpdateGridDisplay();
     void refreshDeviceList(int controller_index = -1);
+    void EnsureGridAnchorSelected();
     bool assignSource(const CustomControllerSourceRef& source);
     void removeSourceFromGrid(const CustomControllerSourceRef& source);
     CustomControllerSourceRef currentSourceSelection() const;
@@ -228,6 +264,7 @@ private:
     QSpinBox*       height_spin;
     QSpinBox*       depth_spin;
     QComboBox*      leds_per_section_combo = nullptr;
+    QComboBox*      fill_order_combo = nullptr;
 
     QDoubleSpinBox* layer_depth_spin = nullptr;
 
@@ -248,12 +285,18 @@ private:
     QPushButton*    copy_button = nullptr;
     QPushButton*    cut_button = nullptr;
     QPushButton*    paste_button = nullptr;
+    QPushButton*    undo_button_ = nullptr;
+    QPushButton*    redo_button_ = nullptr;
     QPushButton*    clear_button;
     QPushButton*    remove_from_grid_button;
     QPushButton*    save_button;
 
     std::unordered_set<uint64_t> matrix_hole_cells;
     std::unordered_set<uint64_t> light_blocker_cells_;
+
+    CustomControllerHistory history_;
+    bool applying_history_ = false;
+    bool resize_history_pushed_ = false;
 
     QGroupBox*      transform_group = nullptr;
     QPushButton*    rotate_90_button;

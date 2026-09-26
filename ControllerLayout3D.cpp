@@ -3,6 +3,7 @@
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
+#include "MatrixWiringOrder.h"
 #include "SpatialLightingSceneProvider.h"
 #include "VirtualController3D.h"
 #include <algorithm>
@@ -15,7 +16,7 @@
 
 namespace
 {
-constexpr unsigned int MATRIX_MAP_NA = 0xFFFFFFFFu;
+constexpr unsigned int MATRIX_MAP_NA = kMatrixMapUnused;
 constexpr unsigned int DEVICE_VIEW_MAX_COLS = 20;
 constexpr float ZONE_STACK_PAD = 1.0f;
 
@@ -90,25 +91,61 @@ static void AppendLinearWrappedZone(
     unsigned int segment_start_led,
     float base_y,
     unsigned int wrap_cols,
+    MatrixWiringOrder order,
     std::vector<LEDPosition3D>& zone_positions,
     float& zone_max_y)
 {
-    unsigned int placed = 0;
+    if(led_count == 0 || wrap_cols == 0)
+    {
+        return;
+    }
+
+    /* Count assignable LEDs first — wiring map uses that span. */
+    unsigned int assignable = 0;
+    for(unsigned int led_idx = 0; led_idx < led_count; led_idx++)
+    {
+        if(ZoneLedIsAssignable(controller, zone_idx, segment_start_led + led_idx))
+        {
+            ++assignable;
+        }
+    }
+    if(assignable == 0)
+    {
+        return;
+    }
+
+    const unsigned int rows = (assignable + wrap_cols - 1) / wrap_cols;
+    std::vector<unsigned int> map;
+    FillMatrixWiringMap(rows, wrap_cols, assignable, order, map);
+
+    /* Map sequential assignable index → zone LED. */
+    std::vector<unsigned int> zone_leds;
+    zone_leds.reserve(assignable);
     for(unsigned int led_idx = 0; led_idx < led_count; led_idx++)
     {
         const unsigned int zone_led_idx = segment_start_led + led_idx;
-        if(!ZoneLedIsAssignable(controller, zone_idx, zone_led_idx))
+        if(ZoneLedIsAssignable(controller, zone_idx, zone_led_idx))
         {
-            continue;
+            zone_leds.push_back(zone_led_idx);
         }
-        float x = (float)(placed % wrap_cols);
-        float y = base_y + (float)(placed / wrap_cols);
-        zone_positions.push_back(MakeLedPosition(controller, zone_idx, zone_led_idx, x, y, 0.0f));
-        if(y > zone_max_y)
+    }
+
+    for(unsigned int y = 0; y < rows; y++)
+    {
+        for(unsigned int x = 0; x < wrap_cols; x++)
         {
-            zone_max_y = y;
+            const unsigned int seq = map[y * wrap_cols + x];
+            if(seq == kMatrixMapUnused || seq >= zone_leds.size())
+            {
+                continue;
+            }
+            const float fy = base_y + (float)y;
+            zone_positions.push_back(MakeLedPosition(controller, zone_idx, zone_leds[seq], (float)x, fy, 0.0f));
+            if(fy > zone_max_y)
+            {
+                zone_max_y = fy;
+            }
         }
-        placed++;
     }
 }
 
@@ -148,7 +185,12 @@ static void AppendHeuristicBucketZone(
 }
 } // namespace
 
-std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBControllerInterface* controller, int grid_x, int grid_y, bool center_layout)
+std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBControllerInterface* controller,
+                                                                       int grid_x,
+                                                                       int grid_y,
+                                                                       bool center_layout,
+                                                                       MatrixWiringOrder linear_order,
+                                                                       bool use_openrgb_matrix_maps)
 {
     std::vector<LEDPosition3D> positions;
     if(!controller) return positions;
@@ -164,7 +206,9 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
         float zone_max_y = zone_stack_y;
         bool zone_layout_applied = false;
 
-        if(current_zone->type == ZONE_TYPE_MATRIX && current_zone->matrix_map.map.size() > 0)
+        if(use_openrgb_matrix_maps
+           && current_zone->type == ZONE_TYPE_MATRIX
+           && current_zone->matrix_map.map.size() > 0)
         {
             const matrix_map_type* map = &current_zone->matrix_map;
             std::vector<bool> placed(current_zone->leds_count, false);
@@ -237,9 +281,10 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
                     segment_start_led,
                     zone_stack_y + segment_base_y,
                     wrap_cols,
+                    linear_order,
                     zone_positions,
                     zone_max_y);
-                segment_base_y += (float)((segment_led_count / wrap_cols) + ((segment_led_count % wrap_cols) > 0));
+                segment_base_y += (float)((segment_led_count / wrap_cols) + ((segment_led_count % wrap_cols) > 0 ? 1u : 0u));
             }
 
             zone_layout_applied = true;
@@ -261,35 +306,16 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
         else if(current_zone->type == ZONE_TYPE_LINEAR || current_zone->leds_count > 0)
         {
             const unsigned int wrap_cols = LinearWrapColumns(current_zone->leds_count, grid_x);
-
-            if(current_zone->type == ZONE_TYPE_LINEAR && current_zone->leds_count <= wrap_cols)
-            {
-                unsigned int placed = 0;
-                for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
-                {
-                    if(!ZoneLedIsAssignable(controller, zone_idx, led_idx))
-                    {
-                        continue;
-                    }
-                    const float y = zone_stack_y;
-                    zone_positions.push_back(MakeLedPosition(controller, zone_idx, led_idx, (float)placed, y, 0.0f));
-                    zone_max_y = y;
-                    placed++;
-                }
-            }
-            else
-            {
-                AppendLinearWrappedZone(
-                    controller,
-                    zone_idx,
-                    current_zone->leds_count,
-                    0,
-                    zone_stack_y,
-                    wrap_cols,
-                    zone_positions,
-                    zone_max_y);
-            }
-
+            AppendLinearWrappedZone(
+                controller,
+                zone_idx,
+                current_zone->leds_count,
+                0,
+                zone_stack_y,
+                wrap_cols,
+                linear_order,
+                zone_positions,
+                zone_max_y);
             zone_layout_applied = true;
         }
 
@@ -351,9 +377,19 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     return positions;
 }
 
-std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(RGBControllerInterface* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm, bool center_layout)
+std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(RGBControllerInterface* controller,
+                                                                                  int grid_x,
+                                                                                  int grid_y,
+                                                                                  float spacing_mm_x,
+                                                                                  float spacing_mm_y,
+                                                                                  float spacing_mm_z,
+                                                                                  float grid_scale_mm,
+                                                                                  bool center_layout,
+                                                                                  MatrixWiringOrder linear_order,
+                                                                                  bool use_openrgb_matrix_maps)
 {
-    std::vector<LEDPosition3D> positions = GenerateCustomGridLayout(controller, grid_x, grid_y, center_layout);
+    std::vector<LEDPosition3D> positions = GenerateCustomGridLayout(
+        controller, grid_x, grid_y, center_layout, linear_order, use_openrgb_matrix_maps);
 
     float scale_x = (spacing_mm_x > 0.001f) ? MMToGridUnits(spacing_mm_x, grid_scale_mm) : 1.0f;
     float scale_y = (spacing_mm_y > 0.001f) ? MMToGridUnits(spacing_mm_y, grid_scale_mm) : 1.0f;

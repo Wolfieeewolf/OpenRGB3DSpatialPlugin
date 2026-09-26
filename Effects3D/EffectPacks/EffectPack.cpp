@@ -2,6 +2,7 @@
 
 #include "EffectPack.h"
 #include "EffectPackDetail.h"
+#include "EffectScript.h"
 
 #include <algorithm>
 #include <cmath>
@@ -58,7 +59,6 @@ bool DirectionInvertsAxis(Direction dir)
     }
 }
 
-/** Preferred room axis: 0=X, 1=Y, 2=Z. */
 int DirectionPreferredAxis(Direction dir)
 {
     switch(dir)
@@ -87,46 +87,13 @@ int DirectionPreferredAxis(Direction dir)
     }
 }
 
-const char* BlockTypeDisplayName(BlockType t)
-{
-    switch(t)
-    {
-        case BlockType::Solid: return "Set Level";
-        case BlockType::Fade: return "Fade";
-        case BlockType::Pulse: return "Pulse";
-        case BlockType::Wipe: return "Wipe";
-        case BlockType::Chase: return "Chase";
-        case BlockType::Twinkle: return "Twinkle";
-        case BlockType::ColorWash: return "ColorWash";
-        case BlockType::Alternating: return "Alternating";
-        case BlockType::Strobe: return "Strobe";
-        case BlockType::Spin: return "Spin";
-        case BlockType::Candle: return "Candle Flicker";
-        case BlockType::Dissolve: return "Dissolve";
-        case BlockType::Wave: return "Wave";
-        case BlockType::Plasma: return "Plasma";
-        case BlockType::Snow: return "Snow";
-        case BlockType::Fire: return "Fire";
-        case BlockType::Balls: return "Balls";
-        case BlockType::Bars: return "Bars";
-        case BlockType::Scanner: return "Scanner";
-        case BlockType::SphereWipe: return "Sphere Wipe";
-        case BlockType::Orbit: return "Orbit";
-        case BlockType::Ripple: return "Ripple";
-        case BlockType::Meteor: return "Meteor";
-        case BlockType::Noise3D: return "Noise 3D";
-        case BlockType::Burst: return "Burst";
-        default: return "Effect";
-    }
-}
-
 void EnsureBlockGradient(Block* block)
 {
     if(!block || !block->gradient.empty())
     {
         return;
     }
-    if(block->type == BlockType::Fade)
+    if(EffectColorEnds(BlockFileId(*block)))
     {
         block->gradient.push_back({0.0f, block->color_from});
         block->gradient.push_back({1.0f, block->color_to});
@@ -141,7 +108,7 @@ RGBColor SampleGradient(const Block& block, float t)
     t = std::clamp(t, 0.0f, 1.0f);
     if(block.gradient.empty())
     {
-        if(block.type == BlockType::Fade)
+        if(EffectColorEnds(BlockFileId(block)))
         {
             return LerpColor(block.color_from, block.color_to, t);
         }

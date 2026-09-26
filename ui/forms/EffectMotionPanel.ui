@@ -251,6 +251,129 @@
     </layout>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="pathRow">
+     <item>
+      <widget class="QLabel" name="pathCaption">
+       <property name="text">
+        <string>Path:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="pathAxisCombo">
+       <property name="toolTip">
+        <string>Which way the effect travels: X left/right, Y up/down, Z depth.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="thicknessRow">
+     <item>
+      <widget class="QLabel" name="thicknessCaption">
+       <property name="text">
+        <string>Thickness:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="thicknessSlider">
+       <property name="maximum">
+        <number>100</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Width of the lit band.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="thicknessLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="edgeFadeRow">
+     <item>
+      <widget class="QLabel" name="edgeFadeCaption">
+       <property name="text">
+        <string>Edge fade:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="edgeFadeSlider">
+       <property name="maximum">
+        <number>100</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Softens the effect toward the room edges. 0 is off.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="edgeFadeLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="countRow">
+     <item>
+      <widget class="QLabel" name="countCaption">
+       <property name="text">
+        <string>Count:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="countSlider">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>48</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>How many copies the effect draws. Each effect clamps this to its own maximum.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="countLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <layout class="QHBoxLayout" name="fpsRow">
      <item>
       <widget class="QLabel" name="fpsCaption">

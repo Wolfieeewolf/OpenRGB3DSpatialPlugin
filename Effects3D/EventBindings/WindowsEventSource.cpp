@@ -103,7 +103,8 @@ public:
             return false;
         }
         MSG* msg = static_cast<MSG*>(message);
-        if(!msg || !owner_)
+        HWND sink = owner_ ? static_cast<HWND>(owner_->SinkHwnd()) : nullptr;
+        if(!msg || !owner_ || !sink || msg->hwnd != sink)
         {
             return false;
         }
@@ -244,15 +245,12 @@ void WindowsEventSource::Start()
     device_notify_hid_ = RegisterDeviceInterface(&GUID_DEVINTERFACE_HID);
 
     started_ = true;
-    HandleForegroundChanged();
+    SyncAppFocus();
 
     SYSTEM_POWER_STATUS ps{};
-    if(GetSystemPowerStatus(&ps) && ps.BatteryFlag != 128)
+    if(GetSystemPowerStatus(&ps) && ps.BatteryFlag != 128 && ps.BatteryLifePercent <= 100)
     {
-        if(ps.BatteryLifePercent <= 100)
-        {
-            last_battery_pct_ = ps.BatteryLifePercent;
-        }
+        ApplyBatteryPercent(static_cast<int>(ps.BatteryLifePercent));
     }
     LOG_INFO("[3DSpatial] Windows event source started");
 }
@@ -351,10 +349,8 @@ void WindowsEventSource::HandleDeviceChange(unsigned long wparam, long long lpar
     }
 }
 
-void WindowsEventSource::HandleForegroundChanged()
+void WindowsEventSource::SyncAppFocus()
 {
-    EmitPulse("foreground_changed");
-
     HWND fg = GetForegroundWindow();
     bool ours = false;
     if(fg)
@@ -364,6 +360,12 @@ void WindowsEventSource::HandleForegroundChanged()
         ours = (pid == GetCurrentProcessId());
     }
     UpdateAppFocusState(ours);
+}
+
+void WindowsEventSource::HandleForegroundChanged()
+{
+    EmitPulse("foreground_changed");
+    SyncAppFocus();
 }
 
 void WindowsEventSource::UpdateAppFocusState(bool openrgb_foreground)
@@ -411,48 +413,56 @@ void WindowsEventSource::HandlePowerSetting(const void* guid, const void* data, 
 
     if(IsEqualGUID(g, GUID_BATTERY_PERCENTAGE_REMAINING_LOCAL))
     {
-        const int pct = static_cast<int>(value);
-        if(pct > kBatteryLowPct)
-        {
-            if(emitted_battery_low_)
-            {
-                EmitLevel("battery_low", false);
-                emitted_battery_low_ = false;
-            }
-            if(emitted_battery_critical_)
-            {
-                EmitLevel("battery_critical", false);
-                emitted_battery_critical_ = false;
-            }
-        }
-        else if(pct > kBatteryCriticalPct)
-        {
-            if(emitted_battery_critical_)
-            {
-                EmitLevel("battery_critical", false);
-                emitted_battery_critical_ = false;
-            }
-            if(!emitted_battery_low_)
-            {
-                EmitLevel("battery_low", true);
-                emitted_battery_low_ = true;
-            }
-        }
-        else
-        {
-            if(!emitted_battery_critical_)
-            {
-                EmitLevel("battery_critical", true);
-                emitted_battery_critical_ = true;
-            }
-            if(!emitted_battery_low_)
-            {
-                EmitLevel("battery_low", true);
-                emitted_battery_low_ = true;
-            }
-        }
-        last_battery_pct_ = pct;
+        ApplyBatteryPercent(static_cast<int>(value));
     }
+}
+
+void WindowsEventSource::ApplyBatteryPercent(int pct)
+{
+    if(pct < 0 || pct > 100)
+    {
+        return;
+    }
+    if(pct > kBatteryLowPct)
+    {
+        if(emitted_battery_low_)
+        {
+            EmitLevel("battery_low", false);
+            emitted_battery_low_ = false;
+        }
+        if(emitted_battery_critical_)
+        {
+            EmitLevel("battery_critical", false);
+            emitted_battery_critical_ = false;
+        }
+    }
+    else if(pct > kBatteryCriticalPct)
+    {
+        if(emitted_battery_critical_)
+        {
+            EmitLevel("battery_critical", false);
+            emitted_battery_critical_ = false;
+        }
+        if(!emitted_battery_low_)
+        {
+            EmitLevel("battery_low", true);
+            emitted_battery_low_ = true;
+        }
+    }
+    else
+    {
+        if(!emitted_battery_critical_)
+        {
+            EmitLevel("battery_critical", true);
+            emitted_battery_critical_ = true;
+        }
+        if(!emitted_battery_low_)
+        {
+            EmitLevel("battery_low", true);
+            emitted_battery_low_ = true;
+        }
+    }
+    last_battery_pct_ = pct;
 }
 
 #endif // _WIN32

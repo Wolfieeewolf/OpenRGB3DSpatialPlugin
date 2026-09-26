@@ -3,7 +3,6 @@
 #include "EventBindingsPanel.h"
 
 #include "EventBindings/EventBinding.h"
-#include "EventBindings/ManualEventSource.h"
 #include "EffectPacks/EffectPackLibrary.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginSettingsPaths.h"
@@ -11,17 +10,14 @@
 #include "ui_EventBindingsPanel.h"
 
 #include <algorithm>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
-#include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTimer>
-#include <QVBoxLayout>
 
 EventBindingsPanel::EventBindingsPanel(QWidget* parent)
     : QGroupBox(parent)
@@ -58,17 +54,32 @@ void EventBindingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
                                  bool active,
                                  EffectBinding::EventEdge edge) {
         runtime_.OnEvent(source, event, active, edge);
-        if(runtime_.IsPlaying() && !timer_->isActive())
+        const QString error = QString::fromStdString(runtime_.lastError());
+        if(runtime_.IsPlaying())
         {
-            timer_->start();
+            runtime_.Tick(0);
         }
-        if(!runtime_.IsPlaying())
+        if(runtime_.IsPlaying())
+        {
+            if(!timer_->isActive())
+            {
+                timer_->start();
+            }
+        }
+        else
         {
             timer_->stop();
         }
-        setStatus(runtime_.IsPlaying()
-                      ? QStringLiteral("Playing bound packs…")
-                      : QStringLiteral("Idle"));
+        if(!error.isEmpty())
+        {
+            setStatus(error);
+        }
+        else
+        {
+            setStatus(runtime_.IsPlaying()
+                          ? QStringLiteral("Playing bound packs…")
+                          : QStringLiteral("Idle"));
+        }
     });
     runtime_.SetPacksDir(packsDir());
     runtime_.SetApplyCallbacks(
@@ -122,50 +133,170 @@ filesystem::path EventBindingsPanel::packsDir() const
     {
         return {};
     }
-    return PluginSettingsPaths::EffectPacksDir(tab_->resource_manager);
+    return PluginSettingsPaths::TimelinesDir(tab_->resource_manager);
+}
+
+filesystem::path EventBindingsPanel::catalogDir() const
+{
+    if(!tab_ || !tab_->resource_manager)
+    {
+        return {};
+    }
+    return PluginSettingsPaths::BindingsDir(tab_->resource_manager);
+}
+
+bool EventBindingsPanel::catalogEnabled(const std::string& id) const
+{
+    for(const std::string& have : user_.catalog_enabled)
+    {
+        if(have == id)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool EventBindingsPanel::isCatalogItem(const QListWidgetItem* item) const
+{
+    return item && item->data(Qt::UserRole + 1).toString() == QStringLiteral("catalog");
+}
+
+void EventBindingsPanel::syncRuntime()
+{
+    EffectBinding::Document play = user_;
+    for(EffectBinding::Binding b : catalog_)
+    {
+        bool owned = false;
+        for(const EffectBinding::Binding& user_binding : user_.bindings)
+        {
+            if(user_binding.id == b.id)
+            {
+                owned = true;
+                break;
+            }
+        }
+        if(owned || !catalogEnabled(b.id))
+        {
+            continue;
+        }
+        b.enabled = true;
+        play.bindings.push_back(std::move(b));
+    }
+    runtime_.SetDocument(std::move(play));
 }
 
 void EventBindingsPanel::reloadDocument()
 {
     EffectBinding::Document doc;
     std::string err;
-    EffectBinding::LoadOrEmpty(bindingsPath(), &doc, &err);
-    runtime_.SetDocument(std::move(doc));
+    if(!EffectBinding::LoadOrEmpty(bindingsPath(), &doc, &err))
+    {
+        setStatus(QStringLiteral("Load failed: %1").arg(QString::fromStdString(err)));
+        return;
+    }
+    user_ = std::move(doc);
+    std::vector<std::string> warnings;
+    EffectBinding::LoadCatalog(catalogDir(), &catalog_, &warnings);
+    syncRuntime();
     populateList();
+    if(!warnings.empty())
+    {
+        setStatus(QString::fromStdString(warnings.front()));
+        return;
+    }
+    setStatus(QStringLiteral("Idle"));
 }
 
 void EventBindingsPanel::saveDocument()
 {
     std::string err;
-    if(!EffectBinding::SaveToFile(bindingsPath(), runtime_.document(), &err))
+    if(!EffectBinding::SaveToFile(bindingsPath(), user_, &err))
     {
         setStatus(QStringLiteral("Save failed: %1").arg(QString::fromStdString(err)));
         return;
     }
-    setStatus(QStringLiteral("Bindings saved"));
+    if(!runtime_.IsPlaying())
+    {
+        setStatus(QStringLiteral("Bindings saved"));
+    }
 }
 
 void EventBindingsPanel::populateList()
 {
+    const QString selected = ui->bindingsList->currentItem()
+                                 ? ui->bindingsList->currentItem()->data(Qt::UserRole).toString()
+                                 : QString();
+
+    std::vector<EffectPack::PackListEntry> packs = EffectPack::ListPacks(packsDir());
+
     ui->bindingsList->blockSignals(true);
     ui->bindingsList->clear();
-    for(const EffectBinding::Binding& b : runtime_.document().bindings)
-    {
-        if(!registry_.HasSource(b.source))
+    int restore_row = -1;
+    auto add_row = [&](const EffectBinding::Binding& b, bool catalog) {
+        EffectBinding::EventSource* src = registry_.Find(b.source);
+        if(!src)
         {
-            continue;
+            return;
         }
-        const QString label = QStringLiteral("%1 → %2 / %3%4")
-                                  .arg(QString::fromStdString(b.pack_id))
-                                  .arg(QString::fromStdString(b.source))
-                                  .arg(QString::fromStdString(b.event))
-                                  .arg(b.enabled ? QString() : QStringLiteral(" (off)"));
+        if(catalog)
+        {
+            for(const EffectBinding::Binding& user_binding : user_.bindings)
+            {
+                if(user_binding.id == b.id)
+                {
+                    return;
+                }
+            }
+        }
+        QString pack_label = QString::fromStdString(b.pack_id);
+        for(const EffectPack::PackListEntry& p : packs)
+        {
+            if(p.id == b.pack_id)
+            {
+                pack_label = QString::fromStdString(p.name);
+                break;
+            }
+        }
+        QString event_label = QString::fromStdString(b.event);
+        for(const EffectBinding::EventInfo& ev : src->ListEvents())
+        {
+            if(ev.id == b.event)
+            {
+                event_label = QString::fromStdString(ev.display_name);
+                break;
+            }
+        }
+        QString label = QStringLiteral("%1  →  %2 / %3")
+                            .arg(pack_label, QString::fromUtf8(src->displayName()), event_label);
+        if(catalog)
+        {
+            label += QStringLiteral("  (catalog)");
+        }
         auto* item = new QListWidgetItem(label, ui->bindingsList);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(b.enabled ? Qt::Checked : Qt::Unchecked);
+        const bool on = catalog ? catalogEnabled(b.id) : b.enabled;
+        item->setCheckState(on ? Qt::Checked : Qt::Unchecked);
         item->setData(Qt::UserRole, QString::fromStdString(b.id));
+        item->setData(Qt::UserRole + 1, catalog ? QStringLiteral("catalog") : QStringLiteral("user"));
+        if(item->data(Qt::UserRole).toString() == selected)
+        {
+            restore_row = ui->bindingsList->row(item);
+        }
+    };
+    for(const EffectBinding::Binding& b : user_.bindings)
+    {
+        add_row(b, false);
+    }
+    for(const EffectBinding::Binding& b : catalog_)
+    {
+        add_row(b, true);
     }
     ui->bindingsList->blockSignals(false);
+    if(restore_row >= 0)
+    {
+        ui->bindingsList->setCurrentRow(restore_row);
+    }
     onSelectionChanged();
 }
 
@@ -176,7 +307,7 @@ void EventBindingsPanel::setStatus(const QString& text)
 
 void EventBindingsPanel::onSelectionChanged()
 {
-    const bool ok = ui->bindingsList->currentRow() >= 0;
+    const bool ok = ui->bindingsList->currentRow() >= 0 && !isCatalogItem(ui->bindingsList->currentItem());
     ui->editButton->setEnabled(ok);
     ui->deleteButton->setEnabled(ok);
 }
@@ -188,16 +319,38 @@ void EventBindingsPanel::onItemChanged(QListWidgetItem* item)
         return;
     }
     const std::string id = item->data(Qt::UserRole).toString().toStdString();
-    for(EffectBinding::Binding& b : runtime_.mutableDocument()->bindings)
+    const bool on = item->checkState() == Qt::Checked;
+    if(isCatalogItem(item))
     {
-        if(b.id == id)
+        auto& ids = user_.catalog_enabled;
+        ids.erase(std::remove(ids.begin(), ids.end(), id), ids.end());
+        if(on)
         {
-            b.enabled = item->checkState() == Qt::Checked;
-            saveDocument();
-            populateList();
-            return;
+            ids.push_back(id);
         }
     }
+    else
+    {
+        for(EffectBinding::Binding& b : user_.bindings)
+        {
+            if(b.id == id)
+            {
+                b.enabled = on;
+                break;
+            }
+        }
+    }
+    if(!on)
+    {
+        runtime_.StopBinding(id);
+        if(!runtime_.IsPlaying())
+        {
+            timer_->stop();
+            setStatus(QStringLiteral("Idle"));
+        }
+    }
+    syncRuntime();
+    saveDocument();
 }
 
 bool EventBindingsPanel::editBindingDialog(EffectBinding::Binding* binding)
@@ -295,20 +448,34 @@ bool EventBindingsPanel::editBindingDialog(EffectBinding::Binding* binding)
         return false;
     }
 
+    if(!binding->pack_id.empty() && pack_combo->findData(QString::fromStdString(binding->pack_id)) < 0)
+    {
+        pack_combo->addItem(tr("Missing: %1").arg(QString::fromStdString(binding->pack_id)),
+                            QString::fromStdString(binding->pack_id));
+        pack_combo->setCurrentIndex(pack_combo->count() - 1);
+    }
+
     if(dlg.exec() != QDialog::Accepted)
     {
         return false;
     }
 
-    binding->source = source_combo->currentData().toString().toStdString();
-    binding->event = event_combo->currentData().toString().toStdString();
-    binding->pack_id = pack_combo->currentData().toString().toStdString();
+    const std::string source = source_combo->currentData().toString().toStdString();
+    const std::string event = event_combo->currentData().toString().toStdString();
+    const std::string pack_id = pack_combo->currentData().toString().toStdString();
+    if(source.empty() || event.empty() || pack_id.empty())
+    {
+        return false;
+    }
+    binding->source = source;
+    binding->event = event;
+    binding->pack_id = pack_id;
     if(binding->id.empty())
     {
         binding->id = EffectBinding::MakeBindingId();
         binding->enabled = true;
     }
-    return !binding->source.empty() && !binding->event.empty() && !binding->pack_id.empty();
+    return true;
 }
 
 void EventBindingsPanel::onAdd()
@@ -318,7 +485,8 @@ void EventBindingsPanel::onAdd()
     {
         return;
     }
-    runtime_.mutableDocument()->bindings.push_back(std::move(b));
+    user_.bindings.push_back(std::move(b));
+    syncRuntime();
     saveDocument();
     populateList();
 }
@@ -330,13 +498,23 @@ void EventBindingsPanel::onEdit()
     {
         return;
     }
+    if(isCatalogItem(item))
+    {
+        return;
+    }
     const std::string id = item->data(Qt::UserRole).toString().toStdString();
-    for(EffectBinding::Binding& b : runtime_.mutableDocument()->bindings)
+    for(EffectBinding::Binding& b : user_.bindings)
     {
         if(b.id == id)
         {
             if(editBindingDialog(&b))
             {
+                runtime_.StopBinding(b.id);
+                if(!runtime_.IsPlaying())
+                {
+                    timer_->stop();
+                }
+                syncRuntime();
                 saveDocument();
                 populateList();
             }
@@ -352,11 +530,26 @@ void EventBindingsPanel::onDelete()
     {
         return;
     }
+    if(isCatalogItem(item))
+    {
+        return;
+    }
     const std::string id = item->data(Qt::UserRole).toString().toStdString();
-    auto& bindings = runtime_.mutableDocument()->bindings;
+    if(QMessageBox::question(this, tr("Delete binding"), tr("Delete this event binding?"))
+       != QMessageBox::Yes)
+    {
+        return;
+    }
+    runtime_.StopBinding(id);
+    if(!runtime_.IsPlaying())
+    {
+        timer_->stop();
+    }
+    auto& bindings = user_.bindings;
     bindings.erase(std::remove_if(bindings.begin(), bindings.end(),
                                   [&](const EffectBinding::Binding& b) { return b.id == id; }),
                    bindings.end());
+    syncRuntime();
     saveDocument();
     populateList();
 }
@@ -376,10 +569,14 @@ void EventBindingsPanel::onStop()
         registry_.manual()->StopFire();
         registry_.manual()->EndHold();
     }
+    ui->holdButton->blockSignals(true);
     ui->holdButton->setChecked(false);
-    runtime_.StopAll();
-    timer_->stop();
-    setStatus(QStringLiteral("Stopped"));
+    ui->holdButton->blockSignals(false);
+    if(!runtime_.IsPlaying())
+    {
+        timer_->stop();
+        setStatus(QStringLiteral("Idle"));
+    }
 }
 
 void EventBindingsPanel::onHoldToggled(bool checked)
@@ -410,4 +607,13 @@ void EventBindingsPanel::onTick()
 void EventBindingsPanel::stopAll()
 {
     onStop();
+    runtime_.StopAll();
+    if(timer_)
+    {
+        timer_->stop();
+    }
+    if(ui)
+    {
+        setStatus(QStringLiteral("Idle"));
+    }
 }

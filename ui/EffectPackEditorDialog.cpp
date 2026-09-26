@@ -2,9 +2,13 @@
 
 #include "EffectPackEditorDialog.h"
 #include "EffectPackCatalog.h"
+#include "EffectPackUserCurves.h"
 #include "EffectPackGradientBar.h"
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackToolBar.h"
+#include "EffectPackUserGradients.h"
+#include "PluginSettingsPaths.h"
+#include "EffectPacks/EffectScript.h"
 #include "EffectPacks/EffectPackApplier.h"
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
@@ -31,6 +35,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QSlider>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QTimer>
@@ -112,28 +117,12 @@ void EffectPackEditorDialog::buildUi()
 {
     auto* root = new QVBoxLayout(this);
 
-    auto* meta_row = new QHBoxLayout();
-    name_edit_ = new QLineEdit();
-    duration_spin_ = new QSpinBox();
-    duration_spin_->setRange(100, EffectPack::kMaxDurationMs);
-    duration_spin_->setSingleStep(100);
-    duration_spin_->setValue(5000);
-    loop_combo_ = new QComboBox();
-    loop_combo_->addItem(QStringLiteral("Once"), QStringLiteral("once"));
-    loop_combo_->addItem(QStringLiteral("Forever"), QStringLiteral("forever"));
-    loop_combo_->addItem(QStringLiteral("While active"), QStringLiteral("while_active"));
-    meta_row->addWidget(new QLabel(QStringLiteral("Name")));
-    meta_row->addWidget(name_edit_, 2);
-    meta_row->addWidget(new QLabel(QStringLiteral("Duration ms")));
-    meta_row->addWidget(duration_spin_);
-    meta_row->addWidget(new QLabel(QStringLiteral("Loop")));
-    meta_row->addWidget(loop_combo_);
-    controllers_button_ = new QPushButton(QStringLiteral("Controllers…"));
-    controllers_button_->setToolTip(QStringLiteral("Choose which scene controllers appear on this pack’s timeline"));
-    meta_row->addWidget(controllers_button_);
-    root->addLayout(meta_row);
-
-    effect_toolbar_ = new EffectPackToolBar();
+    const filesystem::path effect_files_dir = PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr);
+    effect_toolbar_ = new EffectPackToolBar(
+        PluginSettingsPaths::UserGradientsFile(tab_ ? tab_->resource_manager : nullptr),
+        PluginSettingsPaths::UserColorsFile(tab_ ? tab_->resource_manager : nullptr),
+        effect_files_dir,
+        PluginSettingsPaths::UserCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     root->addWidget(effect_toolbar_);
 
     auto* splitter = new QSplitter(Qt::Horizontal);
@@ -142,6 +131,7 @@ void EffectPackEditorDialog::buildUi()
     timeline_scroll->setWidgetResizable(true);
     timeline_scroll->setFrameShape(QFrame::NoFrame);
     timeline_ = new EffectPackTimelineWidget();
+    timeline_->setEffectFilesDir(effect_files_dir);
     timeline_scroll->setWidget(timeline_);
     splitter->addWidget(timeline_scroll);
 
@@ -152,10 +142,10 @@ void EffectPackEditorDialog::buildUi()
     auto* palette_row = new QHBoxLayout();
     remove_block_button_ = new QPushButton(QStringLiteral("Remove effect"));
     remove_block_button_->setToolTip(QStringLiteral("Delete selected block (Delete / Backspace)"));
-    auto* props_hint = new QLabel(QStringLiteral("Select a block to edit"));
-    props_hint->setWordWrap(true);
-    PluginUiApplyMutedSecondaryLabel(props_hint);
-    palette_row->addWidget(props_hint, 1);
+    props_hint_ = new QLabel(QStringLiteral("Select a block to edit"));
+    props_hint_->setWordWrap(true);
+    PluginUiApplyMutedSecondaryLabel(props_hint_);
+    palette_row->addWidget(props_hint_, 1);
     palette_row->addWidget(remove_block_button_, 0, Qt::AlignTop);
     props_layout->addLayout(palette_row);
 
@@ -166,6 +156,43 @@ void EffectPackEditorDialog::buildUi()
     auto* props_inner_layout = new QVBoxLayout(props_inner);
     props_inner_layout->setContentsMargins(0, 0, 0, 0);
 
+    name_edit_ = new QLineEdit();
+    duration_spin_ = new QSpinBox();
+    duration_spin_->setRange(100, EffectPack::kMaxDurationMs);
+    duration_spin_->setSingleStep(100);
+    duration_spin_->setSuffix(QStringLiteral(" ms"));
+    duration_spin_->setKeyboardTracking(false);
+    duration_spin_->setValue(5000);
+    loop_combo_ = new QComboBox();
+    loop_combo_->addItem(QStringLiteral("Once"), QStringLiteral("once"));
+    loop_combo_->addItem(QStringLiteral("Forever"), QStringLiteral("forever"));
+    loop_combo_->addItem(QStringLiteral("While active"), QStringLiteral("while_active"));
+    controllers_button_ = new QPushButton(QStringLiteral("Controllers…"));
+    controllers_button_->setToolTip(QStringLiteral("Choose which scene controllers appear on this pack’s timeline"));
+    map_controllers_button_ = new QPushButton(QStringLiteral("Map…"));
+    map_controllers_button_->setToolTip(QStringLiteral("Point this pack’s controller names at controllers in your scene"));
+    auto* timeline_buttons = new QWidget();
+    auto* timeline_row = new QHBoxLayout(timeline_buttons);
+    timeline_row->setContentsMargins(0, 0, 0, 0);
+    timeline_row->setSpacing(6);
+    timeline_row->addWidget(controllers_button_, 1);
+    timeline_row->addWidget(map_controllers_button_);
+
+    auto* pack_sec = new EffectCollapsibleSection(QStringLiteral("Pack"));
+    pack_sec->setExpanded(true);
+    pack_sec->bodyLayout()->setSpacing(6);
+    pack_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
+    auto* pack_form = new QFormLayout();
+    pack_form->setContentsMargins(0, 0, 0, 0);
+    pack_form->setSpacing(6);
+    pack_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    pack_form->addRow(QStringLiteral("Name"), name_edit_);
+    pack_form->addRow(QStringLiteral("Duration"), duration_spin_);
+    pack_form->addRow(QStringLiteral("Loop"), loop_combo_);
+    pack_form->addRow(QStringLiteral("Timeline"), timeline_buttons);
+    pack_sec->bodyLayout()->addLayout(pack_form);
+    props_inner_layout->addWidget(pack_sec);
+
     auto* effect_sec = new EffectCollapsibleSection(QStringLiteral("Effect"));
     effect_sec->setExpanded(true);
     effect_sec->bodyLayout()->setSpacing(6);
@@ -175,17 +202,48 @@ void EffectPackEditorDialog::buildUi()
     effect_form->setSpacing(6);
     effect_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     type_combo_ = new QComboBox();
-    for(const EffectPackCatalog::Entry& e : EffectPackCatalog::AllEntries())
+    for(const EffectPackCatalog::Entry& e : EffectPackCatalog::LoadEntries(effect_files_dir))
     {
-        type_combo_->addItem(EffectPackCatalog::MakeEffectIcon(e), QString::fromUtf8(e.name), (int)e.type);
+        type_combo_->addItem(EffectPackCatalog::MakeEffectIcon(e), e.name, e.id);
     }
     start_spin_ = new QSpinBox();
     start_spin_->setRange(0, EffectPack::kMaxDurationMs);
+    start_spin_->setSuffix(QStringLiteral(" ms"));
+    start_spin_->setKeyboardTracking(false);
     end_spin_ = new QSpinBox();
     end_spin_->setRange(1, EffectPack::kMaxDurationMs);
+    end_spin_->setSuffix(QStringLiteral(" ms"));
+    end_spin_->setKeyboardTracking(false);
+    auto attachTimeSlider = [](QSpinBox* spin, const QString& tip) {
+        auto* slider = new QSlider(Qt::Horizontal);
+        slider->setRange(spin->minimum(), spin->maximum());
+        slider->setValue(spin->value());
+        slider->setSingleStep(10);
+        slider->setPageStep(100);
+        slider->setFixedHeight(14);
+        slider->setToolTip(tip);
+        QObject::connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
+        QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), slider, [slider](int value) {
+            const bool blocked = slider->blockSignals(true);
+            slider->setValue(value);
+            slider->blockSignals(blocked);
+        });
+        auto* wrap = new QWidget();
+        auto* lay = new QVBoxLayout(wrap);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(0);
+        lay->addWidget(spin);
+        lay->addWidget(slider);
+        return std::pair<QWidget*, QSlider*>{wrap, slider};
+    };
+    const auto start_field = attachTimeSlider(start_spin_, QStringLiteral("Drag to set the start time"));
+    const auto end_field = attachTimeSlider(end_spin_, QStringLiteral("Drag to set the end time"));
+    start_slider_ = start_field.second;
+    end_slider_ = end_field.second;
+    syncTimeSliderRanges();
     effect_form->addRow(QStringLiteral("Type"), type_combo_);
-    effect_form->addRow(QStringLiteral("Start ms"), start_spin_);
-    effect_form->addRow(QStringLiteral("End ms"), end_spin_);
+    effect_form->addRow(QStringLiteral("Start"), start_field.first);
+    effect_form->addRow(QStringLiteral("End"), end_field.first);
     effect_sec->bodyLayout()->addLayout(effect_form);
     props_inner_layout->addWidget(effect_sec);
 
@@ -206,12 +264,11 @@ void EffectPackEditorDialog::buildUi()
     color_to_layout->setContentsMargins(0, 0, 0, 0);
     color_to_layout->setSpacing(6);
     gradient_preset_ = new QComboBox();
-    gradient_preset_->addItem(QStringLiteral("Preset…"), QString());
-    for(const EffectPackCatalog::GradientEntry& g : EffectPackCatalog::GradientEntries())
-    {
-        gradient_preset_->addItem(QString::fromUtf8(g.label ? g.label : g.id),
-                                  QString::fromUtf8(g.id ? g.id : ""));
-    }
+    save_gradient_button_ = new QPushButton(QStringLiteral("Save"));
+    save_gradient_button_->setToolTip(QStringLiteral("Save the current gradient as a preset"));
+    delete_gradient_button_ = new QPushButton(QStringLiteral("Delete"));
+    delete_gradient_button_->setToolTip(QStringLiteral("Remove the selected gradient preset"));
+    delete_gradient_button_->setEnabled(false);
     gradient_bar_ = new EffectPackGradientBar();
     auto* color_form = new QFormLayout();
     color_form->setContentsMargins(0, 0, 0, 0);
@@ -219,7 +276,6 @@ void EffectPackEditorDialog::buildUi()
     color_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     color_form->addRow(QStringLiteral("Primary"), color_button_);
     color_sec->bodyLayout()->addLayout(color_form);
-    // End color lives outside the form so hide/show keeps its label with the row.
     color_to_layout->addWidget(new QLabel(QStringLiteral("End")));
     color_to_layout->addWidget(color_to_button_, 1);
     color_sec->bodyLayout()->addWidget(color_to_row_);
@@ -227,7 +283,15 @@ void EffectPackEditorDialog::buildUi()
     preset_form->setContentsMargins(0, 0, 0, 0);
     preset_form->setSpacing(6);
     preset_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    preset_form->addRow(QStringLiteral("Preset"), gradient_preset_);
+    auto* preset_row = new QWidget();
+    auto* preset_layout = new QHBoxLayout(preset_row);
+    preset_layout->setContentsMargins(0, 0, 0, 0);
+    preset_layout->setSpacing(6);
+    preset_layout->addWidget(gradient_preset_, 1);
+    preset_layout->addWidget(save_gradient_button_);
+    preset_layout->addWidget(delete_gradient_button_);
+    preset_form->addRow(QStringLiteral("Preset"), preset_row);
+    refillGradientPresets();
     color_sec->bodyLayout()->addLayout(preset_form);
     color_sec->bodyLayout()->addWidget(new QLabel(QStringLiteral("Color gradient")));
     color_sec->bodyLayout()->addWidget(gradient_bar_);
@@ -239,7 +303,7 @@ void EffectPackEditorDialog::buildUi()
     props_inner_layout->addWidget(color_sec);
 
     auto* bright_sec = new EffectCollapsibleSection(QStringLiteral("Brightness"));
-    bright_sec->setExpanded(true);
+    bright_sec->setExpanded(false);
     bright_sec->bodyLayout()->setSpacing(6);
     bright_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     intensity_spin_ = new QSpinBox();
@@ -263,7 +327,7 @@ void EffectPackEditorDialog::buildUi()
     props_inner_layout->addWidget(bright_sec);
 
     direction_section_ = new EffectCollapsibleSection(QStringLiteral("Direction"));
-    static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(true);
+    static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(false);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setSpacing(6);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     direction_combo_ = new QComboBox();
@@ -322,10 +386,10 @@ void EffectPackEditorDialog::buildUi()
     props_inner_layout->addWidget(direction_section_);
 
     curve_combo_ = new QComboBox();
-    for(const EffectPackCatalog::CurveEntry& c : EffectPackCatalog::CurveEntries())
+    const filesystem::path curves_path = PluginSettingsPaths::UserCurvesFile(tab_ ? tab_->resource_manager : nullptr);
+    for(const EffectPackUserCurves::Entry& c : EffectPackUserCurves::Load(curves_path))
     {
-        curve_combo_->addItem(QString::fromUtf8(c.label ? c.label : c.id),
-                              QString::fromUtf8(c.id ? c.id : ""));
+        curve_combo_->addItem(c.label.isEmpty() ? c.id : c.label, c.id);
     }
     curve_combo_->addItem(QStringLiteral("Custom"), QStringLiteral("custom"));
     auto* curve_sec = new EffectCollapsibleSection(QStringLiteral("Intensity Curve"));
@@ -336,7 +400,7 @@ void EffectPackEditorDialog::buildUi()
     props_inner_layout->addWidget(curve_sec);
 
     speed_section_ = new EffectCollapsibleSection(QStringLiteral("Speed"));
-    static_cast<EffectCollapsibleSection*>(speed_section_)->setExpanded(true);
+    static_cast<EffectCollapsibleSection*>(speed_section_)->setExpanded(false);
     speed_spin_ = new QDoubleSpinBox();
     speed_spin_->setRange(0.05, 8.0);
     speed_spin_->setSingleStep(0.1);
@@ -356,7 +420,7 @@ void EffectPackEditorDialog::buildUi()
     props_inner_layout->addWidget(speed_section_);
 
     pulse_section_ = new EffectCollapsibleSection(QStringLiteral("Pulse / Chase"));
-    static_cast<EffectCollapsibleSection*>(pulse_section_)->setExpanded(true);
+    static_cast<EffectCollapsibleSection*>(pulse_section_)->setExpanded(false);
     pulse_length_spin_ = new QSpinBox();
     pulse_length_spin_->setRange(2, 100);
     pulse_length_spin_->setValue(25);
@@ -388,6 +452,7 @@ void EffectPackEditorDialog::buildUi()
     stop_button_ = new QPushButton(QStringLiteral("Stop"));
     stop_button_->setEnabled(false);
     save_button_ = new QPushButton(QStringLiteral("Save"));
+    PluginUiApplyPrimaryButton(save_button_);
     auto* close_button = new QPushButton(QStringLiteral("Close"));
     action_row->addWidget(preview_button_);
     action_row->addWidget(stop_button_);
@@ -401,6 +466,7 @@ void EffectPackEditorDialog::buildUi()
 
     connect(duration_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onDurationChanged);
     connect(controllers_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickControllers);
+    connect(map_controllers_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onMapControllers);
     connect(timeline_, &EffectPackTimelineWidget::playheadChanged, this, &EffectPackEditorDialog::onPlayheadChanged);
     connect(timeline_, &EffectPackTimelineWidget::blockSelected, this, &EffectPackEditorDialog::onBlockSelected);
     connect(timeline_, &EffectPackTimelineWidget::blockEdited, this, &EffectPackEditorDialog::onBlockSelected);
@@ -408,11 +474,19 @@ void EffectPackEditorDialog::buildUi()
     connect(timeline_, &EffectPackTimelineWidget::effectAddRequested, this, &EffectPackEditorDialog::onEffectAddRequested);
     connect(timeline_, &EffectPackTimelineWidget::gradientPresetApplied, this, &EffectPackEditorDialog::onGradientPresetApplied);
     connect(timeline_, &EffectPackTimelineWidget::curvePresetApplied, this, &EffectPackEditorDialog::onCurvePresetApplied);
+    connect(timeline_, &EffectPackTimelineWidget::colorDropped, this, &EffectPackEditorDialog::onColorDropped);
+    connect(timeline_, &EffectPackTimelineWidget::gradientDropped, this, &EffectPackEditorDialog::onGradientDropped);
     connect(timeline_, &EffectPackTimelineWidget::sceneZoneControllersReordered,
             this, &EffectPackEditorDialog::onSceneZoneControllersReordered);
     connect(effect_toolbar_, &EffectPackToolBar::effectClicked, this, &EffectPackEditorDialog::onToolbarEffectClicked);
     connect(effect_toolbar_, &EffectPackToolBar::colorClicked, this, &EffectPackEditorDialog::onToolbarColorClicked);
     connect(effect_toolbar_, &EffectPackToolBar::gradientPresetClicked, this, &EffectPackEditorDialog::onToolbarGradientClicked);
+    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetOverwriteRequested, this, &EffectPackEditorDialog::onOverwriteGradientPreset);
+    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetDeleteRequested, this, &EffectPackEditorDialog::onDeleteGradientPreset);
+    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetResetRequested, this, &EffectPackEditorDialog::onResetGradientPreset);
+    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetOverwriteRequested, this, &EffectPackEditorDialog::onOverwriteGradientPreset);
+    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetDeleteRequested, this, &EffectPackEditorDialog::onDeleteGradientPreset);
+    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetResetRequested, this, &EffectPackEditorDialog::onResetGradientPreset);
     connect(effect_toolbar_, &EffectPackToolBar::curvePresetClicked, this, &EffectPackEditorDialog::onToolbarCurveClicked);
     connect(remove_block_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onRemoveBlock);
     connect(type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onTypeChanged);
@@ -432,6 +506,8 @@ void EffectPackEditorDialog::buildUi()
     connect(color_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickColor);
     connect(color_to_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickColorTo);
     connect(gradient_preset_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onGradientPreset);
+    connect(save_gradient_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onSaveUserGradient);
+    connect(delete_gradient_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onDeleteUserGradient);
     connect(gradient_bar_, &EffectPackGradientBar::stopsChanged, this, &EffectPackEditorDialog::onGradientStopsChanged);
     connect(preview_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPreview);
     connect(stop_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::stopPreview);
@@ -446,7 +522,6 @@ void EffectPackEditorDialog::NewPack(const filesystem::path& packs_dir)
     std::vector<std::string> devices;
     if(!promptSelectControllers(&devices, true))
     {
-        // Cancel: leave any currently open pack untouched.
         return;
     }
 
@@ -483,6 +558,19 @@ void EffectPackEditorDialog::EditPack(const filesystem::path& path)
     pack_path_ = path;
     pack_ = std::move(pack);
     loadIntoUi(pack_);
+    bool needs_map = false;
+    for(const std::string& name : packDeviceNames())
+    {
+        if(!deviceNameInScene(name))
+        {
+            needs_map = true;
+            break;
+        }
+    }
+    if(needs_map)
+    {
+        promptMapControllers();
+    }
     setWindowTitle(QStringLiteral("Effect Pack Editor — %1").arg(QString::fromStdString(pack_.name)));
     status_label_->setText(QStringLiteral("Editing %1 — All (this pack) shows pack-wide blocks").arg(
         QString::fromStdString(path.filename().string())));
@@ -580,6 +668,253 @@ bool EffectPackEditorDialog::promptSelectControllers(std::vector<std::string>* d
     return true;
 }
 
+std::vector<std::string> EffectPackEditorDialog::packDeviceNames() const
+{
+    std::vector<std::string> names;
+    auto add = [&](const std::string& name) {
+        if(name.empty())
+        {
+            return;
+        }
+        if(std::find(names.begin(), names.end(), name) == names.end())
+        {
+            names.push_back(name);
+        }
+    };
+    for(const std::string& device : pack_.devices)
+    {
+        add(device);
+    }
+    for(const EffectPack::Track& track : pack_.tracks)
+    {
+        add(track.target.device_name);
+    }
+    return names;
+}
+
+bool EffectPackEditorDialog::deviceNameInScene(const std::string& name) const
+{
+    if(!tab_ || name.empty())
+    {
+        return false;
+    }
+    const auto& transforms = tab_->GetControllerTransforms();
+    for(int i = 0; i < (int)transforms.size(); ++i)
+    {
+        ControllerTransform* transform = transforms[(size_t)i].get();
+        if(!transform || transform->hidden_by_virtual)
+        {
+            continue;
+        }
+        const std::string key = ControllerKeyName(transform, i);
+        if(EffectPack::NameMatches(key, name) || EffectPack::NameMatches(name, key))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool EffectPackEditorDialog::promptMapControllers()
+{
+    const std::vector<std::string> names = packDeviceNames();
+    if(names.empty())
+    {
+        QMessageBox::information(this, QStringLiteral("Effect Pack Editor"),
+                                 QStringLiteral("This pack has no per-controller rows to map."));
+        return false;
+    }
+    if(!tab_)
+    {
+        return false;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("Map controllers"));
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->addWidget(new QLabel(
+        QStringLiteral("Point each controller from this pack at one of yours.\n"
+                       "LED and zone rows copy in order. A 10-row mouse mapped onto a 2-row mouse keeps the first two and drops the rest.")));
+
+    struct Row
+    {
+        std::string from;
+        QComboBox* combo = nullptr;
+    };
+    std::vector<Row> rows;
+    auto* form = new QFormLayout();
+    const auto& transforms = tab_->GetControllerTransforms();
+    for(const std::string& name : names)
+    {
+        auto* combo = new QComboBox();
+        combo->addItem(QStringLiteral("Not mapped"), QString());
+        int matched = 0;
+        for(int i = 0; i < (int)transforms.size(); ++i)
+        {
+            ControllerTransform* transform = transforms[(size_t)i].get();
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+            const std::string key = ControllerKeyName(transform, i);
+            combo->addItem(ControllerLabel(transform, i), QString::fromStdString(key));
+            if(EffectPack::NameMatches(key, name) || EffectPack::NameMatches(name, key))
+            {
+                matched = combo->count() - 1;
+            }
+        }
+        combo->setCurrentIndex(matched);
+        form->addRow(QString::fromStdString(name), combo);
+        rows.push_back({name, combo});
+    }
+    layout->addLayout(form);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    layout->addWidget(buttons);
+    if(dlg.exec() != QDialog::Accepted)
+    {
+        return false;
+    }
+
+    int dropped = 0;
+    for(const Row& row : rows)
+    {
+        const std::string to = row.combo->currentData().toString().toStdString();
+        if(to.empty() || to == row.from)
+        {
+            continue;
+        }
+
+        ControllerTransform* dest = nullptr;
+        int dest_index = -1;
+        for(int i = 0; i < (int)transforms.size(); ++i)
+        {
+            ControllerTransform* transform = transforms[(size_t)i].get();
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+            if(ControllerKeyName(transform, i) == to)
+            {
+                dest = transform;
+                dest_index = i;
+                break;
+            }
+        }
+
+        std::vector<EffectPack::Target> dest_zones;
+        std::vector<EffectPack::Target> dest_leds;
+        if(dest && dest_index >= 0)
+        {
+            const EffectPackTimelineWidget::Node node = buildControllerNode(dest, dest_index);
+            for(const EffectPackTimelineWidget::Node& zone : node.children)
+            {
+                dest_zones.push_back(zone.target);
+                for(const EffectPackTimelineWidget::Node& led : zone.children)
+                {
+                    dest_leds.push_back(led.target);
+                }
+            }
+        }
+
+        std::vector<size_t> led_tracks;
+        std::vector<size_t> zone_tracks;
+        for(size_t i = 0; i < pack_.tracks.size(); ++i)
+        {
+            const EffectPack::Target& target = pack_.tracks[i].target;
+            if(target.device_name != row.from)
+            {
+                continue;
+            }
+            if(target.kind == EffectPack::TargetKind::Leds)
+            {
+                led_tracks.push_back(i);
+            }
+            else if(target.kind == EffectPack::TargetKind::Zone)
+            {
+                zone_tracks.push_back(i);
+            }
+            else
+            {
+                pack_.tracks[i].target.device_name = to;
+            }
+        }
+        std::sort(led_tracks.begin(), led_tracks.end(), [&](size_t a, size_t b) {
+            const int ia = pack_.tracks[a].target.led_indices.empty() ? 0 : pack_.tracks[a].target.led_indices.front();
+            const int ib = pack_.tracks[b].target.led_indices.empty() ? 0 : pack_.tracks[b].target.led_indices.front();
+            return ia < ib;
+        });
+
+        std::vector<char> drop(pack_.tracks.size(), 0);
+        for(size_t i = 0; i < led_tracks.size(); ++i)
+        {
+            if(i < dest_leds.size())
+            {
+                EffectPack::Target& target = pack_.tracks[led_tracks[i]].target;
+                target.device_name = to;
+                target.zone_name = dest_leds[i].zone_name;
+                target.led_indices = dest_leds[i].led_indices;
+            }
+            else
+            {
+                drop[led_tracks[i]] = 1;
+                ++dropped;
+            }
+        }
+        for(size_t i = 0; i < zone_tracks.size(); ++i)
+        {
+            if(i < dest_zones.size())
+            {
+                EffectPack::Target& target = pack_.tracks[zone_tracks[i]].target;
+                target.device_name = to;
+                target.zone_name = dest_zones[i].zone_name;
+            }
+            else
+            {
+                drop[zone_tracks[i]] = 1;
+                ++dropped;
+            }
+        }
+
+        std::vector<EffectPack::Track> kept;
+        kept.reserve(pack_.tracks.size());
+        for(size_t i = 0; i < pack_.tracks.size(); ++i)
+        {
+            if(!drop[i])
+            {
+                kept.push_back(std::move(pack_.tracks[i]));
+            }
+        }
+        pack_.tracks = std::move(kept);
+
+        bool replaced = false;
+        for(std::string& device : pack_.devices)
+        {
+            if(device == row.from)
+            {
+                device = to;
+                replaced = true;
+            }
+        }
+        if(!replaced && std::find(pack_.devices.begin(), pack_.devices.end(), to) == pack_.devices.end())
+        {
+            pack_.devices.push_back(to);
+        }
+    }
+    onRebuildTimelineModel();
+    status_label_->setText(dropped > 0
+                                ? QStringLiteral("Mapped. %1 extra row(s) did not fit and were dropped.").arg(dropped)
+                                : QStringLiteral("Controller rows mapped to this scene"));
+    return true;
+}
+
+void EffectPackEditorDialog::onMapControllers()
+{
+    promptMapControllers();
+}
+
 void EffectPackEditorDialog::onPickControllers()
 {
     std::vector<std::string> devices = pack_.devices;
@@ -608,11 +943,28 @@ bool EffectPackEditorDialog::deviceSelectedForPack(const std::string& key) const
     return false;
 }
 
+void EffectPackEditorDialog::syncTimeSliderRanges()
+{
+    const int dur = std::max(1, duration_spin_ ? duration_spin_->value() : 1);
+    auto fit = [](QSlider* slider, int min_v, int max_v) {
+        if(!slider)
+        {
+            return;
+        }
+        const bool blocked = slider->blockSignals(true);
+        slider->setRange(min_v, std::max(min_v, max_v));
+        slider->blockSignals(blocked);
+    };
+    fit(start_slider_, 0, std::max(0, dur - 1));
+    fit(end_slider_, 1, dur);
+}
+
 void EffectPackEditorDialog::loadIntoUi(const EffectPack::Pack& pack)
 {
     suppress_ui_ = true;
     name_edit_->setText(QString::fromStdString(pack.name));
     duration_spin_->setValue(pack.duration_ms);
+    syncTimeSliderRanges();
     const QString loop = (pack.loop == EffectPack::LoopMode::Forever) ? QStringLiteral("forever")
         : (pack.loop == EffectPack::LoopMode::WhileActive) ? QStringLiteral("while_active")
         : QStringLiteral("once");
@@ -626,6 +978,7 @@ void EffectPackEditorDialog::loadIntoUi(const EffectPack::Pack& pack)
     timeline_->setPlayheadMs(0);
     onRebuildTimelineModel();
     applyBlockToForm();
+    updateSelectionActions();
 }
 
 void EffectPackEditorDialog::onDurationChanged(int value)
@@ -635,6 +988,7 @@ void EffectPackEditorDialog::onDurationChanged(int value)
         return;
     }
     pack_.duration_ms = value;
+    syncTimeSliderRanges();
     for(EffectPack::Track& track : pack_.tracks)
     {
         for(EffectPack::Block& block : track.blocks)
@@ -668,8 +1022,6 @@ void EffectPackEditorDialog::keyPressEvent(QKeyEvent* event)
 {
     if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
-        // Allow Delete from anywhere in the dialog (not only when timeline has focus),
-        // unless the user is editing a line edit / spin box text.
         const QWidget* focus = focusWidget();
         const bool editing_text = focus
             && (qobject_cast<const QLineEdit*>(focus)
@@ -686,16 +1038,80 @@ void EffectPackEditorDialog::keyPressEvent(QKeyEvent* event)
 
 void EffectPackEditorDialog::updateSelectionActions()
 {
-    const bool has = selectedBlock() != nullptr;
+    const EffectPack::Block* block = selectedBlock();
+    const bool has = block != nullptr;
     if(remove_block_button_)
     {
         remove_block_button_->setEnabled(has && !player_.IsPlaying());
     }
+    if(props_hint_)
+    {
+        QString title = QStringLiteral("Select a block to edit");
+        if(has)
+        {
+            title = QString::fromStdString(EffectPack::BlockFileId(*block));
+            const QList<EffectPackCatalog::Entry> entries = EffectPackCatalog::LoadEntries(
+                PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr));
+            for(const EffectPackCatalog::Entry& entry : entries)
+            {
+                if(entry.id == title)
+                {
+                    title = entry.name;
+                    break;
+                }
+            }
+        }
+        props_hint_->setText(title);
+    }
+    if(delete_gradient_button_ && gradient_preset_)
+    {
+        delete_gradient_button_->setEnabled(!gradient_preset_->currentData().toString().isEmpty());
+    }
+    if(effect_toolbar_)
+    {
+        bool any_block = false;
+        for(const EffectPack::Track& track : pack_.tracks)
+        {
+            if(!track.blocks.empty())
+            {
+                any_block = true;
+                break;
+            }
+        }
+        effect_toolbar_->setCurvesEnabled(any_block);
+    }
 }
 
-void EffectPackEditorDialog::onEffectAddRequested(int row_index, int ms, int block_type)
+void EffectPackEditorDialog::onColorDropped(int row_index, int ms, unsigned int rgb)
 {
-    addBlockAt(row_index, ms, (EffectPack::BlockType)block_type);
+    addBlockAt(row_index, ms);
+    if(EffectPack::Block* block = selectedBlock())
+    {
+        const RGBColor color = (RGBColor)rgb;
+        block->color = color;
+        block->color_from = color;
+        block->color_to = color;
+        block->gradient = {{0.0f, color}};
+        applyBlockToForm();
+        if(timeline_)
+        {
+            timeline_->update();
+        }
+    }
+    updateSelectionActions();
+}
+
+void EffectPackEditorDialog::onGradientDropped(int row_index, int ms, const QString& preset_id)
+{
+    addBlockAt(row_index, ms);
+    applyGradientPresetToBlock(selectedBlock(), preset_id);
+    applyBlockToForm();
+    updateSelectionActions();
+}
+
+void EffectPackEditorDialog::onEffectAddRequested(int row_index, int ms, const QString& effect_id)
+{
+    addBlockAt(row_index, ms, effect_id);
 }
 
 void EffectPackEditorDialog::onBlockSelected(int track_index, int block_index)
@@ -704,7 +1120,6 @@ void EffectPackEditorDialog::onBlockSelected(int track_index, int block_index)
     {
         timeline_->cancelDrag();
     }
-    // Commit the previously selected block before switching the form target.
     if(selected_track_ != track_index || selected_block_ != block_index)
     {
         applyFormToSelectedBlock();
@@ -717,6 +1132,10 @@ void EffectPackEditorDialog::onBlockSelected(int track_index, int block_index)
 
 int EffectPackEditorDialog::currentTimelineRow() const
 {
+    if(!timeline_)
+    {
+        return -1;
+    }
     const int selected = timeline_->selectedRowIndex();
     if(selected >= 0 && selected < timeline_->rows().size())
     {
@@ -725,10 +1144,9 @@ int EffectPackEditorDialog::currentTimelineRow() const
     return 0;
 }
 
-void EffectPackEditorDialog::onToolbarEffectClicked(int block_type)
+void EffectPackEditorDialog::onToolbarEffectClicked(const QString& effect_id)
 {
-    addBlockAt(currentTimelineRow(), timeline_ ? timeline_->playheadMs() : 0,
-               (EffectPack::BlockType)block_type);
+    addBlockAt(currentTimelineRow(), timeline_ ? timeline_->playheadMs() : 0, effect_id);
 }
 
 void EffectPackEditorDialog::onBlockDeleteRequested(int track_index, int block_index)
@@ -753,10 +1171,8 @@ void EffectPackEditorDialog::onRemoveBlock()
     {
         timeline_->cancelDrag();
     }
-    // Stop writing form values into a block that is about to vanish.
     suppress_ui_ = true;
     blocks.erase(blocks.begin() + selected_block_);
-    // Drop empty tracks so stale target rows cannot keep painting blacks forever.
     if(blocks.empty())
     {
         pack_.tracks.erase(pack_.tracks.begin() + selected_track_);
@@ -916,7 +1332,6 @@ void EffectPackEditorDialog::stopPreview()
     }
     if(was_playing && tab_)
     {
-        // Push buffered colours so hardware matches the last viewport frame.
         tab_->ApplyEffectPackPreviewFrame(pack_, player_.LocalMs(), true);
     }
     player_.Stop();
@@ -977,7 +1392,6 @@ void EffectPackEditorDialog::onTick()
     const int elapsed = (int)wall_.elapsed();
     const int dt = std::max(0, elapsed - last_elapsed_ms_);
     last_elapsed_ms_ = elapsed;
-    // Live editor edits already mutate pack_; keep the player copy current.
     player_.UpdatePack(pack_);
     if(!player_.Tick(dt, true))
     {

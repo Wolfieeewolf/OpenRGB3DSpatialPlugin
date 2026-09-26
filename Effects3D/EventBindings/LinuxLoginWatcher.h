@@ -35,6 +35,7 @@ private:
 
     LinuxEventSource* owner_ = nullptr;
     QString session_path_;
+    bool have_lock_ = false;
     bool locked_ = false;
 };
 

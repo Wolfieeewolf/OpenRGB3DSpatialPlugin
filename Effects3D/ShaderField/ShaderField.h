@@ -4,26 +4,32 @@
 #define SHADERFIELD_H
 
 #include "SpatialEffect3D.h"
-#include "EffectRegisterer3D.h"
 #include "Shaders/SpatialShaderEngine.h"
 
 #include <QImage>
 #include <QMutex>
+#include <QString>
 #include <memory>
-#include <vector>
+#include <string>
 
 class QComboBox;
 class QLabel;
 class QSlider;
 
+struct ShaderFieldSpec
+{
+    std::string class_name;
+    std::string ui_name;
+    std::string description;
+    QString     path;
+};
+
 class ShaderField : public SpatialEffect3D
 {
     Q_OBJECT
 public:
-    explicit ShaderField(QWidget* parent = nullptr);
+    explicit ShaderField(ShaderFieldSpec spec, QWidget* parent = nullptr);
     ~ShaderField() override;
-
-    EFFECT_REGISTERER_3D("ShaderField", "Shader Field", "Spatial", []() { return new ShaderField; })
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
@@ -36,14 +42,12 @@ public:
 
 private slots:
     void OnCompileMessage(const QString& message);
-    void OnPresetChanged(int index);
     void OnProjectionModeChanged(int index);
     void OnOpenShadersFolder();
 
 private:
     void EnsureShaderEngineRunning();
-    void RebuildPresetList();
-    void LoadPresetAtIndex(int index);
+    void LoadShaderBody();
     void SyncUniforms(float time);
     void SampleUv(float nx, float ny, float nz, float& u, float& v) const;
     RGBColor SampleField(float u, float v) const;
@@ -64,15 +68,13 @@ private:
         PROJ_COUNT
     };
 
+    ShaderFieldSpec spec_{};
     SpatialShaderEngine* shader_engine = nullptr;
-    QComboBox* preset_combo = nullptr;
     QComboBox* projection_combo = nullptr;
     QSlider* contrast_slider = nullptr;
     QSlider* hue_slider = nullptr;
     QLabel* compile_log_label = nullptr;
 
-    std::vector<QString> preset_ids;
-    int active_preset_index = 0;
     int projection_mode = 0;
     float contrast = 1.0f;
     float hue_shift = 0.0f;

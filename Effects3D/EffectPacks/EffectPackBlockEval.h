@@ -8,7 +8,6 @@ namespace EffectPack
 namespace block_eval
 {
 
-/** Mutable axis-eval scratch (LED / sequence / 1D). Return false = LED off. */
 struct AxisCtx
 {
     const Block* block = nullptr;
@@ -22,7 +21,6 @@ struct AxisCtx
 
 using AxisFn = bool (*)(AxisCtx& ctx);
 
-/** Normalized world sample (device or room AABB). */
 struct WorldNorm
 {
     float nx = 0.5f;

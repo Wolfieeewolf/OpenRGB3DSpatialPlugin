@@ -90,32 +90,34 @@ inline void ApplyAudioRegisterRole(AudioReactiveSettings3D& cfg)
         cfg.low_hz = 40;
         cfg.high_hz = 180;
         cfg.drive_mode = static_cast<int>(AudioDriveMode::Beat);
-        cfg.sustain_reject = 0.72f;
-        cfg.smoothing = 0.48f;
-        cfg.peak_boost = 1.35f;
-        cfg.falloff = std::max(cfg.falloff, 0.85f);
+        cfg.sustain_reject = 0.82f;
+        cfg.smoothing = 0.52f;
+        cfg.peak_boost = 1.22f;
+        cfg.falloff = std::max(cfg.falloff, 1.0f);
         break;
     case AudioRegisterRole::Mid:
-        /* Voice + pitched instruments (ColorChord-weighted band). */
         cfg.low_hz = 200;
         cfg.high_hz = 4000;
         cfg.drive_mode = static_cast<int>(AudioDriveMode::Sustained);
-        cfg.smoothing = 0.58f;
-        cfg.peak_boost = 1.18f;
+        cfg.smoothing = 0.62f;
+        cfg.peak_boost = 1.12f;
+        cfg.falloff = std::max(cfg.falloff, 1.0f);
         break;
     case AudioRegisterRole::High:
         cfg.low_hz = 2800;
         cfg.high_hz = 14000;
         cfg.drive_mode = static_cast<int>(AudioDriveMode::Sustained);
-        cfg.smoothing = 0.68f;
-        cfg.peak_boost = 1.45f;
+        cfg.smoothing = 0.72f;
+        cfg.peak_boost = 1.18f;
+        cfg.falloff = std::max(cfg.falloff, 1.05f);
         break;
     case AudioRegisterRole::Mixed:
         cfg.low_hz = 40;
         cfg.high_hz = 12000;
         cfg.drive_mode = static_cast<int>(AudioDriveMode::Sustained);
-        cfg.smoothing = 0.45f;
-        cfg.peak_boost = 1.20f;
+        cfg.smoothing = 0.55f;
+        cfg.peak_boost = 1.08f;
+        cfg.falloff = std::max(cfg.falloff, 1.1f);
         break;
     }
 }
@@ -147,6 +149,9 @@ inline AudioReactiveSettings3D MakeDefaultSpectrumAudioReactiveSettings3D()
     AudioReactiveSettings3D cfg = MakeDefaultAudioReactiveSettings3D(40, 12000);
     cfg.register_role = static_cast<int>(AudioRegisterRole::Mixed);
     ApplyAudioRegisterRole(cfg);
+    cfg.smoothing = 0.58f;
+    cfg.peak_boost = 1.08f;
+    cfg.falloff = 1.15f;
     cfg.pulse_color_mode = static_cast<int>(AudioPulseColorMode::SpatialAlongRing);
     return cfg;
 }
@@ -157,10 +162,10 @@ inline AudioReactiveSettings3D MakeDefaultLowPunchAudioReactiveSettings3D()
     AudioReactiveSettings3D cfg = MakeDefaultBeatAudioReactiveSettings3D();
     cfg.register_role = static_cast<int>(AudioRegisterRole::Low);
     ApplyAudioRegisterRole(cfg);
-    cfg.peak_boost = 1.55f;
-    cfg.sustain_reject = 0.70f;
-    cfg.falloff = 0.88f;
-    cfg.smoothing = 0.42f;
+    cfg.peak_boost = 1.28f;
+    cfg.sustain_reject = 0.82f;
+    cfg.falloff = 1.05f;
+    cfg.smoothing = 0.50f;
     cfg.pulse_color_mode = static_cast<int>(AudioPulseColorMode::SpatialAlongRing);
     cfg.beat_wave_mode = static_cast<int>(AudioBeatWaveMode::ClassicWave);
     cfg.wave_spread = 1.05f;
@@ -175,8 +180,8 @@ inline AudioReactiveSettings3D MakeDefaultHighSparkleAudioReactiveSettings3D()
     cfg.register_role = static_cast<int>(AudioRegisterRole::High);
     ApplyAudioRegisterRole(cfg);
     cfg.smoothing = 0.72f;
-    cfg.peak_boost = 1.55f;
-    cfg.falloff = 0.88f;
+    cfg.peak_boost = 1.22f;
+    cfg.falloff = 1.05f;
     cfg.pulse_color_mode = static_cast<int>(AudioPulseColorMode::FollowNotes);
     return cfg;
 }
@@ -344,8 +349,10 @@ inline RGBColor ScaleRGBColor(RGBColor color, float scale)
 inline float AudioEffectDisplayBrightness(float energy)
 {
     energy = std::clamp(energy, 0.0f, 1.0f);
-    const float lifted = std::pow(energy, 0.78f);
-    return std::clamp(0.52f + 0.98f * lifted, 0.0f, 1.32f);
+    if(energy < 0.04f)
+        return 0.0f;
+    const float lifted = std::pow(energy, 0.88f);
+    return std::clamp(0.08f + 0.92f * lifted, 0.0f, 1.15f);
 }
 
 inline RGBColor BrightenAudioEffectColor(RGBColor color, float energy)
@@ -353,11 +360,22 @@ inline RGBColor BrightenAudioEffectColor(RGBColor color, float energy)
     return ScaleRGBColor(color, AudioEffectDisplayBrightness(energy));
 }
 
+/** Soft noise gate before visual intensity — kills ambient hiss flashes. */
+inline float AudioVisualNoiseGate(float level, float floor = 0.10f, float knee = 0.12f)
+{
+    level = std::clamp(level, 0.0f, 1.0f);
+    floor = std::clamp(floor, 0.0f, 0.45f);
+    knee = std::max(0.02f, knee);
+    const float t = std::clamp((level - floor) / knee, 0.0f, 1.0f);
+    const float s = t * t * (3.0f - 2.0f * t);
+    return level * s;
+}
+
 inline float ApplyAudioIntensity(float value, const AudioReactiveSettings3D& cfg)
 {
-    /* Wider effective gain so Effect sensitivity / Feel is obvious on LEDs. */
     const float boost = std::clamp(cfg.peak_boost, 0.25f, 4.0f);
-    float boosted = std::clamp(value * boost, 0.0f, 1.0f);
+    float gated = AudioVisualNoiseGate(value);
+    float boosted = std::clamp(gated * boost, 0.0f, 1.0f);
     return AudioReactiveShapeLevel(boosted, cfg.falloff);
 }
 
@@ -522,16 +540,18 @@ inline bool TryTriggerAudioPulse(float dt,
         ApplyAudioVisualIntensity(std::clamp(state.onset_smoothed, 0.0f, 1.0f), cfg);
 
     const AudioDriveMode mode = static_cast<AudioDriveMode>(cfg.drive_mode);
-    const bool allow_drive_only = (mode == AudioDriveMode::Beat);
 
     const bool onset_hit =
         state.beat_armed
         && (state.onset_smoothed >= onset_threshold || onset_raw >= onset_threshold * 1.08f);
 
-    const float drive_trigger =
-        (mode == AudioDriveMode::Beat) ? 0.16f : 0.22f;
-    const bool drive_hit = shaped_drive >= drive_trigger;
-    if(!onset_hit && !(allow_drive_only && drive_hit))
+    /* Require a real onset; drive only assists when onset is already warm (kills ambient bass rings). */
+    const float drive_trigger = (mode == AudioDriveMode::Beat) ? 0.30f : 0.34f;
+    const bool drive_assist =
+        mode == AudioDriveMode::Beat
+        && shaped_drive >= drive_trigger
+        && state.onset_smoothed >= onset_threshold * 0.70f;
+    if(!onset_hit && !drive_assist)
     {
         return false;
     }
@@ -543,17 +563,17 @@ inline bool TryTriggerAudioPulse(float dt,
     {
         strength = std::max(strength, shaped_raw_onset * 0.88f);
     }
-    if(drive_hit)
+    if(drive_assist)
     {
-        strength = std::max(strength, shaped_drive * (onset_hit ? 0.72f : 1.0f));
+        strength = std::max(strength, shaped_drive * 0.72f);
     }
-    if(onset_hit && drive_hit)
+    if(onset_hit && drive_assist)
     {
         strength = std::max(strength,
                             (shaped_drive + std::max(shaped_onset, shaped_raw_onset)) * 0.48f);
     }
-    strength = std::clamp(strength * 1.10f, 0.0f, 1.0f);
-    if(strength < 0.04f)
+    strength = std::clamp(strength * 1.05f, 0.0f, 1.0f);
+    if(strength < 0.08f)
     {
         return false;
     }

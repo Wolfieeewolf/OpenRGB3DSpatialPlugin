@@ -20,17 +20,11 @@ void CustomControllerGridScene::SetSceneSizeMm(qreal width_mm, qreal height_mm)
     invalidate(sceneRect());
 }
 
-void CustomControllerGridScene::SetShowGrid(bool show)
-{
-    show_grid_ = show;
-    invalidate(sceneRect());
-}
-
 void CustomControllerGridScene::drawBackground(QPainter* painter, const QRectF& rect)
 {
     painter->fillRect(rect, palette().window());
 
-    if(!show_grid_ || scene_width_mm_ <= 0.0 || scene_height_mm_ <= 0.0)
+    if(scene_width_mm_ <= 0.0 || scene_height_mm_ <= 0.0)
     {
         return;
     }

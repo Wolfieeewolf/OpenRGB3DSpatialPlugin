@@ -4,7 +4,9 @@
 #include "EventBindings/BindingRuntime.h"
 #include "EventBindings/EventSourceRegistry.h"
 #include <QGroupBox>
+#include <vector>
 
+class QListWidgetItem;
 class QTimer;
 
 namespace Ui {
@@ -43,11 +45,17 @@ private:
     bool editBindingDialog(EffectBinding::Binding* binding);
     filesystem::path bindingsPath() const;
     filesystem::path packsDir() const;
+    filesystem::path catalogDir() const;
+    void syncRuntime();
+    bool catalogEnabled(const std::string& id) const;
+    bool isCatalogItem(const QListWidgetItem* item) const;
 
     Ui::EventBindingsPanel* ui = nullptr;
     OpenRGB3DSpatialTab* tab_ = nullptr;
     QTimer* timer_ = nullptr;
     EffectBinding::EventSourceRegistry registry_;
     EffectBinding::BindingRuntime runtime_;
+    EffectBinding::Document user_;
+    std::vector<EffectBinding::Binding> catalog_;
     bool bound_ = false;
 };

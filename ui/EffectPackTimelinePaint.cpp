@@ -3,6 +3,7 @@
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackCatalog.h"
 #include "EffectPacks/EffectPackApplier.h"
+#include "EffectPacks/EffectScript.h"
 #include "ZoneManager3D.h"
 
 #include <QCursor>
@@ -95,12 +96,7 @@ void EffectPackTimelineWidget::paintBlockSpatialRaster(QPainter& p, const QRect&
     img.fill(Qt::transparent);
 
     const int dur = std::max(1, sample.end_ms - sample.start_ms);
-    const float floor_i = std::clamp(sample.min_intensity, 0.0f, 1.0f);
-    const bool twinkle = (sample.type == EffectPack::BlockType::Twinkle);
-    const bool chase = (sample.type == EffectPack::BlockType::Chase
-                        || sample.type == EffectPack::BlockType::Spin
-                        || sample.type == EffectPack::BlockType::Orbit);
-    const bool world_eval = EffectPack::BlockNeedsWorldEval(sample.type);
+    const bool world_eval = EffectPack::EffectScriptUsesWorld(EffectPack::BlockFileId(sample));
 
     auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
         constexpr float k0 = 0.0f;
@@ -168,14 +164,6 @@ void EffectPackTimelineWidget::paintBlockSpatialRaster(QPainter& p, const QRect&
             {
                 continue;
             }
-            if(twinkle && intens <= floor_i + 0.05f)
-            {
-                continue;
-            }
-            if(chase && intens < 0.12f)
-            {
-                continue;
-            }
             if(intens < 0.02f)
             {
                 continue;
@@ -203,7 +191,7 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
         grad.setColorAt(0.0, c);
         grad.setColorAt(1.0, c);
     }
-    else if(sample.type == EffectPack::BlockType::Solid && sample.gradient.size() <= 2
+    else if(sample.gradient.size() <= 2
             && sample.gradient.front().color == sample.gradient.back().color)
     {
         QColor c = RgbToQColor(sample.gradient.front().color);
@@ -219,7 +207,6 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
             c.setAlpha(alpha);
             grad.setColorAt(std::clamp(s.pos, 0.0f, 1.0f), c);
         }
-        // Guard: QLinearGradient needs at least one stop.
         if(sample.gradient.empty())
         {
             QColor c = RgbToQColor(sample.color);
@@ -232,7 +219,7 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
     p.setBrush(grad);
     p.drawRect(br);
 
-    if(sample.type == EffectPack::BlockType::Pulse && br.width() > 8)
+    if(EffectPack::EffectPreviewPulse(EffectPack::BlockFileId(sample)) && br.width() > 8)
     {
         const float speed = std::max(0.05f, sample.speed);
         const int period = std::max(1, (int)std::lround((float)std::max(1, sample.period_ms) / speed));
@@ -253,6 +240,32 @@ void EffectPackTimelineWidget::paintBlockGradientBar(QPainter& p, const QRect& b
     }
 }
 
+void EffectPackTimelineWidget::paintBlockIntensityCurve(QPainter& p, const QRect& br,
+                                                        const EffectPack::Block& block) const
+{
+    if(block.intensity_curve.empty() || br.width() < 4)
+    {
+        return;
+    }
+    const int steps = std::max(8, br.width());
+    QPolygon line;
+    line.reserve(steps);
+    for(int i = 0; i < steps; ++i)
+    {
+        const float t = ((float)i + 0.5f) / (float)steps;
+        const float level = std::clamp(EffectPack::SampleCurve(block.intensity_curve, t), 0.0f, 1.0f);
+        const int x0 = br.left() + (i * br.width()) / steps;
+        const int x1 = br.left() + ((i + 1) * br.width()) / steps;
+        const int shade = (int)std::lround((1.0f - level) * 210.0f);
+        p.fillRect(x0, br.top(), std::max(1, x1 - x0), br.height(), QColor(0, 0, 0, shade));
+        const int y = br.bottom() - (int)std::lround(level * (float)(br.height() - 1));
+        line << QPoint(x0, y);
+    }
+    p.setPen(QPen(QColor(255, 255, 255, 180), 1));
+    p.setBrush(Qt::NoBrush);
+    p.drawPolyline(line);
+}
+
 void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, const PaintBlock& pb, bool selected) const
 {
     if(!pb.block || br.width() < 2 || br.height() < 2)
@@ -271,37 +284,13 @@ void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, co
     p.setBrush(QColor(8, 8, 10));
     p.drawRect(br);
 
-    switch(sample.type)
+    if(EffectPack::EffectScriptLoaded(EffectPack::BlockFileId(sample)))
     {
-        case EffectPack::BlockType::Solid:
-        case EffectPack::BlockType::Fade:
-        case EffectPack::BlockType::Pulse:
-        case EffectPack::BlockType::Strobe:
-        case EffectPack::BlockType::Candle:
-            paintBlockGradientBar(p, br, sample, alpha);
-            break;
-        case EffectPack::BlockType::Wipe:
-        case EffectPack::BlockType::Chase:
-        case EffectPack::BlockType::Twinkle:
-        case EffectPack::BlockType::ColorWash:
-        case EffectPack::BlockType::Alternating:
-        case EffectPack::BlockType::Spin:
-        case EffectPack::BlockType::Dissolve:
-        case EffectPack::BlockType::Plasma:
-        case EffectPack::BlockType::Snow:
-        case EffectPack::BlockType::Fire:
-        case EffectPack::BlockType::Balls:
-        case EffectPack::BlockType::Bars:
-        case EffectPack::BlockType::SphereWipe:
-        case EffectPack::BlockType::Orbit:
-        case EffectPack::BlockType::Ripple:
-        case EffectPack::BlockType::Meteor:
-        case EffectPack::BlockType::Noise3D:
-            paintBlockSpatialRaster(p, br, pb, sample);
-            break;
-        default:
-            paintBlockGradientBar(p, br, sample, alpha);
-            break;
+        paintBlockSpatialRaster(p, br, pb, sample);
+    }
+    else
+    {
+        paintBlockGradientBar(p, br, sample, alpha);
     }
 
     {
@@ -309,6 +298,8 @@ void EffectPackTimelineWidget::paintBlockVisual(QPainter& p, const QRect& br, co
         p.fillRect(br.left(), br.top(), grip, br.height(), QColor(255, 255, 255, 28));
         p.fillRect(br.right() - grip + 1, br.top(), grip, br.height(), QColor(255, 255, 255, 28));
     }
+
+    paintBlockIntensityCurve(p, br, sample);
 
     p.setBrush(Qt::NoBrush);
     p.setPen(selected ? QColor(255, 220, 80) : QColor(70, 70, 78));
@@ -323,8 +314,6 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
 
     p.fillRect(0, 0, gutter_width_, height(), QColor(40, 40, 44));
     p.fillRect(gutter_width_, 0, width() - gutter_width_, header_height_, QColor(45, 45, 50));
-    p.setPen(QColor(70, 70, 78));
-    p.drawLine(gutter_width_, 0, gutter_width_, height());
 
     p.setPen(QColor(160, 160, 170));
     QFont font = p.font();
@@ -346,6 +335,22 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
         const QColor gutter_bg = (selected_row_ == row) ? QColor(55, 55, 70) : bg;
         p.fillRect(0, y, gutter_width_, row_height_, gutter_bg);
         p.fillRect(gutter_width_, y, width() - gutter_width_, row_height_, bg);
+        const int second_px = timeToX(1000) - timeToX(0);
+        p.setPen(QColor(255, 255, 255, 28));
+        for(int sec = 1; sec * 1000 <= duration_ms_; ++sec)
+        {
+            const int x = timeToX(sec * 1000);
+            p.drawLine(x, y, x, y + row_height_);
+        }
+        if(second_px >= 48)
+        {
+            p.setPen(QColor(255, 255, 255, 14));
+            for(int half = 1; half * 500 <= duration_ms_; half += 2)
+            {
+                const int x = timeToX(half * 500);
+                p.drawLine(x, y, x, y + row_height_);
+            }
+        }
         p.setPen(QColor(55, 55, 60));
         p.drawLine(0, y + row_height_ - 1, width(), y + row_height_ - 1);
 
@@ -393,6 +398,9 @@ void EffectPackTimelineWidget::paintEvent(QPaintEvent*)
             paintBlockVisual(p, blockRect(row, *pb.block), pb, selected);
         }
     }
+
+    p.setPen(QPen(QColor(168, 168, 176), 2));
+    p.drawLine(gutter_width_, 0, gutter_width_, height());
 
     const int px = timeToX(playhead_ms_);
     p.setPen(QPen(QColor(255, 80, 80), 2));

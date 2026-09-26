@@ -5,7 +5,6 @@
 
 #include <cstdint>
 
-/** Packed (x, y, z) grid cell key for custom controller layers. */
 inline uint64_t GridCellKey3D(int x, int y, int z)
 {
     return (static_cast<uint64_t>(static_cast<uint32_t>(x)) << 42)

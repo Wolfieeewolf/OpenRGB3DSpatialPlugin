@@ -2,18 +2,19 @@
 
 #include "CustomControllerDialog.h"
 #include "CustomControllerDialog_Internal.h"
-#include "CustomControllerClipboard.h"
 #include "CustomControllerMappingUtils.h"
 #include "CustomControllerGridKeys.h"
 #include "ControllerDisplayUtils.h"
 #include "CustomControllerDeviceList.h"
 #include "ControllerLayout3D.h"
+#include "MatrixWiringOrder.h"
 #include "SpatialTabLedHelpers.h"
 #include "custom-controller-grid/CustomControllerLayoutGrid.h"
 #include "custom-controller-grid/CustomControllerGridLayoutMath.h"
 
 #include <QColor>
 #include <QComboBox>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -24,7 +25,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <map>
 #include <set>
 #include <unordered_set>
 #include <utility>
@@ -47,12 +47,13 @@ void CustomControllerDialog::sourceEnableToggled(const CustomControllerSourceRef
     }
     else
     {
+        RecordUndoPoint();
         removeSourceFromGrid(source);
+        CommitHistoryBaseline();
+        UpdateGridDisplay();
         refreshDeviceList();
         UpdateCellInfo();
-        UpdateSummaryLabel();
         UpdateIdentifyButtonUi();
-        UpdateGridColors();
     }
 }
 
@@ -105,21 +106,36 @@ bool CustomControllerDialog::IsSourceItemOnGrid(const CustomControllerSourceRef&
     return IsItemAssigned(controller, source.granularity, source.item_idx);
 }
 
-QColor CustomControllerDialog::SourceItemColor(const CustomControllerSourceRef& source) const
-{
-    RGBControllerInterface* controller = controllerForSource(source);
-    if(!controller)
-    {
-        return QColor();
-    }
-    return GetItemColor(controller, source.granularity, source.item_idx);
-}
-
 void CustomControllerDialog::refreshDeviceList(int controller_index)
 {
     if(device_list)
     {
         device_list->refreshFromHost(controller_index);
+    }
+}
+
+void CustomControllerDialog::EnsureGridAnchorSelected()
+{
+    if(selectedGridCellValid())
+    {
+        return;
+    }
+
+    if(!width_spin || !height_spin || width_spin->value() < 1 || height_spin->value() < 1)
+    {
+        return;
+    }
+
+    selected_col = 0;
+    selected_row = 0;
+    if(layout_grid)
+    {
+        layout_grid->SelectCellAt(0, 0);
+        layout_grid->SetAnchorCell(0, 0);
+    }
+    if(device_list)
+    {
+        device_list->refreshEnableButtonsOnly();
     }
 }
 
@@ -140,14 +156,11 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
     {
         for(unsigned int i = 0; i < controller->GetZoneCount(); i++)
         {
-            if(!IsItemAssigned(controller, granularity, static_cast<int>(i)))
-            {
-                const QColor color = GetItemColor(controller, granularity, static_cast<int>(i));
-                QPixmap pixmap(16, 16);
-                pixmap.fill(color);
-                combo->addItem(QIcon(pixmap), QString::fromStdString(controller->GetZoneName(i)),
-                               static_cast<int>(i));
-            }
+            const QColor color = GetItemColor(controller, granularity, static_cast<int>(i));
+            QPixmap pixmap(16, 16);
+            pixmap.fill(color);
+            combo->addItem(QIcon(pixmap), QString::fromStdString(controller->GetZoneName(i)),
+                           static_cast<int>(i));
         }
     }
     else if(granularity == 2)
@@ -158,13 +171,10 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
             {
                 continue;
             }
-            if(!IsItemAssigned(controller, granularity, static_cast<int>(i)))
-            {
-                const QColor color = GetItemColor(controller, granularity, static_cast<int>(i));
-                QPixmap pixmap(16, 16);
-                pixmap.fill(color);
-                combo->addItem(QIcon(pixmap), QString::fromStdString(controller->GetLEDName(i)), static_cast<int>(i));
-            }
+            const QColor color = GetItemColor(controller, granularity, static_cast<int>(i));
+            QPixmap pixmap(16, 16);
+            pixmap.fill(color);
+            combo->addItem(QIcon(pixmap), QString::fromStdString(controller->GetLEDName(i)), static_cast<int>(i));
         }
     }
 }
@@ -179,6 +189,7 @@ void CustomControllerDialog::removeSourceFromGrid(const CustomControllerSourceRe
 
     std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
     std::vector<GridLEDMapping> removed_mappings;
+
     for(auto it = led_mappings.begin(); it != led_mappings.end();)
     {
         const GridLEDMapping& mapping = *it;
@@ -218,6 +229,78 @@ void CustomControllerDialog::removeSourceFromGrid(const CustomControllerSourceRe
         }
     }
 
+    if(!matrix_hole_cells.empty() && !removed_mappings.empty())
+    {
+        std::set<unsigned int> cleared_zones;
+        for(const GridLEDMapping& mapping : removed_mappings)
+        {
+            if(!cleared_zones.insert(mapping.zone_idx).second)
+            {
+                continue;
+            }
+            if(!ZoneHasOpenRgbMatrixMap(controller, mapping.zone_idx))
+            {
+                continue;
+            }
+
+            bool zone_still_mapped = false;
+            for(const GridLEDMapping& remaining : led_mappings)
+            {
+                if(CustomControllerMapping::MappingOwnedByController(remaining, controller, controllers)
+                   && remaining.zone_idx == mapping.zone_idx)
+                {
+                    zone_still_mapped = true;
+                    break;
+                }
+            }
+            if(zone_still_mapped)
+            {
+                continue;
+            }
+
+            const matrix_map_type map = controller->GetZoneMatrixMap(mapping.zone_idx);
+            const int map_w = static_cast<int>(map.width);
+            const int map_h = static_cast<int>(map.height);
+            zone zone_data = controller->GetZone(mapping.zone_idx);
+
+            int origin_x = mapping.x;
+            int origin_y = mapping.y;
+            bool found_origin = false;
+            for(unsigned int led_y = 0; led_y < map.height && !found_origin; ++led_y)
+            {
+                for(unsigned int led_x = 0; led_x < map.width; ++led_x)
+                {
+                    const unsigned int map_idx = led_y * map.width + led_x;
+                    if(map.map[map_idx] == kMatrixMapUnused)
+                    {
+                        continue;
+                    }
+                    unsigned int zone_led_idx = 0;
+                    if(!TryResolveZoneLedFromMatrixValue(&zone_data, map.map[map_idx], &zone_led_idx))
+                    {
+                        continue;
+                    }
+                    if(zone_led_idx != mapping.led_idx)
+                    {
+                        continue;
+                    }
+                    origin_x = mapping.x - static_cast<int>(led_x);
+                    origin_y = mapping.y - static_cast<int>(led_y);
+                    found_origin = true;
+                    break;
+                }
+            }
+
+            for(int y = origin_y; y < origin_y + map_h; ++y)
+            {
+                for(int x = origin_x; x < origin_x + map_w; ++x)
+                {
+                    matrix_hole_cells.erase(GridCellKey3D(x, y, mapping.z));
+                }
+            }
+        }
+    }
+
     RestoreIdentifyForMappings(removed_mappings);
 }
 
@@ -248,22 +331,318 @@ bool CustomControllerDialog::assignSource(const CustomControllerSourceRef& sourc
         return false;
     }
 
+    PlaceLayoutChoice layout_choice;
+    if(source.granularity != 2)
+    {
+        const bool has_matrix = SourceHasOpenRgbMatrixMap(controller, source.granularity, source.item_idx);
+        layout_choice = PromptPlaceLayoutChoice(has_matrix);
+        if(layout_choice.cancelled)
+        {
+            return false;
+        }
+        if(fill_order_combo)
+        {
+            fill_order_combo->setCurrentIndex(static_cast<int>(layout_choice.wiring));
+        }
+    }
+    else
+    {
+        layout_choice.use_openrgb_matrix = false;
+        layout_choice.wiring = fill_order_combo
+            ? static_cast<MatrixWiringOrder>(std::clamp(fill_order_combo->currentIndex(), 0, (int)MatrixWiringOrder::Count - 1))
+            : MatrixWiringOrder::HorizontalTopLeftZigzag;
+    }
+
     std::vector<GridLEDMapping> replaced_mappings;
     CollectMappingsAtCell(led_mappings, selected_col, selected_row, current_layer, replaced_mappings);
     RestoreIdentifyForMappings(replaced_mappings);
     RemoveMappingsAtCell(led_mappings, selected_col, selected_row, current_layer);
 
-    PlaceProfileLayout(controller, source.granularity, source.item_idx, selected_col, selected_row);
+    const std::unordered_set<uint64_t> holes_before = matrix_hole_cells;
+
+    RecordUndoPoint();
+    const bool placed = PlaceProfileLayout(controller,
+                                           source.granularity,
+                                           source.item_idx,
+                                           selected_col,
+                                           selected_row,
+                                           layout_choice);
+    if(!placed)
+    {
+        history_.AbandonLastUndoPush();
+        matrix_hole_cells = holes_before;
+        for(const GridLEDMapping& mapping : replaced_mappings)
+        {
+            led_mappings.push_back(mapping);
+        }
+        UpdateGridDisplay();
+        UpdateUndoRedoUi();
+        return false;
+    }
+
+    CommitHistoryBaseline();
     UpdateCellInfo();
-    UpdateSummaryLabel();
     UpdateIdentifyButtonUi();
-    UpdateGridColors();
+    UpdateGridDisplay();
     refreshDeviceList(source.controller_index);
-    syncPreviewLayoutIfVisible();
     return true;
 }
 
-bool CustomControllerDialog::PlaceProfileLayout(RGBControllerInterface* controller, int granularity, int item_idx, int start_x, int start_y)
+CustomControllerDialog::PlaceLayoutChoice CustomControllerDialog::PromptPlaceLayoutChoice(bool has_openrgb_matrix) const
+{
+    PlaceLayoutChoice choice;
+    choice.wiring = fill_order_combo
+        ? static_cast<MatrixWiringOrder>(std::clamp(fill_order_combo->currentIndex(), 0, (int)MatrixWiringOrder::Count - 1))
+        : MatrixWiringOrder::HorizontalTopLeftZigzag;
+    choice.use_openrgb_matrix = has_openrgb_matrix;
+
+    auto pick_wiring = [this, &choice]() -> bool {
+        QStringList items;
+        items.reserve((int)MatrixWiringOrder::Count);
+        for(int o = 0; o < (int)MatrixWiringOrder::Count; o++)
+        {
+            items << QString::fromUtf8(MatrixWiringOrderName(static_cast<MatrixWiringOrder>(o)));
+        }
+        bool ok = false;
+        const QString picked = QInputDialog::getItem(
+            const_cast<CustomControllerDialog*>(this),
+            tr("Strip fill order"),
+            tr("Choose how LEDs snake onto the grid\n"
+               "(same serpentine presets as OpenRGB's Matrix Map Editor):"),
+            items,
+            static_cast<int>(choice.wiring),
+            false,
+            &ok);
+        if(!ok)
+        {
+            return false;
+        }
+        const int idx = items.indexOf(picked);
+        if(idx >= 0)
+        {
+            choice.wiring = static_cast<MatrixWiringOrder>(idx);
+        }
+        choice.use_openrgb_matrix = false;
+        return true;
+    };
+
+    if(!has_openrgb_matrix)
+    {
+        if(!pick_wiring())
+        {
+            choice.cancelled = true;
+        }
+        return choice;
+    }
+
+    QMessageBox box(const_cast<CustomControllerDialog*>(this));
+    box.setWindowTitle(tr("Import layout"));
+    box.setText(tr("OpenRGB already has a matrix map for this source "
+                   "(keyboard layout, unused cells, etc.)."));
+    box.setInformativeText(tr("Import that map onto the grid, or fill with a strip wiring order instead?"));
+    QPushButton* use_map = box.addButton(tr("Use OpenRGB map"), QMessageBox::AcceptRole);
+    QPushButton* use_wire = box.addButton(tr("Choose wiring…"), QMessageBox::ActionRole);
+    box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(use_map);
+    box.exec();
+
+    if(box.clickedButton() == use_map)
+    {
+        choice.use_openrgb_matrix = true;
+        return choice;
+    }
+    if(box.clickedButton() == use_wire)
+    {
+        if(!pick_wiring())
+        {
+            choice.cancelled = true;
+        }
+        return choice;
+    }
+
+    choice.cancelled = true;
+    return choice;
+}
+
+bool CustomControllerDialog::EnsureGridFitsFrom(int start_x, int start_y, int span_w, int span_h)
+{
+    if(!width_spin || !height_spin || span_w <= 0 || span_h <= 0)
+    {
+        return false;
+    }
+
+    const int needed_w = start_x + span_w;
+    const int needed_h = start_y + span_h;
+    const int cur_w = width_spin->value();
+    const int cur_h = height_spin->value();
+    if(needed_w <= cur_w && needed_h <= cur_h)
+    {
+        return true;
+    }
+
+    {
+        const QSignalBlocker block_w(width_spin);
+        const QSignalBlocker block_h(height_spin);
+        if(needed_w > cur_w)
+        {
+            width_spin->setValue(needed_w);
+        }
+        if(needed_h > cur_h)
+        {
+            height_spin->setValue(needed_h);
+        }
+    }
+    const bool prev_applying = applying_history_;
+    applying_history_ = true;
+    dimensionChanged();
+    applying_history_ = prev_applying;
+    return true;
+}
+
+bool CustomControllerDialog::PlaceOpenRgbMatrixMaps(RGBControllerInterface* controller,
+                                                    int granularity,
+                                                    int item_idx,
+                                                    int start_x,
+                                                    int start_y)
+{
+    if(!controller || !resource_manager)
+    {
+        return false;
+    }
+
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
+
+    int cursor_y = start_y;
+    int placed = 0;
+    int zones_placed = 0;
+
+    auto clear_holes_in_rect = [&](int x0, int y0, int w, int h) {
+        for(int y = y0; y < y0 + h; ++y)
+        {
+            for(int x = x0; x < x0 + w; ++x)
+            {
+                matrix_hole_cells.erase(GridCellKey3D(x, y, current_layer));
+            }
+        }
+    };
+
+    auto place_led_at = [&](unsigned int zone_idx, unsigned int led_idx, int x, int y) -> bool {
+        if(IsLedMappedOnLayer(led_mappings, controller, zone_idx, led_idx, current_layer, controllers))
+        {
+            return false;
+        }
+        std::vector<GridLEDMapping> replaced_mappings;
+        CollectMappingsAtCell(led_mappings, x, y, current_layer, replaced_mappings);
+        RestoreIdentifyForMappings(replaced_mappings);
+        RemoveMappingsAtCell(led_mappings, x, y, current_layer);
+
+        GridLEDMapping mapping;
+        mapping.x = x;
+        mapping.y = y;
+        mapping.z = current_layer;
+        mapping.controller = controller;
+        mapping.zone_idx = zone_idx;
+        mapping.led_idx = led_idx;
+        mapping.granularity = 2;
+        CustomControllerMapping::FinalizeMapping(mapping);
+        led_mappings.push_back(mapping);
+        return true;
+    };
+
+    auto place_matrix_zone = [&](unsigned int zone_idx) -> bool {
+        if(!ZoneHasOpenRgbMatrixMap(controller, zone_idx))
+        {
+            return false;
+        }
+
+        const matrix_map_type map = controller->GetZoneMatrixMap(zone_idx);
+        const int map_w = static_cast<int>(map.width);
+        const int map_h = static_cast<int>(map.height);
+        if(!EnsureGridFitsFrom(start_x, cursor_y, map_w, map_h))
+        {
+            return false;
+        }
+
+        clear_holes_in_rect(start_x, cursor_y, map_w, map_h);
+
+        for(unsigned int led_y = 0; led_y < map.height; led_y++)
+        {
+            for(unsigned int led_x = 0; led_x < map.width; led_x++)
+            {
+                const unsigned int map_idx = led_y * map.width + led_x;
+                const int gx = start_x + static_cast<int>(led_x);
+                const int gy = cursor_y + static_cast<int>(led_y);
+
+                if(map.map[map_idx] == kMatrixMapUnused)
+                {
+                    matrix_hole_cells.insert(GridCellKey3D(gx, gy, current_layer));
+                    continue;
+                }
+
+                zone zone_data = controller->GetZone(zone_idx);
+                unsigned int zone_led_idx = 0;
+                if(!TryResolveZoneLedFromMatrixValue(&zone_data, map.map[map_idx], &zone_led_idx))
+                {
+                    matrix_hole_cells.insert(GridCellKey3D(gx, gy, current_layer));
+                    continue;
+                }
+
+                unsigned int global_led_idx = 0;
+                if(!TryGetDialogGlobalLedIndex(controller, zone_idx, zone_led_idx, &global_led_idx)
+                   || !IsAssignableControllerLed(controller, global_led_idx))
+                {
+                    matrix_hole_cells.insert(GridCellKey3D(gx, gy, current_layer));
+                    continue;
+                }
+
+                if(place_led_at(zone_idx, zone_led_idx, gx, gy))
+                {
+                    placed++;
+                }
+            }
+        }
+
+        cursor_y += map_h + 1;
+        zones_placed++;
+        return true;
+    };
+
+    if(granularity == 1)
+    {
+        if(!place_matrix_zone(static_cast<unsigned int>(item_idx)))
+        {
+            QMessageBox::warning(this, tr("No matrix map"),
+                                 tr("That zone has no OpenRGB matrix map to import."));
+            return false;
+        }
+    }
+    else
+    {
+        for(unsigned int z = 0; z < controller->GetZoneCount(); z++)
+        {
+            if(ZoneHasOpenRgbMatrixMap(controller, z))
+            {
+                place_matrix_zone(z);
+            }
+        }
+        if(zones_placed == 0)
+        {
+            QMessageBox::warning(this, tr("No matrix map"),
+                                 tr("This device has no OpenRGB matrix maps to import."));
+            return false;
+        }
+    }
+
+    UpdateGridDisplay();
+    return placed > 0 || zones_placed > 0;
+}
+
+bool CustomControllerDialog::PlaceLinearWiringLayout(RGBControllerInterface* controller,
+                                                     int granularity,
+                                                     int item_idx,
+                                                     int start_x,
+                                                     int start_y,
+                                                     MatrixWiringOrder fill_order)
 {
     if(!controller || !resource_manager)
     {
@@ -276,10 +655,19 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBControllerInterface* controll
     int grid_h = height_spin->value();
 
     const std::vector<LEDPosition3D> positions =
-        ControllerLayout3D::GenerateCustomGridLayout(controller, grid_w, grid_h, false);
+        ControllerLayout3D::GenerateCustomGridLayout(controller, grid_w, grid_h, false, fill_order, false);
 
     const ProfileLayoutBounds bounds =
         ComputeProfileLayoutBounds(PositionsForLayoutBounds(positions, granularity, item_idx));
+
+    if(bounds.valid)
+    {
+        const int span_w = static_cast<int>(std::lround(bounds.max_x - bounds.min_x)) + 1;
+        const int span_h = static_cast<int>(std::lround(bounds.max_y - bounds.min_y)) + 1;
+        EnsureGridFitsFrom(start_x, start_y, span_w, span_h);
+        grid_w = width_spin->value();
+        grid_h = height_spin->value();
+    }
 
     auto place_profile_position = [&](const LEDPosition3D& pos) -> bool
     {
@@ -317,68 +705,7 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBControllerInterface* controll
         return true;
     };
 
-    if(granularity == 0)
-    {
-        int placed = 0;
-        int skipped = 0;
-        for(unsigned int p = 0; p < positions.size(); p++)
-        {
-            if(place_profile_position(positions[p]))
-            {
-                placed++;
-            }
-            else
-            {
-                skipped++;
-            }
-        }
-
-        if(skipped > 0)
-        {
-            QMessageBox::information(this, tr("Grid too small"),
-                                     tr("Placed %1 of %2 LEDs using the device profile (%3 could not fit). Move the anchor cell or use Fit layout.")
-                                     .arg(placed).arg(static_cast<int>(positions.size())).arg(skipped));
-        }
-
-        if(placed > 0)
-        {
-            RebuildMatrixHoleMask(controller, start_x, start_y);
-        }
-    }
-    else if(granularity == 1)
-    {
-        int placed = 0;
-        int skipped = 0;
-        for(unsigned int p = 0; p < positions.size(); p++)
-        {
-            if(positions[p].zone_idx != static_cast<unsigned int>(item_idx))
-            {
-                continue;
-            }
-
-            if(place_profile_position(positions[p]))
-            {
-                placed++;
-            }
-            else
-            {
-                skipped++;
-            }
-        }
-
-        if(skipped > 0)
-        {
-            QMessageBox::information(this, tr("Grid too small"),
-                                     tr("Placed %1 zone LEDs (%2 could not fit). Move the anchor cell or use Fit layout.")
-                                     .arg(placed).arg(skipped));
-        }
-
-        if(placed > 0)
-        {
-            RebuildMatrixHoleMask(controller, start_x, start_y);
-        }
-    }
-    else if(granularity == 2)
+    if(granularity == 2)
     {
         for(unsigned int p = 0; p < positions.size(); p++)
         {
@@ -387,37 +714,152 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBControllerInterface* controll
             {
                 continue;
             }
-            if(global_led_idx == static_cast<unsigned int>(item_idx))
+            if(global_led_idx != static_cast<unsigned int>(item_idx))
             {
-                if(IsLedMappedOnLayer(led_mappings, controller, positions[p].zone_idx, positions[p].led_idx,
-                                     current_layer, controllers))
-                {
-                    return false;
-                }
-
-                std::vector<GridLEDMapping> replaced_mappings;
-                CollectMappingsAtCell(led_mappings, start_x, start_y, current_layer, replaced_mappings);
-                RestoreIdentifyForMappings(replaced_mappings);
-                RemoveMappingsAtCell(led_mappings, start_x, start_y, current_layer);
-
-                GridLEDMapping mapping;
-                mapping.x = start_x;
-                mapping.y = start_y;
-                mapping.z = current_layer;
-                mapping.controller = controller;
-                mapping.zone_idx = positions[p].zone_idx;
-                mapping.led_idx = positions[p].led_idx;
-                mapping.granularity = 2;
-                CustomControllerMapping::FinalizeMapping(mapping);
-                led_mappings.push_back(mapping);
-                return true;
+                continue;
             }
+            if(IsLedMappedOnLayer(led_mappings, controller, positions[p].zone_idx, positions[p].led_idx,
+                                 current_layer, controllers))
+            {
+                return false;
+            }
+            if(IsMatrixHoleCell(start_x, start_y))
+            {
+                return false;
+            }
+
+            std::vector<GridLEDMapping> replaced_mappings;
+            CollectMappingsAtCell(led_mappings, start_x, start_y, current_layer, replaced_mappings);
+            RestoreIdentifyForMappings(replaced_mappings);
+            RemoveMappingsAtCell(led_mappings, start_x, start_y, current_layer);
+
+            GridLEDMapping mapping;
+            mapping.x = start_x;
+            mapping.y = start_y;
+            mapping.z = current_layer;
+            mapping.controller = controller;
+            mapping.zone_idx = positions[p].zone_idx;
+            mapping.led_idx = positions[p].led_idx;
+            mapping.granularity = 2;
+            CustomControllerMapping::FinalizeMapping(mapping);
+            led_mappings.push_back(mapping);
+            UpdateGridDisplay();
+            return true;
+        }
+        return false;
+    }
+
+    int placed = 0;
+    int skipped = 0;
+    for(unsigned int p = 0; p < positions.size(); p++)
+    {
+        if(granularity == 1 && positions[p].zone_idx != static_cast<unsigned int>(item_idx))
+        {
+            continue;
+        }
+        if(place_profile_position(positions[p]))
+        {
+            placed++;
+        }
+        else
+        {
+            skipped++;
         }
     }
 
-    UpdateGridColors();
+    if(skipped > 0)
+    {
+        if(granularity == 0)
+        {
+            QMessageBox::information(this, tr("Grid too small"),
+                                     tr("Placed %1 of %2 LEDs (%3 could not fit). "
+                                        "Move the anchor cell or pick another Strip fill order.")
+                                     .arg(placed).arg(static_cast<int>(positions.size())).arg(skipped));
+        }
+        else
+        {
+            QMessageBox::information(this, tr("Grid too small"),
+                                     tr("Placed %1 zone LEDs (%2 could not fit). "
+                                        "Move the anchor cell or pick another Strip fill order.")
+                                     .arg(placed).arg(skipped));
+        }
+    }
 
-    return true;
+    UpdateGridDisplay();
+    return placed > 0;
+}
+
+bool CustomControllerDialog::PlaceProfileLayout(RGBControllerInterface* controller,
+                                                int granularity,
+                                                int item_idx,
+                                                int start_x,
+                                                int start_y,
+                                                const PlaceLayoutChoice& layout_choice)
+{
+    if(!controller || layout_choice.cancelled)
+    {
+        return false;
+    }
+
+    if(granularity == 2)
+    {
+        return PlaceLinearWiringLayout(controller, granularity, item_idx, start_x, start_y, layout_choice.wiring);
+    }
+
+    if(layout_choice.use_openrgb_matrix
+       && SourceHasOpenRgbMatrixMap(controller, granularity, item_idx))
+    {
+        if(granularity == 1)
+        {
+            return PlaceOpenRgbMatrixMaps(controller, granularity, item_idx, start_x, start_y);
+        }
+
+        bool any = PlaceOpenRgbMatrixMaps(controller, granularity, item_idx, start_x, start_y);
+
+        int cursor_y = start_y;
+        for(const GridLEDMapping& mapping : led_mappings)
+        {
+            if(mapping.z == current_layer && mapping.controller == controller)
+            {
+                cursor_y = std::max(cursor_y, mapping.y + 1);
+            }
+        }
+        for(const uint64_t key : matrix_hole_cells)
+        {
+            int hx = 0;
+            int hy = 0;
+            int hz = 0;
+            DecodeGridCellKey3D(key, &hx, &hy, &hz);
+            if(hz == current_layer)
+            {
+                cursor_y = std::max(cursor_y, hy + 1);
+            }
+        }
+
+        for(unsigned int z = 0; z < controller->GetZoneCount(); z++)
+        {
+            if(ZoneHasOpenRgbMatrixMap(controller, z) || controller->GetZoneLEDsCount(z) == 0)
+            {
+                continue;
+            }
+            if(PlaceLinearWiringLayout(controller, 1, static_cast<int>(z), start_x, cursor_y + 1, layout_choice.wiring))
+            {
+                any = true;
+                for(const GridLEDMapping& mapping : led_mappings)
+                {
+                    if(mapping.z == current_layer
+                       && mapping.controller == controller
+                       && mapping.zone_idx == z)
+                    {
+                        cursor_y = std::max(cursor_y, mapping.y);
+                    }
+                }
+            }
+        }
+        return any;
+    }
+
+    return PlaceLinearWiringLayout(controller, granularity, item_idx, start_x, start_y, layout_choice.wiring);
 }
 
 void CustomControllerDialog::resetGridViewClicked()
@@ -465,6 +907,7 @@ void CustomControllerDialog::fitDeviceLayoutClicked()
         return;
     }
 
+    RecordUndoPoint();
     const int new_w = max_x - min_x + 1;
     const int new_h = max_y - min_y + 1;
 
@@ -485,13 +928,20 @@ void CustomControllerDialog::fitDeviceLayoutClicked()
             shifted_holes.reserve(matrix_hole_cells.size());
             for(const uint64_t key : matrix_hole_cells)
             {
-                const int x = static_cast<int>(static_cast<uint32_t>(key >> 32));
-                const int y = static_cast<int>(static_cast<uint32_t>(key));
+                int x = 0;
+                int y = 0;
+                int z = 0;
+                DecodeGridCellKey3D(key, &x, &y, &z);
+                if(z != current_layer)
+                {
+                    shifted_holes.insert(key);
+                    continue;
+                }
                 const int nx = x - min_x;
                 const int ny = y - min_y;
                 if(nx >= 0 && nx < new_w && ny >= 0 && ny < new_h)
                 {
-                    shifted_holes.insert(GridCellKey(nx, ny));
+                    shifted_holes.insert(GridCellKey3D(nx, ny, z));
                 }
             }
             matrix_hole_cells = std::move(shifted_holes);
@@ -528,8 +978,15 @@ void CustomControllerDialog::fitDeviceLayoutClicked()
         clipped_holes.reserve(matrix_hole_cells.size());
         for(const uint64_t key : matrix_hole_cells)
         {
-            const int x = static_cast<int>(static_cast<uint32_t>(key >> 32));
-            const int y = static_cast<int>(static_cast<uint32_t>(key));
+            int x = 0;
+            int y = 0;
+            int z = 0;
+            DecodeGridCellKey3D(key, &x, &y, &z);
+            if(z != current_layer)
+            {
+                clipped_holes.insert(key);
+                continue;
+            }
             if(x >= 0 && x < new_w && y >= 0 && y < new_h)
             {
                 clipped_holes.insert(key);
@@ -557,9 +1014,8 @@ void CustomControllerDialog::fitDeviceLayoutClicked()
     UpdateGridDisplay();
     UpdateCellInfo();
     refreshDeviceList();
-    UpdateSummaryLabel();
     UpdateIdentifyButtonUi();
-    syncPreviewLayoutIfVisible();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::RestoreAllIdentifiedLeds()
@@ -767,7 +1223,9 @@ void CustomControllerDialog::clearCellClicked()
         return;
     }
 
+    RecordUndoPoint();
     ClearSelectedCellContents();
+    CommitHistoryBaseline();
     UpdateGridDisplay();
     UpdateCellInfo();
     refreshDeviceList();
@@ -793,6 +1251,7 @@ void CustomControllerDialog::removeAllLedsClicked()
 
     if(reply == QMessageBox::Yes)
     {
+        RecordUndoPoint();
         const size_t removed_count = led_mappings.size();
         RestoreAllIdentifiedLeds();
         led_mappings.clear();
@@ -804,10 +1263,12 @@ void CustomControllerDialog::removeAllLedsClicked()
                                  tr("Cleared %1 LED assignment(s) and all light blockers.")
                                      .arg(static_cast<int>(removed_count)));
 
+        EnsureGridAnchorSelected();
         UpdateGridDisplay();
         UpdateCellInfo();
         refreshDeviceList();
         UpdateIdentifyButtonUi();
+        CommitHistoryBaseline();
     }
 }
 
@@ -820,10 +1281,16 @@ void CustomControllerDialog::addLightBlockerClicked()
         return;
     }
 
+    RecordUndoPoint();
     for(const std::pair<int, int>& cell : selected_cells)
     {
+        if(IsMatrixHoleCell(cell.first, cell.second))
+        {
+            continue;
+        }
         light_blocker_cells_.insert(GridCellKey3D(cell.first, cell.second, current_layer));
     }
+    CommitHistoryBaseline();
 
     UpdateGridDisplay();
     UpdateCellInfo();
@@ -914,10 +1381,7 @@ bool CustomControllerDialog::IsItemAssigned(RGBControllerInterface* controller, 
 
     const std::vector<GridLEDMapping>& mappings = led_mappings;
     std::vector<RGBControllerInterface*> controllers;
-    if(resource_manager)
-    {
-        controllers = resource_manager->GetRGBControllers();
-    }
+    bool controllers_loaded = false;
 
     auto mapping_owned_by_controller = [&](const GridLEDMapping& mapping) -> bool
     {
@@ -925,9 +1389,14 @@ bool CustomControllerDialog::IsItemAssigned(RGBControllerInterface* controller, 
         {
             return true;
         }
-        if(controllers.empty())
+        if(mapping.controller || !resource_manager)
         {
             return false;
+        }
+        if(!controllers_loaded)
+        {
+            controllers = resource_manager->GetRGBControllers();
+            controllers_loaded = true;
         }
         return CustomControllerMapping::MappingOwnedByController(mapping, controller, controllers);
     };
@@ -1025,7 +1494,9 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
 
     InferMappingGranularity();
     UpdateGridDisplay();
+    EnsureGridAnchorSelected();
     refreshDeviceList();
+    ResetHistoryFromCurrent();
 }
 
 QColor CustomControllerDialog::GetItemColor(RGBControllerInterface* controller, int granularity, int item_idx) const
@@ -1123,40 +1594,31 @@ QString CustomControllerDialog::GetMappingCellLabel(const std::vector<GridLEDMap
         return QString();
     }
 
-    std::vector<unsigned int> display_numbers;
-    display_numbers.reserve(cell_mappings.size());
+    QStringList name_parts;
+    name_parts.reserve(static_cast<int>(cell_mappings.size()));
     for(const GridLEDMapping& mapping : cell_mappings)
     {
-        if(MappingHasZoneLed(mapping))
+        if(!MappingHasZoneLed(mapping) || !mapping.controller)
         {
-            display_numbers.push_back(MappingDisplayLedNumber(mapping));
+            continue;
         }
+        name_parts << ShortOpenRgbLedCellLabel(mapping.controller, mapping.zone_idx, mapping.led_idx);
     }
 
-    if(display_numbers.empty())
+    if(name_parts.isEmpty())
     {
         return QString::number(cell_mappings.size());
     }
 
-    std::sort(display_numbers.begin(), display_numbers.end());
-    display_numbers.erase(std::unique(display_numbers.begin(), display_numbers.end()), display_numbers.end());
-
-    if(display_numbers.size() == 1)
+    if(name_parts.size() == 1)
     {
-        return QString::number(display_numbers.front());
+        return name_parts.front();
     }
-
-    if(display_numbers.size() <= 2)
+    if(name_parts.size() <= 2)
     {
-        QStringList parts;
-        for(unsigned int number : display_numbers)
-        {
-            parts << QString::number(number);
-        }
-        return parts.join(QLatin1Char(','));
+        return name_parts.join(QLatin1Char(','));
     }
-
-    return QStringLiteral("%1+%2").arg(display_numbers.front()).arg(display_numbers.size() - 1);
+    return QStringLiteral("%1+%2").arg(name_parts.front()).arg(name_parts.size() - 1);
 }
 
 QString CustomControllerDialog::GetMappingTooltip(const GridLEDMapping& mapping) const

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpatialEffect3D.h"
+#include "Shaders/SpatialShaderCatalog.h"
 
 #include "EffectMotionPanel.h"
 #include "EffectOutputPanel.h"
@@ -18,10 +19,9 @@
 #include "PluginUiUtils.h"
 #include "PluginLog.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
-#include "Effects3D/SpatialPatternKernels/SpatialStripKernelFieldGlsl.h"
-#include "Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h"
 #include "Game/StripPatternSurface.h"
 #include <QColorDialog>
+#include <QComboBox>
 #include <QSignalBlocker>
 #include <algorithm>
 #include <cmath>
@@ -211,6 +211,20 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     scale_invert_check = motion_pattern_group->scaleInvertCheck();
     fps_slider = motion_pattern_group->fpsSlider();
     fps_label = motion_pattern_group->fpsLabel();
+    path_axis_combo = motion_pattern_group->pathAxisCombo();
+    path_axis_combo->setCurrentIndex(std::clamp(effect_path_axis, 0, 2));
+    thickness_slider = motion_pattern_group->thicknessSlider();
+    thickness_label = motion_pattern_group->thicknessLabel();
+    thickness_slider->setValue((int)effect_band_thickness);
+    thickness_label->setText(QString::number(effect_band_thickness) + QStringLiteral("%"));
+    edge_fade_slider = motion_pattern_group->edgeFadeSlider();
+    edge_fade_label = motion_pattern_group->edgeFadeLabel();
+    edge_fade_slider->setValue((int)effect_edge_fade);
+    edge_fade_label->setText(QString::number(effect_edge_fade) + QStringLiteral("%"));
+    count_slider = motion_pattern_group->countSlider();
+    count_label = motion_pattern_group->countLabel();
+    count_slider->setValue((int)effect_instance_count);
+    count_label->setText(QString::number(effect_instance_count));
 
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Motion and pattern"),
                    QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."),
@@ -218,7 +232,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
 
     custom_effect_settings_host = new EffectCustomHost();
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
-                   QStringLiteral("Parameters unique to this effect type (e.g. plasma tweak, explosion type)."),
+                   QStringLiteral("Parameters unique to this effect (styles, shapes, audio options)."),
                    custom_effect_settings_host,
                    &effect_specific_section,
                    false);
@@ -375,6 +389,10 @@ void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geo
     connect(speed_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(thickness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(edge_fade_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(count_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(path_axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnParameterChanged);
     connect(detail_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(size_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -587,7 +605,7 @@ void SpatialEffect3D::AddColorPatternWidget(QWidget* widget)
 
 void SpatialEffect3D::EnsureStripColormapPanel()
 {
-    if(!GetEffectInfo().supports_strip_colormap || effect_strip_cmap_panel || !color_pattern_settings_host)
+    if(effect_strip_cmap_panel || !color_pattern_settings_host)
     {
         return;
     }
@@ -924,6 +942,24 @@ void SpatialEffect3D::ApplyControlVisibility()
     SetControlGroupVisibility(size_slider, size_label, "Size:", info.show_size_control);
     SetControlGroupVisibility(scale_slider, scale_label, "Scale:", info.show_scale_control);
     SetControlGroupVisibility(fps_slider, fps_label, "FPS:", info.show_fps_control);
+    SetControlGroupVisibility(thickness_slider, thickness_label, "Thickness:", info.show_thickness_control);
+    SetControlGroupVisibility(edge_fade_slider, edge_fade_label, "Edge fade:", info.show_edge_fade_control);
+    SetControlGroupVisibility(count_slider, count_label, "Count:", info.show_count_control);
+    if(path_axis_combo)
+    {
+        path_axis_combo->setVisible(info.show_path_axis_control);
+        const QList<QLabel*> labels = path_axis_combo->parentWidget()
+            ? path_axis_combo->parentWidget()->findChildren<QLabel*>()
+            : QList<QLabel*>();
+        for(QLabel* label : labels)
+        {
+            if(label->text() == QStringLiteral("Path:"))
+            {
+                label->setVisible(info.show_path_axis_control);
+                break;
+            }
+        }
+    }
 
     if(color_controls_group)
     {
@@ -993,6 +1029,26 @@ void SpatialEffect3D::OnParameterChanged()
     {
         effect_frequency = frequency_slider->value();
         frequency_label->setText(QString::number(effect_frequency));
+    }
+
+    if(thickness_slider && thickness_label)
+    {
+        effect_band_thickness = (unsigned int)std::clamp(thickness_slider->value(), 0, 100);
+        thickness_label->setText(QString::number(effect_band_thickness) + QStringLiteral("%"));
+    }
+    if(edge_fade_slider && edge_fade_label)
+    {
+        effect_edge_fade = (unsigned int)std::clamp(edge_fade_slider->value(), 0, 100);
+        edge_fade_label->setText(QString::number(effect_edge_fade) + QStringLiteral("%"));
+    }
+    if(count_slider && count_label)
+    {
+        effect_instance_count = (unsigned int)std::clamp(count_slider->value(), 1, 48);
+        count_label->setText(QString::number(effect_instance_count));
+    }
+    if(path_axis_combo)
+    {
+        effect_path_axis = std::clamp(path_axis_combo->currentIndex(), 0, 2);
     }
 
     if(size_slider && size_label)
@@ -1190,7 +1246,7 @@ void SpatialEffect3D::PrepareStripColormapAssist(std::uint64_t render_sequence, 
 
     if(!strip_cmap_body_ready_)
     {
-        strip_cmap_assist_.setFragmentBody(SpatialStripKernelFieldGlsl());
+        strip_cmap_assist_.setFragmentBody(SpatialPatternKernelShader());
         strip_cmap_assist_.setWidth(256);
         strip_cmap_body_ready_ = true;
     }
@@ -1212,7 +1268,7 @@ void SpatialEffect3D::PrepareStripColormapAssist(std::uint64_t render_sequence, 
     }
 
     const float vp[4] = {
-        (float)std::clamp(GetEffectStripColormapKernel(), 0, kSpatialStripGpuKernelMaxId),
+        (float)SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
         phase_eff,
         kernel_rep_eff,
         time_eff
@@ -1263,7 +1319,6 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     if(strip_cmap_assist_.isAvailable())
         return std::clamp(strip_cmap_assist_.sample01(s01), 0.0f, 1.0f);
 
-    /* Assist failed — full CPU twin for this pass only. */
     float k = EvalSpatialPatternKernel(GetEffectStripColormapKernel(), s01, phase_use,
                                        kernel_rep_eff, time_use);
     return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);

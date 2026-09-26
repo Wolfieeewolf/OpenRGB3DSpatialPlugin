@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// OpenRGB 3D Spatial Plugin
 
 #ifndef OPENRGB3DSPATIALPLUGIN_H
 #define OPENRGB3DSPATIALPLUGIN_H
@@ -47,8 +46,6 @@ public:
 private:
     OpenRGB3DSpatialTab*        ui = nullptr;
     std::unique_ptr<GameTelemetryBridge> game_telemetry_bridge;
-    nlohmann::json              pending_profile_data;
-    bool                        has_pending_profile = false;
 };
 
 #endif

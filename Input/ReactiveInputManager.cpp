@@ -276,6 +276,9 @@ public:
     std::array<EdgeSlot, kEdgeCap> edges{};
     int edge_head = 0;
     int edge_count = 0;
+    std::uint64_t edge_frame_key = 0;
+    bool edge_frame_valid = false;
+    std::vector<ReactiveOriginEvent> edge_frame;
     std::unordered_map<uint64_t, DownKey> down;
     std::vector<ReactiveLedSample> samples;
 #ifdef _WIN32
@@ -639,6 +642,9 @@ public:
         edges.fill(EdgeSlot{});
         edge_head = 0;
         edge_count = 0;
+        edge_frame.clear();
+        edge_frame_key = 0;
+        edge_frame_valid = false;
         down.clear();
         samples.clear();
 #ifdef _WIN32
@@ -811,10 +817,6 @@ public:
             {
                 return 0;
             }
-            if(s.type == DEVICE_TYPE_KEYPAD)
-            {
-                score += 50;
-            }
             if(vid != 0 && pid != 0 && s.vid == vid && s.pid == pid)
             {
                 score += 2000;
@@ -843,7 +845,6 @@ public:
             {
                 return best;
             }
-            return nullptr;
         }
 
         best = nullptr;
@@ -1109,7 +1110,8 @@ void ReactiveInputManager::SetLayoutSnapshot(std::vector<ReactiveLedSample> samp
     impl_->samples = std::move(samples);
 }
 
-void ReactiveInputManager::DrainOriginEdges(std::vector<ReactiveOriginEvent>& out_edges)
+void ReactiveInputManager::CopyOriginEdgesForFrame(std::uint64_t frame_key,
+                                                   std::vector<ReactiveOriginEvent>& out_edges)
 {
     out_edges.clear();
     if(!impl_)
@@ -1127,25 +1129,49 @@ void ReactiveInputManager::DrainOriginEdges(std::vector<ReactiveOriginEvent>& ou
     {
         return;
     }
-    out_edges.reserve(static_cast<size_t>(impl_->edge_count));
-    for(int i = 0; i < impl_->edge_count; ++i)
+    if(!impl_->edge_frame_valid || impl_->edge_frame_key != frame_key)
     {
-        const EdgeSlot& slot = impl_->edges[static_cast<size_t>((impl_->edge_head + i) % kEdgeCap)];
-        OriginHit hit{};
-        if(!impl_->ResolvePacked(slot.packed, slot.vid, slot.pid, &hit))
+        impl_->edge_frame.clear();
+        impl_->edge_frame.reserve(static_cast<size_t>(impl_->edge_count));
+        for(int i = 0; i < impl_->edge_count; ++i)
         {
-            continue;
+            const EdgeSlot& slot = impl_->edges[static_cast<size_t>((impl_->edge_head + i) % kEdgeCap)];
+            OriginHit hit{};
+            if(!impl_->ResolvePacked(slot.packed, slot.vid, slot.pid, &hit))
+            {
+                continue;
+            }
+            ReactiveOriginEvent ev{};
+            ev.room_position = hit.position;
+            ev.kind = UnpackKind(slot.packed);
+            ev.down = slot.down;
+            ev.device_spread = hit.spread;
+            ev.led_spacing = hit.spacing;
+            ev.source_key = MakeSourceKey(slot.packed, slot.vid, slot.pid);
+            impl_->edge_frame.push_back(ev);
         }
-        ReactiveOriginEvent ev{};
-        ev.room_position = hit.position;
-        ev.kind = UnpackKind(slot.packed);
-        ev.down = slot.down;
-        ev.device_spread = hit.spread;
-        ev.led_spacing = hit.spacing;
-        out_edges.push_back(ev);
+        impl_->edge_head = 0;
+        impl_->edge_count = 0;
+        impl_->edge_frame_key = frame_key;
+        impl_->edge_frame_valid = true;
     }
-    impl_->edge_head = 0;
-    impl_->edge_count = 0;
+    out_edges = impl_->edge_frame;
+}
+
+void ReactiveInputManager::DrainOriginEdges(std::vector<ReactiveOriginEvent>& out_edges)
+{
+    if(!impl_)
+    {
+        out_edges.clear();
+        return;
+    }
+    std::uint64_t key = 0;
+    {
+        QMutexLocker lock(&impl_->mutex);
+        key = ++impl_->edge_frame_key;
+        impl_->edge_frame_valid = false;
+    }
+    CopyOriginEdgesForFrame(key, out_edges);
 }
 
 void ReactiveInputManager::CopyHeldOrigins(std::vector<ReactiveHeldOrigin>& out_held)
@@ -1174,6 +1200,7 @@ void ReactiveInputManager::CopyHeldOrigins(std::vector<ReactiveHeldOrigin>& out_
         held.kind = UnpackKind(key.packed);
         held.device_spread = hit.spread;
         held.led_spacing = hit.spacing;
+        held.source_key = MakeSourceKey(key.packed, key.vid, key.pid);
         out_held.push_back(held);
     }
 }

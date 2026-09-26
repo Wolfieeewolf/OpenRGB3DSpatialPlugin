@@ -14,10 +14,8 @@
 #include <QComboBox>
 #include <QSignalBlocker>
 #include <QFontMetrics>
-#include <QFrame>
 #include <QGridLayout>
 #include <QResizeEvent>
-#include <QScrollArea>
 #include <QSizePolicy>
 #include <QToolButton>
 #include <algorithm>
@@ -30,7 +28,6 @@ CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBControllerInterfac
       controller_(controller),
       controller_index_(controller_index),
       host_(host),
-      row_selected_(false),
       ui(new Ui::CustomControllerDeviceWidget)
 {
     ui->setupUi(this);
@@ -65,7 +62,8 @@ CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBControllerInterfac
             &CustomControllerDeviceWidget::itemChanged);
 
     ui->enableButton->setFont(OpenRGBPluginsFont::GetFont());
-    ui->enableButton->setToolTip(tr("Add to or remove from layout grid at the selected cell"));
+    ui->enableButton->setToolTip(tr(
+        "Add (+) places at the selected grid cell. Remove (−) clears this source from the grid."));
     connect(ui->enableButton, &QToolButton::toggled, this, &CustomControllerDeviceWidget::handleEnableButtonToggled);
 
     rebuildItemCombo();
@@ -180,34 +178,6 @@ CustomControllerSourceRef CustomControllerDeviceWidget::currentSource() const
     return ref;
 }
 
-void CustomControllerDeviceWidget::applySource(const CustomControllerSourceRef& source)
-{
-    if(!ui->granularityCombo || source.controller_index != controller_index_ || source.granularity < 0)
-    {
-        return;
-    }
-
-    ui->granularityCombo->blockSignals(true);
-    ui->granularityCombo->setCurrentIndex(source.granularity);
-    ui->granularityCombo->blockSignals(false);
-
-    rebuildItemCombo();
-
-    if(source.granularity > 0 && ui->itemCombo)
-    {
-        for(int i = 0; i < ui->itemCombo->count(); i++)
-        {
-            if(ui->itemCombo->itemData(i).toInt() == source.item_idx)
-            {
-                ui->itemCombo->setCurrentIndex(i);
-                break;
-            }
-        }
-    }
-
-    updatePlusFromSource();
-}
-
 void CustomControllerDeviceWidget::rebuildItemCombo()
 {
     if(!ui->itemCombo || !host_ || !controller_ || !ui->granularityCombo)
@@ -228,7 +198,7 @@ void CustomControllerDeviceWidget::rebuildItemCombo()
         ui->itemCombo->setEnabled(false);
         ui->itemCombo->addItem(tr("All LEDs"), 0);
         ui->itemCombo->setCurrentIndex(0);
-        updatePlusFromSource();
+        updateEnableButtonState();
         return;
     }
 
@@ -248,12 +218,12 @@ void CustomControllerDeviceWidget::rebuildItemCombo()
     {
         ui->itemCombo->setCurrentIndex(restore_index);
     }
-    else if(ui->itemCombo->count() > 0 && prev_data == -9999)
+    else if(ui->itemCombo->count() > 0)
     {
         ui->itemCombo->setCurrentIndex(0);
     }
 
-    updatePlusFromSource();
+    updateEnableButtonState();
 }
 
 void CustomControllerDeviceWidget::updatePlusFromSource()
@@ -272,27 +242,34 @@ void CustomControllerDeviceWidget::updatePlusFromSource()
     ui->enableButton->blockSignals(false);
 }
 
-void CustomControllerDeviceWidget::refreshFromHost()
+void CustomControllerDeviceWidget::updateEnableButtonState()
 {
-    rebuildItemCombo();
-
-    if(!host_)
+    if(!ui->enableButton || !host_)
     {
         return;
     }
 
     const CustomControllerSourceRef ref = currentSource();
-    const bool grid_ready               = host_->selectedGridCellValid();
-    const bool grid                  = ref.isValid() && host_->IsSourceItemOnGrid(ref);
-    const bool can_add                  = ref.isValid() && host_->CanAddSourceToGrid(ref);
+    const bool on_grid = ref.isValid() && host_->IsSourceItemOnGrid(ref);
+    const bool available = ref.isValid() && host_->IsSourceItemAvailable(ref);
+    const bool cell_ok = host_->selectedGridCellValid();
 
+    setPlusEnabled(ref.isValid() && (on_grid || (available && cell_ok)));
     updatePlusFromSource();
-    setPlusEnabled(grid_ready && ref.isValid() && (grid || can_add));
+}
+
+void CustomControllerDeviceWidget::refreshFromHost()
+{
+    rebuildItemCombo();
+}
+
+void CustomControllerDeviceWidget::refreshEnableButtonsOnly()
+{
+    updateEnableButtonState();
 }
 
 void CustomControllerDeviceWidget::setRowSelected(bool selected)
 {
-    row_selected_ = selected;
     PluginUiApplyControllerCardChrome(ui->cardFrame, selected);
 }
 
@@ -320,7 +297,7 @@ void CustomControllerDeviceWidget::granularityChanged(int)
 void CustomControllerDeviceWidget::itemChanged(int index)
 {
     Q_UNUSED(index);
-    updatePlusFromSource();
+    updateEnableButtonState();
     emit deviceActivated(controller_index_);
     notifySourceChanged();
 }
@@ -356,13 +333,11 @@ void CustomControllerDeviceWidget::updateEnableIcon()
 CustomControllerDeviceList::CustomControllerDeviceList(QWidget* parent)
     : QWidget(parent),
       ui(new Ui::CustomControllerDeviceList),
-      scroll_area_(nullptr),
       content_widget_(nullptr),
       content_layout_(nullptr),
       selected_controller_index_(-1)
 {
     ui->setupUi(this);
-    scroll_area_    = ui->scrollArea;
     content_widget_ = ui->contentWidget;
     content_layout_ = ui->contentLayout;
 }
@@ -502,6 +477,17 @@ void CustomControllerDeviceList::refreshFromHost(int only_controller_index)
 
     suppress_row_activation_ = false;
     applySelection();
+}
+
+void CustomControllerDeviceList::refreshEnableButtonsOnly()
+{
+    for(CustomControllerDeviceWidget* widget : device_widgets_)
+    {
+        if(widget)
+        {
+            widget->refreshEnableButtonsOnly();
+        }
+    }
 }
 
 CustomControllerSourceRef CustomControllerDeviceList::selectedSource() const

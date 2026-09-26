@@ -44,7 +44,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 - Catalog categories: **Basic** | **Pixel** | **Volume** (toolbar and right-click share `EffectPackCatalog`).
 - Dual add UX: right-click Add effect, or drag from the effect toolbar; drag colors / gradients / intensity curves onto blocks.
 - Authoring entry points: **Object Creator** → Zone / Effect Pack / **Event Bindings** (removed from the Run left column).
-- Bindings file: `{PluginRoot}/effect-bindings.json` (format `openrgb3d.effect_bindings` v1).
+- Bindings file: `{PluginRoot}/bindings/effect-bindings.json` (format `openrgb3d.effect_bindings` v1).
 - Event sources shown only for this OS/build: **Manual** always; **Windows** / **Linux** / **macOS** OS catalogs on their platforms. Game/app bridges later.
 - Spatial sampling (`axis_space`):
   - **Device** (default on device / HW-zone / LED rows): per-controller local axes / AABB.
@@ -53,7 +53,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
   - Preset directions or custom yaw/pitch in Device/Room space.
   - Named directions aim at the matching viewport wall/side: Left/Right (±X), Down/Up (±Y),
     **Forward → Front wall (Z=0 / −Z)**, **Back → Back wall (+Z)**. Explicit `+z`/`-z` stay geometric.
-- Storage: `{PluginRoot}/effect-packs/*.oreffect.json` (format version **4** only).
+- Storage: `{PluginRoot}/timelines/*.oreffect.json` (format version **4** only).
 - Empty library seeds three examples: rainbow wash, desk ripple (Room), sequence wipe.
 
 ### Event edges
@@ -233,7 +233,7 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 - `Effects3D/EffectPacks/EffectPackSpatial.cpp` — curves, world/volume evaluate
 - `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock
 - `Effects3D/EffectPacks/EffectPackApplier*.cpp` — hardware + viewport apply (frame / match / spatial)
-- `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `effect-packs/`
+- `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `timelines/`
 - `ui/EffectPackCatalog.h` — shared Basic/Pixel/Volume catalog
 - `ui/EffectPackPanel.*` — Object Creator → Effect Pack list + Preview/Stop / New / Edit
 - `ui/ZonesPanel.*` — Object Creator → Zone list + Create / Edit / Delete
@@ -243,4 +243,4 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 - `ui/EffectPackTimelineWidget.*` (+ `EffectPackTimelinePaint`, `EffectPackTimelineInteract`) — ruler / rows / blocks / playhead
 - `ui/EffectPackToolBar.*` — effect/color/gradient/curve strips
 - `ui/EffectPackGradientBar.*` — gradient stops UI
-- `PluginSettingsPaths::EffectPacksDir` — `{PluginRoot}/effect-packs`
+- `PluginSettingsPaths::TimelinesDir` — `{PluginRoot}/timelines`

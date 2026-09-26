@@ -157,12 +157,6 @@ inline EffectGridAxisHalfExtents MakeEffectGpuAtlasHalfExtents(const GridContext
     return MakeEffectGridOriginLocalHalfExtents(grid, origin, std::max(0.05f, normalized_scale));
 }
 
-inline float EffectGridBoundingRadius(const GridContext3D& grid, float normalized_scale)
-{
-    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
-    return std::sqrt(e.hw * e.hw + e.hh * e.hh + e.hd * e.hd);
-}
-
 inline float EffectGridHorizontalRadialNormXZ(float rx, float rz, float hw, float hd)
 {
     float lx = rx / hw;
@@ -275,22 +269,8 @@ inline void EffectGpuAtlasUvFromGrid(float x, float y, float z,
     *w = 0.5f + 0.5f * (z - origin.z) / hd;
 }
 
-/** In-box origin-local UV with face clamp. Occupancy lookups must use
- *  SampleGpuVolumeOriginLocal01 so samples outside the scaled box stay unlit. */
-inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
-                                      const Vector3D& origin,
-                                      const EffectGridAxisHalfExtents& e,
-                                      float* c1, float* c2, float* c3)
-{
-    EffectGpuAtlasUvFromGrid(rot_x, rot_y, rot_z, origin, e, c1, c2, c3);
-    *c1 = std::max(0.0f, std::min(1.0f, *c1));
-    *c2 = std::max(0.0f, std::min(1.0f, *c2));
-    *c3 = std::max(0.0f, std::min(1.0f, *c3));
-}
-
 /** Canonical GPU volume atlas lookup. Pair with GLSL `l = p01 * 2.0 - 1.0`.
- *  Returns false when the sample is outside the scaled effect box — caller must
- *  leave the LED unlit. Never clamp those samples onto the atlas faces. */
+ *  Returns false outside the scaled effect box — leave those LEDs unlit. */
 inline bool SampleGpuVolumeOriginLocal01(float x, float y, float z,
                                          const GridContext3D& grid,
                                          const Vector3D& origin,
@@ -311,7 +291,7 @@ inline bool SampleGpuVolumeOriginLocal01(float x, float y, float z,
     return true;
 }
 
-/** Room-fixed GPU atlas lookup (front-left floor = 0). Pair with GLSL that reads p01 as room UV. */
+/** Room-fixed GPU atlas lookup (front-left floor = 0). */
 inline void SampleGpuRoomVolume01(float x, float y, float z,
                                   const GridContext3D& grid,
                                   float* c1, float* c2, float* c3)
@@ -319,27 +299,6 @@ inline void SampleGpuRoomVolume01(float x, float y, float z,
     *c1 = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
     *c2 = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
     *c3 = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
-}
-
-/** Room UV that does not clamp onto atlas faces (four-quadrant artifact).
- *  Occupancy is a sphere around the Spatial Anchor, so samples can sit outside
- *  the grid AABB; those must stay unlit instead of snapping to a cube face. */
-inline bool TrySampleGpuRoomVolume01(float x, float y, float z,
-                                     const GridContext3D& grid,
-                                     float* c1, float* c2, float* c3)
-{
-    const float u = GridAxisToUnitUnclamped(x, grid.min_x, grid.max_x);
-    const float v = GridAxisToUnitUnclamped(y, grid.min_y, grid.max_y);
-    const float w = GridAxisToUnitUnclamped(z, grid.min_z, grid.max_z);
-    constexpr float kEps = 1e-4f;
-    if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
-    {
-        return false;
-    }
-    *c1 = std::max(0.0f, std::min(1.0f, u));
-    *c2 = std::max(0.0f, std::min(1.0f, v));
-    *c3 = std::max(0.0f, std::min(1.0f, w));
-    return true;
 }
 
 inline float EffectGridMedianOfHalfExtents(const EffectGridAxisHalfExtents& e)
@@ -350,11 +309,6 @@ inline float EffectGridMedianOfHalfExtents(const EffectGridAxisHalfExtents& e)
     const float max_e = extents[2];
     constexpr float kDominantAxisFraction = 0.2f;
     return std::max(med, kDominantAxisFraction * max_e);
-}
-
-inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
-{
-    return EffectGridMedianOfHalfExtents(MakeEffectGridAxisHalfExtents(grid, normalized_scale));
 }
 
 inline float EffectGridGpuAtlasMedianHalfExtent(const GridContext3D& grid,
@@ -378,15 +332,8 @@ struct EffectInfo3D
     bool                has_custom_settings;
     bool                needs_3d_origin;
     bool                needs_direction;
-    bool                needs_thickness;
-    bool                needs_arms;
     bool                needs_frequency;
 
-    /* Legacy metadata. Speed/frequency rates come from GetMotionHz /
-     * GetColorCycleHz, not these fields. Keep at 10 so old readers stay sane. */
-    float               default_speed_scale;
-    float               default_frequency_scale;
-    float               default_detail_scale = 10.0f;
     bool                use_size_parameter;
 
     bool                show_speed_control = true;
@@ -396,10 +343,12 @@ struct EffectInfo3D
     bool                show_size_control = true;
     bool                show_scale_control = true;
     bool                show_fps_control = true;
-    bool                show_axis_control = true;
     bool                show_color_controls = true;
     bool                show_surface_control = true;
     bool                show_path_axis_control = false;
+    bool                show_thickness_control = false;
+    bool                show_edge_fade_control = false;
+    bool                show_count_control = false;
     bool                show_plane_control = false;
     bool                show_position_offset_control = true;
     bool                supports_height_bands = false;
@@ -454,7 +403,7 @@ public:
     virtual bool IsEffectEnabled() { return effect_enabled; }
 
     virtual void SetSpeed(unsigned int speed) { effect_speed = speed; }
-    virtual unsigned int GetSpeed() { return effect_speed; }
+    virtual unsigned int GetSpeed() const { return effect_speed; }
     unsigned int GetTargetFPS() const;
 
     virtual void SetBrightness(unsigned int brightness) { effect_brightness = brightness; }
@@ -471,7 +420,6 @@ public:
     virtual unsigned int GetFrequency() const;
     virtual void SetDetail(unsigned int detail);
     virtual unsigned int GetDetail() const;
-    float GetScaledFrequency() const;
     float GetScaledDetail() const;
     /** Spatial rainbow / ring density from Detail + Frequency.
      *  ~1 at low (soft blend), ~12 at mid, up to ~56 at max (LED-tight overlapping bands). */
@@ -482,6 +430,9 @@ public:
 
     virtual void SetReferenceMode(ReferenceMode mode);
     virtual int GetPathAxis() const { return effect_path_axis; }
+    int GetBandThickness() const { return (int)effect_band_thickness; }
+    int GetEdgeFade() const { return (int)effect_edge_fade; }
+    int GetInstanceCount() const { return (int)effect_instance_count; }
     virtual int GetPlane() const { return effect_plane; }
     virtual int GetSurfaceMask() const { return effect_surface_mask; }
     void SetSurfaceMaskFlag(int flag, bool enabled);
@@ -520,7 +471,6 @@ public:
     /** Once-per-frame: rebuild 1D strip-colormap atlas when Surface Look Pattern is on. */
     void PrepareStripColormapAssist(std::uint64_t render_sequence, float time_sec);
 
-    /** GPU 8-family strip sample (CPU unfold); falls back to full CPU Eval if assist unavailable. */
     float SampleEffectStripColormap01(float kernel_rep,
                                       int unfold_mode,
                                       float dir_deg,
@@ -602,6 +552,12 @@ protected:
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
     QSlider*            frequency_slider;
+    QSlider*            thickness_slider = nullptr;
+    QLabel*             thickness_label = nullptr;
+    QSlider*            edge_fade_slider = nullptr;
+    QLabel*             edge_fade_label = nullptr;
+    QSlider*            count_slider = nullptr;
+    QLabel*             count_label = nullptr;
     QSlider*            detail_slider;
     QSlider*            size_slider;
     QSlider*            scale_slider;
@@ -674,6 +630,9 @@ protected:
     unsigned int        effect_speed;
     unsigned int        effect_brightness;
     unsigned int        effect_frequency;
+    unsigned int        effect_band_thickness = 15;
+    unsigned int        effect_edge_fade = 0;
+    unsigned int        effect_instance_count = 12;
     unsigned int        effect_detail;
     unsigned int        effect_size;
     unsigned int        effect_scale;
@@ -797,8 +756,6 @@ protected:
     float GetMotionHz() const;
     /** Frequency slider → hue/palette cycle rate. Frequency 100 ≈ 0.11 Hz. */
     float GetColorCycleHz() const;
-    /** Same as GetMotionHz (legacy name). */
-    float GetScaledSpeed() const;
     /** Elapsed motion cycles: time * GetMotionHz(). */
     float CalculateProgress(float time) const;
     /** Fractional cycle in [0,1). */
@@ -823,7 +780,6 @@ protected:
     Vector3D TransformPointByRotation(float x, float y, float z,
                                       const Vector3D& origin) const;
     static Vector3D RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg);
-    float ApplySharpness(float value) const;
 
 private slots:
     void OnParameterChanged();

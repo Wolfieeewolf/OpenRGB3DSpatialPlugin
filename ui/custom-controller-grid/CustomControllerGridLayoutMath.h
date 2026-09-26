@@ -210,14 +210,20 @@ inline int ColumnResizeIndexAtScenePos(const QVector<float>& column_widths_mm,
                                        qreal hit_slop_scene,
                                        float mm_per_unit)
 {
-    if(grid_width <= 0 || scene_pos.y() < ColHeaderHeightScene(column_widths_mm, mm_per_unit))
+    if(grid_width <= 0)
+    {
+        return -1;
+    }
+
+    const qreal row_header_w = RowHeaderWidthScene(row_heights_mm, mm_per_unit);
+    if(scene_pos.x() < row_header_w)
     {
         return -1;
     }
 
     qreal best_distance = hit_slop_scene + 1.0;
     int   best_column   = -1;
-    qreal border_x      = RowHeaderWidthScene(row_heights_mm, mm_per_unit);
+    qreal border_x      = row_header_w;
     for(int col = 0; col < grid_width; ++col)
     {
         border_x += ColumnWidthScene(column_widths_mm, col, mm_per_unit);
@@ -239,14 +245,20 @@ inline int RowResizeIndexAtScenePos(const QVector<float>& row_heights_mm,
                                     qreal hit_slop_scene,
                                     float mm_per_unit)
 {
-    if(grid_height <= 0 || scene_pos.x() < RowHeaderWidthScene(row_heights_mm, mm_per_unit))
+    if(grid_height <= 0)
+    {
+        return -1;
+    }
+
+    const qreal col_header_h = ColHeaderHeightScene(column_widths_mm, mm_per_unit);
+    if(scene_pos.y() < col_header_h)
     {
         return -1;
     }
 
     qreal best_distance = hit_slop_scene + 1.0;
     int   best_row      = -1;
-    qreal border_y      = ColHeaderHeightScene(column_widths_mm, mm_per_unit);
+    qreal border_y      = col_header_h;
     for(int row = 0; row < grid_height; ++row)
     {
         border_y += RowHeightScene(row_heights_mm, row, mm_per_unit);

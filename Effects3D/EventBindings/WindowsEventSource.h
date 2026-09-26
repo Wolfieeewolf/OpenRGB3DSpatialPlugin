@@ -36,6 +36,8 @@ private:
     void UpdateAppFocusState(bool openrgb_foreground);
     void UnregisterPowerNotify(void*& handle);
     void* RegisterDeviceInterface(const void* guid);
+    void ApplyBatteryPercent(int pct);
+    void SyncAppFocus();
 
     std::unique_ptr<SinkWidget> sink_;
     std::unique_ptr<Watcher> watcher_;

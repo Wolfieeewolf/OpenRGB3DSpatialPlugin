@@ -2,13 +2,17 @@
 
 Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cubes. This plugin’s edge is **Spatial Anchor + volume atlas + strip kernels unfolded into the room** — not copying cube demos.
 
-## Contracts
+**Engine contracts (authoring rules):** [effects-engines.md](effects-engines.md) — read that first when adding or converting an effect.
+
+## Contracts (lanes → engines)
 
 | Lane | Entry point | Engine |
 |------|-------------|--------|
-| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Strip assist + volume GLSL ([SpatialStripKernelEvalGlsl.h](../Effects3D/SpatialPatternKernels/SpatialStripKernelEvalGlsl.h)); unfold via `stripUnfoldKernelInputs` ([StripUnfoldFieldGlsl.h](../Effects3D/SpatialPatternKernels/StripUnfoldFieldGlsl.h)). Shell Pattern composes both into `volumeMain`. Surface Look Pattern uses `SpatialEffect3D::PrepareStripColormapAssist` + `SampleEffectStripColormap01` (8-family GPU SoT; full CPU kernel table is fallback only). |
-| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field |
-| **3D** | `volumeMain(out, p01)` soft field | `SpatialVolumeFieldAssist` |
+| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Kernel — `patterns/*.kernel` |
+| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field — `effects/shader-field/*.fs` |
+| **3D** | `volumeMain(out, p01)` soft field | Volume — `effects/spatial/<id>.fs` (or audio/media) via FolderVolume |
+
+Also: **Media** / **Audio** (Volume host + texture or FFT), **Reactive** / **Ambilight** (player codecs), **Games** (programmed packs). Details in [effects-engines.md](effects-engines.md).
 
 ## Triage
 
@@ -16,63 +20,14 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 ## Adapters
 
-**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`).
+**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`.
 
-**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G).
+**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `effects/spatial/` for **Volume** (or `effects/audio/` / `effects/media/`) with a FolderVolume `class:` header.
 
-**Strip → 1D:** reduce to `s01` + time; add CPU + GLSL kernel in sync; bump `kSpatialStripGpuKernelMaxId`.
+**Strip → 1D:** drop a `patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
 
-## Curated batch (first ports)
-
-Bundled Shader Field presets (also under `resources/spatial_shaders/`):
-
-| Id | Source dump | Notes |
-|----|-------------|--------|
-| `lobe_plasma` | AnotherPlasma | Multi-lobe product plasma |
-| `noise_contour` | 2dNoiseContour | Gradient-noise topo bands |
-| `corner_waves` | 4RadialWave | Four-corner interference |
-| `aurora_ridge` | AnotherAuroraBorealis | Horizon ridge (vs Soft Aurora curtains) |
-| `neon_warp` | 003Warpy | Clamped neon tunnels |
-| `soft_blobs` | 002Blobby | Clamped neon blobs |
-
-### Second curated batch
-
-| Id | Theme | Notes |
-|----|--------|--------|
-| `atom_plasma` | Compact multi-lobe plasma | Distinct from lobe_plasma / room_plasma |
-| `cell_bloom` | Organic cells | AlienCells-style |
-| `voronoi_wash` | Soft Voronoi lattice | ≠ hex_drift |
-| `gyroid_mist` | Soft SDF / gyroid wash | Misty fill |
-| `vortex_swirl` | Spiral vortex | Room-plane swirl |
-| `wave_mesh` | Wave interference lattice | ≠ corner_waves |
-| `melt_petals` | Soft melt / petal wash | Not 70sStripes |
-
-### Third curated batch
-
-| Id | Theme | Notes |
-|----|--------|--------|
-| `oozy_flow` | Soft molten wash | 005Oozy-inspired |
-| `plasmic_ribbons` | Flowing plasma bands | 004Plasmic-inspired |
-| `dense_chroma` | Packed color plasma | 576ColorsPlasma-inspired |
-| `rainbow_drip` | Falling color streaks | 2dRainbowRain-inspired |
-| `neon_space` | Soft star haze | 2dNeonSpace-inspired (no dFdx) |
-| `fluid_swirl` | Soft current | 2dFluidKinda-inspired |
-| `psyche_grid` | Soft 60s lattice | 60sPsychedelicWallpaper-inspired |
-
-### Fourth curated batch
-
-| Id | Theme | Notes |
-|----|--------|--------|
-| `blau_waves` | Soft blue bands | BlauWaves-inspired |
-| `oil_slick` | Iridescent layers | 3Oils-inspired |
-| `jewel_scatter` | Soft sparkle dots | 2dRainbowDribblingJewels-inspired |
-| `potential_rings` | Soft EM field rings | 2dElectromagneticPotential-inspired |
-| `fog_drift` | Soft rolling haze | BambiFog-inspired |
-| `arc_static` | Soft electric wash | BasicArclightningNoise-inspired |
-| `petal_spin` | Rotating soft petals | 70sPetals-inspired (≠ melt_petals) |
-
-Skipped this round: `BlueDots` (dFdx / screen derivatives), `70sStripes` (not a clean 1D kernel; kernels 0–43 already cover chase/comet/fire), heavy multipass / mouse dumps from triage reject lane.
+**Pattern labels:** a combo fed by `pattern:` lines in the effect `.fs` file. Order is the saved index. Text after `|` is the item tooltip.
 
 ## GPU vs CPU
 
-GPU for room fields — including **audio visual fields** (Audio Level, Spectrum Bars, Strip Viz, Pulse) via `SpatialVolumeFieldAssist`. **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen` (3D direction from the display plane, both hemispheres), nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.
+GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist`. **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen`, nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.

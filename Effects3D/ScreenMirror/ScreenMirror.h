@@ -4,7 +4,6 @@
 #define SCREENMIRROR_H
 
 #include "SpatialEffect3D.h"
-#include "EffectRegisterer3D.h"
 #include "ScreenMirror/ScreenMirrorWaveMath.h"
 #include <map>
 #include <unordered_map>
@@ -30,8 +29,6 @@ class ScreenMirror : public SpatialEffect3D
 public:
     explicit ScreenMirror(QWidget* parent = nullptr);
     ~ScreenMirror();
-
-    EFFECT_REGISTERER_3D("ScreenMirror", "Screen Mirror", "Ambilight", [](){return new ScreenMirror;});
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;

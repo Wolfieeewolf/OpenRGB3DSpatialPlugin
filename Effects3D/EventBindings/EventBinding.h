@@ -16,14 +16,15 @@ struct Binding
 {
     std::string id;
     bool enabled = true;
-    std::string source;   // manual | windows | …
-    std::string event;    // fire | session_lock | …
+    std::string source;
+    std::string event;
     std::string pack_id;
 };
 
 struct Document
 {
     std::vector<Binding> bindings;
+    std::vector<std::string> catalog_enabled;
 };
 
 std::string MakeBindingId();
@@ -35,5 +36,8 @@ bool SaveToFile(const filesystem::path& path, const Document& doc, std::string* 
 
 /** Empty / missing file → empty document (not an error). */
 bool LoadOrEmpty(const filesystem::path& path, Document* out, std::string* error);
+
+/** Read-only recipes in a folder. Each *.json uses the bindings format. Missing folder → empty. */
+void LoadCatalog(const filesystem::path& dir, std::vector<Binding>* out, std::vector<std::string>* warnings);
 
 } // namespace EffectBinding

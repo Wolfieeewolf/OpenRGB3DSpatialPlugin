@@ -12,7 +12,7 @@
    <item>
     <widget class="EffectInfoLabel" name="helpLabel" native="true">
      <property name="text">
-      <string>Map system or manual events to effect packs. Only sources for this OS are listed.</string>
+      <string>Map system or manual events to timelines. Drop extra .json recipes in bindings/. Only sources for this OS are listed.</string>
      </property>
     </widget>
    </item>
@@ -73,6 +73,9 @@
       <widget class="QPushButton" name="stopButton">
        <property name="text">
         <string>Stop</string>
+       </property>
+       <property name="toolTip">
+        <string>Stop Manual Fire and Hold. System events keep running.</string>
        </property>
       </widget>
      </item>

@@ -125,28 +125,6 @@ inline void AppendAudioPeakBoostRow(QVBoxLayout* layout,
                         on_changed);
 }
 
-inline void AppendOnsetThresholdRow(QVBoxLayout* layout,
-                                    float& threshold,
-                                    QObject* owner,
-                                    const std::function<void()>& on_changed,
-                                    const QString& label,
-                                    const QString& tooltip,
-                                    int slider_min = 0,
-                                    int slider_max = 95)
-{
-    AppendSliderHBoxRow(layout,
-                        label,
-                        slider_min,
-                        slider_max,
-                        (int)(threshold * 100.0f),
-                        tooltip,
-                        40,
-                        owner,
-                        [](int v) { return QString::number(v) + QStringLiteral("%"); },
-                        [&threshold](int v) { threshold = v / 100.0f; },
-                        on_changed);
-}
-
 inline void AppendFrequencyBandRows(QVBoxLayout* layout,
                                     AudioReactiveSettings3D& cfg,
                                     QObject* owner,
@@ -534,23 +512,6 @@ inline void AppendStandardBeatWaveSection(QVBoxLayout* layout,
                               800,
                               tip);
     }
-}
-
-inline void AppendBeatSensitivityRow(QVBoxLayout* layout,
-                                     float& threshold,
-                                     QObject* owner,
-                                     const std::function<void()>& on_changed)
-{
-    AppendOnsetThresholdRow(layout,
-                            threshold,
-                            owner,
-                            on_changed,
-                            QStringLiteral("Beat trigger:"),
-                            QStringLiteral(
-                                "How loud a hit must be to spawn a pulse (higher = fewer triggers). "
-                                "Not the same as Effect sensitivity."),
-                            5,
-                            92);
 }
 
 inline void SyncSettingsToHost(QWidget* host, AudioReactiveSettings3D& cfg)

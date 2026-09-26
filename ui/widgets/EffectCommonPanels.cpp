@@ -99,6 +99,7 @@ EffectSurfacesPanel::~EffectSurfacesPanel()
 #include "ui_EffectMotionPanel.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QLabel>
 #include <QSlider>
 
@@ -131,6 +132,16 @@ EffectMotionPanel::EffectMotionPanel(unsigned int speed,
     ui->scaleInvertCheck->setChecked(scale_inverted);
     ui->fpsSlider->setValue((int)fps);
     ui->fpsLabel->setText(QString::number(fps));
+    ui->pathAxisCombo->addItem(QStringLiteral("X (left/right)"));
+    ui->pathAxisCombo->addItem(QStringLiteral("Y (up/down)"));
+    ui->pathAxisCombo->addItem(QStringLiteral("Z (depth)"));
+    ui->pathAxisCombo->setCurrentIndex(1);
+    ui->thicknessSlider->setValue(15);
+    ui->thicknessLabel->setText(QStringLiteral("15%"));
+    ui->edgeFadeSlider->setValue(0);
+    ui->edgeFadeLabel->setText(QStringLiteral("0%"));
+    ui->countSlider->setValue(12);
+    ui->countLabel->setText(QStringLiteral("12"));
 }
 
 EffectMotionPanel::~EffectMotionPanel()
@@ -153,6 +164,13 @@ QLabel* EffectMotionPanel::scaleLabel() const { return ui->scaleLabel; }
 QCheckBox* EffectMotionPanel::scaleInvertCheck() const { return ui->scaleInvertCheck; }
 QSlider* EffectMotionPanel::fpsSlider() const { return ui->fpsSlider; }
 QLabel* EffectMotionPanel::fpsLabel() const { return ui->fpsLabel; }
+QComboBox* EffectMotionPanel::pathAxisCombo() const { return ui->pathAxisCombo; }
+QSlider* EffectMotionPanel::thicknessSlider() const { return ui->thicknessSlider; }
+QLabel* EffectMotionPanel::thicknessLabel() const { return ui->thicknessLabel; }
+QSlider* EffectMotionPanel::edgeFadeSlider() const { return ui->edgeFadeSlider; }
+QLabel* EffectMotionPanel::edgeFadeLabel() const { return ui->edgeFadeLabel; }
+QSlider* EffectMotionPanel::countSlider() const { return ui->countSlider; }
+QLabel* EffectMotionPanel::countLabel() const { return ui->countLabel; }
 #include "EffectOutputPanel.h"
 
 #include "ui_EffectOutputPanel.h"

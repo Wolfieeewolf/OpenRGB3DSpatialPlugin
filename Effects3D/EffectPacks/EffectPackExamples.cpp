@@ -31,7 +31,7 @@ Pack MakeExampleRainbowWash()
     for(int i = 0; i < segments; ++i)
     {
         Block block;
-        block.type = BlockType::Fade;
+        block.effect_id = "fade";
         block.start_ms = i * seg_ms;
         block.end_ms = (i == segments - 1) ? pack.duration_ms : (i + 1) * seg_ms;
         block.color_from = stops[i];
@@ -58,7 +58,7 @@ Pack MakeExampleDeskRipple()
     track.target.kind = TargetKind::All;
 
     Block ripple;
-    ripple.type = BlockType::Ripple;
+    ripple.effect_id = "ripple";
     ripple.start_ms = 0;
     ripple.end_ms = 3500;
     ripple.axis_space = AxisSpace::Room;
@@ -68,7 +68,7 @@ Pack MakeExampleDeskRipple()
     track.blocks.push_back(ripple);
 
     Block burst;
-    burst.type = BlockType::Burst;
+    burst.effect_id = "burst";
     burst.start_ms = 800;
     burst.end_ms = 2800;
     burst.axis_space = AxisSpace::Room;
@@ -95,7 +95,7 @@ Pack MakeExampleSequenceWipe()
     track.target.kind = TargetKind::All;
 
     Block wipe;
-    wipe.type = BlockType::Wipe;
+    wipe.effect_id = "wipe";
     wipe.start_ms = 0;
     wipe.end_ms = 2200;
     wipe.axis_space = AxisSpace::Sequence;
@@ -106,7 +106,7 @@ Pack MakeExampleSequenceWipe()
     track.blocks.push_back(wipe);
 
     Block scanner;
-    scanner.type = BlockType::Scanner;
+    scanner.effect_id = "scanner";
     scanner.start_ms = 400;
     scanner.end_ms = 3000;
     scanner.axis_space = AxisSpace::Sequence;

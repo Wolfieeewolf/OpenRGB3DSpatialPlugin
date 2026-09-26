@@ -27,15 +27,12 @@ EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const
     info.user_colors = 1;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
-    info.default_speed_scale = 10.0f;
-    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = false;
     info.show_speed_control = false;
     info.show_brightness_control = true;
     info.show_frequency_control = false;
     info.show_size_control = false;
     info.show_scale_control = false;
-    info.show_axis_control = false;
     info.show_color_controls = false;
     info.show_surface_control = false;
     info.show_fps_control = false;

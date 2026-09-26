@@ -7,7 +7,6 @@
 namespace EffectPack
 {
 
-/** Playback clock for a loaded pack. Hardware apply is done by EffectPackApplier. */
 class Player
 {
 public:
@@ -20,10 +19,8 @@ public:
 
     const Pack& GetPack() const { return pack_; }
 
-    /** Replace pack data without resetting the playback clock (live editor edits). */
     void UpdatePack(const Pack& pack) { pack_ = pack; }
 
-    /** Jump playback to a pack-local time (keeps playing). */
     void SeekToLocalMs(int local_ms)
     {
         const int dur = std::max(1, pack_.duration_ms);
@@ -42,7 +39,6 @@ public:
     bool IsPlaying() const { return playing_; }
     int ElapsedMs() const { return elapsed_ms_; }
 
-    /** Advance clock by dt_ms. event_active matters for while_active loop mode. */
     bool Tick(int dt_ms, bool event_active)
     {
         if(!playing_)

@@ -4,10 +4,11 @@
 #include "CustomControllerDialog_Internal.h"
 #include "CustomControllerClipboard.h"
 #include "CustomControllerGridKeys.h"
-#include "ControllerDisplayUtils.h"
+#include "CustomControllerDeviceList.h"
 #include "custom-controller-grid/CustomControllerLayoutGrid.h"
 #include "custom-controller-grid/CustomControllerGridCell.h"
 #include "custom-controller-grid/CustomControllerGridLayoutMath.h"
+#include "MatrixWiringOrder.h"
 #include "PluginUiUtils.h"
 
 #include <QColor>
@@ -36,15 +37,12 @@ void CustomControllerDialog::gridCellClicked(int column, int row)
 {
     selected_col = column;
     selected_row = row;
-    UpdateCellInfo();
-    UpdateIdentifyButtonUi();
 }
 
 void CustomControllerDialog::gridCellDoubleClicked(int column, int row)
 {
     selected_col = column;
     selected_row = row;
-    UpdateCellInfo();
 
     const CustomControllerSourceRef source = currentSourceSelection();
     if(!CanAddSourceToGrid(source))
@@ -57,6 +55,8 @@ void CustomControllerDialog::gridCellDoubleClicked(int column, int row)
 
 void CustomControllerDialog::gridSelectionChanged()
 {
+    const bool had_valid_cell = selectedGridCellValid();
+
     if(layout_grid)
     {
         const std::set<std::pair<int, int>> cells = layout_grid->SelectedCells();
@@ -72,6 +72,12 @@ void CustomControllerDialog::gridSelectionChanged()
     UpdateCellInfo();
     RefreshSelectionFillTints();
     UpdateIdentifyButtonUi();
+
+    const bool has_valid_cell = selectedGridCellValid();
+    if(device_list && had_valid_cell != has_valid_cell)
+    {
+        device_list->refreshEnableButtonsOnly();
+    }
 }
 
 std::set<std::pair<int, int>> CustomControllerDialog::SelectedGridCells() const
@@ -218,7 +224,7 @@ void CustomControllerDialog::PopulateCellVisual(int col,
     }
     else if(visual.is_hole)
     {
-        visual.tooltip = tr("Matrix gap (no LED on this device)");
+        visual.tooltip = tr("OpenRGB matrix unused cell (0xFFFFFFFF) — no LED here");
         visual.label.clear();
     }
     else if(visual.is_light_blocker)
@@ -288,7 +294,95 @@ void CustomControllerDialog::RefreshLayoutGridVisuals()
 
     layout_grid->SetCells(layout_cells_cache_);
     layout_grid->SetSelectedCells(selected_cells);
+
+    std::set<std::pair<int, int>> draggable;
+    for(const GridLEDMapping& mapping : led_mappings)
+    {
+        if(mapping.z == current_layer)
+        {
+            draggable.insert(std::make_pair(mapping.x, mapping.y));
+        }
+    }
+    for(const uint64_t key : light_blocker_cells_)
+    {
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(key, &x, &y, &z);
+        if(z == current_layer)
+        {
+            draggable.insert(std::make_pair(x, y));
+        }
+    }
+    layout_grid->SetDraggableCells(draggable);
+
     layout_grid->updateGeometry();
+    selection_fill_cache_ = selected_cells;
+}
+
+void CustomControllerDialog::RefreshCellsVisuals(const std::set<std::pair<int, int>>& cells)
+{
+    if(!layout_grid || cells.empty())
+    {
+        return;
+    }
+
+    if(!LayoutCellsCacheMatchesGrid())
+    {
+        RefreshLayoutGridVisuals();
+        return;
+    }
+
+    const LayerCellIndex layer_index = BuildLayerCellIndex(led_mappings, current_layer);
+    const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
+
+    for(const std::pair<int, int>& cell : cells)
+    {
+        const int col = cell.first;
+        const int row = cell.second;
+        const int cache_index = row * layout_cells_cache_w_ + col;
+        if(cache_index < 0 || cache_index >= layout_cells_cache_.size())
+        {
+            continue;
+        }
+
+        std::vector<GridLEDMapping> cell_mappings;
+        const auto cell_it = layer_index.find(GridCellKey(col, row));
+        if(cell_it != layer_index.end())
+        {
+            cell_mappings.reserve(cell_it->second.size());
+            for(size_t mapping_index : cell_it->second)
+            {
+                cell_mappings.push_back(led_mappings[mapping_index]);
+            }
+        }
+
+        CustomControllerGridCellVisual& visual = layout_cells_cache_[cache_index];
+        const bool is_selected = selected_cells.count(cell) > 0;
+        PopulateCellVisual(col, row, cell_mappings, visual, is_selected);
+        layout_grid->SetCellAt(col, row, visual);
+    }
+
+    std::set<std::pair<int, int>> draggable;
+    for(const GridLEDMapping& mapping : led_mappings)
+    {
+        if(mapping.z == current_layer)
+        {
+            draggable.insert(std::make_pair(mapping.x, mapping.y));
+        }
+    }
+    for(const uint64_t key : light_blocker_cells_)
+    {
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(key, &x, &y, &z);
+        if(z == current_layer)
+        {
+            draggable.insert(std::make_pair(x, y));
+        }
+    }
+    layout_grid->SetDraggableCells(draggable);
     selection_fill_cache_ = selected_cells;
 }
 
@@ -323,8 +417,13 @@ void CustomControllerDialog::RefreshSelectionFillTints()
     }
     selection_fill_cache_ = new_selection;
 
-    if(affected.empty() || static_cast<int>(affected.size()) > kMaxSelectionFillTintUpdates)
+    if(affected.empty())
     {
+        return;
+    }
+    if(static_cast<int>(affected.size()) > kMaxSelectionFillTintUpdates)
+    {
+        RefreshLayoutGridVisuals();
         return;
     }
 
@@ -459,6 +558,8 @@ bool CustomControllerDialog::PasteClipboardRegion(const CustomControllerClipboar
         return false;
     }
 
+    RecordUndoPoint();
+
     size_t pasted_mappings = 0;
     size_t skipped_mappings = 0;
     size_t pasted_blockers = 0;
@@ -500,12 +601,18 @@ bool CustomControllerDialog::PasteClipboardRegion(const CustomControllerClipboar
         {
             continue;
         }
+        if(IsMatrixHoleCell(x, y))
+        {
+            continue;
+        }
         light_blocker_cells_.insert(GridCellKey3D(x, y, current_layer));
         pasted_blockers++;
     }
 
     if(pasted_mappings == 0 && pasted_blockers == 0)
     {
+        history_.AbandonLastUndoPush();
+        UpdateUndoRedoUi();
         QMessageBox::information(this,
                                tr("Paste"),
                                tr("Nothing could be pasted at the current selection (out of bounds or blocked)."));
@@ -522,6 +629,7 @@ bool CustomControllerDialog::PasteClipboardRegion(const CustomControllerClipboar
                                    .arg(static_cast<qlonglong>(skipped_mappings)));
     }
 
+    CommitHistoryBaseline();
     UpdateGridDisplay();
     UpdateCellInfo();
     refreshDeviceList();
@@ -585,7 +693,9 @@ void CustomControllerDialog::cutSelectionClicked()
         return;
     }
 
+    RecordUndoPoint();
     ClearSelectedCellContents();
+    CommitHistoryBaseline();
     if(paste_button)
     {
         paste_button->setEnabled(true);
@@ -794,6 +904,7 @@ void CustomControllerDialog::ApplyColumnWidthMm(int column, float width_mm)
         return;
     }
 
+    RecordUndoPoint();
     column_widths_mm_[static_cast<size_t>(column)] =
         std::max(CustomControllerGridLayoutMath::kMinCellSizeMm, width_mm);
     if(layout_grid)
@@ -801,6 +912,7 @@ void CustomControllerDialog::ApplyColumnWidthMm(int column, float width_mm)
         layout_grid->SetColumnWidthsMm(ColumnWidthsQVector());
     }
     UpdateGridDisplay();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::ApplyRowHeightMm(int row, float height_mm)
@@ -811,6 +923,7 @@ void CustomControllerDialog::ApplyRowHeightMm(int row, float height_mm)
         return;
     }
 
+    RecordUndoPoint();
     row_heights_mm_[static_cast<size_t>(row)] =
         std::max(CustomControllerGridLayoutMath::kMinCellSizeMm, height_mm);
     if(layout_grid)
@@ -818,11 +931,13 @@ void CustomControllerDialog::ApplyRowHeightMm(int row, float height_mm)
         layout_grid->SetRowHeightsMm(RowHeightsQVector());
     }
     UpdateGridDisplay();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::ApplyColumnWidthsForColumns(const std::set<int>& columns, float width_mm)
 {
     EnsureDialogGridSizeArrays();
+    RecordUndoPoint();
     const float clamped = std::max(CustomControllerGridLayoutMath::kMinCellSizeMm, width_mm);
     for(int column : columns)
     {
@@ -836,11 +951,13 @@ void CustomControllerDialog::ApplyColumnWidthsForColumns(const std::set<int>& co
         layout_grid->SetColumnWidthsMm(ColumnWidthsQVector());
     }
     UpdateGridDisplay();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::ApplyRowHeightsForRows(const std::set<int>& rows, float height_mm)
 {
     EnsureDialogGridSizeArrays();
+    RecordUndoPoint();
     const float clamped = std::max(CustomControllerGridLayoutMath::kMinCellSizeMm, height_mm);
     for(int row : rows)
     {
@@ -854,6 +971,7 @@ void CustomControllerDialog::ApplyRowHeightsForRows(const std::set<int>& rows, f
         layout_grid->SetRowHeightsMm(RowHeightsQVector());
     }
     UpdateGridDisplay();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::ApplyColumnWidthsForSelection(float width_mm)
@@ -879,6 +997,7 @@ void CustomControllerDialog::ApplyRowHeightsForSelection(float height_mm)
 void CustomControllerDialog::ApplyAllColumnWidths(float width_mm)
 {
     EnsureDialogGridSizeArrays();
+    RecordUndoPoint();
     const float clamped = std::max(CustomControllerGridLayoutMath::kMinCellSizeMm, width_mm);
     for(float& value : column_widths_mm_)
     {
@@ -889,11 +1008,13 @@ void CustomControllerDialog::ApplyAllColumnWidths(float width_mm)
         layout_grid->SetColumnWidthsMm(ColumnWidthsQVector());
     }
     UpdateGridDisplay();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::ApplyAllRowHeights(float height_mm)
 {
     EnsureDialogGridSizeArrays();
+    RecordUndoPoint();
     const float clamped = std::max(CustomControllerGridLayoutMath::kMinCellSizeMm, height_mm);
     for(float& value : row_heights_mm_)
     {
@@ -904,6 +1025,7 @@ void CustomControllerDialog::ApplyAllRowHeights(float height_mm)
         layout_grid->SetRowHeightsMm(RowHeightsQVector());
     }
     UpdateGridDisplay();
+    CommitHistoryBaseline();
 }
 
 void CustomControllerDialog::PromptAndApplyColumnWidth(int column)
@@ -1032,6 +1154,46 @@ void CustomControllerDialog::TrimLightBlockerCells(int max_width, int max_height
     }
 }
 
+void CustomControllerDialog::TransformMatrixHoleCells(const std::function<void(int& x, int& y, int& z)>& transform_fn)
+{
+    if(!transform_fn || matrix_hole_cells.empty())
+    {
+        return;
+    }
+
+    std::unordered_set<uint64_t> transformed;
+    transformed.reserve(matrix_hole_cells.size());
+    for(const uint64_t key : matrix_hole_cells)
+    {
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(key, &x, &y, &z);
+        transform_fn(x, y, z);
+        transformed.insert(GridCellKey3D(x, y, z));
+    }
+    matrix_hole_cells = std::move(transformed);
+}
+
+void CustomControllerDialog::TrimMatrixHoleCells(int max_width, int max_height, int max_depth)
+{
+    for(auto it = matrix_hole_cells.begin(); it != matrix_hole_cells.end();)
+    {
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(*it, &x, &y, &z);
+        if(x < 0 || x >= max_width || y < 0 || y >= max_height || z < 0 || z >= max_depth)
+        {
+            it = matrix_hole_cells.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
 void CustomControllerDialog::UpdateSummaryLabel()
 {
     const std::vector<GridLEDMapping>& mappings_ref = led_mappings;
@@ -1065,51 +1227,7 @@ void CustomControllerDialog::UpdateSummaryLabel()
 
 bool CustomControllerDialog::IsMatrixHoleCell(int x, int y) const
 {
-    return matrix_hole_cells.find(GridCellKey(x, y)) != matrix_hole_cells.end();
-}
-
-void CustomControllerDialog::RebuildMatrixHoleMask(RGBControllerInterface* controller, int anchor_x, int anchor_y)
-{
-    matrix_hole_cells.clear();
-    if(!controller)
-    {
-        return;
-    }
-
-    const int grid_w = width_spin->value();
-    const int grid_h = height_spin->value();
-
-    for(unsigned int zone_idx = 0; zone_idx < controller->GetZoneCount(); zone_idx++)
-    {
-        if(controller->GetZoneType(zone_idx) != ZONE_TYPE_MATRIX)
-        {
-            continue;
-        }
-
-        matrix_map_type map_data = controller->GetZoneMatrixMap(zone_idx);
-        if(map_data.map.empty())
-        {
-            continue;
-        }
-
-        const matrix_map_type* map = &map_data;
-        for(unsigned int led_y = 0; led_y < map->height; led_y++)
-        {
-            for(unsigned int led_x = 0; led_x < map->width; led_x++)
-            {
-                const unsigned int map_idx = led_y * map->width + led_x;
-                if(map->map[map_idx] == 0xFFFFFFFFu)
-                {
-                    const int gx = anchor_x + static_cast<int>(led_x);
-                    const int gy = anchor_y + static_cast<int>(led_y);
-                    if(gx >= 0 && gx < grid_w && gy >= 0 && gy < grid_h)
-                    {
-                        matrix_hole_cells.insert(GridCellKey(gx, gy));
-                    }
-                }
-            }
-        }
-    }
+    return matrix_hole_cells.find(GridCellKey3D(x, y, current_layer)) != matrix_hole_cells.end();
 }
 
 void CustomControllerDialog::UpdateCellInfo()

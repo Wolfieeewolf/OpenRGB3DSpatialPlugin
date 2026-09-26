@@ -152,24 +152,6 @@ inline float CombinedPhase01(const BandBlendScalars& bb, float motion01, float m
     return PhaseShift01(bb) + motion01 * motion_strength;
 }
 
-inline float ApplyMotionToPhase01(float phase01, float motion01, float motion_strength = 0.55f)
-{
-    if(motion01 <= 1e-6f)
-    {
-        return phase01;
-    }
-    return std::fmod(phase01 + motion01 * motion_strength + 1.0f, 1.0f);
-}
-
-inline float ApplyMotionToAngleRad(float angle_rad, float motion01, float motion_strength = 0.55f)
-{
-    if(motion01 <= 1e-6f)
-    {
-        return angle_rad;
-    }
-    return angle_rad + motion01 * 6.2831853f * motion_strength;
-}
-
 inline float ApplyMotionToUnit01(float value01, float motion01, float motion_strength = 0.28f)
 {
     if(motion01 <= 1e-6f)

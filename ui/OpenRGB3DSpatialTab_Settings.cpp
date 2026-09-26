@@ -3,6 +3,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
 #include "ui_OpenRGB3DSpatialTab.h"
+#include <QSizePolicy>
 #include <exception>
 #include "PluginLog.h"
 
@@ -67,21 +68,22 @@ void OpenRGB3DSpatialTab::BindSettingsPanels()
         profile_unsaved_banner_->setWordWrap(false);
         profile_unsaved_banner_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         profile_unsaved_banner_->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+        profile_unsaved_banner_->setText(
+            tr("Unsaved Spatial changes — save your OpenRGB profile."));
         profile_unsaved_banner_->setToolTip(
             tr("Save in OpenRGB using File → Profiles, or layout and effect changes will be lost."));
         profile_unsaved_banner_->setVisible(false);
         profile_unsaved_banner_->setAutoFillBackground(true);
         profile_unsaved_banner_->setMargin(6);
-        {
-            // Theme-aware warning strip (follows OpenRGB/Qt palette instead of hard-coded dark amber).
-            const QColor base = PluginUiPaletteColor(this, QPalette::Base);
-            const QColor mid  = PluginUiPaletteColor(this, QPalette::Mid);
-            const QColor warn = PluginUiBlendColors(base, mid, 0.55f);
-            QPalette pal      = profile_unsaved_banner_->palette();
-            pal.setColor(QPalette::Window, warn);
-            pal.setColor(QPalette::WindowText, PluginUiReadableTextOn(warn, this));
-            profile_unsaved_banner_->setPalette(pal);
-        }
+
+        const QColor base = PluginUiPaletteColor(this, QPalette::Base);
+        const QColor mid  = PluginUiPaletteColor(this, QPalette::Mid);
+        const QColor warn = PluginUiBlendColors(base, mid, 0.55f);
+        QPalette pal      = profile_unsaved_banner_->palette();
+        pal.setColor(QPalette::Window, warn);
+        pal.setColor(QPalette::WindowText, PluginUiReadableTextOn(warn, this));
+        profile_unsaved_banner_->setPalette(pal);
+
         ui->rootVerticalLayout->insertWidget(0, profile_unsaved_banner_);
     }
 
@@ -97,6 +99,10 @@ void OpenRGB3DSpatialTab::BindSettingsPanels()
 
 void OpenRGB3DSpatialTab::SetLayoutDirty(bool dirty)
 {
+    if(layout_dirty == dirty)
+    {
+        return;
+    }
     layout_dirty = dirty;
     UpdateProfileDirtyBanner();
 }
@@ -108,16 +114,8 @@ void OpenRGB3DSpatialTab::ClearLayoutDirty()
 
 void OpenRGB3DSpatialTab::UpdateProfileDirtyBanner()
 {
-    if(!profile_unsaved_banner_)
+    if(profile_unsaved_banner_)
     {
-        return;
-    }
-
-    profile_unsaved_banner_->setVisible(layout_dirty);
-    if(layout_dirty)
-    {
-        profile_unsaved_banner_->setText(
-            tr("Unsaved Spatial changes — save your OpenRGB profile."));
+        profile_unsaved_banner_->setVisible(layout_dirty);
     }
 }
-

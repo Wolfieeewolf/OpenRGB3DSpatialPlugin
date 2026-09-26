@@ -33,10 +33,10 @@ public:
     int            controllerIndex() const { return controller_index_; }
 
     CustomControllerSourceRef currentSource() const;
-    void                      applySource(const CustomControllerSourceRef& source);
 
     void setRowSelected(bool selected);
     void refreshFromHost();
+    void refreshEnableButtonsOnly();
     void setPlusEnabled(bool enabled);
 
 protected:
@@ -59,6 +59,7 @@ private:
     void applyItemComboStyle(QComboBox* combo);
     void rebuildItemCombo();
     void updatePlusFromSource();
+    void updateEnableButtonState();
     void updateEnableIcon();
     void notifySourceChanged();
     void updateNameLabelElide();
@@ -69,7 +70,6 @@ private:
     RGBControllerInterface*            controller_;
     int                       controller_index_;
     CustomControllerDialog*   host_;
-    bool                      row_selected_;
 
     Ui::CustomControllerDeviceWidget* ui = nullptr;
 };

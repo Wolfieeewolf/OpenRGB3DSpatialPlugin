@@ -54,6 +54,10 @@ nlohmann::json ToJson(const Document& doc)
         });
     }
     j["bindings"] = std::move(arr);
+    if(!doc.catalog_enabled.empty())
+    {
+        j["catalog_enabled"] = doc.catalog_enabled;
+    }
     return j;
 }
 
@@ -102,6 +106,16 @@ bool FromJson(const nlohmann::json& j, Document* out, std::string* error)
             doc.bindings.push_back(std::move(b));
         }
     }
+    if(j.contains("catalog_enabled") && j["catalog_enabled"].is_array())
+    {
+        for(const auto& id : j["catalog_enabled"])
+        {
+            if(id.is_string() && !id.get<std::string>().empty())
+            {
+                doc.catalog_enabled.push_back(id.get<std::string>());
+            }
+        }
+    }
     *out = std::move(doc);
     return true;
 }
@@ -129,6 +143,8 @@ bool LoadFromFile(const filesystem::path& path, Document* out, std::string* erro
 
 bool SaveToFile(const filesystem::path& path, const Document& doc, std::string* error)
 {
+    std::error_code ec;
+    filesystem::create_directories(path.parent_path(), ec);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if(!out)
     {
@@ -160,6 +176,65 @@ bool LoadOrEmpty(const filesystem::path& path, Document* out, std::string* error
         return true;
     }
     return LoadFromFile(path, out, error);
+}
+
+void LoadCatalog(const filesystem::path& dir, std::vector<Binding>* out, std::vector<std::string>* warnings)
+{
+    if(!out)
+    {
+        return;
+    }
+    out->clear();
+    std::error_code ec;
+    if(!filesystem::exists(dir, ec) || !filesystem::is_directory(dir, ec))
+    {
+        return;
+    }
+    for(const filesystem::directory_entry& ent : filesystem::directory_iterator(dir, ec))
+    {
+        if(ec || !ent.is_regular_file(ec))
+        {
+            continue;
+        }
+        const filesystem::path path = ent.path();
+        if(path.extension() != ".json")
+        {
+            continue;
+        }
+        Document doc;
+        std::string err;
+        const std::string name = path.filename().string();
+        if(!LoadFromFile(path, &doc, &err))
+        {
+            if(warnings)
+            {
+                warnings->push_back(name + ": " + err);
+            }
+            continue;
+        }
+        for(Binding b : doc.bindings)
+        {
+            bool duplicate = false;
+            for(const Binding& have : *out)
+            {
+                if(have.id == b.id)
+                {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if(duplicate)
+            {
+                if(warnings)
+                {
+                    warnings->push_back(name + ": duplicate id " + b.id);
+                }
+                continue;
+            }
+            b.enabled = false;
+            out->push_back(std::move(b));
+        }
+    }
 }
 
 } // namespace EffectBinding

@@ -91,74 +91,6 @@ bool AxisSpaceFromString(const std::string& s, AxisSpace* out)
     return false;
 }
 
-std::string BlockTypeToString(BlockType t)
-{
-    switch(t)
-    {
-        case BlockType::Solid: return "solid";
-        case BlockType::Fade: return "fade";
-        case BlockType::Pulse: return "pulse";
-        case BlockType::Wipe: return "wipe";
-        case BlockType::Chase: return "chase";
-        case BlockType::Twinkle: return "twinkle";
-        case BlockType::Alternating: return "alternating";
-        case BlockType::Strobe: return "strobe";
-        case BlockType::Spin: return "spin";
-        case BlockType::Candle: return "candle";
-        case BlockType::Dissolve: return "dissolve";
-        case BlockType::Wave: return "wave";
-        case BlockType::ColorWash: return "colorwash";
-        case BlockType::Plasma: return "plasma";
-        case BlockType::Snow: return "snow";
-        case BlockType::Fire: return "fire";
-        case BlockType::Balls: return "balls";
-        case BlockType::Bars: return "bars";
-        case BlockType::Scanner: return "scanner";
-        case BlockType::SphereWipe: return "spherewipe";
-        case BlockType::Orbit: return "orbit";
-        case BlockType::Ripple: return "ripple";
-        case BlockType::Meteor: return "meteor";
-        case BlockType::Noise3D: return "noise3d";
-        case BlockType::Burst: return "burst";
-        default:
-        {
-            const BlockType unused = t;
-            (void)unused;
-            return "solid";
-        }
-    }
-}
-
-bool BlockTypeFromString(const std::string& s, BlockType* out)
-{
-    if(s == "solid" || s == "set_level") { *out = BlockType::Solid; return true; }
-    if(s == "fade") { *out = BlockType::Fade; return true; }
-    if(s == "pulse") { *out = BlockType::Pulse; return true; }
-    if(s == "wipe") { *out = BlockType::Wipe; return true; }
-    if(s == "chase") { *out = BlockType::Chase; return true; }
-    if(s == "twinkle") { *out = BlockType::Twinkle; return true; }
-    if(s == "colorwash" || s == "color_wash") { *out = BlockType::ColorWash; return true; }
-    if(s == "alternating") { *out = BlockType::Alternating; return true; }
-    if(s == "strobe") { *out = BlockType::Strobe; return true; }
-    if(s == "spin") { *out = BlockType::Spin; return true; }
-    if(s == "candle" || s == "candle_flicker") { *out = BlockType::Candle; return true; }
-    if(s == "dissolve") { *out = BlockType::Dissolve; return true; }
-    if(s == "wave") { *out = BlockType::Wave; return true; }
-    if(s == "plasma") { *out = BlockType::Plasma; return true; }
-    if(s == "snow" || s == "meteors") { *out = BlockType::Snow; return true; }
-    if(s == "fire") { *out = BlockType::Fire; return true; }
-    if(s == "balls") { *out = BlockType::Balls; return true; }
-    if(s == "bars") { *out = BlockType::Bars; return true; }
-    if(s == "scanner") { *out = BlockType::Scanner; return true; }
-    if(s == "spherewipe" || s == "sphere_wipe") { *out = BlockType::SphereWipe; return true; }
-    if(s == "orbit") { *out = BlockType::Orbit; return true; }
-    if(s == "ripple") { *out = BlockType::Ripple; return true; }
-    if(s == "meteor") { *out = BlockType::Meteor; return true; }
-    if(s == "noise3d" || s == "plasma3d") { *out = BlockType::Noise3D; return true; }
-    if(s == "burst") { *out = BlockType::Burst; return true; }
-    return false;
-}
-
 std::string ColorToHex(RGBColor c)
 {
     char buf[8];
@@ -276,7 +208,6 @@ bool DirectionFromString(const std::string& s, Direction* out)
     return false;
 }
 
-/** True when wipe progresses toward the negative end of the chosen axis. */
 nlohmann::json ToJson(const Pack& pack)
 {
     nlohmann::json j;
@@ -323,7 +254,9 @@ nlohmann::json ToJson(const Pack& pack)
         for(const Block& block : track.blocks)
         {
             nlohmann::json bj;
-            bj["type"] = BlockTypeToString(block.type);
+            const std::string effect_id = block.effect_id.empty() ? "solid" : block.effect_id;
+            bj["type"] = effect_id;
+            bj["effect"] = effect_id;
             bj["start_ms"] = block.start_ms;
             bj["end_ms"] = block.end_ms;
             bj["intensity"] = block.intensity;
@@ -491,16 +424,8 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
         for(const auto& bj : tj["blocks"])
         {
             Block block;
-            BlockType type = BlockType::Solid;
-            if(!BlockTypeFromString(bj.value("type", std::string("solid")), &type))
-            {
-                if(error)
-                {
-                    *error = "invalid block type";
-                }
-                return false;
-            }
-            block.type = type;
+            const std::string type_name = bj.value("type", std::string("solid"));
+            block.effect_id = bj.value("effect", type_name);
             block.start_ms = std::max(0, bj.value("start_ms", 0));
             block.end_ms = std::max(block.start_ms + 1, bj.value("end_ms", block.start_ms + 1));
             block.intensity = std::clamp(bj.value("intensity", 1.0f), 0.0f, 1.0f);
