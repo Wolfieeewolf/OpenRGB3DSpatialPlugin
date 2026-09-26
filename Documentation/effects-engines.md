@@ -1,19 +1,29 @@
 # Effects engines
 
-The player ships a **small set of engines**. Authors drop **content** that those engines know how to run. Do not add a new engine per effect.
+The player ships a **small set of engines**. Authors drop **content** that those engines know how to run — like tracks for a player. Do not add a new engine per look.
 
-| Engine | Content lives in | Who extends it |
+Library **categories are engine names**. Rows under each category are the looks that engine plays.
+
+| Engine (library category) | Content lives in | Who extends it |
 |--------|------------------|----------------|
-| **Volume** | `effects/spatial/*.fs` (and media/audio when hosted) | Authors — thin `.fs` |
-| **Shader Field** | `effects/shader-field/*.fs` | Authors — thin `.fs` |
-| **Kernel / Strip** | `patterns/*.kernel` | Authors — thin kernels |
+| **Volume** | `effects/spatial/*.fs` | Authors — thin `.fs` |
+| **Audio** | `effects/audio/*.fs` | Authors — thin `.fs` on one FFT service |
 | **Media** | `effects/media/*.fs` | Authors — thin `.fs` (+ browse UI from host) |
-| **Audio** | `effects/audio/*.fs` (target) | Authors — thin `.fs` on one FFT service |
-| **Reactive** | Built-in effect | Player only — one engine, not a content farm |
-| **Ambilight** | Built-in Screen Mirror | Player only — one capture engine |
-| **Games** | Per-game pack / bridge | Standalone programmed content when not covered above |
+| **Shader Field** | `effects/shader-field/*.fs` | Authors — thin `.fs` (one list entry per file) |
+| **Kernel / Strip** | `patterns/*.kernel` | Authors — thin kernels (patterns, not a stack category) |
+| **Reactive** | Player codec | HID input + waves — not a content farm |
+| **Ambilight** | Player codec (Screen Mirror) | Capture — not a content farm |
+| **Game** | Per-game pack / bridge | Programmed / fat addon later |
 
-Shared hard services (FFT, HID input, screen capture, game telemetry) stay in the player. Unique games may ship as **standalone programmed addons**.
+Shared hard services (FFT, HID input, screen capture, game telemetry) stay in the player.
+
+### Registration (plugin Load)
+
+1. `RegisterFolderVolumeEffects()` — Volume / Audio / Media from disk; category from **folder** (`spatial`→Volume, `audio`→Audio, `media`→Media); skips `shader-field/`.
+2. `RegisterPlayerEngines()` — Reactive, Screen Mirror (Ambilight), Shader Field files.
+3. Minecraft — `REGISTER_EFFECT_3D` under **Game** only (exception).
+
+Do not add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight.
 
 ---
 
@@ -32,6 +42,7 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 ## Volume engine
 
 **Runs:** soft 3D fields via `SpatialVolumeFieldEngine` / FolderVolume.  
+**Library category:** Volume (disk folder still `effects/spatial/`).  
 **Entry:** `void volumeMain(out vec4 out_color, in vec3 p01)`  
 **Uniforms:** `u_time`, `u_params[]` filled from header `param:` lines (order = index).
 
@@ -40,7 +51,7 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 ```text
 name: Display Name
 class: StableClassId
-category: Spatial
+category: Volume
 description: One short line
 global: speed brightness frequency detail size scale …
 param: …
@@ -48,6 +59,8 @@ finish: depth | hex | hsv | spiral | atlas | surface | rgb
 # Effect
 void volumeMain(...)
 ```
+
+(`category:` in the file is optional for library grouping — registration uses the folder. Prefer `category: Volume` in new files.)
 
 ### Rules
 
@@ -78,9 +91,10 @@ void volumeMain(...)
 
 | Rule | Detail |
 |------|--------|
-| No `class:` FolderVolume header | Shader Field host owns the effect list |
+| Registration | `RegisterShaderFieldEffects()` — one effect list entry **per** `.fs` file |
+| No `REGISTER_EFFECT_3D` | Codec host is constructed from the file spec |
 | Soft imagery only | Plasma, aurora, waves — not UI or video decode |
-| `# Name` / `name:` | Title for the preset combo |
+| `name:` / optional `class:` | Title and stable profile id (defaults to filename) |
 | Folder | `effects/shader-field/<id>.fs` |
 
 ---
@@ -135,7 +149,6 @@ void volumeMain(...)
 | Pulse queue | Auto-enabled when `audio_preset` is `beat` or `low_punch`; host packs up to 5 `{age, strength}` pairs into `u_params[14..23]`; shader outputs `(energy, gradient, pulse_idx01)` |
 | Note pack | Auto-enabled when `audio_preset` is `high_sparkle`; host packs 4 notes (amp ≥ 0.10) into `u_params[12..19]` + count/time at 20/21; shader outputs `(intensity, note_hue01, gradient)` |
 | `shader:` override | A `.fs` header may delegate GLSL to another effect's shader (e.g. `bass-punch.fs` reuses `audio-pulse.fs`) |
-| Converted | Audio Level, Audio Paintbrush, Spectrum Bars, Audio Strip Visualizer, Audio Pulse, Bass Punch, Note Sparkle |
 
 ### Anti-flicker rules (content)
 
@@ -153,13 +166,15 @@ void volumeMain(...)
 
 ## Reactive engine
 
-**Built-in.** HID → LED origins → waves → LED color.
+**Player codec** registered at Load via `RegisterReactiveEngine()` (no `REGISTER_EFFECT_3D` macro).  
+HID → LED origins → waves → LED color. The C++ stays in the player (codec); there is no thin `.fs` content farm.
 
 ### Rules
 
 | Rule | Detail |
 |------|--------|
-| One engine / one effect | Not a folder of author reactive variants |
+| Registration | `RegisterPlayerEngines()` → `RegisterReactiveEngine()` |
+| Library category | **Reactive** (one row) |
 | Input stays in player | `ReactiveInputManager` / key map |
 | Optional later | Look skins as data on top of the same wave buffer — still one engine |
 
@@ -167,13 +182,15 @@ void volumeMain(...)
 
 ## Ambilight engine (Screen Mirror)
 
-**Built-in.** Capture → display-plane map → LEDs (CPU path).
+**Player codec** registered at Load via `RegisterScreenMirrorEngine()` (no `REGISTER_EFFECT_3D` macro).  
+Capture → display-plane map → LEDs. Capture code stays in the player.
 
 ### Rules
 
 | Rule | Detail |
 |------|--------|
-| One engine / one effect | Not a content farm |
+| Registration | `RegisterPlayerEngines()` → `RegisterScreenMirrorEngine()` |
+| Library category | **Ambilight** (Screen Mirror row) |
 | Capture stays in player | DXGI/GDI + plane math |
 | Do not | Reimplement capture inside a Volume `.fs` |
 
@@ -189,6 +206,7 @@ Use when no standard engine covers the behavior (title-specific telemetry, custo
 |------|--------|
 | Prefer shared telemetry | `GameTelemetryBridge` / room sample protocol when possible |
 | Per-game pack | Mappings, sub-effects, UI for that title |
+| Registration today | Minecraft uses `REGISTER_EFFECT_3D` under library category **Game** |
 | Fat native | Only when the title cannot speak the shared protocol |
 | Do not | Stuff game logic into Volume/Shader Field files |
 
@@ -201,9 +219,9 @@ Soft 3D density / plasma / shells     → Volume
 2D shadertoy-like look into the room  → Shader Field
 Chase / comet along strips            → Kernel
 Image or GIF in the room              → Media
-Driven by music FFT/bands             → Audio (+ Volume content)
-Key/mouse/gamepad pulses              → Reactive (built-in)
-Desktop / monitor glow                → Ambilight (built-in)
-Game vitals / world hooks             → Games pack
+Driven by music FFT/bands             → Audio
+Key/mouse/gamepad pulses              → Reactive
+Desktop / monitor glow                → Ambilight
+Game vitals / world hooks             → Game pack
 Anything else                         → Programmed addon (new host work)
 ```

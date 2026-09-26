@@ -157,12 +157,6 @@ inline EffectGridAxisHalfExtents MakeEffectGpuAtlasHalfExtents(const GridContext
     return MakeEffectGridOriginLocalHalfExtents(grid, origin, std::max(0.05f, normalized_scale));
 }
 
-inline float EffectGridBoundingRadius(const GridContext3D& grid, float normalized_scale)
-{
-    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
-    return std::sqrt(e.hw * e.hw + e.hh * e.hh + e.hd * e.hd);
-}
-
 inline float EffectGridHorizontalRadialNormXZ(float rx, float rz, float hw, float hd)
 {
     float lx = rx / hw;
@@ -275,22 +269,8 @@ inline void EffectGpuAtlasUvFromGrid(float x, float y, float z,
     *w = 0.5f + 0.5f * (z - origin.z) / hd;
 }
 
-/** In-box origin-local UV with face clamp. Occupancy lookups must use
- *  SampleGpuVolumeOriginLocal01 so samples outside the scaled box stay unlit. */
-inline void SampleCoordsOriginLocal01(float rot_x, float rot_y, float rot_z,
-                                      const Vector3D& origin,
-                                      const EffectGridAxisHalfExtents& e,
-                                      float* c1, float* c2, float* c3)
-{
-    EffectGpuAtlasUvFromGrid(rot_x, rot_y, rot_z, origin, e, c1, c2, c3);
-    *c1 = std::max(0.0f, std::min(1.0f, *c1));
-    *c2 = std::max(0.0f, std::min(1.0f, *c2));
-    *c3 = std::max(0.0f, std::min(1.0f, *c3));
-}
-
 /** Canonical GPU volume atlas lookup. Pair with GLSL `l = p01 * 2.0 - 1.0`.
- *  Returns false when the sample is outside the scaled effect box — caller must
- *  leave the LED unlit. Never clamp those samples onto the atlas faces. */
+ *  Returns false outside the scaled effect box — leave those LEDs unlit. */
 inline bool SampleGpuVolumeOriginLocal01(float x, float y, float z,
                                          const GridContext3D& grid,
                                          const Vector3D& origin,
@@ -311,7 +291,7 @@ inline bool SampleGpuVolumeOriginLocal01(float x, float y, float z,
     return true;
 }
 
-/** Room-fixed GPU atlas lookup (front-left floor = 0). Pair with GLSL that reads p01 as room UV. */
+/** Room-fixed GPU atlas lookup (front-left floor = 0). */
 inline void SampleGpuRoomVolume01(float x, float y, float z,
                                   const GridContext3D& grid,
                                   float* c1, float* c2, float* c3)
@@ -319,27 +299,6 @@ inline void SampleGpuRoomVolume01(float x, float y, float z,
     *c1 = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
     *c2 = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
     *c3 = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
-}
-
-/** Room UV that does not clamp onto atlas faces (four-quadrant artifact).
- *  Occupancy is a sphere around the Spatial Anchor, so samples can sit outside
- *  the grid AABB; those must stay unlit instead of snapping to a cube face. */
-inline bool TrySampleGpuRoomVolume01(float x, float y, float z,
-                                     const GridContext3D& grid,
-                                     float* c1, float* c2, float* c3)
-{
-    const float u = GridAxisToUnitUnclamped(x, grid.min_x, grid.max_x);
-    const float v = GridAxisToUnitUnclamped(y, grid.min_y, grid.max_y);
-    const float w = GridAxisToUnitUnclamped(z, grid.min_z, grid.max_z);
-    constexpr float kEps = 1e-4f;
-    if(u < -kEps || u > 1.0f + kEps || v < -kEps || v > 1.0f + kEps || w < -kEps || w > 1.0f + kEps)
-    {
-        return false;
-    }
-    *c1 = std::max(0.0f, std::min(1.0f, u));
-    *c2 = std::max(0.0f, std::min(1.0f, v));
-    *c3 = std::max(0.0f, std::min(1.0f, w));
-    return true;
 }
 
 inline float EffectGridMedianOfHalfExtents(const EffectGridAxisHalfExtents& e)
@@ -350,11 +309,6 @@ inline float EffectGridMedianOfHalfExtents(const EffectGridAxisHalfExtents& e)
     const float max_e = extents[2];
     constexpr float kDominantAxisFraction = 0.2f;
     return std::max(med, kDominantAxisFraction * max_e);
-}
-
-inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
-{
-    return EffectGridMedianOfHalfExtents(MakeEffectGridAxisHalfExtents(grid, normalized_scale));
 }
 
 inline float EffectGridGpuAtlasMedianHalfExtent(const GridContext3D& grid,
@@ -826,7 +780,6 @@ protected:
     Vector3D TransformPointByRotation(float x, float y, float z,
                                       const Vector3D& origin) const;
     static Vector3D RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg);
-    float ApplySharpness(float value) const;
 
 private slots:
     void OnParameterChanged();

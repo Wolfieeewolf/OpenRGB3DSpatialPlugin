@@ -6,35 +6,36 @@ This started as a **for-me** plugin and is still **alpha**: uneven, half-built i
 
 ## Player + content
 
-The DLL is a **player**. Effect looks, strip kernels, Shader Field presets, and timeline blocks live as **files** under the plugin data folder (and in the stock [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) repo). An empty data folder loads **no** stock effects.
+The DLL is a **player** of **engines**. Each engine plays its own list of looks — like a music player with different tracks.
+
+| Engine (library category) | What it plays |
+|---------------------------|---------------|
+| **Volume** | `effects/spatial/*.fs` (`volumeMain` + FolderVolume header) |
+| **Audio** | `effects/audio/*.fs` (same host; shared FFT/onset) |
+| **Media** | `effects/media/*.fs` (Volume + image/GIF browse) |
+| **Shader Field** | each `effects/shader-field/*.fs` (`spatialMain`) |
+| **Kernel / Strip** | `patterns/*.kernel` (1D strip / colormap; not a stack category) |
+| **Reactive** | HID pulses (player codec — one row) |
+| **Ambilight** | Screen Mirror capture (player codec — one row) |
+| **Game** | Minecraft channels (programmed pack) |
+
+Stock files live under the plugin data folder (and in [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)). An empty data folder loads **no** file-based looks.
 
 ```text
 <OpenRGB config>/plugins/settings/OpenRGB3DSpatialPlugin/
   controllers/     device layouts
   effects/
-    spatial/       FolderVolume room effects (.fs)
-    audio/         audio FolderVolume effects (.fs)
-    media/         texture / shape media (.fs)
-    shader-field/  2D Shader Field presets (.fs)
+    spatial/       Volume engine content (.fs)
+    audio/         Audio engine content (.fs)
+    media/         Media engine content (.fs)
+    shader-field/  Shader Field engine content (.fs)
   patterns/        strip / colormap kernels (.kernel)
   timelines/       shows + blocks/
 ```
 
-Install stock content by copying from the presets repo into those folders (see that repo’s README).
+Install stock content by copying from the presets repo into those folders (see that repo’s README). Contracts: [Documentation/effects-engines.md](Documentation/effects-engines.md).
 
-### Effects engines
-
-Most looks are **thin content** on a small set of **engines** in the player:
-
-| Engine | Content | Notes |
-|--------|---------|--------|
-| **Volume** | `effects/spatial/*.fs` | `volumeMain` + FolderVolume header (`class:`, `global:`, `param:`, `finish:`) |
-| **Audio** | `effects/audio/*.fs` | Same host; shared FFT/onset service |
-| **Media** | `effects/media/*.fs` | Volume + image/GIF browse |
-| **Shader Field** | `effects/shader-field/*.fs` | `spatialMain` 2D fields projected into the room |
-| **Kernel / Strip** | `patterns/*.kernel` | 1D strip / colormap patterns |
-
-**Built-in engines** (not a content farm): **Reactive** (keyboard/mouse/gamepad pulses), **Screen Mirror** / ambilight (capture), **Minecraft** game channels. Contracts: [Documentation/effects-engines.md](Documentation/effects-engines.md).
+Library categories **are** the engine names. The folder `effects/spatial/` is Volume content on disk — not a separate “Spatial effects” product bucket.
 
 ## Who it is for
 
@@ -58,7 +59,7 @@ None of this is “done for everyone”—only a map of areas that have code:
 
 - **3D viewport** — place/rotate devices, grid snap, room turntable, gizmo. OpenGL 4.1 Core (MeshBatch / GLSL 410). Expect DPR quirks and ongoing viewport churn.
 - **Reference points, display planes, capture zones** — for Screen Mirror / ambilight-style mapping onto geometry.
-- **Effect stack** — file-loaded spatial / audio / media looks, Shader Field presets, strip kernels, plus built-in **Reactive**, Screen Mirror, and game bridges. Quality varies a lot by effect.
+- **Effect stack** — pick an **engine** in the library, then a look that engine plays (Volume / Audio / Media / Shader Field files; Reactive / Ambilight / Game codecs). Quality varies a lot by look.
 - **Effect packs + Event Bindings** — timeline packs and Manual / OS / game-style triggers. Design notes: [Documentation/effect-event-maker.md](Documentation/effect-event-maker.md).
 - **OpenRGB profiles** — layout + effects round-trip through the host profile payload (current schema only; no legacy dual loaders).
 - **Minecraft bridge** — Room Ambilight over **sparse cubemap SHM** (mod ≥ 0.9.46) plus UDP vitals/damage. Fabric mod under [integrations/minecraft/](integrations/minecraft/). **Alpha:** works well enough on **vanilla**; not meaningfully tested against big modpacks.
@@ -71,7 +72,7 @@ Contracts that ship with the code live under **[Documentation/](Documentation/)*
 
 | Doc | When to read it |
 | --- | --- |
-| [effects-engines.md](Documentation/effects-engines.md) | Engines vs content; FolderVolume / Audio / Media / Shader Field / Kernel rules |
+| [effects-engines.md](Documentation/effects-engines.md) | Engines as players; library categories; FolderVolume / codecs |
 | [shader-conversion.md](Documentation/shader-conversion.md) | Porting 1D / 2D / 3D shaders into those engines |
 | [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | Layout math, mm ↔ grid, RoomGrid, spacing, viewport / effects contracts |
 | [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry bridge (RoomGrid → game world, sparse cubemap SHM) |
@@ -87,7 +88,7 @@ Upstream OpenRGB docs stay in the `OpenRGB/` submodule (`OpenRGB/Documentation/�
 The whole plugin is **experimental**. Pieces land at different levels of polish:
 
 - **Spatial layout / viewport** — Backbone of the project. Furthest along, still evolving, and still easy to confuse (pivots, wipe directions, gizmo feel, DPI).
-- **File-loaded effects** — Spatial, audio, and media looks are FolderVolume content; Shader Field and kernels are disk presets. Still alpha UX; missing files means missing effects.
+- **File-loaded looks** — Volume / Audio / Media / Shader Field content on disk; missing files means missing rows in that engine’s list. Still alpha UX.
 - **Packs / events** — Real path, not a mock—but authoring and bindings are early.
 - **Screen mirror / ambilight** — **Works** for some setups, still **experimental**. Capture stays on the CPU; room fields use a GPU volume atlas.
 - **Reactive** — Keyboard / mouse / gamepad pulses from layout positions (privacy: no key logging). Mapping depends on OpenRGB LED names.

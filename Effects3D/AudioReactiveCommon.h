@@ -96,7 +96,6 @@ inline void ApplyAudioRegisterRole(AudioReactiveSettings3D& cfg)
         cfg.falloff = std::max(cfg.falloff, 1.0f);
         break;
     case AudioRegisterRole::Mid:
-        /* Voice + pitched instruments (ColorChord-weighted band). */
         cfg.low_hz = 200;
         cfg.high_hz = 4000;
         cfg.drive_mode = static_cast<int>(AudioDriveMode::Sustained);

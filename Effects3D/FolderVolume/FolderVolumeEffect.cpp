@@ -387,12 +387,35 @@ void RegisterFolderVolumeEffects()
         {
             continue;
         }
+        const QString abs = fi.absoluteFilePath();
+        if(abs.contains(QStringLiteral("/shader-field/")) || abs.contains(QStringLiteral("\\shader-field\\")))
+        {
+            continue;
+        }
         const std::string class_name = spec.class_name;
         const std::string ui_name = spec.ui_name;
-        const std::string category = spec.category;
+        std::string category = "Volume";
+        if(abs.contains(QStringLiteral("/audio/")) || abs.contains(QStringLiteral("\\audio\\")))
+        {
+            category = "Audio";
+        }
+        else if(abs.contains(QStringLiteral("/media/")) || abs.contains(QStringLiteral("\\media\\")))
+        {
+            category = "Media";
+        }
+        else if(abs.contains(QStringLiteral("/spatial/")) || abs.contains(QStringLiteral("\\spatial\\")))
+        {
+            category = "Volume";
+        }
+        else if(!spec.category.empty())
+        {
+            category = spec.category;
+        }
+        FolderVolumeSpec reg_spec = spec;
+        reg_spec.category = category;
         EffectListManager3D::get()->RegisterEffect(
             class_name, ui_name, category, "", "",
-            [spec]() { return new FolderVolumeEffect(spec); });
+            [reg_spec]() { return new FolderVolumeEffect(reg_spec); });
     }
 }
 
@@ -461,54 +484,15 @@ EffectInfo3D FolderVolumeEffect::GetEffectInfo() const
     info.effect_name = spec_.ui_name.c_str();
     info.effect_description = spec_.description.c_str();
     info.category = spec_.category.c_str();
-    info.is_reversible = !(spec_.uses_media || spec_.uses_audio
-                           || spec_.class_name == "TextureProjection"
-                           || spec_.class_name == "OmniShapeTexture");
+    info.is_reversible = !(spec_.uses_media || spec_.uses_audio);
     info.supports_random = false;
     info.max_speed = 200;
     info.min_speed = 0;
     info.user_colors = (unsigned int)std::max(0, spec_.user_colors);
     info.has_custom_settings = !spec_.patterns.empty() || !spec_.sliders.empty()
         || !spec_.combos.empty() || spec_.uses_media || spec_.uses_audio;
-    info.needs_3d_origin = spec_.uses_media
-        || spec_.class_name == "TextureProjection"
-        || spec_.class_name == "OmniShapeTexture";
-    if(spec_.class_name == "BreathingSphere")
-        info.effect_type = SPATIAL_EFFECT_BREATHING_SPHERE;
-    else if(spec_.class_name == "ShellPattern")
-        info.effect_type = SPATIAL_EFFECT_SHELL_PATTERN;
-    else if(spec_.class_name == "Wave")
-        info.effect_type = SPATIAL_EFFECT_WAVE;
-    else if(spec_.class_name == "Starfield")
-        info.effect_type = SPATIAL_EFFECT_STARFIELD;
-    else if(spec_.class_name == "RotatingConeSpotlights")
-        info.effect_type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
-    else if(spec_.class_name == "SurfaceAmbient")
-        info.effect_type = SPATIAL_EFFECT_SURFACE_AMBIENT;
-    else if(spec_.class_name == "TextureProjection")
-        info.effect_type = SPATIAL_EFFECT_TEXTURE_PROJECTION;
-    else if(spec_.class_name == "OmniShapeTexture")
-        info.effect_type = SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE;
-    else if(spec_.class_name == "AudioLevel")
-        info.effect_type = SPATIAL_EFFECT_AUDIO_LEVEL;
-    else if(spec_.class_name == "AudioPaintBrush")
-        info.effect_type = SPATIAL_EFFECT_AUDIO_PAINTBRUSH;
-    else if(spec_.class_name == "SpectrumBars")
-        info.effect_type = SPATIAL_EFFECT_SPECTRUM_BARS;
-    else if(spec_.class_name == "AudioStripVisualizer")
-        info.effect_type = SPATIAL_EFFECT_AUDIO_STRIP_VISUALIZER;
-    else if(spec_.class_name == "NoteSparkle")
-        info.effect_type = SPATIAL_EFFECT_NOTE_SPARKLE;
-    else if(spec_.class_name == "AudioPulse")
-        info.effect_type = SPATIAL_EFFECT_AUDIO_PULSE;
-    else if(spec_.class_name == "BassPunch")
-        info.effect_type = SPATIAL_EFFECT_BASS_PUNCH;
-    else
-    {
-        info.effect_type = spec_.finish_hex ? SPATIAL_EFFECT_HEX_LATTICE
-            : spec_.finish_spiral ? SPATIAL_EFFECT_SPIRAL
-            : SPATIAL_EFFECT_PLASMA;
-    }
+    info.needs_3d_origin = spec_.uses_media;
+    info.effect_type = SPATIAL_EFFECT_FOLDER_VOLUME;
     info.needs_frequency = spec_.needs_frequency;
     info.use_size_parameter = spec_.show_size;
     info.show_speed_control = spec_.show_speed;
@@ -1102,24 +1086,16 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     {
         return SliderRaw(name.substr(5)) / 100.0f;
     }
-    if(name.rfind("raw ", 0) == 0)
-    {
-        return (float)SliderRaw(name.substr(4));
-    }
-    // Audio reactive params — only meaningful when spec_.uses_audio
     if(name == "audio_fill")
     {
         return audio_fill_cached;
     }
-    // Spectrum / bands params
     if(name == "audio_band_count")  { return audio_band_count_cached; }
     if(name == "audio_roll_phase")  { return audio_roll_phase_cached; }
     if(name == "audio_bar_edge")    { return audio_bar_edge_cached; }
     if(name == "audio_strip_scroll"){ return audio_strip_scroll_cached; }
-    // Raw audio_settings accessors
     if(name == "audio_falloff")     { return std::clamp(audio_settings.falloff, 0.2f, 5.0f); }
     if(name == "audio_beat_mode")   { return (float)audio_settings.beat_wave_mode; }
-    // Pulse geometry (cached in PrepareGpuFields for beat/low_punch presets)
     if(name == "audio_pulse_speed") { return audio_pulse_speed_cached; }
     if(name == "audio_radius_basis"){ return audio_radius_basis_cached; }
     if(name == "audio_pulse_half_w"){ return audio_pulse_half_w_cached; }
@@ -1128,7 +1104,6 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     if(name == "audio_pulse_hw")    { return audio_pulse_hw_cached; }
     if(name == "audio_pulse_hh")    { return audio_pulse_hh_cached; }
     if(name == "audio_pulse_hd")    { return audio_pulse_hd_cached; }
-    // Note sparkle
     if(name == "audio_hi_drive")    { return audio_hi_drive_cached; }
     if(name == "audio_time_e")
     {
@@ -1653,7 +1628,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
 
     if(spec_.uses_audio)
     {
-        // Update smoothed fill level (same logic as AudioLevel::EvaluateIntensity)
         const float amplitude = SampleAudioVisualLevel(audio_settings);
         const float alpha = std::clamp(audio_settings.smoothing, 0.0f, 0.99f);
         if(std::fabs(time_sec - audio_last_intensity_time) > 1e-4f)
@@ -1661,7 +1635,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
             audio_smoothed = alpha * audio_smoothed + (1.0f - alpha) * amplitude;
             audio_last_intensity_time = time_sec;
 
-            // Per-band smoothing for multi-band effects (AudioPaintBrush)
             AudioInputManager* aud = AudioInputManager::instance();
             float bass_t = 0.0f, mid_t = 0.0f, high_t = 0.0f;
             if(aud)
@@ -1675,7 +1648,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
             audio_band_mid = band_alpha * audio_band_mid + (1.0f - band_alpha) * mid_t;
             audio_band_hi  = band_alpha * audio_band_hi  + (1.0f - band_alpha) * high_t;
 
-            // time_boost for AudioPaintBrush tboost param
             const float drive = ApplyAudioVisualIntensity(SampleAudioVisualLevel(audio_settings), audio_settings);
             audio_time_boost += (0.35f + 1.8f * audio_band_lo + 0.4f * drive)
                                 * std::max(0.0f, GetNormalizedSpeed()) * speed_mul * 0.016f;
@@ -1688,7 +1660,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
         audio_fill_cached = ApplyAudioIntensity(audio_smoothed, audio_settings);
     }
 
-    // ---- Spectrum bands media upload (audio_media: bands) ----
     if(spec_.audio_media == "bands")
     {
         AudioInputManager* aud = AudioInputManager::instance();
@@ -1750,7 +1721,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
             ? std::fmod(time_sec * roll_sp * speed_mul + 1000.0f, 1.0f) : 0.0f;
     }
 
-    // ---- Spectrogram media upload (audio_media: spectrogram) ----
     if(spec_.audio_media == "spectrogram")
     {
         if((int)audio_spectrogram_history.size() != kFvAudioSpectrogramRows)
@@ -1846,7 +1816,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
         }
     }
 
-    // ---- Pulse effects (beat / low_punch) ----
     if(spec_.audio_preset == "beat" || spec_.audio_preset == "low_punch")
     {
         // Tick pulse queue
@@ -1930,7 +1899,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
         return;
     }
 
-    // ---- Note sparkle (high_sparkle) ----
     if(spec_.audio_preset == "high_sparkle")
     {
         AudioInputManager* aud = AudioInputManager::instance();
@@ -1948,7 +1916,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
             for(const auto& n : notes)
             {
                 if(audio_note_count >= 4) break;
-                if(n.amp < 0.10f) continue;   // raised threshold vs original 0.04
+                if(n.amp < 0.10f) continue;
                 float mean = n.mean;
                 if(mean < 0.0f)   mean += 12.0f;
                 if(mean >= 12.0f) mean -= 12.0f;
@@ -2302,7 +2270,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
             return BrightenAudioEffectColor(color, intensity);
         }
 
-        // Pulse effects: shader outputs (energy, gradient, pulse_idx01)
+        // Pulse: shader outputs (energy, gradient, pulse_idx01)
         float gradient_pos = samp.y();
         uint32_t beat_slot = (uint32_t)std::floor(time * 2.5f);
         if((spec_.audio_preset == "beat" || spec_.audio_preset == "low_punch")
@@ -2311,7 +2279,6 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
             const int pulse_slot = std::clamp((int)std::floor(samp.z() * 5.0f), 0, 4);
             beat_slot = audio_packed_color_slots[pulse_slot];
 
-            // Classic wave: apply 1.45 display boost (preserved from original CalculateColorGrid)
             const bool classic = (static_cast<AudioBeatWaveMode>(audio_settings.beat_wave_mode)
                                   == AudioBeatWaveMode::ClassicWave);
             intensity = std::min(1.0f, intensity * (classic ? 1.45f : 1.22f));

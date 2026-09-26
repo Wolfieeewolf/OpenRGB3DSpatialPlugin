@@ -4,6 +4,11 @@
 #include "Shaders/SpatialShaderCatalog.h"
 #include "MediaTextureEffectUtils.h"
 #include "PluginUiUtils.h"
+#include "OpenRGB3DSpatialPlugin.h"
+#include "PluginSettingsPaths.h"
+#include "EffectListManager3D.h"
+#include "PlayerEngines.h"
+#include "EffectUiRows.h"
 
 #include <QVBoxLayout>
 #include <QComboBox>
@@ -15,7 +20,7 @@
 #include <QTextStream>
 #include <QFileInfo>
 #include <QUrl>
-#include "EffectUiRows.h"
+#include <QDirIterator>
 #include <algorithm>
 #include <cmath>
 
@@ -25,30 +30,6 @@
 
 namespace
 {
-
-QString ShaderTitle(const QString& path, const QString& fallback)
-{
-    QFile file(path);
-    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        return fallback;
-    }
-    QTextStream stream(&file);
-    while(!stream.atEnd())
-    {
-        const QString line = stream.readLine().trimmed();
-        if(line.isEmpty() || line.startsWith(QLatin1Char('#')))
-        {
-            continue;
-        }
-        if(line.startsWith(QStringLiteral("name:")))
-        {
-            return line.mid(5).trimmed();
-        }
-        break;
-    }
-    return fallback;
-}
 
 QString ShaderBody(const QString& path)
 {
@@ -74,7 +55,9 @@ QString ShaderBody(const QString& path)
             if(colon > 0)
             {
                 const QString key = trimmed.left(colon).trimmed();
-                if(key == QStringLiteral("name") || key == QStringLiteral("description") || key == QStringLiteral("section"))
+                if(key == QStringLiteral("name") || key == QStringLiteral("description")
+                   || key == QStringLiteral("section") || key == QStringLiteral("class")
+                   || key == QStringLiteral("category"))
                 {
                     continue;
                 }
@@ -87,10 +70,93 @@ QString ShaderBody(const QString& path)
     return body;
 }
 
+ShaderFieldSpec ReadShaderFieldSpec(const QString& path)
+{
+    ShaderFieldSpec spec;
+    const QFileInfo fi(path);
+    spec.path = fi.absoluteFilePath();
+    spec.class_name = fi.completeBaseName().toStdString();
+    spec.ui_name = spec.class_name;
+
+    QFile file(path);
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return spec;
+    }
+    QTextStream stream(&file);
+    while(!stream.atEnd())
+    {
+        const QString line = stream.readLine().trimmed();
+        if(line.isEmpty() || line.startsWith(QLatin1Char('#')))
+        {
+            continue;
+        }
+        const int colon = line.indexOf(QLatin1Char(':'));
+        if(colon <= 0)
+        {
+            break;
+        }
+        const QString key = line.left(colon).trimmed();
+        const QString val = line.mid(colon + 1).trimmed();
+        if(key == QStringLiteral("class") && !val.isEmpty())
+        {
+            spec.class_name = val.toStdString();
+        }
+        else if(key == QStringLiteral("name") && !val.isEmpty())
+        {
+            spec.ui_name = val.toStdString();
+        }
+        else if(key == QStringLiteral("description") && !val.isEmpty())
+        {
+            spec.description = val.toStdString();
+        }
+    }
+    return spec;
 }
 
-ShaderField::ShaderField(QWidget* parent)
+} // namespace
+
+void RegisterShaderFieldEffects()
+{
+    if(!OpenRGB3DSpatialPlugin::APIPointer)
+    {
+        return;
+    }
+    SpatialShaderCatalog::EnsureUserShadersFolder();
+    const QString root = SpatialShaderCatalog::UserShadersFolderPath();
+    if(root.isEmpty())
+    {
+        return;
+    }
+    QDir dir(root);
+    if(!dir.exists())
+    {
+        return;
+    }
+    const QFileInfoList files =
+        dir.entryInfoList(QStringList() << QStringLiteral("*.fs"), QDir::Files, QDir::Name);
+    for(const QFileInfo& fi : files)
+    {
+        ShaderFieldSpec spec = ReadShaderFieldSpec(fi.absoluteFilePath());
+        if(spec.class_name.empty())
+        {
+            continue;
+        }
+        const std::string class_name = spec.class_name;
+        const std::string ui_name = spec.ui_name.empty() ? class_name : spec.ui_name;
+        EffectListManager3D::get()->RegisterEffect(
+            class_name,
+            ui_name,
+            "Shader Field",
+            "",
+            "",
+            [spec]() { return new ShaderField(spec); });
+    }
+}
+
+ShaderField::ShaderField(ShaderFieldSpec spec, QWidget* parent)
     : SpatialEffect3D(parent)
+    , spec_(std::move(spec))
 {
     shader_engine = new SpatialShaderEngine(this);
     shader_engine->setRenderSize(256, 144);
@@ -100,11 +166,7 @@ ShaderField::ShaderField(QWidget* parent)
             &ShaderField::OnCompileMessage,
             Qt::QueuedConnection);
 
-    RebuildPresetList();
-    if(!preset_ids.empty())
-    {
-        LoadPresetAtIndex(0);
-    }
+    LoadShaderBody();
 
     connect(this, &SpatialEffect3D::ParametersChanged, this, [this]() {
         last_uniform_sequence = 0;
@@ -126,6 +188,27 @@ void ShaderField::EnsureShaderEngineRunning()
     {
         shader_engine->start();
     }
+}
+
+void ShaderField::LoadShaderBody()
+{
+    if(!shader_engine)
+    {
+        return;
+    }
+    const QString body = ShaderBody(spec_.path);
+    if(body.trimmed().isEmpty())
+    {
+        return;
+    }
+    {
+        QMutexLocker lock(&display_mutex);
+        display_frame.reset();
+    }
+    last_uniform_sequence = 0;
+    last_uniform_time = -1.0f;
+    shader_engine->setFragmentBody(body);
+    EnsureShaderEngineRunning();
 }
 
 void ShaderField::PrepareGpuFields(std::uint64_t /*render_sequence*/, float time_sec, const GridContext3D& /*grid*/)
@@ -156,13 +239,13 @@ void ShaderField::PrepareGpuFields(std::uint64_t /*render_sequence*/, float time
 EffectInfo3D ShaderField::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.effect_name = "Shader Field";
+    info.effect_name = spec_.ui_name.empty() ? "Shader Field" : spec_.ui_name.c_str();
     info.effect_description =
-        "Projects a 2D GPU shader pattern onto your room (like wrapping wallpaper around the LEDs). "
-        "Pick a Preset for the look, Projection for how it maps (planes, sphere, cylinder, triplanar, …). "
-        "Speed animates the shader, Frequency scrolls hue, Size zooms, Detail densifies the pattern. "
-        "Use Contrast and Hue with the common controls.";
-    info.category = "Spatial";
+        spec_.description.empty()
+            ? "Projects a 2D GPU shader pattern onto your room. "
+              "Projection picks how it maps; Speed/Frequency/Size/Detail plus Contrast/Hue drive the look."
+            : spec_.description.c_str();
+    info.category = "Shader Field";
     info.effect_type = SPATIAL_EFFECT_SHADER_FIELD;
     info.is_reversible = false;
     info.supports_random = false;
@@ -192,13 +275,10 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     const auto on_changed = [this]() { emit ParametersChanged(); };
     const auto pct_format = [](int v) { return QString::number(v) + QStringLiteral("%"); };
 
-    // Refresh list when the panel opens (ctor may have run before resources were ready).
-    RebuildPresetList();
-
     QLabel* help = new QLabel(
         QStringLiteral(
             "Shader Field paints a moving 2D pattern, then samples it onto LEDs.\n"
-            "Presets are .fs files in the effects/shader-field folder. Each file defines spatialMain().\n"
+            "This look is a .fs file in effects/shader-field (spatialMain). "
             "Projection picks which room plane is mapped; Size/Detail/Contrast/Hue drive the shader."),
         w);
     help->setWordWrap(true);
@@ -207,22 +287,6 @@ void ShaderField::SetupCustomUI(QWidget* parent)
 
     QVBoxLayout* shader_section = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Shader"));
     QVBoxLayout* shader_layout = shader_section ? shader_section : layout;
-
-    EffectLabeledComboRow* preset_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Preset:"));
-    preset_row->setObjectName(QStringLiteral("presetRow"));
-    preset_combo = preset_row->combo();
-    preset_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    preset_combo->clear();
-    for(size_t i = 0; i < preset_ids.size(); ++i)
-    {
-        const QString title = i < preset_titles.size() ? preset_titles[i] : preset_ids[i];
-        preset_combo->addItem(title, preset_ids[i]);
-    }
-    preset_combo->setEnabled(true);
-    preset_combo->setCurrentIndex(0);
-    LoadPresetAtIndex(0);
-    preset_combo->setToolTip(QStringLiteral("Each preset is a different GLSL pattern. Switching reloads the shader."));
-    connect(preset_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShaderField::OnPresetChanged);
 
     EffectLabeledComboRow* projection_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Projection:"));
     projection_row->setObjectName(QStringLiteral("projectionRow"));
@@ -254,7 +318,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
         35,
         250,
         (int)std::lround(contrast * 100.0f),
-        QStringLiteral("Sharpens or softens the pattern (works on every preset)."));
+        QStringLiteral("Sharpens or softens the pattern."));
     contrast_row->setObjectName(QStringLiteral("contrastRow"));
     contrast_slider = contrast_row->slider();
     contrast_row->bindValueChanged(
@@ -287,7 +351,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     auto* open_folder_button = new QPushButton(QStringLiteral("Open user shaders folder"), w);
     open_folder_button->setObjectName(QStringLiteral("openFolderButton"));
     open_folder_button->setToolTip(QStringLiteral(
-        "Opens the effects/shader-field folder. Drop .fs files that define spatialMain()."));
+        "Opens the effects/shader-field folder. Drop .fs files that define spatialMain(). Restart OpenRGB to pick up new files."));
     shader_layout->addWidget(open_folder_button);
     connect(open_folder_button, &QPushButton::clicked, this, &ShaderField::OnOpenShadersFolder);
 
@@ -298,93 +362,6 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     shader_layout->addWidget(compile_log_label);
 
     AddWidgetToParent(w, parent);
-}
-
-void ShaderField::RebuildPresetList()
-{
-    preset_ids.clear();
-    preset_titles.clear();
-    preset_paths.clear();
-
-    SpatialShaderCatalog::EnsureUserShadersFolder();
-    const QString custom_root = SpatialShaderCatalog::UserShadersFolderPath();
-    if(!custom_root.isEmpty())
-    {
-        QDir custom_dir(custom_root);
-        if(custom_dir.exists())
-        {
-            const QFileInfoList files =
-                custom_dir.entryInfoList(QStringList() << QStringLiteral("*.fs"), QDir::Files, QDir::Name);
-            for(const QFileInfo& fi : files)
-            {
-                preset_ids.push_back(fi.completeBaseName());
-                preset_titles.push_back(ShaderTitle(fi.absoluteFilePath(), fi.completeBaseName()));
-                preset_paths.push_back(fi.absoluteFilePath());
-            }
-        }
-    }
-
-    if(!preset_combo)
-        return;
-
-    const QString prev =
-        (active_preset_index >= 0 && active_preset_index < (int)preset_ids.size())
-            ? preset_ids[(size_t)active_preset_index]
-            : QString();
-    preset_combo->blockSignals(true);
-    preset_combo->clear();
-    for(size_t i = 0; i < preset_ids.size(); ++i)
-    {
-        const QString title = i < preset_titles.size() ? preset_titles[i] : preset_ids[i];
-        preset_combo->addItem(title, preset_ids[i]);
-    }
-    int idx = 0;
-    if(!prev.isEmpty())
-    {
-        const auto it = std::find(preset_ids.begin(), preset_ids.end(), prev);
-        if(it != preset_ids.end())
-            idx = (int)std::distance(preset_ids.begin(), it);
-    }
-    preset_combo->setCurrentIndex(idx);
-    preset_combo->blockSignals(false);
-    active_preset_index = idx;
-}
-
-void ShaderField::LoadPresetAtIndex(int index)
-{
-    if(!shader_engine)
-    {
-        return;
-    }
-    if(preset_ids.empty())
-    {
-        RebuildPresetList();
-    }
-    if(preset_ids.empty() || index < 0 || index >= (int)preset_ids.size())
-    {
-        return;
-    }
-    active_preset_index = index;
-
-    const QString path = index < (int)preset_paths.size() ? preset_paths[(size_t)index] : QString();
-    const QString body = ShaderBody(path);
-    if(body.trimmed().isEmpty())
-    {
-        return;
-    }
-    {
-        QMutexLocker lock(&display_mutex);
-        display_frame.reset();
-    }
-    last_uniform_sequence = 0;
-    shader_engine->setFragmentBody(body);
-    EnsureShaderEngineRunning();
-}
-
-void ShaderField::OnPresetChanged(int index)
-{
-    LoadPresetAtIndex(index);
-    emit ParametersChanged();
 }
 
 void ShaderField::OnProjectionModeChanged(int index)
@@ -398,8 +375,9 @@ void ShaderField::OnOpenShadersFolder()
     SpatialShaderCatalog::EnsureUserShadersFolder();
     const QString path = SpatialShaderCatalog::UserShadersFolderPath();
     if(!path.isEmpty())
+    {
         QDesktopServices::openUrl(QUrl::fromLocalFile(path));
-    RebuildPresetList();
+    }
 }
 
 void ShaderField::OnCompileMessage(const QString& message)
@@ -420,10 +398,7 @@ void ShaderField::SyncUniforms(float time)
     }
     EnsureShaderEngineRunning();
     SpatialShaderUniforms u;
-    // Drive animation from wall-clock effect time scaled by Speed (not progress wrap alone).
     u.time_sec = time * GetMotionHz() * (float)(2.0 * M_PI);
-    // Size → zoom, Detail → density, Frequency → hue scroll, local contrast/hue.
-    // Scale is occupancy (atlas box), not shader zoom.
     const float zoom = std::clamp(GetNormalizedSize(), 0.25f, 3.0f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float hue = std::fmod(hue_shift + time * GetColorCycleHz() + 1.0f, 1.0f);
@@ -593,8 +568,7 @@ nlohmann::json ShaderField::SaveSettings() const
     j["projection_mode"] = projection_mode;
     j["shader_contrast"] = contrast;
     j["shader_hue_shift"] = hue_shift;
-    if(active_preset_index >= 0 && active_preset_index < (int)preset_ids.size())
-        j["preset_id"] = preset_ids[(size_t)active_preset_index].toStdString();
+    j["shader_path"] = spec_.path.toStdString();
     return j;
 }
 
@@ -605,33 +579,24 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
     {
         projection_mode = std::clamp(settings["projection_mode"].get<int>(), 0, PROJ_COUNT - 1);
         if(projection_combo)
+        {
             projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
+        }
     }
     if(settings.contains("shader_contrast") && settings["shader_contrast"].is_number())
+    {
         contrast = std::clamp(settings["shader_contrast"].get<float>(), 0.35f, 2.5f);
+    }
     if(settings.contains("shader_hue_shift") && settings["shader_hue_shift"].is_number())
+    {
         hue_shift = std::clamp(settings["shader_hue_shift"].get<float>(), 0.0f, 1.0f);
+    }
     if(contrast_slider)
+    {
         contrast_slider->setValue((int)std::lround(contrast * 100.0f));
+    }
     if(hue_slider)
+    {
         hue_slider->setValue((int)std::lround(hue_shift * 1000.0f));
-
-    RebuildPresetList();
-    int idx = 0;
-    if(settings.contains("preset_id") && settings["preset_id"].is_string())
-    {
-        const QString want = QString::fromStdString(settings["preset_id"].get<std::string>());
-        const auto it = std::find(preset_ids.begin(), preset_ids.end(), want);
-        if(it != preset_ids.end())
-            idx = (int)std::distance(preset_ids.begin(), it);
     }
-    if(preset_combo)
-    {
-        preset_combo->blockSignals(true);
-        preset_combo->setCurrentIndex(idx);
-        preset_combo->blockSignals(false);
-    }
-    LoadPresetAtIndex(idx);
 }
-
-REGISTER_EFFECT_3D(ShaderField)

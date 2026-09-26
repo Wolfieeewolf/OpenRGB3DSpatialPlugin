@@ -18,41 +18,6 @@ inline float Frac01(float x)
     return x - std::floor(x);
 }
 
-inline float Smoothstep(float edge0, float edge1, float x)
-{
-    const float t = std::clamp((x - edge0) / std::max(1e-5f, edge1 - edge0), 0.0f, 1.0f);
-    return t * t * (3.0f - 2.0f * t);
-}
-
-inline float AmbienceGain(float dist_origin, float max_r, float d_face,
-                          unsigned int dist_pct, unsigned int curve_pct, unsigned int edge_pct)
-{
-    float g = 1.0f;
-    const float fd = dist_pct / 100.0f;
-    const float c = curve_pct / 100.0f;
-    const float es = edge_pct / 100.0f;
-
-    if(max_r > 1e-4f)
-    {
-        const float t = std::min(1.0f, dist_origin / max_r);
-        /* Distance dim and curve each contribute — mid slider values are obvious. */
-        const float amount = std::clamp(fd * 0.95f + c * 0.55f, 0.0f, 1.0f);
-        if(amount > 1e-4f)
-        {
-            const float linear = 1.0f - t * (0.12f + 0.88f * amount);
-            const float exponent = 0.70f + 3.8f * c;
-            g *= std::pow(std::clamp(linear, 0.0f, 1.0f), exponent);
-        }
-    }
-    if(es > 1e-4f)
-    {
-        /* Smaller feather → fade starts farther from the wall (stronger mid-range). */
-        const float feather = 0.035f + 0.55f * es;
-        g *= Smoothstep(0.0f, feather, d_face);
-    }
-    return std::clamp(g, 0.0f, 1.0f);
-}
-
 inline int BilinearChannelSample(int a00, int a10, int a01, int a11, float ttx, float tty)
 {
     const float top = (float)a00 * (1.0f - ttx) + (float)a10 * ttx;

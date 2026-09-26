@@ -251,7 +251,6 @@ HEADERS += \
     ui/CaptureZonesWidget.h \
     ui/PluginUiUtils.h \
     Effects3D/EffectStratumBlend.h \
-    Effects3D/EffectHelpers.h \
     Effects3D/EffectColorUtils.h \
     Effects3D/EffectUiSync.h \
     Effects3D/AudioReactiveCommon.h \
@@ -282,6 +281,7 @@ HEADERS += \
     ui/widgets/AudioEqBandColumn.h \
     ui/widgets/EffectControlsRoot.h \
     Effects3D/ShaderField/ShaderField.h \
+    Effects3D/PlayerEngines.h \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
     Shaders/SpatialShaderCatalog.h \
@@ -452,6 +452,7 @@ SOURCES += \
     ui/widgets/MediaTextureAmbienceBlock.cpp \
     ui/widgets/AudioEqBandColumn.cpp \
     Effects3D/FolderVolume/FolderVolumeEffect.cpp \
+    Effects3D/PlayerEngines.cpp \
     Effects3D/ShaderField/ShaderField.cpp \
     Shaders/SpatialShaderEngine.cpp \
     Shaders/SpatialShaderCatalog.cpp \

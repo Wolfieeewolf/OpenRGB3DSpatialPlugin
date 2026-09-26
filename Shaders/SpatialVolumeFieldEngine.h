@@ -15,19 +15,8 @@ class QOpenGLFramebufferObject;
 class QOpenGLShaderProgram;
 
 /**
- * Shared offscreen OpenGL assist: evaluate a volumetric GLSL field on a unit-cube
- * atlas (Z slices stacked), then sample on the CPU.
- *
- * User fragment body must define:
- *   void volumeMain(out vec4 out_color, in vec3 p01);
- * where p01 is in [0,1]^3 and matches room / origin-local sample coords
- * (x→right, y→up/ceiling, z→back). Atlas readback preserves that orientation.
- * Engine supplies u_time, u_params[kMaxParams], and optional
- * sampler2D u_media (media texture for TextureProjection / OmniShapeTexture / ScreenMirror).
- *
- * Sibling to SpatialShaderEngine (2D fullscreen). Does not use the viewport MeshBatch.
- * Call ensureReady() from one thread only (typically the effect render path).
- * sample01 / sampleScalar01 are lock-free — do not call concurrently with ensureReady.
+ * Offscreen volume atlas: GLSL `volumeMain(out, p01)` on a unit cube, CPU sample.
+ * Uniforms: u_time, u_params[], optional u_media. Sibling to SpatialShaderEngine (2D).
  */
 class SpatialVolumeFieldEngine
 {

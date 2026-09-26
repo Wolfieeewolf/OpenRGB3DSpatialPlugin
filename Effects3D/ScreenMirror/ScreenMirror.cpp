@@ -9,6 +9,8 @@
 #include "PluginUiUtils.h"
 #include "ScreenMirror/ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror/ScreenMirror_Internal.h"
+#include "EffectListManager3D.h"
+#include "PlayerEngines.h"
 #include "ui_ScreenMirrorCapturePanel.h"
 #include "ui_ScreenMirrorEffectShell.h"
 
@@ -19,7 +21,16 @@
 #include <QSignalBlocker>
 #include <algorithm>
 
-REGISTER_EFFECT_3D(ScreenMirror);
+void RegisterScreenMirrorEngine()
+{
+    EffectListManager3D::get()->RegisterEffect(
+        "ScreenMirror",
+        "Screen Mirror",
+        "Ambilight",
+        "",
+        "",
+        []() { return new ScreenMirror; });
+}
 
 ScreenMirror::ScreenMirror(QWidget* parent)
     : SpatialEffect3D(parent)

@@ -87,7 +87,7 @@ inline bool ParseHidVidPid(const std::string& text, std::uint16_t* vid, std::uin
     return *vid != 0 && *pid != 0;
 }
 
-/** Origin for lighting only. Does not identify the key or button. */
+/** Origin for lighting only. source_key identifies the key/button (stable across presses). */
 struct ReactiveOriginEvent
 {
     Vector3D          room_position{};
@@ -95,6 +95,7 @@ struct ReactiveOriginEvent
     bool              down  = true;
     float             device_spread = 0.0f;
     float             led_spacing = 0.0f;
+    std::uint64_t     source_key = 0;
 };
 
 struct ReactiveHeldOrigin
@@ -103,6 +104,7 @@ struct ReactiveHeldOrigin
     ReactiveSourceKind kind = ReactiveSourceKind::Keyboard;
     float             device_spread = 0.0f;
     float             led_spacing = 0.0f;
+    std::uint64_t     source_key = 0;
 };
 
 #endif

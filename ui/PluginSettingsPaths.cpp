@@ -16,21 +16,6 @@ bool IsStackPresetFile(const filesystem::path& path)
     return stem.length() > 6 && stem.compare(stem.length() - 6, 6, ".stack") == 0;
 }
 
-void EnsureSpatialShadersFolder(OpenRGBPluginAPIInterface* rm)
-{
-    if(!rm)
-    {
-        return;
-    }
-
-    std::error_code ec;
-    filesystem::create_directories(EffectsDir(rm) / "spatial", ec);
-    filesystem::create_directories(EffectsDir(rm) / "audio", ec);
-    filesystem::create_directories(EffectsDir(rm) / "media", ec);
-    filesystem::create_directories(ShaderFieldDir(rm), ec);
-    filesystem::create_directories(PatternsDir(rm), ec);
-}
-
 void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
 {
     if(!rm)
@@ -39,7 +24,9 @@ void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
     }
 
     std::error_code ec;
+    filesystem::create_directories(PluginRoot(rm), ec);
     filesystem::create_directories(ControllersDir(rm), ec);
+    // Volume engine content folder (library category is Volume, not "Spatial").
     filesystem::create_directories(EffectsDir(rm) / "spatial", ec);
     filesystem::create_directories(EffectsDir(rm) / "audio", ec);
     filesystem::create_directories(EffectsDir(rm) / "media", ec);
@@ -48,7 +35,11 @@ void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
     filesystem::create_directories(TimelinesDir(rm), ec);
     filesystem::create_directories(TimelineBlocksDir(rm), ec);
     filesystem::create_directories(BindingsDir(rm), ec);
-    filesystem::create_directories(PluginRoot(rm), ec);
+}
+
+void EnsureSpatialShadersFolder(OpenRGBPluginAPIInterface* rm)
+{
+    EnsurePluginDataLayout(rm);
 }
 
 } // namespace PluginSettingsPaths

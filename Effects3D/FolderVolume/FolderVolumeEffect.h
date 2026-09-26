@@ -26,7 +26,7 @@ struct FolderVolumeSpec
 {
     std::string class_name;
     std::string ui_name;
-    std::string category = "Spatial";
+    std::string category = "Volume";
     std::string description;
     std::string shader_id;
     std::string pattern_key = "pattern_type";
@@ -65,7 +65,7 @@ struct FolderVolumeSpec
     bool height_bands = false;
     bool pattern_from_kernels = false;
     std::string audio_preset;
-    std::string audio_media;       // "bands" or "spectrogram"
+    std::string audio_media;
     std::string shader_override;
     std::vector<std::string> params;
     struct Slider

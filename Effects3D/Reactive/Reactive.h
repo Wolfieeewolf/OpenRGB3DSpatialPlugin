@@ -4,7 +4,6 @@
 #define REACTIVE_H
 
 #include "SpatialEffect3D.h"
-#include "EffectRegisterer3D.h"
 #include "ReactiveInputTypes.h"
 
 #include <cstdint>
@@ -17,8 +16,6 @@ class Reactive : public SpatialEffect3D
 
 public:
     explicit Reactive(QWidget* parent = nullptr);
-
-    EFFECT_REGISTERER_3D("Reactive", "Reactive", "Spatial", []() { return new Reactive; })
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
@@ -97,7 +94,19 @@ private:
         float    strength   = 1.0f;
         float    spread     = 0.0f;
         float    spacing    = 0.0f;
+        float    speed01    = 0.5f;
+        int      spread_mode = 0;
+        int      spread_orient = 0;
+        int      look_mode = 0;
+        int      footprint_shape = 0;
+        int      travel_pct = 40;
+        int      ring_width_pct = 15;
+        int      accel_pct = 0;
+        int      distance_fade_pct = 0;
+        int      press_glow_pct = 0;
+        int      press_glow_deci_sec = 20;
         uint32_t color_slot = 0;
+        uint64_t source_key = 0;
     };
 
     static const char* TriggerName(int mode);
@@ -107,6 +116,7 @@ private:
     static const char* LookName(int mode);
     static const char* ShapeName(int mode);
     static uint64_t OriginKey(const Vector3D& p);
+    static uint64_t PulseKey(uint64_t source_key, const Vector3D& origin);
 
     bool SourceEnabled(ReactiveSourceKind kind) const;
     bool ShouldSpawnOnEdge(bool down) const;
@@ -117,7 +127,9 @@ private:
                    float time,
                    float strength,
                    float spread,
-                   float spacing);
+                   float spacing,
+                   uint64_t source_key,
+                   float zone_diag);
     void TickWaves(float time, const GridContext3D& grid, std::uint64_t frame_key);
 
     bool listen_keyboard_ = true;
@@ -129,8 +141,12 @@ private:
     int  spread_orient_ = ORIENT_B;
     int  look_mode_ = LOOK_RING;
     int  footprint_shape_ = SHAPE_SPHERE;
-    int  repeat_rate_deci_hz_ = 5;
+    int  repeat_rate_deci_hz_ = 20;
     int  travel_pct_ = 40;
+    int  accel_pct_ = 45;
+    int  distance_fade_pct_ = 0;
+    int  press_glow_pct_ = 0;
+    int  press_glow_deci_sec_ = 20;
 
     std::vector<WaveImpact> waves_;
     std::unordered_map<uint64_t, float> last_spawn_time_;
@@ -138,6 +154,8 @@ private:
     uint32_t next_color_slot_ = 0;
     float last_tick_time_ = 0.0f;
     bool have_tick_time_ = false;
+    std::uint64_t last_edges_frame_key_ = 0;
+    bool have_edges_frame_key_ = false;
 };
 
 #endif

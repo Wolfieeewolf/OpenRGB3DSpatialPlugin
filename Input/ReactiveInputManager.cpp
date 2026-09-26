@@ -1147,6 +1147,7 @@ void ReactiveInputManager::CopyOriginEdgesForFrame(std::uint64_t frame_key,
             ev.down = slot.down;
             ev.device_spread = hit.spread;
             ev.led_spacing = hit.spacing;
+            ev.source_key = MakeSourceKey(slot.packed, slot.vid, slot.pid);
             impl_->edge_frame.push_back(ev);
         }
         impl_->edge_head = 0;
@@ -1199,6 +1200,7 @@ void ReactiveInputManager::CopyHeldOrigins(std::vector<ReactiveHeldOrigin>& out_
         held.kind = UnpackKind(key.packed);
         held.device_spread = hit.spread;
         held.led_spacing = hit.spacing;
+        held.source_key = MakeSourceKey(key.packed, key.vid, key.pid);
         out_held.push_back(held);
     }
 }

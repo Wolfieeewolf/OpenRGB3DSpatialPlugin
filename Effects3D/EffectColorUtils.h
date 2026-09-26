@@ -36,18 +36,3 @@ inline RGBColor EffectHsv01ToBgr(float h, float s, float v)
     const int bi = std::min(255, std::max(0, (int)std::lround(b * 255.0f)));
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
-
-inline RGBColor EffectLerpColor(RGBColor a, RGBColor b, float t)
-{
-    t = std::clamp(t, 0.0f, 1.0f);
-    const int ar = a & 0xFF;
-    const int ag = (a >> 8) & 0xFF;
-    const int ab = (a >> 16) & 0xFF;
-    const int br = b & 0xFF;
-    const int bg = (b >> 8) & 0xFF;
-    const int bb = (b >> 16) & 0xFF;
-    const int r = (int)std::lround(ar + (br - ar) * t);
-    const int g = (int)std::lround(ag + (bg - ag) * t);
-    const int bl = (int)std::lround(ab + (bb - ab) * t);
-    return (RGBColor)((bl << 16) | (g << 8) | r);
-}

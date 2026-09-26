@@ -18,11 +18,11 @@ If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can
 
 | Doc | Use it for |
 | --- | --- |
-| [effects-engines.md](Documentation/effects-engines.md) | Engines vs file content; FolderVolume / Audio / Media / Shader Field / Kernel — read before adding or converting an effect |
+| [effects-engines.md](Documentation/effects-engines.md) | Engines as players; Volume / Audio / Media / Shader Field / Kernel / Reactive / Ambilight / Game — read before adding a look |
 | [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | mm, grid units, RoomGrid, viewport, effects, spacing — read before changing layout math, reference points, or LED placement |
 | [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry — RoomGrid → game world, sparse cubemap SHM; read when changing SHM, scale publish, or mod mapping |
 | [effect-event-maker.md](Documentation/effect-event-maker.md) | Effect packs + Event Bindings |
-| [shader-conversion.md](Documentation/shader-conversion.md) | Porting shaders into Shader Field / volume / strip kernels |
+| [shader-conversion.md](Documentation/shader-conversion.md) | Porting shaders into Shader Field / Volume / strip kernels |
 
 Stock layouts and effect `.fs` / `.kernel` files: **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)**.
 
@@ -107,7 +107,21 @@ When changing plugin behavior—especially anything that touches devices, colors
 
 - Plugin rules apply to plugin-owned code in this repository (e.g. `Effects3D/`, `ui/`, `Game/`, root `.pro`).
 - Do not modify files under `OpenRGB/` (upstream subtree) unless explicitly requested.
-- **Effects engines** (Volume, Shader Field, Kernel, Media, Audio, Reactive, Ambilight, Games): authoring contracts in `Documentation/effects-engines.md`. Prefer thin content on an existing engine over a new per-effect C++ class.
+- **Effects engines** (Volume, Shader Field, Kernel, Media, Audio, Reactive, Ambilight, Games): authoring contracts in `Documentation/effects-engines.md`. Prefer thin content on an existing engine over a new programmed host.
+
+### Effects registration (Load)
+
+The plugin is a **player**: library categories are **engine names**; each engine lists the looks it can play.
+
+At plugin Load (`OpenRGB3DSpatialPlugin.cpp`):
+
+1. **`RegisterFolderVolumeEffects()`** — scans `effects/**/*.fs` (skips `shader-field/`). Library category comes from the **folder**: `spatial/` → **Volume**, `audio/` → **Audio**, `media/` → **Media**.
+2. **`RegisterPlayerEngines()`** (`Effects3D/PlayerEngines.*`) — **Reactive**, **Ambilight** (Screen Mirror), and one row per `effects/shader-field/*.fs`.
+3. **Minecraft** sub-effects still use **`REGISTER_EFFECT_3D`** under category **Game** (programmed pack; fat-addon work later).
+
+Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight looks. New looks are files (or a new programmed Game pack).
+
+Disk folder `effects/spatial/` is **Volume** content — the library label is Volume, not “Spatial”.
 
 ## Code quality
 
@@ -132,11 +146,11 @@ When changing plugin behavior—especially anything that touches devices, colors
 
 **Exception — viewport only:** the Qt **OpenGL 4.1 Core** room (`LEDViewport3D` / `QOpenGLWidget` + `QOpenGLFunctions_4_1_Core`) is the only viewport path (no GPU shader dual path). That is rendering infrastructure, not data-format backward compatibility. Requires **Qt 6.8 or newer**, built with the same Qt as the OpenRGB host (pipeline Windows/AppImage **6.8.3**; distro and Flatpak hosts may use a newer Qt — rebuild or use the Flatpak extension).
 
-**GPU volume/strip field assists:** when an effect uses `SpatialVolumeFieldAssist` / `SpatialStripFieldAssist`, the atlas is the source of truth. Do not keep parallel CPU formula fallbacks. Sample coords reaching `CalculateColorGrid` are already axis-scaled and rotated by the render path (`ApplyEffectRotation`) unless `SkipsSpatialSampleWarp()` is true. Origin-centric volumes (including audio fill/spectrum/sparkle/strip viz) sample with `SampleGpuVolumeOriginLocal01`: origin→farthest face of the current `GridContext3D` (global room or **target-zone AABB**), multiplied by **Scale** (occupancy). Scale below 100% makes the effect smaller; samples outside that box return unlit — do **not** clamp UV onto atlas faces (four-quadrant artifact). **Size** is feature size inside the effect (`u_params`), not atlas coverage. Reconstruct world distances with `MakeEffectGpuAtlasHalfExtents`. Wall/floor/ceiling surface fields (Surface Ambient) use `SampleGpuRoomVolume01` on the same active grid. Shader Field projections use origin-local unit UV. Single-atlas height bands bake mid-band stratum scalars at `PrepareGpuFields` — full per-LED multi-atlas stratum is out of scope until designed deliberately.
+**GPU volume/strip field assists:** when a look uses `SpatialVolumeFieldAssist` / `SpatialStripFieldAssist`, the atlas is the source of truth. Do not keep parallel CPU formula fallbacks. Sample coords reaching `CalculateColorGrid` are already axis-scaled and rotated by the render path (`ApplyEffectRotation`) unless `SkipsSpatialSampleWarp()` is true. Origin-centric volumes (including audio fill/spectrum/sparkle/strip viz) sample with `SampleGpuVolumeOriginLocal01`: origin→farthest face of the current `GridContext3D` (global room or **target-zone AABB**), multiplied by **Scale** (occupancy). Scale below 100% makes the effect smaller; samples outside that box return unlit — do **not** clamp UV onto atlas faces (four-quadrant artifact). **Size** is feature size inside the effect (`u_params`), not atlas coverage. Reconstruct world distances with `MakeEffectGpuAtlasHalfExtents`. Wall/floor/ceiling Volume looks (`sample: room`, e.g. Surface Ambient content) use `SampleGpuRoomVolume01` on the same active grid. Shader Field projections use origin-local unit UV. Single-atlas height bands bake mid-band stratum scalars at `PrepareGpuFields` — full per-LED multi-atlas stratum is out of scope until designed deliberately.
 
-**Shell Pattern / Surface Ambient:** both are volume-atlas source of truth. The shader text lives in `effects/<category>/<id>.fs`. Shell loads `shell-pattern`. Palette / stratum finish stays on CPU. Thickness and edge fade use the shared motion controls (`global: thickness` / `edge`). Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
+**Shell Pattern / Surface Ambient:** Volume FolderVolume content (`effects/spatial/shell-pattern.fs`, `surface-ambient.fs`). Palette / stratum finish stays on CPU where the host finish path requires it. Thickness and edge fade use shared motion controls (`global: thickness` / `edge`). Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
 
-**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `patterns/*.kernel` via `SpatialPatternKernelShader()`. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. `EvalSpatialPatternKernel` is a single sine if the GPU assist fails. Shell Pattern does not use this assist.
+**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `patterns/*.kernel` via `SpatialPatternKernelShader()`. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. `EvalSpatialPatternKernel` is a single sine if the GPU assist fails. Shell Pattern content does not use this assist.
 
 When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
@@ -197,11 +211,11 @@ Do **not** duplicate strip colormap or floor/mid/ceiling band controls in `Setup
 
 Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`EffectUiRows`** (`AppendComboRow`, `AppendSliderRow`, …). Give each row a stable `objectName` when `LoadSettings` must resync after profile load (`EffectUiSync`). Prefer caching widget pointers (sliders/combos) when the effect already holds them; use `EffectUiSync` on the nested `NewEffectPanel` when controls live only inside that panel.
 
-**Audio effects:** same reuse rule as above. Each algorithm is its own stack layer. Prefer **strip-first** effects (e.g. **Audio Strip Visualizer**) with **zone / single-controller** targeting for floor, wall, and ceiling strips; use full-room 3D audio effects when one layer should cover everything. Shared audio helpers live in `Effects3D/AudioReactiveUi.h` (`AppendStandardFrequencyBandSection`, `AppendStandardResponseSection`, `AppendStandardBeatWaveSection`). Global **16-band EQ** is on the **Audio Input** panel. Show that panel when any audio layer is on the stack.
+**Audio looks:** Volume host under `effects/audio/*.fs` (`drive: audio`, `audio_preset:`). Prefer strip-first looks with zone/controller targeting for floor/wall/ceiling strips; use full-room 3D when one layer should cover everything. Shared audio UI helpers live in `Effects3D/AudioReactiveUi.h`. Global **16-band EQ** is on the **Audio Input** panel (show when any Audio-engine layer is on the stack).
 
-- **Spectrum bin effects** (Spectrum Bars, Audio Strip Visualizer) use frequency band + response only; they sample raw FFT bins in the Hz range.
-- **Level-driven effects** (Audio Level) use Role / Hz band + Feel (smoothing, sensitivity, falloff) + Color mode.
-- **Audio Pulse** (and Bass Punch) use the full beat-wave section for beat-triggered shockwaves from the origin.
+- Spectrum / strip presets use frequency band + response and sample FFT bins in the Hz range.
+- Level presets use Role / Hz + Feel + Color mode.
+- Beat / low-punch presets use the beat-wave section for origin shockwaves.
 
 - Keep signal wiring/disconnect paths symmetrical for dynamically created effect UI widgets.
 - Keep list, combo, and selection state synchronized.
@@ -214,17 +228,18 @@ Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`Ef
 Aligned with **this file**, **`OpenRGB/CONTRIBUTING.md`**, and the OpenRGB docs in **OpenRGB reference documentation** above (minimum: **`RGBControllerAPI.md`** when touching LEDs/zones/colors).
 
 - [ ] **Scope:** changes only under plugin-owned paths; no edits in `OpenRGB/` unless intentional.
+- [ ] **Engines:** new looks go on an existing engine (`.fs` / `.kernel` or player codec); no new `REGISTER_EFFECT_3D` except Game/Minecraft-style packs (see **Effects registration**).
 - [ ] **No legacy paths:** no new migration or old-format fallbacks; remove any you touch (viewport is OpenGL 4.1 Core only — see **No legacy or backward-compatibility paths**).
 - [ ] **Logging:** no `QDebug`, `printf`, or `std::cout`; use `LogManager`.
 - [ ] **UI chrome:** no `setStyleSheet` on structural chrome; no custom theme `QPalette` on panels/`QGroupBox` (card selection exception in **UI** only).
 - [ ] **Headers:** SPDX on new or substantially new `.cpp`/`.h`; match brace/naming style in the file.
 - [ ] **Effects:** stack/render paths call `SpatialEffect3D::EvaluateColorGrid`, not `CalculateColorGrid`, except inside effect implementations.
 - [ ] **RGB safety:** guard null pointers; validate zone and LED indices before `colors[]` / mapping writes (see **RGBController safety rules**).
-- [ ] **Docs:** user-facing build/troubleshooting text matches `OpenRGB/Documentation/Compiling.md` and the relevant USB/SMBus/Udev/Kernel docs when applicable.
+- [ ] **Docs:** user-facing build/troubleshooting text matches `OpenRGB/Documentation/Compiling.md` and the relevant USB/SMBus/Udev/Kernel docs when applicable; engine/category wording matches `Documentation/effects-engines.md`.
 - [ ] **Strings:** user-visible text uses correct UTF-8 (prefer `QStringLiteral` with `\\uXXXX` escapes for special characters in source files).
 
 ## Effect rendering entry points
 
 - Effect stack code should call **`SpatialEffect3D::EvaluateColorGrid`** (applies global **Sampling** / spatial quantization where enabled), not `CalculateColorGrid` directly.
 - Implement per-effect color in **`CalculateColorGrid`**; override **`UsesSpatialSamplingQuantization()`** only when the effect already handles resolution in UV space (e.g. texture projection, screen mirror).
-- **Texture / GIF effects:** reuse **`MediaTextureEffectUtils.h`** (`MediaTextureEffect` namespace) for bilinear sampling, ambience gain, and RGB lerp—avoid duplicating those helpers in individual `.cpp` files.
+- **Texture / GIF effects:** reuse **`MediaTextureEffectUtils.h`** (`MediaTextureEffect` namespace) for bilinear sampling and RGB lerp—avoid duplicating those helpers in individual `.cpp` files.
