@@ -33,6 +33,8 @@ public:
     QLineEdit*   searchEdit() const;
     QListWidget* libraryList() const;
     QPushButton* addToStackButton() const;
+    QPushButton* installStockPackButton() const;
+    QPushButton* installStockZipButton() const;
 
 private:
     Ui::EffectLibraryPanel* ui = nullptr;

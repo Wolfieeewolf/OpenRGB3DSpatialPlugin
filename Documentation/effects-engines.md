@@ -25,6 +25,8 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 
 Do not add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight.
 
+**Stock pack:** Effect Library → **Install Stock Pack** downloads the presets repo archive into the plugin data root (or **Install from Zip…** offline), then rescans disk registrations.
+
 ---
 
 ## Shared author rules

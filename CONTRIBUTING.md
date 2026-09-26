@@ -123,6 +123,8 @@ Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / 
 
 Disk folder `effects/spatial/` is **Volume** content — the library label is Volume, not “Spatial”.
 
+**Stock pack:** Effect Library has **Install Stock Pack** (network) and **Install from Zip…**. Both merge `effects/`, `patterns/`, `controllers/`, and `timelines/` into the plugin data root, then rescan FolderVolume / Shader Field / kernels. Same-named files are updated; other user files are kept.
+
 ## Code quality
 
 - No debug code or dead code.

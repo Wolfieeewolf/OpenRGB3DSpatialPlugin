@@ -73,6 +73,30 @@
     </widget>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="stockPackRow">
+     <item>
+      <widget class="QPushButton" name="installStockPackButton">
+       <property name="text">
+        <string>Install Stock Pack</string>
+       </property>
+       <property name="toolTip">
+        <string>Download stock Volume / Audio / Media / Shader Field looks and patterns into the plugin data folder (cross-platform).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="installStockZipButton">
+       <property name="text">
+        <string>Install from Zip…</string>
+       </property>
+       <property name="toolTip">
+        <string>Install stock content from a local OpenRGB3DSpatialPresets zip (offline / mirror).</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <layout class="QHBoxLayout" name="addButtonRow">
      <item>
       <spacer name="addButtonSpacer">

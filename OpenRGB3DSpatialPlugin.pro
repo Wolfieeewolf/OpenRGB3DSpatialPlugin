@@ -1,4 +1,4 @@
-QT += core gui widgets opengl
+QT += core gui widgets opengl network
 greaterThan(QT_MAJOR_VERSION, 5): QT += openglwidgets
 
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY QT_NO_CONNECT_SLOTS_BY_NAME
@@ -197,6 +197,7 @@ HEADERS += \
     ui/ObjectCreatorTabPanel.h \
     ui/ControllerListPanel.h \
     ui/EffectLibraryPanel.h \
+    ui/StockPackInstaller.h \
     ui/EffectPackPanel.h \
     ui/EffectPackEditorDialog.h \
     ui/EffectPackTimelineWidget.h \
@@ -374,6 +375,7 @@ SOURCES += \
     ui/ObjectCreatorTabPanel.cpp \
     ui/ControllerListPanel.cpp \
     ui/EffectLibraryPanel.cpp \
+    ui/StockPackInstaller.cpp \
     ui/EffectPackPanel.cpp \
     ui/EventBindingsPanel.cpp \
     ui/EffectPackEditorDialog.cpp \

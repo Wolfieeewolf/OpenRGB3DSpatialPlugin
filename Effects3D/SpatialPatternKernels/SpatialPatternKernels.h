@@ -12,4 +12,7 @@ const char* SpatialPatternKernelPaletteName(int kernel_id);
 float EvalSpatialPatternKernel(int kernel_id, float s01, float phase01, float rep, float time_sec);
 QString SpatialPatternKernelShader();
 
+/** Clear cached kernels and load again from patterns/*.kernel. */
+void SpatialPatternKernelsReload();
+
 #endif
