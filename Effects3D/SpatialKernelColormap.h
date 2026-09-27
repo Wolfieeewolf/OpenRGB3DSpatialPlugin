@@ -102,7 +102,16 @@ inline void StripColormapSaveCanonical(nlohmann::json& j,
                                       float dir)
 {
     j["strip_cmap_on"] = on;
-    j["strip_cmap_kernel"] = kern;
+    kern = SpatialPatternKernelClamp(kern);
+    const char* kernel_id = SpatialPatternKernelId(kern);
+    if(kernel_id && kernel_id[0] != '\0')
+    {
+        j["strip_cmap_kernel"] = kernel_id;
+    }
+    else
+    {
+        j["strip_cmap_kernel"] = kern;
+    }
     j["strip_cmap_rep"] = rep;
     j["strip_cmap_unfold"] = unfold;
     j["strip_cmap_dir"] = dir;
@@ -117,8 +126,23 @@ inline void StripColormapLoadCanonical(const nlohmann::json& settings,
 {
     if(settings.contains("strip_cmap_on") && settings["strip_cmap_on"].is_boolean())
         on = settings["strip_cmap_on"].get<bool>();
-    if(settings.contains("strip_cmap_kernel") && settings["strip_cmap_kernel"].is_number_integer())
-        kern = std::clamp(settings["strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
+    if(settings.contains("strip_cmap_kernel"))
+    {
+        const auto& k = settings["strip_cmap_kernel"];
+        if(k.is_string())
+        {
+            const int found = SpatialPatternKernelFindById(k.get<std::string>());
+            if(found >= 0)
+            {
+                kern = found;
+            }
+        }
+        else if(k.is_number_integer())
+        {
+            // Legacy profiles stored a list index.
+            kern = SpatialPatternKernelClamp(k.get<int>());
+        }
+    }
     if(settings.contains("strip_cmap_rep") && settings["strip_cmap_rep"].is_number())
         rep = std::max(1.0f, std::min(40.0f, settings["strip_cmap_rep"].get<float>()));
     if(settings.contains("strip_cmap_unfold") && settings["strip_cmap_unfold"].is_number_integer())

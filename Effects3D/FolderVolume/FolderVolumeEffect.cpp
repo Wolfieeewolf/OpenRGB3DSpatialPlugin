@@ -2446,7 +2446,24 @@ nlohmann::json FolderVolumeEffect::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     if(!spec_.patterns.empty())
     {
-        j[spec_.pattern_key] = pattern_index;
+        const int listed = (int)spec_.patterns.size();
+        const int idx = std::clamp(pattern_index, 0, std::max(0, listed - 1));
+        if(spec_.pattern_from_kernels)
+        {
+            const char* kernel_id = SpatialPatternKernelId(idx);
+            if(kernel_id && kernel_id[0] != '\0')
+            {
+                j[spec_.pattern_key] = kernel_id;
+            }
+            else
+            {
+                j[spec_.pattern_key] = idx;
+            }
+        }
+        else
+        {
+            j[spec_.pattern_key] = spec_.patterns[(size_t)idx].name.toStdString();
+        }
     }
     for(size_t i = 0; i < spec_.combos.size(); ++i)
     {
@@ -2521,11 +2538,40 @@ void FolderVolumeEffect::LoadSettings(const nlohmann::json& settings)
     if(!settings.contains("edge_fade") && settings.contains("shellpattern_edge_fade_pct") && settings["shellpattern_edge_fade_pct"].is_number())
         effect_edge_fade = (unsigned int)std::clamp((int)std::lround(settings["shellpattern_edge_fade_pct"].get<float>()), 0, 100);
     SyncEffectStripColormapPanelFromModel();
-    if(!spec_.pattern_key.empty() && settings.contains(spec_.pattern_key) && settings[spec_.pattern_key].is_number_integer())
+    if(!spec_.pattern_key.empty() && settings.contains(spec_.pattern_key))
     {
+        const auto& pattern_value = settings[spec_.pattern_key];
         const int listed = (int)spec_.patterns.size();
         const int pattern_count = std::max(1, pattern_combo ? pattern_combo->count() : listed);
-        pattern_index = std::clamp(settings[spec_.pattern_key].get<int>(), 0, pattern_count - 1);
+        if(pattern_value.is_string())
+        {
+            const std::string id = pattern_value.get<std::string>();
+            int found = -1;
+            if(spec_.pattern_from_kernels)
+            {
+                found = SpatialPatternKernelFindById(id);
+            }
+            if(found < 0)
+            {
+                for(size_t i = 0; i < spec_.patterns.size(); ++i)
+                {
+                    if(spec_.patterns[i].name.toStdString() == id)
+                    {
+                        found = (int)i;
+                        break;
+                    }
+                }
+            }
+            if(found >= 0)
+            {
+                pattern_index = std::clamp(found, 0, pattern_count - 1);
+            }
+        }
+        else if(pattern_value.is_number_integer())
+        {
+            // Legacy profiles stored a list index.
+            pattern_index = std::clamp(pattern_value.get<int>(), 0, pattern_count - 1);
+        }
     }
     if(pattern_combo)
     {

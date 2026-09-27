@@ -19,7 +19,8 @@ namespace
 struct KernelFile
 {
     int index = 0;
-    std::string name;
+    std::string id;   // file stem — stable across reorder / name: edits
+    std::string name; // display label
     std::string palette;
     QString body;
 };
@@ -52,7 +53,8 @@ void LoadKernels()
         }
         KernelFile kernel;
         kernel.index = (int)g_kernels.size();
-        kernel.name = fi.completeBaseName().toStdString();
+        kernel.id = fi.completeBaseName().toStdString();
+        kernel.name = kernel.id;
         QString body;
         QTextStream stream(&file);
         bool header = true;
@@ -74,6 +76,11 @@ void LoadKernels()
                     if(key == QStringLiteral("name"))
                     {
                         kernel.name = val.toStdString();
+                        continue;
+                    }
+                    if(key == QStringLiteral("id") && !val.isEmpty())
+                    {
+                        kernel.id = val.toStdString();
                         continue;
                     }
                     if(key == QStringLiteral("index"))
@@ -100,7 +107,7 @@ void LoadKernels()
         {
             return a.index < b.index;
         }
-        return a.name < b.name;
+        return a.id < b.id;
     });
 }
 
@@ -152,6 +159,16 @@ int SpatialPatternKernelClamp(int id)
     return id;
 }
 
+const char* SpatialPatternKernelId(int kernel_id)
+{
+    const KernelFile* kernel = KernelAt(kernel_id);
+    if(!kernel || kernel->id.empty())
+    {
+        return "";
+    }
+    return kernel->id.c_str();
+}
+
 const char* SpatialPatternKernelDisplayName(int kernel_id)
 {
     const KernelFile* kernel = KernelAt(kernel_id);
@@ -170,6 +187,30 @@ const char* SpatialPatternKernelPaletteName(int kernel_id)
         return "";
     }
     return kernel->palette.c_str();
+}
+
+int SpatialPatternKernelFindById(const std::string& id)
+{
+    if(id.empty())
+    {
+        return -1;
+    }
+    LoadKernels();
+    for(size_t i = 0; i < g_kernels.size(); ++i)
+    {
+        if(g_kernels[i].id == id)
+        {
+            return (int)i;
+        }
+    }
+    for(size_t i = 0; i < g_kernels.size(); ++i)
+    {
+        if(g_kernels[i].name == id)
+        {
+            return (int)i;
+        }
+    }
+    return -1;
 }
 
 float EvalSpatialPatternKernel(int, float s01, float phase01, float rep, float time_sec)

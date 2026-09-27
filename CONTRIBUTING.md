@@ -123,7 +123,7 @@ Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / 
 
 Disk folder `effects/spatial/` is **Volume** content — the library label is Volume, not “Spatial”.
 
-**Stock pack:** Effect Library has **Install Stock Pack** (network) and **Install from Zip…**. Both merge `effects/`, `patterns/`, `controllers/`, and `timelines/` into the plugin data root, then rescan FolderVolume / Shader Field / kernels. Same-named files are updated; other user files are kept.
+**Stock pack:** shipped by the installer (MSI/exe), or copy `effects/`, `patterns/`, `controllers/`, and `timelines/` from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root. Restart OpenRGB (or reload the plugin) so FolderVolume / Shader Field / kernels rescan.
 
 ## Code quality
 
