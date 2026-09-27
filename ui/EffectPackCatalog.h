@@ -33,6 +33,8 @@ struct Entry
     bool knob_period = false;
     bool knob_pulse = false;
     bool knob_min_intensity = false;
+    bool knob_media_path = false;
+    bool knob_media_text = false;
     QStringList icon;
 };
 
@@ -87,7 +89,7 @@ inline QStringList SectionOrder(const QList<Entry>& entries)
         }
         order.push_back(section);
     };
-    for(const char* preferred : {"basic", "pixel", "volume"})
+    for(const char* preferred : {"basic", "pixel", "volume", "media"})
     {
         for(const Entry& e : entries)
         {
@@ -129,6 +131,7 @@ inline QString SectionLabel(const QString& section)
     if(key == QStringLiteral("basic")) return QStringLiteral("Basic");
     if(key == QStringLiteral("pixel")) return QStringLiteral("Pixel");
     if(key == QStringLiteral("volume")) return QStringLiteral("Volume");
+    if(key == QStringLiteral("media")) return QStringLiteral("Media");
     if(section.trimmed().isEmpty()) return QStringLiteral("Effects");
     return section.trimmed();
 }
@@ -187,6 +190,21 @@ inline QList<CurveEntry> CurveEntries()
         {"Pulse", "pulse_curve"},
         {"Hold Peak", "hold_peak"},
         {"Snap", "snap"},
+    };
+}
+
+/** Period-local waveform presets (shape of each blink/strobe/pulse cycle). */
+inline QList<CurveEntry> PeriodCurveEntries()
+{
+    return {
+        {"Flat", "flat"},
+        {"Square (blink)", "square"},
+        {"Duty 25%", "duty25"},
+        {"Duty 75%", "duty75"},
+        {"Triangle", "triangle"},
+        {"Saw", "saw"},
+        {"Pulse", "pulse_curve"},
+        {"Sine", "sine"},
     };
 }
 

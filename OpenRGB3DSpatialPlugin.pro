@@ -166,6 +166,7 @@ HEADERS += \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
     Effects3D/EffectPacks/EffectPack.h \
+    Effects3D/EffectPacks/EffectPackMedia.h \
     Effects3D/EffectPacks/EffectPackPlayer.h \
     Effects3D/EffectPacks/EffectPackApplier.h \
     Effects3D/EffectPacks/EffectPackApplierDetail.h \
@@ -201,6 +202,7 @@ HEADERS += \
     ui/EffectPackEditorDialog.h \
     ui/EffectPackTimelineWidget.h \
     ui/EffectPackGradientBar.h \
+    ui/EffectPackCurveBar.h \
     ui/EffectPackToolBar.h \
     ui/EventBindingsPanel.h \
     ui/EffectStackPanel.h \
@@ -340,6 +342,7 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
     Effects3D/EffectPacks/EffectPack.cpp \
+    Effects3D/EffectPacks/EffectPackMedia.cpp \
     Effects3D/EffectPacks/EffectPackSerialize.cpp \
     Effects3D/EffectPacks/EffectPackBlockEvalAxis.cpp \
     Effects3D/EffectPacks/EffectPackExamples.cpp \
@@ -383,6 +386,7 @@ SOURCES += \
     ui/EffectPackTimelinePaint.cpp \
     ui/EffectPackTimelineInteract.cpp \
     ui/EffectPackGradientBar.cpp \
+    ui/EffectPackCurveBar.cpp \
     ui/EffectPackUserGradients.cpp \
     ui/EffectPackEffectFiles.cpp \
     ui/EffectPackUserCurves.cpp \

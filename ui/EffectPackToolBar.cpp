@@ -6,7 +6,6 @@
 #include "EffectPackUserGradients.h"
 
 #include <QAction>
-#include <QAction>
 #include <QAbstractButton>
 #include <QApplication>
 #include <QButtonGroup>
@@ -18,17 +17,19 @@
 #include <QJsonObject>
 #include <QDrag>
 #include <QFrame>
-#include <QHBoxLayout>
 #include <QIcon>
+#include <QLayout>
+#include <QLayoutItem>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPixmap>
-#include <QScrollArea>
 #include <QStackedWidget>
+#include <QStyle>
 #include <QTabWidget>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <system_error>
@@ -160,26 +161,138 @@ void StylePaletteButton(QToolButton* btn)
     btn->setCursor(Qt::PointingHandCursor);
 }
 
-QWidget* WrapPalette(QWidget* inner)
+/** Left-to-right wrap layout (no horizontal scrollbar). */
+class FlowLayout : public QLayout
 {
-    auto* scroll = new QScrollArea();
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setWidget(inner);
-    scroll->setMinimumHeight(40);
-    scroll->setMaximumHeight(52);
-    return scroll;
-}
+public:
+    explicit FlowLayout(QWidget* parent = nullptr, int margin = 0, int h_spacing = 4, int v_spacing = 4)
+        : QLayout(parent)
+        , h_space_(h_spacing)
+        , v_space_(v_spacing)
+    {
+        setContentsMargins(margin, margin, margin, margin);
+    }
+
+    ~FlowLayout() override
+    {
+        while(QLayoutItem* item = takeAt(0))
+        {
+            delete item;
+        }
+    }
+
+    void addItem(QLayoutItem* item) override { items_.append(item); }
+    int count() const override { return items_.size(); }
+    QLayoutItem* itemAt(int index) const override
+    {
+        return (index >= 0 && index < items_.size()) ? items_.at(index) : nullptr;
+    }
+    QLayoutItem* takeAt(int index) override
+    {
+        return (index >= 0 && index < items_.size()) ? items_.takeAt(index) : nullptr;
+    }
+    Qt::Orientations expandingDirections() const override { return {}; }
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int width) const override { return doLayout(QRect(0, 0, width, 0), true); }
+    void setGeometry(const QRect& rect) override
+    {
+        QLayout::setGeometry(rect);
+        doLayout(rect, false);
+    }
+    QSize sizeHint() const override { return minimumSize(); }
+    QSize minimumSize() const override
+    {
+        QSize size;
+        for(const QLayoutItem* item : items_)
+        {
+            size = size.expandedTo(item->minimumSize());
+        }
+        const QMargins m = contentsMargins();
+        size += QSize(m.left() + m.right(), m.top() + m.bottom());
+        return size;
+    }
+
+private:
+    int horizontalSpacing() const
+    {
+        if(h_space_ >= 0)
+        {
+            return h_space_;
+        }
+        if(const QWidget* w = parentWidget())
+        {
+            return w->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
+        }
+        return 4;
+    }
+
+    int verticalSpacing() const
+    {
+        if(v_space_ >= 0)
+        {
+            return v_space_;
+        }
+        if(const QWidget* w = parentWidget())
+        {
+            return w->style()->pixelMetric(QStyle::PM_LayoutVerticalSpacing);
+        }
+        return 4;
+    }
+
+    int doLayout(const QRect& rect, bool test_only) const
+    {
+        int left = 0;
+        int top = 0;
+        int right = 0;
+        int bottom = 0;
+        getContentsMargins(&left, &top, &right, &bottom);
+        const QRect effective = rect.adjusted(left, top, -right, -bottom);
+        int x = effective.x();
+        int y = effective.y();
+        int line_height = 0;
+        const int space_x = horizontalSpacing();
+        const int space_y = verticalSpacing();
+
+        for(QLayoutItem* item : items_)
+        {
+            QWidget* widget = item->widget();
+            if(widget && widget->isHidden())
+            {
+                continue;
+            }
+            const QSize hint = item->sizeHint();
+            int next_x = x + hint.width() + space_x;
+            if(x > effective.x() && next_x - space_x > effective.right() + 1)
+            {
+                x = effective.x();
+                y = y + line_height + space_y;
+                next_x = x + hint.width() + space_x;
+                line_height = 0;
+            }
+            if(!test_only)
+            {
+                item->setGeometry(QRect(QPoint(x, y), hint));
+            }
+            x = next_x;
+            line_height = std::max(line_height, hint.height());
+        }
+        return y + line_height - rect.y() + bottom;
+    }
+
+    QList<QLayoutItem*> items_;
+    int h_space_ = -1;
+    int v_space_ = -1;
+};
 
 QWidget* BuildEffectsPage(QWidget* owner, const filesystem::path& effect_dir, const std::function<void(const QString&)>& on_click)
 {
     auto* page = new QWidget(owner);
-    auto* row = new QHBoxLayout(page);
-    row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(6);
+    auto* outer = new QVBoxLayout(page);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(4);
 
+    auto* cats_host = new QWidget(page);
+    auto* cats_flow = new FlowLayout(cats_host, 0, 6, 2);
     auto* stack = new QStackedWidget(page);
     auto* cats = new QButtonGroup(page);
     cats->setExclusive(true);
@@ -187,7 +300,7 @@ QWidget* BuildEffectsPage(QWidget* owner, const filesystem::path& effect_dir, co
     const QList<EffectPackCatalog::Entry> entries = EffectPackCatalog::LoadEntries(effect_dir);
     for(const QString& section : EffectPackCatalog::SectionOrder(entries))
     {
-        auto* tab = new QToolButton(page);
+        auto* tab = new QToolButton(cats_host);
         const QString full = EffectPackCatalog::SectionLabel(section);
         tab->setText(full);
         tab->setToolTip(full);
@@ -195,12 +308,10 @@ QWidget* BuildEffectsPage(QWidget* owner, const filesystem::path& effect_dir, co
         tab->setAutoRaise(true);
         tab->setFocusPolicy(Qt::NoFocus);
         cats->addButton(tab);
-        row->addWidget(tab);
+        cats_flow->addWidget(tab);
 
         auto* icons = new QWidget();
-        auto* icons_row = new QHBoxLayout(icons);
-        icons_row->setContentsMargins(0, 0, 0, 0);
-        icons_row->setSpacing(1);
+        auto* icons_flow = new FlowLayout(icons, 0, 4, 4);
         for(const EffectPackCatalog::Entry& e : EffectPackCatalog::EntriesFor(entries, section))
         {
             auto* btn = new DragToolButton(icons);
@@ -216,22 +327,19 @@ QWidget* BuildEffectsPage(QWidget* owner, const filesystem::path& effect_dir, co
             QObject::connect(btn, &QToolButton::clicked, owner, [on_click, id = e.id]() {
                 on_click(id);
             });
-            icons_row->addWidget(btn);
+            icons_flow->addWidget(btn);
         }
-        icons_row->addStretch(1);
-        auto* scroller = WrapPalette(icons);
-        scroller->setMinimumHeight(32);
-        scroller->setMaximumHeight(36);
-        stack->addWidget(scroller);
-        QObject::connect(tab, &QToolButton::clicked, stack, [stack, scroller]() {
-            stack->setCurrentWidget(scroller);
+        stack->addWidget(icons);
+        QObject::connect(tab, &QToolButton::clicked, stack, [stack, icons]() {
+            stack->setCurrentWidget(icons);
         });
     }
     if(QAbstractButton* first = cats->buttons().value(0))
     {
         first->setChecked(true);
     }
-    row->addWidget(stack, 1);
+    outer->addWidget(cats_host);
+    outer->addWidget(stack, 1);
     return page;
 }
 
@@ -321,9 +429,7 @@ void PaintSwatch(DragToolButton* btn, const Swatch& swatch)
 QWidget* BuildColorsPage(QWidget* owner, const filesystem::path& path, const std::function<void(unsigned int)>& on_click)
 {
     auto* page = new QWidget();
-    auto* row = new QHBoxLayout(page);
-    row->setContentsMargins(2, 2, 2, 2);
-    row->setSpacing(4);
+    auto* flow = new FlowLayout(page, 2, 4, 4);
     auto swatches = std::make_shared<QVector<Swatch>>(LoadSwatches(path));
     for(int i = 0; i < swatches->size(); ++i)
     {
@@ -350,13 +456,12 @@ QWidget* BuildColorsPage(QWidget* owner, const filesystem::path& path, const std
             PaintSwatch(btn, swatches->at(i));
             SaveSwatches(path, *swatches);
         });
-        row->addWidget(btn);
+        flow->addWidget(btn);
     }
-    row->addStretch(1);
-    return WrapPalette(page);
+    return page;
 }
 
-void AddGradientButton(QWidget* page, QHBoxLayout* row, QWidget* owner,
+void AddGradientButton(QWidget* page, QLayout* row, QWidget* owner,
                       const QString& label, const QString& id, const QPixmap& preview,
                       const std::function<void(const QString&)>& on_click,
                       const std::function<void(const QString&)>& on_overwrite,
@@ -412,16 +517,14 @@ QWidget* BuildGradientsPage(QWidget* owner, const std::function<void(const QStri
                             const filesystem::path& user_path)
 {
     auto* page = new QWidget();
-    auto* row = new QHBoxLayout(page);
-    row->setContentsMargins(2, 2, 2, 2);
-    row->setSpacing(6);
+    auto* flow = new FlowLayout(page, 2, 6, 4);
     for(const EffectPackUserGradients::Entry& entry : EffectPackUserGradients::Visible(user_path))
     {
         const bool customized = EffectPackUserGradients::IsCustomized(user_path, entry.id);
         const QPixmap preview = customized
             ? EffectPackUserGradients::Preview(entry.stops)
             : EffectPackCatalog::MakeGradientPreview(entry.id.toUtf8().constData(), 36, 14);
-        AddGradientButton(page, row, owner, entry.label, entry.id, preview, on_click, on_overwrite, on_delete, on_reset, customized);
+        AddGradientButton(page, flow, owner, entry.label, entry.id, preview, on_click, on_overwrite, on_delete, on_reset, customized);
     }
     for(const EffectPackUserGradients::Entry& entry : EffectPackUserGradients::Hidden(user_path))
     {
@@ -436,18 +539,15 @@ QWidget* BuildGradientsPage(QWidget* owner, const std::function<void(const QStri
                 on_reset(id);
             }
         });
-        row->addWidget(btn);
+        flow->addWidget(btn);
     }
-    row->addStretch(1);
-    return WrapPalette(page);
+    return page;
 }
 
 QWidget* BuildCurvesPage(QWidget* owner, const filesystem::path& curves_path, const std::function<void(const QString&)>& on_click)
 {
     auto* page = new QWidget();
-    auto* row = new QHBoxLayout(page);
-    row->setContentsMargins(2, 2, 2, 2);
-    row->setSpacing(4);
+    auto* flow = new FlowLayout(page, 2, 4, 4);
     for(const EffectPackUserCurves::Entry& c : EffectPackUserCurves::Load(curves_path))
     {
         auto* btn = new DragToolButton(page);
@@ -462,10 +562,9 @@ QWidget* BuildCurvesPage(QWidget* owner, const filesystem::path& curves_path, co
         QObject::connect(btn, &QToolButton::clicked, owner, [on_click, id]() {
             on_click(id);
         });
-        row->addWidget(btn);
+        flow->addWidget(btn);
     }
-    row->addStretch(1);
-    return WrapPalette(page);
+    return page;
 }
 
 } // namespace

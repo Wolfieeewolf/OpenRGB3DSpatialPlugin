@@ -6,6 +6,7 @@
 #include "EffectPackTimelineWidget.h"
 #include "EffectPackToolBar.h"
 #include "EffectPacks/EffectPackApplier.h"
+#include "EffectPacks/EffectPackMedia.h"
 #include "EffectPacks/EffectScript.h"
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
@@ -21,7 +22,6 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QFrame>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -148,8 +148,25 @@ EffectPackTimelineWidget::Node EffectPackEditorDialog::buildControllerNode(Contr
         ZoneBucket& bucket = zones[zone_key];
         if(bucket.zone_name.isEmpty())
         {
-            bucket.zone_name = rgb ? ZoneLabelForLed(rgb, led.zone_idx) : QStringLiteral("LEDs");
-            bucket.label = bucket.zone_name;
+            // Canonical OpenRGB zone name for matching; UI label stays display-friendly.
+            if(rgb)
+            {
+                bucket.zone_name = QString::fromStdString(rgb->GetZoneName(led.zone_idx));
+                if(bucket.zone_name.isEmpty())
+                {
+                    bucket.zone_name = QString::fromStdString(rgb->GetZoneDisplayName(led.zone_idx));
+                }
+                if(bucket.zone_name.isEmpty())
+                {
+                    bucket.zone_name = QStringLiteral("Zone %1").arg(led.zone_idx);
+                }
+                bucket.label = ZoneLabelForLed(rgb, led.zone_idx);
+            }
+            else
+            {
+                bucket.zone_name = QStringLiteral("LEDs");
+                bucket.label = bucket.zone_name;
+            }
         }
         int global = -1;
         if(rgb && TryGlobalLedIndex(rgb, led.zone_idx, led.led_idx, &global))
@@ -257,7 +274,7 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
                 return;
             }
             EffectPackTimelineWidget::Node ctrl = buildControllerNode(transform, i);
-            ctrl.expanded = !ctrl.children.isEmpty();
+            ctrl.expanded = false;
             ctrl.transform_index = i;
             ctrl.scene_zone_name = scene_zone_name;
             ctrl.reorderable = reorderable;
@@ -422,7 +439,7 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
         });
         for(int i : loose)
         {
-            append_controller(i, &ungrouped, QString(), true);
+            append_controller(i, &ungrouped, QStringLiteral("__ungrouped__"), true);
         }
         if(!ungrouped.children.isEmpty())
         {
@@ -443,10 +460,55 @@ void EffectPackEditorDialog::onRebuildTimelineModel()
 void EffectPackEditorDialog::onSceneZoneControllersReordered(const QString& scene_zone_name,
                                                              const QVector<int>& controller_indices)
 {
-    if(!tab_ || scene_zone_name == QStringLiteral("__ungrouped__"))
+    if(!tab_ || controller_indices.isEmpty())
     {
         return;
     }
+
+    const bool ungrouped = scene_zone_name.isEmpty()
+        || scene_zone_name == QStringLiteral("__ungrouped__");
+
+    // Persist order into the scene zone when one is named (keeps non-pack members).
+    if(!ungrouped)
+    {
+        ZoneManager3D* zones = tab_->GetZoneManager();
+        Zone3D* zone = zones ? zones->GetZoneByName(scene_zone_name.toStdString()) : nullptr;
+        if(zone)
+        {
+            const std::vector<int>& full = zone->GetControllers();
+            std::vector<int> result;
+            result.reserve(full.size());
+            bool spliced = false;
+            for(int idx : full)
+            {
+                const bool in_order = controller_indices.contains(idx);
+                if(in_order)
+                {
+                    if(!spliced)
+                    {
+                        for(int n : controller_indices)
+                        {
+                            result.push_back(n);
+                        }
+                        spliced = true;
+                    }
+                }
+                else
+                {
+                    result.push_back(idx);
+                }
+            }
+            if(!spliced)
+            {
+                for(int n : controller_indices)
+                {
+                    result.push_back(n);
+                }
+            }
+            zone->SetControllers(std::move(result));
+        }
+    }
+
     const auto& transforms = tab_->GetControllerTransforms();
     std::vector<std::string> group;
     group.reserve((size_t)controller_indices.size());
@@ -460,10 +522,17 @@ void EffectPackEditorDialog::onSceneZoneControllersReordered(const QString& scen
     }
     if(group.empty())
     {
+        onRebuildTimelineModel();
         return;
     }
+
+    // Materialize "all devices" into an explicit list once — must not call
+    // deviceSelectedForPack() while pack_.devices is being filled (empty ⇒ all,
+    // so the first push would filter out every subsequent controller).
     if(pack_.devices.empty())
     {
+        std::vector<std::string> all;
+        all.reserve(transforms.size());
         for(int i = 0; i < (int)transforms.size(); ++i)
         {
             ControllerTransform* transform = transforms[(size_t)i].get();
@@ -471,30 +540,52 @@ void EffectPackEditorDialog::onSceneZoneControllersReordered(const QString& scen
             {
                 continue;
             }
-            const std::string key = ControllerKeyName(transform, i);
-            if(deviceSelectedForPack(key))
+            all.push_back(ControllerKeyName(transform, i));
+        }
+        pack_.devices = std::move(all);
+    }
+
+    auto matches_group = [&](const std::string& name) {
+        for(const std::string& g : group)
+        {
+            if(EffectPack::NameMatches(name, g) || EffectPack::NameMatches(g, name))
             {
-                pack_.devices.push_back(key);
+                return true;
             }
         }
-    }
-    std::vector<size_t> device_indexes;
+        return false;
+    };
+
+    std::vector<size_t> device_slots;
     for(size_t i = 0; i < pack_.devices.size(); ++i)
     {
-        if(std::find(group.begin(), group.end(), pack_.devices[i]) != group.end())
+        if(matches_group(pack_.devices[i]))
         {
-            device_indexes.push_back(i);
+            device_slots.push_back(i);
         }
     }
-    for(size_t i = 0; i < device_indexes.size() && i < group.size(); ++i)
+    if(device_slots.size() == group.size())
     {
-        pack_.devices[device_indexes[i]] = group[i];
+        for(size_t i = 0; i < device_slots.size(); ++i)
+        {
+            pack_.devices[device_slots[i]] = group[i];
+        }
     }
+
     onRebuildTimelineModel();
     if(status_label_)
     {
-        status_label_->setText(QStringLiteral(
-            "All / Sequence order updated. Left-to-right wipes still follow the 3D layout."));
+        if(ungrouped)
+        {
+            status_label_->setText(QStringLiteral(
+                "Controller order updated for Sequence space."));
+        }
+        else
+        {
+            status_label_->setText(
+                QStringLiteral("Reordered controllers in “%1” (Sequence space uses this order)")
+                    .arg(scene_zone_name));
+        }
     }
 }
 
@@ -506,6 +597,8 @@ int EffectPackEditorDialog::ensureTrackForTarget(const EffectPack::Target& targe
         if(existing.kind == target.kind
            && existing.device_name == target.device_name
            && existing.zone_name == target.zone_name
+           && existing.scene_zone_name == target.scene_zone_name
+           && existing.flatten_leds == target.flatten_leds
            && existing.led_indices == target.led_indices)
         {
             return i;
@@ -562,7 +655,28 @@ void EffectPackEditorDialog::addBlockAt(int row_index, int ms, const QString& ef
     block.axis_pitch_deg = 0.0f;
     block.speed = 1.0f;
     block.pulse_length = 0.25f;
+    if(EffectPack::IsMediaEffect(block.effect_id))
+    {
+        block.axis_space = EffectPack::AxisSpace::Device;
+        block.period_ms = 2000;
+        block.media_scroll = (block.effect_id == "media_text");
+        if(block.media_scroll)
+        {
+            block.media_text = "HELLO";
+            block.color = ToRGBColor(255, 220, 60);
+        }
+    }
     EffectPack::EnsureBlockGradient(&block);
+    // Carry the currently selected gradient preset onto new blocks (combo does not
+    // re-fire currentIndexChanged when the same preset stays selected).
+    if(gradient_preset_)
+    {
+        const QString preset = gradient_preset_->currentData().toString();
+        if(!preset.isEmpty())
+        {
+            applyGradientPresetToBlock(&block, preset);
+        }
+    }
     pack_.tracks[(size_t)track].blocks.push_back(block);
     selected_track_ = track;
     selected_block_ = (int)pack_.tracks[(size_t)track].blocks.size() - 1;

@@ -39,7 +39,6 @@ EffectPackGradientBar::EffectPackGradientBar(QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     stops_ = {
         {0.0f, ToRGBColor(255, 0, 0)},
-        {1.0f, ToRGBColor(255, 255, 255)},
     };
 }
 
@@ -48,7 +47,7 @@ void EffectPackGradientBar::setStops(std::vector<EffectPack::GradientStop> stops
     stops_ = std::move(stops);
     if(stops_.empty())
     {
-        stops_ = {{0.0f, ToRGBColor(255, 0, 0)}, {1.0f, ToRGBColor(255, 255, 255)}};
+        stops_ = {{0.0f, ToRGBColor(255, 0, 0)}};
     }
     sortStops();
     update();

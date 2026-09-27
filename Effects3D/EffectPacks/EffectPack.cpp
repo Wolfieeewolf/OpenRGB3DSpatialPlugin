@@ -19,16 +19,139 @@ float BlockProgress(const Block& block, int local_ms)
     t = std::clamp(t, 0.0f, 1.0f);
     const float speed = std::max(0.05f, block.speed);
     const float scaled = t * speed;
+    float result = 0.0f;
     if(scaled <= 0.0f)
     {
-        return 0.0f;
+        result = 0.0f;
     }
-    const float wrapped = scaled - std::floor(scaled);
-    if(wrapped <= 1e-6f)
+    else
     {
-        return 1.0f;
+        // Keep fractional progress in [0, 1). Mapping near-zero wrap → 1.0 made wipes/chases
+        // briefly light the far end at cycle seams (including just after t=0 with float noise).
+        const float wrapped = scaled - std::floor(scaled);
+        if(t >= 1.0f && wrapped <= 1e-6f)
+        {
+            // True block end on an integer cycle: show completed (fully wiped), not restarted.
+            result = 1.0f;
+        }
+        else
+        {
+            result = wrapped;
+        }
     }
-    return wrapped;
+    if(block.reverse)
+    {
+        result = 1.0f - result;
+    }
+    return result;
+}
+
+float BlockPeriodProgress(const Block& block, int local_ms)
+{
+    const int elapsed = std::max(0, local_ms - block.start_ms);
+    const float speed = std::max(0.05f, block.speed);
+    const float period = std::max(1.0f, (float)std::max(1, block.period_ms) / speed);
+    float phase = std::fmod((float)elapsed, period);
+    if(phase < 0.0f)
+    {
+        phase += period;
+    }
+    return std::clamp(phase / period, 0.0f, 1.0f);
+}
+
+void ApplyBlockUvTransform(const Block& block, float* u, float* v)
+{
+    if(!u || !v)
+    {
+        return;
+    }
+    float uu = std::clamp(*u, 0.0f, 1.0f);
+    float vv = std::clamp(*v, 0.0f, 1.0f);
+    int q = block.rotate_quarters % 4;
+    if(q < 0)
+    {
+        q += 4;
+    }
+    for(int i = 0; i < q; ++i)
+    {
+        // 90° CW around (0.5, 0.5): (u,v) → (v, 1-u)
+        const float nu = vv;
+        const float nv = 1.0f - uu;
+        uu = nu;
+        vv = nv;
+    }
+    if(block.flip_h)
+    {
+        uu = 1.0f - uu;
+    }
+    if(block.flip_v)
+    {
+        vv = 1.0f - vv;
+    }
+    *u = uu;
+    *v = vv;
+}
+
+float ApplyBlockAxisMirror(const Block& block, float axis)
+{
+    float a = std::clamp(axis, 0.0f, 1.0f);
+    int q = block.rotate_quarters % 4;
+    if(q < 0)
+    {
+        q += 4;
+    }
+    // 180° reverses a 1D strip; 90/270 need a V axis (media path handles those).
+    if(q == 2)
+    {
+        a = 1.0f - a;
+    }
+    if(block.flip_h)
+    {
+        a = 1.0f - a;
+    }
+    return a;
+}
+
+void ModulateBlockIntensity(const Block& block, float block_progress, float period_progress, float* intensity)
+{
+    if(!intensity)
+    {
+        return;
+    }
+    if(!block.intensity_curve.empty())
+    {
+        *intensity *= SampleCurve(block.intensity_curve, block_progress);
+    }
+    if(!block.period_curve.empty())
+    {
+        *intensity *= SampleCurve(block.period_curve, period_progress);
+    }
+    *intensity = std::clamp(*intensity, 0.0f, 1.0f);
+}
+
+Direction OppositeDirection(Direction dir)
+{
+    switch(dir)
+    {
+        case Direction::Left: return Direction::Right;
+        case Direction::Right: return Direction::Left;
+        case Direction::Up: return Direction::Down;
+        case Direction::Down: return Direction::Up;
+        case Direction::Forward: return Direction::Back;
+        case Direction::Back: return Direction::Forward;
+        case Direction::PosX: return Direction::NegX;
+        case Direction::NegX: return Direction::PosX;
+        case Direction::PosY: return Direction::NegY;
+        case Direction::NegY: return Direction::PosY;
+        case Direction::PosZ: return Direction::NegZ;
+        case Direction::NegZ: return Direction::PosZ;
+        default:
+        {
+            const Direction unused = dir;
+            (void)unused;
+            return Direction::Left;
+        }
+    }
 }
 
 bool DirectionInvertsAxis(Direction dir)
@@ -99,8 +222,8 @@ void EnsureBlockGradient(Block* block)
         block->gradient.push_back({1.0f, block->color_to});
         return;
     }
+    // Single stop for solid / blink / etc. — alternating treats one colour as colour↔off.
     block->gradient.push_back({0.0f, block->color});
-    block->gradient.push_back({1.0f, block->color});
 }
 
 RGBColor SampleGradient(const Block& block, float t)
@@ -139,9 +262,49 @@ RGBColor SampleGradient(const Block& block, float t)
     return block.gradient.back().color;
 }
 
-bool EvaluateBlock(const Block& block, int local_ms, RGBColor* out_color, float* out_intensity)
+RGBColor SampleGradientStop(const Block& block, int index)
 {
-    return EvaluateBlockAtLed(block, local_ms, 0, 1, out_color, out_intensity);
+    Block sample = block;
+    EnsureBlockGradient(&sample);
+    if(sample.gradient.empty())
+    {
+        return block.color;
+    }
+    const int n = (int)sample.gradient.size();
+    index %= n;
+    if(index < 0)
+    {
+        index += n;
+    }
+    return sample.gradient[(size_t)index].color;
+}
+
+int UniqueGradientStopCount(const Block& block)
+{
+    Block sample = block;
+    EnsureBlockGradient(&sample);
+    if(sample.gradient.empty())
+    {
+        return 1;
+    }
+    int count = 0;
+    for(size_t i = 0; i < sample.gradient.size(); ++i)
+    {
+        bool seen = false;
+        for(size_t j = 0; j < i; ++j)
+        {
+            if(sample.gradient[j].color == sample.gradient[i].color)
+            {
+                seen = true;
+                break;
+            }
+        }
+        if(!seen)
+        {
+            ++count;
+        }
+    }
+    return std::max(1, count);
 }
 
 bool MapPlaybackTime(const Pack& pack, int elapsed_ms, bool event_active, int* out_local_ms)

@@ -273,6 +273,31 @@ nlohmann::json ToJson(const Pack& pack)
             bj["axis_pitch_deg"] = block.axis_pitch_deg;
             bj["speed"] = block.speed;
             bj["pulse_length"] = block.pulse_length;
+            bj["reverse"] = block.reverse;
+            if(block.flip_h)
+            {
+                bj["flip_h"] = true;
+            }
+            if(block.flip_v)
+            {
+                bj["flip_v"] = true;
+            }
+            if(block.rotate_quarters != 0)
+            {
+                bj["rotate_quarters"] = ((block.rotate_quarters % 4) + 4) % 4;
+            }
+            if(!block.media_path.empty())
+            {
+                bj["media_path"] = block.media_path;
+            }
+            if(!block.media_text.empty())
+            {
+                bj["media_text"] = block.media_text;
+            }
+            if(block.media_scroll)
+            {
+                bj["media_scroll"] = true;
+            }
             if(!block.gradient.empty())
             {
                 bj["gradient"] = GradientToJson(block.gradient);
@@ -288,6 +313,18 @@ nlohmann::json ToJson(const Pack& pack)
                     carr.push_back(cj);
                 }
                 bj["intensity_curve"] = carr;
+            }
+            if(!block.period_curve.empty())
+            {
+                nlohmann::json carr = nlohmann::json::array();
+                for(const CurvePoint& cp : block.period_curve)
+                {
+                    nlohmann::json cj;
+                    cj["pos"] = cp.pos;
+                    cj["value"] = cp.value;
+                    carr.push_back(cj);
+                }
+                bj["period_curve"] = carr;
             }
             tj["blocks"].push_back(bj);
         }
@@ -434,6 +471,23 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             block.max_intensity = std::clamp(bj.value("max_intensity", 1.0f), 0.0f, 1.0f);
             block.speed = std::max(0.05f, bj.value("speed", 1.0f));
             block.pulse_length = std::clamp(bj.value("pulse_length", 0.25f), 0.02f, 1.0f);
+            block.reverse = bj.value("reverse", false);
+            block.flip_h = bj.value("flip_h", false);
+            block.flip_v = bj.value("flip_v", false);
+            block.rotate_quarters = bj.value("rotate_quarters", 0) % 4;
+            if(block.rotate_quarters < 0)
+            {
+                block.rotate_quarters += 4;
+            }
+            if(bj.contains("media_path") && bj["media_path"].is_string())
+            {
+                block.media_path = bj["media_path"].get<std::string>();
+            }
+            if(bj.contains("media_text") && bj["media_text"].is_string())
+            {
+                block.media_text = bj["media_text"].get<std::string>();
+            }
+            block.media_scroll = bj.value("media_scroll", false);
 
             Direction dir = Direction::Right;
             if(bj.contains("direction") && bj["direction"].is_string())
@@ -477,6 +531,18 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
                     block.intensity_curve.push_back(cp);
                 }
                 std::sort(block.intensity_curve.begin(), block.intensity_curve.end(),
+                          [](const CurvePoint& a, const CurvePoint& b) { return a.pos < b.pos; });
+            }
+            if(bj.contains("period_curve") && bj["period_curve"].is_array())
+            {
+                for(const auto& cj : bj["period_curve"])
+                {
+                    CurvePoint cp;
+                    cp.pos = std::clamp(cj.value("pos", 0.0f), 0.0f, 1.0f);
+                    cp.value = std::clamp(cj.value("value", 1.0f), 0.0f, 1.0f);
+                    block.period_curve.push_back(cp);
+                }
+                std::sort(block.period_curve.begin(), block.period_curve.end(),
                           [](const CurvePoint& a, const CurvePoint& b) { return a.pos < b.pos; });
             }
 

@@ -27,27 +27,7 @@ namespace
 
 bool TargetsEqual(const EffectPack::Target& a, const EffectPack::Target& b)
 {
-    if(a.kind != b.kind || a.flatten_leds != b.flatten_leds)
-    {
-        return false;
-    }
-    switch(a.kind)
-    {
-        case EffectPack::TargetKind::All:
-            return true;
-        case EffectPack::TargetKind::Device:
-            return a.device_name == b.device_name;
-        case EffectPack::TargetKind::Zone:
-            return a.device_name == b.device_name && a.zone_name == b.zone_name;
-        case EffectPack::TargetKind::Leds:
-            return a.device_name == b.device_name
-                && a.zone_name == b.zone_name
-                && a.led_indices == b.led_indices;
-        case EffectPack::TargetKind::SceneZone:
-            return a.scene_zone_name == b.scene_zone_name
-                && a.flatten_leds == b.flatten_leds;
-    }
-    return false;
+    return EffectPack::TargetEquals(a, b);
 }
 
 } // namespace
@@ -268,9 +248,7 @@ void EffectPackTimelineWidget::setPixelsPerSecond(double pps)
 
 void EffectPackTimelineWidget::setSelectedBlock(int track_index, int block_index)
 {
-    selected_track_ = track_index;
-    selected_block_ = block_index;
-    update();
+    setPrimarySelection(track_index, block_index);
 }
 
 void EffectPackTimelineWidget::cancelDrag()
@@ -286,6 +264,18 @@ void EffectPackTimelineWidget::cancelDrag()
     drag_track_ = -1;
     drag_block_ = -1;
     drag_moved_ = false;
+    drag_copy_ = false;
+    drag_copy_source_track_ = -1;
+    drag_dest_row_ = -1;
+    drag_home_row_ = -1;
+    drag_float_y_ = 0;
+    drag_grab_offset_y_ = 0;
+    drag_span_anchor_row_ = -1;
+    drag_span_hover_row_ = -1;
+    drag_group_.clear();
+    marquee_origin_ = QPoint();
+    marquee_current_ = QPoint();
+    releaseMouse();
     unsetCursor();
     update();
 }
@@ -307,6 +297,29 @@ int EffectPackTimelineWidget::trackIndexForRow(int row) const
     return -1;
 }
 
+QVector<EffectPack::Target> EffectPackTimelineWidget::subtreeTargetsForRow(int row) const
+{
+    QVector<EffectPack::Target> out;
+    if(row < 0 || row >= visible_rows_.size())
+    {
+        return out;
+    }
+    const Node* root = nodeAtPath(visible_rows_[row].path);
+    if(!root)
+    {
+        return out;
+    }
+    std::function<void(const Node&)> walk = [&](const Node& node) {
+        out.push_back(node.target);
+        for(const Node& child : node.children)
+        {
+            walk(child);
+        }
+    };
+    walk(*root);
+    return out;
+}
+
 QVector<EffectPackTimelineWidget::PaintBlock> EffectPackTimelineWidget::paintBlocksForRow(int row) const
 {
     QVector<PaintBlock> out;
@@ -318,7 +331,7 @@ QVector<EffectPackTimelineWidget::PaintBlock> EffectPackTimelineWidget::paintBlo
     for(int ti = 0; ti < (int)pack_->tracks.size(); ++ti)
     {
         const EffectPack::Track& track = pack_->tracks[(size_t)ti];
-        if(!TargetsEqual(track.target, r.target))
+        if(!trackCoversRow(track, r))
         {
             continue;
         }
@@ -444,12 +457,26 @@ bool EffectPackTimelineWidget::hitTestBlock(int x, int y, int* out_row, int* out
         if(out_block) *out_block = pb.block_index;
         if(out_hit)
         {
-            const int edge = std::min(edge_hit_px_, std::max(3, br.width() / 3));
-            if(x <= br.left() + edge)
+            const int edge_x = std::min(edge_hit_px_, std::max(3, br.width() / 3));
+            const int edge_y = std::min(6, std::max(3, br.height() / 3));
+            // Prefer vertical edges when near top/bottom centre (away from L/R time handles).
+            const bool near_top = y <= br.top() + edge_y;
+            const bool near_bot = y >= br.bottom() - edge_y;
+            const bool near_left = x <= br.left() + edge_x;
+            const bool near_right = x >= br.right() - edge_x;
+            if(near_top && !near_left && !near_right)
+            {
+                *out_hit = BlockHit::TopEdge;
+            }
+            else if(near_bot && !near_left && !near_right)
+            {
+                *out_hit = BlockHit::BottomEdge;
+            }
+            else if(near_left)
             {
                 *out_hit = BlockHit::LeftEdge;
             }
-            else if(x >= br.right() - edge)
+            else if(near_right)
             {
                 *out_hit = BlockHit::RightEdge;
             }

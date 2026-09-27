@@ -151,4 +151,29 @@ bool Apply(EffectPack::Block* block, const QString& preset_id, const filesystem:
     return false;
 }
 
+bool Upsert(const filesystem::path& path, const Entry& entry)
+{
+    if(entry.id.isEmpty() || entry.points.size() < 2)
+    {
+        return false;
+    }
+    std::vector<Entry> entries = Load(path);
+    bool found = false;
+    for(Entry& existing : entries)
+    {
+        if(existing.id != entry.id)
+        {
+            continue;
+        }
+        existing = entry;
+        found = true;
+        break;
+    }
+    if(!found)
+    {
+        entries.push_back(entry);
+    }
+    return Write(path, entries);
+}
+
 } // namespace EffectPackUserCurves

@@ -2,6 +2,7 @@
 
 #include "EffectPackEditorDialog.h"
 #include "EffectPackCatalog.h"
+#include "EffectPackCurveBar.h"
 #include "EffectPackUserCurves.h"
 #include "EffectPackGradientBar.h"
 #include "EffectPackTimelineWidget.h"
@@ -19,13 +20,15 @@
 
 #include <QAbstractItemView>
 #include <QAbstractSpinBox>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QFrame>
-#include <QGroupBox>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -39,11 +42,12 @@
 #include <QSpinBox>
 #include <QSplitter>
 #include <QTimer>
+#include <QToolButton>
+#include <QMenu>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
-#include <map>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -118,6 +122,8 @@ void EffectPackEditorDialog::buildUi()
     auto* root = new QVBoxLayout(this);
 
     const filesystem::path effect_files_dir = PluginSettingsPaths::TimelineBlocksDir(tab_ ? tab_->resource_manager : nullptr);
+    EffectPack::SetEffectScriptDirectory(effect_files_dir);
+    EffectPack::ReloadEffectScripts();
     effect_toolbar_ = new EffectPackToolBar(
         PluginSettingsPaths::UserGradientsFile(tab_ ? tab_->resource_manager : nullptr),
         PluginSettingsPaths::UserColorsFile(tab_ ? tab_->resource_manager : nullptr),
@@ -178,6 +184,66 @@ void EffectPackEditorDialog::buildUi()
     timeline_row->addWidget(controllers_button_, 1);
     timeline_row->addWidget(map_controllers_button_);
 
+    auto attachIntSpinSlider = [](QSpinBox* spin, const QString& tip, int single_step = 1, int page_step = 10) {
+        auto* slider = new QSlider(Qt::Horizontal);
+        slider->setRange(spin->minimum(), spin->maximum());
+        slider->setValue(spin->value());
+        slider->setSingleStep(single_step);
+        slider->setPageStep(page_step);
+        slider->setFixedHeight(14);
+        slider->setToolTip(tip);
+        QObject::connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
+        QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), slider, [slider](int value) {
+            const bool blocked = slider->blockSignals(true);
+            slider->setValue(value);
+            slider->blockSignals(blocked);
+        });
+        auto* wrap = new QWidget();
+        auto* lay = new QVBoxLayout(wrap);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(0);
+        lay->addWidget(spin);
+        lay->addWidget(slider);
+        return std::pair<QWidget*, QSlider*>{wrap, slider};
+    };
+    auto attachDoubleSpinSlider = [](QDoubleSpinBox* spin, const QString& tip) {
+        int scale = 1;
+        for(int i = 0; i < spin->decimals(); ++i)
+        {
+            scale *= 10;
+        }
+        auto* slider = new QSlider(Qt::Horizontal);
+        const int min_i = (int)std::lround(spin->minimum() * (double)scale);
+        const int max_i = (int)std::lround(spin->maximum() * (double)scale);
+        slider->setRange(min_i, std::max(min_i, max_i));
+        slider->setValue((int)std::lround(spin->value() * (double)scale));
+        slider->setSingleStep(std::max(1, (int)std::lround(spin->singleStep() * (double)scale)));
+        slider->setPageStep(std::max(slider->singleStep() * 5, slider->singleStep()));
+        slider->setFixedHeight(14);
+        slider->setToolTip(tip);
+        QObject::connect(slider, &QSlider::valueChanged, spin, [spin, scale](int value) {
+            spin->setValue((double)value / (double)scale);
+        });
+        QObject::connect(spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), slider,
+                         [slider, scale](double value) {
+                             const bool blocked = slider->blockSignals(true);
+                             slider->setValue((int)std::lround(value * (double)scale));
+                             slider->blockSignals(blocked);
+                         });
+        auto* wrap = new QWidget();
+        auto* lay = new QVBoxLayout(wrap);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(0);
+        lay->addWidget(spin);
+        lay->addWidget(slider);
+        return std::pair<QWidget*, QSlider*>{wrap, slider};
+    };
+
+    const auto duration_field = attachIntSpinSlider(duration_spin_,
+                                                    QStringLiteral("Drag to set pack duration"),
+                                                    100,
+                                                    500);
+
     auto* pack_sec = new EffectCollapsibleSection(QStringLiteral("Pack"));
     pack_sec->setExpanded(true);
     pack_sec->bodyLayout()->setSpacing(6);
@@ -187,7 +253,7 @@ void EffectPackEditorDialog::buildUi()
     pack_form->setSpacing(6);
     pack_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     pack_form->addRow(QStringLiteral("Name"), name_edit_);
-    pack_form->addRow(QStringLiteral("Duration"), duration_spin_);
+    pack_form->addRow(QStringLiteral("Duration"), duration_field.first);
     pack_form->addRow(QStringLiteral("Loop"), loop_combo_);
     pack_form->addRow(QStringLiteral("Timeline"), timeline_buttons);
     pack_sec->bodyLayout()->addLayout(pack_form);
@@ -214,30 +280,8 @@ void EffectPackEditorDialog::buildUi()
     end_spin_->setRange(1, EffectPack::kMaxDurationMs);
     end_spin_->setSuffix(QStringLiteral(" ms"));
     end_spin_->setKeyboardTracking(false);
-    auto attachTimeSlider = [](QSpinBox* spin, const QString& tip) {
-        auto* slider = new QSlider(Qt::Horizontal);
-        slider->setRange(spin->minimum(), spin->maximum());
-        slider->setValue(spin->value());
-        slider->setSingleStep(10);
-        slider->setPageStep(100);
-        slider->setFixedHeight(14);
-        slider->setToolTip(tip);
-        QObject::connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
-        QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), slider, [slider](int value) {
-            const bool blocked = slider->blockSignals(true);
-            slider->setValue(value);
-            slider->blockSignals(blocked);
-        });
-        auto* wrap = new QWidget();
-        auto* lay = new QVBoxLayout(wrap);
-        lay->setContentsMargins(0, 0, 0, 0);
-        lay->setSpacing(0);
-        lay->addWidget(spin);
-        lay->addWidget(slider);
-        return std::pair<QWidget*, QSlider*>{wrap, slider};
-    };
-    const auto start_field = attachTimeSlider(start_spin_, QStringLiteral("Drag to set the start time"));
-    const auto end_field = attachTimeSlider(end_spin_, QStringLiteral("Drag to set the end time"));
+    const auto start_field = attachIntSpinSlider(start_spin_, QStringLiteral("Drag to set the start time"), 10, 100);
+    const auto end_field = attachIntSpinSlider(end_spin_, QStringLiteral("Drag to set the end time"), 10, 100);
     start_slider_ = start_field.second;
     end_slider_ = end_field.second;
     syncTimeSliderRanges();
@@ -246,6 +290,31 @@ void EffectPackEditorDialog::buildUi()
     effect_form->addRow(QStringLiteral("End"), end_field.first);
     effect_sec->bodyLayout()->addLayout(effect_form);
     props_inner_layout->addWidget(effect_sec);
+
+    media_section_ = new EffectCollapsibleSection(QStringLiteral("Media / Matrix"));
+    static_cast<EffectCollapsibleSection*>(media_section_)->setExpanded(true);
+    media_path_edit_ = new QLineEdit();
+    media_path_edit_->setPlaceholderText(QStringLiteral("Path to image or GIF…"));
+    media_browse_button_ = new QPushButton(QStringLiteral("Browse…"));
+    media_text_edit_ = new QLineEdit();
+    media_text_edit_->setPlaceholderText(QStringLiteral("Marquee text"));
+    media_scroll_check_ = new QCheckBox(QStringLiteral("Scroll / marquee"));
+    media_scroll_check_->setToolTip(
+        QStringLiteral("Slide image/text across LEDs using Direction, Speed, and Period."));
+    auto* media_path_row = new QWidget();
+    auto* media_path_layout = new QHBoxLayout(media_path_row);
+    media_path_layout->setContentsMargins(0, 0, 0, 0);
+    media_path_layout->setSpacing(6);
+    media_path_layout->addWidget(media_path_edit_, 1);
+    media_path_layout->addWidget(media_browse_button_);
+    auto* media_form = new QFormLayout();
+    media_form->setContentsMargins(0, 0, 0, 0);
+    media_form->setSpacing(6);
+    media_form->addRow(QStringLiteral("File"), media_path_row);
+    media_form->addRow(QStringLiteral("Text"), media_text_edit_);
+    media_form->addRow(QString(), media_scroll_check_);
+    static_cast<EffectCollapsibleSection*>(media_section_)->bodyLayout()->addLayout(media_form);
+    props_inner_layout->addWidget(media_section_);
 
     auto* color_sec = new EffectCollapsibleSection(QStringLiteral("Color"));
     color_sec->setExpanded(true);
@@ -265,7 +334,7 @@ void EffectPackEditorDialog::buildUi()
     color_to_layout->setSpacing(6);
     gradient_preset_ = new QComboBox();
     save_gradient_button_ = new QPushButton(QStringLiteral("Save"));
-    save_gradient_button_->setToolTip(QStringLiteral("Save the current gradient as a preset"));
+    save_gradient_button_->setToolTip(QStringLiteral("Overwrite the selected preset (including defaults) or save as a new one"));
     delete_gradient_button_ = new QPushButton(QStringLiteral("Delete"));
     delete_gradient_button_->setToolTip(QStringLiteral("Remove the selected gradient preset"));
     delete_gradient_button_->setEnabled(false);
@@ -293,37 +362,76 @@ void EffectPackEditorDialog::buildUi()
     preset_form->addRow(QStringLiteral("Preset"), preset_row);
     refillGradientPresets();
     color_sec->bodyLayout()->addLayout(preset_form);
-    color_sec->bodyLayout()->addWidget(new QLabel(QStringLiteral("Color gradient")));
+    color_sec->bodyLayout()->addWidget(new QLabel(QStringLiteral("Colors / gradient")));
     color_sec->bodyLayout()->addWidget(gradient_bar_);
+    auto* swatch_row = new QWidget();
+    auto* swatch_layout = new QHBoxLayout(swatch_row);
+    swatch_layout->setContentsMargins(0, 0, 0, 0);
+    swatch_layout->setSpacing(6);
+    add_color_button_ = new QPushButton(QStringLiteral("Add colour"));
+    add_color_button_->setToolTip(QStringLiteral("Add another colour stop (blink/alternating use these as swatches)"));
+    remove_color_button_ = new QPushButton(QStringLiteral("Remove colour"));
+    remove_color_button_->setToolTip(QStringLiteral("Remove the last colour stop (one colour left = on/off for blink & alternating)"));
+    swatch_layout->addWidget(add_color_button_);
+    swatch_layout->addWidget(remove_color_button_);
+    swatch_layout->addStretch(1);
+    color_sec->bodyLayout()->addWidget(swatch_row);
     auto* grad_help = new QLabel(
-        QStringLiteral("Drag stops · click bar to add · double-click recolour · right-click remove"));
+        QStringLiteral("Gradient: drag stops · click bar to add · right-click remove.\n"
+                       "Swatches: Add/Remove for blink (on/off) and alternating (colour↔off or colour↔colour)."));
     grad_help->setWordWrap(true);
     PluginUiApplyMutedSecondaryLabel(grad_help);
     color_sec->bodyLayout()->addWidget(grad_help);
     props_inner_layout->addWidget(color_sec);
 
     auto* bright_sec = new EffectCollapsibleSection(QStringLiteral("Brightness"));
-    bright_sec->setExpanded(false);
+    bright_sec->setExpanded(true);
     bright_sec->bodyLayout()->setSpacing(6);
     bright_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     intensity_spin_ = new QSpinBox();
     intensity_spin_->setRange(1, 100);
     intensity_spin_->setValue(100);
+    intensity_spin_->setToolTip(QStringLiteral("Overall brightness scale for this effect"));
     min_intensity_spin_ = new QSpinBox();
     min_intensity_spin_->setRange(0, 100);
     min_intensity_spin_->setValue(15);
+    min_intensity_spin_->setToolTip(QStringLiteral("Floor used by blink/pulse scripts and as the low end of the intensity range"));
+    max_intensity_spin_ = new QSpinBox();
+    max_intensity_spin_->setRange(1, 100);
+    max_intensity_spin_->setValue(100);
+    max_intensity_spin_->setToolTip(QStringLiteral("Ceiling used by scripts (soft max for twinkle/candle/etc.)"));
+    const auto intensity_field = attachIntSpinSlider(intensity_spin_,
+                                                     QStringLiteral("Drag to set intensity"),
+                                                     1,
+                                                     5);
+    const auto min_intensity_field = attachIntSpinSlider(min_intensity_spin_,
+                                                         QStringLiteral("Drag to set minimum intensity floor"),
+                                                         1,
+                                                         5);
+    const auto max_intensity_field = attachIntSpinSlider(max_intensity_spin_,
+                                                         QStringLiteral("Drag to set maximum intensity ceiling"),
+                                                         1,
+                                                         5);
     auto* bright_form = new QFormLayout();
     bright_form->setContentsMargins(0, 0, 0, 0);
     bright_form->setSpacing(6);
     bright_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    bright_form->addRow(QStringLiteral("Intensity %"), intensity_spin_);
+    bright_form->addRow(QStringLiteral("Intensity %"), intensity_field.first);
     min_intensity_row_ = new QWidget();
-    auto* min_row_layout = new QHBoxLayout(min_intensity_row_);
+    auto* min_row_layout = new QVBoxLayout(min_intensity_row_);
     min_row_layout->setContentsMargins(0, 0, 0, 0);
+    min_row_layout->setSpacing(2);
     min_row_layout->addWidget(new QLabel(QStringLiteral("Min % (floor)")));
-    min_row_layout->addWidget(min_intensity_spin_, 1);
+    min_row_layout->addWidget(min_intensity_field.first);
+    max_intensity_row_ = new QWidget();
+    auto* max_row_layout = new QVBoxLayout(max_intensity_row_);
+    max_row_layout->setContentsMargins(0, 0, 0, 0);
+    max_row_layout->setSpacing(2);
+    max_row_layout->addWidget(new QLabel(QStringLiteral("Max % (ceiling)")));
+    max_row_layout->addWidget(max_intensity_field.first);
     bright_sec->bodyLayout()->addLayout(bright_form);
     bright_sec->bodyLayout()->addWidget(min_intensity_row_);
+    bright_sec->bodyLayout()->addWidget(max_intensity_row_);
     props_inner_layout->addWidget(bright_sec);
 
     direction_section_ = new EffectCollapsibleSection(QStringLiteral("Direction"));
@@ -369,10 +477,16 @@ void EffectPackEditorDialog::buildUi()
     axis_mode_combo_->addItem(QStringLiteral("Custom yaw/pitch"), (int)EffectPack::AxisMode::Custom);
     axis_yaw_spin_ = new QDoubleSpinBox();
     axis_yaw_spin_->setRange(-180.0, 180.0);
+    axis_yaw_spin_->setDecimals(1);
+    axis_yaw_spin_->setSingleStep(1.0);
     axis_yaw_spin_->setSuffix(QStringLiteral("°"));
     axis_pitch_spin_ = new QDoubleSpinBox();
     axis_pitch_spin_->setRange(-90.0, 90.0);
+    axis_pitch_spin_->setDecimals(1);
+    axis_pitch_spin_->setSingleStep(1.0);
     axis_pitch_spin_->setSuffix(QStringLiteral("°"));
+    const auto yaw_field = attachDoubleSpinSlider(axis_yaw_spin_, QStringLiteral("Drag to set yaw"));
+    const auto pitch_field = attachDoubleSpinSlider(axis_pitch_spin_, QStringLiteral("Drag to set pitch"));
     auto* dir_form = new QFormLayout();
     dir_form->setContentsMargins(0, 0, 0, 0);
     dir_form->setSpacing(6);
@@ -380,42 +494,92 @@ void EffectPackEditorDialog::buildUi()
     dir_form->addRow(QStringLiteral("Space"), axis_space_combo_);
     dir_form->addRow(QStringLiteral("Axis"), axis_mode_combo_);
     dir_form->addRow(QStringLiteral("Direction"), direction_combo_);
-    dir_form->addRow(QStringLiteral("Yaw"), axis_yaw_spin_);
-    dir_form->addRow(QStringLiteral("Pitch"), axis_pitch_spin_);
+    flip_direction_button_ = new QPushButton(QStringLiteral("Flip direction"));
+    flip_direction_button_->setToolTip(QStringLiteral("Swap to the opposite direction (Left↔Right, Forward↔Back, …)"));
+    reverse_check_ = new QCheckBox(QStringLiteral("Reverse time"));
+    reverse_check_->setToolTip(QStringLiteral("Play this block’s progress backwards (dissolve/fade/wipe reverse)"));
+    flip_h_check_ = new QCheckBox(QStringLiteral("Flip H"));
+    flip_h_check_->setToolTip(QStringLiteral("Mirror left↔right (media UV / wipe axis)"));
+    flip_v_check_ = new QCheckBox(QStringLiteral("Flip V"));
+    flip_v_check_->setToolTip(QStringLiteral("Mirror top↔bottom (media UV / height)"));
+    rotate_combo_ = new QComboBox();
+    rotate_combo_->addItem(QStringLiteral("0°"), 0);
+    rotate_combo_->addItem(QStringLiteral("90° CW"), 1);
+    rotate_combo_->addItem(QStringLiteral("180°"), 2);
+    rotate_combo_->addItem(QStringLiteral("270° CW"), 3);
+    rotate_combo_->setToolTip(QStringLiteral("Rotate media / UV mapping in 90° steps"));
+    auto* flip_row = new QWidget();
+    auto* flip_layout = new QHBoxLayout(flip_row);
+    flip_layout->setContentsMargins(0, 0, 0, 0);
+    flip_layout->setSpacing(8);
+    flip_layout->addWidget(flip_h_check_);
+    flip_layout->addWidget(flip_v_check_);
+    flip_layout->addStretch(1);
+    dir_form->addRow(QString(), flip_direction_button_);
+    dir_form->addRow(QString(), reverse_check_);
+    dir_form->addRow(QStringLiteral("Mirror"), flip_row);
+    dir_form->addRow(QStringLiteral("Rotate"), rotate_combo_);
+    dir_form->addRow(QStringLiteral("Yaw"), yaw_field.first);
+    dir_form->addRow(QStringLiteral("Pitch"), pitch_field.first);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->addLayout(dir_form);
     props_inner_layout->addWidget(direction_section_);
 
     curve_combo_ = new QComboBox();
-    const filesystem::path curves_path = PluginSettingsPaths::UserCurvesFile(tab_ ? tab_->resource_manager : nullptr);
-    for(const EffectPackUserCurves::Entry& c : EffectPackUserCurves::Load(curves_path))
-    {
-        curve_combo_->addItem(c.label.isEmpty() ? c.id : c.label, c.id);
-    }
-    curve_combo_->addItem(QStringLiteral("Custom"), QStringLiteral("custom"));
-    auto* curve_sec = new EffectCollapsibleSection(QStringLiteral("Intensity Curve"));
-    curve_sec->setExpanded(false);
+    save_curve_button_ = new QPushButton(QStringLiteral("Save"));
+    save_curve_button_->setToolTip(QStringLiteral("Save the current envelope curve as a named preset"));
+    curve_bar_ = new EffectPackCurveBar();
+    period_curve_combo_ = new QComboBox();
+    period_curve_bar_ = new EffectPackCurveBar();
+    auto* curve_sec = new EffectCollapsibleSection(QStringLiteral("Curves"));
+    curve_sec->setExpanded(true);
     auto* curve_form = new QFormLayout();
-    curve_form->addRow(QStringLiteral("Preset"), curve_combo_);
+    auto* curve_preset_row = new QWidget();
+    auto* curve_preset_layout = new QHBoxLayout(curve_preset_row);
+    curve_preset_layout->setContentsMargins(0, 0, 0, 0);
+    curve_preset_layout->setSpacing(6);
+    curve_preset_layout->addWidget(curve_combo_, 1);
+    curve_preset_layout->addWidget(save_curve_button_);
+    curve_form->addRow(QStringLiteral("Envelope"), curve_preset_row);
     curve_sec->bodyLayout()->addLayout(curve_form);
+    curve_sec->bodyLayout()->addWidget(curve_bar_);
+    auto* period_form = new QFormLayout();
+    period_form->addRow(QStringLiteral("Waveform"), period_curve_combo_);
+    curve_sec->bodyLayout()->addLayout(period_form);
+    curve_sec->bodyLayout()->addWidget(period_curve_bar_);
+    refillCurvePresets();
+    refillPeriodCurvePresets();
     props_inner_layout->addWidget(curve_sec);
 
-    speed_section_ = new EffectCollapsibleSection(QStringLiteral("Speed"));
-    static_cast<EffectCollapsibleSection*>(speed_section_)->setExpanded(false);
+    speed_section_ = new EffectCollapsibleSection(QStringLiteral("Timing"));
+    static_cast<EffectCollapsibleSection*>(speed_section_)->setExpanded(true);
     speed_spin_ = new QDoubleSpinBox();
     speed_spin_->setRange(0.05, 8.0);
+    speed_spin_->setDecimals(2);
     speed_spin_->setSingleStep(0.1);
     speed_spin_->setValue(1.0);
+    speed_spin_->setToolTip(QStringLiteral("Scales block progress and shortens Period cycles"));
     period_spin_ = new QSpinBox();
     period_spin_->setRange(50, EffectPack::kMaxDurationMs);
     period_spin_->setValue(800);
-    auto* speed_form = new QFormLayout();
-    speed_form->addRow(QStringLiteral("Speed ×"), speed_spin_);
+    period_spin_->setToolTip(QStringLiteral("Length of one blink/strobe/pulse cycle (ms). Waveform curve repeats each period."));
+    const auto speed_field = attachDoubleSpinSlider(speed_spin_, QStringLiteral("Drag to set speed"));
+    const auto period_field = attachIntSpinSlider(period_spin_,
+                                                  QStringLiteral("Drag to set period"),
+                                                  10,
+                                                  100);
+    speed_row_ = new QWidget();
+    auto* speed_row_layout = new QVBoxLayout(speed_row_);
+    speed_row_layout->setContentsMargins(0, 0, 0, 0);
+    speed_row_layout->setSpacing(2);
+    speed_row_layout->addWidget(new QLabel(QStringLiteral("Speed ×")));
+    speed_row_layout->addWidget(speed_field.first);
     period_row_ = new QWidget();
-    auto* period_layout = new QHBoxLayout(period_row_);
+    auto* period_layout = new QVBoxLayout(period_row_);
     period_layout->setContentsMargins(0, 0, 0, 0);
+    period_layout->setSpacing(2);
     period_layout->addWidget(new QLabel(QStringLiteral("Period ms")));
-    period_layout->addWidget(period_spin_, 1);
-    static_cast<EffectCollapsibleSection*>(speed_section_)->bodyLayout()->addLayout(speed_form);
+    period_layout->addWidget(period_field.first);
+    static_cast<EffectCollapsibleSection*>(speed_section_)->bodyLayout()->addWidget(speed_row_);
     static_cast<EffectCollapsibleSection*>(speed_section_)->bodyLayout()->addWidget(period_row_);
     props_inner_layout->addWidget(speed_section_);
 
@@ -424,8 +588,12 @@ void EffectPackEditorDialog::buildUi()
     pulse_length_spin_ = new QSpinBox();
     pulse_length_spin_->setRange(2, 100);
     pulse_length_spin_->setValue(25);
+    const auto pulse_field = attachIntSpinSlider(pulse_length_spin_,
+                                                 QStringLiteral("Drag to set pulse / chase length"),
+                                                 1,
+                                                 5);
     auto* pulse_form = new QFormLayout();
-    pulse_form->addRow(QStringLiteral("Length / Duty %"), pulse_length_spin_);
+    pulse_form->addRow(QStringLiteral("Length / Duty %"), pulse_field.first);
     static_cast<EffectCollapsibleSection*>(pulse_section_)->bodyLayout()->addLayout(pulse_form);
     props_inner_layout->addWidget(pulse_section_);
 
@@ -449,12 +617,37 @@ void EffectPackEditorDialog::buildUi()
 
     auto* action_row = new QHBoxLayout();
     preview_button_ = new QPushButton(QStringLiteral("Preview"));
+    preview_button_->setToolTip(QStringLiteral("Preview pack (Space)"));
+    preview_menu_button_ = new QToolButton();
+    preview_menu_button_->setText(QStringLiteral("▾"));
+    preview_menu_button_->setToolTip(QStringLiteral("Preview options"));
+    preview_menu_button_->setPopupMode(QToolButton::InstantPopup);
+    auto* preview_menu = new QMenu(preview_menu_button_);
+    preview_menu->addAction(QStringLiteral("Preview pack\tSpace"), this, [this]() { onPreviewPack(0); });
+    preview_menu->addAction(QStringLiteral("Preview selected track\tShift+Space"), this, [this]() {
+        const int row = currentTimelineRow();
+        if(selected_track_ >= 0)
+        {
+            onPreviewTrack(selected_track_, 0);
+        }
+        else
+        {
+            onPreviewRow(row >= 0 ? row : 0, 0);
+        }
+    });
+    preview_menu->addAction(QStringLiteral("Preview from playhead"), this, [this]() {
+        const int ms = timeline_ ? timeline_->playheadMs() : 0;
+        onPreviewPack(ms);
+    });
+    preview_menu_button_->setMenu(preview_menu);
     stop_button_ = new QPushButton(QStringLiteral("Stop"));
     stop_button_->setEnabled(false);
+    stop_button_->setToolTip(QStringLiteral("Stop preview (Esc)"));
     save_button_ = new QPushButton(QStringLiteral("Save"));
     PluginUiApplyPrimaryButton(save_button_);
     auto* close_button = new QPushButton(QStringLiteral("Close"));
     action_row->addWidget(preview_button_);
+    action_row->addWidget(preview_menu_button_);
     action_row->addWidget(stop_button_);
     action_row->addStretch(1);
     action_row->addWidget(save_button_);
@@ -470,6 +663,7 @@ void EffectPackEditorDialog::buildUi()
     connect(timeline_, &EffectPackTimelineWidget::playheadChanged, this, &EffectPackEditorDialog::onPlayheadChanged);
     connect(timeline_, &EffectPackTimelineWidget::blockSelected, this, &EffectPackEditorDialog::onBlockSelected);
     connect(timeline_, &EffectPackTimelineWidget::blockEdited, this, &EffectPackEditorDialog::onBlockSelected);
+    connect(timeline_, &EffectPackTimelineWidget::blockCreated, this, &EffectPackEditorDialog::onBlockSelected);
     connect(timeline_, &EffectPackTimelineWidget::blockDeleteRequested, this, &EffectPackEditorDialog::onBlockDeleteRequested);
     connect(timeline_, &EffectPackTimelineWidget::effectAddRequested, this, &EffectPackEditorDialog::onEffectAddRequested);
     connect(timeline_, &EffectPackTimelineWidget::gradientPresetApplied, this, &EffectPackEditorDialog::onGradientPresetApplied);
@@ -478,12 +672,17 @@ void EffectPackEditorDialog::buildUi()
     connect(timeline_, &EffectPackTimelineWidget::gradientDropped, this, &EffectPackEditorDialog::onGradientDropped);
     connect(timeline_, &EffectPackTimelineWidget::sceneZoneControllersReordered,
             this, &EffectPackEditorDialog::onSceneZoneControllersReordered);
+    connect(timeline_, &EffectPackTimelineWidget::previewPackRequested,
+            this, &EffectPackEditorDialog::onPreviewPack);
+    connect(timeline_, &EffectPackTimelineWidget::previewRowRequested,
+            this, &EffectPackEditorDialog::onPreviewRow);
+    connect(timeline_, &EffectPackTimelineWidget::previewTrackRequested,
+            this, &EffectPackEditorDialog::onPreviewTrack);
+    connect(timeline_, &EffectPackTimelineWidget::stopPreviewRequested,
+            this, &EffectPackEditorDialog::stopPreview);
     connect(effect_toolbar_, &EffectPackToolBar::effectClicked, this, &EffectPackEditorDialog::onToolbarEffectClicked);
     connect(effect_toolbar_, &EffectPackToolBar::colorClicked, this, &EffectPackEditorDialog::onToolbarColorClicked);
     connect(effect_toolbar_, &EffectPackToolBar::gradientPresetClicked, this, &EffectPackEditorDialog::onToolbarGradientClicked);
-    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetOverwriteRequested, this, &EffectPackEditorDialog::onOverwriteGradientPreset);
-    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetDeleteRequested, this, &EffectPackEditorDialog::onDeleteGradientPreset);
-    connect(effect_toolbar_, &EffectPackToolBar::gradientPresetResetRequested, this, &EffectPackEditorDialog::onResetGradientPreset);
     connect(effect_toolbar_, &EffectPackToolBar::gradientPresetOverwriteRequested, this, &EffectPackEditorDialog::onOverwriteGradientPreset);
     connect(effect_toolbar_, &EffectPackToolBar::gradientPresetDeleteRequested, this, &EffectPackEditorDialog::onDeleteGradientPreset);
     connect(effect_toolbar_, &EffectPackToolBar::gradientPresetResetRequested, this, &EffectPackEditorDialog::onResetGradientPreset);
@@ -495,20 +694,36 @@ void EffectPackEditorDialog::buildUi()
     connect(period_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(min_intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(max_intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(speed_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(pulse_length_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(direction_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(flip_direction_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onFlipDirection);
+    connect(reverse_check_, &QCheckBox::toggled, this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(flip_h_check_, &QCheckBox::toggled, this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(flip_v_check_, &QCheckBox::toggled, this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(rotate_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(axis_space_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(axis_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(axis_yaw_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(axis_pitch_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
-    connect(curve_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(curve_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onCurvePresetChanged);
+    connect(save_curve_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onSaveUserCurve);
+    connect(curve_bar_, &EffectPackCurveBar::pointsChanged, this, &EffectPackEditorDialog::onCurvePointsChanged);
+    connect(period_curve_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onPeriodCurvePresetChanged);
+    connect(period_curve_bar_, &EffectPackCurveBar::pointsChanged, this, &EffectPackEditorDialog::onPeriodCurvePointsChanged);
+    connect(media_browse_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onBrowseMediaPath);
+    connect(media_path_edit_, &QLineEdit::editingFinished, this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(media_text_edit_, &QLineEdit::editingFinished, this, &EffectPackEditorDialog::onBlockFieldChanged);
+    connect(media_scroll_check_, &QCheckBox::toggled, this, &EffectPackEditorDialog::onBlockFieldChanged);
     connect(color_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickColor);
     connect(color_to_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPickColorTo);
     connect(gradient_preset_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EffectPackEditorDialog::onGradientPreset);
     connect(save_gradient_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onSaveUserGradient);
     connect(delete_gradient_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onDeleteUserGradient);
     connect(gradient_bar_, &EffectPackGradientBar::stopsChanged, this, &EffectPackEditorDialog::onGradientStopsChanged);
+    connect(add_color_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onAddColorStop);
+    connect(remove_color_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onRemoveColorStop);
     connect(preview_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onPreview);
     connect(stop_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::stopPreview);
     connect(save_button_, &QPushButton::clicked, this, &EffectPackEditorDialog::onSave);
@@ -1007,19 +1222,57 @@ void EffectPackEditorDialog::onPlayheadChanged(int ms)
     timeline_->setPlayheadMs(ms);
     if(player_.IsPlaying())
     {
-        player_.UpdatePack(pack_);
+        player_.UpdatePack(preview_pack_);
         player_.SeekToLocalMs(ms);
         wall_.restart();
         last_elapsed_ms_ = 0;
         if(tab_)
         {
-            tab_->ApplyEffectPackPreviewFrame(pack_, ms);
+            tab_->ApplyEffectPackPreviewFrame(preview_pack_, ms);
         }
     }
 }
 
 void EffectPackEditorDialog::keyPressEvent(QKeyEvent* event)
 {
+    if(event->key() == Qt::Key_Escape && player_.IsPlaying())
+    {
+        stopPreview();
+        event->accept();
+        return;
+    }
+    if(event->key() == Qt::Key_Space)
+    {
+        const QWidget* focus = focusWidget();
+        const bool editing_text = focus
+            && (qobject_cast<const QLineEdit*>(focus)
+                || qobject_cast<const QAbstractSpinBox*>(focus));
+        if(!editing_text)
+        {
+            if(player_.IsPlaying())
+            {
+                stopPreview();
+            }
+            else if(event->modifiers() & Qt::ShiftModifier)
+            {
+                const int row = currentTimelineRow();
+                if(selected_track_ >= 0)
+                {
+                    onPreviewTrack(selected_track_, 0);
+                }
+                else
+                {
+                    onPreviewRow(row >= 0 ? row : 0, 0);
+                }
+            }
+            else
+            {
+                onPreviewPack(0);
+            }
+            event->accept();
+            return;
+        }
+    }
     if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
         const QWidget* focus = focusWidget();
@@ -1116,13 +1369,21 @@ void EffectPackEditorDialog::onEffectAddRequested(int row_index, int ms, const Q
 
 void EffectPackEditorDialog::onBlockSelected(int track_index, int block_index)
 {
-    if(timeline_)
+    // Don't abort an in-progress block drag (cross-track moves emit selection updates).
+    if(timeline_ && !timeline_->isBlockDragging())
     {
         timeline_->cancelDrag();
     }
     if(selected_track_ != track_index || selected_block_ != block_index)
     {
-        applyFormToSelectedBlock();
+        // Flush the form only when the previous block is still present. Vertical
+        // resize can move/erase the old slot; writing into a sibling would corrupt it.
+        if(selected_track_ >= 0 && selected_track_ < (int)pack_.tracks.size()
+           && selected_block_ >= 0
+           && selected_block_ < (int)pack_.tracks[(size_t)selected_track_].blocks.size())
+        {
+            applyFormToSelectedBlock();
+        }
     }
     selected_track_ = track_index;
     selected_block_ = block_index;
@@ -1318,6 +1579,10 @@ void EffectPackEditorDialog::onSave()
 void EffectPackEditorDialog::setPlayingUi(bool playing)
 {
     preview_button_->setEnabled(!playing);
+    if(preview_menu_button_)
+    {
+        preview_menu_button_->setEnabled(!playing);
+    }
     stop_button_->setEnabled(playing);
     save_button_->setEnabled(!playing);
     updateSelectionActions();
@@ -1332,9 +1597,12 @@ void EffectPackEditorDialog::stopPreview()
     }
     if(was_playing && tab_)
     {
-        tab_->ApplyEffectPackPreviewFrame(pack_, player_.LocalMs(), true);
+        tab_->ApplyEffectPackPreviewFrame(preview_pack_.tracks.empty() ? pack_ : preview_pack_,
+                                          player_.LocalMs(), true);
     }
     player_.Stop();
+    preview_pack_ = EffectPack::Pack();
+    preview_solo_ = false;
     setPlayingUi(false);
     emit previewStopped();
     if(status_label_)
@@ -1343,14 +1611,55 @@ void EffectPackEditorDialog::stopPreview()
     }
 }
 
-void EffectPackEditorDialog::onPreview()
+EffectPack::Pack EffectPackEditorDialog::soloPackForRow(int row_index) const
+{
+    EffectPack::Pack solo = pack_;
+    solo.tracks.clear();
+    if(!timeline_)
+    {
+        return solo;
+    }
+    const QVector<EffectPack::Target> scopes = timeline_->subtreeTargetsForRow(row_index);
+    if(scopes.isEmpty())
+    {
+        return solo;
+    }
+    for(const EffectPack::Track& track : pack_.tracks)
+    {
+        for(const EffectPack::Target& scope : scopes)
+        {
+            if(EffectPack::TargetEquals(track.target, scope))
+            {
+                solo.tracks.push_back(track);
+                break;
+            }
+        }
+    }
+    return solo;
+}
+
+EffectPack::Pack EffectPackEditorDialog::soloPackForTrack(int track_index) const
+{
+    EffectPack::Pack solo = pack_;
+    solo.tracks.clear();
+    if(track_index < 0 || track_index >= (int)pack_.tracks.size())
+    {
+        return solo;
+    }
+    solo.tracks.push_back(pack_.tracks[(size_t)track_index]);
+    return solo;
+}
+
+void EffectPackEditorDialog::startPreview(const EffectPack::Pack& play_pack, int start_ms, const QString& status, bool solo)
 {
     if(!tab_)
     {
         return;
     }
-    applyFormToSelectedBlock();
-    applyMetaToPack();
+    if(player_.IsPlaying())
+    {
+        stopPreview();
+    }
     if(tab_)
     {
         auto* transforms = tab_->GetControllerTransformsMutable();
@@ -1372,14 +1681,93 @@ void EffectPackEditorDialog::onPreview()
                              QStringLiteral("No OpenRGB controllers available."));
         return;
     }
+    preview_pack_ = play_pack;
+    preview_pack_.duration_ms = pack_.duration_ms;
+    preview_pack_.loop = pack_.loop;
+    preview_pack_.devices = pack_.devices;
+    preview_solo_ = solo;
     emit previewStarted();
-    player_.SetPack(pack_);
+    player_.SetPack(preview_pack_);
+    const int seek = std::clamp(start_ms, 0, std::max(0, preview_pack_.duration_ms - 1));
+    player_.SeekToLocalMs(seek);
     player_.Play();
     wall_.restart();
     last_elapsed_ms_ = 0;
     setPlayingUi(true);
     timer_->start();
-    status_label_->setText(QStringLiteral("Previewing…"));
+    if(timeline_)
+    {
+        timeline_->setPlayheadMs(player_.LocalMs());
+    }
+    status_label_->setText(status.isEmpty() ? QStringLiteral("Previewing…") : status);
+}
+
+void EffectPackEditorDialog::onPreview()
+{
+    onPreviewPack(0);
+}
+
+void EffectPackEditorDialog::onPreviewPack(int start_ms)
+{
+    if(player_.IsPlaying())
+    {
+        stopPreview();
+        return;
+    }
+    applyFormToSelectedBlock();
+    applyMetaToPack();
+    startPreview(pack_, start_ms, start_ms > 0
+                 ? QStringLiteral("Previewing pack from %1 ms…").arg(start_ms)
+                 : QStringLiteral("Previewing pack…"),
+                 false);
+}
+
+void EffectPackEditorDialog::onPreviewRow(int row_index, int start_ms)
+{
+    if(player_.IsPlaying())
+    {
+        stopPreview();
+        return;
+    }
+    applyFormToSelectedBlock();
+    applyMetaToPack();
+    EffectPack::Pack solo = soloPackForRow(row_index);
+    QString label = QStringLiteral("track");
+    if(timeline_ && row_index >= 0 && row_index < timeline_->visibleRows().size())
+    {
+        label = timeline_->visibleRows()[row_index].label;
+    }
+    if(solo.tracks.empty())
+    {
+        QMessageBox::information(this, QStringLiteral("Effect Pack Editor"),
+                                 QStringLiteral("No effects on \"%1\" (or its children).").arg(label));
+        return;
+    }
+    startPreview(solo, start_ms, QStringLiteral("Previewing \"%1\"…").arg(label), true);
+}
+
+void EffectPackEditorDialog::onPreviewTrack(int track_index, int start_ms)
+{
+    if(player_.IsPlaying())
+    {
+        stopPreview();
+        return;
+    }
+    applyFormToSelectedBlock();
+    applyMetaToPack();
+    EffectPack::Pack solo = soloPackForTrack(track_index);
+    if(solo.tracks.empty())
+    {
+        QMessageBox::information(this, QStringLiteral("Effect Pack Editor"),
+                                 QStringLiteral("No effects on that track."));
+        return;
+    }
+    const QString label = QString::fromStdString(solo.tracks.front().name);
+    startPreview(solo, start_ms,
+                 start_ms > 0
+                     ? QStringLiteral("Previewing \"%1\" from %2 ms…").arg(label).arg(start_ms)
+                     : QStringLiteral("Previewing \"%1\"…").arg(label),
+                 true);
 }
 
 void EffectPackEditorDialog::onTick()
@@ -1392,14 +1780,37 @@ void EffectPackEditorDialog::onTick()
     const int elapsed = (int)wall_.elapsed();
     const int dt = std::max(0, elapsed - last_elapsed_ms_);
     last_elapsed_ms_ = elapsed;
-    player_.UpdatePack(pack_);
+    if(preview_solo_)
+    {
+        EffectPack::Pack refreshed = preview_pack_;
+        refreshed.tracks.clear();
+        for(const EffectPack::Track& playing : preview_pack_.tracks)
+        {
+            for(const EffectPack::Track& src : pack_.tracks)
+            {
+                if(EffectPack::TargetEquals(playing.target, src.target))
+                {
+                    refreshed.tracks.push_back(src);
+                    break;
+                }
+            }
+        }
+        refreshed.duration_ms = pack_.duration_ms;
+        refreshed.loop = pack_.loop;
+        preview_pack_ = refreshed;
+    }
+    else
+    {
+        preview_pack_ = pack_;
+    }
+    player_.UpdatePack(preview_pack_);
     if(!player_.Tick(dt, true))
     {
         stopPreview();
         status_label_->setText(QStringLiteral("Preview finished"));
         return;
     }
-    tab_->ApplyEffectPackPreviewFrame(pack_, player_.LocalMs());
+    tab_->ApplyEffectPackPreviewFrame(preview_pack_, player_.LocalMs());
     timeline_->setPlayheadMs(player_.LocalMs());
     status_label_->setText(
         QStringLiteral("Preview %1 / %2 ms")

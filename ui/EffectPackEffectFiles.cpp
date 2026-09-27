@@ -59,6 +59,8 @@ bool ReadEntry(const filesystem::path& file, const QString& section, Entry* out)
                     else if(knob == QStringLiteral("period")) out->knob_period = true;
                     else if(knob == QStringLiteral("pulse")) out->knob_pulse = true;
                     else if(knob == QStringLiteral("min_intensity")) out->knob_min_intensity = true;
+                    else if(knob == QStringLiteral("media_path")) out->knob_media_path = true;
+                    else if(knob == QStringLiteral("media_text")) out->knob_media_text = true;
                 }
             }
             else if(key == QStringLiteral("icon"))
@@ -126,13 +128,47 @@ void ReadJsonFiles(const filesystem::path& dir, const QString& section, QList<En
 
 } // namespace
 
+namespace
+{
+
+QList<Entry> BuiltinMediaEntries()
+{
+    QList<Entry> out;
+    auto add = [&](const char* id, const char* name, const char* desc, bool path, bool text) {
+        Entry e;
+        e.id = QString::fromUtf8(id);
+        e.name = QString::fromUtf8(name);
+        e.description = QString::fromUtf8(desc);
+        e.section = QStringLiteral("media");
+        e.swatch = QColor(80, 180, 220);
+        e.knob_direction = true;
+        e.knob_speed = true;
+        e.knob_period = true;
+        e.knob_media_path = path;
+        e.knob_media_text = text;
+        out.push_back(e);
+    };
+    add("media_image", "Image",
+        "Still image on Device UV. Enable Scroll for marquee.",
+        true, false);
+    add("media_gif", "GIF",
+        "Animated GIF over the block length.",
+        true, false);
+    add("media_text", "Text / Marquee",
+        "Scroll or hold text across the track.",
+        false, true);
+    return out;
+}
+
+} // namespace
+
 QList<Entry> LoadEntries(const filesystem::path& dir)
 {
     QList<Entry> entries;
     std::error_code ec;
     if(dir.empty() || !filesystem::is_directory(dir, ec))
     {
-        return entries;
+        return BuiltinMediaEntries();
     }
     std::vector<filesystem::path> sections;
     for(const filesystem::directory_entry& item : filesystem::directory_iterator(dir, ec))
@@ -160,6 +196,19 @@ QList<Entry> LoadEntries(const filesystem::path& dir)
         {
             ReadJsonFiles(group, section, &entries);
         }
+    }
+    bool have_media = false;
+    for(const Entry& e : entries)
+    {
+        if(e.section.compare(QStringLiteral("media"), Qt::CaseInsensitive) == 0)
+        {
+            have_media = true;
+            break;
+        }
+    }
+    if(!have_media)
+    {
+        entries.append(BuiltinMediaEntries());
     }
     return entries;
 }

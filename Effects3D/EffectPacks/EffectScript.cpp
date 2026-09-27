@@ -40,6 +40,7 @@ enum Op
     JumpIfFalse,
     Paint,
     PaintMix,
+    PaintStop,
     Off,
     Halt,
 };
@@ -351,6 +352,14 @@ void Parser::parsePrimary()
             emit(PushNum, 0, 0.0f);
             return;
         }
+        if(name == "paint_stop" || name == "swatch")
+        {
+            parseExpr();
+            acceptSym(")");
+            emit(PaintStop);
+            emit(PushNum, 0, 0.0f);
+            return;
+        }
         if(name == "paint_mix")
         {
             parseExpr();
@@ -548,10 +557,10 @@ bool Compile(const std::string& body, Program* prog)
     p.toks = Tokenize(body);
     p.prog = prog;
     const char* reserved[] = {
-        "progress", "axis", "time_ms", "start_ms", "speed", "period_ms", "intensity",
-        "min_intensity", "max_intensity", "pulse", "seed", "x", "y", "z",
+        "progress", "axis", "time_ms", "start_ms", "speed", "period_ms", "period_progress",
+        "intensity", "min_intensity", "max_intensity", "pulse", "seed", "x", "y", "z",
         "nx", "ny", "nz", "radius", "height", "span_x", "span_y", "span_z",
-        "dx", "dy", "dz", "invert", "local_ms",
+        "dx", "dy", "dz", "invert", "local_ms", "stops",
     };
     for(const char* name : reserved)
     {
@@ -639,8 +648,9 @@ struct Machine
                 {
                     return 0.0f;
                 }
-                return SampleAxisPos(*led->block, led->x, led->y, led->z,
-                                     led->min_x, led->max_x, led->min_y, led->max_y, led->min_z, led->max_z);
+                return ApplyBlockAxisMirror(*led->block,
+                    SampleAxisPos(*led->block, led->x, led->y, led->z,
+                                  led->min_x, led->max_x, led->min_y, led->max_y, led->min_z, led->max_z));
             default:
                 return 0.0f;
         }
@@ -716,6 +726,17 @@ struct Machine
                     }
                     ++ip;
                     break;
+                case PaintStop:
+                    if(led && led->block)
+                    {
+                        color = SampleGradientStop(*led->block, (int)std::lround(pop()));
+                    }
+                    else
+                    {
+                        pop();
+                    }
+                    ++ip;
+                    break;
                 case PaintMix:
                 {
                     const float k = (float)pop();
@@ -728,7 +749,13 @@ struct Machine
                     ++ip;
                     break;
                 }
-                case Off: off = true; return false;
+                case Off:
+                    off = true;
+                    if(led)
+                    {
+                        led->turned_off = true;
+                    }
+                    return false;
                 case Halt: return true;
                 default: return true;
             }
@@ -911,6 +938,18 @@ void SetDirectory(const filesystem::path& dir)
     ScanDir(dir, "", 0);
 }
 
+void ReloadDirectory()
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(g_dir.empty())
+    {
+        return;
+    }
+    g_programs.clear();
+    g_alias.clear();
+    ScanDir(g_dir, "", 0);
+}
+
 bool Has(const std::string& id)
 {
     std::lock_guard<std::mutex> lock(g_mu);
@@ -962,6 +1001,7 @@ bool Run(const std::string& id, LedView* led)
     m.prog = &prog;
     m.led = led;
     m.color = led->color;
+    led->turned_off = false;
     m.vars.assign(prog.names.size(), 0.0);
     auto set = [&](const char* name, double v) {
         const int idx = Var(prog, name);
@@ -978,11 +1018,13 @@ bool Run(const std::string& id, LedView* led)
     set("time_ms", block ? (float)(led->local_ms - block->start_ms) : 0.0f);
     set("speed", block ? block->speed : 1.0f);
     set("period_ms", block ? (float)block->period_ms : 1000.0f);
+    set("period_progress", block ? BlockPeriodProgress(*block, led->local_ms) : 0.0f);
     set("intensity", led->intensity);
     set("min_intensity", block ? block->min_intensity : 0.0f);
     set("max_intensity", block ? block->max_intensity : 1.0f);
     set("pulse", block ? block->pulse_length : 0.25f);
     set("seed", (float)led->seed);
+    set("stops", block ? (float)UniqueGradientStopCount(*block) : 1.0f);
     set("x", led->x);
     set("y", led->y);
     set("z", led->z);
@@ -1018,9 +1060,9 @@ void SetEffectScriptDirectory(const filesystem::path& dir)
     script::SetDirectory(dir);
 }
 
-bool EffectScriptLoaded(const std::string& id)
+void ReloadEffectScripts()
 {
-    return script::Has(id);
+    script::ReloadDirectory();
 }
 
 bool EffectScriptUsesWorld(const std::string& id)

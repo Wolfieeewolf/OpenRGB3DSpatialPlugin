@@ -90,8 +90,27 @@ bool LedMatchesTarget(const LEDPosition3D& led,
             {
                 return true;
             }
-            const int zone = FindZoneIndex(mapping, target.zone_name);
-            return (zone >= 0 && (unsigned int)zone == led.zone_idx);
+            // Match THIS LED's zone by name — do not FindZoneIndex then compare indices.
+            // Timeline rows often store display / "Zone N" labels; FindZoneIndex can miss
+            // those or return the wrong first substring hit, which made Zone tracks no-ops.
+            const unsigned int z = led.zone_idx;
+            if(z < mapping->GetZoneCount())
+            {
+                const std::string zn = mapping->GetZoneName(z);
+                const std::string zd = mapping->GetZoneDisplayName(z);
+                if(NameMatches(zn, target.zone_name) || NameMatches(zd, target.zone_name)
+                   || NameMatches(target.zone_name, zn) || NameMatches(target.zone_name, zd))
+                {
+                    return true;
+                }
+            }
+            const std::string synthetic = "Zone " + std::to_string(z);
+            if(NameMatches(synthetic, target.zone_name) || NameMatches(target.zone_name, synthetic))
+            {
+                return true;
+            }
+            // Null-rgb timeline buckets used a generic "LEDs" label for the only strip.
+            return target.zone_name == "LEDs" && mapping->GetZoneCount() <= 1;
         }
         case TargetKind::Leds:
         {
@@ -217,13 +236,50 @@ int FindZoneIndex(RGBControllerInterface* c, const std::string& zone_name)
         return -1;
     }
     const unsigned int zones = c->GetZoneCount();
+    auto equals_ci = [](const std::string& a, const std::string& b) {
+        return applier_detail::ToLower(a) == applier_detail::ToLower(b);
+    };
+    // Prefer exact name / display match so short substring hits cannot steal the wrong zone.
     for(unsigned int z = 0; z < zones; ++z)
     {
-        if(NameMatches(c->GetZoneName(z), zone_name)
-           || NameMatches(c->GetZoneDisplayName(z), zone_name))
+        if(equals_ci(c->GetZoneName(z), zone_name)
+           || equals_ci(c->GetZoneDisplayName(z), zone_name))
         {
             return (int)z;
         }
+    }
+    for(unsigned int z = 0; z < zones; ++z)
+    {
+        if(NameMatches(c->GetZoneName(z), zone_name)
+           || NameMatches(c->GetZoneDisplayName(z), zone_name)
+           || NameMatches(zone_name, c->GetZoneName(z))
+           || NameMatches(zone_name, c->GetZoneDisplayName(z)))
+        {
+            return (int)z;
+        }
+    }
+    // Synthetic labels from the timeline ("Zone 0", …).
+    if(zone_name.size() > 5)
+    {
+        const std::string lower = applier_detail::ToLower(zone_name);
+        if(lower.rfind("zone ", 0) == 0)
+        {
+            try
+            {
+                const int idx = std::stoi(zone_name.substr(5));
+                if(idx >= 0 && (unsigned int)idx < zones)
+                {
+                    return idx;
+                }
+            }
+            catch(...)
+            {
+            }
+        }
+    }
+    if(zone_name == "LEDs" && zones == 1)
+    {
+        return 0;
     }
     return -1;
 }

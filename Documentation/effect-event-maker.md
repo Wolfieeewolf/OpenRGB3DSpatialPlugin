@@ -70,6 +70,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 | Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve`, `wave` |
 | Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars`, `scanner` |
 | Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst` |
+| Media | `media_image`, `media_gif`, `media_text` — still/GIF/marquee mapped onto Device UV (PixelScreen / xLights matrix style) |
 
 Shared toolbar/props presets live in `EffectPackCatalog`: solid colors (incl. warm white / cyan / magenta / dim gray), gradients (`rainbow`, `red_blue`, `white_color`, `fire`, `ice`, `forest`, `sunset`, `cyber`), and intensity curves (`flat`, `triangle`, `ease_in`, `ease_out`, `pulse_curve`, `hold_peak`, `snap`).
 
@@ -136,7 +137,13 @@ Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`4`).
 | `axis_space` | `device` \| `room` \| `sequence` — missing on All/scene_zone → `room`; else v3+ → `device`; v2 → `room` |
 | `axis_mode` | `preset` \| `custom` |
 | `axis_yaw_deg` / `axis_pitch_deg` | Custom unit axis in the chosen space |
-| `intensity_curve` | Optional `{pos,value}` points 0…1 |
+| `intensity_curve` | Optional `{pos,value}` envelope over **block length** (0…1) |
+| `period_curve` | Optional `{pos,value}` waveform over each **period_ms** cycle (0…1); multiplies with envelope |
+| `period_ms` / `speed` | Cycle length and rate; `period_progress` available to `.fx` scripts |
+| `min_intensity` / `max_intensity` | Script floor/ceiling (always editable in Brightness) |
+| `media_path` | Image/GIF file for `media_image` / `media_gif` |
+| `media_text` | Marquee string for `media_text` |
+| `media_scroll` | Scroll media across Device/Room UV (direction + speed + period) |
 
 ## Event bindings (v1)
 

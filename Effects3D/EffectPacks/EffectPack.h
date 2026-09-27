@@ -77,6 +77,30 @@ struct Target
     std::vector<int> led_indices;
 };
 
+inline bool TargetEquals(const Target& a, const Target& b)
+{
+    if(a.kind != b.kind || a.flatten_leds != b.flatten_leds)
+    {
+        return false;
+    }
+    switch(a.kind)
+    {
+        case TargetKind::All:
+            return true;
+        case TargetKind::Device:
+            return a.device_name == b.device_name;
+        case TargetKind::Zone:
+            return a.device_name == b.device_name && a.zone_name == b.zone_name;
+        case TargetKind::Leds:
+            return a.device_name == b.device_name
+                && a.zone_name == b.zone_name
+                && a.led_indices == b.led_indices;
+        case TargetKind::SceneZone:
+            return a.scene_zone_name == b.scene_zone_name;
+    }
+    return false;
+}
+
 inline bool TargetIsMultiDeviceGroup(const Target& t)
 {
     return t.kind == TargetKind::All || t.kind == TargetKind::SceneZone;
@@ -113,8 +137,21 @@ struct Block
     float axis_pitch_deg = 0.0f;
     float speed = 1.0f;
     float pulse_length = 0.25f;
+    bool reverse = false;
+    /** Mirror sample U (left↔right on media / axis). */
+    bool flip_h = false;
+    /** Mirror sample V (top↔bottom on media / height). */
+    bool flip_v = false;
+    /** Clockwise 90° steps in UV (0–3). Media / 2D mapping; 180° also mirrors 1D axis. */
+    int rotate_quarters = 0;
     std::vector<GradientStop> gradient;
+    /** Intensity envelope over block length. Empty = flat 1. */
     std::vector<CurvePoint> intensity_curve;
+    /** Intensity waveform within each period_ms cycle. Empty = flat 1. */
+    std::vector<CurvePoint> period_curve;
+    std::string media_path;
+    std::string media_text;
+    bool media_scroll = false;
 };
 
 struct Track
@@ -138,14 +175,27 @@ struct Pack
 bool MapPlaybackTime(const Pack& pack, int elapsed_ms, bool event_active, int* out_local_ms);
 
 RGBColor SampleGradient(const Block& block, float t);
+/** Pick a discrete gradient stop by index (wraps). No interpolation. */
+RGBColor SampleGradientStop(const Block& block, int index);
+/** Number of unique colours in the block gradient (1 if empty / solid). */
+int UniqueGradientStopCount(const Block& block);
 float SampleCurve(const std::vector<CurvePoint>& curve, float t);
 void EnsureBlockGradient(Block* block);
 void ApplyBuiltinIntensityCurve(Block* block, const char* preset_id);
 const char* MatchBuiltinIntensityCurve(const std::vector<CurvePoint>& curve);
+void ApplyBuiltinPeriodCurve(Block* block, const char* preset_id);
+const char* MatchBuiltinPeriodCurve(const std::vector<CurvePoint>& curve);
 bool ApplyGradientPresetId(Block* block, const char* preset_id, RGBColor accent = ToRGBColor(255, 80, 40));
 float BlockProgress(const Block& block, int local_ms);
+float BlockPeriodProgress(const Block& block, int local_ms);
+void ModulateBlockIntensity(const Block& block, float block_progress, float period_progress, float* intensity);
+/** Rotate (CW quarters) then flip H/V around UV center. */
+void ApplyBlockUvTransform(const Block& block, float* u, float* v);
+/** 1D axis mirror: flip_h and 180° rotate (90/270 leave axis unchanged). */
+float ApplyBlockAxisMirror(const Block& block, float axis);
 
-bool EvaluateBlock(const Block& block, int local_ms, RGBColor* out_color, float* out_intensity);
+bool IsMediaEffect(const std::string& effect_id);
+bool IsMediaBlock(const Block& block);
 
 bool EvaluateBlockAtAxis(const Block& block,
                          int local_ms,
@@ -184,6 +234,8 @@ const Block* FindActiveBlock(const Track& track, int local_ms);
 
 bool DirectionInvertsAxis(Direction dir);
 int DirectionPreferredAxis(Direction dir);
+/** Opposite named / axis direction (Left↔Right, Forward↔Back, …). */
+Direction OppositeDirection(Direction dir);
 void AxisUnitVector(const Block& block, float* out_x, float* out_y, float* out_z);
 
 float WorldAxisPos(Direction dir,

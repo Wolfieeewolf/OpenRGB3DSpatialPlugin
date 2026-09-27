@@ -3,6 +3,7 @@
 #include "EffectPack.h"
 #include "EffectPackBlockEval.h"
 #include "EffectPackDetail.h"
+#include "EffectPackMedia.h"
 #include "EffectScript.h"
 
 #include <algorithm>
@@ -139,6 +140,13 @@ bool EvaluateBlockAtAxis(const Block& block,
         return false;
     }
 
+    if(IsMediaBlock(block))
+    {
+        // Strip / 1D fallback: map along U and project the full image column onto each LED.
+        const float u = std::clamp(axis_pos, 0.0f, 1.0f);
+        return EvaluateMediaAtUv(block, local_ms, u, 0.5f, out_color, out_intensity, true);
+    }
+
     if(script::UsesWorld(script::FileId(block)))
     {
         const float axis = std::clamp(axis_pos, 0.0f, 1.0f);
@@ -151,19 +159,30 @@ bool EvaluateBlockAtAxis(const Block& block,
     script::LedView led;
     led.block = &block;
     led.local_ms = local_ms;
-    led.axis = std::clamp(axis_pos, 0.0f, 1.0f);
+    led.axis = ApplyBlockAxisMirror(block, axis_pos);
     led.progress = BlockProgress(block, local_ms);
     led.seed = twinkle_seed;
     led.intensity = std::clamp(block.intensity, 0.0f, 1.0f);
     led.color = block.color;
-    if(!script::Run(script::FileId(block), &led))
+    led.turned_off = false;
+    const std::string effect_id = script::FileId(block);
+    if(!script::Run(effect_id, &led))
     {
-        return false;
+        if(led.turned_off)
+        {
+            return false;
+        }
+        // Script present but failed this LED → stay dark. No script → soft colour preview.
+        if(script::Has(effect_id))
+        {
+            return false;
+        }
+        Block sample = block;
+        EnsureBlockGradient(&sample);
+        led.color = sample.gradient.empty() ? sample.color : SampleGradient(sample, led.progress);
+        led.intensity = std::clamp(block.intensity, 0.0f, 1.0f);
     }
-    if(!block.intensity_curve.empty())
-    {
-        led.intensity *= SampleCurve(block.intensity_curve, led.progress);
-    }
+    ModulateBlockIntensity(block, led.progress, BlockPeriodProgress(block, local_ms), &led.intensity);
 
     if(out_color)
     {

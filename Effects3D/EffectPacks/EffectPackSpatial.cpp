@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "EffectPack.h"
 #include "EffectPackBlockEval.h"
+#include "EffectPackMedia.h"
 #include "EffectScript.h"
 
 #include <algorithm>
@@ -194,6 +195,85 @@ const char* MatchBuiltinIntensityCurve(const std::vector<CurvePoint>& curve)
         Block probe;
         ApplyBuiltinIntensityCurve(&probe, id);
         if(CurvesEqual(curve, probe.intensity_curve))
+        {
+            return id;
+        }
+    }
+    return nullptr;
+}
+
+void ApplyBuiltinPeriodCurve(Block* block, const char* preset_id)
+{
+    if(!block || !preset_id)
+    {
+        return;
+    }
+    const std::string id(preset_id);
+    block->period_curve.clear();
+    if(id == "square" || id == "blink")
+    {
+        // Hard on for first half, off for second (blink / strobe).
+        block->period_curve = {
+            {0.0f, 1.0f}, {0.499f, 1.0f}, {0.5f, 0.0f}, {1.0f, 0.0f}
+        };
+    }
+    else if(id == "duty25")
+    {
+        block->period_curve = {
+            {0.0f, 1.0f}, {0.24f, 1.0f}, {0.25f, 0.0f}, {1.0f, 0.0f}
+        };
+    }
+    else if(id == "duty75")
+    {
+        block->period_curve = {
+            {0.0f, 1.0f}, {0.74f, 1.0f}, {0.75f, 0.0f}, {1.0f, 0.0f}
+        };
+    }
+    else if(id == "triangle" || id == "seesaw")
+    {
+        block->period_curve = {{0.0f, 0.0f}, {0.5f, 1.0f}, {1.0f, 0.0f}};
+    }
+    else if(id == "saw")
+    {
+        block->period_curve = {{0.0f, 0.0f}, {1.0f, 1.0f}};
+    }
+    else if(id == "pulse_curve")
+    {
+        block->period_curve = {
+            {0.0f, 0.0f}, {0.08f, 1.0f}, {0.22f, 1.0f}, {0.35f, 0.0f}, {1.0f, 0.0f}
+        };
+    }
+    else if(id == "sine")
+    {
+        // Coarse sine approximation for soft breathing within each period.
+        block->period_curve = {
+            {0.0f, 0.0f}, {0.25f, 0.7f}, {0.5f, 1.0f}, {0.75f, 0.7f}, {1.0f, 0.0f}
+        };
+    }
+    else if(id == "flat")
+    {
+        return;
+    }
+    else
+    {
+        block->period_curve = {{0.0f, 1.0f}, {1.0f, 1.0f}};
+    }
+}
+
+const char* MatchBuiltinPeriodCurve(const std::vector<CurvePoint>& curve)
+{
+    if(curve.empty())
+    {
+        return "flat";
+    }
+    static const char* kIds[] = {
+        "square", "duty25", "duty75", "triangle", "saw", "pulse_curve", "sine"
+    };
+    for(const char* id : kIds)
+    {
+        Block probe;
+        ApplyBuiltinPeriodCurve(&probe, id);
+        if(CurvesEqual(curve, probe.period_curve))
         {
             return id;
         }
@@ -408,6 +488,37 @@ bool EvaluateBlockAtWorld(const Block& block,
         return false;
     }
 
+    if(IsMediaBlock(block))
+    {
+        const float sx = max_x - min_x;
+        const float sy = max_y - min_y;
+        const float sz = max_z - min_z;
+        const float diag = std::max(1e-5f, std::sqrt(sx * sx + sy * sy + sz * sz));
+        const float eps = diag * 0.02f;
+        const float tx = (sx > eps) ? std::clamp((x - min_x) / sx, 0.0f, 1.0f) : 0.5f;
+        const float ty = (sy > eps) ? std::clamp((y - min_y) / sy, 0.0f, 1.0f) : 0.5f;
+        const float tz = (sz > eps) ? std::clamp((z - min_z) / sz, 0.0f, 1.0f) : 0.5f;
+        const float spans[3] = {sx, sy, sz};
+        const float coords[3] = {tx, ty, tz};
+        int order[3] = {0, 1, 2};
+        // Sort axes by span descending (stable enough for three elements).
+        if(spans[order[1]] > spans[order[0]]) { std::swap(order[0], order[1]); }
+        if(spans[order[2]] > spans[order[1]]) { std::swap(order[1], order[2]); }
+        if(spans[order[1]] > spans[order[0]]) { std::swap(order[0], order[1]); }
+        int u_axis = order[0];
+        int v_axis = order[1];
+        // Prefer world X as U when it is one of the two largest (left→right reading).
+        if(order[1] == 0)
+        {
+            u_axis = 0;
+            v_axis = order[0];
+        }
+        const bool collapse_v = (spans[v_axis] <= eps);
+        const float u = coords[u_axis];
+        const float v = collapse_v ? 0.5f : coords[v_axis];
+        return EvaluateMediaAtUv(block, local_ms, u, v, out_color, out_intensity, collapse_v);
+    }
+
     WorldCtx ctx;
     ctx.block = &block;
     ctx.local_ms = local_ms;
@@ -423,6 +534,8 @@ bool EvaluateBlockAtWorld(const Block& block,
     ctx.min_z = min_z;
     ctx.max_z = max_z;
     ctx.s = MakeNormSample(x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
+    ApplyBlockUvTransform(block, &ctx.s.nx, &ctx.s.ny);
+    ctx.s.height = ctx.s.ny;
     ctx.dx = ctx.s.nx - 0.5f;
     ctx.dy = ctx.s.ny - 0.5f;
     ctx.dz = ctx.s.nz - 0.5f;
@@ -458,17 +571,26 @@ bool EvaluateBlockAtWorld(const Block& block,
     led.dy = ctx.dy;
     led.dz = ctx.dz;
     const std::string id = script::FileId(block);
+    led.turned_off = false;
     if(!script::Run(id, &led))
     {
-        return false;
+        if(led.turned_off)
+        {
+            return false;
+        }
+        if(script::Has(id))
+        {
+            return false;
+        }
+        Block sample = block;
+        EnsureBlockGradient(&sample);
+        led.color = sample.gradient.empty() ? sample.color : SampleGradient(sample, ctx.progress);
+        led.intensity = std::clamp(block.intensity, 0.0f, 1.0f);
     }
     ctx.color = led.color;
     ctx.intensity = led.intensity;
 
-    if(!block.intensity_curve.empty())
-    {
-        ctx.intensity *= SampleCurve(block.intensity_curve, ctx.progress);
-    }
+    ModulateBlockIntensity(block, ctx.progress, BlockPeriodProgress(block, local_ms), &ctx.intensity);
 
     if(out_color)
     {

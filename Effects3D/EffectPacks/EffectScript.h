@@ -37,9 +37,12 @@ struct LedView
     float dx = 0.0f;
     float dy = 0.0f;
     float dz = 0.0f;
+    /** Set by script `off` — Evaluate* must not fall back to a gradient paint. */
+    bool turned_off = false;
 };
 
 void SetDirectory(const filesystem::path& dir);
+void ReloadDirectory();
 bool Has(const std::string& id);
 std::string FileId(const Block& block);
 bool UsesWorld(const std::string& id);
@@ -51,7 +54,7 @@ bool Run(const std::string& id, LedView* led);
 } // namespace script
 
 void SetEffectScriptDirectory(const filesystem::path& dir);
-bool EffectScriptLoaded(const std::string& id);
+void ReloadEffectScripts();
 bool EffectScriptUsesWorld(const std::string& id);
 bool EffectColorEnds(const std::string& id);
 bool EffectPreviewPulse(const std::string& id);

@@ -5,7 +5,7 @@
 #include <QWidget>
 #include <vector>
 
-/** Vixen-style gradient bar with draggable stop markers. */
+/** Editable multi-stop colour gradient. */
 class EffectPackGradientBar : public QWidget
 {
     Q_OBJECT

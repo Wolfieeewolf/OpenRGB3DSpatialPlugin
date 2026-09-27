@@ -3,6 +3,7 @@
 #include "EffectPackApplier.h"
 #include "EffectScript.h"
 #include "EffectPackApplierDetail.h"
+#include "EffectPackMedia.h"
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"
 #include "ZoneManager3D.h"
@@ -153,7 +154,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                 }
                 on = EvaluateBlockAtAxis(*top, local_ms, axis, seed, &color, &intensity);
             }
-            else if(have_bounds && script::UsesWorld(script::FileId(*top)))
+            else if(have_bounds && (IsMediaBlock(*top) || script::UsesWorld(script::FileId(*top))))
             {
                 on = EvaluateBlockAtWorld(*top, local_ms,
                                           p.x, p.y, p.z,

@@ -8,19 +8,6 @@ namespace EffectPack
 namespace block_eval
 {
 
-struct AxisCtx
-{
-    const Block* block = nullptr;
-    int local_ms = 0;
-    float axis = 0.0f;
-    float progress = 0.0f;
-    int twinkle_seed = 0;
-    float intensity = 1.0f;
-    RGBColor color = ToRGBColor(0, 0, 0);
-};
-
-using AxisFn = bool (*)(AxisCtx& ctx);
-
 struct WorldNorm
 {
     float nx = 0.5f;
@@ -55,8 +42,6 @@ struct WorldCtx
     float intensity = 1.0f;
     RGBColor color = ToRGBColor(0, 0, 0);
 };
-
-using WorldFn = bool (*)(WorldCtx& ctx);
 
 } // namespace block_eval
 } // namespace EffectPack
