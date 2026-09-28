@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "DisplayPlaneDialog.h"
@@ -476,6 +476,32 @@ void OpenRGB3DSpatialTab::removeDisplayPlaneClicked()
                 else if(plane_ref_idx > ref_point_index)
                 {
                     display_planes[i]->SetReferencePointIndex(plane_ref_idx - 1);
+                }
+            }
+            for(size_t i = 0; i < scene_props_.size(); i++)
+            {
+                if(!scene_props_[i]) continue;
+                int prop_ref_idx = scene_props_[i]->GetReferencePointIndex();
+                if(prop_ref_idx == ref_point_index)
+                {
+                    scene_props_[i]->SetReferencePointIndex(-1);
+                }
+                else if(prop_ref_idx > ref_point_index)
+                {
+                    scene_props_[i]->SetReferencePointIndex(prop_ref_idx - 1);
+                }
+            }
+            for(size_t i = 0; i < controller_transforms.size(); i++)
+            {
+                ControllerTransform* ct = controller_transforms[i].get();
+                if(!ct) continue;
+                if(ct->linked_reference_point_index == ref_point_index)
+                {
+                    ct->linked_reference_point_index = -1;
+                }
+                else if(ct->linked_reference_point_index > ref_point_index)
+                {
+                    ct->linked_reference_point_index -= 1;
                 }
             }
             RemoveReferencePointControllerEntries(ref_point_index);

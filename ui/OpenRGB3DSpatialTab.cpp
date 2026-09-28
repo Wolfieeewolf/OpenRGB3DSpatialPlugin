@@ -230,6 +230,7 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     viewport->SetGridSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
     viewport->SetDisplayPlanes(&display_planes);
+    viewport->SetSceneProps(&scene_props_);
     viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, true);
     viewport->SetScreenPreviewTickCallback({});
@@ -243,12 +244,15 @@ void OpenRGB3DSpatialTab::InitLedViewport()
         refPointSelected(index, false);
     });
     connect(viewport, &LEDViewport3D::DisplayPlaneSelected, this, &OpenRGB3DSpatialTab::viewportDisplayPlaneSelected);
+    connect(viewport, &LEDViewport3D::ScenePropSelected, this, &OpenRGB3DSpatialTab::viewportScenePropSelected);
     connect(viewport, &LEDViewport3D::RoomViewportSelected, this, [this](bool) {
         UpdateSelectionInfo();
     });
     connect(viewport, &LEDViewport3D::ReferencePointPositionChanged, this, &OpenRGB3DSpatialTab::refPointPositionChanged);
     connect(viewport, &LEDViewport3D::DisplayPlanePositionChanged, this, &OpenRGB3DSpatialTab::displayPlanePositionSignal);
     connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::displayPlaneRotationSignal);
+    connect(viewport, &LEDViewport3D::ScenePropPositionChanged, this, &OpenRGB3DSpatialTab::scenePropPositionSignal);
+    connect(viewport, &LEDViewport3D::ScenePropRotationChanged, this, &OpenRGB3DSpatialTab::scenePropRotationSignal);
 
     viewport->installViewportKeyboardShortcuts(this);
 }
@@ -1551,6 +1555,33 @@ void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)
             }
             return;
         }
+        if(metadata.first == -4)
+        {
+            const int prop_index = FindScenePropIndexById(metadata.second);
+            if(prop_index >= 0 && prop_index < (int)scene_props_.size())
+            {
+                SceneProp3D* prop = scene_props_[(size_t)prop_index].get();
+                if(prop)
+                {
+                    Transform3D& t = prop->GetTransform();
+                    if(axis == 0) t.position.x = (float)value;
+                    else if(axis == 1) t.position.y = (float)value;
+                    else t.position.z = (float)value;
+                    current_scene_prop_index_ = prop_index;
+                    const int ref_index = prop->GetReferencePointIndex();
+                    if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+                    {
+                        reference_points[ref_index]->SetPosition(t.position);
+                    }
+                    SyncScenePropControls(prop);
+                    viewport->SelectSceneProp(prop_index);
+                    viewport->NotifyScenePropChanged();
+                    SetLayoutDirty();
+                    emit GridLayoutChanged();
+                }
+            }
+            return;
+        }
     }
 
     if(referencePointsList())
@@ -1607,6 +1638,28 @@ void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)
             SetLayoutDirty();
             emit GridLayoutChanged();
         }
+        return;
+    }
+    if(current_scene_prop_index_ >= 0 && current_scene_prop_index_ < (int)scene_props_.size())
+    {
+        SceneProp3D* prop = scene_props_[(size_t)current_scene_prop_index_].get();
+        if(prop)
+        {
+            Transform3D& t = prop->GetTransform();
+            if(axis == 0) t.position.x = (float)value;
+            else if(axis == 1) t.position.y = (float)value;
+            else t.position.z = (float)value;
+            const int ref_index = prop->GetReferencePointIndex();
+            if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+            {
+                reference_points[ref_index]->SetPosition(t.position);
+            }
+            SyncScenePropControls(prop);
+            viewport->SelectSceneProp(current_scene_prop_index_);
+            viewport->NotifyScenePropChanged();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+        }
     }
 }
 
@@ -1653,6 +1706,33 @@ void OpenRGB3DSpatialTab::ApplyRotationComponent(int axis, double value)
                     SyncDisplayPlaneControls(plane);
                     viewport->SelectDisplayPlane(plane_index);
                     viewport->NotifyDisplayPlaneChanged();
+                    SetLayoutDirty();
+                    emit GridLayoutChanged();
+                }
+            }
+            return;
+        }
+        if(metadata.first == -4)
+        {
+            const int prop_index = FindScenePropIndexById(metadata.second);
+            if(prop_index >= 0 && prop_index < (int)scene_props_.size())
+            {
+                SceneProp3D* prop = scene_props_[(size_t)prop_index].get();
+                if(prop)
+                {
+                    Transform3D& t = prop->GetTransform();
+                    if(axis == 0) t.rotation.x = (float)value;
+                    else if(axis == 1) t.rotation.y = (float)value;
+                    else t.rotation.z = (float)value;
+                    current_scene_prop_index_ = prop_index;
+                    const int ref_index = prop->GetReferencePointIndex();
+                    if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+                    {
+                        reference_points[ref_index]->GetTransform().rotation = t.rotation;
+                    }
+                    SyncScenePropControls(prop);
+                    viewport->SelectSceneProp(prop_index);
+                    viewport->NotifyScenePropChanged();
                     SetLayoutDirty();
                     emit GridLayoutChanged();
                 }
@@ -1712,6 +1792,28 @@ void OpenRGB3DSpatialTab::ApplyRotationComponent(int axis, double value)
             SyncDisplayPlaneControls(plane);
             viewport->SelectDisplayPlane(current_display_plane_index);
             viewport->NotifyDisplayPlaneChanged();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+        }
+        return;
+    }
+    if(current_scene_prop_index_ >= 0 && current_scene_prop_index_ < (int)scene_props_.size())
+    {
+        SceneProp3D* prop = scene_props_[(size_t)current_scene_prop_index_].get();
+        if(prop)
+        {
+            Transform3D& t = prop->GetTransform();
+            if(axis == 0) t.rotation.x = (float)value;
+            else if(axis == 1) t.rotation.y = (float)value;
+            else t.rotation.z = (float)value;
+            const int ref_index = prop->GetReferencePointIndex();
+            if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+            {
+                reference_points[ref_index]->GetTransform().rotation = t.rotation;
+            }
+            SyncScenePropControls(prop);
+            viewport->SelectSceneProp(current_scene_prop_index_);
+            viewport->NotifyScenePropChanged();
             SetLayoutDirty();
             emit GridLayoutChanged();
         }
@@ -2054,6 +2156,31 @@ QListWidget* OpenRGB3DSpatialTab::displayPlanesList() const
 QWidget* OpenRGB3DSpatialTab::displayPlanesEmptyLabel() const
 {
     return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->displayPlanesEmptyLabel() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::scenePropsList() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->scenePropsList() : nullptr;
+}
+
+QWidget* OpenRGB3DSpatialTab::scenePropsEmptyLabel() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->scenePropsEmptyLabel() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::createScenePropButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->createScenePropButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::editScenePropButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->editScenePropButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::removeScenePropButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->removeScenePropButton() : nullptr;
 }
 
 QPushButton* OpenRGB3DSpatialTab::editDisplayPlaneButton() const

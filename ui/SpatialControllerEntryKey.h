@@ -6,7 +6,8 @@
 #include <QMetaType>
 #include <QPair>
 
-// type_code: RGB controller index (>=0), -1 custom virtual, -2 ref point, -3 display plane
+// type_code: RGB controller index (>=0), -1 custom virtual, -2 ref point,
+//            -3 display plane, -4 scene prop
 using SpatialControllerEntryKey = QPair<int, int>;
 
 Q_DECLARE_METATYPE(SpatialControllerEntryKey)

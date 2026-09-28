@@ -22,6 +22,7 @@
 #include "SpatialEffectTypes.h"
 #include "VirtualController3D.h"
 #include "DisplayPlane3D.h"
+#include "SceneProp3D.h"
 #include "viewport/ViewportMath.h"
 #include "viewport/GlProgram.h"
 #include "viewport/MeshBatch.h"
@@ -59,7 +60,10 @@ public:
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
     void SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes);
     void SelectDisplayPlane(int index);
+    void SetSceneProps(std::vector<std::unique_ptr<SceneProp3D>>* props);
+    void SelectSceneProp(int index);
     void NotifyDisplayPlaneChanged();
+    void NotifyScenePropChanged();
     void UploadDisplayPlaneCaptureTexturesDuringEffectTick();
     void SetShowScreenPreview(bool show);
     /** When true, effect tick uploads plane textures; stop the independent preview timer. */
@@ -141,6 +145,7 @@ public:
     int                     GetSelectedControllerIndex() const { return selected_controller_idx; }
     int                     GetSelectedReferencePointIndex() const { return selected_ref_point_idx; }
     int                     GetSelectedDisplayPlaneIndex() const { return selected_display_plane_idx; }
+    int                     GetSelectedScenePropIndex() const { return selected_scene_prop_idx_; }
     bool                    IsRoomViewportSelected() const { return room_viewport_selected_; }
 
     void update();
@@ -157,6 +162,9 @@ signals:
     void ReferencePointSelected(int index);
     void ReferencePointPositionChanged(int index, float x, float y, float z);
     void DisplayPlaneSelected(int index);
+    void ScenePropSelected(int index);
+    void ScenePropPositionChanged(int index, float x, float y, float z);
+    void ScenePropRotationChanged(int index, float x, float y, float z);
     void DisplayPlanePositionChanged(int index, float x, float y, float z);
     void DisplayPlaneRotationChanged(int index, float x, float y, float z);
     void RoomViewportSelected(bool selected);
@@ -216,6 +224,8 @@ private:
     void tryDeleteSelectedFromKeyboard();
     GridExtents GetRoomExtents() const;
     void DrawGrid();
+    void DrawRoomFloor();
+    void DrawRoomWalls();
     void DrawReferencePoints();
     void drawGizmo();
     void drawGizmoMeshPass(const GizmoDrawMesh& mesh, const ViewportMat4& model);
@@ -249,6 +259,7 @@ private:
     void abandonViewportGlHandles();
     size_t populateLedDrawBuffers(ControllerTransform* ctrl);
     void RebuildFloorGridCache(const GridExtents& extents);
+    void RebuildRoomShellCache(const GridExtents& extents);
     void DrawControllers();
     void DrawLEDs(ControllerTransform* ctrl, const ViewportMat4& model);
     void DrawUserFigure();
@@ -257,6 +268,7 @@ private:
     void getRoomGridOverlayExtents(float& min_x, float& max_x, float& min_y, float& max_y, float& min_z, float& max_z) const;
     void invalidateRoomGridOverlayColors();
     void DrawDisplayPlanes();
+    void DrawSceneProps();
     void DrawLightBlockerLayers();
     void UpdateDisplayPlaneTextures();
     void SyncScreenPreviewTimer();
@@ -267,6 +279,7 @@ private:
     int PickController(const Ray3D& ray);
     int PickReferencePoint(const Ray3D& ray);
     int PickDisplayPlane(const Ray3D& ray);
+    int PickSceneProp(const Ray3D& ray);
     bool RayBoxIntersect(const Ray3D& ray,
                         const Vector3D& box_min, const Vector3D& box_max, float& distance);
     bool RaySphereIntersect(const Ray3D& ray,
@@ -295,7 +308,9 @@ private:
 
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
     std::vector<std::unique_ptr<DisplayPlane3D>>* display_planes;
+    std::vector<std::unique_ptr<SceneProp3D>>* scene_props_ = nullptr;
     int                                     selected_display_plane_idx;
+    int                                     selected_scene_prop_idx_ = -1;
     int                                     selected_ref_point_idx;
     bool                                    show_screen_preview;
     bool                                    effect_render_owns_preview_uploads_ = false;
@@ -367,6 +382,7 @@ private:
     GlProgram gl_prog_unlit_point_;
     GlProgram gl_prog_textured_unlit_;
     bool      viewport_shader_programs_ok_ = false;
+    MeshBatch floor_fill_batch_;
     MeshBatch floor_grid_batch_;
     MeshBatch floor_border_batch_;
     MeshBatch room_sel_lines_batch_;
@@ -374,12 +390,15 @@ private:
     MeshBatch axes_lines_batch_;
     MeshBatch axes_heads_batch_;
     MeshBatch room_boundary_batch_;
+    MeshBatch room_walls_batch_;
     MeshBatch controller_faces_batch_;
     MeshBatch controller_edges_batch_;
     MeshBatch controller_leds_batch_;
     MeshBatch controller_indicator_batch_;
     MeshBatch room_grid_overlay_batch_;
     MeshBatch display_plane_batch_;
+    MeshBatch scene_prop_faces_batch_;
+    MeshBatch scene_prop_edges_batch_;
     MeshBatch gizmo_lines_batch_;
     MeshBatch gizmo_tris_batch_;
     float     room_boundary_cached_max_x_ = -1.0f;

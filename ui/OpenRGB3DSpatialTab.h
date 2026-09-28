@@ -44,6 +44,7 @@ namespace EffectPack { struct Pack; }
 #include "VirtualController3D.h"
 #include "VirtualReferencePoint3D.h"
 #include "DisplayPlane3D.h"
+#include "SceneProp3D.h"
 #include "SpatialEffectTypes.h"
 #include "SpatialEffect3D.h"
 #include "EffectListManager3D.h"
@@ -134,6 +135,7 @@ private slots:
     void controllerSelected(int index);
     void viewportControllerSelected(int transform_index);
     void viewportDisplayPlaneSelected(int plane_index);
+    void viewportScenePropSelected(int prop_index);
     void controllerPositionChanged(int index, float x, float y, float z);
     void controllerRotationChanged(int index, float x, float y, float z);
 
@@ -283,9 +285,12 @@ private:
     void UpdateAvailableControllersList();
     void UpdateCustomControllersList();
     int  FindDisplayPlaneIndexById(int plane_id) const;
+    int  FindScenePropIndexById(int prop_id) const;
     int  FindSceneRowForReferencePoint(int ref_index) const;
     int  FindSceneRowForDisplayPlane(int plane_index) const;
+    int  FindSceneRowForSceneProp(int prop_index) const;
     void RemoveDisplayPlaneControllerEntries(int plane_id);
+    void RemoveScenePropControllerEntries(int prop_id);
     void RemoveReferencePointControllerEntries(int removed_index);
     int  TransformIndexToControllerListRow(int transform_index) const;
     void SetObjectCreatorStatus(const QString& message, bool is_error = false);
@@ -450,6 +455,11 @@ private:
     QPushButton*    removeDisplayPlaneButton() const;
     QComboBox*      displayPlaneCaptureCombo() const;
     QPushButton*    displayPlaneCaptureRefreshButton() const;
+    QListWidget*    scenePropsList() const;
+    QWidget*        scenePropsEmptyLabel() const;
+    QPushButton*    createScenePropButton() const;
+    QPushButton*    editScenePropButton() const;
+    QPushButton*    removeScenePropButton() const;
 
     void FillDisplayPlaneCaptureCombo(QComboBox* combo,
                                       const std::string& prefer_source_id,
@@ -537,6 +547,14 @@ private slots:
     void displayPlanePositionSignal(int index, float x, float y, float z);
     void displayPlaneRotationSignal(int index, float x, float y, float z);
 
+    void scenePropsListSelectionChanged(int row);
+    void scenePropSelected(int index);
+    void addScenePropClicked();
+    void editScenePropClicked();
+    void removeScenePropClicked();
+    void scenePropPositionSignal(int index, float x, float y, float z);
+    void scenePropRotationSignal(int index, float x, float y, float z);
+
 private:
     std::vector<RGBColor> room_grid_overlay_buffer;
 
@@ -553,14 +571,22 @@ private:
     std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
     int             current_display_plane_index = -1;
 
+    std::vector<std::unique_ptr<SceneProp3D>> scene_props_;
+    int             current_scene_prop_index_ = -1;
+
     void UpdateDisplayPlanesList();
     void UpdateCurrentDisplayPlaneListItemLabel();
     void RefreshDisplayPlaneDetails();
     DisplayPlane3D* GetSelectedDisplayPlane();
+    void UpdateScenePropsList();
+    SceneProp3D* GetSelectedSceneProp();
     void SyncDisplayPlaneManager();
     void NotifyDisplayPlaneChanged();
+    void NotifyScenePropChanged();
     void SyncDisplayPlaneControls(DisplayPlane3D* plane);
+    void SyncScenePropControls(SceneProp3D* prop);
     void SetDisplayPlaneVisibleInScene(DisplayPlane3D* plane, bool visible);
+    void SetScenePropVisibleInScene(SceneProp3D* prop, bool visible);
     bool EditReferencePointAtIndex(int ref_index);
     bool EditDisplayPlaneAtIndex(int plane_index);
     int  FindAvailableControllerRow(int type_code, int object_index) const;

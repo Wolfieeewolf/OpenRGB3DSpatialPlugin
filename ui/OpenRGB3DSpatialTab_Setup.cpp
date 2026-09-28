@@ -145,6 +145,15 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
         }
     }
 
+    for(unsigned int i = 0; i < scene_props_.size(); i++)
+    {
+        if(scene_props_[i] && !scene_props_[i]->IsVisible())
+        {
+            available_controllers_.append(QString("[Prop] ") + QString::fromStdString(scene_props_[i]->GetName()),
+                                        qMakePair(-4, scene_props_[i]->GetId()));
+        }
+    }
+
     UpdateCustomControllersList();
 
     bool selection_restored = false;
@@ -546,6 +555,13 @@ void OpenRGB3DSpatialTab::controllerSelected(int index)
                 }
                 current_display_plane_index = -1;
                 if(viewport) viewport->SelectDisplayPlane(-1);
+                if(scenePropsList())
+                {
+                    QSignalBlocker block(scenePropsList());
+                    scenePropsList()->clearSelection();
+                }
+                current_scene_prop_index_ = -1;
+                if(viewport) viewport->SelectSceneProp(-1);
             return;
         }
         if(metadata.first == -3)
@@ -569,6 +585,13 @@ void OpenRGB3DSpatialTab::controllerSelected(int index)
                         QSignalBlocker block(referencePointsList());
                         referencePointsList()->clearSelection();
                     }
+                    if(scenePropsList())
+                    {
+                        QSignalBlocker block(scenePropsList());
+                        scenePropsList()->clearSelection();
+                    }
+                    current_scene_prop_index_ = -1;
+                    if(viewport) viewport->SelectSceneProp(-1);
                     DisplayPlane3D* plane = display_planes[plane_index].get();
                     SyncDisplayPlaneControls(plane);
                     RefreshDisplayPlaneDetails();
@@ -588,6 +611,52 @@ void OpenRGB3DSpatialTab::controllerSelected(int index)
             }
             return;
         }
+        if(metadata.first == -4)
+        {
+            int prop_index = FindScenePropIndexById(metadata.second);
+            if(prop_index >= 0 && prop_index < (int)scene_props_.size())
+            {
+                if(sceneControllerCards())
+                {
+                    sceneControllerCards()->setSelectedSceneRow(index);
+                }
+
+                current_scene_prop_index_ = prop_index;
+                if(scenePropsList())
+                {
+                    QSignalBlocker block(scenePropsList());
+                    scenePropsList()->setCurrentRow(prop_index);
+                }
+                if(displayPlanesList())
+                {
+                    QSignalBlocker block(displayPlanesList());
+                    displayPlanesList()->clearSelection();
+                }
+                current_display_plane_index = -1;
+                if(viewport) viewport->SelectDisplayPlane(-1);
+                if(referencePointsList())
+                {
+                    QSignalBlocker block(referencePointsList());
+                    referencePointsList()->clearSelection();
+                }
+                SceneProp3D* prop = scene_props_[(size_t)prop_index].get();
+                SyncScenePropControls(prop);
+                if(viewport) viewport->SelectSceneProp(prop_index);
+                if(posXSpin()) posXSpin()->setEnabled(true);
+                if(posYSpin()) posYSpin()->setEnabled(true);
+                if(posZSpin()) posZSpin()->setEnabled(true);
+                if(posXSlider()) posXSlider()->setEnabled(true);
+                if(posYSlider()) posYSlider()->setEnabled(true);
+                if(posZSlider()) posZSlider()->setEnabled(true);
+                if(rotXSpin()) rotXSpin()->setEnabled(true);
+                if(rotYSpin()) rotYSpin()->setEnabled(true);
+                if(rotZSpin()) rotZSpin()->setEnabled(true);
+                if(rotXSlider()) rotXSlider()->setEnabled(true);
+                if(rotYSlider()) rotYSlider()->setEnabled(true);
+                if(rotZSlider()) rotZSlider()->setEnabled(true);
+            }
+            return;
+        }
     }
 
     if(displayPlanesList())
@@ -597,6 +666,13 @@ void OpenRGB3DSpatialTab::controllerSelected(int index)
     }
     current_display_plane_index = -1;
     if(viewport) viewport->SelectDisplayPlane(-1);
+    if(scenePropsList())
+    {
+        QSignalBlocker block(scenePropsList());
+        scenePropsList()->clearSelection();
+    }
+    current_scene_prop_index_ = -1;
+    if(viewport) viewport->SelectSceneProp(-1);
 
     int transform_index = index;
     if(index >= 0 && index < scene_controllers_.count() && !scene_controllers_.hasUserRole(index))
@@ -866,6 +942,16 @@ void OpenRGB3DSpatialTab::PopulateAvailableItemCombo(const SpatialControllerEntr
         }
         return;
     }
+    if(type_code == -4)
+    {
+        const int prop_index = FindScenePropIndexById(object_index);
+        if(prop_index >= 0)
+        {
+            combo->addItem(tr("Whole object"),
+                           QVariant::fromValue(qMakePair(-4, scene_props_[(size_t)prop_index]->GetId())));
+        }
+        return;
+    }
     if(type_code == -1)
     {
         combo->addItem(tr("Whole device"), QVariant::fromValue(qMakePair(-1, object_index)));
@@ -1015,6 +1101,14 @@ bool OpenRGB3DSpatialTab::IsDeviceLinkedReferencePoint(int ref_index) const
     for(const std::unique_ptr<DisplayPlane3D>& plane : display_planes)
     {
         if(plane && plane->GetReferencePointIndex() == ref_index)
+        {
+            return true;
+        }
+    }
+
+    for(const std::unique_ptr<SceneProp3D>& prop : scene_props_)
+    {
+        if(prop && prop->GetReferencePointIndex() == ref_index)
         {
             return true;
         }
@@ -1184,6 +1278,24 @@ void OpenRGB3DSpatialTab::RemoveControllerLinkedReferencePoint(int transform_ind
         }
     }
 
+    for(size_t i = 0; i < scene_props_.size(); i++)
+    {
+        SceneProp3D* prop = scene_props_[i].get();
+        if(!prop)
+        {
+            continue;
+        }
+        int prop_ref_idx = prop->GetReferencePointIndex();
+        if(prop_ref_idx == removed_ref_index)
+        {
+            prop->SetReferencePointIndex(-1);
+        }
+        else if(prop_ref_idx > removed_ref_index)
+        {
+            prop->SetReferencePointIndex(prop_ref_idx - 1);
+        }
+    }
+
     RemoveReferencePointControllerEntries(removed_ref_index);
     reference_points.erase(reference_points.begin() + removed_ref_index);
     UpdateReferencePointsList();
@@ -1306,6 +1418,54 @@ void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
             QMessageBox::information(this, tr("Display plane added"),
                                     tr("Display plane '%1' added to the 3D scene.")
                                         .arg(plane_name));
+        }
+        RefreshHiddenControllerStates();
+        return;
+    }
+
+    if(ctrl_idx == -4)
+    {
+        int prop_index = FindScenePropIndexById(item_row);
+        if(prop_index < 0 || prop_index >= (int)scene_props_.size())
+        {
+            return;
+        }
+
+        SceneProp3D* prop = scene_props_[(size_t)prop_index].get();
+        prop->SetVisible(true);
+
+        QString prop_name = QString::fromStdString(prop->GetName());
+        scene_controllers_.append(QString("[Prop] ") + prop_name, qMakePair(-4, prop->GetId()));
+
+        int linked_ref_idx = prop->GetReferencePointIndex();
+        if(linked_ref_idx >= 0 && linked_ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_pt = reference_points[linked_ref_idx].get();
+            if(ref_pt)
+            {
+                const Transform3D& pt = prop->GetTransform();
+                ref_pt->SetPosition({pt.position.x, pt.position.y, pt.position.z});
+                ref_pt->SetRotation({pt.rotation.x, pt.rotation.y, pt.rotation.z});
+                ref_pt->SetVisible(true);
+            }
+        }
+
+        if(viewport)
+        {
+            viewport->SelectSceneProp(prop_index);
+            viewport->update();
+        }
+        SetLayoutDirty();
+        NotifyScenePropChanged();
+        emit GridLayoutChanged();
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
+
+        if(show_messages)
+        {
+            QMessageBox::information(this, tr("Scene prop added"),
+                                    tr("Scene prop '%1' added to the 3D scene.")
+                                        .arg(prop_name));
         }
         RefreshHiddenControllerStates();
         return;
@@ -1499,6 +1659,45 @@ void OpenRGB3DSpatialTab::removeControllerClicked()
             RefreshHiddenControllerStates();
             return;
         }
+        else if(type_code == -4)
+        {
+            int prop_index = FindScenePropIndexById(object_index);
+            if(prop_index >= 0 && prop_index < (int)scene_props_.size())
+            {
+                SceneProp3D* prop = scene_props_[(size_t)prop_index].get();
+                prop->SetVisible(false);
+
+                int linked_ref_idx = prop->GetReferencePointIndex();
+                if(linked_ref_idx >= 0 && linked_ref_idx < (int)reference_points.size())
+                {
+                    reference_points[linked_ref_idx]->SetVisible(false);
+                }
+
+                if(current_scene_prop_index_ == prop_index)
+                {
+                    current_scene_prop_index_ = -1;
+                    if(scenePropsList())
+                    {
+                        QSignalBlocker block(scenePropsList());
+                        scenePropsList()->setCurrentRow(-1);
+                    }
+                }
+            }
+            scene_controllers_.removeAt(selected_row);
+            if(viewport)
+            {
+                viewport->SelectSceneProp(-1);
+                viewport->update();
+            }
+            SetLayoutDirty();
+            NotifyScenePropChanged();
+            emit GridLayoutChanged();
+            UpdateScenePropsList();
+            UpdateAvailableControllersList();
+            UpdateAvailableItemCombo();
+            RefreshHiddenControllerStates();
+            return;
+        }
     }
 
     int transform_index = ControllerListRowToTransformIndex(selected_row);
@@ -1633,6 +1832,18 @@ int OpenRGB3DSpatialTab::FindDisplayPlaneIndexById(int plane_id) const
     return -1;
 }
 
+int OpenRGB3DSpatialTab::FindScenePropIndexById(int prop_id) const
+{
+    for(size_t i = 0; i < scene_props_.size(); i++)
+    {
+        if(scene_props_[i] && scene_props_[i]->GetId() == prop_id)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
 int OpenRGB3DSpatialTab::FindSceneRowForReferencePoint(int ref_index) const
 {
     if(ref_index < 0)
@@ -1678,6 +1889,29 @@ int OpenRGB3DSpatialTab::FindSceneRowForDisplayPlane(int plane_index) const
     return -1;
 }
 
+int OpenRGB3DSpatialTab::FindSceneRowForSceneProp(int prop_index) const
+{
+    if(prop_index < 0 || prop_index >= (int)scene_props_.size())
+    {
+        return -1;
+    }
+
+    const int prop_id = scene_props_[(size_t)prop_index]->GetId();
+    for(int row = 0; row < scene_controllers_.count(); row++)
+    {
+        if(!scene_controllers_.hasUserRole(row))
+        {
+            continue;
+        }
+        const SpatialControllerEntryKey metadata = scene_controllers_.userRoleAt(row);
+        if(metadata.first == -4 && metadata.second == prop_id)
+        {
+            return row;
+        }
+    }
+    return -1;
+}
+
 void OpenRGB3DSpatialTab::RemoveDisplayPlaneControllerEntries(int plane_id)
 {
     for(int row = scene_controllers_.count() - 1; row >= 0; row--)
@@ -1688,6 +1922,22 @@ void OpenRGB3DSpatialTab::RemoveDisplayPlaneControllerEntries(int plane_id)
         }
         const SpatialControllerEntryKey metadata = scene_controllers_.userRoleAt(row);
         if(metadata.first == -3 && metadata.second == plane_id)
+        {
+            scene_controllers_.removeAt(row);
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::RemoveScenePropControllerEntries(int prop_id)
+{
+    for(int row = scene_controllers_.count() - 1; row >= 0; row--)
+    {
+        if(!scene_controllers_.hasUserRole(row))
+        {
+            continue;
+        }
+        const SpatialControllerEntryKey metadata = scene_controllers_.userRoleAt(row);
+        if(metadata.first == -4 && metadata.second == prop_id)
         {
             scene_controllers_.removeAt(row);
         }

@@ -94,8 +94,11 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
                                        selected_ref_point_idx < (int)reference_points->size());
         bool has_display_plane_selected = (selected_display_plane_idx >= 0 && display_planes &&
                                            selected_display_plane_idx < (int)display_planes->size());
+        bool has_scene_prop_selected = (selected_scene_prop_idx_ >= 0 && scene_props_ &&
+                                        selected_scene_prop_idx_ < (int)scene_props_->size());
 
-        if(has_controller_selected || has_ref_point_selected || has_display_plane_selected)
+        if(has_controller_selected || has_ref_point_selected || has_display_plane_selected
+           || has_scene_prop_selected)
         {
             gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
             syncGizmoScreenScale();
@@ -180,6 +183,16 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             ClearSelection();
             SelectDisplayPlane(picked_plane);
             emit DisplayPlaneSelected(picked_plane);
+            update();
+            return;
+        }
+
+        const int picked_prop = PickSceneProp(ray);
+        if(picked_prop >= 0)
+        {
+            ClearSelection();
+            SelectSceneProp(picked_prop);
+            emit ScenePropSelected(picked_prop);
             update();
             return;
         }

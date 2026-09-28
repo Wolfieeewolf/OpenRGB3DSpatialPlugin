@@ -207,6 +207,7 @@ void LEDViewport3D::clearSceneObjectSelection()
     selected_controller_indices.clear();
     selected_controller_idx = -1;
     selected_display_plane_idx = -1;
+    selected_scene_prop_idx_ = -1;
     selected_ref_point_idx = -1;
     gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
 }
@@ -224,6 +225,7 @@ void LEDViewport3D::selectRoomViewport()
     emit ControllerSelected(-1);
     emit ReferencePointSelected(-1);
     emit DisplayPlaneSelected(-1);
+    emit ScenePropSelected(-1);
     update();
 }
 
@@ -265,6 +267,7 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
         emit ControllerSelected(-1);
         emit ReferencePointSelected(-1);
         emit DisplayPlaneSelected(-1);
+        emit ScenePropSelected(-1);
         return;
     }
 
@@ -296,6 +299,15 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
         return;
     }
 
+    const int picked_prop = PickSceneProp(ray);
+    if(picked_prop >= 0)
+    {
+        ClearSelection();
+        SelectSceneProp(picked_prop);
+        emit ScenePropSelected(picked_prop);
+        return;
+    }
+
     if(pickRoomVolume(ray))
     {
         selectRoomViewport();
@@ -306,6 +318,7 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
     emit ControllerSelected(-1);
     emit ReferencePointSelected(-1);
     emit DisplayPlaneSelected(-1);
+    emit ScenePropSelected(-1);
 }
 
 void LEDViewport3D::ResetCameraToDefault()
