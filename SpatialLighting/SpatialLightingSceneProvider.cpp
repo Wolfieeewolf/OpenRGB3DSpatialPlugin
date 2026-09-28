@@ -58,6 +58,7 @@ void SpatialLightingSceneProvider::EnsureFrameOccluders(const GridContext3D& gri
                                                         const SpatialLighting::OccluderBuildOptions& options)
 {
     if(frame_occluders_valid_ && frame_occluder_options_.display_planes == options.display_planes &&
+       frame_occluder_options_.scene_props == options.scene_props &&
        frame_occluder_options_.room_walls == options.room_walls &&
        frame_occluder_options_.controllers == options.controllers &&
        frame_occluder_options_.light_blockers == options.light_blockers)

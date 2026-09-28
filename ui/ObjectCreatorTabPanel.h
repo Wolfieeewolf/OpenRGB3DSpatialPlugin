@@ -32,6 +32,7 @@ public:
     void showCustomControllerSection();
     void showReferencePointSection();
     void showDisplayPlaneSection();
+    void showScenePropSection();
     void showZoneSection();
     void showEffectPackSection();
     void showEventBindingsSection();
@@ -54,6 +55,11 @@ public:
     QPushButton*    removeDisplayPlaneButton() const;
     QComboBox*      displayPlaneCaptureCombo() const;
     QPushButton*    displayPlaneCaptureRefreshButton() const;
+    QListWidget*    scenePropsList() const;
+    QWidget*        scenePropsEmptyLabel() const;
+    QPushButton*    createScenePropButton() const;
+    QPushButton*    editScenePropButton() const;
+    QPushButton*    removeScenePropButton() const;
     ZonesPanel*     zonesPanel() const;
     EffectPackPanel* effectPackPanel() const;
     EventBindingsPanel* eventBindingsPanel() const;
@@ -72,14 +78,23 @@ private:
         ObjectTypeZone = 4,
         ObjectTypeEffectPack = 5,
         ObjectTypeEventBindings = 6,
+        ObjectTypeSceneProp = 7,
     };
 
     void applyVisualStyles();
     void setObjectTypeIndex(int index);
+    void buildScenePropsPage();
 
     Ui::ObjectCreatorTabPanel* ui;
     OpenRGB3DSpatialTab*       host_tab_ = nullptr;
     bool                       bound_ = false;
+
+    QWidget*        scene_props_page_ = nullptr;
+    QListWidget*    scene_props_list_ = nullptr;
+    QLabel*         scene_props_empty_label_ = nullptr;
+    QPushButton*    create_scene_prop_button_ = nullptr;
+    QPushButton*    edit_scene_prop_button_ = nullptr;
+    QPushButton*    remove_scene_prop_button_ = nullptr;
 };
 
 #endif

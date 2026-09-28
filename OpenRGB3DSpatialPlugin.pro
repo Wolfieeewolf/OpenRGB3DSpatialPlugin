@@ -138,7 +138,9 @@ HEADERS += \
     Zone3D.h \
     ZoneManager3D.h \
     DisplayPlane3D.h \
+    SceneProp3D.h \
     DisplayPlaneManager.h \
+    ScenePropManager.h \
     ScreenCaptureManager.h \
     ScreenCaptureDownscale.h \
     DisplayPlaneCaptureLabels.h \
@@ -227,6 +229,7 @@ HEADERS += \
     ui/CustomControllerDialog_Internal.h \
     ui/ReferencePointDialog.h \
     ui/DisplayPlaneDialog.h \
+    ui/ScenePropDialog.h \
     ui/DisplayPlaneCaptureCombo.h \
     ui/custom-controller-grid/CustomControllerGridCell.h \
     ui/custom-controller-grid/CustomControllerGridLayoutMath.h \
@@ -325,6 +328,7 @@ SOURCES += \
     Zone3D.cpp \
     ZoneManager3D.cpp \
     DisplayPlane3D.cpp \
+    SceneProp3D.cpp \
     ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
     Game/GameTelemetryBridge.cpp \
@@ -402,6 +406,7 @@ SOURCES += \
     ui/OpenRGB3DSpatialTab_Setup.cpp \
     ui/SpatialTabLedHelpers.cpp \
     ui/OpenRGB3DSpatialTab_SetupDisplayPlanes.cpp \
+    ui/OpenRGB3DSpatialTab_SetupSceneProps.cpp \
     ui/OpenRGB3DSpatialTab_Layout.cpp \
     ui/OpenRGB3DSpatialTab_LayoutCustomControllers.cpp \
     ui/OpenRGB3DSpatialTab_Settings.cpp \
@@ -417,6 +422,7 @@ SOURCES += \
     ui/LEDViewport3D_Controllers.cpp \
     ui/LEDViewport3D_SceneObjects.cpp \
     ui/LEDViewport3D_DisplayPlanes.cpp \
+    ui/LEDViewport3D_SceneProps.cpp \
     ui/CustomControllerDialog.cpp \
     ui/CustomControllerDialog_Grid.cpp \
     ui/CustomControllerDialog_Sources.cpp \
@@ -424,6 +430,7 @@ SOURCES += \
     ui/CustomControllerMappingUtils.cpp \
     ui/ReferencePointDialog.cpp \
     ui/DisplayPlaneDialog.cpp \
+    ui/ScenePropDialog.cpp \
     ui/DisplayPlaneCaptureCombo.cpp \
     ui/custom-controller-grid/CustomControllerGridItem.cpp \
     ui/custom-controller-grid/CustomControllerGridScene.cpp \

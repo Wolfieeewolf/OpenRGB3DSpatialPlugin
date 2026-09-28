@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Gizmo3D.h"
 #include "QtCompat.h"
@@ -32,6 +32,7 @@ Gizmo3D::Gizmo3D()
     target_transform = nullptr;
     target_ref_point = nullptr;
     target_display_plane = nullptr;
+    target_scene_prop = nullptr;
 
     gizmo_x = 0.0f;
     gizmo_y = 0.0f;
@@ -120,6 +121,7 @@ void Gizmo3D::SetTarget(ControllerTransform* target)
     target_transform = target;
     target_ref_point = nullptr;
     target_display_plane = nullptr;
+    target_scene_prop = nullptr;
     active = (target != nullptr);
 
     if(target)
@@ -133,6 +135,7 @@ void Gizmo3D::SetTarget(VirtualReferencePoint3D* target)
     target_ref_point = target;
     target_transform = nullptr;
     target_display_plane = nullptr;
+    target_scene_prop = nullptr;
     active = (target != nullptr);
 
     if(target)
@@ -147,6 +150,22 @@ void Gizmo3D::SetTarget(DisplayPlane3D* target)
     target_display_plane = target;
     target_transform = nullptr;
     target_ref_point = nullptr;
+    target_scene_prop = nullptr;
+    active = (target != nullptr);
+
+    if(target)
+    {
+        Transform3D& t = target->GetTransform();
+        SetPosition(t.position.x, t.position.y, t.position.z);
+    }
+}
+
+void Gizmo3D::SetTarget(SceneProp3D* target)
+{
+    target_scene_prop = target;
+    target_transform = nullptr;
+    target_ref_point = nullptr;
+    target_display_plane = nullptr;
     active = (target != nullptr);
 
     if(target)
@@ -206,7 +225,7 @@ void Gizmo3D::SetScreenScale(float eye_distance, float fovy_degrees)
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
                                const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || (!target_transform && !target_ref_point && !target_display_plane))
+    if(!active || (!target_transform && !target_ref_point && !target_display_plane && !target_scene_prop))
         return false;
 
     last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
@@ -315,7 +334,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
 bool Gizmo3D::HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
                               const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || (!target_transform && !target_ref_point && !target_display_plane))
+    if(!active || (!target_transform && !target_ref_point && !target_display_plane && !target_scene_prop))
         return false;
 
     if(center_press_pending && !dragging)
@@ -616,7 +635,7 @@ bool Gizmo3D::PickGizmoCenter(int mouse_x, int mouse_y, const float* modelview, 
 
 void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!target_transform && !target_ref_point && !target_display_plane)
+    if(!target_transform && !target_ref_point && !target_display_plane && !target_scene_prop)
         return;
 
     switch(mode)
@@ -762,6 +781,13 @@ void Gizmo3D::captureDragStartPosition()
         drag_start_position[1] = transform.position.y;
         drag_start_position[2] = transform.position.z;
     }
+    else if(target_scene_prop)
+    {
+        const Transform3D& transform = target_scene_prop->GetTransform();
+        drag_start_position[0] = transform.position.x;
+        drag_start_position[1] = transform.position.y;
+        drag_start_position[2] = transform.position.z;
+    }
 }
 
 void Gizmo3D::setTargetWorldPosition(float x, float y, float z)
@@ -786,6 +812,13 @@ void Gizmo3D::setTargetWorldPosition(float x, float y, float z)
     else if(target_display_plane)
     {
         Transform3D& transform = target_display_plane->GetTransform();
+        transform.position.x = x;
+        transform.position.y = y;
+        transform.position.z = z;
+    }
+    else if(target_scene_prop)
+    {
+        Transform3D& transform = target_scene_prop->GetTransform();
         transform.position.x = x;
         transform.position.y = y;
         transform.position.z = z;
@@ -867,6 +900,20 @@ void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
         while(transform.rotation.z > 360.0f) transform.rotation.z -= 360.0f;
         while(transform.rotation.z < 0.0f) transform.rotation.z += 360.0f;
     }
+    else if(target_scene_prop)
+    {
+        Transform3D& transform = target_scene_prop->GetTransform();
+        transform.rotation.x += delta_x;
+        transform.rotation.y += delta_y;
+        transform.rotation.z += delta_z;
+
+        while(transform.rotation.x > 360.0f) transform.rotation.x -= 360.0f;
+        while(transform.rotation.x < 0.0f) transform.rotation.x += 360.0f;
+        while(transform.rotation.y > 360.0f) transform.rotation.y -= 360.0f;
+        while(transform.rotation.y < 0.0f) transform.rotation.y += 360.0f;
+        while(transform.rotation.z > 360.0f) transform.rotation.z -= 360.0f;
+        while(transform.rotation.z < 0.0f) transform.rotation.z += 360.0f;
+    }
 }
 
 void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport)
@@ -902,6 +949,14 @@ void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* m
     else if(target_display_plane)
     {
         Transform3D& transform = target_display_plane->GetTransform();
+        const float x = transform.position.x + (right_x * delta_x - up_x * delta_y) * move_scale;
+        const float y = transform.position.y + (right_y * delta_x - up_y * delta_y) * move_scale;
+        const float z = transform.position.z + (right_z * delta_x - up_z * delta_y) * move_scale;
+        setTargetWorldPosition(x, y, z);
+    }
+    else if(target_scene_prop)
+    {
+        Transform3D& transform = target_scene_prop->GetTransform();
         const float x = transform.position.x + (right_x * delta_x - up_x * delta_y) * move_scale;
         const float y = transform.position.y + (right_y * delta_x - up_y * delta_y) * move_scale;
         const float z = transform.position.z + (right_z * delta_x - up_z * delta_y) * move_scale;

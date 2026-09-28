@@ -11,9 +11,13 @@
 
 #include <QComboBox>
 #include <QFont>
+#include <QFormLayout>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QString>
+#include <QVBoxLayout>
 #include <Qt>
 
 ObjectCreatorTabPanel::ObjectCreatorTabPanel(QWidget* parent)
@@ -21,6 +25,7 @@ ObjectCreatorTabPanel::ObjectCreatorTabPanel(QWidget* parent)
     , ui(new Ui::ObjectCreatorTabPanel)
 {
     ui->setupUi(this);
+    buildScenePropsPage();
     ui->contentStack->setCurrentWidget(ui->emptyPage);
     applyVisualStyles();
 }
@@ -121,6 +126,18 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
             &OpenRGB3DSpatialTab::editDisplayPlaneClicked);
     connect(ui->removeDisplayPlaneButton, &QPushButton::clicked, tab,
             &OpenRGB3DSpatialTab::removeDisplayPlaneClicked);
+
+    if(create_scene_prop_button_)
+    {
+        connect(create_scene_prop_button_, &QPushButton::clicked, tab,
+                &OpenRGB3DSpatialTab::addScenePropClicked);
+        connect(edit_scene_prop_button_, &QPushButton::clicked, tab,
+                &OpenRGB3DSpatialTab::editScenePropClicked);
+        connect(remove_scene_prop_button_, &QPushButton::clicked, tab,
+                &OpenRGB3DSpatialTab::removeScenePropClicked);
+        connect(scene_props_list_, &QListWidget::currentRowChanged, tab,
+                &OpenRGB3DSpatialTab::scenePropsListSelectionChanged);
+    }
     connect(ui->displayCaptureCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
             &OpenRGB3DSpatialTab::displayPlaneCaptureComboChanged);
     connect(ui->displayCaptureRefreshButton, &QPushButton::clicked, tab,
@@ -164,6 +181,13 @@ void ObjectCreatorTabPanel::onObjectTypeChanged(int index)
             ui->contentStack->setCurrentWidget(ui->displayPage);
             host_tab_->UpdateDisplayPlanesList();
             host_tab_->RefreshDisplayPlaneDetails();
+            break;
+        case ObjectTypeSceneProp:
+            if(scene_props_page_)
+            {
+                ui->contentStack->setCurrentWidget(scene_props_page_);
+            }
+            host_tab_->UpdateScenePropsList();
             break;
         case ObjectTypeZone:
             ui->contentStack->setCurrentWidget(ui->zonePage);
@@ -209,6 +233,11 @@ void ObjectCreatorTabPanel::showDisplayPlaneSection()
     setObjectTypeIndex(ObjectTypeDisplayPlane);
 }
 
+void ObjectCreatorTabPanel::showScenePropSection()
+{
+    setObjectTypeIndex(ObjectTypeSceneProp);
+}
+
 void ObjectCreatorTabPanel::showZoneSection()
 {
     setObjectTypeIndex(ObjectTypeZone);
@@ -233,6 +262,46 @@ void ObjectCreatorTabPanel::onReferencePointListRowChanged(int list_row)
     host_tab_->refPointSelected(host_tab_->ReferencePointIndexFromListRow(list_row));
 }
 
+void ObjectCreatorTabPanel::buildScenePropsPage()
+{
+    ui->objectTypeCombo->addItem(tr("Scene Prop"));
+
+    scene_props_page_ = new QWidget(ui->contentStack);
+    auto* layout = new QVBoxLayout(scene_props_page_);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(8);
+
+    auto* title = new QLabel(tr("Scene Props (non-RGB):"), scene_props_page_);
+    QFont bold = title->font();
+    bold.setBold(true);
+    title->setFont(bold);
+    layout->addWidget(title);
+
+    scene_props_list_ = new QListWidget(scene_props_page_);
+    scene_props_list_->setMinimumHeight(120);
+    layout->addWidget(scene_props_list_, 1);
+
+    scene_props_empty_label_ = new QLabel(
+        tr("No scene props yet."),
+        scene_props_page_);
+    scene_props_empty_label_->setWordWrap(true);
+    layout->addWidget(scene_props_empty_label_);
+
+    create_scene_prop_button_ = new QPushButton(tr("Create New Scene Prop"), scene_props_page_);
+    layout->addWidget(create_scene_prop_button_);
+
+    auto* row = new QWidget(scene_props_page_);
+    auto* row_layout = new QHBoxLayout(row);
+    row_layout->setContentsMargins(0, 0, 0, 0);
+    edit_scene_prop_button_ = new QPushButton(tr("Edit"), row);
+    remove_scene_prop_button_ = new QPushButton(tr("Remove"), row);
+    row_layout->addWidget(edit_scene_prop_button_);
+    row_layout->addWidget(remove_scene_prop_button_);
+    layout->addWidget(row);
+
+    ui->contentStack->addWidget(scene_props_page_);
+}
+
 QLabel* ObjectCreatorTabPanel::statusLabel() const { return ui->statusLabel; }
 QListWidget* ObjectCreatorTabPanel::customControllersList() const { return ui->customControllersList; }
 QWidget* ObjectCreatorTabPanel::customControllersEmptyLabel() const { return ui->customControllersEmptyLabel; }
@@ -251,6 +320,11 @@ QPushButton* ObjectCreatorTabPanel::editDisplayPlaneButton() const { return ui->
 QPushButton* ObjectCreatorTabPanel::removeDisplayPlaneButton() const { return ui->removeDisplayPlaneButton; }
 QComboBox* ObjectCreatorTabPanel::displayPlaneCaptureCombo() const { return ui->displayCaptureCombo; }
 QPushButton* ObjectCreatorTabPanel::displayPlaneCaptureRefreshButton() const { return ui->displayCaptureRefreshButton; }
+QListWidget* ObjectCreatorTabPanel::scenePropsList() const { return scene_props_list_; }
+QWidget* ObjectCreatorTabPanel::scenePropsEmptyLabel() const { return scene_props_empty_label_; }
+QPushButton* ObjectCreatorTabPanel::createScenePropButton() const { return create_scene_prop_button_; }
+QPushButton* ObjectCreatorTabPanel::editScenePropButton() const { return edit_scene_prop_button_; }
+QPushButton* ObjectCreatorTabPanel::removeScenePropButton() const { return remove_scene_prop_button_; }
 ZonesPanel* ObjectCreatorTabPanel::zonesPanel() const { return ui->zonesPanel; }
 EffectPackPanel* ObjectCreatorTabPanel::effectPackPanel() const { return ui->effectPackPanel; }
 EventBindingsPanel* ObjectCreatorTabPanel::eventBindingsPanel() const { return ui->eventBindingsPanel; }

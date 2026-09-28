@@ -360,6 +360,7 @@ SpatialLighting::OccluderBuildOptions MergeStackOccluderOptions(const std::vecto
         const SpatialLighting::OccluderBuildOptions layer_opts =
             RoomSpatialLightingUi::BuildOccluderOptions(params);
         merged.display_planes |= layer_opts.display_planes;
+        merged.scene_props |= layer_opts.scene_props;
         merged.room_walls |= layer_opts.room_walls;
         merged.controllers |= layer_opts.controllers;
         merged.light_blockers |= layer_opts.light_blockers;
@@ -1013,8 +1014,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     }
 
     const SpatialLighting::OccluderBuildOptions frame_occluder_options = MergeStackOccluderOptions(active_effects);
-    if(frame_occluder_options.display_planes || frame_occluder_options.room_walls ||
-       frame_occluder_options.controllers || frame_occluder_options.light_blockers)
+    if(frame_occluder_options.display_planes || frame_occluder_options.scene_props ||
+       frame_occluder_options.room_walls || frame_occluder_options.controllers ||
+       frame_occluder_options.light_blockers)
     {
         SpatialLightingSceneProvider::instance()->EnsureFrameOccluders(room_grid, frame_occluder_options);
     }

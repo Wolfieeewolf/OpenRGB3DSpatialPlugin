@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include <QPainter>
 #include <QFont>
@@ -95,6 +95,8 @@ void LEDViewport3D::paintGlScene()
     const ViewportFrame frame = BuildViewportFrame();
     syncPickMatricesFromFrame(frame);
 
+    DrawRoomFloor();
+    DrawRoomWalls();
     DrawGrid();
     DrawAxes();
     DrawRoomBoundary();
@@ -104,6 +106,7 @@ void LEDViewport3D::paintGlScene()
     }
 
     DrawDisplayPlanes();
+    DrawSceneProps();
     if(show_room_grid_overlay)
     {
         DrawRoomGridOverlay();
@@ -119,8 +122,10 @@ void LEDViewport3D::paintGlScene()
                                          selected_ref_point_idx < (int)reference_points->size());
     const bool has_display_plane_selected = (selected_display_plane_idx >= 0 && display_planes &&
                                              selected_display_plane_idx < (int)display_planes->size());
+    const bool has_scene_prop_selected = (selected_scene_prop_idx_ >= 0 && scene_props_ &&
+                                          selected_scene_prop_idx_ < (int)scene_props_->size());
 
-    if(has_controller_selected || has_ref_point_selected || has_display_plane_selected)
+    if(has_controller_selected || has_ref_point_selected || has_display_plane_selected || has_scene_prop_selected)
     {
         syncGizmoScreenScale();
         drawGizmo();
@@ -444,6 +449,23 @@ void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
     cached_floor_grid_max_x = max_x;
     cached_floor_grid_max_z = max_z;
 
+    /* Floor slightly below Y=0 to avoid z-fighting the grid lines. */
+    {
+        std::vector<float> floor;
+        floor.reserve(6 * 6);
+        const float y = -0.002f;
+        const float fr = 0.0f;
+        const float fg = 0.8f;
+        const float fb = 0.8f;
+        MeshGeometry::PushQuadAsTris(floor,
+                                     0.0f, y, 0.0f,
+                                     max_x, y, 0.0f,
+                                     max_x, y, max_z,
+                                     0.0f, y, max_z,
+                                     fr, fg, fb);
+        floor_fill_batch_.Upload(MeshBatch::Layout::PosColor, floor.data(), floor.size() / 6);
+    }
+
     cached_floor_grid_interleaved_.clear();
     const int line_count = ((int)max_x + 1) + ((int)max_z + 1);
     cached_floor_grid_interleaved_.reserve((size_t)line_count * 2 * 6);
@@ -465,40 +487,40 @@ void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
 
     for(int i = 0; i <= (int)max_x; i++)
     {
-        float r = 0.22f;
-        float g = 0.24f;
-        float b = 0.28f;
+        float r = 0.16f;
+        float g = 0.22f;
+        float b = 0.21f;
         if(i == 0)
         {
-            r = 0.55f;
-            g = 0.32f;
-            b = 0.32f;
+            r = 0.48f;
+            g = 0.30f;
+            b = 0.28f;
         }
         else if(i % 5 == 0)
         {
-            r = 0.38f;
-            g = 0.40f;
-            b = 0.44f;
+            r = 0.24f;
+            g = 0.32f;
+            b = 0.30f;
         }
         push_line((float)i, 0.0f, 0.0f, (float)i, 0.0f, max_z, r, g, b);
     }
 
     for(int i = 0; i <= (int)max_z; i++)
     {
-        float r = 0.22f;
-        float g = 0.24f;
-        float b = 0.28f;
+        float r = 0.16f;
+        float g = 0.22f;
+        float b = 0.21f;
         if(i == 0)
         {
-            r = 0.30f;
-            g = 0.34f;
-            b = 0.55f;
+            r = 0.28f;
+            g = 0.32f;
+            b = 0.45f;
         }
         else if(i % 5 == 0)
         {
-            r = 0.38f;
-            g = 0.40f;
-            b = 0.44f;
+            r = 0.24f;
+            g = 0.32f;
+            b = 0.30f;
         }
         push_line(0.0f, 0.0f, (float)i, max_x, 0.0f, (float)i, r, g, b);
     }
@@ -514,9 +536,9 @@ void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
         floor_grid_batch_.Destroy();
     }
 
-    const float border_r = 0.45f;
-    const float border_g = 0.55f;
-    const float border_b = 0.48f;
+    const float border_r = 0.28f;
+    const float border_g = 0.40f;
+    const float border_b = 0.38f;
     const float border[] = {
         0.0f, 0.0f, 0.0f, border_r, border_g, border_b,
         max_x, 0.0f, 0.0f, border_r, border_g, border_b,
@@ -530,9 +552,131 @@ void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
     floor_border_batch_.Upload(MeshBatch::Layout::PosColor, border, 8);
 }
 
+void LEDViewport3D::DrawRoomFloor()
+{
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_z = extents.depth_units;
+    if(cached_floor_grid_max_x != max_x || cached_floor_grid_max_z != max_z || !floor_fill_batch_.IsValid())
+    {
+        RebuildFloorGridCache(extents);
+    }
+
+    drawUnlitBatch(floor_fill_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.14f);
+    glDepthMask(GL_TRUE);
+}
+
+void LEDViewport3D::DrawRoomWalls()
+{
+    if(!use_manual_room_dimensions)
+    {
+        return;
+    }
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_y = extents.height_units;
+    const float max_z = extents.depth_units;
+
+    if(room_boundary_cached_max_x_ != max_x || room_boundary_cached_max_y_ != max_y ||
+       room_boundary_cached_max_z_ != max_z || !room_walls_batch_.IsValid() || !room_boundary_batch_.IsValid())
+    {
+        RebuildRoomShellCache(extents);
+    }
+
+    drawUnlitBatch(room_walls_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.14f);
+    glDepthMask(GL_TRUE);
+}
+
+void LEDViewport3D::RebuildRoomShellCache(const GridExtents& extents)
+{
+    const float max_x = extents.width_units;
+    const float max_y = extents.height_units;
+    const float max_z = extents.depth_units;
+
+    const float wr = 0.34f;
+    const float wg = 0.33f;
+    const float wb = 0.32f;
+    std::vector<float> walls;
+    walls.reserve(5 * 6 * 6);
+    MeshGeometry::PushQuadAsTris(walls,
+                                 0.0f, 0.0f, 0.0f,
+                                 max_x, 0.0f, 0.0f,
+                                 max_x, max_y, 0.0f,
+                                 0.0f, max_y, 0.0f,
+                                 wr, wg, wb);
+    MeshGeometry::PushQuadAsTris(walls,
+                                 max_x, 0.0f, max_z,
+                                 0.0f, 0.0f, max_z,
+                                 0.0f, max_y, max_z,
+                                 max_x, max_y, max_z,
+                                 wr, wg, wb);
+    MeshGeometry::PushQuadAsTris(walls,
+                                 0.0f, 0.0f, max_z,
+                                 0.0f, 0.0f, 0.0f,
+                                 0.0f, max_y, 0.0f,
+                                 0.0f, max_y, max_z,
+                                 wr, wg, wb);
+    MeshGeometry::PushQuadAsTris(walls,
+                                 max_x, 0.0f, 0.0f,
+                                 max_x, 0.0f, max_z,
+                                 max_x, max_y, max_z,
+                                 max_x, max_y, 0.0f,
+                                 wr, wg, wb);
+    MeshGeometry::PushQuadAsTris(walls,
+                                 0.0f, max_y, 0.0f,
+                                 max_x, max_y, 0.0f,
+                                 max_x, max_y, max_z,
+                                 0.0f, max_y, max_z,
+                                 wr, wg, wb);
+    room_walls_batch_.Upload(MeshBatch::Layout::PosColor, walls.data(), walls.size() / 6);
+
+    const float r = 0.0f;
+    const float g = 0.8f;
+    const float b = 0.8f;
+    auto push_line = [](std::vector<float>& out, float x0, float y0, float z0, float x1, float y1, float z1,
+                        float cr, float cg, float cb) {
+        out.push_back(x0); out.push_back(y0); out.push_back(z0);
+        out.push_back(cr); out.push_back(cg); out.push_back(cb);
+        out.push_back(x1); out.push_back(y1); out.push_back(z1);
+        out.push_back(cr); out.push_back(cg); out.push_back(cb);
+    };
+    std::vector<float> lines;
+    lines.reserve(12 * 2 * 6);
+    push_line(lines, 0.0f, 0.0f, 0.0f, max_x, 0.0f, 0.0f, r, g, b);
+    push_line(lines, max_x, 0.0f, 0.0f, max_x, 0.0f, max_z, r, g, b);
+    push_line(lines, max_x, 0.0f, max_z, 0.0f, 0.0f, max_z, r, g, b);
+    push_line(lines, 0.0f, 0.0f, max_z, 0.0f, 0.0f, 0.0f, r, g, b);
+    push_line(lines, 0.0f, max_y, 0.0f, max_x, max_y, 0.0f, r, g, b);
+    push_line(lines, max_x, max_y, 0.0f, max_x, max_y, max_z, r, g, b);
+    push_line(lines, max_x, max_y, max_z, 0.0f, max_y, max_z, r, g, b);
+    push_line(lines, 0.0f, max_y, max_z, 0.0f, max_y, 0.0f, r, g, b);
+    push_line(lines, 0.0f, 0.0f, 0.0f, 0.0f, max_y, 0.0f, r, g, b);
+    push_line(lines, max_x, 0.0f, 0.0f, max_x, max_y, 0.0f, r, g, b);
+    push_line(lines, max_x, 0.0f, max_z, max_x, max_y, max_z, r, g, b);
+    push_line(lines, 0.0f, 0.0f, max_z, 0.0f, max_y, max_z, r, g, b);
+    room_boundary_batch_.Upload(MeshBatch::Layout::PosColor, lines.data(), lines.size() / 6);
+
+    room_boundary_cached_max_x_ = max_x;
+    room_boundary_cached_max_y_ = max_y;
+    room_boundary_cached_max_z_ = max_z;
+}
+
 void LEDViewport3D::DrawGrid()
 {
     glDepthMask(GL_TRUE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
@@ -543,8 +687,8 @@ void LEDViewport3D::DrawGrid()
         RebuildFloorGridCache(extents);
     }
 
-    drawUnlitBatch(floor_grid_batch_, MeshBatch::Primitive::Lines, 1.0f, 1.0f);
-    drawUnlitBatch(floor_border_batch_, MeshBatch::Primitive::Lines, 1.5f, 1.0f);
+    drawUnlitBatch(floor_grid_batch_, MeshBatch::Primitive::Lines, 1.0f, 0.55f);
+    drawUnlitBatch(floor_border_batch_, MeshBatch::Primitive::Lines, 1.5f, 0.75f);
 }
 
 void LEDViewport3D::DrawAxes()
@@ -578,8 +722,8 @@ void LEDViewport3D::DrawAxes()
         axes_heads_batch_.Upload(MeshBatch::Layout::PosColor, heads, 9);
     }
 
-    drawUnlitBatch(axes_lines_batch_, MeshBatch::Primitive::Lines, 3.0f, 1.0f);
-    drawUnlitBatch(axes_heads_batch_, MeshBatch::Primitive::Triangles, 1.0f, 1.0f);
+    drawUnlitBatch(axes_lines_batch_, MeshBatch::Primitive::Lines, 2.0f, 0.85f);
+    drawUnlitBatch(axes_heads_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.85f);
 }
 
 void LEDViewport3D::paintRoomGuideLabels(QPainter& painter,
@@ -698,9 +842,9 @@ void LEDViewport3D::DrawRoomViewportSelection()
     const float max_x = extents.width_units;
     const float max_y = extents.height_units;
     const float max_z = extents.depth_units;
-    const float r = 1.0f;
-    const float g = 0.85f;
-    const float b = 0.1f;
+    const float r = 0.92f;
+    const float g = 0.78f;
+    const float b = 0.28f;
 
     auto push_line = [](std::vector<float>& out, float x0, float y0, float z0, float x1, float y1, float z1,
                         float cr, float cg, float cb) {
@@ -736,8 +880,8 @@ void LEDViewport3D::DrawRoomViewportSelection()
     };
     room_sel_fill_batch_.Upload(MeshBatch::Layout::PosColor, fill, 6);
 
-    drawUnlitBatch(room_sel_lines_batch_, MeshBatch::Primitive::Lines, 3.0f, 0.95f);
-    drawUnlitBatch(room_sel_fill_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.12f);
+    drawUnlitBatch(room_sel_lines_batch_, MeshBatch::Primitive::Lines, 2.5f, 0.88f);
+    drawUnlitBatch(room_sel_fill_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.10f);
 
     glDisable(GL_BLEND);
 }
@@ -749,6 +893,8 @@ void LEDViewport3D::DrawRoomBoundary()
         return;
     }
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
@@ -758,34 +904,7 @@ void LEDViewport3D::DrawRoomBoundary()
     if(room_boundary_cached_max_x_ != max_x || room_boundary_cached_max_y_ != max_y ||
        room_boundary_cached_max_z_ != max_z || !room_boundary_batch_.IsValid())
     {
-        const float r = 0.0f;
-        const float g = 0.8f;
-        const float b = 0.8f;
-        auto push_line = [](std::vector<float>& out, float x0, float y0, float z0, float x1, float y1, float z1,
-                            float cr, float cg, float cb) {
-            out.push_back(x0); out.push_back(y0); out.push_back(z0);
-            out.push_back(cr); out.push_back(cg); out.push_back(cb);
-            out.push_back(x1); out.push_back(y1); out.push_back(z1);
-            out.push_back(cr); out.push_back(cg); out.push_back(cb);
-        };
-        std::vector<float> lines;
-        lines.reserve(12 * 2 * 6);
-        push_line(lines, 0.0f, 0.0f, 0.0f, max_x, 0.0f, 0.0f, r, g, b);
-        push_line(lines, max_x, 0.0f, 0.0f, max_x, 0.0f, max_z, r, g, b);
-        push_line(lines, max_x, 0.0f, max_z, 0.0f, 0.0f, max_z, r, g, b);
-        push_line(lines, 0.0f, 0.0f, max_z, 0.0f, 0.0f, 0.0f, r, g, b);
-        push_line(lines, 0.0f, max_y, 0.0f, max_x, max_y, 0.0f, r, g, b);
-        push_line(lines, max_x, max_y, 0.0f, max_x, max_y, max_z, r, g, b);
-        push_line(lines, max_x, max_y, max_z, 0.0f, max_y, max_z, r, g, b);
-        push_line(lines, 0.0f, max_y, max_z, 0.0f, max_y, 0.0f, r, g, b);
-        push_line(lines, 0.0f, 0.0f, 0.0f, 0.0f, max_y, 0.0f, r, g, b);
-        push_line(lines, max_x, 0.0f, 0.0f, max_x, max_y, 0.0f, r, g, b);
-        push_line(lines, max_x, 0.0f, max_z, max_x, max_y, max_z, r, g, b);
-        push_line(lines, 0.0f, 0.0f, max_z, 0.0f, max_y, max_z, r, g, b);
-        room_boundary_batch_.Upload(MeshBatch::Layout::PosColor, lines.data(), lines.size() / 6);
-        room_boundary_cached_max_x_ = max_x;
-        room_boundary_cached_max_y_ = max_y;
-        room_boundary_cached_max_z_ = max_z;
+        RebuildRoomShellCache(extents);
     }
 
     drawUnlitBatch(room_boundary_batch_, MeshBatch::Primitive::Lines, 2.0f, 1.0f);

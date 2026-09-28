@@ -346,6 +346,7 @@ void LEDViewport3D::SelectController(int index)
 
         deselectRoomViewport();
         selected_display_plane_idx = -1;
+        selected_scene_prop_idx_ = -1;
         selected_ref_point_idx = -1;
         selected_controller_idx = index;
 
@@ -378,6 +379,7 @@ void LEDViewport3D::SelectReferencePoint(int index)
         selected_controller_indices.clear();
         selected_controller_idx = -1;
         selected_display_plane_idx = -1;
+        selected_scene_prop_idx_ = -1;
         selected_ref_point_idx = index;
 
         VirtualReferencePoint3D* ref_point = (*reference_points)[index].get();
@@ -536,6 +538,21 @@ void LEDViewport3D::SetRoomDimensions(float width, float depth, float height, bo
 
 void LEDViewport3D::UpdateGizmoPosition()
 {
+    if(scene_props_ && selected_scene_prop_idx_ >= 0 &&
+       selected_scene_prop_idx_ < (int)scene_props_->size())
+    {
+        SceneProp3D* prop = (*scene_props_)[(size_t)selected_scene_prop_idx_].get();
+        if(prop)
+        {
+            Transform3D& transform = prop->GetTransform();
+            gizmo.SetTarget(prop);
+            gizmo.SetPosition(transform.position.x,
+                              transform.position.y,
+                              transform.position.z);
+            return;
+        }
+    }
+
     if(display_planes && selected_display_plane_idx >= 0 &&
        selected_display_plane_idx < (int)display_planes->size())
     {
@@ -631,6 +648,23 @@ void LEDViewport3D::emitGizmoDragCompleted()
                                                  transform.rotation.z);
             }
         }
+        else if(scene_props_ && selected_scene_prop_idx_ >= 0 &&
+                selected_scene_prop_idx_ < (int)scene_props_->size())
+        {
+            SceneProp3D* prop = (*scene_props_)[(size_t)selected_scene_prop_idx_].get();
+            if(prop)
+            {
+                const Transform3D& transform = prop->GetTransform();
+                emit ScenePropPositionChanged(selected_scene_prop_idx_,
+                                              transform.position.x,
+                                              transform.position.y,
+                                              transform.position.z);
+                emit ScenePropRotationChanged(selected_scene_prop_idx_,
+                                              transform.rotation.x,
+                                              transform.rotation.y,
+                                              transform.rotation.z);
+            }
+        }
 }
 
 void LEDViewport3D::NotifyControllerTransformChanged()
@@ -679,7 +713,7 @@ void LEDViewport3D::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glClearColor(0.11f, 0.12f, 0.15f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     /* Context may have been recreated; old VAO/VBO/texture names are invalid. */
     abandonViewportGlHandles();
@@ -716,6 +750,7 @@ void LEDViewport3D::initViewportShaderPrograms()
 
 void LEDViewport3D::destroyViewportGlResources()
 {
+    floor_fill_batch_.Destroy();
     floor_grid_batch_.Destroy();
     floor_border_batch_.Destroy();
     room_sel_lines_batch_.Destroy();
@@ -723,12 +758,15 @@ void LEDViewport3D::destroyViewportGlResources()
     axes_lines_batch_.Destroy();
     axes_heads_batch_.Destroy();
     room_boundary_batch_.Destroy();
+    room_walls_batch_.Destroy();
     controller_faces_batch_.Destroy();
     controller_edges_batch_.Destroy();
     controller_leds_batch_.Destroy();
     controller_indicator_batch_.Destroy();
     room_grid_overlay_batch_.Destroy();
     display_plane_batch_.Destroy();
+    scene_prop_faces_batch_.Destroy();
+    scene_prop_edges_batch_.Destroy();
     gizmo_lines_batch_.Destroy();
     gizmo_tris_batch_.Destroy();
     room_boundary_cached_max_x_ = -1.0f;
@@ -742,6 +780,7 @@ void LEDViewport3D::destroyViewportGlResources()
 
 void LEDViewport3D::abandonViewportGlHandles()
 {
+    floor_fill_batch_.Abandon();
     floor_grid_batch_.Abandon();
     floor_border_batch_.Abandon();
     room_sel_lines_batch_.Abandon();
@@ -749,12 +788,15 @@ void LEDViewport3D::abandonViewportGlHandles()
     axes_lines_batch_.Abandon();
     axes_heads_batch_.Abandon();
     room_boundary_batch_.Abandon();
+    room_walls_batch_.Abandon();
     controller_faces_batch_.Abandon();
     controller_edges_batch_.Abandon();
     controller_leds_batch_.Abandon();
     controller_indicator_batch_.Abandon();
     room_grid_overlay_batch_.Abandon();
     display_plane_batch_.Abandon();
+    scene_prop_faces_batch_.Abandon();
+    scene_prop_edges_batch_.Abandon();
     gizmo_lines_batch_.Abandon();
     gizmo_tris_batch_.Abandon();
     room_boundary_cached_max_x_ = -1.0f;
@@ -949,6 +991,7 @@ void LEDViewport3D::SelectDisplayPlane(int index)
         selected_controller_indices.clear();
         selected_controller_idx = -1;
         selected_ref_point_idx = -1;
+        selected_scene_prop_idx_ = -1;
         selected_display_plane_idx = index;
         gizmo.SetTarget((*display_planes)[index].get());
         gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
@@ -958,7 +1001,7 @@ void LEDViewport3D::SelectDisplayPlane(int index)
     {
         selected_display_plane_idx = -1;
 
-        if(selected_controller_idx < 0 && selected_ref_point_idx < 0)
+        if(selected_controller_idx < 0 && selected_ref_point_idx < 0 && selected_scene_prop_idx_ < 0)
         {
             gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
         }

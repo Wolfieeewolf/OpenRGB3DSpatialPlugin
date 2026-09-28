@@ -11,6 +11,7 @@
 #include "ControllerLayout3D.h"
 #include "VirtualReferencePoint3D.h"
 #include "DisplayPlane3D.h"
+#include "SceneProp3D.h"
 
 enum GizmoMode
 {
@@ -71,6 +72,7 @@ public:
     void SetTarget(ControllerTransform* target);
     void SetTarget(VirtualReferencePoint3D* target);
     void SetTarget(DisplayPlane3D* target);
+    void SetTarget(SceneProp3D* target);
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
     /** Keep gizmo ~constant on screen: pass eye→gizmo distance and vertical FOV (degrees). */
@@ -129,6 +131,7 @@ private:
     ControllerTransform*        target_transform;
     VirtualReferencePoint3D*    target_ref_point;
     DisplayPlane3D*             target_display_plane;
+    SceneProp3D*                target_scene_prop;
 
     float                  gizmo_x;
     float                  gizmo_y;

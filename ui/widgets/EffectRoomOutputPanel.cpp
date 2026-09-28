@@ -51,8 +51,8 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
         tr("Blockers"),
         false,
         tr("Off: emitter light spreads in all directions.\n"
-           "On: custom-controller blocker cells stop light like the real device "
-           "(tube, speaker body, keyboard plate)."));
+           "On: stop light with custom-controller blocker cells, display planes, "
+           "and scene-prop Solid/Blocker faces (Glass lets light through)."));
     blockers_row_->setVisible(false);
     layout->addWidget(blockers_row_);
 
