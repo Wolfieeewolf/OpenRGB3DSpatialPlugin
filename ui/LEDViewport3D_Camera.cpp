@@ -357,26 +357,3 @@ void LEDViewport3D::showGizmoModeFeedback()
     update();
 }
 
-void LEDViewport3D::retargetOrbitToRoomCenterPreservingEye()
-{
-    const float pitch_rad = camera_pitch * (float)M_PI / 180.0f;
-    const float yaw_rad = camera_yaw * (float)M_PI / 180.0f;
-    const float cos_pitch = std::cos(pitch_rad);
-    const float eye_x = camera_target_x + camera_distance * cos_pitch * std::cos(yaw_rad);
-    const float eye_y = camera_target_y + camera_distance * std::sin(pitch_rad);
-    const float eye_z = camera_target_z + camera_distance * cos_pitch * std::sin(yaw_rad);
-
-    const GridExtents extents = GetRoomExtents();
-    camera_target_x = extents.width_units * 0.5f;
-    camera_target_y = extents.height_units * 0.5f;
-    camera_target_z = extents.depth_units * 0.5f;
-
-    const float dx = eye_x - camera_target_x;
-    const float dy = eye_y - camera_target_y;
-    const float dz = eye_z - camera_target_z;
-    camera_distance = std::max(1.0f, std::sqrt(dx * dx + dy * dy + dz * dz));
-    camera_pitch = std::asin(std::clamp(dy / camera_distance, -1.0f, 1.0f)) * 180.0f / (float)M_PI;
-    camera_yaw = std::atan2(dz, dx) * 180.0f / (float)M_PI;
-    pick_matrices_valid_ = false;
-}
-

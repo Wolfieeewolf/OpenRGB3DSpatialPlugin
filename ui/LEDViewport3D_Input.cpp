@@ -232,9 +232,6 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
     }
     else if(event->button() == Qt::RightButton)
     {
-        // Orbit around the live room center. Preserve the current eye position so
-        // beginning a right-drag does not cause a visible camera jump.
-        retargetOrbitToRoomCenterPreservingEye();
         dragging_grab = false;
         dragging_pan = false;
         dragging_rotate = true;

@@ -189,7 +189,6 @@ private:
     void focusSelectionFromKeyboard();
     void resetCameraFromKeyboard();
     void clearCameraDragState();
-    void retargetOrbitToRoomCenterPreservingEye();
     void clearSceneObjectSelection();
     void resetRoomPreviewSpin();
     void clampRoomTurntablePitch();
