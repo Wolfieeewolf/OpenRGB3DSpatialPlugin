@@ -3,6 +3,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "ScenePropDialog.h"
 #include "SceneProp3D.h"
+#include "ScenePropManager.h"
 #include "GridSpaceUtils.h"
 #include "ObjectCreatorTabPanel.h"
 #include "LEDViewport3D.h"
@@ -75,7 +76,22 @@ void OpenRGB3DSpatialTab::NotifyScenePropChanged()
     {
         viewport->NotifyScenePropChanged();
     }
+    SyncScenePropManager();
     emit GridLayoutChanged();
+}
+
+void OpenRGB3DSpatialTab::SyncScenePropManager()
+{
+    std::vector<SceneProp3D*> prop_ptrs;
+    prop_ptrs.reserve(scene_props_.size());
+    for(const std::unique_ptr<SceneProp3D>& prop : scene_props_)
+    {
+        if(prop)
+        {
+            prop_ptrs.push_back(prop.get());
+        }
+    }
+    ScenePropManager::instance()->SetSceneProps(prop_ptrs);
 }
 
 void OpenRGB3DSpatialTab::UpdateScenePropsList()
@@ -221,7 +237,6 @@ void OpenRGB3DSpatialTab::addScenePropClicked()
     const QString suggested = QStringLiteral("Prop %1").arg((int)scene_props_.size() + 1);
     ScenePropDialog dialog(this);
     dialog.setCreateMode();
-    /* Default mid-tower-ish box; user can reshape for desk / pegboard / etc. */
     dialog.setCreateDefaults(suggested, 200.0f, 450.0f, 450.0f, 0x555555u);
     if(dialog.exec() != QDialog::Accepted)
     {

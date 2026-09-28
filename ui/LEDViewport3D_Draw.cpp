@@ -449,12 +449,11 @@ void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)
     cached_floor_grid_max_x = max_x;
     cached_floor_grid_max_z = max_z;
 
-    /* Solid floor slightly below Y=0 so the line grid does not z-fight. */
+    /* Floor slightly below Y=0 to avoid z-fighting the grid lines. */
     {
         std::vector<float> floor;
         floor.reserve(6 * 6);
         const float y = -0.002f;
-        /* Floor fill matches neon cyan room wire. */
         const float fr = 0.0f;
         const float fg = 0.8f;
         const float fb = 0.8f;
@@ -568,7 +567,6 @@ void LEDViewport3D::DrawRoomFloor()
         RebuildFloorGridCache(extents);
     }
 
-    /* Same see-through treatment as walls — neon tint, not a solid slab. */
     drawUnlitBatch(floor_fill_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.14f);
     glDepthMask(GL_TRUE);
 }
@@ -596,7 +594,6 @@ void LEDViewport3D::DrawRoomWalls()
         RebuildRoomShellCache(extents);
     }
 
-    /* Soft planner walls — low alpha so the scene stays readable. */
     drawUnlitBatch(room_walls_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.14f);
     glDepthMask(GL_TRUE);
 }
@@ -612,7 +609,6 @@ void LEDViewport3D::RebuildRoomShellCache(const GridExtents& extents)
     const float wb = 0.32f;
     std::vector<float> walls;
     walls.reserve(5 * 6 * 6);
-    /* Front (Z=0), Back (Z=max), Left (X=0), Right (X=max), Ceiling (Y=max). */
     MeshGeometry::PushQuadAsTris(walls,
                                  0.0f, 0.0f, 0.0f,
                                  max_x, 0.0f, 0.0f,
@@ -645,7 +641,6 @@ void LEDViewport3D::RebuildRoomShellCache(const GridExtents& extents)
                                  wr, wg, wb);
     room_walls_batch_.Upload(MeshBatch::Layout::PosColor, walls.data(), walls.size() / 6);
 
-    /* Neon cyan wireframe edges (OpenRGB-ish accent). */
     const float r = 0.0f;
     const float g = 0.8f;
     const float b = 0.8f;

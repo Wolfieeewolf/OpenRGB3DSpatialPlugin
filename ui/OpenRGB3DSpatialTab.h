@@ -585,6 +585,7 @@ private:
     void NotifyScenePropChanged();
     void SyncDisplayPlaneControls(DisplayPlane3D* plane);
     void SyncScenePropControls(SceneProp3D* prop);
+    void SyncScenePropManager();
     void SetDisplayPlaneVisibleInScene(DisplayPlane3D* plane, bool visible);
     void SetScenePropVisibleInScene(SceneProp3D* prop, bool visible);
     bool EditReferencePointAtIndex(int ref_index);

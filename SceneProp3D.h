@@ -9,31 +9,26 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
-/** How one face of a box prop is treated. */
 enum class ScenePropFaceKind : int
 {
-    Solid = 0,   /**< Opaque-ish body panel (user solid colour). */
-    Glass = 1,   /**< See-through tinted panel (user glass colour). */
-    Blocker = 2, /**< Occluding panel (dark / matte — for light blocking later). */
+    Solid = 0,
+    Glass = 1,
+    Blocker = 2,
 };
 
-/**
- * Box faces in prop-local space (the object’s own front/back/left/right).
- * At rotation 0, Front faces the user (+Z / room back) — desk/case setup looking
- * at the front wall. Left/Right are from that view.
- */
+/* Prop-local faces. At rotation 0, Front (+Z) faces the user; Left/Right are
+   the viewer's left/right when looking at Front. */
 enum class ScenePropFace : int
 {
-    Front = 0,  /**< Prop front (+Z local → toward user at rot 0) */
-    Back = 1,   /**< Prop back (−Z local → toward front wall at rot 0) */
-    Left = 2,   /**< Prop left (+X local when facing Front) */
-    Right = 3,  /**< Prop right (−X local when facing Front) */
-    Bottom = 4, /**< Prop bottom (−Y local) */
-    Top = 5,    /**< Prop top (+Y local) */
+    Front = 0,
+    Back = 1,
+    Left = 2,
+    Right = 3,
+    Bottom = 4,
+    Top = 5,
     Count = 6
 };
 
-/** Non-RGB room furniture / fixture (box for now). LEDs stay on controllers. */
 class SceneProp3D
 {
 public:
@@ -57,11 +52,9 @@ public:
     float               GetDepthMM() const { return depth_mm; }
     void                SetDepthMM(float d) { depth_mm = (d > 1.0f) ? d : 1.0f; }
 
-    /** 0xRRGGBB solid panel colour. */
     unsigned int        GetColor() const { return color; }
     void                SetColor(unsigned int rgb) { color = rgb & 0x00FFFFFFu; }
 
-    /** 0xRRGGBB glass tint. */
     unsigned int        GetGlassColor() const { return glass_color; }
     void                SetGlassColor(unsigned int rgb) { glass_color = rgb & 0x00FFFFFFu; }
 
@@ -74,6 +67,11 @@ public:
 
     int                 GetReferencePointIndex() const { return reference_point_index; }
     void                SetReferencePointIndex(int index) { reference_point_index = index; }
+
+    /* Half-extents in grid units; fills four corners for the given face. */
+    static void         FaceLocalCorners(ScenePropFace face,
+                                         float hw, float hh, float hd,
+                                         Vector3D out_corners[4]);
 
     nlohmann::json      ToJson() const;
     static std::unique_ptr<SceneProp3D> FromJson(const nlohmann::json& j);

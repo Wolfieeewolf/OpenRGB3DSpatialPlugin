@@ -5,22 +5,6 @@
 
 int SceneProp3D::next_id = 1;
 
-namespace
-{
-ScenePropFaceKind ClampFaceKind(int v)
-{
-    if(v == (int)ScenePropFaceKind::Glass)
-    {
-        return ScenePropFaceKind::Glass;
-    }
-    if(v == (int)ScenePropFaceKind::Blocker)
-    {
-        return ScenePropFaceKind::Blocker;
-    }
-    return ScenePropFaceKind::Solid;
-}
-} // namespace
-
 const char* ScenePropFaceKindToString(ScenePropFaceKind kind)
 {
     switch(kind)
@@ -119,6 +103,60 @@ void SceneProp3D::SetAllFaces(ScenePropFaceKind kind)
     }
 }
 
+void SceneProp3D::FaceLocalCorners(ScenePropFace face,
+                                   float hw, float hh, float hd,
+                                   Vector3D out_corners[4])
+{
+    if(!out_corners)
+    {
+        return;
+    }
+
+    switch(face)
+    {
+        case ScenePropFace::Bottom:
+            out_corners[0] = {-hw, -hh, -hd};
+            out_corners[1] = { hw, -hh, -hd};
+            out_corners[2] = { hw, -hh,  hd};
+            out_corners[3] = {-hw, -hh,  hd};
+            break;
+        case ScenePropFace::Top:
+            out_corners[0] = {-hw,  hh, -hd};
+            out_corners[1] = { hw,  hh, -hd};
+            out_corners[2] = { hw,  hh,  hd};
+            out_corners[3] = {-hw,  hh,  hd};
+            break;
+        case ScenePropFace::Left:
+            out_corners[0] = {-hw, -hh,  hd};
+            out_corners[1] = {-hw, -hh, -hd};
+            out_corners[2] = {-hw,  hh, -hd};
+            out_corners[3] = {-hw,  hh,  hd};
+            break;
+        case ScenePropFace::Right:
+            out_corners[0] = { hw, -hh, -hd};
+            out_corners[1] = { hw, -hh,  hd};
+            out_corners[2] = { hw,  hh,  hd};
+            out_corners[3] = { hw,  hh, -hd};
+            break;
+        case ScenePropFace::Front:
+            out_corners[0] = { hw, -hh,  hd};
+            out_corners[1] = {-hw, -hh,  hd};
+            out_corners[2] = {-hw,  hh,  hd};
+            out_corners[3] = { hw,  hh,  hd};
+            break;
+        case ScenePropFace::Back:
+            out_corners[0] = {-hw, -hh, -hd};
+            out_corners[1] = { hw, -hh, -hd};
+            out_corners[2] = { hw,  hh, -hd};
+            out_corners[3] = {-hw,  hh, -hd};
+            break;
+        case ScenePropFace::Count:
+        default:
+            out_corners[0] = out_corners[1] = out_corners[2] = out_corners[3] = {0.0f, 0.0f, 0.0f};
+            break;
+    }
+}
+
 nlohmann::json SceneProp3D::ToJson() const
 {
     nlohmann::json j;
@@ -181,25 +219,6 @@ std::unique_ptr<SceneProp3D> SceneProp3D::FromJson(const nlohmann::json& j)
             {
                 ScenePropFaceKind kind = ScenePropFaceKind::Solid;
                 if(ScenePropFaceKindFromString(fj[key].get<std::string>(), &kind))
-                {
-                    prop->faces[i] = kind;
-                }
-            }
-        }
-    }
-    else if(j.contains("faces") && j["faces"].is_array())
-    {
-        const auto& fa = j["faces"];
-        for(int i = 0; i < kFaceCount && i < (int)fa.size(); ++i)
-        {
-            if(fa[i].is_number_integer())
-            {
-                prop->faces[i] = ClampFaceKind(fa[i].get<int>());
-            }
-            else if(fa[i].is_string())
-            {
-                ScenePropFaceKind kind = ScenePropFaceKind::Solid;
-                if(ScenePropFaceKindFromString(fa[i].get<std::string>(), &kind))
                 {
                     prop->faces[i] = kind;
                 }

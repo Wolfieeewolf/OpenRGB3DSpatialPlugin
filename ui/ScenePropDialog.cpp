@@ -28,7 +28,6 @@ QDoubleSpinBox* MakeMmSpin(QWidget* parent)
 
 const char* FaceLabel(ScenePropFace face)
 {
-    /* Object-local sides. At rot 0, Front faces the user (+Z). */
     switch(face)
     {
         case ScenePropFace::Front: return "Front";
@@ -59,9 +58,8 @@ ScenePropDialog::ScenePropDialog(QWidget* parent)
     glass_color_button_->setMinimumHeight(28);
 
     auto* hint = new QLabel(
-        tr("Faces are sides of this prop (front of the case, desk drawers, screen, etc.). "
-           "At default orientation, Front faces you (toward the back of the room). "
-           "Rotate to re-aim. Solid = body, Glass = tinted see-through, Blocker = dark occluding panel."),
+        tr("Prop faces (Front faces you at default orientation). "
+           "Solid/Blocker stop light; Glass does not."),
         this);
     hint->setWordWrap(true);
 

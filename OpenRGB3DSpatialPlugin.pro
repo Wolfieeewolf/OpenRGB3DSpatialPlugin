@@ -140,6 +140,7 @@ HEADERS += \
     DisplayPlane3D.h \
     SceneProp3D.h \
     DisplayPlaneManager.h \
+    ScenePropManager.h \
     ScreenCaptureManager.h \
     ScreenCaptureDownscale.h \
     DisplayPlaneCaptureLabels.h \

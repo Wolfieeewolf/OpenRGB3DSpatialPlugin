@@ -50,6 +50,7 @@ struct OccluderAabb
 struct OccluderBuildOptions
 {
     bool display_planes = true;
+    bool scene_props = true;
     bool room_walls = false;
     bool controllers = true;
     /** Custom-controller light blocker cells (independent of full controller body occlusion). */
@@ -101,6 +102,9 @@ struct RoomScene
 
 /** Build occluders from visible display planes (room grid units). */
 void AppendDisplayPlaneOccluders(std::vector<OccluderQuad>& out, float grid_scale_mm);
+
+/** Solid/Blocker faces of visible scene props (Glass skipped). */
+void AppendScenePropOccluders(std::vector<OccluderQuad>& out, float grid_scale_mm);
 
 void AppendRoomWallOccluders(std::vector<OccluderQuad>& out,
                              float min_x,

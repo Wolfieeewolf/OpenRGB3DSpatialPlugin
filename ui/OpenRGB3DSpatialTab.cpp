@@ -41,6 +41,7 @@
 #include "PluginLog.h"
 #include "CustomControllerDialog.h"
 #include "DisplayPlaneManager.h"
+#include "ScenePropManager.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "GridSpaceUtils.h"
@@ -1425,10 +1426,13 @@ void OpenRGB3DSpatialTab::SyncStackRoomOutputPanel()
 
 void OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi()
 {
+    SpatialLightingSceneProvider::instance()->InvalidateFrameOccluders();
     if(!controller_transforms.empty())
     {
         SpatialLightingSceneProvider::instance()->SetControllers(&controller_transforms);
     }
+    SyncDisplayPlaneManager();
+    SyncScenePropManager();
     if(current_effect_ui)
     {
         current_effect_ui->RefreshRoomOutputControllerLists();

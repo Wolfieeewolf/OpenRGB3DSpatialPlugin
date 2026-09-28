@@ -110,7 +110,6 @@ void LEDViewport3D::DrawSceneProps()
         float glass_r, glass_g, glass_b;
         unpack(prop->GetColor(), &solid_r, &solid_g, &solid_b);
         unpack(prop->GetGlassColor(), &glass_r, &glass_g, &glass_b);
-        /* Blocker: dark matte charcoal (reads as housing / occlusion). */
         const float block_r = 0.12f;
         const float block_g = 0.12f;
         const float block_b = 0.14f;
@@ -121,10 +120,12 @@ void LEDViewport3D::DrawSceneProps()
         std::vector<float> blocker_faces;
         std::vector<float> edges;
 
-        auto append_face = [&](ScenePropFace face, float x0, float y0, float z0,
-                               float x1, float y1, float z1,
-                               float x2, float y2, float z2,
-                               float x3, float y3, float z3) {
+        for(int face_i = 0; face_i < SceneProp3D::kFaceCount; ++face_i)
+        {
+            const ScenePropFace face = (ScenePropFace)face_i;
+            Vector3D corners[4];
+            SceneProp3D::FaceLocalCorners(face, hw, hh, hd, corners);
+
             const ScenePropFaceKind kind = prop->GetFaceKind(face);
             float r = solid_r;
             float g = solid_g;
@@ -144,23 +145,13 @@ void LEDViewport3D::DrawSceneProps()
                 b = block_b;
                 dest = &blocker_faces;
             }
-            MeshGeometry::PushQuadAsTris(*dest, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, r, g, b);
-        };
-
-        /* Bottom (−Y), Top (+Y). Front (+Z toward user), Back (−Z), Left (+X), Right (−X)
-           so Left/Right match when looking at Front at rotation 0. */
-        append_face(ScenePropFace::Bottom,
-                    -hw, -hh, -hd,  hw, -hh, -hd,  hw, -hh,  hd, -hw, -hh,  hd);
-        append_face(ScenePropFace::Top,
-                    -hw,  hh, -hd,  hw,  hh, -hd,  hw,  hh,  hd, -hw,  hh,  hd);
-        append_face(ScenePropFace::Left,
-                     hw, -hh, -hd,  hw, -hh,  hd,  hw,  hh,  hd,  hw,  hh, -hd);
-        append_face(ScenePropFace::Right,
-                    -hw, -hh,  hd, -hw, -hh, -hd, -hw,  hh, -hd, -hw,  hh,  hd);
-        append_face(ScenePropFace::Front,
-                     hw, -hh,  hd, -hw, -hh,  hd, -hw,  hh,  hd,  hw,  hh,  hd);
-        append_face(ScenePropFace::Back,
-                    -hw, -hh, -hd,  hw, -hh, -hd,  hw,  hh, -hd, -hw,  hh, -hd);
+            MeshGeometry::PushQuadAsTris(*dest,
+                                        corners[0].x, corners[0].y, corners[0].z,
+                                        corners[1].x, corners[1].y, corners[1].z,
+                                        corners[2].x, corners[2].y, corners[2].z,
+                                        corners[3].x, corners[3].y, corners[3].z,
+                                        r, g, b);
+        }
 
         const float er = selected ? 0.95f : 0.55f;
         const float eg = selected ? 0.85f : 0.55f;
@@ -248,7 +239,6 @@ int LEDViewport3D::PickSceneProp(const Ray3D& ray)
         box.min[0] = world_min.x; box.min[1] = world_min.y; box.min[2] = world_min.z;
         box.max[0] = world_max.x; box.max[1] = world_max.y; box.max[2] = world_max.z;
 
-        /* Slab ray–AABB */
         float tmin = 0.0f;
         float tmax = FLT_MAX;
         bool hit = true;

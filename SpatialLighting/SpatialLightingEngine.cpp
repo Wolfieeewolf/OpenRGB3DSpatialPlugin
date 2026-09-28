@@ -10,6 +10,8 @@
 #include "ControllerLayout3D.h"
 #include "DisplayPlaneManager.h"
 #include "DisplayPlane3D.h"
+#include "ScenePropManager.h"
+#include "SceneProp3D.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
 #include "LEDPosition3D.h"
@@ -568,6 +570,10 @@ void BuildSpatialOccluders(std::vector<OccluderQuad>& out,
     {
         AppendDisplayPlaneOccluders(out, grid.grid_scale_mm);
     }
+    if(options.scene_props)
+    {
+        AppendScenePropOccluders(out, grid.grid_scale_mm);
+    }
     if(options.room_walls)
     {
         AppendRoomWallOccluders(out,
@@ -629,6 +635,63 @@ void AppendDisplayPlaneOccluders(std::vector<OccluderQuad>& out, float grid_scal
         quad.double_sided = true;
         quad.controller_index = -1;
         out.push_back(quad);
+    }
+}
+
+void AppendScenePropOccluders(std::vector<OccluderQuad>& out, float grid_scale_mm)
+{
+    const float scale_mm = SafeGridScaleMm(grid_scale_mm);
+
+    for(SceneProp3D* prop : ScenePropManager::instance()->GetSceneProps())
+    {
+        if(!prop || !prop->IsVisible())
+        {
+            continue;
+        }
+
+        const float w = MMToGridUnits(prop->GetWidthMM(), scale_mm);
+        const float h = MMToGridUnits(prop->GetHeightMM(), scale_mm);
+        const float d = MMToGridUnits(prop->GetDepthMM(), scale_mm);
+        if(w <= 0.0f || h <= 0.0f || d <= 0.0f)
+        {
+            continue;
+        }
+
+        const float hw = w * 0.5f;
+        const float hh = h * 0.5f;
+        const float hd = d * 0.5f;
+        const Transform3D& transform = prop->GetTransform();
+
+        for(int face_i = 0; face_i < SceneProp3D::kFaceCount; ++face_i)
+        {
+            const ScenePropFace face = (ScenePropFace)face_i;
+            if(prop->GetFaceKind(face) == ScenePropFaceKind::Glass)
+            {
+                continue;
+            }
+
+            Vector3D local[4];
+            SceneProp3D::FaceLocalCorners(face, hw, hh, hd, local);
+
+            OccluderQuad quad{};
+            for(int i = 0; i < 4; ++i)
+            {
+                const Vector3D world =
+                    Geometry3D::TransformDisplayPlaneLocalToWorld(local[i], transform);
+                quad.corners[i] = ToVec3(world);
+            }
+            const Vec3 e1 = Sub(quad.corners[1], quad.corners[0]);
+            const Vec3 e2 = Sub(quad.corners[3], quad.corners[0]);
+            const Vec3 n = {
+                e1.y * e2.z - e1.z * e2.y,
+                e1.z * e2.x - e1.x * e2.z,
+                e1.x * e2.y - e1.y * e2.x,
+            };
+            quad.normal = Normalize(n);
+            quad.double_sided = true;
+            quad.controller_index = -1;
+            out.push_back(quad);
+        }
     }
 }
 

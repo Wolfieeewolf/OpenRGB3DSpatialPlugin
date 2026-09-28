@@ -9,6 +9,7 @@ SpatialLighting::OccluderBuildOptions BuildOccluderOptions(const RoomSpatialLigh
 {
     SpatialLighting::OccluderBuildOptions options{};
     options.display_planes = params.use_occlusion;
+    options.scene_props = params.use_occlusion;
     options.room_walls = params.use_occlusion && params.use_room_walls;
     options.controllers = false;
     options.light_blockers = params.use_occlusion;

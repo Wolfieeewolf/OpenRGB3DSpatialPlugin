@@ -503,33 +503,16 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         for(const auto& pj : layout_json["scene_props"])
         {
             std::unique_ptr<SceneProp3D> prop = SceneProp3D::FromJson(pj);
-            if(prop)
-            {
-                int ref_idx = prop->GetReferencePointIndex();
-                if(ref_idx < 0 || ref_idx >= ref_count)
-                {
-                    prop->SetReferencePointIndex(-1);
-                }
-                scene_props_.push_back(std::move(prop));
-            }
-        }
-        for(size_t i = 0; i < scene_props_.size(); i++)
-        {
-            SceneProp3D* prop = scene_props_[i].get();
-            if(!prop || prop->GetReferencePointIndex() >= 0)
+            if(!prop)
             {
                 continue;
             }
-            /* Migrate older layouts that had props without linked refs. */
-            std::string ref_name = prop->GetName() + " Reference";
-            Vector3D pos = prop->GetTransform().position;
-            auto ref_point = std::make_unique<VirtualReferencePoint3D>(
-                ref_name, REF_POINT_CUSTOM, pos.x, pos.y, pos.z);
-            ref_point->SetDisplayColor(0xFFAA00);
-            ref_point->SetVisible(prop->IsVisible());
-            ref_point->GetTransform().rotation = prop->GetTransform().rotation;
-            prop->SetReferencePointIndex((int)reference_points.size());
-            reference_points.push_back(std::move(ref_point));
+            int ref_idx = prop->GetReferencePointIndex();
+            if(ref_idx < 0 || ref_idx >= ref_count)
+            {
+                prop->SetReferencePointIndex(-1);
+            }
+            scene_props_.push_back(std::move(prop));
         }
     }
     UpdateScenePropsList();

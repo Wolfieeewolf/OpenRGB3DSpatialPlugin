@@ -282,7 +282,7 @@ void ObjectCreatorTabPanel::buildScenePropsPage()
     layout->addWidget(scene_props_list_, 1);
 
     scene_props_empty_label_ = new QLabel(
-        tr("No scene props yet. Click Create to add a box (desk, tower shell, pegboard, …)."),
+        tr("No scene props yet."),
         scene_props_page_);
     scene_props_empty_label_->setWordWrap(true);
     layout->addWidget(scene_props_empty_label_);
