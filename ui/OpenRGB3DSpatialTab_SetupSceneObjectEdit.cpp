@@ -133,7 +133,12 @@ bool OpenRGB3DSpatialTab::HasSceneObjectEditTarget() const
         return true;
     }
 
-    return viewport->GetSelectedDisplayPlaneIndex() >= 0;
+    if(viewport->GetSelectedDisplayPlaneIndex() >= 0)
+    {
+        return true;
+    }
+
+    return viewport->GetSelectedScenePropIndex() >= 0;
 }
 
 void OpenRGB3DSpatialTab::MaybeHideSceneObjectEditOnDeselect()

@@ -2,6 +2,8 @@
 
 #include "PluginSettingsPaths.h"
 
+#include "viewport/ScenePropMeshPaths.h"
+
 namespace PluginSettingsPaths
 {
 
@@ -26,6 +28,8 @@ void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
     std::error_code ec;
     filesystem::create_directories(PluginRoot(rm), ec);
     filesystem::create_directories(ControllersDir(rm), ec);
+    filesystem::create_directories(MeshesDir(rm), ec);
+    ScenePropMeshPaths::SetMeshesRoot(MeshesDir(rm));
     // Volume engine content folder (library category is Volume, not "Spatial").
     filesystem::create_directories(EffectsDir(rm) / "spatial", ec);
     filesystem::create_directories(EffectsDir(rm) / "audio", ec);

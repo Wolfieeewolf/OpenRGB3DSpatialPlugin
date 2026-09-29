@@ -46,6 +46,10 @@ jobs:
         with:
           arch: x64
 
+      - name: Build Assimp
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-assimp.ps1
+
       - name: Build
         shell: cmd
         run: |
@@ -110,6 +114,11 @@ jobs:
           cache: true
           modules: ''
 
+      - name: Build Assimp
+        run: |
+          chmod +x scripts/build-assimp.sh
+          bash scripts/build-assimp.sh
+
       - name: Build
         run: bash scripts/ci/build-linux.sh 6 release
 
@@ -147,7 +156,8 @@ jobs:
 
       - name: Build
         run: |
-          chmod +x scripts/ci/*.sh
+          chmod +x scripts/ci/*.sh scripts/build-assimp.sh
+          bash scripts/build-assimp.sh
           bash scripts/ci/build-macos.sh 6 release
 
       - name: Package

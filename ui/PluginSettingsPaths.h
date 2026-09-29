@@ -22,6 +22,11 @@ inline filesystem::path ControllersDir(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "controllers";
 }
 
+inline filesystem::path MeshesDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "meshes";
+}
+
 inline filesystem::path EffectsDir(OpenRGBPluginAPIInterface* rm)
 {
     return PluginRoot(rm) / "effects";
