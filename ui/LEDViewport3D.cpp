@@ -467,6 +467,25 @@ bool LEDViewport3D::FocusSelectionInView()
             span_units = std::max(sx, std::max(sy, sz)) * 2.2f;
         }
     }
+    else if(scene_props_ && selected_scene_prop_idx_ >= 0 &&
+            selected_scene_prop_idx_ < (int)scene_props_->size())
+    {
+        SceneProp3D* prop = (*scene_props_)[(size_t)selected_scene_prop_idx_].get();
+        if(prop)
+        {
+            const Transform3D& t = prop->GetTransform();
+            focus_x = t.position.x;
+            focus_y = t.position.y;
+            focus_z = t.position.z;
+            const float w = MMToGridUnits(prop->GetWidthMM(), grid_scale_mm)
+                            * std::max(t.scale.x, 0.001f);
+            const float h = MMToGridUnits(prop->GetHeightMM(), grid_scale_mm)
+                            * std::max(t.scale.y, 0.001f);
+            const float d = MMToGridUnits(prop->GetDepthMM(), grid_scale_mm)
+                            * std::max(t.scale.z, 0.001f);
+            span_units = std::max(w, std::max(h, d)) * 1.25f;
+        }
+    }
     else
     {
         if(room_viewport_selected_)
