@@ -55,9 +55,40 @@ const char* ScenePropFaceToString(ScenePropFace face)
     }
 }
 
+const char* ScenePropShapeToString(ScenePropShape shape)
+{
+    switch(shape)
+    {
+        case ScenePropShape::Mesh: return "mesh";
+        case ScenePropShape::Box:
+        default: return "box";
+    }
+}
+
+bool ScenePropShapeFromString(const std::string& s, ScenePropShape* out)
+{
+    if(!out)
+    {
+        return false;
+    }
+    if(s == "mesh")
+    {
+        *out = ScenePropShape::Mesh;
+        return true;
+    }
+    if(s == "box")
+    {
+        *out = ScenePropShape::Box;
+        return true;
+    }
+    return false;
+}
+
 SceneProp3D::SceneProp3D(const std::string& name_value)
     : id(next_id++)
     , name(name_value)
+    , shape(ScenePropShape::Box)
+    , mesh_body_kind(ScenePropFaceKind::Solid)
     , width_mm(200.0f)
     , height_mm(450.0f)
     , depth_mm(450.0f)
@@ -172,6 +203,12 @@ nlohmann::json SceneProp3D::ToJson() const
     {
         j["reference_point_index"] = reference_point_index;
     }
+    if(shape == ScenePropShape::Mesh)
+    {
+        j["shape"] = ScenePropShapeToString(shape);
+        j["mesh_asset"] = mesh_asset;
+        j["mesh_body_kind"] = ScenePropFaceKindToString(mesh_body_kind);
+    }
     nlohmann::json fj = nlohmann::json::object();
     for(int i = 0; i < kFaceCount; ++i)
     {
@@ -208,6 +245,27 @@ std::unique_ptr<SceneProp3D> SceneProp3D::FromJson(const nlohmann::json& j)
     prop->SetGlassColor(j.value("glass_color", 0x4AA8C8u));
     prop->visible = j.value("visible", false);
     prop->reference_point_index = j.value("reference_point_index", -1);
+
+    if(j.contains("shape") && j["shape"].is_string())
+    {
+        ScenePropShape parsed = ScenePropShape::Box;
+        if(ScenePropShapeFromString(j["shape"].get<std::string>(), &parsed))
+        {
+            prop->shape = parsed;
+        }
+    }
+    if(j.contains("mesh_asset") && j["mesh_asset"].is_string())
+    {
+        prop->mesh_asset = j["mesh_asset"].get<std::string>();
+    }
+    if(j.contains("mesh_body_kind") && j["mesh_body_kind"].is_string())
+    {
+        ScenePropFaceKind kind = ScenePropFaceKind::Solid;
+        if(ScenePropFaceKindFromString(j["mesh_body_kind"].get<std::string>(), &kind))
+        {
+            prop->mesh_body_kind = kind;
+        }
+    }
 
     if(j.contains("faces") && j["faces"].is_object())
     {

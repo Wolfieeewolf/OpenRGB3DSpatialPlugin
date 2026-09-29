@@ -55,6 +55,8 @@ OpenRGBPluginInfo OpenRGB3DSpatialPlugin::GetPluginInfo()
     info.Label          = "Spatial";
     info.Location       = OPENRGB_PLUGIN_LOCATION_TOP;
 
+    info.Icon.load(":/images/OpenRGB3DSpatialPlugin.png");
+
     return info;
 }
 

@@ -6,15 +6,24 @@
 /debian/changelog
 /fedora/OpenRGB3DSpatialPlugin.spec
 
-
 # Build directories
 build/
+build_mesh/
 build_apiv5/
 _gpu_build_check/
 _recovery/
 debug/
 release/
 dist/
+
+# Assimp local build / portable CMake (scripts/build-assimp.ps1)
+dependencies/cmake/
+dependencies/cmake-*/
+dependencies/assimp-build/
+dependencies/assimp-build-*/
+dependencies/assimp-install/
+dependencies/assimp-install-*/
+dependencies/cmake-win64.zip
 
 # WiX MSI intermediates (scripts/ci/build-msi.ps1)
 *.wxs

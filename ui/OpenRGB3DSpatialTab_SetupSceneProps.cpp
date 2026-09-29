@@ -19,11 +19,19 @@ namespace
 {
 QString ScenePropListLabel(const SceneProp3D& prop)
 {
-    return QStringLiteral("%1 (%2 × %3 × %4 mm)")
-        .arg(QString::fromStdString(prop.GetName()))
+    const QString dims = QStringLiteral("%1 × %2 × %3 mm")
         .arg(prop.GetWidthMM(), 0, 'f', 0)
         .arg(prop.GetHeightMM(), 0, 'f', 0)
         .arg(prop.GetDepthMM(), 0, 'f', 0);
+    if(prop.GetShape() == ScenePropShape::Mesh)
+    {
+        return QStringLiteral("%1 [mesh] (%2)")
+            .arg(QString::fromStdString(prop.GetName()))
+            .arg(dims);
+    }
+    return QStringLiteral("%1 (%2)")
+        .arg(QString::fromStdString(prop.GetName()))
+        .arg(dims);
 }
 } // namespace
 
@@ -236,10 +244,28 @@ void OpenRGB3DSpatialTab::addScenePropClicked()
 {
     const QString suggested = QStringLiteral("Prop %1").arg((int)scene_props_.size() + 1);
     ScenePropDialog dialog(this);
+    dialog.setResourceManager(resource_manager);
+    dialog.setRoomSizeMm(
+        roomWidthSpin() ? (float)roomWidthSpin()->value() : DEFAULT_ROOM_SIZE_MM,
+        roomHeightSpin() ? (float)roomHeightSpin()->value() : DEFAULT_ROOM_SIZE_MM,
+        roomDepthSpin() ? (float)roomDepthSpin()->value() : DEFAULT_ROOM_SIZE_MM);
     dialog.setCreateMode();
     dialog.setCreateDefaults(suggested, 200.0f, 450.0f, 450.0f, 0x555555u);
-    if(dialog.exec() != QDialog::Accepted)
+    const int dialog_result = dialog.exec();
+    if(viewport)
     {
+        viewport->makeCurrent();
+        viewport->doneCurrent();
+        viewport->update();
+    }
+    if(dialog_result != QDialog::Accepted)
+    {
+        return;
+    }
+    if(dialog.shape() == ScenePropShape::Mesh && dialog.meshAssetRelative().isEmpty())
+    {
+        QMessageBox::warning(this, tr("Create Scene Prop"),
+                             tr("Import a mesh file before creating a mesh prop."));
         return;
     }
 
@@ -328,10 +354,28 @@ void OpenRGB3DSpatialTab::editScenePropClicked()
     }
 
     ScenePropDialog dialog(this);
+    dialog.setResourceManager(resource_manager);
+    dialog.setRoomSizeMm(
+        roomWidthSpin() ? (float)roomWidthSpin()->value() : DEFAULT_ROOM_SIZE_MM,
+        roomHeightSpin() ? (float)roomHeightSpin()->value() : DEFAULT_ROOM_SIZE_MM,
+        roomDepthSpin() ? (float)roomDepthSpin()->value() : DEFAULT_ROOM_SIZE_MM);
     dialog.setEditMode();
     dialog.loadFrom(*prop);
-    if(dialog.exec() != QDialog::Accepted)
+    const int dialog_result = dialog.exec();
+    if(viewport)
     {
+        viewport->makeCurrent();
+        viewport->doneCurrent();
+        viewport->update();
+    }
+    if(dialog_result != QDialog::Accepted)
+    {
+        return;
+    }
+    if(dialog.shape() == ScenePropShape::Mesh && dialog.meshAssetRelative().isEmpty())
+    {
+        QMessageBox::warning(this, tr("Edit Scene Prop"),
+                             tr("Import a mesh file for mesh props."));
         return;
     }
 

@@ -230,6 +230,7 @@ HEADERS += \
     ui/ReferencePointDialog.h \
     ui/DisplayPlaneDialog.h \
     ui/ScenePropDialog.h \
+    ui/ScenePropPreviewWidget.h \
     ui/DisplayPlaneCaptureCombo.h \
     ui/custom-controller-grid/CustomControllerGridCell.h \
     ui/custom-controller-grid/CustomControllerGridLayoutMath.h \
@@ -252,6 +253,9 @@ HEADERS += \
     ui/viewport/GlProgram.h \
     ui/viewport/MeshBatch.h \
     ui/viewport/MeshGeometry.h \
+    ui/viewport/MeshImport.h \
+    ui/viewport/ScenePropMeshCache.h \
+    ui/viewport/ScenePropMeshPaths.h \
     ui/viewport/ViewportShaders.h \
     ui/CaptureZonesWidget.h \
     ui/PluginUiUtils.h \
@@ -431,6 +435,7 @@ SOURCES += \
     ui/ReferencePointDialog.cpp \
     ui/DisplayPlaneDialog.cpp \
     ui/ScenePropDialog.cpp \
+    ui/ScenePropPreviewWidget.cpp \
     ui/DisplayPlaneCaptureCombo.cpp \
     ui/custom-controller-grid/CustomControllerGridItem.cpp \
     ui/custom-controller-grid/CustomControllerGridScene.cpp \
@@ -448,6 +453,7 @@ SOURCES += \
     ui/viewport/GlProgram.cpp \
     ui/viewport/MeshBatch.cpp \
     ui/viewport/MeshGeometry.cpp \
+    ui/viewport/MeshImport.cpp \
     ui/viewport/ViewportShaders.cpp \
     ui/CaptureZonesWidget.cpp \
     ui/widgets/StratumBandPanel.cpp \
@@ -488,6 +494,37 @@ win32:LIBS += \
     -lOle32 -lOleAut32 -lAvrt -lMmdevapi -lPropsys -luuid \
     -lgdi32 -luser32 -ld3d11 -ldxgi -ld3dcompiler \
     -lws2_32 -lopengl32 -lWtsapi32
+
+# Assimp (scene-prop mesh import). Default: dependencies/assimp-install from scripts/build-assimp.*.
+# Override with ASSIMP_DIR (prefix containing include/ and lib/).
+isEmpty(ASSIMP_DIR) {
+    ASSIMP_DIR = $$PWD/dependencies/assimp-install
+}
+INCLUDEPATH += $$ASSIMP_DIR/include
+win32 {
+    DEFINES += ASSIMP_STATIC
+    ASSIMP_LIBDIR = $$ASSIMP_DIR/lib
+    exists($$ASSIMP_LIBDIR/assimp-vc143-mt.lib) {
+        LIBS += -L$$ASSIMP_LIBDIR -lassimp-vc143-mt
+    } else:exists($$ASSIMP_LIBDIR/assimp-vc142-mt.lib) {
+        LIBS += -L$$ASSIMP_LIBDIR -lassimp-vc142-mt
+    } else:exists($$ASSIMP_LIBDIR/assimp.lib) {
+        LIBS += -L$$ASSIMP_LIBDIR -lassimp
+    } else {
+        warning("Assimp not found under $$ASSIMP_DIR — run scripts/build-assimp.ps1")
+    }
+    exists($$ASSIMP_LIBDIR/zlibstatic.lib) {
+        LIBS += -L$$ASSIMP_LIBDIR -lzlibstatic
+    }
+}
+unix:!macx {
+    DEFINES += ASSIMP_STATIC
+    LIBS += -L$$ASSIMP_DIR/lib -lassimp -lz
+}
+macx {
+    DEFINES += ASSIMP_STATIC
+    LIBS += -L$$ASSIMP_DIR/lib -lassimp -lz
+}
 
 win32:CONFIG(debug, debug|release): DESTDIR = debug
 win32:CONFIG(release, debug|release): DESTDIR = release

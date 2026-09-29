@@ -40,6 +40,10 @@ jobs:
         with:
           arch: x64
 
+      - name: Build Assimp
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-assimp.ps1
+
       - name: Build
         shell: cmd
         run: |
@@ -77,6 +81,11 @@ jobs:
           cache: true
           modules: ''
 
+      - name: Build Assimp
+        run: |
+          chmod +x scripts/build-assimp.sh
+          bash scripts/build-assimp.sh
+
       - name: Build
         run: bash scripts/ci/build-linux.sh 6 release
 
@@ -109,7 +118,9 @@ jobs:
           chmod +x scripts/build-package-files.sh
           docker run --rm -v "$PWD":/src -w /src fedora:44 bash -lc '
             set -euo pipefail
-            dnf install -y rpmdevtools dnf-plugins-core gcc-c++ qt6-qtbase-devel qt6-linguist mesa-libGL-devel git make
+            dnf install -y rpmdevtools dnf-plugins-core gcc-c++ cmake ninja-build qt6-qtbase-devel qt6-linguist mesa-libGL-devel git make
+            chmod +x scripts/build-assimp.sh
+            ./scripts/build-assimp.sh
             ./scripts/build-package-files.sh fedora/OpenRGB3DSpatialPlugin.spec
             rpmdev-setuptree
             cp fedora/OpenRGB3DSpatialPlugin.spec /root/rpmbuild/SPECS

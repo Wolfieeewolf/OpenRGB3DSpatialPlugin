@@ -29,6 +29,12 @@ enum class ScenePropFace : int
     Count = 6
 };
 
+enum class ScenePropShape : int
+{
+    Box = 0,
+    Mesh = 1,
+};
+
 class SceneProp3D
 {
 public:
@@ -42,6 +48,15 @@ public:
 
     Transform3D&        GetTransform() { return transform; }
     const Transform3D&  GetTransform() const { return transform; }
+
+    ScenePropShape      GetShape() const { return shape; }
+    void                SetShape(ScenePropShape s) { shape = s; }
+
+    const std::string&  GetMeshAsset() const { return mesh_asset; }
+    void                SetMeshAsset(const std::string& relative_path) { mesh_asset = relative_path; }
+
+    ScenePropFaceKind   GetMeshBodyKind() const { return mesh_body_kind; }
+    void                SetMeshBodyKind(ScenePropFaceKind kind) { mesh_body_kind = kind; }
 
     float               GetWidthMM() const { return width_mm; }
     void                SetWidthMM(float w) { width_mm = (w > 1.0f) ? w : 1.0f; }
@@ -80,6 +95,9 @@ private:
     int                 id;
     std::string         name;
     Transform3D         transform;
+    ScenePropShape      shape;
+    std::string         mesh_asset;
+    ScenePropFaceKind   mesh_body_kind;
     float               width_mm;
     float               height_mm;
     float               depth_mm;
@@ -95,5 +113,7 @@ private:
 const char* ScenePropFaceKindToString(ScenePropFaceKind kind);
 bool ScenePropFaceKindFromString(const std::string& s, ScenePropFaceKind* out);
 const char* ScenePropFaceToString(ScenePropFace face);
+const char* ScenePropShapeToString(ScenePropShape shape);
+bool ScenePropShapeFromString(const std::string& s, ScenePropShape* out);
 
 #endif

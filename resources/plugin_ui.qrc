@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>OpenRGBPlugins.ttf</file>
+        <file alias="images/OpenRGB3DSpatialPlugin.png">../images/OpenRGB3DSpatialPlugin.png</file>
     </qresource>
 </RCC>

@@ -12,9 +12,12 @@
 #include "DisplayPlane3D.h"
 #include "ScenePropManager.h"
 #include "SceneProp3D.h"
+#include "viewport/ScenePropMeshCache.h"
+#include "viewport/ScenePropMeshPaths.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
 #include "LEDPosition3D.h"
+#include "filesystem.h"
 
 #include <algorithm>
 #include <cmath>
@@ -661,6 +664,47 @@ void AppendScenePropOccluders(std::vector<OccluderQuad>& out, float grid_scale_m
         const float hh = h * 0.5f;
         const float hd = d * 0.5f;
         const Transform3D& transform = prop->GetTransform();
+
+        if(prop->GetShape() == ScenePropShape::Mesh)
+        {
+            if(prop->GetMeshBodyKind() == ScenePropFaceKind::Glass)
+            {
+                continue;
+            }
+            const filesystem::path abs = ScenePropMeshPaths::Resolve(prop->GetMeshAsset());
+            const MeshImport::TriangleMesh* mesh =
+                ScenePropMeshCache::instance()->GetOrLoad(abs.string());
+            if(!mesh || mesh->empty())
+            {
+                continue;
+            }
+            for(int face_i = 0; face_i < SceneProp3D::kFaceCount; ++face_i)
+            {
+                const ScenePropFace face = (ScenePropFace)face_i;
+                Vector3D local[4];
+                SceneProp3D::FaceLocalCorners(face, hw, hh, hd, local);
+
+                OccluderQuad quad{};
+                for(int i = 0; i < 4; ++i)
+                {
+                    const Vector3D world =
+                        Geometry3D::TransformDisplayPlaneLocalToWorld(local[i], transform);
+                    quad.corners[i] = ToVec3(world);
+                }
+                const Vec3 e1 = Sub(quad.corners[1], quad.corners[0]);
+                const Vec3 e2 = Sub(quad.corners[3], quad.corners[0]);
+                const Vec3 n = {
+                    e1.y * e2.z - e1.z * e2.y,
+                    e1.z * e2.x - e1.x * e2.z,
+                    e1.x * e2.y - e1.y * e2.x,
+                };
+                quad.normal = Normalize(n);
+                quad.double_sided = true;
+                quad.controller_index = -1;
+                out.push_back(quad);
+            }
+            continue;
+        }
 
         for(int face_i = 0; face_i < SceneProp3D::kFaceCount; ++face_i)
         {
