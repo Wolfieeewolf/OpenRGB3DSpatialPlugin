@@ -123,7 +123,18 @@ Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / 
 
 Disk folder `effects/spatial/` is **Volume** content — the library label is Volume, not “Spatial”.
 
-**Stock pack:** shipped by the installer (MSI/exe), or copy `effects/`, `patterns/`, `controllers/`, and `timelines/` from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root. Restart OpenRGB (or reload the plugin) so FolderVolume / Shader Field / kernels rescan.
+**Stock pack:** shipped by the installer (MSI/exe), or copy `effects/`, `patterns/`, `controllers/`, and `timelines/` from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root (`plugins/settings/OpenRGB3DSpatialPlugin/`). Restart OpenRGB (or reload the plugin) so FolderVolume / Shader Field / kernels rescan. On Windows the typical path is `%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\`.
+
+### Smoke / stable-build hygiene
+
+Before a release cut (or after GL / FolderVolume / timeline changes):
+
+1. **Presets static smoke** (no OpenRGB): in the presets checkout run `python scripts/smoke_presets.py`. Optionally `pip install moderngl` and `python scripts/smoke_presets.py --compile-glsl` on a machine with OpenGL 4.1.
+2. **Plugin build** — existing GitHub/GitLab Qt 6.8.3 jobs must stay green.
+3. **Manual overlay pass** (grid overlay on): one Volume look each of `finish: depth|hex|hsv|spiral|rgb`, one audio look, Omni + Texture Projection, one Shader Field, then a short timeline using Chase / Twinkle / Confetti / Blink / Alternating.
+4. **Installed data sync** — after merging presets, overwrite the local plugin data trees from the presets repo so AppData is not older than `main`/`master`.
+
+Timeline `.fx` notes: `hash_byte(seed, local_ms, period, shift)` — when using epochs, pass `epoch * period` as `local_ms` (see `twinkle.fx`). Circular wrap `min(delta, 1-delta)` belongs on **angular** fields (e.g. Helix), not linear chase along `axis`.
 
 ## Code quality
 

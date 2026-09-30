@@ -138,3 +138,22 @@ jobs:
           name: Linux_amd64_Fedora44
           path: dist/openrgb-plugin-3d-spatial*.rpm
           if-no-files-found: error
+
+  presets-smoke:
+    name: Presets content smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout presets
+        uses: actions/checkout@v5
+        with:
+          repository: Wolfieeewolf/OpenRGB3DSpatialPresets
+          path: presets
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run smoke_presets.py
+        working-directory: presets
+        run: python scripts/smoke_presets.py

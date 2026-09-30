@@ -25,7 +25,7 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 
 Do not add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight.
 
-**Stock pack:** installed with the plugin (MSI/exe), or copy from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root. Reload OpenRGB so disk registrations pick up new files.
+**Stock pack:** installed with the plugin (MSI/exe), or copy from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root (`%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\` on Windows). Reload OpenRGB so disk registrations pick up new files. Presets CI runs `scripts/smoke_presets.py` on every push.
 
 ---
 
@@ -36,7 +36,7 @@ Do not add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reac
 3. No parallel CPU formula beside a GPU atlas for the same field.
 4. Prefer shared globals (`speed`, `brightness`, `size`, `scale`, …) over one-off knobs when ≥2 effects need the same control.
 5. Reject ports that need `iChannel`, `iMouse`, raymarch, webcam, or per-effect native hooks unless you are writing a programmed addon.
-6. **GPU standard:** viewport, preview, and all field atlases run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `shared`, …).
+6. **GPU standard:** viewport, preview, and all field atlases run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, …).
 
 Porting helpers: [shader-conversion.md](shader-conversion.md).
 
@@ -77,6 +77,7 @@ void volumeMain(...)
 | `finish:` | How CPU turns atlas sample into LED color |
 | `media_layout:` | `projection` or `omni` selects the shared media prepare codec (not `class_name` forks). Legacy class ids still map if this key is omitted |
 | `instances:` | When set (e.g. `1`), forces effect instance count (legacy: RotatingConeSpotlights) |
+| `needs_arms:` / `show_axis:` | **Reserved no-ops** (catalog skip only). Prefer real knobs (`slider: num_arms`, etc.). Unknown header keys stop parsing before `finish`/`param` — do not invent keys |
 | `sample: room` | Wall/floor/ceiling UV (`SampleGpuRoomVolume01`); default is origin-local occupancy |
 | `resolution:` | Atlas resolution hint |
 | GLSL | Bodies compile under `#version 410 core` wrappers — use `texture(u_media, uv)` |
