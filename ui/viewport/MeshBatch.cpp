@@ -35,10 +35,12 @@ MeshBatch::MeshBatch(MeshBatch&& other) noexcept
     , vbo_(other.vbo_)
     , vertex_count_(other.vertex_count_)
     , layout_(other.layout_)
+    , create_context_(other.create_context_)
 {
     other.vao_ = 0;
     other.vbo_ = 0;
     other.vertex_count_ = 0;
+    other.create_context_ = nullptr;
 }
 
 MeshBatch& MeshBatch::operator=(MeshBatch&& other) noexcept
@@ -50,15 +52,32 @@ MeshBatch& MeshBatch::operator=(MeshBatch&& other) noexcept
         vbo_ = other.vbo_;
         vertex_count_ = other.vertex_count_;
         layout_ = other.layout_;
+        create_context_ = other.create_context_;
         other.vao_ = 0;
         other.vbo_ = 0;
         other.vertex_count_ = 0;
+        other.create_context_ = nullptr;
     }
     return *this;
 }
 
 void MeshBatch::Destroy()
 {
+    if(!vao_ && !vbo_)
+    {
+        Abandon();
+        return;
+    }
+
+    QOpenGLContext* current = QOpenGLContext::currentContext();
+    /* Never call QOpenGLContext::makeCurrent on a QOpenGLWidget-owned context.
+       If the owning context is not current, drop handles without glDelete. */
+    if(create_context_ && current != create_context_)
+    {
+        Abandon();
+        return;
+    }
+
     QOpenGLExtraFunctions* xf = Extra();
     if(xf)
     {
@@ -79,6 +98,7 @@ void MeshBatch::Abandon()
     vao_ = 0;
     vbo_ = 0;
     vertex_count_ = 0;
+    create_context_ = nullptr;
 }
 
 bool MeshBatch::Upload(Layout layout, const float* interleaved, size_t vertex_count)
@@ -92,10 +112,15 @@ bool MeshBatch::Upload(Layout layout, const float* interleaved, size_t vertex_co
     if(!vao_)
     {
         xf->glGenVertexArrays(1, &vao_);
+        create_context_ = QOpenGLContext::currentContext();
     }
     if(!vbo_)
     {
         xf->glGenBuffers(1, &vbo_);
+        if(!create_context_)
+        {
+            create_context_ = QOpenGLContext::currentContext();
+        }
     }
     if(!vao_ || !vbo_)
     {

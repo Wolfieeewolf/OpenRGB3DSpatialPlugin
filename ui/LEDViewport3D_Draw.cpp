@@ -76,6 +76,28 @@ const char* GizmoModeLabel(GizmoMode mode)
 
 void LEDViewport3D::paintGL()
 {
+    /* Field-engine Sessions bind their own FBOs on the shared 4.1 Core pool.
+       Rebind the widget FBO and viewport every paint so atlas work cannot leave
+       draws targeting the wrong framebuffer. */
+    if(QOpenGLContext* ctx = context())
+    {
+        if(QOpenGLExtraFunctions* xf = ctx->extraFunctions())
+        {
+            xf->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+        }
+    }
+    const int fb_w = viewportFramebufferWidth(width());
+    const int fb_h = viewportFramebufferHeight(height());
+    glViewport(0, 0, fb_w, fb_h);
+
+    if(!viewport_shader_programs_ok_
+       || !gl_prog_unlit_color_.IsValid()
+       || !gl_prog_unlit_point_.IsValid()
+       || !gl_prog_textured_unlit_.IsValid())
+    {
+        initViewportShaderPrograms();
+    }
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if(!viewport_paint_enabled_ || width() < 2 || height() < 2)

@@ -2,6 +2,8 @@
 
 #include "SpatialStripFieldEngine.h"
 #include "SpatialOffscreenGlPool.h"
+#include "FieldFullscreenQuad410.h"
+#include "GlslUniformArray.h"
 
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
@@ -14,20 +16,18 @@
 namespace
 {
 
-const char* kStripVertexShader = R"(attribute vec2 a_position;
-void main() {
-    gl_Position = vec4(a_position, 0.0, 1.0);
-}
-)";
+const char* kStripVertexShader = FieldFullscreenQuad410::VertexShaderSource();
 
 QString BuildStripFragmentShader(const QString& user_body)
 {
     return QStringLiteral(
-               "#version 110\n"
+               "#version 410 core\n"
                "uniform float u_time;\n"
                "uniform float u_width;\n")
            + QStringLiteral("uniform float u_params[%1];\n").arg(SpatialStripFieldEngine::kMaxParams)
-           + QStringLiteral("void stripMain(out vec4 out_color, in float s01);\n")
+           + QStringLiteral(
+               "out vec4 frag_color;\n"
+               "void stripMain(out vec4 out_color, in float s01);\n")
            + user_body
            + QStringLiteral(
                "\nvoid main() {\n"
@@ -35,7 +35,7 @@ QString BuildStripFragmentShader(const QString& user_body)
                "    float s01 = clamp((floor(gl_FragCoord.x) + 0.5) / w, 0.0, 1.0);\n"
                "    vec4 c = vec4(0.0);\n"
                "    stripMain(c, s01);\n"
-               "    gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
+               "    frag_color = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
                "}\n");
 }
 
@@ -259,13 +259,16 @@ bool SpatialStripFieldEngine::renderStrip()
     glf->glViewport(0, 0, w, 1);
     program_->setUniformValue("u_time", params_.time_sec);
     program_->setUniformValue("u_width", (float)w);
-    program_->setUniformValueArray("u_params", param_bins, kMaxParams, 1);
+    SetGlslFloatUniformArray(*program_, glf, "u_params", param_bins, kMaxParams);
 
-    static const float quad[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
-    program_->enableAttributeArray("a_position");
-    program_->setAttributeArray("a_position", GL_FLOAT, quad, 2);
-    glf->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    program_->disableAttributeArray("a_position");
+    if(!FieldFullscreenQuad410::Draw(SpatialOffscreenGlPool::sharedContext()))
+    {
+        last_error_ = QStringLiteral("Fullscreen quad draw failed.");
+        fbo_->release();
+        program_->release();
+        available_.store(false);
+        return false;
+    }
 
     readbackStrip(w);
 

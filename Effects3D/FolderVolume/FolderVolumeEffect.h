@@ -67,6 +67,10 @@ struct FolderVolumeSpec
     std::string audio_preset;
     std::string audio_media;
     std::string shader_override;
+    /** Header `media_layout:` — projection | omni (empty = generic media). */
+    std::string media_layout;
+    /** Header `instances:` — when >0, forces SpatialEffect3D::effect_instance_count. */
+    int effect_instances = 0;
     std::vector<std::string> params;
     struct Slider
     {

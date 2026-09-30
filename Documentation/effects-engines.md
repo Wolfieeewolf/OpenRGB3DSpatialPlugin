@@ -36,6 +36,7 @@ Do not add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reac
 3. No parallel CPU formula beside a GPU atlas for the same field.
 4. Prefer shared globals (`speed`, `brightness`, `size`, `scale`, …) over one-off knobs when ≥2 effects need the same control.
 5. Reject ports that need `iChannel`, `iMouse`, raymarch, webcam, or per-effect native hooks unless you are writing a programmed addon.
+6. **GPU standard:** viewport, preview, and all field atlases run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `shared`, …).
 
 Porting helpers: [shader-conversion.md](shader-conversion.md).
 
@@ -43,7 +44,7 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 
 ## Volume engine
 
-**Runs:** soft 3D fields via `SpatialVolumeFieldEngine` / FolderVolume.  
+**Runs:** soft 3D fields via `SpatialVolumeFieldEngine` / FolderVolume on the shared **4.1 Core** offscreen pool (shares with the room viewport).  
 **Library category:** Volume (disk folder still `effects/spatial/`).  
 **Entry:** `void volumeMain(out vec4 out_color, in vec3 p01)`  
 **Uniforms:** `u_time`, `u_params[]` filled from header `param:` lines (order = index).
@@ -58,6 +59,9 @@ description: One short line
 global: speed brightness frequency detail size scale …
 param: …
 finish: depth | hex | hsv | spiral | atlas | surface | rgb
+# optional:
+# media_layout: projection | omni
+# instances: 1
 # Effect
 void volumeMain(...)
 ```
@@ -69,10 +73,13 @@ void volumeMain(...)
 | Rule | Detail |
 |------|--------|
 | `class:` | Stable id for profiles; required to register |
-| `global:` | Opt-in shared motion/UI flags only |
+| `global:` | Opt-in shared motion/UI flags only (`media` / `audio` aliases: `media: yes`, `drive: audio`) |
 | `finish:` | How CPU turns atlas sample into LED color |
+| `media_layout:` | `projection` or `omni` selects the shared media prepare codec (not `class_name` forks). Legacy class ids still map if this key is omitted |
+| `instances:` | When set (e.g. `1`), forces effect instance count (legacy: RotatingConeSpotlights) |
 | `sample: room` | Wall/floor/ceiling UV (`SampleGpuRoomVolume01`); default is origin-local occupancy |
 | `resolution:` | Atlas resolution hint |
+| GLSL | Bodies compile under `#version 410 core` wrappers — use `texture(u_media, uv)` |
 | Output | Soft field in channels the chosen `finish:` expects (intensity / HSV / RGB) — not raymarched scenes |
 | Scale vs Size | **Scale** = occupancy of the effect box; **Size** = feature size inside `u_params` |
 | Outside box | Unlit — do not clamp UVs onto atlas faces |
@@ -126,9 +133,11 @@ void volumeMain(...)
 | Rule | Detail |
 |------|--------|
 | Header | Volume rules + `global: media` (or `media: yes`) + `finish: rgb` |
+| `media_layout:` | Optional `projection` / `omni` for shared prepare codecs |
 | Folder | `effects/media/<id>.fs` |
 | Host owns | File browse, GIF timing, `setMediaTexture` |
 | Content owns | UV / shape / ambience math in GLSL + declared knobs |
+| GLSL | Core 410 — `texture(u_media, …)` only |
 
 ---
 

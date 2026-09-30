@@ -2,6 +2,7 @@
 
 #include "SpatialShaderEngine.h"
 #include "SpatialOffscreenGlPool.h"
+#include "FieldFullscreenQuad410.h"
 #include "GlslUniformArray.h"
 #include "QtCompat.h"
 
@@ -17,26 +18,23 @@
 namespace
 {
 
-const char* kVertexShader = R"(attribute vec2 a_position;
-void main() {
-    gl_Position = vec4(a_position, 0.0, 1.0);
-}
-)";
+const char* kVertexShader = FieldFullscreenQuad410::VertexShaderSource();
 
 QString BuildFragmentShader(const QString& user_body)
 {
     return QStringLiteral(
-               "#version 110\n"
+               "#version 410 core\n"
                "uniform float u_time;\n"
                "uniform vec2 u_resolution;\n"
                "uniform float u_params[8];\n"
+               "out vec4 frag_color;\n"
                "void spatialMain(out vec4 out_color, in vec2 frag_coord);\n")
            + user_body
            + QStringLiteral(
                "\nvoid main() {\n"
                "    vec4 c = vec4(0.0);\n"
                "    spatialMain(c, gl_FragCoord.xy);\n"
-               "    gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
+               "    frag_color = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
                "}\n");
 }
 
@@ -190,11 +188,13 @@ bool SpatialShaderEngine::renderFrame()
     program_->setUniformValue("u_resolution", QVector2D((float)w, (float)h));
     SetGlslFloatUniformArray(*program_, glf, "u_params", params, 8);
 
-    static const float quad[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
-    program_->enableAttributeArray("a_position");
-    program_->setAttributeArray("a_position", GL_FLOAT, quad, 2);
-    glf->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    program_->disableAttributeArray("a_position");
+    if(!FieldFullscreenQuad410::Draw(ctx))
+    {
+        last_error_ = QStringLiteral("Fullscreen quad draw failed.");
+        fbo_->release();
+        program_->release();
+        return false;
+    }
 
     std::vector<unsigned char> rgba((size_t)w * (size_t)h * 4u);
     glf->glPixelStorei(GL_PACK_ALIGNMENT, 1);

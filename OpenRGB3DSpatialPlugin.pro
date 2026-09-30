@@ -298,6 +298,7 @@ HEADERS += \
     Shaders/SpatialFieldAssistBase.h \
     Shaders/SpatialVolumeFieldEngine.h \
     Shaders/SpatialOffscreenGlPool.h \
+    Shaders/FieldFullscreenQuad410.h \
     Shaders/SpatialVolumeFieldAssist.h \
     Shaders/SpatialStripFieldEngine.h \
     Shaders/SpatialStripFieldAssist.h \
@@ -475,6 +476,7 @@ SOURCES += \
     Shaders/SpatialShaderCatalog.cpp \
     Shaders/SpatialVolumeFieldEngine.cpp \
     Shaders/SpatialOffscreenGlPool.cpp \
+    Shaders/FieldFullscreenQuad410.cpp \
     Shaders/SpatialVolumeFieldAssist.cpp \
     Shaders/SpatialStripFieldEngine.cpp \
     Shaders/SpatialStripFieldAssist.cpp \

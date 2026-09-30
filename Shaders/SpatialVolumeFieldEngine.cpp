@@ -2,6 +2,7 @@
 
 #include "SpatialVolumeFieldEngine.h"
 #include "SpatialOffscreenGlPool.h"
+#include "FieldFullscreenQuad410.h"
 #include "GlslUniformArray.h"
 
 #include <QOffscreenSurface>
@@ -19,22 +20,19 @@
 namespace
 {
 
-const char* kVertexShader = R"(attribute vec2 a_position;
-void main() {
-    gl_Position = vec4(a_position, 0.0, 1.0);
-}
-)";
+const char* kVertexShader = FieldFullscreenQuad410::VertexShaderSource();
 
 QString BuildFragmentShader(const QString& user_body)
 {
     return QStringLiteral(
-               "#version 110\n"
+               "#version 410 core\n"
                "uniform float u_time;\n"
                "uniform float u_res;\n"
                "uniform vec2 u_atlas;\n")
            + QStringLiteral("uniform float u_params[%1];\n").arg(SpatialVolumeFieldEngine::kMaxParams)
            + QStringLiteral(
                "uniform sampler2D u_media;\n"
+               "out vec4 frag_color;\n"
                "void volumeMain(out vec4 out_color, in vec3 p01);\n")
            + user_body
            + QStringLiteral(
@@ -47,7 +45,7 @@ QString BuildFragmentShader(const QString& user_body)
                "    vec3 p01 = vec3((fx + 0.5) / n, (ly + 0.5) / n, (slice + 0.5) / n);\n"
                "    vec4 c = vec4(0.0);\n"
                "    volumeMain(c, clamp(p01, 0.0, 1.0));\n"
-               "    gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
+               "    frag_color = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
                "}\n");
 }
 
@@ -483,11 +481,14 @@ bool SpatialVolumeFieldEngine::renderAtlas()
     glf->glBindTexture(GL_TEXTURE_2D, media_tex_id_);
     program_->setUniformValue("u_media", 0);
 
-    static const float quad[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
-    program_->enableAttributeArray("a_position");
-    program_->setAttributeArray("a_position", GL_FLOAT, quad, 2);
-    glf->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    program_->disableAttributeArray("a_position");
+    if(!FieldFullscreenQuad410::Draw(SpatialOffscreenGlPool::sharedContext()))
+    {
+        last_error_ = QStringLiteral("Fullscreen quad draw failed.");
+        fbo_->release();
+        program_->release();
+        available_.store(false);
+        return false;
+    }
 
     glf->glBindTexture(GL_TEXTURE_2D, 0);
 

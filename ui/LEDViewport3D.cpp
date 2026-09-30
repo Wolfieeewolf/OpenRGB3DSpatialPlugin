@@ -118,6 +118,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
 
 LEDViewport3D::~LEDViewport3D()
 {
+    SpatialOffscreenGlPool::clearHostMakeCurrent(this);
     if(screen_preview_refresh_timer)
     {
         screen_preview_refresh_timer->stop();
@@ -727,6 +728,16 @@ void LEDViewport3D::initializeGL()
                  gl_vendor ? gl_vendor : "(null)");
     }
 
+    SpatialOffscreenGlPool::setHostMakeCurrent(
+        [](void* user) {
+            LEDViewport3D* viewport = static_cast<LEDViewport3D*>(user);
+            if(viewport && viewport->isValid())
+            {
+                viewport->makeCurrent();
+            }
+        },
+        this,
+        context());
     SpatialOffscreenGlPool::notifyHostContextReady();
 
     glEnable(GL_DEPTH_TEST);

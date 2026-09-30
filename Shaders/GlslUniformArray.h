@@ -5,8 +5,8 @@
 #include <QOpenGLShaderProgram>
 #include <QString>
 
-/** Upload uniform float u_name[count]. Qt setUniformValueArray is unreliable on
- *  #version 110 array uniforms (location -1 or silently no-op). */
+/** Upload uniform float u_name[count]. Resolves both `name` and `name[0]`
+ *  locations for GLSL 410 array uniforms across drivers. */
 inline void SetGlslFloatUniformArray(QOpenGLShaderProgram& program,
                                      QOpenGLFunctions* gl,
                                      const char* name,

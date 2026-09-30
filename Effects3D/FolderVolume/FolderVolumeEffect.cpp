@@ -262,6 +262,10 @@ FolderVolumeSpec ReadSpec(const QString& path)
         {
             spec.needs_frequency = val == QStringLiteral("true");
         }
+        else if(key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis"))
+        {
+            /* Catalog / UI hints — ignore so later finish/param lines still parse. */
+        }
         else if(key == QStringLiteral("user_colors"))
         {
             spec.user_colors = val.toInt();
@@ -289,6 +293,14 @@ FolderVolumeSpec ReadSpec(const QString& path)
         else if(key == QStringLiteral("shader"))
         {
             spec.shader_override = val.toStdString();
+        }
+        else if(key == QStringLiteral("media_layout"))
+        {
+            spec.media_layout = val.toLower().toStdString();
+        }
+        else if(key == QStringLiteral("instances"))
+        {
+            spec.effect_instances = std::max(0, val.toInt());
         }
         else if(key == QStringLiteral("combo"))
         {
@@ -322,10 +334,30 @@ FolderVolumeSpec ReadSpec(const QString& path)
                 && key != QStringLiteral("pattern_source")
                 && key != QStringLiteral("drive") && key != QStringLiteral("audio_preset")
                 && key != QStringLiteral("audio_media")
-                && key != QStringLiteral("shader"))
+                && key != QStringLiteral("shader")
+                && key != QStringLiteral("media_layout")
+                && key != QStringLiteral("instances")
+                && key != QStringLiteral("needs_arms")
+                && key != QStringLiteral("show_axis"))
         {
             break;
         }
+    }
+    /* Legacy class_name fallbacks when headers omit the new canonical keys. */
+    if(spec.media_layout.empty())
+    {
+        if(spec.class_name == "OmniShapeTexture")
+        {
+            spec.media_layout = "omni";
+        }
+        else if(spec.class_name == "TextureProjection")
+        {
+            spec.media_layout = "projection";
+        }
+    }
+    if(spec.effect_instances <= 0 && spec.class_name == "RotatingConeSpotlights")
+    {
+        spec.effect_instances = 1;
     }
     if(spec.pattern_from_kernels)
     {
@@ -439,9 +471,9 @@ FolderVolumeEffect::FolderVolumeEffect(FolderVolumeSpec spec, QWidget* parent)
         SetColors(spec_.colors);
     }
     SetRainbowMode(spec_.rainbow);
-    if(spec_.class_name == "RotatingConeSpotlights")
+    if(spec_.effect_instances > 0)
     {
-        effect_instance_count = 1;
+        effect_instance_count = spec_.effect_instances;
     }
     if(spec_.uses_media)
     {
@@ -1493,7 +1525,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
             media = media.scaled(kGpuMediaEdge, kGpuMediaEdge, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         }
 
-        const bool is_omni = spec_.class_name == "OmniShapeTexture";
+        const bool is_omni = (spec_.media_layout == "omni");
         const unsigned int eff_res = CombineMediaSampling((unsigned int)std::clamp(SliderRaw("media_resolution"), 0, 100));
         if(is_omni && eff_res < 100u)
         {
@@ -1542,7 +1574,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
         const float size_m = std::max(0.08f, size);
         const float prop01 = SliderRaw("ambience_propagation") / 100.0f;
 
-        if(spec_.class_name == "TextureProjection")
+        if(spec_.media_layout == "projection")
         {
             const float detail_s = std::max(0.05f, GetScaledDetail()) * tm;
             const float freq_n = std::clamp(GetNormalizedFrequency(), 0.05f, 1.0f);

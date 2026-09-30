@@ -5,6 +5,8 @@
 
 #include <cstddef>
 
+class QOpenGLContext;
+
 /** CPU → VAO/VBO batch for unlit draws (lines / triangles / points). */
 class MeshBatch
 {
@@ -43,6 +45,8 @@ private:
     unsigned int vbo_ = 0;
     size_t vertex_count_ = 0;
     Layout layout_ = Layout::PosColor;
+    /** Context that created the VAO/VBO; never glDelete under a foreign context. */
+    QOpenGLContext* create_context_ = nullptr;
 };
 
 #endif

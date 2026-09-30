@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "PluginLog.h"
 #include "SpatialOffscreenGlPool.h"
 
 /**
@@ -31,6 +32,7 @@ public:
         body_set_ = true;
         // Allow a fresh prepare after the body changes (or after a prior compile latch).
         unavailable_ = false;
+        logged_unavailable_ = false;
         if(engine_)
         {
             engine_->setFragmentBody(body_);
@@ -93,6 +95,13 @@ public:
             {
                 return false;
             }
+            if(!logged_unavailable_)
+            {
+                logged_unavailable_ = true;
+                const QByteArray err_bytes = err.isEmpty() ? QByteArray("ensureReady failed") : err.toUtf8();
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Field assist unavailable: %s",
+                            err_bytes.constData());
+            }
             unavailable_ = true;
             return false;
         }
@@ -119,6 +128,7 @@ private:
     std::uint64_t last_sequence_ = 0;
     float last_time_sec_ = -1e9f;
     bool unavailable_ = false;
+    bool logged_unavailable_ = false;
     QString body_;
     bool body_set_ = false;
 };

@@ -30,4 +30,6 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 ## GPU vs CPU
 
+All field atlases (Volume / Strip / Shader Field) and the room viewport use **OpenGL 4.1 Core** with `#version 410 core` wrappers. Author `.fs` bodies must not include `#version` or legacy GLSL (`texture2D`, `attribute`, `varying`, `gl_FragColor`). Do not use GLSL reserved words as identifiers (`layout`, `packed`, `shared`, …) — rename them (e.g. `place`, `pack_val`).
+
 GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist`. **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen`, nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.
