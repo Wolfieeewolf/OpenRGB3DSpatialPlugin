@@ -53,7 +53,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
   - Preset directions or custom yaw/pitch in Device/Room space.
   - Named directions aim at the matching viewport wall/side: Left/Right (±X), Down/Up (±Y),
     **Forward → Front wall (Z=0 / −Z)**, **Back → Back wall (+Z)**. Explicit `+z`/`-z` stay geometric.
-- Storage: `{PluginRoot}/timelines/*.oreffect.json` (format version **4** only).
+- Storage: `{PluginRoot}/library/packs/*.oreffect.json` (format version **4** only).
 - Empty library seeds three examples: rainbow wash, desk ripple (Room), sequence wipe.
 
 ### Event edges
@@ -77,6 +77,8 @@ Shared toolbar/props presets live in `EffectPackCatalog`: solid colors (incl. wa
 ## Pack file schema (v4)
 
 Extension: `.oreffect.json` (JSON, UTF-8). Version field required (`1`…`4`).
+
+Hand-authored packs should follow the section order in `presets/library/packs/_template.oreffect.json` (same layout as `presets/library/movie-cue/_template.oreffect.json`): pack identity → playback → tracks → block type / timing / brightness / colour / motion. `//` and `/* */` comments are accepted on load; saving from the in-app editor drops comments but keeps this field order. Content root: [content-library.md](content-library.md).
 
 ```json
 {
@@ -240,7 +242,7 @@ LED frames over time → OpenRGB + 3D viewport (layout-aware)
 - `Effects3D/EffectPacks/EffectPackSpatial.cpp` — curves, world/volume evaluate
 - `Effects3D/EffectPacks/EffectPackPlayer.h` — playback clock
 - `Effects3D/EffectPacks/EffectPackApplier*.cpp` — hardware + viewport apply (frame / match / spatial)
-- `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `timelines/`
+- `Effects3D/EffectPacks/EffectPackLibrary.*` — scan/seed `library/packs/`
 - `ui/EffectPackCatalog.h` — shared Basic/Pixel/Volume catalog
 - `ui/EffectPackPanel.*` — Object Creator → Effect Pack list + Preview/Stop / New / Edit
 - `ui/ZonesPanel.*` — Object Creator → Zone list + Create / Edit / Delete

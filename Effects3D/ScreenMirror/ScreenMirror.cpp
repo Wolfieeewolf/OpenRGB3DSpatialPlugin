@@ -29,7 +29,8 @@ void RegisterScreenMirrorEngine()
         "Ambilight",
         "",
         "",
-        []() { return new ScreenMirror; });
+        []() { return new ScreenMirror; },
+        SpatialEffectSettingsLayout::CustomOnly);
 }
 
 ScreenMirror::ScreenMirror(QWidget* parent)

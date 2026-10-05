@@ -5,15 +5,30 @@
 
 #include "EffectListManager3D.h"
 
-#define EFFECT_REGISTERER_3D(_classname, _ui_name, _category, _constructor)          \
-    static class _register                                                           \
-    {                                                                                \
-     public:                                                                         \
-       _register()                                                                   \
-       {                                                                             \
-           EffectListManager3D::get()->RegisterEffect(_classname, _ui_name,        \
-                                                       _category, "", "", _constructor); \
-        }                                                                            \
+/** Standard self-registration for SpatialEffect3D subclasses.
+ *  Put EFFECT_REGISTERER_3D* inside the class public section; define with REGISTER_EFFECT_3D(T) in the .cpp. */
+
+#define EFFECT_REGISTERER_3D(_classname, _ui_name, _category, _constructor)                \
+    static class _register                                                                 \
+    {                                                                                      \
+     public:                                                                               \
+       _register()                                                                         \
+       {                                                                                   \
+           EffectListManager3D::get()->RegisterEffect(                                     \
+               _classname, _ui_name, _category, "", "", _constructor,                      \
+               SpatialEffectSettingsLayout::FullWithTransport);                            \
+        }                                                                                  \
+    } _registerer;
+
+#define EFFECT_REGISTERER_3D_LAYOUT(_classname, _ui_name, _category, _layout, _constructor) \
+    static class _register                                                                  \
+    {                                                                                       \
+     public:                                                                                \
+       _register()                                                                          \
+       {                                                                                    \
+           EffectListManager3D::get()->RegisterEffect(                                      \
+               _classname, _ui_name, _category, "", "", _constructor, _layout);             \
+        }                                                                                   \
     } _registerer;
 
 #define EFFECT_REGISTERER_3D_GAME(_classname, _ui_name, _game_id, _game_label, _constructor) \
@@ -22,8 +37,9 @@
      public:                                                                                  \
        _register()                                                                            \
        {                                                                                      \
-           EffectListManager3D::get()->RegisterEffect(_classname, _ui_name,                 \
-                                                       "Game", _game_id, _game_label, _constructor); \
+           EffectListManager3D::get()->RegisterEffect(                                        \
+               _classname, _ui_name, "Game", _game_id, _game_label, _constructor,             \
+               SpatialEffectSettingsLayout::FullWithTransport);                               \
         }                                                                                     \
     } _registerer;
 

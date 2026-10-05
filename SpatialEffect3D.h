@@ -358,13 +358,6 @@ struct EffectInfo3D
 
 class SpatialEffect3D;
 
-enum class SpatialEffectSettingsLayout : uint8_t
-{
-    FullWithTransport = 0,
-    CommonNoTransport = 1,
-    CustomOnly = 2,
-};
-
 namespace MinecraftGame {
 void ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
 }

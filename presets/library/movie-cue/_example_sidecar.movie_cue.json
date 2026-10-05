@@ -1,0 +1,22 @@
+{
+  "format": "openrgb3d.movie_cues",
+  "version": 1,
+  "title": "Example Short",
+  "content_id": "example:short",
+  "edition": {
+    "label": "Example — any — any",
+    "cut": "theatrical",
+    "video_standard": "ntsc",
+    "country": "US"
+  },
+  "duration_ms": 60000,
+  "duration_tolerance_ms": 5000,
+  "port": 27180,
+  "notes": "Copy beside your video as MatchYourVideo.movie_cue.json. See library/movie-cue/docs/movie-cue-authoring.md",
+  "cues": [
+    { "t_ms": 2000, "effect_id": "title_flash", "edge": "pulse" },
+    { "t_ms": 10000, "effect_id": "explosion", "edge": "pulse" },
+    { "t_ms": 20000, "t_end_ms": 45000, "effect_id": "ocean_horizon", "edge": "level" },
+    { "t_ms": 50000, "effect_id": "laser_sweep", "edge": "pulse" }
+  ]
+}

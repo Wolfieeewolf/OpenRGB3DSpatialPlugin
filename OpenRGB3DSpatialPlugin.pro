@@ -1,4 +1,4 @@
-QT += core gui widgets opengl
+QT += core gui widgets opengl network
 greaterThan(QT_MAJOR_VERSION, 5): QT += openglwidgets
 
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY QT_NO_CONNECT_SLOTS_BY_NAME
@@ -291,6 +291,11 @@ HEADERS += \
     ui/widgets/EffectControlsRoot.h \
     Effects3D/ShaderField/ShaderField.h \
     Effects3D/PlayerEngines.h \
+    Effects3D/MovieCue/MovieCue.h \
+    Effects3D/MovieCue/MovieCueCatalog.h \
+    Effects3D/MovieCue/MovieCueListener.h \
+    Effects3D/MovieCue/MovieCueRuntime.h \
+    EffectListManager3D.h \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
     Shaders/SpatialShaderCatalog.h \
@@ -471,6 +476,11 @@ SOURCES += \
     ui/widgets/AudioEqBandColumn.cpp \
     Effects3D/FolderVolume/FolderVolumeEffect.cpp \
     Effects3D/PlayerEngines.cpp \
+    EffectListManager3D.cpp \
+    Effects3D/MovieCue/MovieCue.cpp \
+    Effects3D/MovieCue/MovieCueCatalog.cpp \
+    Effects3D/MovieCue/MovieCueListener.cpp \
+    Effects3D/MovieCue/MovieCueRuntime.cpp \
     Effects3D/ShaderField/ShaderField.cpp \
     Shaders/SpatialShaderEngine.cpp \
     Shaders/SpatialShaderCatalog.cpp \

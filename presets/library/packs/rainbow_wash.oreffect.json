@@ -1,0 +1,185 @@
+﻿// =============================================================================
+// Effect pack â€” rainbow_wash
+// Layout follows library/packs/_template.oreffect.json
+// =============================================================================
+{
+  // --- Pack identity ---------------------------------------------------------
+  "format": "openrgb3d.effect_pack",
+  "version": 4,
+  "id": "rainbow_wash",
+  "name": "Rainbow wash",
+
+  // --- Playback --------------------------------------------------------------
+  "duration_ms": 60000,
+  "loop": "forever",
+  "priority": 10,
+
+  // --- Tracks ----------------------------------------------------------------
+  "tracks": [
+    {
+      "name": "All LEDs",
+      "target": { "kind": "all" },
+      "blocks": [
+        {
+          // --- Block look / type ---------------------------------------------
+          "type": "fade",
+          "effect": "fade",
+
+          // --- Timing within the pack ----------------------------------------
+          "start_ms": 0,
+          "end_ms": 10000,
+
+          // --- Brightness ----------------------------------------------------
+          "intensity": 1.0,
+          "min_intensity": 0.15,
+          "max_intensity": 1.0,
+
+          // --- Colour --------------------------------------------------------
+          "color": "#FF0000",
+          "color_from": "#FF0000",
+          "color_to": "#FF8000",
+          "gradient": [
+            { "pos": 0.0, "color": "#FF0000" },
+            { "pos": 1.0, "color": "#FF8000" }
+          ],
+
+          // --- Motion / space ------------------------------------------------
+          "direction": "right",
+          "axis_space": "device",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
+          "speed": 1.0,
+          "pulse_length": 0.25,
+          "period_ms": 1000,
+          "reverse": false
+        },
+        {
+          "type": "fade",
+          "effect": "fade",
+          "start_ms": 10000,
+          "end_ms": 20000,
+          "intensity": 1.0,
+          "min_intensity": 0.15,
+          "max_intensity": 1.0,
+          "color": "#FF0000",
+          "color_from": "#FF8000",
+          "color_to": "#FFFF00",
+          "gradient": [
+            { "pos": 0.0, "color": "#FF8000" },
+            { "pos": 1.0, "color": "#FFFF00" }
+          ],
+          "direction": "right",
+          "axis_space": "device",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
+          "speed": 1.0,
+          "pulse_length": 0.25,
+          "period_ms": 1000,
+          "reverse": false
+        },
+        {
+          "type": "fade",
+          "effect": "fade",
+          "start_ms": 20000,
+          "end_ms": 30000,
+          "intensity": 1.0,
+          "min_intensity": 0.15,
+          "max_intensity": 1.0,
+          "color": "#FF0000",
+          "color_from": "#FFFF00",
+          "color_to": "#00FF00",
+          "gradient": [
+            { "pos": 0.0, "color": "#FFFF00" },
+            { "pos": 1.0, "color": "#00FF00" }
+          ],
+          "direction": "right",
+          "axis_space": "device",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
+          "speed": 1.0,
+          "pulse_length": 0.25,
+          "period_ms": 1000,
+          "reverse": false
+        },
+        {
+          "type": "fade",
+          "effect": "fade",
+          "start_ms": 30000,
+          "end_ms": 40000,
+          "intensity": 1.0,
+          "min_intensity": 0.15,
+          "max_intensity": 1.0,
+          "color": "#FF0000",
+          "color_from": "#00FF00",
+          "color_to": "#0080FF",
+          "gradient": [
+            { "pos": 0.0, "color": "#00FF00" },
+            { "pos": 1.0, "color": "#0080FF" }
+          ],
+          "direction": "right",
+          "axis_space": "device",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
+          "speed": 1.0,
+          "pulse_length": 0.25,
+          "period_ms": 1000,
+          "reverse": false
+        },
+        {
+          "type": "fade",
+          "effect": "fade",
+          "start_ms": 40000,
+          "end_ms": 50000,
+          "intensity": 1.0,
+          "min_intensity": 0.15,
+          "max_intensity": 1.0,
+          "color": "#FF0000",
+          "color_from": "#0080FF",
+          "color_to": "#8000FF",
+          "gradient": [
+            { "pos": 0.0, "color": "#0080FF" },
+            { "pos": 1.0, "color": "#8000FF" }
+          ],
+          "direction": "right",
+          "axis_space": "device",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
+          "speed": 1.0,
+          "pulse_length": 0.25,
+          "period_ms": 1000,
+          "reverse": false
+        },
+        {
+          "type": "fade",
+          "effect": "fade",
+          "start_ms": 50000,
+          "end_ms": 60000,
+          "intensity": 1.0,
+          "min_intensity": 0.15,
+          "max_intensity": 1.0,
+          "color": "#FF0000",
+          "color_from": "#8000FF",
+          "color_to": "#FF0000",
+          "gradient": [
+            { "pos": 0.0, "color": "#8000FF" },
+            { "pos": 1.0, "color": "#FF0000" }
+          ],
+          "direction": "right",
+          "axis_space": "device",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
+          "speed": 1.0,
+          "pulse_length": 0.25,
+          "period_ms": 1000,
+          "reverse": false
+        }
+      ]
+    }
+  ]
+}

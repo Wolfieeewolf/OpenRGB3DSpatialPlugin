@@ -408,8 +408,15 @@ void RegisterFolderVolumeEffects()
         return;
     }
     PluginSettingsPaths::EnsurePluginDataLayout(OpenRGB3DSpatialPlugin::APIPointer);
-    const QString root = QString::fromStdString(
-        PluginSettingsPaths::EffectsDir(OpenRGB3DSpatialPlugin::APIPointer).string());
+    auto* rm = OpenRGB3DSpatialPlugin::APIPointer;
+    const filesystem::path scan_roots[] = {
+        PluginSettingsPaths::VolumeLibraryDir(rm),
+        PluginSettingsPaths::AudioLibraryDir(rm),
+        PluginSettingsPaths::MediaLibraryDir(rm),
+    };
+    for(const filesystem::path& scan_root : scan_roots)
+    {
+    const QString root = QString::fromStdString(scan_root.string());
     QDirIterator files(root, QStringList() << QStringLiteral("*.fs"), QDir::Files, QDirIterator::Subdirectories);
     while(files.hasNext())
     {
@@ -420,10 +427,6 @@ void RegisterFolderVolumeEffects()
             continue;
         }
         const QString abs = fi.absoluteFilePath();
-        if(abs.contains(QStringLiteral("/shader-field/")) || abs.contains(QStringLiteral("\\shader-field\\")))
-        {
-            continue;
-        }
         const std::string class_name = spec.class_name;
         const std::string ui_name = spec.ui_name;
         std::string category = "Volume";
@@ -435,7 +438,8 @@ void RegisterFolderVolumeEffects()
         {
             category = "Media";
         }
-        else if(abs.contains(QStringLiteral("/spatial/")) || abs.contains(QStringLiteral("\\spatial\\")))
+        else if(abs.contains(QStringLiteral("/volume/")) || abs.contains(QStringLiteral("\\volume\\"))
+                || abs.contains(QStringLiteral("/spatial/")) || abs.contains(QStringLiteral("\\spatial\\")))
         {
             category = "Volume";
         }
@@ -449,6 +453,7 @@ void RegisterFolderVolumeEffects()
             class_name, ui_name, category, "", "",
             [reg_spec]() { return new FolderVolumeEffect(reg_spec); });
     }
+    } // scan_roots
 }
 
 FolderVolumeEffect::FolderVolumeEffect(FolderVolumeSpec spec, QWidget* parent)

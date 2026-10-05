@@ -110,6 +110,11 @@ public:
     /** Pause spatial stack, then drive hardware + viewport from an effect pack. */
     void PrepareEffectPackPreview();
     void ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms, bool force_hw_update = false);
+    /** Apply pack using a stack layer's zone / Spatial Anchor / bounds (Movie Cue). */
+    void ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack,
+                                     int local_ms,
+                                     bool force_hw_update,
+                                     SpatialEffect3D* layer_effect);
     const std::vector<std::unique_ptr<ControllerTransform>>& GetControllerTransforms() const
     {
         return controller_transforms;

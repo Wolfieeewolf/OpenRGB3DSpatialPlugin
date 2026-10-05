@@ -278,7 +278,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     QLabel* help = new QLabel(
         QStringLiteral(
             "Shader Field paints a moving 2D pattern, then samples it onto LEDs.\n"
-            "This look is a .fs file in effects/shader-field (spatialMain). "
+            "This look is a .fs file in library/shader-field (spatialMain). "
             "Projection picks which room plane is mapped; Size/Detail/Contrast/Hue drive the shader."),
         w);
     help->setWordWrap(true);
@@ -351,7 +351,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     auto* open_folder_button = new QPushButton(QStringLiteral("Open user shaders folder"), w);
     open_folder_button->setObjectName(QStringLiteral("openFolderButton"));
     open_folder_button->setToolTip(QStringLiteral(
-        "Opens the effects/shader-field folder. Drop .fs files that define spatialMain(). Restart OpenRGB to pick up new files."));
+        "Opens the library/shader-field folder. Drop .fs files that define spatialMain(). Restart OpenRGB to pick up new files."));
     shader_layout->addWidget(open_folder_button);
     connect(open_folder_button, &QPushButton::clicked, this, &ShaderField::OnOpenShadersFolder);
 

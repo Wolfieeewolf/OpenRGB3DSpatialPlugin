@@ -1627,12 +1627,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
 SpatialEffectSettingsLayout OpenRGB3DSpatialTab::settingsLayoutForClass(const std::string& class_name) const
 {
-    if(class_name == "ScreenMirror")
-    {
-        return SpatialEffectSettingsLayout::CustomOnly;
-    }
-
-    return SpatialEffectSettingsLayout::FullWithTransport;
+    return EffectListManager3D::get()->GetEffectInfo(class_name).settings_layout;
 }
 
 OpenRGB3DSpatialTab::EffectSettingsUiMount OpenRGB3DSpatialTab::createEffectSettingsUi(QWidget* parent,

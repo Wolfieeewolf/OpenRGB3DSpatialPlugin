@@ -3,6 +3,7 @@
 #ifndef SPATIALEFFECTTYPES_H
 #define SPATIALEFFECTTYPES_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include "LEDPosition3D.h"
@@ -21,6 +22,16 @@ enum SpatialEffectType
     SPATIAL_EFFECT_MC_DAMAGE = 33,
     SPATIAL_EFFECT_MC_ROOM_AMBILIGHT = 34,
     SPATIAL_EFFECT_REACTIVE = 35,
+    // Additional engines (e.g. Movie Cue) may use local type ids in their .cpp;
+    // library identity is class_name, not this enum.
+};
+
+/** How the effect settings panel is assembled in the stack UI. */
+enum class SpatialEffectSettingsLayout : uint8_t
+{
+    FullWithTransport = 0,
+    CommonNoTransport = 1,
+    CustomOnly = 2,
 };
 
 enum ReferencePointType

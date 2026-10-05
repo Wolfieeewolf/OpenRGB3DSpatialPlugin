@@ -133,7 +133,7 @@ filesystem::path EventBindingsPanel::packsDir() const
     {
         return {};
     }
-    return PluginSettingsPaths::TimelinesDir(tab_->resource_manager);
+    return PluginSettingsPaths::PacksDir(tab_->resource_manager);
 }
 
 filesystem::path EventBindingsPanel::catalogDir() const

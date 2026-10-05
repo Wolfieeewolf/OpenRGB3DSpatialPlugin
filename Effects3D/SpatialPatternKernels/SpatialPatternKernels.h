@@ -8,7 +8,7 @@
 
 int SpatialPatternKernelCount();
 int SpatialPatternKernelClamp(int id);
-/** Stable id = patterns/<id>.kernel stem (survives reorder / display-name edits). */
+/** Stable id = library/patterns/<id>.kernel stem (survives reorder / display-name edits). */
 const char* SpatialPatternKernelId(int kernel_id);
 const char* SpatialPatternKernelDisplayName(int kernel_id);
 const char* SpatialPatternKernelPaletteName(int kernel_id);
@@ -17,7 +17,7 @@ int SpatialPatternKernelFindById(const std::string& id);
 float EvalSpatialPatternKernel(int kernel_id, float s01, float phase01, float rep, float time_sec);
 QString SpatialPatternKernelShader();
 
-/** Clear cached kernels and load again from patterns/*.kernel. */
+/** Clear cached kernels and load again from library/patterns/*.kernel. */
 void SpatialPatternKernelsReload();
 
 #endif

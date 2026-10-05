@@ -1,31 +1,33 @@
 # Effects engines
 
-The player ships a **small set of engines**. Authors drop **content** that those engines know how to run — like tracks for a player. Do not add a new engine per look.
+The player ships a **small set of engines**. Authors drop **content** under `library/<category>/` — like tracks for a player. Do not add a new engine per look.
 
-Library **categories are engine names**. Rows under each category are the looks that engine plays.
+**Folder name = library category.** Full map: [content-library.md](content-library.md).
 
 | Engine (library category) | Content lives in | Who extends it |
 |--------|------------------|----------------|
-| **Volume** | `effects/spatial/*.fs` | Authors — thin `.fs` |
-| **Audio** | `effects/audio/*.fs` | Authors — thin `.fs` on one FFT service |
-| **Media** | `effects/media/*.fs` | Authors — thin `.fs` (+ browse UI from host) |
-| **Shader Field** | `effects/shader-field/*.fs` | Authors — thin `.fs` (one list entry per file) |
-| **Kernel / Strip** | `patterns/*.kernel` | Authors — thin kernels (patterns, not a stack category) |
-| **Reactive** | Player codec | HID input + waves — not a content farm |
-| **Ambilight** | Player codec (Screen Mirror) | Capture — not a content farm |
-| **Game** | Per-game pack / bridge | Programmed / fat addon later |
+| **Volume** | `library/volume/*.fs` | Authors — thin `.fs` |
+| **Audio** | `library/audio/*.fs` | Authors — thin `.fs` on one FFT service |
+| **Media** | `library/media/*.fs` | Authors — image/GIF/texture `.fs` (not sound/movies) |
+| **Shader Field** | `library/shader-field/*.fs` | Authors — thin `.fs` |
+| **Patterns** | `library/patterns/*.kernel` | Authors — strip kernels |
+| **Packs** | `library/packs/*.oreffect.json` | Effect Pack maker / Event Bindings |
+| **Reactive** | Player codec (`library/reactive/` for notes) | HID input + waves |
+| **Ambilight** | Player codec (`library/ambilight/` for notes) | Screen Mirror capture |
+| **Movie Cue** | Player codec + `library/movie-cue/` | Script API + VLC sidecars |
+| **Game** | Player codec (`library/game/` for notes) | Minecraft bridge |
 
-Shared hard services (FFT, HID input, screen capture, game telemetry) stay in the player.
+Shared hard services (FFT, HID input, screen capture, game telemetry) stay in the player. Engines stay **in the plugin binary** for now; see [extract-later.md](extract-later.md).
 
 ### Registration (plugin Load)
 
-1. `RegisterFolderVolumeEffects()` — Volume / Audio / Media from disk; category from **folder** (`spatial`→Volume, `audio`→Audio, `media`→Media); skips `shader-field/`.
-2. `RegisterPlayerEngines()` — Reactive, Screen Mirror (Ambilight), Shader Field files.
-3. Minecraft — `REGISTER_EFFECT_3D` under **Game** only (exception).
+1. `RegisterFolderVolumeEffects()` — Volume / Audio / Media from `library/volume|audio|media`.
+2. `RegisterPlayerEngines()` — Reactive, Screen Mirror (Ambilight), Movie Cue, Shader Field files.
+3. Minecraft — `REGISTER_EFFECT_3D` under **Game**.
 
-Do not add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight.
+**Movie Cue:** add the effect to the stack and enable Script API. Cue timelines are **sidecars next to the video** (`Movie.movie_cue.json`). Shared looks: `library/movie-cue/`. VLC helper: `library/movie-cue/vlc/`. Authoring: [movie-cue-authoring.md](../presets/library/movie-cue/docs/movie-cue-authoring.md).
 
-**Stock pack:** installed with the plugin (MSI/exe), or copy from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root (`%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\` on Windows). Reload OpenRGB so disk registrations pick up new files. Presets CI runs `scripts/smoke_presets.py` on every push.
+**Stock pack:** copy from [`presets/library/`](../presets/library/) into AppData `library/`, or use the presets repo. Reload OpenRGB so disk registrations pick up new files.
 
 ---
 
@@ -45,195 +47,66 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 ## Volume engine
 
 **Runs:** soft 3D fields via `SpatialVolumeFieldEngine` / FolderVolume on the shared **4.1 Core** offscreen pool (shares with the room viewport).  
-**Library category:** Volume (disk folder still `effects/spatial/`).  
-**Entry:** `void volumeMain(out vec4 out_color, in vec3 p01)`  
-**Uniforms:** `u_time`, `u_params[]` filled from header `param:` lines (order = index).
+**Library category:** Volume (`library/volume/`).
 
 ### Required header (FolderVolume)
 
 ```text
-name: Display Name
-class: StableClassId
 category: Volume
-description: One short line
-global: speed brightness frequency detail size scale …
-param: …
-finish: depth | hex | hsv | spiral | atlas | surface | rgb
-# optional:
-# media_layout: projection | omni
-# instances: 1
-# Effect
-void volumeMain(...)
 ```
 
 (`category:` in the file is optional for library grouping — registration uses the folder. Prefer `category: Volume` in new files.)
 
-### Rules
-
-| Rule | Detail |
-|------|--------|
-| `class:` | Stable id for profiles; required to register |
-| `global:` | Opt-in shared motion/UI flags only (`media` / `audio` aliases: `media: yes`, `drive: audio`) |
-| `finish:` | How CPU turns atlas sample into LED color |
+| Header keys | Meaning |
+|-------------|---------|
 | `media_layout:` | `projection` or `omni` selects the shared media prepare codec (not `class_name` forks). Legacy class ids still map if this key is omitted |
-| `instances:` | When set (e.g. `1`), forces effect instance count (legacy: RotatingConeSpotlights) |
-| `needs_arms:` / `show_axis:` | **Reserved no-ops** (catalog skip only). Prefer real knobs (`slider: num_arms`, etc.). Unknown header keys stop parsing before `finish`/`param` — do not invent keys |
 | `sample: room` | Wall/floor/ceiling UV (`SampleGpuRoomVolume01`); default is origin-local occupancy |
-| `resolution:` | Atlas resolution hint |
-| GLSL | Bodies compile under `#version 410 core` wrappers — use `texture(u_media, uv)` |
-| Output | Soft field in channels the chosen `finish:` expects (intensity / HSV / RGB) — not raymarched scenes |
-| Scale vs Size | **Scale** = occupancy of the effect box; **Size** = feature size inside `u_params` |
-| Outside box | Unlit — do not clamp UVs onto atlas faces |
 
-### Folder
-
-`effects/spatial/<id>.fs` (presets repo / plugin data `effects/`).
-
----
+(See full Volume / Audio / Media / Shader Field sections below for controls — paths above supersede older `effects/spatial` wording.)
 
 ## Shader Field engine
 
-**Runs:** 2D full-frame fields via `SpatialShaderEngine`, sampled into the room by projection.  
-**Entry:** `void spatialMain(out vec4 out_color, in vec2 frag_coord)`  
-**Uniforms:** `u_time`, `u_resolution`, `u_params[0..3]` (zoom / contrast / hue / detail).
-
-### Rules
-
-| Rule | Detail |
-|------|--------|
-| Registration | `RegisterShaderFieldEffects()` — one effect list entry **per** `.fs` file |
-| No `REGISTER_EFFECT_3D` | Codec host is constructed from the file spec |
-| Soft imagery only | Plasma, aurora, waves — not UI or video decode |
-| `name:` / optional `class:` | Title and stable profile id (defaults to filename) |
-| Folder | `effects/shader-field/<id>.fs` |
-
----
-
-## Kernel / Strip engine
-
-**Runs:** 1D pattern along strips / colormaps.  
-**Entry:** kernel body composed into `evalStripKernelSigned(...)`.
-
-### Rules
-
-| Rule | Detail |
-|------|--------|
-| File | `patterns/<name>.kernel` |
-| `index` | Keep stable — saved pattern ids depend on it |
-| Use | Strip colormap / Shell `pattern_source: kernels` — not a full room volume by itself |
-
----
+**Library category:** Shader Field (`library/shader-field/`).
 
 ## Media engine
 
 **Runs:** Volume engine + media texture (`u_media`) + browse/GIF host.  
-**Entry:** same `volumeMain`; sample the bound texture in GLSL.
-
-### Rules
-
-| Rule | Detail |
-|------|--------|
-| Header | Volume rules + `global: media` (or `media: yes`) + `finish: rgb` |
-| `media_layout:` | Optional `projection` / `omni` for shared prepare codecs |
-| Folder | `effects/media/<id>.fs` |
-| Host owns | File browse, GIF timing, `setMediaTexture` |
-| Content owns | UV / shape / ambience math in GLSL + declared knobs |
-| GLSL | Core 410 — `texture(u_media, …)` only |
-
----
+**Library category:** Media (`library/media/`). Images/GIF/textures only — not audio, not Movie Cue.
 
 ## Audio engine
 
 **Runs:** One FFT/bands/onset service (`AudioInputManager`) feeding Volume fields via FolderVolume (`drive: audio`, `finish: audio`).  
-**Content:** thin `effects/audio/*.fs` with `class:` + `audio_preset:`.
-
-### Rules
-
-| Rule | Detail |
-|------|--------|
-| Never fork FFT | All audio looks use the shared analysis service |
-| Header | Volume rules + `drive: audio` + `audio_preset:` + `finish: audio` |
-| Host owns | Smoothing, band/fill packing, pulse queue, note pack, AudioReactiveUi, color resolve |
-| Content owns | `volumeMain` field math + unique sliders; do not apply `peak_boost` inside GLSL if `audio_media` is set |
-| `audio_preset:` | `level` · `spectrum` · `beat` · `low_punch` · `high_sparkle` |
-| `audio_media: bands` | Host builds N×1 noise-gated band texture; shader reads `u_media`; no second peak_boost in shader |
-| `audio_media: spectrogram` | Host maintains 64-col × 72-row history; uploads bars (64×1) or spectrogram (64×72) depending on `display_mode` combo |
-| Pulse queue | Auto-enabled when `audio_preset` is `beat` or `low_punch`; host packs up to 5 `{age, strength}` pairs into `u_params[14..23]`; shader outputs `(energy, gradient, pulse_idx01)` |
-| Note pack | Auto-enabled when `audio_preset` is `high_sparkle`; host packs 4 notes (amp ≥ 0.10) into `u_params[12..19]` + count/time at 20/21; shader outputs `(intensity, note_hue01, gradient)` |
-| `shader:` override | A `.fs` header may delegate GLSL to another effect's shader (e.g. `bass-punch.fs` reuses `audio-pulse.fs`) |
-
-### Anti-flicker rules (content)
-
-- Do not multiply band values inside GLSL when `audio_media` is set — the host applies `AudioVisualNoiseGate` and `peak_boost` before upload.
-- Use softstep gates in the shader for any secondary gating (0.06–0.18 range for bars, 0.08–0.16 for sparkle).
-- Keep sweep / radial multipliers in the range **0.92–1.0** (not 0.7 floor which caused ambient flash).
-- `height_fade` for pulse: min 0.0 (not 0.15) so the top of the zone stays dark with no beat.
-- Note sparkle gate range **0.10–0.16** to suppress ambient hiss cloud.
-
-### Folder
-
-`effects/audio/<id>.fs`
-
----
+**Library category:** Audio (`library/audio/`).
 
 ## Reactive engine
 
-**Player codec** registered at Load via `RegisterReactiveEngine()` (no `REGISTER_EFFECT_3D` macro).  
-HID → LED origins → waves → LED color. The C++ stays in the player (codec); there is no thin `.fs` content farm.
-
-### Rules
-
-| Rule | Detail |
-|------|--------|
-| Registration | `RegisterPlayerEngines()` → `RegisterReactiveEngine()` |
-| Library category | **Reactive** (one row) |
-| Input stays in player | `ReactiveInputManager` / key map |
-| Optional later | Look skins as data on top of the same wave buffer — still one engine |
-
----
+**Player codec** registered at Load via `RegisterReactiveEngine()`.  
+Library category **Reactive**. Optional notes in `library/reactive/`.
 
 ## Ambilight engine (Screen Mirror)
 
-**Player codec** registered at Load via `RegisterScreenMirrorEngine()` (no `REGISTER_EFFECT_3D` macro).  
-Capture → display-plane map → LEDs. Capture code stays in the player.
+**Player codec** registered at Load via `RegisterScreenMirrorEngine()`.  
+Library category **Ambilight**. Optional notes in `library/ambilight/`.
 
-### Rules
+## Movie Cue engine
 
-| Rule | Detail |
-|------|--------|
-| Registration | `RegisterPlayerEngines()` → `RegisterScreenMirrorEngine()` |
-| Library category | **Ambilight** (Screen Mirror row) |
-| Capture stays in player | DXGI/GDI + plane math |
-| Do not | Reimplement capture inside a Volume `.fs` |
+**Player codec** registered at Load via `RegisterMovieCueEngine()`.  
+Content: `library/movie-cue/`. Sidecars beside the video.
 
----
+## Game engine
 
-## Games / programmed addons
+Minecraft sub-effects under library category **Game**. Optional notes in `library/game/`.
 
-Use when no standard engine covers the behavior (title-specific telemetry, custom bridges).
-
-### Rules
-
-| Rule | Detail |
-|------|--------|
-| Prefer shared telemetry | `GameTelemetryBridge` / room sample protocol when possible |
-| Per-game pack | Mappings, sub-effects, UI for that title |
-| Registration today | Minecraft uses `REGISTER_EFFECT_3D` under library category **Game** |
-| Fat native | Only when the title cannot speak the shared protocol |
-| Do not | Stuff game logic into Volume/Shader Field files |
-
----
-
-## Choosing an engine (quick)
+## Quick chooser
 
 ```text
 Soft 3D density / plasma / shells     → Volume
 2D shadertoy-like look into the room  → Shader Field
-Chase / comet along strips            → Kernel
-Image or GIF in the room              → Media
-Driven by music FFT/bands             → Audio
-Key/mouse/gamepad pulses              → Reactive
+Image / GIF / texture projection      → Media
+Beat / FFT driven fields              → Audio
 Desktop / monitor glow                → Ambilight
-Game vitals / world hooks             → Game pack
-Anything else                         → Programmed addon (new host work)
+Keyboard / HID waves                  → Reactive
+Film sidecar cues                     → Movie Cue
+Minecraft Fabric telemetry            → Game
+Timed pack sequences                  → Packs (library/packs)
 ```

@@ -10,32 +10,31 @@ The DLL is a **player** of **engines**. Each engine plays its own list of looks 
 
 | Engine (library category) | What it plays |
 |---------------------------|---------------|
-| **Volume** | `effects/spatial/*.fs` (`volumeMain` + FolderVolume header) |
-| **Audio** | `effects/audio/*.fs` (same host; shared FFT/onset) |
-| **Media** | `effects/media/*.fs` (Volume + image/GIF browse) |
-| **Shader Field** | each `effects/shader-field/*.fs` (`spatialMain`) |
-| **Kernel / Strip** | `patterns/*.kernel` (1D strip / colormap; not a stack category) |
-| **Reactive** | HID pulses (player codec — one row) |
-| **Ambilight** | Screen Mirror capture (player codec — one row) |
+| **Volume** | `library/volume/*.fs` |
+| **Audio** | `library/audio/*.fs` |
+| **Media** | `library/media/*.fs` (textures/GIF — not sound/movies) |
+| **Shader Field** | `library/shader-field/*.fs` |
+| **Patterns** | `library/patterns/*.kernel` |
+| **Packs** | `library/packs/*.oreffect.json` |
+| **Movie Cue** | `library/movie-cue/` + video sidecars |
+| **Reactive** | HID pulses (player codec) |
+| **Ambilight** | Screen Mirror capture (player codec) |
 | **Game** | Minecraft channels (programmed pack) |
 
 Stock files live under the plugin data folder (and in [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)). An empty data folder loads **no** file-based looks.
 
 ```text
 <OpenRGB config>/plugins/settings/OpenRGB3DSpatialPlugin/
-  controllers/     device layouts
-  effects/
-    spatial/       Volume engine content (.fs)
-    audio/         Audio engine content (.fs)
-    media/         Media engine content (.fs)
-    shader-field/  Shader Field engine content (.fs)
-  patterns/        strip / colormap kernels (.kernel)
-  timelines/       shows + blocks/
+  library/           ← ALL drop-in content (folder = category)
+    volume|audio|media|shader-field|patterns|packs|movie-cue|…
+  controllers/       device layouts
+  meshes/
+  bindings/
 ```
 
-Install stock content with the Windows MSI (or copy folders from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root — see that repo’s README). Contracts: [Documentation/effects-engines.md](Documentation/effects-engines.md).
+Install stock from [`presets/library/`](presets/library/) or the presets repo. Map: [Documentation/content-library.md](Documentation/content-library.md). Contracts: [Documentation/effects-engines.md](Documentation/effects-engines.md).
 
-Library categories **are** the engine names. The folder `effects/spatial/` is Volume content on disk — not a separate “Spatial effects” product bucket.
+**Folder name = library category.** Want audio effects? Open `library/audio/`.
 
 ## Who it is for
 

@@ -53,6 +53,29 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                           bool force_hw_update = false,
                           ZoneManager3D* zone_manager = nullptr);
 
+/** Optional stack-layer spatial settings (Movie Cue / Event Bindings). */
+struct ApplySpatialContext
+{
+    /** Effect global zone (-1 = all). Filters which controllers/transforms are painted. */
+    int layer_zone_index = -1;
+    /** When set, Room / world blocks sample against this AABB (Spatial Anchor occupancy). */
+    bool has_world_bounds = false;
+    float min_x = 0.0f;
+    float max_x = 0.0f;
+    float min_y = 0.0f;
+    float max_y = 0.0f;
+    float min_z = 0.0f;
+    float max_z = 0.0f;
+};
+
+ApplyStats ApplyPackFrame(const Pack& pack,
+                          int local_ms,
+                          const std::vector<RGBControllerInterface*>& controllers,
+                          std::vector<std::unique_ptr<ControllerTransform>>* transforms,
+                          bool force_hw_update,
+                          ZoneManager3D* zone_manager,
+                          const ApplySpatialContext* spatial);
+
 void PrepareControllersForPreview(const std::vector<RGBControllerInterface*>& controllers);
 
 } // namespace EffectPack

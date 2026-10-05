@@ -530,6 +530,15 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         }
         UpdateEffectOriginCombo();
     }
+    if(instance->effect_class_name == "MovieCue")
+    {
+        setStackLayerGlobalChromeVisible(true);
+        if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
+        {
+            global_panel->setRoomOutputSectionVisible(false);
+        }
+        UpdateEffectOriginCombo();
+    }
 
     nlohmann::json settings;
     if(instance->saved_settings && !instance->saved_settings->empty())
@@ -551,6 +560,33 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         QSignalBlocker b(effectBoundsCombo());
         int idx = effectBoundsCombo()->findData(QVariant(ui_effect->GetEffectBoundsMode()));
         if(idx >= 0) effectBoundsCombo()->setCurrentIndex(idx);
+    }
+
+    if(effectOriginCombo() && instance->effect_class_name == "MovieCue")
+    {
+        int data = -1;
+        bool apply = true;
+        switch(ui_effect->GetReferenceMode())
+        {
+            case REF_MODE_TARGET_ZONE_CENTER: data = -2; break;
+            case REF_MODE_WORLD_ORIGIN:       data = -3; break;
+            case REF_MODE_LED_CENTROID:       data = -4; break;
+            case REF_MODE_ROOM_CENTER:        data = -1; break;
+            case REF_MODE_CUSTOM_POINT:
+            case REF_MODE_USER_POSITION:
+            default:
+                apply = false;
+                break;
+        }
+        if(apply)
+        {
+            QSignalBlocker b(effectOriginCombo());
+            const int idx = effectOriginCombo()->findData(QVariant(data));
+            if(idx >= 0)
+            {
+                effectOriginCombo()->setCurrentIndex(idx);
+            }
+        }
     }
 
     QPushButton* ui_start = use_direct_transport ? direct_start : ui_effect->GetStartButton();

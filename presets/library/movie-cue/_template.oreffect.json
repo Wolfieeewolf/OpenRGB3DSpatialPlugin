@@ -1,0 +1,71 @@
+// =============================================================================
+// Movie Cue look template  (same openrgb3d.effect_pack v4 as library/packs/)
+// Copy into a category folder, e.g. washes/my_look.oreffect.json
+// then register id in catalog.json (or Reload to pick up a new file).
+// Comments load fine; in-app Effect Pack save drops comments but keeps field order.
+// =============================================================================
+{
+  // --- Pack identity ---------------------------------------------------------
+  "format": "openrgb3d.effect_pack",
+  "version": 4,
+  "id": "my_movie_effect_id",
+  "name": "My Movie Effect",
+
+  // --- Playback --------------------------------------------------------------
+  // duration_ms: 1..60000
+  // loop: once | forever | while_active  (Movie Cue level holds use while_active)
+  // priority: higher wins when packs overlap the same LEDs
+  "duration_ms": 2000,
+  "loop": "once",
+  "priority": 20,
+
+  // --- Tracks ----------------------------------------------------------------
+  "tracks": [
+    {
+      "name": "All LEDs",
+      "target": {
+        // kind: all | device | zone | leds | scene_zone
+        "kind": "all"
+      },
+      "blocks": [
+        {
+          // --- Block look / type ---------------------------------------------
+          // type/effect: stem of a library/packs/blocks/**/*.fx file
+          "type": "burst",
+          "effect": "burst",
+
+          // --- Timing within the pack ----------------------------------------
+          "start_ms": 0,
+          "end_ms": 2000,
+
+          // --- Brightness ----------------------------------------------------
+          "intensity": 0.85,
+          "min_intensity": 0.15,
+          "max_intensity": 1.0,
+
+          // --- Colour --------------------------------------------------------
+          "color": "#FF2800",
+          "color_from": "#140000",
+          "color_to": "#FFFFB4",
+          "gradient": [
+            { "pos": 0.0, "color": "#140000" },
+            { "pos": 0.35, "color": "#FF2800" },
+            { "pos": 0.7, "color": "#FFA000" },
+            { "pos": 1.0, "color": "#FFFFB4" }
+          ],
+
+          // --- Motion / space ------------------------------------------------
+          "direction": "right",
+          "axis_space": "room",
+          "axis_mode": "preset",
+          "axis_yaw_deg": 0.0,
+          "axis_pitch_deg": 0.0,
+          "speed": 1.0,
+          "pulse_length": 0.2,
+          "period_ms": 1000,
+          "reverse": false
+        }
+      ]
+    }
+  ]
+}

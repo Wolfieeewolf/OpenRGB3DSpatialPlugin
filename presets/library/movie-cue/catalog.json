@@ -1,0 +1,41 @@
+{
+  "format": "openrgb3d.movie_effect_catalog",
+  "version": 1,
+  "effects": [
+    {
+      "id": "explosion",
+      "name": "Explosion",
+      "category": "explosions",
+      "pack": "explosions/explosion.oreffect.json",
+      "photosensitive": false
+    },
+    {
+      "id": "laser_sweep",
+      "name": "Laser sweep",
+      "category": "wraps",
+      "pack": "wraps/laser_sweep.oreffect.json",
+      "photosensitive": false
+    },
+    {
+      "id": "room_wash",
+      "name": "Room wash",
+      "category": "washes",
+      "pack": "washes/room_wash.oreffect.json",
+      "photosensitive": false
+    },
+    {
+      "id": "ocean_horizon",
+      "name": "Ocean horizon",
+      "category": "washes",
+      "pack": "washes/ocean_horizon.oreffect.json",
+      "photosensitive": false
+    },
+    {
+      "id": "title_flash",
+      "name": "Title flash",
+      "category": "pulses",
+      "pack": "pulses/title_flash.oreffect.json",
+      "photosensitive": true
+    }
+  ]
+}

@@ -115,15 +115,15 @@ The plugin is a **player**: library categories are **engine names**; each engine
 
 At plugin Load (`OpenRGB3DSpatialPlugin.cpp`):
 
-1. **`RegisterFolderVolumeEffects()`** — scans `effects/**/*.fs` (skips `shader-field/`). Library category comes from the **folder**: `spatial/` → **Volume**, `audio/` → **Audio**, `media/` → **Media**.
-2. **`RegisterPlayerEngines()`** (`Effects3D/PlayerEngines.*`) — **Reactive**, **Ambilight** (Screen Mirror), and one row per `effects/shader-field/*.fs`.
+1. **`RegisterFolderVolumeEffects()`** — scans `library/volume|audio|media/**/*.fs`. Folder name = library category (**Volume** / **Audio** / **Media**).
+2. **`RegisterPlayerEngines()`** (`Effects3D/PlayerEngines.*`) — **Reactive**, **Ambilight** (Screen Mirror), **Movie Cue**, and one row per `library/shader-field/*.fs`.
 3. **Minecraft** sub-effects still use **`REGISTER_EFFECT_3D`** under category **Game** (programmed pack; fat-addon work later).
 
-Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight looks. New looks are files (or a new programmed Game pack).
+Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight / Movie Cue looks. New looks are files (or a new programmed Game pack).
 
-Disk folder `effects/spatial/` is **Volume** content — the library label is Volume, not “Spatial”.
+Disk folder `library/volume/` is **Volume** content (folder name = library category). See [Documentation/content-library.md](Documentation/content-library.md).
 
-**Stock pack:** shipped by the installer (MSI/exe), or copy `effects/`, `patterns/`, `controllers/`, and `timelines/` from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root (`plugins/settings/OpenRGB3DSpatialPlugin/`). Restart OpenRGB (or reload the plugin) so FolderVolume / Shader Field / kernels rescan. On Windows the typical path is `%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\`.
+**Stock pack:** shipped by the installer (MSI/exe), or copy `library/` (and `controllers/`) from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) into the plugin data root (`plugins/settings/OpenRGB3DSpatialPlugin/`). Restart OpenRGB (or reload the plugin) so FolderVolume / Shader Field / kernels rescan. On Windows the typical path is `%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\`.
 
 ### Smoke / stable-build hygiene
 
@@ -161,9 +161,9 @@ Timeline `.fx` notes: `hash_byte(seed, local_ms, period, shift)` — when using 
 
 **GPU volume/strip field assists:** when a look uses `SpatialVolumeFieldAssist` / `SpatialStripFieldAssist`, the atlas is the source of truth. Do not keep parallel CPU formula fallbacks. Sample coords reaching `CalculateColorGrid` are already axis-scaled and rotated by the render path (`ApplyEffectRotation`) unless `SkipsSpatialSampleWarp()` is true. Origin-centric volumes (including audio fill/spectrum/sparkle/strip viz) sample with `SampleGpuVolumeOriginLocal01`: origin→farthest face of the current `GridContext3D` (global room or **target-zone AABB**), multiplied by **Scale** (occupancy). Scale below 100% makes the effect smaller; samples outside that box return unlit — do **not** clamp UV onto atlas faces (four-quadrant artifact). **Size** is feature size inside the effect (`u_params`), not atlas coverage. Reconstruct world distances with `MakeEffectGpuAtlasHalfExtents`. Wall/floor/ceiling Volume looks (`sample: room`, e.g. Surface Ambient content) use `SampleGpuRoomVolume01` on the same active grid. Shader Field projections use origin-local unit UV. Single-atlas height bands bake mid-band stratum scalars at `PrepareGpuFields` — full per-LED multi-atlas stratum is out of scope until designed deliberately.
 
-**Shell Pattern / Surface Ambient:** Volume FolderVolume content (`effects/spatial/shell-pattern.fs`, `surface-ambient.fs`). Palette / stratum finish stays on CPU where the host finish path requires it. Thickness and edge fade use shared motion controls (`global: thickness` / `edge`). Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
+**Shell Pattern / Surface Ambient:** Volume FolderVolume content (`library/volume/shell-pattern.fs`, `surface-ambient.fs`). Palette / stratum finish stays on CPU where the host finish path requires it. Thickness and edge fade use shared motion controls (`global: thickness` / `edge`). Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
 
-**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `patterns/*.kernel` via `SpatialPatternKernelShader()`. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. `EvalSpatialPatternKernel` is a single sine if the GPU assist fails. Shell Pattern content does not use this assist.
+**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `library/patterns/*.kernel` via `SpatialPatternKernelShader()`. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. `EvalSpatialPatternKernel` is a single sine if the GPU assist fails. Shell Pattern content does not use this assist.
 
 When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
@@ -224,7 +224,7 @@ Do **not** duplicate strip colormap or floor/mid/ceiling band controls in `Setup
 
 Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`EffectUiRows`** (`AppendComboRow`, `AppendSliderRow`, …). Give each row a stable `objectName` when `LoadSettings` must resync after profile load (`EffectUiSync`). Prefer caching widget pointers (sliders/combos) when the effect already holds them; use `EffectUiSync` on the nested `NewEffectPanel` when controls live only inside that panel.
 
-**Audio looks:** Volume host under `effects/audio/*.fs` (`drive: audio`, `audio_preset:`). Prefer strip-first looks with zone/controller targeting for floor/wall/ceiling strips; use full-room 3D when one layer should cover everything. Shared audio UI helpers live in `Effects3D/AudioReactiveUi.h`. Global **16-band EQ** is on the **Audio Input** panel (show when any Audio-engine layer is on the stack).
+**Audio looks:** Volume host under `library/audio/*.fs` (`drive: audio`, `audio_preset:`). Prefer strip-first looks with zone/controller targeting for floor/wall/ceiling strips; use full-room 3D when one layer should cover everything. Shared audio UI helpers live in `Effects3D/AudioReactiveUi.h`. Global **16-band EQ** is on the **Audio Input** panel (show when any Audio-engine layer is on the stack).
 
 - Spectrum / strip presets use frequency band + response and sample FFT bins in the Hz range.
 - Level presets use Role / Hz + Feel + Color mode.

@@ -45,6 +45,7 @@
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "GridSpaceUtils.h"
+#include "ZoneGrid3D.h"
 #include <QStackedWidget>
 #include <fstream>
 #include <algorithm>
@@ -200,13 +201,134 @@ void OpenRGB3DSpatialTab::PrepareEffectPackPreview()
 
 void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms, bool force_hw_update)
 {
+    ApplyEffectPackPreviewFrame(pack, local_ms, force_hw_update, nullptr);
+}
+
+void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack,
+                                                     int local_ms,
+                                                     bool force_hw_update,
+                                                     SpatialEffect3D* layer_effect)
+{
     if(!resource_manager)
     {
         return;
     }
     EffectPack::SetEffectScriptDirectory(PluginSettingsPaths::TimelineBlocksDir(resource_manager));
+
+    EffectPack::ApplySpatialContext spatial;
+    const EffectPack::ApplySpatialContext* spatial_ptr = nullptr;
+    if(layer_effect)
+    {
+        spatial.layer_zone_index = -1;
+        if(layer_effect == current_effect_ui && effectStackList())
+        {
+            const int row = effectStackList()->currentRow();
+            if(row >= 0 && row < (int)effect_stack.size() && effect_stack[(size_t)row])
+            {
+                spatial.layer_zone_index = effect_stack[(size_t)row]->zone_index;
+            }
+            else if(effectZoneCombo())
+            {
+                spatial.layer_zone_index = ResolveZoneTargetSelection(effectZoneCombo());
+            }
+        }
+        else
+        {
+            for(const std::unique_ptr<EffectInstance3D>& instance_ptr : effect_stack)
+            {
+                EffectInstance3D* instance = instance_ptr.get();
+                if(instance && instance->effect.get() == layer_effect)
+                {
+                    spatial.layer_zone_index = instance->zone_index;
+                    break;
+                }
+            }
+        }
+
+        ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                                  manual_room_width,
+                                                                  manual_room_height,
+                                                                  manual_room_depth);
+        GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+        GridContext3D room_grid(world_bounds.min_x, world_bounds.max_x,
+                                world_bounds.min_y, world_bounds.max_y,
+                                world_bounds.min_z, world_bounds.max_z,
+                                grid_scale_mm);
+
+        Vector3D led_mu{};
+        if(TryComputeLedCentroid(controller_transforms, true, &led_mu))
+        {
+            room_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
+        }
+
+        std::unique_ptr<GridContext3D> zone_room_grid;
+        std::unique_ptr<GridContext3D> zone_world_grid;
+        const GridContext3D* sample_grid = &room_grid;
+        if(layer_effect->UseZoneGrid() && spatial.layer_zone_index != -1)
+        {
+            if(TryMakeZoneGridContextPair(zone_manager.get(),
+                                          controller_transforms,
+                                          spatial.layer_zone_index,
+                                          nullptr,
+                                          true,
+                                          grid_scale_mm,
+                                          grid_scale_mm,
+                                          zone_room_grid,
+                                          zone_world_grid)
+               && zone_room_grid)
+            {
+                sample_grid = zone_room_grid.get();
+            }
+        }
+        else if(spatial.layer_zone_index != -1)
+        {
+            const ReferenceMode mode = layer_effect->GetReferenceMode();
+            if(mode == REF_MODE_LED_CENTROID)
+            {
+                Vector3D centroid{};
+                if(TryComputeZoneLedCentroid(zone_manager.get(),
+                                             controller_transforms,
+                                             spatial.layer_zone_index,
+                                             nullptr,
+                                             true,
+                                             true,
+                                             &centroid))
+                {
+                    room_grid.SetLedCentroid(centroid.x, centroid.y, centroid.z);
+                }
+            }
+            else if(mode == REF_MODE_TARGET_ZONE_CENTER)
+            {
+                Vector3D center{};
+                if(TryComputeZoneAnchorCenter(zone_manager.get(),
+                                              controller_transforms,
+                                              spatial.layer_zone_index,
+                                              nullptr,
+                                              true,
+                                              true,
+                                              &center))
+                {
+                    room_grid.SetAnchorOverride(center.x, center.y, center.z);
+                }
+            }
+        }
+
+        const Vector3D origin = layer_effect->GetEffectOriginGrid(*sample_grid);
+        // Movie Cue CustomOnly has no Scale slider; fill occupancy from the Spatial Anchor (scale 1.0).
+        const EffectGridAxisHalfExtents he =
+            MakeEffectGpuAtlasHalfExtents(*sample_grid, origin, 1.0f);
+        spatial.has_world_bounds = true;
+        spatial.min_x = origin.x - he.hw;
+        spatial.max_x = origin.x + he.hw;
+        spatial.min_y = origin.y - he.hh;
+        spatial.max_y = origin.y + he.hh;
+        spatial.min_z = origin.z - he.hd;
+        spatial.max_z = origin.z + he.hd;
+        spatial_ptr = &spatial;
+    }
+
     EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
-                               force_hw_update, zone_manager.get());
+                               force_hw_update, zone_manager.get(), spatial_ptr);
     if(viewport)
     {
         viewport->UpdateColors();
@@ -1167,6 +1289,24 @@ void OpenRGB3DSpatialTab::effectOriginChanged(int index)
         else
         {
             current_effect_ui->SetReferenceMode(REF_MODE_ROOM_CENTER);
+        }
+
+        if(effectStackList())
+        {
+            const int current_row = effectStackList()->currentRow();
+            if(current_row >= 0 && current_row < (int)effect_stack.size())
+            {
+                EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
+                if(instance && instance->effect)
+                {
+                    instance->effect->SetReferenceMode(current_effect_ui->GetReferenceMode());
+                    if(ref_point_idx >= 0)
+                    {
+                        instance->effect->SetCustomReferencePoint(origin);
+                    }
+                    instance->saved_settings = std::make_unique<nlohmann::json>(current_effect_ui->SaveSettings());
+                }
+            }
         }
     }
 

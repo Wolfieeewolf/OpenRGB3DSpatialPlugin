@@ -37,7 +37,7 @@ QString FindEffectShaderPath(const QString& id)
     }
     PluginSettingsPaths::EnsurePluginDataLayout(OpenRGB3DSpatialPlugin::APIPointer);
     const QString root = QString::fromStdString(
-        PluginSettingsPaths::EffectsDir(OpenRGB3DSpatialPlugin::APIPointer).string());
+        PluginSettingsPaths::LibraryDir(OpenRGB3DSpatialPlugin::APIPointer).string());
     const QString file_name = id + QStringLiteral(".fs");
     QDirIterator it(root, QStringList() << file_name, QDir::Files, QDirIterator::Subdirectories);
     if(it.hasNext())

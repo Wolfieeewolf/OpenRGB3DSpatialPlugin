@@ -8,9 +8,9 @@ Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cube
 
 | Lane | Entry point | Engine |
 |------|-------------|--------|
-| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Kernel — `patterns/*.kernel` |
-| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field — `effects/shader-field/*.fs` |
-| **3D** | `volumeMain(out, p01)` soft field | Volume — `effects/spatial/<id>.fs` (or audio/media) via FolderVolume |
+| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Kernel — `library/patterns/*.kernel` |
+| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field — `library/shader-field/*.fs` |
+| **3D** | `volumeMain(out, p01)` soft field | Volume — `library/volume/<id>.fs` (or audio/media) via FolderVolume |
 
 Also: **Media** / **Audio** (Volume host + texture or FFT), **Reactive** / **Ambilight** (player codecs), **Games** (programmed packs). Details in [effects-engines.md](effects-engines.md).
 
@@ -20,11 +20,11 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 ## Adapters
 
-**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`.
+**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `library/shader-field/`.
 
-**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `effects/spatial/` for **Volume** (or `effects/audio/` / `effects/media/`) with a FolderVolume `class:` header.
+**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `library/volume/` for **Volume** (or `library/audio/` / `library/media/`) with a FolderVolume `class:` header.
 
-**Strip → 1D:** drop a `patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
+**Strip → 1D:** drop a `library/patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
 
 **Pattern labels:** a combo fed by `pattern:` lines in the effect `.fs` file. Order is the saved index. Text after `|` is the item tooltip.
 

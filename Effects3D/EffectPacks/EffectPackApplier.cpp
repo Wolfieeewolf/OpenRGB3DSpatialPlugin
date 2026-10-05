@@ -2,6 +2,7 @@
 
 #include "EffectPackApplier.h"
 #include "EffectPackApplierDetail.h"
+#include "ZoneManager3D.h"
 
 #include <chrono>
 #include <cstdint>
@@ -85,17 +86,61 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                           bool force_hw_update,
                           ZoneManager3D* zone_manager)
 {
+    return ApplyPackFrame(pack, local_ms, controllers, transforms, force_hw_update, zone_manager, nullptr);
+}
+
+namespace
+{
+
+bool LayerZoneIncludesTransform(int layer_zone_index,
+                                int transform_index,
+                                ZoneManager3D* zone_manager)
+{
+    if(layer_zone_index == -1)
+    {
+        return true;
+    }
+    if(layer_zone_index <= -1000)
+    {
+        return transform_index == -(layer_zone_index + 1000);
+    }
+    if(zone_manager && layer_zone_index >= 0)
+    {
+        if(Zone3D* zone = zone_manager->GetZone(layer_zone_index))
+        {
+            return zone->ContainsController(transform_index);
+        }
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
+ApplyStats ApplyPackFrame(const Pack& pack,
+                          int local_ms,
+                          const std::vector<RGBControllerInterface*>& controllers,
+                          std::vector<std::unique_ptr<ControllerTransform>>* transforms,
+                          bool force_hw_update,
+                          ZoneManager3D* zone_manager,
+                          const ApplySpatialContext* spatial)
+{
     ApplyStats stats;
     std::unordered_set<RGBControllerInterface*> touched;
     const bool use_transforms = transforms && !transforms->empty();
     const RGBColor off = ToRGBColor(0, 0, 0);
+    const int layer_zone = spatial ? spatial->layer_zone_index : -1;
 
     if(use_transforms)
     {
-        for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+        for(int ti = 0; ti < (int)transforms->size(); ++ti)
         {
-            ControllerTransform* transform = transform_ptr.get();
+            ControllerTransform* transform = (*transforms)[(size_t)ti].get();
             if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+            {
+                continue;
+            }
+            if(!LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
             {
                 continue;
             }
@@ -126,7 +171,17 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             const bool want_shared = top && BlockUsesSharedWorldBounds(*top);
             const bool want_sequence = top && BlockUsesSequenceAxis(*top);
 
-            if(want_shared || want_sequence)
+            if(want_shared && spatial && spatial->has_world_bounds)
+            {
+                shared_bounds.min_x = spatial->min_x;
+                shared_bounds.max_x = spatial->max_x;
+                shared_bounds.min_y = spatial->min_y;
+                shared_bounds.max_y = spatial->max_y;
+                shared_bounds.min_z = spatial->min_z;
+                shared_bounds.max_z = spatial->max_z;
+                shared_bounds.valid = true;
+            }
+            else if(want_shared || want_sequence)
             {
                 std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
                 applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
@@ -138,6 +193,19 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 {
                     for(const auto& pair : ordered)
                     {
+                        int ti = -1;
+                        for(int i = 0; i < (int)transforms->size(); ++i)
+                        {
+                            if((*transforms)[(size_t)i].get() == pair.first)
+                            {
+                                ti = i;
+                                break;
+                            }
+                        }
+                        if(!LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
+                        {
+                            continue;
+                        }
                         applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
                     }
                     if(!shared_bounds.valid && TargetIsMultiDeviceGroup(track.target))
@@ -151,6 +219,10 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             for(int ti = 0; ti < (int)transforms->size(); ++ti)
             {
                 ControllerTransform* transform = (*transforms)[(size_t)ti].get();
+                if(!LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
+                {
+                    continue;
+                }
                 if(!TrackAppliesToTransform(pack, track, transform, ti, zone_manager))
                 {
                     continue;
@@ -245,10 +317,14 @@ ApplyStats ApplyPackFrame(const Pack& pack,
 
     if(use_transforms)
     {
-        for(std::unique_ptr<ControllerTransform>& transform_ptr : *transforms)
+        for(int ti = 0; ti < (int)transforms->size(); ++ti)
         {
-            ControllerTransform* transform = transform_ptr.get();
+            ControllerTransform* transform = (*transforms)[(size_t)ti].get();
             if(!transform || transform->hidden_by_virtual || !PackIncludesTransform(pack, transform))
+            {
+                continue;
+            }
+            if(!LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
             {
                 continue;
             }

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 
 namespace EffectPack
@@ -255,17 +256,21 @@ nlohmann::json ToJson(const Pack& pack)
         {
             nlohmann::json bj;
             const std::string effect_id = block.effect_id.empty() ? "solid" : block.effect_id;
+            // Keep a stable, readable field order for hand-editing (matches _template.oreffect.json).
             bj["type"] = effect_id;
             bj["effect"] = effect_id;
             bj["start_ms"] = block.start_ms;
             bj["end_ms"] = block.end_ms;
             bj["intensity"] = block.intensity;
+            bj["min_intensity"] = block.min_intensity;
+            bj["max_intensity"] = block.max_intensity;
             bj["color"] = ColorToHex(block.color);
             bj["color_from"] = ColorToHex(block.color_from);
             bj["color_to"] = ColorToHex(block.color_to);
-            bj["period_ms"] = block.period_ms;
-            bj["min_intensity"] = block.min_intensity;
-            bj["max_intensity"] = block.max_intensity;
+            if(!block.gradient.empty())
+            {
+                bj["gradient"] = GradientToJson(block.gradient);
+            }
             bj["direction"] = DirectionToString(block.direction);
             bj["axis_space"] = AxisSpaceToString(block.axis_space);
             bj["axis_mode"] = (block.axis_mode == AxisMode::Custom) ? "custom" : "preset";
@@ -273,6 +278,7 @@ nlohmann::json ToJson(const Pack& pack)
             bj["axis_pitch_deg"] = block.axis_pitch_deg;
             bj["speed"] = block.speed;
             bj["pulse_length"] = block.pulse_length;
+            bj["period_ms"] = block.period_ms;
             bj["reverse"] = block.reverse;
             if(block.flip_h)
             {
@@ -297,10 +303,6 @@ nlohmann::json ToJson(const Pack& pack)
             if(block.media_scroll)
             {
                 bj["media_scroll"] = true;
-            }
-            if(!block.gradient.empty())
-            {
-                bj["gradient"] = GradientToJson(block.gradient);
             }
             if(!block.intensity_curve.empty())
             {
@@ -595,10 +597,12 @@ bool LoadFromFile(const filesystem::path& path, Pack* out, std::string* error)
         }
         return false;
     }
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     nlohmann::json j;
     try
     {
-        in >> j;
+        // Allow // and /* */ comments so hand-authored packs can document the layout.
+        j = nlohmann::json::parse(text, nullptr, true, true);
     }
     catch(const std::exception& ex)
     {

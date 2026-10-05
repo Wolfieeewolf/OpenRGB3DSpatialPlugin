@@ -6,5 +6,6 @@ void RegisterPlayerEngines()
 {
     RegisterReactiveEngine();
     RegisterScreenMirrorEngine();
+    RegisterMovieCueEngine();
     RegisterShaderFieldEffects();
 }
