@@ -267,7 +267,7 @@ void TriggersPanel::populateList()
                 break;
             }
         }
-        QString label = QStringLiteral("%1  â†’  %2 / %3")
+        QString label = QStringLiteral("%1  →  %2 / %3")
                             .arg(pack_label, QString::fromUtf8(src->displayName()), event_label);
         if(catalog)
         {
@@ -400,7 +400,6 @@ bool TriggersPanel::editBindingDialog(Trigger::Binding* binding)
     });
     refill_events();
 
-    Action::EnsureActionsDir(triggerEffectsDir());
     for(const Action::ActionListEntry& p : Action::ListActions(triggerEffectsDir()))
     {
         pack_combo->addItem(QString::fromStdString(p.name), QString::fromStdString(p.id));
@@ -480,6 +479,12 @@ bool TriggersPanel::editBindingDialog(Trigger::Binding* binding)
 
 void TriggersPanel::onAdd()
 {
+    if(!tab_ || !tab_->resource_manager)
+    {
+        QMessageBox::warning(this, tr("Triggers"),
+                             tr("Plugin data path is not available."));
+        return;
+    }
     Trigger::Binding b;
     if(!editBindingDialog(&b))
     {

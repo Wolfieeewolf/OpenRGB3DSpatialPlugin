@@ -129,7 +129,6 @@ void ActionsPanel::populateList()
         return;
     }
 
-    Action::EnsureActionsDir(dir);
     const auto packs = Action::ListActions(dir);
     for(const auto& entry : packs)
     {
@@ -345,6 +344,12 @@ void ActionsPanel::onImport()
 
 void ActionsPanel::onNew()
 {
+    if(!tab_ || !tab_->resource_manager)
+    {
+        QMessageBox::warning(this, QStringLiteral("Actions"),
+                             QStringLiteral("Plugin data path is not available."));
+        return;
+    }
     ActionEditorDialog* editor = ensureEditor();
     if(!editor)
     {
@@ -432,7 +437,7 @@ void ActionsPanel::onPreview()
     last_elapsed_ms_ = 0;
     setPlayingUi(true);
     timer_->start();
-    ui->statusLabel->setText(QStringLiteral("Playing â€œ%1â€â€¦").arg(QString::fromStdString(pack.name)));
+    ui->statusLabel->setText(QStringLiteral("Playing “%1”…").arg(QString::fromStdString(pack.name)));
 }
 
 void ActionsPanel::onStop()

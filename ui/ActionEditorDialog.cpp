@@ -48,6 +48,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -1650,7 +1651,21 @@ void ActionEditorDialog::onSave()
     filesystem::create_directories(save_dir_, ec);
     if(pack_path_.empty())
     {
-        pack_path_ = save_dir_ / (pack_.id + Action::kFileSuffix);
+        filesystem::path candidate = save_dir_ / (pack_.id + Action::kFileSuffix);
+        if(filesystem::exists(candidate, ec))
+        {
+            for(int n = 2;; ++n)
+            {
+                const std::string id = pack_.id + "_" + std::to_string(n);
+                candidate = save_dir_ / (id + Action::kFileSuffix);
+                if(!filesystem::exists(candidate, ec))
+                {
+                    pack_.id = id;
+                    break;
+                }
+            }
+        }
+        pack_path_ = std::move(candidate);
     }
     std::string err;
     if(!Action::SaveToFile(pack_path_, pack_, &err))

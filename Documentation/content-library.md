@@ -23,7 +23,6 @@ Each feature owns its tree.
 | When → play | `triggers/triggers.json` | Object Creator → Triggers |
 | Film looks | `movie-sync/effects/<category>/` | Movie Sync |
 | Movie Sync catalog / VLC | `movie-sync/catalog.json`, `movie-sync/vlc/` | Movie Sync |
-| Minecraft jar / notes | `game-integrations/minecraft/` | Game |
 | Scene meshes | `meshes/` | Scene props |
 
 ## Tree
@@ -46,8 +45,6 @@ Each feature owns its tree.
     effects/
       explosions|pulses|washes|wraps/
     vlc/
-  game-integrations/
-    minecraft/
   meshes/
 ```
 

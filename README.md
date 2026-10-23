@@ -20,7 +20,7 @@ All drop-in content (`.fs`, `.kernel`, Action Tools `.fx`, trigger/Movie Sync ac
 | **Actions** (Action Editor) | `action-editor/toolbox/` + timelines in `triggers/` / `movie-sync/` |
 | **Movie Sync** | `movie-sync/` + video sidecars |
 | **Triggers** | `triggers/triggers.json` + `triggers/effects/` |
-| **Ambilight / Reactive / Game** | codecs in the DLL (+ optional `game-integrations/minecraft/` jar) |
+| **Ambilight / Reactive / Game** | codecs in the DLL (Minecraft bridge mod under `integrations/minecraft/`) |
 
 ```text
 <OpenRGB config>/plugins/settings/OpenRGB3DSpatialPlugin/
@@ -29,7 +29,6 @@ All drop-in content (`.fs`, `.kernel`, Action Tools `.fx`, trigger/Movie Sync ac
   action-editor/toolbox/
   triggers/
   movie-sync/
-  game-integrations/
   meshes/
 ```
 

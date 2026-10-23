@@ -201,6 +201,11 @@ void LoadCatalog(const filesystem::path& dir, std::vector<Binding>* out, std::ve
         {
             continue;
         }
+        /* User bindings file lives beside optional catalog drops — never treat it as catalog. */
+        if(path.filename() == "triggers.json")
+        {
+            continue;
+        }
         Document doc;
         std::string err;
         const std::string name = path.filename().string();

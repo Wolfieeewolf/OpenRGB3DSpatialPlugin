@@ -23,6 +23,7 @@
 #include <QSet>
 #include <fstream>
 #include <filesystem>
+#include <system_error>
 #include <algorithm>
 
 namespace filesystem = std::filesystem;
@@ -809,6 +810,8 @@ bool OpenRGB3DSpatialTab::SaveCustomController(unsigned int index)
 
     PluginSettingsPaths::EnsurePluginDataLayout(resource_manager);
     const filesystem::path controllers_dir = PluginSettingsPaths::ControllersDir(resource_manager);
+    std::error_code ec;
+    filesystem::create_directories(controllers_dir, ec);
 
     if(virtual_controller_json_files.size() < virtual_controllers.size())
     {

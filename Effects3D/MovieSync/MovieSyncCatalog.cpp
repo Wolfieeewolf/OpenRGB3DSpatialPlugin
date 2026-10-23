@@ -130,19 +130,6 @@ void ScanCategoryFolders(const filesystem::path& movie_effects_dir, Catalog* out
     }
 }
 
-void EnsureCatalogDirs(const filesystem::path& movie_effects_dir)
-{
-    if(movie_effects_dir.empty())
-    {
-        return;
-    }
-    std::error_code ec;
-    filesystem::create_directories(movie_effects_dir / "explosions", ec);
-    filesystem::create_directories(movie_effects_dir / "pulses", ec);
-    filesystem::create_directories(movie_effects_dir / "washes", ec);
-    filesystem::create_directories(movie_effects_dir / "wraps", ec);
-}
-
 const CatalogEffect* FindEffect(const Catalog& catalog, const std::string& effect_id)
 {
     for(const CatalogEffect& e : catalog.effects)

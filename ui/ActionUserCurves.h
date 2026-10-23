@@ -18,7 +18,7 @@ struct Entry
 
 std::vector<Entry> Load(const filesystem::path& path);
 bool Apply(Action::Clip* clip, const QString& preset_id, const filesystem::path& path);
-/** Insert or replace a named curve preset and write user-curves.json. */
+/** Insert or replace a named curve preset and write curves.json (create-on-save). */
 bool Upsert(const filesystem::path& path, const Entry& entry);
 
 } // namespace ActionUserCurves

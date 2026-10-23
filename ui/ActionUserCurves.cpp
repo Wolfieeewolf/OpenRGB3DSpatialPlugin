@@ -102,9 +102,8 @@ std::vector<Entry> Load(const filesystem::path& path)
     QFile file(PathToQString(path));
     if(!file.open(QIODevice::ReadOnly))
     {
-        const std::vector<Entry> defaults = Defaults();
-        Write(path, defaults);
-        return defaults;
+        /* Builtins only — do not create curves.json until Upsert/Save. */
+        return Defaults();
     }
     const QJsonArray arr = QJsonDocument::fromJson(file.readAll()).object().value(QStringLiteral("curves")).toArray();
     std::vector<Entry> entries;

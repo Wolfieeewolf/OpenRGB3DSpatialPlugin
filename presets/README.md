@@ -14,4 +14,4 @@ Copy into:
 
 Same folder names as the presets repo. Map: [Documentation/content-library.md](../Documentation/content-library.md).
 
-`game-integrations/minecraft/` may hold a dropped bridge jar after you build/install one — mod sources are under `integrations/minecraft/` in this repo; packaged content still comes from the presets / release flow you choose.
+Minecraft bridge sources live in `integrations/minecraft/` in this repo; the built jar goes in Minecraft’s mods folder, not AppData.

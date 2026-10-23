@@ -18,8 +18,6 @@ struct ActionListEntry
     std::string loop;
 };
 
-void EnsureActionsDir(const filesystem::path& dir);
-
 std::vector<ActionListEntry> ListActions(const filesystem::path& dir);
 
 bool LoadActionByPath(const filesystem::path& path, Pack* out, std::string* error);

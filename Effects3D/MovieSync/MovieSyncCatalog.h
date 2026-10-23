@@ -28,7 +28,6 @@ filesystem::path CatalogFilePath(const filesystem::path& movie_effects_dir);
 
 bool LoadCatalog(const filesystem::path& catalog_path, Catalog* out, std::string* error);
 void ScanCategoryFolders(const filesystem::path& movie_effects_dir, Catalog* out);
-void EnsureCatalogDirs(const filesystem::path& movie_effects_dir);
 
 const CatalogEffect* FindEffect(const Catalog& catalog, const std::string& effect_id);
 

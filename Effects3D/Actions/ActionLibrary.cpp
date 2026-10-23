@@ -8,16 +8,6 @@
 namespace Action
 {
 
-void EnsureActionsDir(const filesystem::path& dir)
-{
-    if(dir.empty())
-    {
-        return;
-    }
-    std::error_code ec;
-    filesystem::create_directories(dir, ec);
-}
-
 std::vector<ActionListEntry> ListActions(const filesystem::path& dir)
 {
     std::vector<ActionListEntry> out;

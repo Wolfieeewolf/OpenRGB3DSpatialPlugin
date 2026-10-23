@@ -115,18 +115,6 @@ inline filesystem::path MovieSyncEffectsDir(OpenRGBPluginAPIInterface* rm)
     return MovieSyncDir(rm) / "effects";
 }
 
-/* --- Game integrations (drop-in jars / notes; not Effect Library) --- */
-
-inline filesystem::path GameIntegrationsDir(OpenRGBPluginAPIInterface* rm)
-{
-    return PluginRoot(rm) / "game-integrations";
-}
-
-inline filesystem::path MinecraftIntegrationDir(OpenRGBPluginAPIInterface* rm)
-{
-    return GameIntegrationsDir(rm) / "minecraft";
-}
-
 inline filesystem::path StackPresetFile(OpenRGBPluginAPIInterface* rm, const std::string& preset_name)
 {
     return PluginRoot(rm) / (preset_name + ".stack.json");

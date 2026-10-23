@@ -280,8 +280,6 @@ void MovieSyncEffect::onAllowStrobeToggled(bool on)
 void MovieSyncEffect::onReloadCatalog()
 {
     const filesystem::path movie_dir = movieEffectsDir();
-    MovieSync::EnsureCatalogDirs(movie_dir);
-
     catalog_ = {};
     std::string err;
     MovieSync::LoadCatalog(MovieSync::CatalogFilePath(movie_dir), &catalog_, &err);

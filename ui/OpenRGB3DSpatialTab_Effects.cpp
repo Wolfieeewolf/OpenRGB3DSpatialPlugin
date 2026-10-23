@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <system_error>
 #include <set>
 #include <unordered_set>
 
@@ -1164,6 +1165,8 @@ void OpenRGB3DSpatialTab::SaveStackPresets()
     }
 
     PluginSettingsPaths::EnsurePluginDataLayout(resource_manager);
+    std::error_code ec;
+    filesystem::create_directories(PluginSettingsPaths::PluginRoot(resource_manager), ec);
 
     for(unsigned int i = 0; i < stack_presets.size(); i++)
     {

@@ -16,7 +16,7 @@ The player ships a **small set of engines** (power only). Authors drop **content
 | **Reactive** | Player codec (no Effect Library folder) | HID input + waves |
 | **Ambilight** | Player codec (no Effect Library folder) | Screen Mirror capture |
 | **Movie Sync** | Player codec + `movie-sync/effects/` | Script API + VLC sidecars |
-| **Game** | Player codec + `game-integrations/minecraft/` | Minecraft bridge |
+| **Game** | Player codec (`integrations/minecraft/` mod sources) | Minecraft bridge |
 
 Shared hard services (FFT, HID input, screen capture, game telemetry) stay in the player. Engines stay **in the plugin binary** for now; see [extract-later.md](extract-later.md).
 
@@ -96,7 +96,7 @@ Content: `movie-sync/effects/`. Sidecars beside the video.
 
 ## Game engine
 
-Minecraft under library category **Game**. Drop-in jar/notes: `game-integrations/minecraft/`.
+Minecraft under library category **Game**. Bridge mod sources: `integrations/minecraft/` (jar goes in Minecraft’s mods folder).
 
 ## Quick chooser
 
