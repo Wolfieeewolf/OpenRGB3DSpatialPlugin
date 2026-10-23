@@ -36,7 +36,7 @@ class QHideEvent;
 class QShowEvent;
 class QStackedWidget;
 
-namespace EffectPack { struct Pack; }
+namespace Action { struct Pack; }
 
 #include "OpenRGBPluginInterface.h"
 #include "LEDPosition3D.h"
@@ -79,9 +79,9 @@ class OpenRGB3DSpatialTab : public QWidget
     friend class ControllerListPanel;
     friend class EffectLibraryPanel;
     friend class EffectStackPanel;
-    friend class EffectPackPanel;
-    friend class EventBindingsPanel;
-    friend class EffectPackEditorDialog;
+    friend class ActionsPanel;
+    friend class TriggersPanel;
+    friend class ActionEditorDialog;
     friend class ZonesPanel;
     friend class EffectGlobalSettingsPanel;
     friend class AudioInputPanel;
@@ -107,11 +107,11 @@ public:
     void ApplyScenePositionAbsoluteMm(int axis, double value_mm);
     void ScenePositionAxisLimitsMm(int axis, double& min_mm, double& max_mm) const;
 
-    /** Pause spatial stack, then drive hardware + viewport from an effect pack. */
-    void PrepareEffectPackPreview();
-    void ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms, bool force_hw_update = false);
-    /** Apply pack using a stack layer's zone / Spatial Anchor / bounds (Movie Cue). */
-    void ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack,
+    /** Pause spatial stack, then drive hardware + viewport from an Actions. */
+    void PrepareActionPreview();
+    void ApplyActionPreviewFrame(const Action::Pack& pack, int local_ms, bool force_hw_update = false);
+    /** Apply pack using a stack layer's zone / Spatial Anchor / bounds (Movie Sync). */
+    void ApplyActionPreviewFrame(const Action::Pack& pack,
                                      int local_ms,
                                      bool force_hw_update,
                                      SpatialEffect3D* layer_effect);

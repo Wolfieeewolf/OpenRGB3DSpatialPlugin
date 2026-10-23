@@ -63,12 +63,12 @@
      </item>
      <item>
       <property name="text">
-       <string>Effect Pack</string>
+       <string>Actions</string>
       </property>
      </item>
      <item>
       <property name="text">
-       <string>Event Bindings</string>
+       <string>Triggers</string>
       </property>
      </item>
     </widget>
@@ -169,7 +169,7 @@
      <item>
       <widget class="QPushButton" name="importCustomControllerButton">
        <property name="text">
-        <string>Import…</string>
+        <string>Importâ€¦</string>
        </property>
       </widget>
      </item>
@@ -377,7 +377,7 @@
         <bool>false</bool>
        </property>
        <property name="toolTip">
-        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …).</string>
+        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, â€¦).</string>
        </property>
       </widget>
      </item>
@@ -466,8 +466,8 @@
   </layout>
  </widget>
 
-<widget class="QWidget" name="effectPackPage">
-  <layout class="QVBoxLayout" name="effectPackPageLayout">
+<widget class="QWidget" name="actionsPage">
+  <layout class="QVBoxLayout" name="actionsPageLayout">
    <property name="spacing">
     <number>4</number>
    </property>
@@ -484,10 +484,10 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="EffectPackPanel" name="effectPackPanel"/>
+    <widget class="ActionsPanel" name="actionsPanel"/>
    </item>
    <item>
-    <spacer name="effectPackPageSpacer">
+    <spacer name="actionsPageSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
      </property>
@@ -502,8 +502,8 @@
   </layout>
  </widget>
 
-<widget class="QWidget" name="eventBindingsPage">
-  <layout class="QVBoxLayout" name="eventBindingsPageLayout">
+<widget class="QWidget" name="triggersPage">
+  <layout class="QVBoxLayout" name="triggersPageLayout">
    <property name="spacing">
     <number>4</number>
    </property>
@@ -520,10 +520,10 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="EventBindingsPanel" name="eventBindingsPanel"/>
+    <widget class="TriggersPanel" name="triggersPanel"/>
    </item>
    <item>
-    <spacer name="eventBindingsPageSpacer">
+    <spacer name="triggersPageSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
      </property>
@@ -568,14 +568,14 @@
    <header>ZonesPanel.h</header>
   </customwidget>
   <customwidget>
-   <class>EffectPackPanel</class>
+   <class>ActionsPanel</class>
    <extends>QGroupBox</extends>
-   <header>EffectPackPanel.h</header>
+   <header>ActionsPanel.h</header>
   </customwidget>
   <customwidget>
-   <class>EventBindingsPanel</class>
+   <class>TriggersPanel</class>
    <extends>QGroupBox</extends>
-   <header>EventBindingsPanel.h</header>
+   <header>TriggersPanel.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

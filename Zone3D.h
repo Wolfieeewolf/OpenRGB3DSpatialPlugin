@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+﻿// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef ZONE3D_H
 #define ZONE3D_H
@@ -18,7 +18,7 @@ public:
     void RemoveController(int controller_idx);
     void ClearControllers();
     bool ContainsController(int controller_idx) const;
-    /** Replace membership order (used by Effect Pack timeline drag-reorder). */
+    /** Replace membership order (used by Actions timeline drag-reorder). */
     void SetControllers(std::vector<int> indices);
 
     std::string GetName() const { return zone_name; }

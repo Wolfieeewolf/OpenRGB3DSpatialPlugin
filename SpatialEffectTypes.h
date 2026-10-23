@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+﻿// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef SPATIALEFFECTTYPES_H
 #define SPATIALEFFECTTYPES_H
@@ -22,7 +22,7 @@ enum SpatialEffectType
     SPATIAL_EFFECT_MC_DAMAGE = 33,
     SPATIAL_EFFECT_MC_ROOM_AMBILIGHT = 34,
     SPATIAL_EFFECT_REACTIVE = 35,
-    // Additional engines (e.g. Movie Cue) may use local type ids in their .cpp;
+    // Additional engines (e.g. Movie Sync) may use local type ids in their .cpp;
     // library identity is class_name, not this enum.
 };
 

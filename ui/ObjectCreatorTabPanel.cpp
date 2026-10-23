@@ -2,8 +2,8 @@
 
 #include "ObjectCreatorTabPanel.h"
 
-#include "EffectPackPanel.h"
-#include "EventBindingsPanel.h"
+#include "ActionsPanel.h"
+#include "TriggersPanel.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
 #include "ZonesPanel.h"
@@ -46,7 +46,7 @@ void ObjectCreatorTabPanel::applyVisualStyles()
     ui->displayListLabel->setFont(bold);
 
     ui->emptyHelpLabel->setText(QStringLiteral(
-        "Choose Custom Controller, Reference Point, Display Plane, Zone, Effect Pack, or Event Bindings above."));
+        "Choose Custom Controller, Reference Point, Display Plane, Zone, Actions, or Triggers above."));
     PluginUiApplyMutedSecondaryLabel(ui->emptyHelpLabel->label());
     QFont empty_font = ui->emptyHelpLabel->label()->font();
     empty_font.setItalic(true);
@@ -90,7 +90,7 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->editDisplayPlaneButton->setToolTip("Edit selected display plane name and size");
     ui->removeDisplayPlaneButton->setToolTip("Delete selected display plane");
     ui->displayCaptureCombo->setToolTip(
-        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …)."));
+        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, â€¦)."));
 
     connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
             &OpenRGB3DSpatialTab::customControllerSelectionChanged);
@@ -147,13 +147,13 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
     {
         ui->zonesPanel->bindTab(tab);
     }
-    if(ui->effectPackPanel)
+    if(ui->actionsPanel)
     {
-        ui->effectPackPanel->bindTab(tab);
+        ui->actionsPanel->bindTab(tab);
     }
-    if(ui->eventBindingsPanel)
+    if(ui->triggersPanel)
     {
-        ui->eventBindingsPanel->bindTab(tab);
+        ui->triggersPanel->bindTab(tab);
     }
 
     connect(ui->objectTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -193,11 +193,11 @@ void ObjectCreatorTabPanel::onObjectTypeChanged(int index)
             ui->contentStack->setCurrentWidget(ui->zonePage);
             host_tab_->UpdateZonesList();
             break;
-        case ObjectTypeEffectPack:
-            ui->contentStack->setCurrentWidget(ui->effectPackPage);
+        case ObjectTypeActions:
+            ui->contentStack->setCurrentWidget(ui->actionsPage);
             break;
-        case ObjectTypeEventBindings:
-            ui->contentStack->setCurrentWidget(ui->eventBindingsPage);
+        case ObjectTypeTriggers:
+            ui->contentStack->setCurrentWidget(ui->triggersPage);
             break;
         case ObjectTypeSelect:
         default:
@@ -243,14 +243,14 @@ void ObjectCreatorTabPanel::showZoneSection()
     setObjectTypeIndex(ObjectTypeZone);
 }
 
-void ObjectCreatorTabPanel::showEffectPackSection()
+void ObjectCreatorTabPanel::showActionsSection()
 {
-    setObjectTypeIndex(ObjectTypeEffectPack);
+    setObjectTypeIndex(ObjectTypeActions);
 }
 
-void ObjectCreatorTabPanel::showEventBindingsSection()
+void ObjectCreatorTabPanel::showTriggersSection()
 {
-    setObjectTypeIndex(ObjectTypeEventBindings);
+    setObjectTypeIndex(ObjectTypeTriggers);
 }
 
 void ObjectCreatorTabPanel::onReferencePointListRowChanged(int list_row)
@@ -326,5 +326,5 @@ QPushButton* ObjectCreatorTabPanel::createScenePropButton() const { return creat
 QPushButton* ObjectCreatorTabPanel::editScenePropButton() const { return edit_scene_prop_button_; }
 QPushButton* ObjectCreatorTabPanel::removeScenePropButton() const { return remove_scene_prop_button_; }
 ZonesPanel* ObjectCreatorTabPanel::zonesPanel() const { return ui->zonesPanel; }
-EffectPackPanel* ObjectCreatorTabPanel::effectPackPanel() const { return ui->effectPackPanel; }
-EventBindingsPanel* ObjectCreatorTabPanel::eventBindingsPanel() const { return ui->eventBindingsPanel; }
+ActionsPanel* ObjectCreatorTabPanel::actionsPanel() const { return ui->actionsPanel; }
+TriggersPanel* ObjectCreatorTabPanel::triggersPanel() const { return ui->triggersPanel; }

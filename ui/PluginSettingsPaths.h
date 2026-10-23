@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+﻿// SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
 #include "OpenRGBPluginInterface.h"
@@ -27,108 +27,104 @@ inline filesystem::path MeshesDir(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "meshes";
 }
 
-/** All drop-in content: library/<category-slug>/… */
-inline filesystem::path LibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return PluginRoot(rm) / "library";
-}
+/* --- Effect Library (stack engines: Volume / Audio / Media / Shader Field / Patterns) --- */
 
-inline filesystem::path VolumeLibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "volume";
-}
-
-inline filesystem::path AudioLibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "audio";
-}
-
-inline filesystem::path MediaLibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "media";
-}
-
-inline filesystem::path ShaderFieldDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "shader-field";
-}
-
-inline filesystem::path PatternsDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "patterns";
-}
-
-inline filesystem::path PacksDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "packs";
-}
-
-inline filesystem::path PackBlocksDir(OpenRGBPluginAPIInterface* rm)
-{
-    return PacksDir(rm) / "blocks";
-}
-
-inline filesystem::path MovieCueLibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "movie-cue";
-}
-
-inline filesystem::path AmbilightLibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "ambilight";
-}
-
-inline filesystem::path ReactiveLibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "reactive";
-}
-
-inline filesystem::path GameLibraryDir(OpenRGBPluginAPIInterface* rm)
-{
-    return LibraryDir(rm) / "game";
-}
-
-/** @deprecated Prefer LibraryDir(); kept for migration helpers. */
 inline filesystem::path EffectsDir(OpenRGBPluginAPIInterface* rm)
 {
     return PluginRoot(rm) / "effects";
 }
 
-/** @deprecated Prefer PacksDir(). */
-inline filesystem::path TimelinesDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path VolumeEffectsDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PacksDir(rm);
+    return EffectsDir(rm) / "volume";
 }
 
-/** @deprecated Prefer PackBlocksDir(). */
-inline filesystem::path TimelineBlocksDir(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path AudioEffectsDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PackBlocksDir(rm);
+    return EffectsDir(rm) / "audio";
 }
 
-inline filesystem::path UserGradientsFile(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path MediaEffectsDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "user-gradients.json";
+    return EffectsDir(rm) / "media";
 }
 
-inline filesystem::path UserColorsFile(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path ShaderFieldDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "user-colors.json";
+    return EffectsDir(rm) / "shader-field";
 }
 
-inline filesystem::path UserCurvesFile(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path PatternsDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "user-curves.json";
+    return EffectsDir(rm) / "patterns";
 }
 
-inline filesystem::path BindingsDir(OpenRGBPluginAPIInterface* rm)
+/* --- Action Editor toolbox (tools / gradients / curves / colors only) --- */
+
+inline filesystem::path ActionEditorDir(OpenRGBPluginAPIInterface* rm)
 {
-    return PluginRoot(rm) / "bindings";
+    return PluginRoot(rm) / "action-editor";
 }
 
-inline filesystem::path EffectBindingsFile(OpenRGBPluginAPIInterface* rm)
+inline filesystem::path ActionToolboxDir(OpenRGBPluginAPIInterface* rm)
 {
-    return BindingsDir(rm) / "effect-bindings.json";
+    return ActionEditorDir(rm) / "toolbox";
+}
+
+inline filesystem::path ActionEditorGradientsFile(OpenRGBPluginAPIInterface* rm)
+{
+    return ActionEditorDir(rm) / "gradients.json";
+}
+
+inline filesystem::path ActionEditorColorsFile(OpenRGBPluginAPIInterface* rm)
+{
+    return ActionEditorDir(rm) / "colors.json";
+}
+
+inline filesystem::path ActionEditorCurvesFile(OpenRGBPluginAPIInterface* rm)
+{
+    return ActionEditorDir(rm) / "curves.json";
+}
+
+/* --- Triggers (when → play action) --- */
+
+inline filesystem::path TriggersDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "triggers";
+}
+
+inline filesystem::path TriggerEffectsDir(OpenRGBPluginAPIInterface* rm)
+{
+    return TriggersDir(rm) / "effects";
+}
+
+inline filesystem::path TriggersFile(OpenRGBPluginAPIInterface* rm)
+{
+    return TriggersDir(rm) / "triggers.json";
+}
+
+/* --- Movie Sync --- */
+
+inline filesystem::path MovieSyncDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "movie-sync";
+}
+
+inline filesystem::path MovieSyncEffectsDir(OpenRGBPluginAPIInterface* rm)
+{
+    return MovieSyncDir(rm) / "effects";
+}
+
+/* --- Game integrations (drop-in jars / notes; not Effect Library) --- */
+
+inline filesystem::path GameIntegrationsDir(OpenRGBPluginAPIInterface* rm)
+{
+    return PluginRoot(rm) / "game-integrations";
+}
+
+inline filesystem::path MinecraftIntegrationDir(OpenRGBPluginAPIInterface* rm)
+{
+    return GameIntegrationsDir(rm) / "minecraft";
 }
 
 inline filesystem::path StackPresetFile(OpenRGBPluginAPIInterface* rm, const std::string& preset_name)

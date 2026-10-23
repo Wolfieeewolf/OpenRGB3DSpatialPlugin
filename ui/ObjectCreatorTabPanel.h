@@ -10,8 +10,8 @@ class QListWidget;
 class QPushButton;
 class QComboBox;
 class ZonesPanel;
-class EffectPackPanel;
-class EventBindingsPanel;
+class ActionsPanel;
+class TriggersPanel;
 
 namespace Ui {
 class ObjectCreatorTabPanel;
@@ -34,8 +34,8 @@ public:
     void showDisplayPlaneSection();
     void showScenePropSection();
     void showZoneSection();
-    void showEffectPackSection();
-    void showEventBindingsSection();
+    void showActionsSection();
+    void showTriggersSection();
 
     QLabel*         statusLabel() const;
     QListWidget*    customControllersList() const;
@@ -61,8 +61,8 @@ public:
     QPushButton*    editScenePropButton() const;
     QPushButton*    removeScenePropButton() const;
     ZonesPanel*     zonesPanel() const;
-    EffectPackPanel* effectPackPanel() const;
-    EventBindingsPanel* eventBindingsPanel() const;
+    ActionsPanel* actionsPanel() const;
+    TriggersPanel* triggersPanel() const;
 
 private slots:
     void onObjectTypeChanged(int index);
@@ -76,8 +76,8 @@ private:
         ObjectTypeReferencePoint = 2,
         ObjectTypeDisplayPlane = 3,
         ObjectTypeZone = 4,
-        ObjectTypeEffectPack = 5,
-        ObjectTypeEventBindings = 6,
+        ObjectTypeActions = 5,
+        ObjectTypeTriggers = 6,
         ObjectTypeSceneProp = 7,
     };
 

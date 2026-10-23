@@ -112,6 +112,10 @@ INCLUDEPATH += \
     ui \
     ui/widgets \
     Effects3D \
+    Effects3D/MovieSync \
+    Effects3D/Actions \
+    Effects3D/Triggers \
+    Effects3D/FolderVolume \
     Game \
     SpatialSamplers \
     SpatialRoom \
@@ -167,20 +171,20 @@ HEADERS += \
     Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
-    Effects3D/EffectPacks/EffectPack.h \
-    Effects3D/EffectPacks/EffectPackMedia.h \
-    Effects3D/EffectPacks/EffectPackPlayer.h \
-    Effects3D/EffectPacks/EffectPackApplier.h \
-    Effects3D/EffectPacks/EffectPackApplierDetail.h \
-    Effects3D/EffectPacks/EffectPackLibrary.h \
-    Effects3D/EventBindings/EventBinding.h \
-    Effects3D/EventBindings/EventSource.h \
-    Effects3D/EventBindings/ManualEventSource.h \
-    Effects3D/EventBindings/WindowsEventSource.h \
-    Effects3D/EventBindings/LinuxEventSource.h \
-    Effects3D/EventBindings/MacEventSource.h \
-    Effects3D/EventBindings/EventSourceRegistry.h \
-    Effects3D/EventBindings/BindingRuntime.h \
+    Effects3D/Actions/Action.h \
+    Effects3D/Actions/ActionMedia.h \
+    Effects3D/Actions/ActionPlayer.h \
+    Effects3D/Actions/ActionApplier.h \
+    Effects3D/Actions/ActionApplierDetail.h \
+    Effects3D/Actions/ActionLibrary.h \
+    Effects3D/Triggers/TriggerBinding.h \
+    Effects3D/Triggers/TriggerSource.h \
+    Effects3D/Triggers/ManualTriggerSource.h \
+    Effects3D/Triggers/WindowsTriggerSource.h \
+    Effects3D/Triggers/LinuxTriggerSource.h \
+    Effects3D/Triggers/MacTriggerSource.h \
+    Effects3D/Triggers/TriggerSourceRegistry.h \
+    Effects3D/Triggers/TriggerRuntime.h \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
@@ -200,13 +204,13 @@ HEADERS += \
     ui/ObjectCreatorTabPanel.h \
     ui/ControllerListPanel.h \
     ui/EffectLibraryPanel.h \
-    ui/EffectPackPanel.h \
-    ui/EffectPackEditorDialog.h \
-    ui/EffectPackTimelineWidget.h \
-    ui/EffectPackGradientBar.h \
-    ui/EffectPackCurveBar.h \
-    ui/EffectPackToolBar.h \
-    ui/EventBindingsPanel.h \
+    ui/ActionsPanel.h \
+    ui/ActionEditorDialog.h \
+    ui/ActionTimelineWidget.h \
+    ui/ActionGradientBar.h \
+    ui/ActionCurveBar.h \
+    ui/ActionToolBar.h \
+    ui/TriggersPanel.h \
     ui/EffectStackPanel.h \
     ui/ZonesPanel.h \
     ui/EffectGlobalSettingsPanel.h \
@@ -291,10 +295,10 @@ HEADERS += \
     ui/widgets/EffectControlsRoot.h \
     Effects3D/ShaderField/ShaderField.h \
     Effects3D/PlayerEngines.h \
-    Effects3D/MovieCue/MovieCue.h \
-    Effects3D/MovieCue/MovieCueCatalog.h \
-    Effects3D/MovieCue/MovieCueListener.h \
-    Effects3D/MovieCue/MovieCueRuntime.h \
+    Effects3D/MovieSync/MovieSync.h \
+    Effects3D/MovieSync/MovieSyncCatalog.h \
+    Effects3D/MovieSync/MovieSyncListener.h \
+    Effects3D/MovieSync/MovieSyncRuntime.h \
     EffectListManager3D.h \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
@@ -355,23 +359,22 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
-    Effects3D/EffectPacks/EffectPack.cpp \
-    Effects3D/EffectPacks/EffectPackMedia.cpp \
-    Effects3D/EffectPacks/EffectPackSerialize.cpp \
-    Effects3D/EffectPacks/EffectPackBlockEvalAxis.cpp \
-    Effects3D/EffectPacks/EffectPackExamples.cpp \
-    Effects3D/EffectPacks/EffectPackSpatial.cpp \
-    Effects3D/EffectPacks/EffectScript.cpp \
-    Effects3D/EffectPacks/EffectPackApplier.cpp \
-    Effects3D/EffectPacks/EffectPackApplierMatch.cpp \
-    Effects3D/EffectPacks/EffectPackApplierSpatial.cpp \
-    Effects3D/EffectPacks/EffectPackLibrary.cpp \
-    Effects3D/EventBindings/EventBinding.cpp \
-    Effects3D/EventBindings/WindowsEventSource.cpp \
-    Effects3D/EventBindings/LinuxEventSource.cpp \
-    Effects3D/EventBindings/MacEventSource.cpp \
-    Effects3D/EventBindings/EventSourceRegistry.cpp \
-    Effects3D/EventBindings/BindingRuntime.cpp \
+    Effects3D/Actions/Action.cpp \
+    Effects3D/Actions/ActionMedia.cpp \
+    Effects3D/Actions/ActionSerialize.cpp \
+    Effects3D/Actions/ActionClipEvalAxis.cpp \
+    Effects3D/Actions/ActionSpatial.cpp \
+    Effects3D/Actions/ActionScript.cpp \
+    Effects3D/Actions/ActionApplier.cpp \
+    Effects3D/Actions/ActionApplierMatch.cpp \
+    Effects3D/Actions/ActionApplierSpatial.cpp \
+    Effects3D/Actions/ActionLibrary.cpp \
+    Effects3D/Triggers/TriggerBinding.cpp \
+    Effects3D/Triggers/WindowsTriggerSource.cpp \
+    Effects3D/Triggers/LinuxTriggerSource.cpp \
+    Effects3D/Triggers/MacTriggerSource.cpp \
+    Effects3D/Triggers/TriggerSourceRegistry.cpp \
+    Effects3D/Triggers/TriggerRuntime.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/BlockerGridOccluder.cpp \
@@ -391,20 +394,20 @@ SOURCES += \
     ui/ObjectCreatorTabPanel.cpp \
     ui/ControllerListPanel.cpp \
     ui/EffectLibraryPanel.cpp \
-    ui/EffectPackPanel.cpp \
-    ui/EventBindingsPanel.cpp \
-    ui/EffectPackEditorDialog.cpp \
-    ui/EffectPackEditorProps.cpp \
-    ui/EffectPackEditorTimelineBridge.cpp \
-    ui/EffectPackTimelineWidget.cpp \
-    ui/EffectPackTimelinePaint.cpp \
-    ui/EffectPackTimelineInteract.cpp \
-    ui/EffectPackGradientBar.cpp \
-    ui/EffectPackCurveBar.cpp \
-    ui/EffectPackUserGradients.cpp \
-    ui/EffectPackEffectFiles.cpp \
-    ui/EffectPackUserCurves.cpp \
-    ui/EffectPackToolBar.cpp \
+    ui/ActionsPanel.cpp \
+    ui/TriggersPanel.cpp \
+    ui/ActionEditorDialog.cpp \
+    ui/ActionEditorProps.cpp \
+    ui/ActionEditorTimelineBridge.cpp \
+    ui/ActionTimelineWidget.cpp \
+    ui/ActionTimelinePaint.cpp \
+    ui/ActionTimelineInteract.cpp \
+    ui/ActionGradientBar.cpp \
+    ui/ActionCurveBar.cpp \
+    ui/ActionUserGradients.cpp \
+    ui/ActionEffectFiles.cpp \
+    ui/ActionUserCurves.cpp \
+    ui/ActionToolBar.cpp \
     ui/EffectStackPanel.cpp \
     ui/ZonesPanel.cpp \
     ui/EffectGlobalSettingsPanel.cpp \
@@ -477,10 +480,10 @@ SOURCES += \
     Effects3D/FolderVolume/FolderVolumeEffect.cpp \
     Effects3D/PlayerEngines.cpp \
     EffectListManager3D.cpp \
-    Effects3D/MovieCue/MovieCue.cpp \
-    Effects3D/MovieCue/MovieCueCatalog.cpp \
-    Effects3D/MovieCue/MovieCueListener.cpp \
-    Effects3D/MovieCue/MovieCueRuntime.cpp \
+    Effects3D/MovieSync/MovieSync.cpp \
+    Effects3D/MovieSync/MovieSyncCatalog.cpp \
+    Effects3D/MovieSync/MovieSyncListener.cpp \
+    Effects3D/MovieSync/MovieSyncRuntime.cpp \
     Effects3D/ShaderField/ShaderField.cpp \
     Shaders/SpatialShaderEngine.cpp \
     Shaders/SpatialShaderCatalog.cpp \
@@ -577,8 +580,8 @@ FORMS += \
     ui/forms/ControllerListPanel.ui \
     ui/forms/MediaTextureAmbienceBlock.ui \
     ui/forms/EffectLibraryPanel.ui \
-    ui/forms/EffectPackPanel.ui \
-    ui/forms/EventBindingsPanel.ui \
+    ui/forms/ActionsPanel.ui \
+    ui/forms/TriggersPanel.ui \
     ui/forms/EffectStackPanel.ui \
     ui/forms/ZonesPanel.ui \
     ui/forms/EffectGlobalSettingsPanel.ui \
@@ -621,7 +624,7 @@ FORMS += \
 unix:!macx {
     QT += dbus
     # Q_OBJECT helper - only moc on Linux (header is #ifdef Q_OS_LINUX).
-    HEADERS += Effects3D/EventBindings/LinuxLoginWatcher.h
+    HEADERS += Effects3D/Triggers/LinuxLoginWatcher.h
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/

@@ -410,9 +410,9 @@ void RegisterFolderVolumeEffects()
     PluginSettingsPaths::EnsurePluginDataLayout(OpenRGB3DSpatialPlugin::APIPointer);
     auto* rm = OpenRGB3DSpatialPlugin::APIPointer;
     const filesystem::path scan_roots[] = {
-        PluginSettingsPaths::VolumeLibraryDir(rm),
-        PluginSettingsPaths::AudioLibraryDir(rm),
-        PluginSettingsPaths::MediaLibraryDir(rm),
+        PluginSettingsPaths::VolumeEffectsDir(rm),
+        PluginSettingsPaths::AudioEffectsDir(rm),
+        PluginSettingsPaths::MediaEffectsDir(rm),
     };
     for(const filesystem::path& scan_root : scan_roots)
     {

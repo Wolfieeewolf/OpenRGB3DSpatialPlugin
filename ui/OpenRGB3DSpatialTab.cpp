@@ -6,9 +6,9 @@
 #include "EffectControlsHostPanel.h"
 #include "EffectGlobalSettingsPanel.h"
 #include "EffectLibraryPanel.h"
-#include "EffectPackPanel.h"
-#include "EffectPacks/EffectPackApplier.h"
-#include "EffectPacks/EffectScript.h"
+#include "ActionsPanel.h"
+#include "Actions/ActionApplier.h"
+#include "Actions/ActionScript.h"
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
@@ -179,9 +179,9 @@ void OpenRGB3DSpatialTab::showEvent(QShowEvent* event)
 void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
 {
     QWidget::hideEvent(event);
-    if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->effectPackPanel())
+    if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->actionsPanel())
     {
-        ui->objectCreatorTabPanel->effectPackPanel()->stopPreview();
+        ui->objectCreatorTabPanel->actionsPanel()->stopPreview();
     }
     if(viewport)
     {
@@ -189,22 +189,22 @@ void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
     }
 }
 
-void OpenRGB3DSpatialTab::PrepareEffectPackPreview()
+void OpenRGB3DSpatialTab::PrepareActionPreview()
 {
     stopEffectClicked();
     if(!resource_manager)
     {
         return;
     }
-    EffectPack::PrepareControllersForPreview(resource_manager->GetRGBControllers());
+    Action::PrepareControllersForPreview(resource_manager->GetRGBControllers());
 }
 
-void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack, int local_ms, bool force_hw_update)
+void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack, int local_ms, bool force_hw_update)
 {
-    ApplyEffectPackPreviewFrame(pack, local_ms, force_hw_update, nullptr);
+    ApplyActionPreviewFrame(pack, local_ms, force_hw_update, nullptr);
 }
 
-void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pack,
+void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                                      int local_ms,
                                                      bool force_hw_update,
                                                      SpatialEffect3D* layer_effect)
@@ -213,10 +213,10 @@ void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pa
     {
         return;
     }
-    EffectPack::SetEffectScriptDirectory(PluginSettingsPaths::TimelineBlocksDir(resource_manager));
+    Action::SetActionScriptDirectory(PluginSettingsPaths::ActionToolboxDir(resource_manager));
 
-    EffectPack::ApplySpatialContext spatial;
-    const EffectPack::ApplySpatialContext* spatial_ptr = nullptr;
+    Action::ApplySpatialContext spatial;
+    const Action::ApplySpatialContext* spatial_ptr = nullptr;
     if(layer_effect)
     {
         spatial.layer_zone_index = -1;
@@ -314,7 +314,7 @@ void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pa
         }
 
         const Vector3D origin = layer_effect->GetEffectOriginGrid(*sample_grid);
-        // Movie Cue CustomOnly has no Scale slider; fill occupancy from the Spatial Anchor (scale 1.0).
+        // Movie Sync CustomOnly has no Scale slider; fill occupancy from the Spatial Anchor (scale 1.0).
         const EffectGridAxisHalfExtents he =
             MakeEffectGpuAtlasHalfExtents(*sample_grid, origin, 1.0f);
         spatial.has_world_bounds = true;
@@ -327,7 +327,7 @@ void OpenRGB3DSpatialTab::ApplyEffectPackPreviewFrame(const EffectPack::Pack& pa
         spatial_ptr = &spatial;
     }
 
-    EffectPack::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
+    Action::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
                                force_hw_update, zone_manager.get(), spatial_ptr);
     if(viewport)
     {

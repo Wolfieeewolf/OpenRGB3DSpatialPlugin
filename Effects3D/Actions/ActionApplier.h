@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: GPL-2.0-only
+#pragma once
+
+#include "Action.h"
+#include "LEDPosition3D.h"
+#include "RGBControllerInterface.h"
+#include <memory>
+#include <string>
+#include <vector>
+
+class ZoneManager3D;
+
+namespace Action
+{
+
+struct ApplyStats
+{
+    int tracks_applied = 0;
+    int controllers_touched = 0;
+    int viewport_leds_painted = 0;
+};
+
+bool NameMatches(const std::string& haystack, const std::string& needle);
+bool ControllerMatchesDevice(RGBControllerInterface* c, const std::string& device_name);
+int FindZoneIndex(RGBControllerInterface* c, const std::string& zone_name);
+bool PackIncludesTransform(const Pack& pack, ControllerTransform* transform);
+bool TransformMatchesDevice(ControllerTransform* transform, const std::string& device_name);
+bool TransformInSceneZone(ControllerTransform* transform,
+                          int transform_index,
+                          const Target& target,
+                          ZoneManager3D* zone_manager);
+bool TrackAppliesToTransform(const Pack& pack,
+                             const Track& track,
+                             ControllerTransform* transform,
+                             int transform_index,
+                             ZoneManager3D* zone_manager);
+
+void BuildSpatialAxesForTarget(const Pack& pack,
+                               const Target& target,
+                               const Clip& sample,
+                               std::vector<std::unique_ptr<ControllerTransform>>* transforms,
+                               std::vector<float>* out_axes,
+                               std::vector<int>* out_seeds,
+                               std::vector<float>* out_nx = nullptr,
+                               std::vector<float>* out_ny = nullptr,
+                               std::vector<float>* out_nz = nullptr,
+                               ZoneManager3D* zone_manager = nullptr);
+
+ApplyStats ApplyPackFrame(const Pack& pack,
+                          int local_ms,
+                          const std::vector<RGBControllerInterface*>& controllers,
+                          std::vector<std::unique_ptr<ControllerTransform>>* transforms = nullptr,
+                          bool force_hw_update = false,
+                          ZoneManager3D* zone_manager = nullptr);
+
+/** Optional stack-layer spatial settings (Movie Sync / Triggers). */
+struct ApplySpatialContext
+{
+    /** Effect global zone (-1 = all). Filters which controllers/transforms are painted. */
+    int layer_zone_index = -1;
+    /** When set, Room / world clips sample against this AABB (Spatial Anchor occupancy). */
+    bool has_world_bounds = false;
+    float min_x = 0.0f;
+    float max_x = 0.0f;
+    float min_y = 0.0f;
+    float max_y = 0.0f;
+    float min_z = 0.0f;
+    float max_z = 0.0f;
+};
+
+ApplyStats ApplyPackFrame(const Pack& pack,
+                          int local_ms,
+                          const std::vector<RGBControllerInterface*>& controllers,
+                          std::vector<std::unique_ptr<ControllerTransform>>* transforms,
+                          bool force_hw_update,
+                          ZoneManager3D* zone_manager,
+                          const ApplySpatialContext* spatial);
+
+void PrepareControllersForPreview(const std::vector<RGBControllerInterface*>& controllers);
+
+} // namespace Action

@@ -1,23 +1,17 @@
-# presets/
+﻿# presets/
 
-Stock content shipped with the plugin. Mirrors AppData:
+This folder is a **placeholder only**. The plugin is the **engine** (players, codecs, editors, bridges).
 
-```text
-presets/library/
-  volume/          Volume .fs
-  audio/           Audio .fs
-  media/           Media .fs (textures/GIF — not sound/movies)
-  shader-field/    Shader Field .fs
-  patterns/        .kernel
-  packs/           .oreffect.json + blocks/*.fx
-  movie-cue/       Movie Cue catalog + vlc/ + docs/
-  ambilight/       Screen Mirror notes
-  reactive/        Reactive notes
-  game/            Game / Minecraft notes
-```
+**Nothing is shipped here** — no Volume/Audio/Media looks, Action Tools, trigger actions, Movie Sync catalogs, controller layouts, or VLC helpers.
 
-Install into:
+Install all of that from:
 
-`%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\library\`
+[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)
 
-Map: [Documentation/content-library.md](../Documentation/content-library.md).
+Copy into:
+
+`%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\`
+
+Same folder names as the presets repo. Map: [Documentation/content-library.md](../Documentation/content-library.md).
+
+`game-integrations/minecraft/` may hold a dropped bridge jar after you build/install one — mod sources are under `integrations/minecraft/` in this repo; packaged content still comes from the presets / release flow you choose.

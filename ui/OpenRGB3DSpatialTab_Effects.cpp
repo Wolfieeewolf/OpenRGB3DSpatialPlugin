@@ -530,7 +530,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         }
         UpdateEffectOriginCombo();
     }
-    if(instance->effect_class_name == "MovieCue")
+    if(instance->effect_class_name == "MovieSync")
     {
         setStackLayerGlobalChromeVisible(true);
         if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
@@ -562,7 +562,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(idx >= 0) effectBoundsCombo()->setCurrentIndex(idx);
     }
 
-    if(effectOriginCombo() && instance->effect_class_name == "MovieCue")
+    if(effectOriginCombo() && instance->effect_class_name == "MovieSync")
     {
         int data = -1;
         bool apply = true;
