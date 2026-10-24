@@ -1,6 +1,6 @@
 # Effect / Event Maker (design)
 
-Status: **production path** - Actions authoring + Triggers (Manual + Windows + Linux + macOS). Pack format version **5** only; bindings format version **1** only.
+Status: **production path** - Actions authoring + Triggers (Manual + Windows + Linux + macOS). Pack format version **5** (v4 loads and auto-upgrades on open); bindings format version **1** only.
 
 Captures the agreed direction: plugin-wide user-authored Actions bound to event catalogs (games, OS, manual, later media).
 
@@ -51,7 +51,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
   - **Travel** (`axis_space`): Device / Room / Sequence  -  coordinate frame for direction and wipes.
   - **Origin** (`origin_ref`): layout reference point name, or empty = room center.
   - Preset directions or custom yaw/pitch; Left/Right (+/-X), Down/Up (+/-Y), Forward/Back (+/-Z).
-- Storage: `{PluginRoot}/triggers/effects/*.action.json` (Triggers) or `{PluginRoot}/movie-sync/effects/<category>/` (Movie Sync). Format `openrgb3d.action` v4.
+- Storage: `{PluginRoot}/triggers/effects/*.action.json` (Triggers) or `{PluginRoot}/movie-sync/effects/<category>/` (Movie Sync). Format `openrgb3d.action` v5 (v4 accepted and rewritten on load).
 - Libraries start **empty**  -  install looks from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets), or author/Import in the Action Editor.
 
 ### Event edges
@@ -100,7 +100,7 @@ World tools may declare `ribbons: arc` for a CPU room ribbon/tube. The applier r
 
 ## Pack file schema (v5)
 
-Extension: `.action.json` (JSON, UTF-8). Version field required (`5` only; older pack versions are rejected).
+Extension: `.action.json` (JSON, UTF-8). Version field required (`4` or `5`). Saves write `5`. Loading a `4` pack fills missing `play_bounds` (RoomBox on All/scene_zone, TrackLights on device/media) and rewrites the file as `5`. Versions outside that range are rejected.
 
 Hand-authored packs: pack identity -> playback -> tracks -> clip type / timing / brightness / colour / motion. `//` and `/* */` comments are accepted on load; saving from the in-app editor drops comments but keeps this field order. Templates and stock looks live in the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). Folder map: [content-library.md](content-library.md).
 

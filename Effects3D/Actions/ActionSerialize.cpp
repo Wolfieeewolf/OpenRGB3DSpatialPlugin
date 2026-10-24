@@ -412,7 +412,7 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
         return false;
     }
     const int ver = j["version"].get<int>();
-    if(ver != kFormatVersion)
+    if(ver < kMinLoadFormatVersion || ver > kFormatVersion)
     {
         if(error)
         {
@@ -558,6 +558,12 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
                 clip.axis_space = AxisSpace::Device;
                 clip.play_bounds = PlayBounds::TrackLights;
             }
+            // v4 packs lack play_bounds; media always samples track UV locally.
+            if(ver < 5 && IsMediaEffect(clip.effect_id))
+            {
+                clip.axis_space = AxisSpace::Device;
+                clip.play_bounds = PlayBounds::TrackLights;
+            }
             if(bj.contains("axis_space") && bj["axis_space"].is_string())
             {
                 AxisSpace parsed = clip.axis_space;
@@ -672,7 +678,17 @@ bool LoadFromFile(const filesystem::path& path, Pack* out, std::string* error)
         }
         return false;
     }
-    return FromJson(j, out, error);
+    if(!FromJson(j, out, error))
+    {
+        return false;
+    }
+    // v4 → v5: fill play_bounds defaults and rewrite so the next open is already current.
+    const int ver = j["version"].get<int>();
+    if(ver >= kMinLoadFormatVersion && ver < kFormatVersion)
+    {
+        SaveToFile(path, *out, nullptr);
+    }
+    return true;
 }
 
 bool SaveToFile(const filesystem::path& path, const Pack& pack, std::string* error)

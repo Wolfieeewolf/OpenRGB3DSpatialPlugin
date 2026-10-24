@@ -11,6 +11,8 @@ namespace Action
 {
 
 constexpr int kFormatVersion = 5;
+/** Oldest pack version FromJson/LoadFromFile still accept (upgraded in memory / on disk). */
+constexpr int kMinLoadFormatVersion = 4;
 constexpr int kMaxDurationMs = 60000;
 constexpr const char* kFormatId = "openrgb3d.action";
 constexpr const char* kFileSuffix = ".action.json";
