@@ -2,6 +2,8 @@
 
 #include "ActionScript.h"
 #include "ActionDetail.h"
+#include "ActionParticleField.h"
+#include "ActionRibbonField.h"
 #include "ActionVolumeField.h"
 
 #include <algorithm>
@@ -69,6 +71,10 @@ struct Program
     bool axis_angle = false;
     /** GPU volume body id (`shader:` / `field:` header) — empty = CPU-only tool. */
     std::string field_shader;
+    /** CPU particle field mode (`particles:` header) — empty = off. */
+    std::string particles;
+    /** CPU ribbon/tube mode (`ribbons:` header) — empty = off. */
+    std::string ribbons;
     std::vector<std::string> aliases;
 };
 
@@ -149,6 +155,10 @@ enum Fn
     FnFieldB,
     FnFieldA,
     FnFieldPaint,
+    FnParticleD,
+    FnParticlePaint,
+    FnRibbonD,
+    FnRibbonPaint,
 };
 
 struct Tok
@@ -251,6 +261,10 @@ int FnId(const std::string& name)
     if(name == "field_b") return FnFieldB;
     if(name == "field_a") return FnFieldA;
     if(name == "field_paint") return FnFieldPaint;
+    if(name == "particle_d") return FnParticleD;
+    if(name == "particle_paint") return FnParticlePaint;
+    if(name == "ribbon_d") return FnRibbonD;
+    if(name == "ribbon_paint") return FnRibbonPaint;
     return -1;
 }
 
@@ -574,6 +588,7 @@ bool Compile(const std::string& body, Program* prog)
         "intensity", "min_intensity", "max_intensity", "pulse", "seed", "x", "y", "z",
         "nx", "ny", "nz", "radius", "height", "span_x", "span_y", "span_z",
         "dx", "dy", "dz", "invert", "local_ms", "stops",
+        "ox", "oy", "oz", "effect_size",
     };
     for(const char* name : reserved)
     {
@@ -691,6 +706,46 @@ struct Machine
                 {
                     return volume_field::SampleA01(led->nx, led->ny, led->nz);
                 }
+                const int r = (int)std::lround(std::clamp(samp.r, 0.0f, 1.0f) * 255.0f);
+                const int g = (int)std::lround(std::clamp(samp.g, 0.0f, 1.0f) * 255.0f);
+                const int b = (int)std::lround(std::clamp(samp.b, 0.0f, 1.0f) * 255.0f);
+                color = ToRGBColor(r, g, b);
+                return std::max(samp.r, std::max(samp.g, samp.b));
+            }
+            case FnParticleD:
+                if(!led)
+                {
+                    return 0.0f;
+                }
+                return particle_field::SampleDensity01(led->nx, led->ny, led->nz);
+            case FnParticlePaint:
+            {
+                if(!led)
+                {
+                    return 0.0f;
+                }
+                const particle_field::SampleRgb samp =
+                    particle_field::Sample01(led->nx, led->ny, led->nz);
+                const int r = (int)std::lround(std::clamp(samp.r, 0.0f, 1.0f) * 255.0f);
+                const int g = (int)std::lround(std::clamp(samp.g, 0.0f, 1.0f) * 255.0f);
+                const int b = (int)std::lround(std::clamp(samp.b, 0.0f, 1.0f) * 255.0f);
+                color = ToRGBColor(r, g, b);
+                return std::max(samp.r, std::max(samp.g, samp.b));
+            }
+            case FnRibbonD:
+                if(!led)
+                {
+                    return 0.0f;
+                }
+                return ribbon_field::SampleDensity01(led->nx, led->ny, led->nz);
+            case FnRibbonPaint:
+            {
+                if(!led)
+                {
+                    return 0.0f;
+                }
+                const ribbon_field::SampleRgb samp =
+                    ribbon_field::Sample01(led->nx, led->ny, led->nz);
                 const int r = (int)std::lround(std::clamp(samp.r, 0.0f, 1.0f) * 255.0f);
                 const int g = (int)std::lround(std::clamp(samp.g, 0.0f, 1.0f) * 255.0f);
                 const int b = (int)std::lround(std::clamp(samp.b, 0.0f, 1.0f) * 255.0f);
@@ -900,6 +955,54 @@ void ReadProgram(const filesystem::path& file, const std::string& section)
                     prog.world = true;
                 }
             }
+            else if(key == "particles")
+            {
+                prog.particles = val;
+                while(!prog.particles.empty()
+                      && (prog.particles.back() == ' ' || prog.particles.back() == '\t'))
+                {
+                    prog.particles.pop_back();
+                }
+                for(char& c : prog.particles)
+                {
+                    if(c >= 'A' && c <= 'Z')
+                    {
+                        c = (char)(c - 'A' + 'a');
+                    }
+                }
+                if(!prog.particles.empty() && prog.particles != "off" && prog.particles != "none")
+                {
+                    prog.world = true;
+                }
+                else
+                {
+                    prog.particles.clear();
+                }
+            }
+            else if(key == "ribbons" || key == "ribbon")
+            {
+                prog.ribbons = val;
+                while(!prog.ribbons.empty()
+                      && (prog.ribbons.back() == ' ' || prog.ribbons.back() == '\t'))
+                {
+                    prog.ribbons.pop_back();
+                }
+                for(char& c : prog.ribbons)
+                {
+                    if(c >= 'A' && c <= 'Z')
+                    {
+                        c = (char)(c - 'A' + 'a');
+                    }
+                }
+                if(!prog.ribbons.empty() && prog.ribbons != "off" && prog.ribbons != "none")
+                {
+                    prog.world = true;
+                }
+                else
+                {
+                    prog.ribbons.clear();
+                }
+            }
             else if(key == "swatch")
             {
                 int r = 180, g = 180, b = 190;
@@ -1007,6 +1110,8 @@ void SetDirectory(const filesystem::path& dir)
     }
     volume_field::SetToolboxDirectory(dir);
     volume_field::Reset();
+    particle_field::Reset();
+    ribbon_field::Reset();
 }
 
 void ReloadDirectory()
@@ -1022,6 +1127,8 @@ void ReloadDirectory()
         ScanDir(g_dir, "", 0);
     }
     volume_field::Reset();
+    particle_field::Reset();
+    ribbon_field::Reset();
 }
 
 bool Has(const std::string& id)
@@ -1047,6 +1154,30 @@ std::string FieldShader(const std::string& id)
 bool UsesField(const std::string& id)
 {
     return !FieldShader(id).empty();
+}
+
+bool UsesParticles(const std::string& id)
+{
+    return !ParticlesMode(id).empty();
+}
+
+std::string ParticlesMode(const std::string& id)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    const Program* prog = FindProgram(id);
+    return prog ? prog->particles : std::string();
+}
+
+bool UsesRibbons(const std::string& id)
+{
+    return !RibbonsMode(id).empty();
+}
+
+std::string RibbonsMode(const std::string& id)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    const Program* prog = FindProgram(id);
+    return prog ? prog->ribbons : std::string();
 }
 
 bool ColorEnds(const std::string& id)
@@ -1117,6 +1248,13 @@ bool Run(const std::string& id, LedView* led)
     set("nx", led->nx);
     set("ny", led->ny);
     set("nz", led->nz);
+    {
+        const ClipOrigin01 origin = GetActiveClipOrigin01();
+        set("ox", origin.ox);
+        set("oy", origin.oy);
+        set("oz", origin.oz);
+        set("effect_size", origin.size);
+    }
     set("radius", led->radius);
     set("height", led->height);
     set("span_x", led->span_x);

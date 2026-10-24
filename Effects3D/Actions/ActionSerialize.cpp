@@ -3,6 +3,7 @@
 #include "Action.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -278,6 +279,20 @@ nlohmann::json ToJson(const Pack& pack)
             bj["axis_pitch_deg"] = clip.axis_pitch_deg;
             bj["speed"] = clip.speed;
             bj["pulse_length"] = clip.pulse_length;
+            if(!clip.origin_ref.empty())
+            {
+                bj["origin_ref"] = clip.origin_ref;
+            }
+            if(clip.origin_offset_x != 0.0f || clip.origin_offset_y != 0.0f || clip.origin_offset_z != 0.0f)
+            {
+                bj["origin_offset_x"] = clip.origin_offset_x;
+                bj["origin_offset_y"] = clip.origin_offset_y;
+                bj["origin_offset_z"] = clip.origin_offset_z;
+            }
+            if(std::fabs(clip.effect_size - 1.0f) > 1e-4f)
+            {
+                bj["effect_size"] = clip.effect_size;
+            }
             bj["period_ms"] = clip.period_ms;
             bj["reverse"] = clip.reverse;
             if(clip.flip_h)
@@ -473,6 +488,14 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             clip.max_intensity = std::clamp(bj.value("max_intensity", 1.0f), 0.0f, 1.0f);
             clip.speed = std::max(0.05f, bj.value("speed", 1.0f));
             clip.pulse_length = std::clamp(bj.value("pulse_length", 0.25f), 0.02f, 1.0f);
+            if(bj.contains("origin_ref") && bj["origin_ref"].is_string())
+            {
+                clip.origin_ref = bj["origin_ref"].get<std::string>();
+            }
+            clip.origin_offset_x = std::clamp(bj.value("origin_offset_x", 0.0f), -100.0f, 100.0f);
+            clip.origin_offset_y = std::clamp(bj.value("origin_offset_y", 0.0f), -100.0f, 100.0f);
+            clip.origin_offset_z = std::clamp(bj.value("origin_offset_z", 0.0f), -100.0f, 100.0f);
+            clip.effect_size = std::clamp(bj.value("effect_size", 1.0f), 0.05f, 2.0f);
             clip.reverse = bj.value("reverse", false);
             clip.flip_h = bj.value("flip_h", false);
             clip.flip_v = bj.value("flip_v", false);

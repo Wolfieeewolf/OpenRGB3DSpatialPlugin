@@ -12,7 +12,7 @@ The player ships a **small set of engines** (power only). Authors drop **content
 | **Shader Field** | `effects/shader-field/*.fs` | Authors — thin `.fs` |
 | **Patterns** | `effects/patterns/*.kernel` | Authors — strip kernels |
 | **Triggers / Actions** | `triggers/effects/*.action.json` | Action Editor → Save for Triggers |
-| **Action Editor Tools** | `action-editor/toolbox/` | Authors — `.fx` tools; optional `shader:` + `field_*` for GPU volume sample |
+| **Action Editor Tools** | `action-editor/toolbox/` | Authors — `.fx` tools; optional `shader:`/`field_*` (GPU), `particles:`/`particle_*`, or `ribbons:`/`ribbon_*` (CPU) |
 | **Reactive** | Player codec (no Effect Library folder) | HID input + waves |
 | **Ambilight** | Player codec (no Effect Library folder) | Screen Mirror capture |
 | **Movie Sync** | Player codec + `movie-sync/effects/` | Script API + VLC sidecars |

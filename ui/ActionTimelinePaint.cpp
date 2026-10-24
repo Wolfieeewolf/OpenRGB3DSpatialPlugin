@@ -4,6 +4,8 @@
 #include "ActionCatalog.h"
 #include "Actions/ActionApplier.h"
 #include "Actions/ActionScript.h"
+#include "Actions/ActionParticleField.h"
+#include "Actions/ActionRibbonField.h"
 #include "Actions/ActionVolumeField.h"
 #include "ZoneManager3D.h"
 
@@ -88,11 +90,45 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     const std::string effect_id = Action::ClipFileId(sample);
     const bool world_eval = Action::ActionScriptUsesWorld(effect_id);
     const bool field_eval = Action::script::UsesField(effect_id);
-    // Match ApplyPackFrame: prepare GPU field once before any field_* samples.
-    if(field_eval)
+    const bool particle_eval = Action::script::UsesParticles(effect_id);
+    const bool ribbon_eval = Action::script::UsesRibbons(effect_id);
+    auto applyOrigin = [&]() {
+        Action::ClipOrigin01 origin;
+        if(room_bounds_.has_world_bounds)
+        {
+            origin = Action::ResolveClipOrigin01(sample,
+                                                room_bounds_.min_x, room_bounds_.max_x,
+                                                room_bounds_.min_y, room_bounds_.max_y,
+                                                room_bounds_.min_z, room_bounds_.max_z,
+                                                room_bounds_.reference_points);
+        }
+        else
+        {
+            origin = Action::ResolveClipOrigin01(sample, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
+        }
+        Action::SetActiveClipOrigin01(origin);
+        Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+        Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+        Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+    };
+
+    // Match ApplyPackFrame: prepare field/particles/ribbons once before samples.
+    if(field_eval || particle_eval || ribbon_eval)
     {
         static std::uint64_t s_timeline_field_seq = 0;
-        Action::volume_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+        applyOrigin();
+        if(field_eval)
+        {
+            Action::volume_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+        }
+        if(particle_eval)
+        {
+            Action::particle_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+        }
+        if(ribbon_eval)
+        {
+            Action::ribbon_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+        }
     }
 
     auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
@@ -119,7 +155,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
                                                    axes[(size_t)idx], seeds[(size_t)idx],
                                                    c, intens);
         }
-        if(world_eval || field_eval
+        if(world_eval || field_eval || particle_eval || ribbon_eval
            || sample.axis_space == Action::AxisSpace::Room)
         {
             // Do not fake Room/world previews with pack LED index order — that reads as
@@ -146,9 +182,21 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         const float t = (img.width() <= 1) ? 0.0f : (float)x / (float)(img.width() - 1);
         const int ms = sample.start_ms + (int)std::lround(t * (float)dur);
         const int sample_ms = std::min(std::max(ms, sample.start_ms), sample.end_ms - 1);
+        if(field_eval || particle_eval || ribbon_eval)
+        {
+            applyOrigin();
+        }
         if(field_eval)
         {
             Action::volume_field::PrepareForClip(sample, sample_ms, 0);
+        }
+        if(particle_eval)
+        {
+            Action::particle_field::PrepareForClip(sample, sample_ms, 0);
+        }
+        if(ribbon_eval)
+        {
+            Action::ribbon_field::PrepareForClip(sample, sample_ms, 0);
         }
 
         int row = 0;

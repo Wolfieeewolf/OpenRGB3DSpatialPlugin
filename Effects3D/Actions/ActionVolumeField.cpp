@@ -27,6 +27,18 @@ std::unique_ptr<SpatialVolumeFieldAssist> g_assist;
 filesystem::path g_toolbox_dir;
 std::string g_loaded_shader_id;
 std::mutex g_mu;
+float g_ox = 0.5f;
+float g_oy = 0.5f;
+float g_oz = 0.5f;
+float g_size = 1.0f;
+
+void RemapSample01(float* nx, float* ny, float* nz)
+{
+    const float s = std::max(0.05f, g_size);
+    *nx = 0.5f + (*nx - g_ox) / s;
+    *ny = 0.5f + (*ny - g_oy) / s;
+    *nz = 0.5f + (*nz - g_oz) / s;
+}
 
 SpatialVolumeFieldAssist& Assist()
 {
@@ -143,6 +155,17 @@ void Reset()
     std::lock_guard<std::mutex> lock(g_mu);
     g_assist.reset();
     g_loaded_shader_id.clear();
+    g_ox = g_oy = g_oz = 0.5f;
+    g_size = 1.0f;
+}
+
+void SetSampleOrigin01(float ox, float oy, float oz, float size)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_ox = std::clamp(ox, 0.0f, 1.0f);
+    g_oy = std::clamp(oy, 0.0f, 1.0f);
+    g_oz = std::clamp(oz, 0.0f, 1.0f);
+    g_size = std::clamp(size, 0.05f, 2.0f);
 }
 
 bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence)
@@ -200,9 +223,11 @@ SampleRgb Sample01(float nx, float ny, float nz)
     {
         return out;
     }
-    const QVector3D s = g_assist->sample01(std::clamp(nx, 0.0f, 1.0f),
-                                           std::clamp(ny, 0.0f, 1.0f),
-                                           std::clamp(nz, 0.0f, 1.0f));
+    float x = nx, y = ny, z = nz;
+    RemapSample01(&x, &y, &z);
+    const QVector3D s = g_assist->sample01(std::clamp(x, 0.0f, 1.0f),
+                                           std::clamp(y, 0.0f, 1.0f),
+                                           std::clamp(z, 0.0f, 1.0f));
     out.r = s.x();
     out.g = s.y();
     out.b = s.z();
@@ -216,9 +241,11 @@ float SampleScalar01(float nx, float ny, float nz)
     {
         return 0.0f;
     }
-    return g_assist->sampleScalar01(std::clamp(nx, 0.0f, 1.0f),
-                                    std::clamp(ny, 0.0f, 1.0f),
-                                    std::clamp(nz, 0.0f, 1.0f));
+    float x = nx, y = ny, z = nz;
+    RemapSample01(&x, &y, &z);
+    return g_assist->sampleScalar01(std::clamp(x, 0.0f, 1.0f),
+                                    std::clamp(y, 0.0f, 1.0f),
+                                    std::clamp(z, 0.0f, 1.0f));
 }
 
 float SampleA01(float nx, float ny, float nz)

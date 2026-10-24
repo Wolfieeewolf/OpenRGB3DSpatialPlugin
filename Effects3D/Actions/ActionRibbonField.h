@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: GPL-2.0-only
+#pragma once
+
+#include "Action.h"
+
+#include <cstdint>
+#include <string>
+
+namespace Action
+{
+namespace ribbon_field
+{
+
+struct SampleRgb
+{
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+};
+
+void Reset();
+
+/** Room-normalized origin + size for ribbon centre / extent (default center / 1). */
+void SetSampleOrigin01(float ox, float oy, float oz, float size);
+
+/**
+ * Rebuild the room-space ribbon polyline for this clip (once per pack frame).
+ * No-op unless the effect declares `ribbons:` in its `.fx` header.
+ */
+bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence);
+
+bool IsAvailable();
+
+/** Soft tube density at normalized room coords (0..1). */
+float SampleDensity01(float nx, float ny, float nz);
+
+/** Density-tinted RGB along the ribbon (neon-style chroma). */
+SampleRgb Sample01(float nx, float ny, float nz);
+
+} // namespace ribbon_field
+} // namespace Action

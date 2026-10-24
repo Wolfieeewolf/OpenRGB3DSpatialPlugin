@@ -155,6 +155,11 @@ private:
     QSpinBox* max_intensity_spin_ = nullptr;
     QDoubleSpinBox* speed_spin_ = nullptr;
     QSpinBox* pulse_length_spin_ = nullptr;
+    QComboBox* origin_ref_combo_ = nullptr;
+    QSpinBox* origin_offset_x_spin_ = nullptr;
+    QSpinBox* origin_offset_y_spin_ = nullptr;
+    QSpinBox* origin_offset_z_spin_ = nullptr;
+    QSpinBox* effect_size_spin_ = nullptr;
     QComboBox* direction_combo_ = nullptr;
     QComboBox* axis_space_combo_ = nullptr;
     QComboBox* axis_mode_combo_ = nullptr;
@@ -183,6 +188,7 @@ private:
     QWidget* direction_section_ = nullptr;
     QWidget* speed_section_ = nullptr;
     QWidget* pulse_section_ = nullptr;
+    QWidget* placement_section_ = nullptr;
     QWidget* color_to_row_ = nullptr;
     QWidget* period_row_ = nullptr;
     QWidget* speed_row_ = nullptr;

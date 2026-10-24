@@ -69,14 +69,20 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 |----------|--------|
 | Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve`, `wave` |
 | Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars`, `scanner` |
-| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst`, `field_ripple` (GPU field) |
+| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst`, `field_ripple` / `field_strata` / `field_burst` (GPU field), `spark_burst` / `particle_rain` / `particle_fireflies` (CPU particles), `neon_ribbon` / `ribbon_helix` (CPU tube) |
 | Media | `media_image`, `media_gif`, `media_text` — still/GIF/marquee mapped onto Device UV (PixelScreen / xLights matrix style) |
 
 **Tools** (Basic / Pixel / Volume / Media) are **not** bundled — they load from `action-editor/toolbox/` after you install the presets pack. Editor chrome only: solid colors, gradients, and intensity/period curves in `ActionCatalog`.
 
-### Action volume-field engine (Atmos sample)
+### Action volume-field engine (Roomscape sample)
 
-World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares `SpatialVolumeFieldAssist` once per pack frame; `.fx` samples with `field_r` / `field_g` / `field_b` / `field_a` / `field_paint()` at the LED’s room-normalized XYZ. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
+World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares `SpatialVolumeFieldAssist` once per pack frame; `.fx` samples with `field_r` / `field_g` / `field_b` / `field_a` / `field_paint()` at the LED’s room-normalized XYZ. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
+
+World tools may declare `particles: burst` for a CPU room particle field. The applier rebuilds the particle set once per pack frame; `.fx` samples with `particle_d` / `particle_paint()` at room-normalized XYZ.
+
+World tools may declare `ribbons: arc` for a CPU room ribbon/tube. The applier rebuilds a soft polyline tube once per pack frame; `.fx` samples with `ribbon_d` / `ribbon_paint()` at room-normalized XYZ. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
+
+**Placement (world / field / particle / ribbon):** clip `origin_ref` (scene reference point name, or empty = room center), `origin_offset_x/y/z` (% of half-room, same as Spatial effects), and `effect_size` (0.05–2.0). Scripts can read `ox` / `oy` / `oz` / `effect_size`. Sampling still uses the full room AABB.
 
 ## Pack file schema (v4)
 

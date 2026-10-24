@@ -467,12 +467,74 @@ bool ClipUsesSharedWorldBounds(const Clip& clip)
     {
         return true;
     }
-    // GPU field tools sample a shared room atlas — always use world AABB.
-    if(script::UsesField(script::FileId(clip)))
+    // GPU field / CPU particle tools sample shared room space — always use world AABB.
+    const std::string effect_id = script::FileId(clip);
+    if(script::UsesField(effect_id) || script::UsesParticles(effect_id)
+       || script::UsesRibbons(effect_id))
     {
         return true;
     }
     return clip.axis_space == AxisSpace::Sequence && !ClipUsesSequenceAxis(clip);
+}
+
+namespace
+{
+ClipOrigin01 g_active_origin;
+}
+
+void SetActiveClipOrigin01(const ClipOrigin01& origin)
+{
+    g_active_origin = origin;
+    g_active_origin.size = std::clamp(g_active_origin.size, 0.05f, 2.0f);
+}
+
+ClipOrigin01 GetActiveClipOrigin01()
+{
+    return g_active_origin;
+}
+
+ClipOrigin01 ResolveClipOrigin01(const Clip& clip,
+                                 float min_x, float max_x,
+                                 float min_y, float max_y,
+                                 float min_z, float max_z,
+                                 const std::vector<NamedWorldPoint>& refs)
+{
+    ClipOrigin01 out;
+    out.size = std::clamp(clip.effect_size, 0.05f, 2.0f);
+
+    const float span_x = max_x - min_x;
+    const float span_y = max_y - min_y;
+    const float span_z = max_z - min_z;
+    float wx = 0.5f * (min_x + max_x);
+    float wy = 0.5f * (min_y + max_y);
+    float wz = 0.5f * (min_z + max_z);
+
+    if(!clip.origin_ref.empty())
+    {
+        for(const NamedWorldPoint& p : refs)
+        {
+            if(p.name == clip.origin_ref)
+            {
+                wx = p.x;
+                wy = p.y;
+                wz = p.z;
+                break;
+            }
+        }
+    }
+
+    const float half_w = span_x * 0.5f;
+    const float half_h = span_y * 0.5f;
+    const float half_d = span_z * 0.5f;
+    wx += (std::clamp(clip.origin_offset_x, -100.0f, 100.0f) / 100.0f) * half_w;
+    wy += (std::clamp(clip.origin_offset_y, -100.0f, 100.0f) / 100.0f) * half_h;
+    wz += (std::clamp(clip.origin_offset_z, -100.0f, 100.0f) / 100.0f) * half_d;
+
+    constexpr float eps = 1e-6f;
+    out.ox = (span_x > eps) ? std::clamp((wx - min_x) / span_x, 0.0f, 1.0f) : 0.5f;
+    out.oy = (span_y > eps) ? std::clamp((wy - min_y) / span_y, 0.0f, 1.0f) : 0.5f;
+    out.oz = (span_z > eps) ? std::clamp((wz - min_z) / span_z, 0.0f, 1.0f) : 0.5f;
+    return out;
 }
 
 using clip_eval::WorldCtx;

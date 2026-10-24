@@ -137,6 +137,17 @@ struct Clip
     float axis_pitch_deg = 0.0f;
     float speed = 1.0f;
     float pulse_length = 0.25f;
+    /**
+     * Scene reference point name for world/field/particle origin (empty = room center).
+     * Matched against VirtualReferencePoint3D::GetName().
+     */
+    std::string origin_ref;
+    /** Offset from origin as % of half-room size (−100…100), same as SpatialEffect3D. */
+    float origin_offset_x = 0.0f;
+    float origin_offset_y = 0.0f;
+    float origin_offset_z = 0.0f;
+    /** Spatial scale of the effect (0.05…2.0; 1 = default room footprint). */
+    float effect_size = 1.0f;
     bool reverse = false;
     /** Mirror sample U (left↔right on media / axis). */
     bool flip_h = false;
@@ -264,6 +275,37 @@ float SampleSpinAngle(const Clip& clip,
 
 bool ClipUsesSharedWorldBounds(const Clip& clip);
 bool ClipUsesSequenceAxis(const Clip& clip);
+
+/** Room-normalized origin (0..1) + size for field/particle sampling. */
+struct ClipOrigin01
+{
+    float ox = 0.5f;
+    float oy = 0.5f;
+    float oz = 0.5f;
+    float size = 1.0f;
+};
+
+struct NamedWorldPoint
+{
+    std::string name;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
+/**
+ * Resolve clip origin into room-normalized coords.
+ * Missing / unknown origin_ref → room center; offset uses half-room % like Spatial.
+ */
+ClipOrigin01 ResolveClipOrigin01(const Clip& clip,
+                                 float min_x, float max_x,
+                                 float min_y, float max_y,
+                                 float min_z, float max_z,
+                                 const std::vector<NamedWorldPoint>& refs);
+
+/** Last resolved origin for the active prepare/eval (script `ox`/`oy`/`oz`/`effect_size`). */
+void SetActiveClipOrigin01(const ClipOrigin01& origin);
+ClipOrigin01 GetActiveClipOrigin01();
 
 nlohmann::json ToJson(const Pack& pack);
 bool FromJson(const nlohmann::json& j, Pack* out, std::string* error);

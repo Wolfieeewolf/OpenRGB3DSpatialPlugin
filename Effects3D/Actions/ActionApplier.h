@@ -48,6 +48,8 @@ struct ApplySpatialContext
     float max_y = 0.0f;
     float min_z = 0.0f;
     float max_z = 0.0f;
+    /** Scene reference points for clip origin_ref resolution. */
+    std::vector<NamedWorldPoint> reference_points;
 };
 
 void BuildSpatialAxesForTarget(const Pack& pack,

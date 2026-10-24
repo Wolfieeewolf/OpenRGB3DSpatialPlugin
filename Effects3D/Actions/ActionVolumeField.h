@@ -24,6 +24,9 @@ void SetToolboxDirectory(const filesystem::path& dir);
 /** Drop cached GL body / assist state (call when toolbox reloads). */
 void Reset();
 
+/** Room-normalized origin + size for Sample* remap (default center / 1). */
+void SetSampleOrigin01(float ox, float oy, float oz, float size);
+
 /**
  * Prepare the GPU volume atlas for this clip's field shader (once per pack frame
  * / render_sequence). No-op if the effect has no `shader:` / `field:` header.

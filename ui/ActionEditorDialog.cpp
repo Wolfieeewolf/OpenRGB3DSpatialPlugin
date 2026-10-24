@@ -620,6 +620,37 @@ void ActionEditorDialog::buildUi()
     static_cast<EffectCollapsibleSection*>(pulse_section_)->bodyLayout()->addLayout(pulse_form);
     props_inner_layout->addWidget(pulse_section_);
 
+    placement_section_ = new EffectCollapsibleSection(QStringLiteral("Placement"));
+    static_cast<EffectCollapsibleSection*>(placement_section_)->setExpanded(true);
+    origin_ref_combo_ = new QComboBox();
+    origin_ref_combo_->setToolTip(QStringLiteral("Scene reference point for the effect centre (Room center if none)"));
+    origin_offset_x_spin_ = new QSpinBox();
+    origin_offset_x_spin_->setRange(-100, 100);
+    origin_offset_x_spin_->setSuffix(QStringLiteral("%"));
+    origin_offset_y_spin_ = new QSpinBox();
+    origin_offset_y_spin_->setRange(-100, 100);
+    origin_offset_y_spin_->setSuffix(QStringLiteral("%"));
+    origin_offset_z_spin_ = new QSpinBox();
+    origin_offset_z_spin_->setRange(-100, 100);
+    origin_offset_z_spin_->setSuffix(QStringLiteral("%"));
+    effect_size_spin_ = new QSpinBox();
+    effect_size_spin_->setRange(5, 200);
+    effect_size_spin_->setValue(100);
+    effect_size_spin_->setSuffix(QStringLiteral("%"));
+    effect_size_spin_->setToolTip(QStringLiteral("Spatial footprint of the effect (100% = default room scale)"));
+    const auto ox_field = attachIntSpinSlider(origin_offset_x_spin_, QStringLiteral("Offset X (% of half room)"), 1, 5);
+    const auto oy_field = attachIntSpinSlider(origin_offset_y_spin_, QStringLiteral("Offset Y (% of half room)"), 1, 5);
+    const auto oz_field = attachIntSpinSlider(origin_offset_z_spin_, QStringLiteral("Offset Z (% of half room)"), 1, 5);
+    const auto size_field = attachIntSpinSlider(effect_size_spin_, QStringLiteral("Effect size"), 1, 5);
+    auto* place_form = new QFormLayout();
+    place_form->addRow(QStringLiteral("Origin"), origin_ref_combo_);
+    place_form->addRow(QStringLiteral("Offset X"), ox_field.first);
+    place_form->addRow(QStringLiteral("Offset Y"), oy_field.first);
+    place_form->addRow(QStringLiteral("Offset Z"), oz_field.first);
+    place_form->addRow(QStringLiteral("Size"), size_field.first);
+    static_cast<EffectCollapsibleSection*>(placement_section_)->bodyLayout()->addLayout(place_form);
+    props_inner_layout->addWidget(placement_section_);
+
     props_inner_layout->setSpacing(8);
     props_inner_layout->addStretch(1);
     props_scroll->setWidget(props_inner);
@@ -720,6 +751,26 @@ void ActionEditorDialog::buildUi()
     connect(max_intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(speed_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(pulse_length_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    if(origin_ref_combo_)
+    {
+        connect(origin_ref_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    }
+    if(origin_offset_x_spin_)
+    {
+        connect(origin_offset_x_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    }
+    if(origin_offset_y_spin_)
+    {
+        connect(origin_offset_y_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    }
+    if(origin_offset_z_spin_)
+    {
+        connect(origin_offset_z_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    }
+    if(effect_size_spin_)
+    {
+        connect(effect_size_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    }
     connect(direction_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(flip_direction_button_, &QPushButton::clicked, this, &ActionEditorDialog::onFlipDirection);
     connect(reverse_check_, &QCheckBox::toggled, this, &ActionEditorDialog::onClipFieldChanged);

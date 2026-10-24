@@ -10,6 +10,8 @@
 #include "Actions/Action.h"
 #include "Actions/ActionApplier.h"
 #include "Actions/ActionScript.h"
+#include "Actions/ActionParticleField.h"
+#include "Actions/ActionRibbonField.h"
 #include "Actions/ActionVolumeField.h"
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
@@ -225,6 +227,22 @@ bool OpenRGB3DSpatialTab::GetActionRoomWorldBounds(Action::ApplySpatialContext* 
     out->max_y = world_bounds.max_y;
     out->min_z = world_bounds.min_z;
     out->max_z = world_bounds.max_z;
+    out->reference_points.clear();
+    out->reference_points.reserve(reference_points.size());
+    for(const auto& rp : reference_points)
+    {
+        if(!rp)
+        {
+            continue;
+        }
+        Action::NamedWorldPoint p;
+        p.name = rp->GetName();
+        const Vector3D pos = rp->GetPosition();
+        p.x = pos.x;
+        p.y = pos.y;
+        p.z = pos.z;
+        out->reference_points.push_back(std::move(p));
+    }
     return true;
 }
 
@@ -361,6 +379,22 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
         spatial.max_y = origin.y + he.hh;
         spatial.min_z = origin.z - he.hd;
         spatial.max_z = origin.z + he.hd;
+        // Still publish scene refs so Action origin_ref resolves in Movie Sync preview.
+        spatial.reference_points.clear();
+        for(const auto& rp : reference_points)
+        {
+            if(!rp)
+            {
+                continue;
+            }
+            Action::NamedWorldPoint p;
+            p.name = rp->GetName();
+            const Vector3D pos = rp->GetPosition();
+            p.x = pos.x;
+            p.y = pos.y;
+            p.z = pos.z;
+            spatial.reference_points.push_back(std::move(p));
+        }
         spatial_ptr = &spatial;
     }
 
@@ -376,12 +410,14 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
         if((overlay_seq & 1ull) == 0ull)
         {
             float min_x = 0.0f, max_x = 0.0f, min_y = 0.0f, max_y = 0.0f, min_z = 0.0f, max_z = 0.0f;
+            std::vector<Action::NamedWorldPoint> overlay_refs;
             bool have_bounds = false;
             if(spatial_ptr && spatial_ptr->has_world_bounds)
             {
                 min_x = spatial_ptr->min_x; max_x = spatial_ptr->max_x;
                 min_y = spatial_ptr->min_y; max_y = spatial_ptr->max_y;
                 min_z = spatial_ptr->min_z; max_z = spatial_ptr->max_z;
+                overlay_refs = spatial_ptr->reference_points;
                 have_bounds = true;
             }
             else
@@ -392,6 +428,7 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                     min_x = room.min_x; max_x = room.max_x;
                     min_y = room.min_y; max_y = room.max_y;
                     min_z = room.min_z; max_z = room.max_z;
+                    overlay_refs = std::move(room.reference_points);
                     have_bounds = true;
                 }
             }
@@ -425,6 +462,8 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                         }
                         const std::string id = Action::script::FileId(*top);
                         if(Action::script::UsesWorld(id) || Action::script::UsesField(id)
+                           || Action::script::UsesParticles(id)
+                           || Action::script::UsesRibbons(id)
                            || Action::IsMediaClip(*top))
                         {
                             world_clips.push_back(top);
@@ -433,13 +472,28 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
 
                     if(!world_clips.empty())
                     {
-                        // One field atlas at a time — prepare per clip, then stamp voxels.
+                        // One field/particle/ribbon set at a time — prepare per clip, then stamp voxels.
                         static std::uint64_t s_overlay_field_seq = 0;
                         for(const Action::Clip* clip : world_clips)
                         {
-                            if(Action::script::UsesField(Action::script::FileId(*clip)))
+                            const std::string cid = Action::script::FileId(*clip);
+                            Action::ClipOrigin01 origin = Action::ResolveClipOrigin01(
+                                *clip, min_x, max_x, min_y, max_y, min_z, max_z, overlay_refs);
+                            Action::SetActiveClipOrigin01(origin);
+                            Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+                            Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+                            Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+                            if(Action::script::UsesField(cid))
                             {
                                 Action::volume_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            if(Action::script::UsesParticles(cid))
+                            {
+                                Action::particle_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            if(Action::script::UsesRibbons(cid))
+                            {
+                                Action::ribbon_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
                             }
                             for(int ix = 0; ix < nx; ++ix)
                             {

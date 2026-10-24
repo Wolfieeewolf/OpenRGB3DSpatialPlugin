@@ -11,6 +11,7 @@
 #include "PluginSettingsPaths.h"
 #include "Actions/ActionApplier.h"
 #include "Actions/ActionMedia.h"
+#include "Actions/ActionScript.h"
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
@@ -555,6 +556,13 @@ void ActionEditorDialog::updatePropVisibility()
     const bool fade = knobs.knob_color_to;
     const bool needs_direction = knobs.knob_direction;
     const bool needs_pulse_length = knobs.knob_pulse;
+    const std::string effect_id = b ? Action::script::FileId(*b) : std::string();
+    const bool needs_placement = b && (Action::script::UsesWorld(effect_id)
+                                       || Action::script::UsesField(effect_id)
+                                       || Action::script::UsesParticles(effect_id)
+                                       || Action::script::UsesRibbons(effect_id)
+                                       || Action::IsMediaClip(*b)
+                                       || b->axis_space == Action::AxisSpace::Room);
     const bool needs_media_path = knobs.knob_media_path
         || (b && (b->effect_id == "media_image" || b->effect_id == "media_gif"));
     const bool needs_media_text = knobs.knob_media_text || (b && b->effect_id == "media_text");
@@ -660,6 +668,10 @@ void ActionEditorDialog::updatePropVisibility()
     if(pulse_section_)
     {
         pulse_section_->setVisible(needs_pulse_length);
+    }
+    if(placement_section_)
+    {
+        placement_section_->setVisible(ok && needs_placement);
     }
     if(min_intensity_row_)
     {
@@ -1162,6 +1174,14 @@ void ActionEditorDialog::applyClipToForm()
     setSpinEnabled(period_spin_, ok);
     direction_combo_->setEnabled(ok);
     setSpinEnabled(pulse_length_spin_, ok);
+    setSpinEnabled(origin_offset_x_spin_, ok);
+    setSpinEnabled(origin_offset_y_spin_, ok);
+    setSpinEnabled(origin_offset_z_spin_, ok);
+    setSpinEnabled(effect_size_spin_, ok);
+    if(origin_ref_combo_)
+    {
+        origin_ref_combo_->setEnabled(ok);
+    }
     if(gradient_bar_)
     {
         gradient_bar_->setEnabled(ok);
@@ -1200,6 +1220,49 @@ void ActionEditorDialog::applyClipToForm()
     }
     speed_spin_->setValue(b->speed);
     pulse_length_spin_->setValue((int)std::lround(std::clamp(b->pulse_length, 0.02f, 1.0f) * 100.0f));
+    if(origin_ref_combo_)
+    {
+        origin_ref_combo_->blockSignals(true);
+        origin_ref_combo_->clear();
+        origin_ref_combo_->addItem(QStringLiteral("Room center"), QString());
+        if(tab_)
+        {
+            Action::ApplySpatialContext room;
+            if(tab_->GetActionRoomWorldBounds(&room))
+            {
+                for(const Action::NamedWorldPoint& p : room.reference_points)
+                {
+                    const QString name = QString::fromStdString(p.name);
+                    origin_ref_combo_->addItem(name, name);
+                }
+            }
+        }
+        const QString want = QString::fromStdString(b->origin_ref);
+        int oidx = want.isEmpty() ? 0 : origin_ref_combo_->findData(want);
+        if(oidx < 0)
+        {
+            origin_ref_combo_->addItem(want + QStringLiteral(" (missing)"), want);
+            oidx = origin_ref_combo_->count() - 1;
+        }
+        origin_ref_combo_->setCurrentIndex(oidx);
+        origin_ref_combo_->blockSignals(false);
+    }
+    if(origin_offset_x_spin_)
+    {
+        origin_offset_x_spin_->setValue((int)std::lround(std::clamp(b->origin_offset_x, -100.0f, 100.0f)));
+    }
+    if(origin_offset_y_spin_)
+    {
+        origin_offset_y_spin_->setValue((int)std::lround(std::clamp(b->origin_offset_y, -100.0f, 100.0f)));
+    }
+    if(origin_offset_z_spin_)
+    {
+        origin_offset_z_spin_->setValue((int)std::lround(std::clamp(b->origin_offset_z, -100.0f, 100.0f)));
+    }
+    if(effect_size_spin_)
+    {
+        effect_size_spin_->setValue((int)std::lround(std::clamp(b->effect_size, 0.05f, 2.0f) * 100.0f));
+    }
     const int dir_idx = direction_combo_->findData((int)b->direction);
     direction_combo_->setCurrentIndex(dir_idx >= 0 ? dir_idx : 1);
     if(axis_space_combo_)
@@ -1307,6 +1370,26 @@ void ActionEditorDialog::applyFormToSelectedClip()
     }
     b->speed = (float)speed_spin_->value();
     b->pulse_length = pulse_length_spin_->value() / 100.0f;
+    if(origin_ref_combo_)
+    {
+        b->origin_ref = origin_ref_combo_->currentData().toString().toStdString();
+    }
+    if(origin_offset_x_spin_)
+    {
+        b->origin_offset_x = (float)origin_offset_x_spin_->value();
+    }
+    if(origin_offset_y_spin_)
+    {
+        b->origin_offset_y = (float)origin_offset_y_spin_->value();
+    }
+    if(origin_offset_z_spin_)
+    {
+        b->origin_offset_z = (float)origin_offset_z_spin_->value();
+    }
+    if(effect_size_spin_)
+    {
+        b->effect_size = effect_size_spin_->value() / 100.0f;
+    }
     b->direction = (Action::Direction)direction_combo_->currentData().toInt();
     if(reverse_check_)
     {
