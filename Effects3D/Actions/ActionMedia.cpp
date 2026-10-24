@@ -4,6 +4,7 @@
 #include "MediaTextureEffectUtils.h"
 
 #include <QFont>
+#include <QFontInfo>
 #include <QFontMetrics>
 #include <QImage>
 #include <QImageReader>
@@ -94,8 +95,30 @@ const MediaFrames* LoadImageOrGif(const std::string& path)
     return &inserted.first->second;
 }
 
+QFont LedMarqueeFont()
+{
+    QFont font(QStringLiteral("Consolas"));
+    if(!QFontInfo(font).exactMatch())
+    {
+        font = QFont(QStringLiteral("Courier New"));
+    }
+    if(!QFontInfo(font).exactMatch())
+    {
+        font = QFont(QStringLiteral("monospace"));
+    }
+    font.setBold(true);
+    font.setStyleStrategy(QFont::NoAntialias);
+    font.setPixelSize(12);
+    return font;
+}
+
 QImage RasterizeText(const Clip& clip)
 {
+    if(clip.media_text.empty())
+    {
+        return QImage();
+    }
+
     const std::string key = clip.media_text + "|" + std::to_string(clip.color)
         + "|" + std::to_string((int)(clip.intensity * 100))
         + "|" + (clip.media_scroll ? "s" : "n");
@@ -108,20 +131,13 @@ QImage RasterizeText(const Clip& clip)
         }
     }
 
-    const QString text = QString::fromStdString(
-        clip.media_text.empty() ? std::string("TEXT") : clip.media_text);
-    // Crisp bitmap glyphs for sparse LED matrices — no AA, bold, large pixels.
-    QFont font(QStringLiteral("Arial"));
-    font.setBold(true);
-    font.setStyleStrategy(QFont::NoAntialias);
-    font.setPixelSize(48);
-
-    QFontMetrics fm(font);
-    const int pad = 2;
-    const int tw = std::max(8, fm.horizontalAdvance(text) + pad * 2);
-    const int th = std::max(8, fm.height() + pad * 2);
-    // Tight canvas; marquee only needs a short gap, not a double-wide empty field.
-    const int gap = clip.media_scroll ? std::max(th, tw / 4) : 0;
+    const QString text = QString::fromStdString(clip.media_text);
+    const QFont font = LedMarqueeFont();
+    const QFontMetrics fm(font);
+    const int pad = 1;
+    const int tw = std::max(4, fm.horizontalAdvance(text) + pad * 2);
+    const int th = std::max(4, fm.height() + pad * 2);
+    const int gap = clip.media_scroll ? std::max(th, fm.horizontalAdvance(QLatin1Char('M'))) : 0;
     const int canvas_w = tw + gap;
     QImage img(canvas_w, th, QImage::Format_ARGB32);
     img.fill(qRgba(0, 0, 0, 0));
@@ -133,14 +149,13 @@ QImage RasterizeText(const Clip& clip)
     p.drawText(pad, pad + fm.ascent(), text);
     p.end();
 
-    // Binary threshold so LED samples hit full-on or off (readable words).
     for(int y = 0; y < img.height(); ++y)
     {
         QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(y));
         for(int x = 0; x < img.width(); ++x)
         {
             const int a = qAlpha(line[x]);
-            if(a >= 128)
+            if(a >= 96)
             {
                 line[x] = qRgba(qRed(line[x]), qGreen(line[x]), qBlue(line[x]), 255);
             }
@@ -183,50 +198,85 @@ const QImage* FrameForTime(const MediaFrames& media, int elapsed_ms)
     return &media.frames.back();
 }
 
-void ScrollUv(const Clip& clip, int local_ms, float* u, float* v)
+void ScrollPhase(const Clip& clip, int local_ms, float* du, float* dv)
 {
-    if(!u || !v)
+    if(!du || !dv)
     {
         return;
     }
+    *du = 0.0f;
+    *dv = 0.0f;
     const int elapsed = std::max(0, local_ms - clip.start_ms);
     const float speed = std::max(0.05f, clip.speed);
     const float period = std::max(50.0f, (float)std::max(1, clip.period_ms) / speed);
     const float phase = (float)elapsed / period;
-    float du = 0.0f;
-    float dv = 0.0f;
     switch(clip.direction)
     {
         case Direction::Left:
         case Direction::NegX:
-            du = phase;
+            *du = phase;
             break;
         case Direction::Right:
         case Direction::PosX:
-            du = -phase;
+            *du = -phase;
             break;
         case Direction::Up:
         case Direction::PosY:
-            dv = -phase;
+            *dv = -phase;
             break;
         case Direction::Down:
         case Direction::NegY:
-            dv = phase;
+            *dv = phase;
             break;
         case Direction::Forward:
         case Direction::Back:
         case Direction::PosZ:
         case Direction::NegZ:
-            du = phase;
+            *du = phase;
             break;
     }
     if(clip.reverse)
     {
-        du = -du;
-        dv = -dv;
+        *du = -*du;
+        *dv = -*dv;
     }
-    *u = MediaTextureEffect::Frac01(*u + du);
-    *v = MediaTextureEffect::Frac01(*v + dv);
+}
+
+/** Map device UV → texture UV (marquee uses an aspect-correct scroll window). */
+void MapSampleUv(const Clip& clip,
+                 const QImage& img,
+                 float u,
+                 float v,
+                 float uv_aspect,
+                 int local_ms,
+                 float* out_u,
+                 float* out_v)
+{
+    float su = std::clamp(u, 0.0f, 1.0f);
+    float sv = std::clamp(v, 0.0f, 1.0f);
+
+    const bool text_marquee = (clip.effect_id == "media_text" && clip.media_scroll
+                               && !img.isNull() && img.width() > 0 && img.height() > 0);
+    if(text_marquee)
+    {
+        const float img_aspect = (float)img.width() / (float)img.height();
+        const float device_aspect = std::max(0.25f, uv_aspect);
+        float window = device_aspect / std::max(0.25f, img_aspect);
+        window = std::clamp(window, 0.06f, 1.0f);
+        su *= window;
+    }
+
+    if(clip.media_scroll)
+    {
+        float du = 0.0f;
+        float dv = 0.0f;
+        ScrollPhase(clip, local_ms, &du, &dv);
+        su = MediaTextureEffect::Frac01(su + du);
+        sv = MediaTextureEffect::Frac01(sv + dv);
+    }
+
+    *out_u = su;
+    *out_v = sv;
 }
 
 int UvToX(const QImage& img, float u)
@@ -360,9 +410,15 @@ bool EvaluateMediaAtUv(const Clip& clip,
                        float ny,
                        RGBColor* out_color,
                        float* out_intensity,
-                       bool collapse_v)
+                       bool collapse_v,
+                       float uv_aspect)
 {
     if(local_ms < clip.start_ms || local_ms >= clip.end_ms || clip.end_ms <= clip.start_ms)
+    {
+        return false;
+    }
+
+    if(clip.effect_id == "media_text" && clip.media_text.empty())
     {
         return false;
     }
@@ -370,18 +426,21 @@ bool EvaluateMediaAtUv(const Clip& clip,
     float u = std::clamp(nx, 0.0f, 1.0f);
     float v = std::clamp(ny, 0.0f, 1.0f);
     ApplyClipUvTransform(clip, &u, &v);
-    if(clip.media_scroll)
-    {
-        ScrollUv(clip, local_ms, &u, &v);
-    }
 
     RGBColor color = 0;
     bool lit = false;
     if(clip.effect_id == "media_text")
     {
         const QImage text = RasterizeText(clip);
-        color = collapse_v ? SampleColumnReduce(text, u, &lit)
-                           : SampleNearestAlpha(text, u, v, &lit);
+        if(text.isNull())
+        {
+            return false;
+        }
+        float su = u;
+        float sv = v;
+        MapSampleUv(clip, text, u, v, uv_aspect, local_ms, &su, &sv);
+        color = collapse_v ? SampleColumnReduce(text, su, &lit)
+                           : SampleNearestAlpha(text, su, sv, &lit);
         if(!lit)
         {
             return false;
@@ -394,10 +453,11 @@ bool EvaluateMediaAtUv(const Clip& clip,
         {
             return false;
         }
-        // Nearest + alpha (and column-reduce on strips) stays sharper on sparse LEDs
-        // than bilinear, which muddies edges and ignores transparency.
-        color = collapse_v ? SampleColumnReduce(frame, u, &lit)
-                           : SampleNearestAlpha(frame, u, v, &lit);
+        float su = u;
+        float sv = v;
+        MapSampleUv(clip, frame, u, v, uv_aspect, local_ms, &su, &sv);
+        color = collapse_v ? SampleColumnReduce(frame, su, &lit)
+                           : SampleNearestAlpha(frame, su, sv, &lit);
         if(!lit)
         {
             return false;

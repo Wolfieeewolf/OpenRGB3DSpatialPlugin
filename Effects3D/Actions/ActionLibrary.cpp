@@ -7,6 +7,61 @@
 
 namespace Action
 {
+namespace
+{
+
+bool AppendPackFromFile(const filesystem::path& path,
+                        const std::string& category,
+                        std::vector<ActionListEntry>* out)
+{
+    if(!out)
+    {
+        return false;
+    }
+    const std::string name = path.filename().string();
+    if(!IsActionFileName(name))
+    {
+        return false;
+    }
+    Pack pack;
+    std::string err;
+    if(!LoadFromFile(path, &pack, &err))
+    {
+        return false;
+    }
+    ActionListEntry item;
+    item.id = pack.id;
+    item.name = pack.name.empty() ? pack.id : pack.name;
+    item.path = path;
+    item.duration_ms = pack.duration_ms;
+    item.category = category;
+    switch(pack.loop)
+    {
+        case LoopMode::Once: item.loop = "once"; break;
+        case LoopMode::Forever: item.loop = "forever"; break;
+        case LoopMode::WhileActive: item.loop = "while_active"; break;
+        default: item.loop = "once"; break;
+    }
+    out->push_back(std::move(item));
+    return true;
+}
+
+void ScanDirFiles(const filesystem::path& dir,
+                  const std::string& category,
+                  std::vector<ActionListEntry>* out)
+{
+    std::error_code ec;
+    for(const auto& entry : filesystem::directory_iterator(dir, ec))
+    {
+        if(ec || !entry.is_regular_file())
+        {
+            continue;
+        }
+        AppendPackFromFile(entry.path(), category, out);
+    }
+}
+
+} // namespace
 
 std::vector<ActionListEntry> ListActions(const filesystem::path& dir)
 {
@@ -16,40 +71,33 @@ std::vector<ActionListEntry> ListActions(const filesystem::path& dir)
     {
         return out;
     }
+
+    // Root packs first (category empty).
+    ScanDirFiles(dir, std::string(), &out);
+
+    // One level of category subfolders (same depth as Movie Sync effects/).
     for(const auto& entry : filesystem::directory_iterator(dir, ec))
     {
-        if(ec || !entry.is_regular_file())
+        if(ec || !entry.is_directory())
         {
             continue;
         }
-        const filesystem::path path = entry.path();
-        const std::string name = path.filename().string();
-        if(!IsActionFileName(name))
+        const std::string category = entry.path().filename().string();
+        if(category.empty() || category[0] == '.' || category[0] == '_')
         {
             continue;
         }
-        Pack pack;
-        std::string err;
-        if(!LoadFromFile(path, &pack, &err))
-        {
-            continue;
-        }
-        ActionListEntry item;
-        item.id = pack.id;
-        item.name = pack.name.empty() ? pack.id : pack.name;
-        item.path = path;
-        item.duration_ms = pack.duration_ms;
-        switch(pack.loop)
-        {
-            case LoopMode::Once: item.loop = "once"; break;
-            case LoopMode::Forever: item.loop = "forever"; break;
-            case LoopMode::WhileActive: item.loop = "while_active"; break;
-            default: item.loop = "once"; break;
-        }
-        out.push_back(std::move(item));
+        ScanDirFiles(entry.path(), category, &out);
     }
+
     std::sort(out.begin(), out.end(),
-              [](const ActionListEntry& a, const ActionListEntry& b) { return a.name < b.name; });
+              [](const ActionListEntry& a, const ActionListEntry& b) {
+                  if(a.category != b.category)
+                  {
+                      return a.category < b.category;
+                  }
+                  return a.name < b.name;
+              });
     return out;
 }
 

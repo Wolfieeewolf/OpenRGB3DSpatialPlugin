@@ -14,7 +14,8 @@ bool EvaluateMediaAtUv(const Clip& clip,
                        float ny,
                        RGBColor* out_color,
                        float* out_intensity,
-                       bool collapse_v = false);
+                       bool collapse_v = false,
+                       float uv_aspect = 1.0f);
 
 void InvalidateMediaCache(const std::string& path = {});
 

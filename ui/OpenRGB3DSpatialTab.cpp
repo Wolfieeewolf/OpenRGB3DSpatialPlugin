@@ -264,7 +264,7 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
 
     Action::ApplySpatialContext spatial;
     const Action::ApplySpatialContext* spatial_ptr = nullptr;
-    // Full room box for Action Editor preview (LEDs + overlay). Never LED cluster AABB.
+    // Room box context for Action preview (RoomBox cues + origin_ref).
     if(!layer_effect)
     {
         if(GetActionRoomWorldBounds(&spatial))
@@ -460,11 +460,7 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                         {
                             continue;
                         }
-                        const std::string id = Action::script::FileId(*top);
-                        if(Action::script::UsesWorld(id) || Action::script::UsesField(id)
-                           || Action::script::UsesParticles(id)
-                           || Action::script::UsesRibbons(id)
-                           || Action::IsMediaClip(*top))
+                        if(Action::ClipUsesRoomBoxBounds(*top))
                         {
                             world_clips.push_back(top);
                         }

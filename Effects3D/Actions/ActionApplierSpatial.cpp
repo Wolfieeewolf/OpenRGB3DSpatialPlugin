@@ -90,7 +90,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
 
     const Clip* top = FindActiveClip(track, local_ms);
     const bool use_device = top && top->axis_space == AxisSpace::Device;
-    const bool use_shared = top && ClipUsesSharedWorldBounds(*top) && shared_bounds && shared_bounds->valid;
+    const bool use_shared = top && shared_bounds && shared_bounds->valid && !use_device;
     const bool use_sequence = top && ClipUsesSequenceAxis(*top)
         && sequence_axes && sequence_axes->size() == matching.size();
 
@@ -347,14 +347,14 @@ void BuildSpatialAxesForTarget(const Pack& pack,
     probe.target = target;
     const bool use_device = sample.axis_space == AxisSpace::Device;
     const bool use_sequence = ClipUsesSequenceAxis(sample);
-    const bool use_shared = ClipUsesSharedWorldBounds(sample);
+    const bool use_room_box = ClipUsesRoomBoxBounds(sample);
     const bool angular = EffectAxisAngle(ClipFileId(sample)) && !use_sequence;
 
     std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
     applier_detail::BuildOrderedSequenceLeds(pack, probe, transforms, zone_manager, &ordered);
 
     applier_detail::SampleBounds shared_bounds;
-    if(use_shared)
+    if(use_room_box)
     {
         if(!room_bounds || !room_bounds->has_world_bounds)
         {
@@ -372,7 +372,10 @@ void BuildSpatialAxesForTarget(const Pack& pack,
     {
         for(const auto& pair : ordered)
         {
-            applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
+            if(pair.second)
+            {
+                applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
+            }
         }
     }
 

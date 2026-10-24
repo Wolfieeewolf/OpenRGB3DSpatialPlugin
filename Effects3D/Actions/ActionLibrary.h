@@ -16,8 +16,14 @@ struct ActionListEntry
     filesystem::path path;
     int duration_ms = 0;
     std::string loop;
+    /** Subfolder under triggers/effects/ (empty = packs in the root). */
+    std::string category;
 };
 
+/**
+ * List action packs in `dir` and one level of subfolders (skip `.` / `_` names).
+ * Root packs have empty category; subfolder packs use the folder name.
+ */
 std::vector<ActionListEntry> ListActions(const filesystem::path& dir);
 
 bool LoadActionByPath(const filesystem::path& path, Pack* out, std::string* error);

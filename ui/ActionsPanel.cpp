@@ -8,6 +8,7 @@
 #include "PluginUiUtils.h"
 #include "ui_ActionsPanel.h"
 
+#include <QComboBox>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -15,9 +16,11 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QTimer>
 
 #include <algorithm>
+#include <set>
 #include <system_error>
 
 namespace
@@ -44,6 +47,9 @@ bool IsActionFilename(const QString& name)
 {
     return name.endsWith(QString::fromUtf8(Action::kFileSuffix), Qt::CaseInsensitive);
 }
+
+/** Sentinel for "show every category". */
+constexpr const char* kCategoryAll = "__all__";
 } // namespace
 
 ActionsPanel::ActionsPanel(QWidget* parent)
@@ -80,6 +86,8 @@ void ActionsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     PluginUiApplyMutedSecondaryLabel(ui->statusLabel);
 
     connect(ui->refreshButton, &QPushButton::clicked, this, &ActionsPanel::onRefresh);
+    connect(ui->categoryCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ActionsPanel::onCategoryFilterChanged);
     connect(ui->previewButton, &QPushButton::clicked, this, &ActionsPanel::onPreview);
     connect(ui->stopButton, &QPushButton::clicked, this, &ActionsPanel::onStop);
     connect(ui->newButton, &QPushButton::clicked, this, &ActionsPanel::onNew);
@@ -90,6 +98,7 @@ void ActionsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         onEdit();
     });
 
+    rebuildCategoryCombo();
     populateList();
 }
 
@@ -119,6 +128,67 @@ void ActionsPanel::selectPathInList(const QString& path)
     }
 }
 
+QString ActionsPanel::selectedCategoryFilter() const
+{
+    if(!ui || !ui->categoryCombo)
+    {
+        return QString::fromUtf8(kCategoryAll);
+    }
+    return ui->categoryCombo->currentData().toString();
+}
+
+filesystem::path ActionsPanel::selectedEffectsSaveDir() const
+{
+    const filesystem::path root = triggerEffectsDir();
+    if(root.empty())
+    {
+        return {};
+    }
+    const QString filter = selectedCategoryFilter();
+    if(filter.isEmpty() || filter == QLatin1String(kCategoryAll))
+    {
+        return root;
+    }
+    return root / QStringToPath(filter);
+}
+
+void ActionsPanel::rebuildCategoryCombo()
+{
+    if(!ui || !ui->categoryCombo)
+    {
+        return;
+    }
+    const QString previous = selectedCategoryFilter();
+    QSignalBlocker blocker(ui->categoryCombo);
+    ui->categoryCombo->clear();
+    ui->categoryCombo->addItem(tr("All"), QString::fromUtf8(kCategoryAll));
+    ui->categoryCombo->addItem(tr("(root)"), QString());
+
+    const filesystem::path dir = triggerEffectsDir();
+    std::set<std::string> cats;
+    if(!dir.empty())
+    {
+        for(const Action::ActionListEntry& e : Action::ListActions(dir))
+        {
+            if(!e.category.empty())
+            {
+                cats.insert(e.category);
+            }
+        }
+    }
+    for(const std::string& cat : cats)
+    {
+        ui->categoryCombo->addItem(QString::fromStdString(cat), QString::fromStdString(cat));
+    }
+
+    int idx = ui->categoryCombo->findData(previous);
+    if(idx < 0)
+    {
+        idx = 0;
+    }
+    ui->categoryCombo->setCurrentIndex(idx);
+}
+
 void ActionsPanel::populateList()
 {
     ui->packList->clear();
@@ -129,26 +199,51 @@ void ActionsPanel::populateList()
         return;
     }
 
+    const QString filter = selectedCategoryFilter();
     const auto packs = Action::ListActions(dir);
-    for(const auto& entry : packs)
+    int shown = 0;
+    for(const Action::ActionListEntry& entry : packs)
     {
-        auto* item = new QListWidgetItem(
-            QStringLiteral("%1 (%2 ms, %3)")
-                .arg(QString::fromStdString(entry.name))
-                .arg(entry.duration_ms)
-                .arg(QString::fromStdString(entry.loop)));
+        const QString cat = QString::fromStdString(entry.category);
+        if(filter != QLatin1String(kCategoryAll))
+        {
+            if(filter.isEmpty())
+            {
+                if(!entry.category.empty())
+                {
+                    continue;
+                }
+            }
+            else if(cat != filter)
+            {
+                continue;
+            }
+        }
+
+        QString label = QStringLiteral("%1 (%2 ms, %3)")
+                            .arg(QString::fromStdString(entry.name))
+                            .arg(entry.duration_ms)
+                            .arg(QString::fromStdString(entry.loop));
+        if(filter == QLatin1String(kCategoryAll) && !entry.category.empty())
+        {
+            label = QStringLiteral("[%1] %2").arg(cat, label);
+        }
+        auto* item = new QListWidgetItem(label);
         item->setData(Qt::UserRole, PathToQString(entry.path));
         item->setData(Qt::UserRole + 1, QString::fromStdString(entry.id));
+        item->setData(Qt::UserRole + 2, cat);
         ui->packList->addItem(item);
+        ++shown;
     }
 
-    if(packs.empty())
+    if(shown == 0)
     {
         ui->statusLabel->setText(QStringLiteral("No actions"));
     }
     else if(!player_.IsPlaying())
     {
-        ui->statusLabel->setText(QStringLiteral("%1 trigger action(s) in triggers/effects/").arg((int)packs.size()));
+        ui->statusLabel->setText(
+            QStringLiteral("%1 action(s) in triggers/effects/").arg(shown));
     }
 }
 
@@ -157,6 +252,10 @@ void ActionsPanel::setPlayingUi(bool playing)
     ui->previewButton->setEnabled(!playing);
     ui->stopButton->setEnabled(playing);
     ui->refreshButton->setEnabled(!playing);
+    if(ui->categoryCombo)
+    {
+        ui->categoryCombo->setEnabled(!playing);
+    }
     ui->newButton->setEnabled(!playing);
     ui->editButton->setEnabled(!playing);
     ui->importButton->setEnabled(!playing);
@@ -200,6 +299,12 @@ ActionEditorDialog* ActionsPanel::ensureEditor()
 void ActionsPanel::onRefresh()
 {
     stopPreview();
+    rebuildCategoryCombo();
+    populateList();
+}
+
+void ActionsPanel::onCategoryFilterChanged()
+{
     populateList();
 }
 
@@ -253,7 +358,7 @@ void ActionsPanel::onExport()
 
 void ActionsPanel::onImport()
 {
-    const filesystem::path dir = triggerEffectsDir();
+    const filesystem::path dir = selectedEffectsSaveDir();
     if(dir.empty())
     {
         return;
@@ -305,7 +410,7 @@ void ActionsPanel::onImport()
             const auto reply = QMessageBox::question(
                 this,
                 QStringLiteral("Replace pack?"),
-                QStringLiteral("%1 is already in triggers/effects/.\n\nReplace it?").arg(src_info.fileName()),
+                QStringLiteral("%1 is already in that folder.\n\nReplace it?").arg(src_info.fileName()),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::No);
             if(reply != QMessageBox::Yes)
@@ -324,6 +429,7 @@ void ActionsPanel::onImport()
         ++copied;
     }
 
+    rebuildCategoryCombo();
     populateList();
     if(!last_path.isEmpty())
     {
@@ -356,7 +462,10 @@ void ActionsPanel::onNew()
         return;
     }
     stopPreview();
-    editor->NewPack(triggerEffectsDir());
+    const filesystem::path save_dir = selectedEffectsSaveDir();
+    std::error_code ec;
+    filesystem::create_directories(save_dir, ec);
+    editor->NewPack(save_dir);
 }
 
 void ActionsPanel::onEdit()
@@ -379,6 +488,7 @@ void ActionsPanel::onEdit()
 
 void ActionsPanel::onEditorSaved(const QString& path)
 {
+    rebuildCategoryCombo();
     populateList();
     selectPathInList(path);
 }

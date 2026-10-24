@@ -162,6 +162,7 @@ private:
     QSpinBox* effect_size_spin_ = nullptr;
     QComboBox* direction_combo_ = nullptr;
     QComboBox* axis_space_combo_ = nullptr;
+    QComboBox* play_bounds_combo_ = nullptr;
     QComboBox* axis_mode_combo_ = nullptr;
     QDoubleSpinBox* axis_yaw_spin_ = nullptr;
     QDoubleSpinBox* axis_pitch_spin_ = nullptr;

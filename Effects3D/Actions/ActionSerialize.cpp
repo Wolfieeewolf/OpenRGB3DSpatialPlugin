@@ -93,6 +93,32 @@ bool AxisSpaceFromString(const std::string& s, AxisSpace* out)
     return false;
 }
 
+std::string PlayBoundsToString(PlayBounds b)
+{
+    switch(b)
+    {
+        case PlayBounds::RoomBox: return "room_box";
+        case PlayBounds::TrackLights: return "track_lights";
+        default:
+        {
+            const PlayBounds unused = b;
+            (void)unused;
+            return "track_lights";
+        }
+    }
+}
+
+bool PlayBoundsFromString(const std::string& s, PlayBounds* out)
+{
+    if(!out)
+    {
+        return false;
+    }
+    if(s == "room_box") { *out = PlayBounds::RoomBox; return true; }
+    if(s == "track_lights") { *out = PlayBounds::TrackLights; return true; }
+    return false;
+}
+
 std::string ColorToHex(RGBColor c)
 {
     char buf[8];
@@ -199,14 +225,14 @@ bool DirectionFromString(const std::string& s, Direction* out)
     if(s == "right") { *out = Direction::Right; return true; }
     if(s == "up") { *out = Direction::Up; return true; }
     if(s == "down") { *out = Direction::Down; return true; }
-    if(s == "forward" || s == "front") { *out = Direction::Forward; return true; }
-    if(s == "back" || s == "backward") { *out = Direction::Back; return true; }
-    if(s == "+x" || s == "pos_x" || s == "x+") { *out = Direction::PosX; return true; }
-    if(s == "-x" || s == "neg_x" || s == "x-") { *out = Direction::NegX; return true; }
-    if(s == "+y" || s == "pos_y" || s == "y+") { *out = Direction::PosY; return true; }
-    if(s == "-y" || s == "neg_y" || s == "y-") { *out = Direction::NegY; return true; }
-    if(s == "+z" || s == "pos_z" || s == "z+") { *out = Direction::PosZ; return true; }
-    if(s == "-z" || s == "neg_z" || s == "z-") { *out = Direction::NegZ; return true; }
+    if(s == "forward") { *out = Direction::Forward; return true; }
+    if(s == "back") { *out = Direction::Back; return true; }
+    if(s == "+x") { *out = Direction::PosX; return true; }
+    if(s == "-x") { *out = Direction::NegX; return true; }
+    if(s == "+y") { *out = Direction::PosY; return true; }
+    if(s == "-y") { *out = Direction::NegY; return true; }
+    if(s == "+z") { *out = Direction::PosZ; return true; }
+    if(s == "-z") { *out = Direction::NegZ; return true; }
     return false;
 }
 
@@ -274,6 +300,7 @@ nlohmann::json ToJson(const Pack& pack)
             }
             bj["direction"] = DirectionToString(clip.direction);
             bj["axis_space"] = AxisSpaceToString(clip.axis_space);
+            bj["play_bounds"] = PlayBoundsToString(clip.play_bounds);
             bj["axis_mode"] = (clip.axis_mode == AxisMode::Custom) ? "custom" : "preset";
             bj["axis_yaw_deg"] = clip.axis_yaw_deg;
             bj["axis_pitch_deg"] = clip.axis_pitch_deg;
@@ -524,10 +551,12 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             if(TargetIsMultiDeviceGroup(track.target))
             {
                 clip.axis_space = AxisSpace::Room;
+                clip.play_bounds = PlayBounds::RoomBox;
             }
             else
             {
                 clip.axis_space = AxisSpace::Device;
+                clip.play_bounds = PlayBounds::TrackLights;
             }
             if(bj.contains("axis_space") && bj["axis_space"].is_string())
             {
@@ -535,6 +564,14 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
                 if(AxisSpaceFromString(bj["axis_space"].get<std::string>(), &parsed))
                 {
                     clip.axis_space = parsed;
+                }
+            }
+            if(bj.contains("play_bounds") && bj["play_bounds"].is_string())
+            {
+                PlayBounds pb = clip.play_bounds;
+                if(PlayBoundsFromString(bj["play_bounds"].get<std::string>(), &pb))
+                {
+                    clip.play_bounds = pb;
                 }
             }
             clip.axis_mode = AxisMode::Preset;

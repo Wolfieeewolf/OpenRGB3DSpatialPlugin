@@ -207,11 +207,11 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             }
             applier_detail::SampleBounds shared_bounds;
             applier_detail::SeqAxesMap seq_map;
-            const bool want_shared = top && ClipUsesSharedWorldBounds(*top);
+            const bool want_room_box = top && ClipUsesRoomBoxBounds(*top);
+            const bool want_track_union = top && ClipUsesTrackWorldUnion(*top);
             const bool want_sequence = top && ClipUsesSequenceAxis(*top);
 
-            // Room / field clips: full room AABB only (never shrink to LED cluster).
-            if(want_shared)
+            if(want_room_box)
             {
                 if(!spatial || !spatial->has_world_bounds)
                 {
@@ -224,6 +224,18 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 shared_bounds.min_z = spatial->min_z;
                 shared_bounds.max_z = spatial->max_z;
                 shared_bounds.valid = true;
+            }
+            else if(want_track_union)
+            {
+                std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
+                applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
+                for(const auto& pair : ordered)
+                {
+                    if(pair.second)
+                    {
+                        applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
+                    }
+                }
             }
             if(want_sequence)
             {

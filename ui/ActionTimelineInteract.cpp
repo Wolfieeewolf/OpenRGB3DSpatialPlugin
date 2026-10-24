@@ -3,6 +3,7 @@
 #include "ActionTimelineWidget.h"
 #include "ActionCatalog.h"
 #include "Actions/ActionApplier.h"
+#include "Actions/ActionMedia.h"
 #include "Actions/ActionScript.h"
 #include "ZoneManager3D.h"
 
@@ -334,10 +335,18 @@ bool ActionTimelineWidget::expandClipAcrossRows(int src_track, int src_clip, int
         {
             moved.axis_space = Action::AxisSpace::Room;
         }
+        if(!Action::IsMediaClip(moved))
+        {
+            moved.play_bounds = Action::PlayBounds::RoomBox;
+        }
     }
     else if(moved.axis_space == Action::AxisSpace::Sequence)
     {
         moved.axis_space = Action::AxisSpace::Device;
+        if(Action::IsMediaClip(moved))
+        {
+            moved.play_bounds = Action::PlayBounds::TrackLights;
+        }
     }
 
     int dest_track = -1;
@@ -890,6 +899,10 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
                    || copy.axis_space == Action::AxisSpace::Sequence))
             {
                 copy.axis_space = Action::AxisSpace::Room;
+                if(!Action::IsMediaClip(copy))
+                {
+                    copy.play_bounds = Action::PlayBounds::RoomBox;
+                }
             }
             pack_->tracks[(size_t)dest_track].clips.push_back(std::move(copy));
             last = (int)pack_->tracks[(size_t)dest_track].clips.size() - 1;
@@ -914,6 +927,10 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
            || copy.axis_space == Action::AxisSpace::Sequence))
     {
         copy.axis_space = Action::AxisSpace::Room;
+        if(!Action::IsMediaClip(copy))
+        {
+            copy.play_bounds = Action::PlayBounds::RoomBox;
+        }
     }
     pack_->tracks[(size_t)dest_track].clips.push_back(std::move(copy));
     selected_track_ = dest_track;

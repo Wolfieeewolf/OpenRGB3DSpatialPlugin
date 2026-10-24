@@ -35,12 +35,12 @@ bool TrackAppliesToTransform(const Pack& pack,
                              int transform_index,
                              ZoneManager3D* zone_manager);
 
-/** Room / Movie Sync spatial settings. Room/field clips require has_world_bounds. */
+/** Room / Movie Sync spatial settings for RoomBox play_bounds and origin_ref. */
 struct ApplySpatialContext
 {
     /** Effect global zone (-1 = all). Filters which controllers/transforms are painted. */
     int layer_zone_index = -1;
-    /** Full room AABB — never shrink to LED cluster. */
+    /** Full room AABB (PlayBounds::RoomBox). */
     bool has_world_bounds = false;
     float min_x = 0.0f;
     float max_x = 0.0f;
@@ -62,7 +62,7 @@ void BuildSpatialAxesForTarget(const Pack& pack,
                                std::vector<float>* out_ny = nullptr,
                                std::vector<float>* out_nz = nullptr,
                                ZoneManager3D* zone_manager = nullptr,
-                               /** Required for Room/field — full room AABB; never LED cluster. */
+                               /** Required when sample.play_bounds is RoomBox. */
                                const ApplySpatialContext* room_bounds = nullptr);
 
 ApplyStats ApplyPackFrame(const Pack& pack,

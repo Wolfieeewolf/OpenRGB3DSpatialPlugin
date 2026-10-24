@@ -562,7 +562,8 @@ void ActionEditorDialog::updatePropVisibility()
                                        || Action::script::UsesParticles(effect_id)
                                        || Action::script::UsesRibbons(effect_id)
                                        || Action::IsMediaClip(*b)
-                                       || b->axis_space == Action::AxisSpace::Room);
+                                       || b->axis_space == Action::AxisSpace::Room
+                                       || b->play_bounds == Action::PlayBounds::RoomBox);
     const bool needs_media_path = knobs.knob_media_path
         || (b && (b->effect_id == "media_image" || b->effect_id == "media_gif"));
     const bool needs_media_text = knobs.knob_media_text || (b && b->effect_id == "media_text");
@@ -612,6 +613,12 @@ void ActionEditorDialog::updatePropVisibility()
     {
         rotate_combo_->setEnabled(ok);
         rotate_combo_->setVisible(true);
+    }
+    if(play_bounds_combo_)
+    {
+        // Always available when a clip is selected — marquee/world canvas choice.
+        play_bounds_combo_->setVisible(ok);
+        play_bounds_combo_->setEnabled(ok);
     }
     if(axis_space_combo_)
     {
@@ -1265,6 +1272,11 @@ void ActionEditorDialog::applyClipToForm()
     }
     const int dir_idx = direction_combo_->findData((int)b->direction);
     direction_combo_->setCurrentIndex(dir_idx >= 0 ? dir_idx : 1);
+    if(play_bounds_combo_)
+    {
+        const int pidx = play_bounds_combo_->findData((int)b->play_bounds);
+        play_bounds_combo_->setCurrentIndex(pidx >= 0 ? pidx : 0);
+    }
     if(axis_space_combo_)
     {
         const int sidx = axis_space_combo_->findData((int)b->axis_space);
@@ -1406,6 +1418,10 @@ void ActionEditorDialog::applyFormToSelectedClip()
     if(rotate_combo_)
     {
         b->rotate_quarters = rotate_combo_->currentData().toInt();
+    }
+    if(play_bounds_combo_)
+    {
+        b->play_bounds = (Action::PlayBounds)play_bounds_combo_->currentData().toInt();
     }
     if(axis_space_combo_)
     {

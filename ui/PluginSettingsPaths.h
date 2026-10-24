@@ -5,17 +5,37 @@
 #include "filesystem.h"
 #include <string>
 
+/* AppData layout — must match OpenRGB3DSpatialPresets folder names (copy-paste install):
+ *
+ *   …/OpenRGB3DSpatialPlugin/
+ *     controllers/<category>/<brand>/      (presets-style; scanned recursively)
+ *     effects/volume|audio|media|shader-field|patterns/
+ *     action-editor/
+ *       toolbox/<section>/*.fx
+ *       gradients.json | colors.json | curves.json   (create-on-save)
+ *     triggers/
+ *       effects/*.action.json                        (root packs)
+ *       effects/<category>/*.action.json             (optional folders; Actions Category filter)
+ *       triggers.json                                (create-on-save)
+ *     movie-sync/
+ *       catalog.json
+ *       effects/<category>/*.action.json
+ *       vlc/
+ *     meshes/                                        (plugin-only scene props)
+ *     *.stack.json                                   (plugin-only effect-stack presets)
+ */
+
 namespace PluginSettingsPaths
 {
-inline filesystem::path ConfigRoot(OpenRGBPluginAPIInterface* rm)
-{
-    return rm ? rm->GetConfigurationDirectory() : filesystem::path();
-}
+    inline filesystem::path ConfigRoot(OpenRGBPluginAPIInterface* rm)
+    {
+        return rm ? rm->GetConfigurationDirectory() : filesystem::path();
+    }
 
-inline filesystem::path PluginRoot(OpenRGBPluginAPIInterface* rm)
-{
-    return ConfigRoot(rm) / "plugins" / "settings" / "OpenRGB3DSpatialPlugin";
-}
+    inline filesystem::path PluginRoot(OpenRGBPluginAPIInterface* rm)
+    {
+        return ConfigRoot(rm) / "plugins" / "settings" / "OpenRGB3DSpatialPlugin";
+    }
 
 inline filesystem::path ControllersDir(OpenRGBPluginAPIInterface* rm)
 {

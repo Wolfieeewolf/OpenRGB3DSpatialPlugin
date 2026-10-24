@@ -10,7 +10,7 @@
 namespace Action
 {
 
-constexpr int kFormatVersion = 4;
+constexpr int kFormatVersion = 5;
 constexpr int kMaxDurationMs = 60000;
 constexpr const char* kFormatId = "openrgb3d.action";
 constexpr const char* kFileSuffix = ".action.json";
@@ -56,9 +56,16 @@ enum class Direction
 
 enum class AxisSpace
 {
-    Room,      // shared world AABB across target LEDs
+    Room,      // world XYZ sample frame
     Device,    // per-controller local space
     Sequence,  // 0..1 along ordered controllers/LEDs (axis effects); Volume uses Room XYZ
+};
+
+/** Which AABB normalizes UV / world samples (separate from AxisSpace travel frame). */
+enum class PlayBounds
+{
+    TrackLights, // LEDs matched by this track's target (union across devices when not Device space)
+    RoomBox,     // full room / Movie Sync spatial box
 };
 
 enum class AxisMode
@@ -132,6 +139,8 @@ struct Clip
     int period_ms = 1000;
     Direction direction = Direction::Right;
     AxisSpace axis_space = AxisSpace::Device;
+    /** Canvas for UV/world normalize — TrackLights keeps marquees on the row's lights. */
+    PlayBounds play_bounds = PlayBounds::TrackLights;
     AxisMode axis_mode = AxisMode::Preset;
     float axis_yaw_deg = 0.0f;
     float axis_pitch_deg = 0.0f;
@@ -273,8 +282,14 @@ float SampleSpinAngle(const Clip& clip,
                       float min_y, float max_y,
                       float min_z, float max_z);
 
-bool ClipUsesSharedWorldBounds(const Clip& clip);
+/** play_bounds == RoomBox — sample against ApplySpatialContext room AABB. */
+bool ClipUsesRoomBoxBounds(const Clip& clip);
+/** TrackLights + non-Device travel — one world AABB over the track's LEDs. */
+bool ClipUsesTrackWorldUnion(const Clip& clip);
 bool ClipUsesSequenceAxis(const Clip& clip);
+
+/** Unique non-empty origin_ref names used by any clip in the pack (share/calibration list). */
+std::vector<std::string> CollectPackOriginRefs(const Pack& pack);
 
 /** Room-normalized origin (0..1) + size for field/particle sampling. */
 struct ClipOrigin01

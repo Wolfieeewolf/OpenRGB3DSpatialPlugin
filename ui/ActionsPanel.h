@@ -28,6 +28,7 @@ public:
 
 private slots:
     void onRefresh();
+    void onCategoryFilterChanged();
     void onPreview();
     void onStop();
     void onNew();
@@ -40,11 +41,15 @@ private slots:
 
 private:
     void setPlayingUi(bool playing);
+    void rebuildCategoryCombo();
     void populateList();
     void selectPathInList(const QString& path);
     filesystem::path triggerEffectsDir() const;
+    /** Directory for New/Import: selected category folder, or root when All/(root). */
+    filesystem::path selectedEffectsSaveDir() const;
     ActionEditorDialog* ensureEditor();
     QString pathFromItem(class QListWidgetItem* item) const;
+    QString selectedCategoryFilter() const;
 
     Ui::ActionsPanel* ui = nullptr;
     OpenRGB3DSpatialTab* tab_ = nullptr;

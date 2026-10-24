@@ -28,10 +28,10 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 
 | Pack | Where | Engines |
 |------|-------|---------|
-| `roomscape_field_ripple` | `triggers/effects/` | volume field |
-| `roomscape_spark_burst` | `triggers/effects/` | particles |
-| `roomscape_neon_ribbon` | `triggers/effects/` | ribbon |
-| `roomscape_strata_fireflies` | `triggers/effects/` | field + particles |
+| `roomscape_field_ripple` | `triggers/effects/roomscape/` | volume field |
+| `roomscape_spark_burst` | `triggers/effects/roomscape/` | particles |
+| `roomscape_neon_ribbon` | `triggers/effects/roomscape/` | ribbon |
+| `roomscape_strata_fireflies` | `triggers/effects/roomscape/` | field + particles |
 | `roomscape_helix_rain` | `movie-sync/effects/washes/` | ribbon + particles |
 
 ## Deferred / next (later)

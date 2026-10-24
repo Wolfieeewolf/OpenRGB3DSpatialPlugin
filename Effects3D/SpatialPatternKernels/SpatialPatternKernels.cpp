@@ -5,6 +5,7 @@
 #include "PluginSettingsPaths.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
@@ -43,7 +44,17 @@ void LoadKernels()
     {
         return;
     }
-    const QFileInfoList files = dir.entryInfoList(QStringList() << QStringLiteral("*.kernel"), QDir::Files, QDir::Name);
+    /* Match Volume/Audio/Media: allow nested packs under effects/patterns/. */
+    QDirIterator it(root, QStringList() << QStringLiteral("*.kernel"), QDir::Files, QDirIterator::Subdirectories);
+    QFileInfoList files;
+    while(it.hasNext())
+    {
+        it.next();
+        files.append(it.fileInfo());
+    }
+    std::sort(files.begin(), files.end(), [](const QFileInfo& a, const QFileInfo& b) {
+        return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0;
+    });
     for(const QFileInfo& fi : files)
     {
         QFile file(fi.absoluteFilePath());

@@ -24,12 +24,19 @@ All drop-in content (`.fs`, `.kernel`, Action Tools `.fx`, trigger/Movie Sync ac
 
 ```text
 <OpenRGB config>/plugins/settings/OpenRGB3DSpatialPlugin/
-  controllers/
+  controllers/                         (nested OK — same as presets pack)
   effects/volume|audio|media|shader-field|patterns/
-  action-editor/toolbox/
+  action-editor/
+    toolbox/
+    gradients.json | colors.json | curves.json   (create-on-save)
   triggers/
+    effects/
+    triggers.json                                (create-on-save)
   movie-sync/
-  meshes/
+    catalog.json
+    effects/<category>/
+    vlc/
+  meshes/                                        (scene props; plugin-only)
 ```
 
 Map: [Documentation/content-library.md](Documentation/content-library.md).

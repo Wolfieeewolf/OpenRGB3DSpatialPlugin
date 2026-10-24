@@ -3,6 +3,7 @@
 #include "ActionTimelineWidget.h"
 #include "ActionCatalog.h"
 #include "Actions/ActionApplier.h"
+#include "Actions/ActionMedia.h"
 #include "Actions/ActionScript.h"
 #include "Actions/ActionParticleField.h"
 #include "Actions/ActionRibbonField.h"
@@ -88,7 +89,8 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
 
     const int dur = std::max(1, sample.end_ms - sample.start_ms);
     const std::string effect_id = Action::ClipFileId(sample);
-    const bool world_eval = Action::ActionScriptUsesWorld(effect_id);
+    const bool world_eval = Action::ActionScriptUsesWorld(effect_id)
+        || Action::IsMediaClip(sample);
     const bool field_eval = Action::script::UsesField(effect_id);
     const bool particle_eval = Action::script::UsesParticles(effect_id);
     const bool ribbon_eval = Action::script::UsesRibbons(effect_id);
@@ -112,24 +114,35 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
     };
 
-    // Match ApplyPackFrame: prepare field/particles/ribbons once before samples.
-    if(field_eval || particle_eval || ribbon_eval)
-    {
-        static std::uint64_t s_timeline_field_seq = 0;
+    // Throttle field prepares — full rebuild per pixel column stalls the editor.
+    int last_prepare_ms = -1;
+    const int prepare_step_ms = std::max(24, dur / std::max(1, img.width() / 6));
+    static std::uint64_t s_timeline_field_seq = 0;
+    auto prepareFieldsAt = [&](int sample_ms) {
+        if(!(field_eval || particle_eval || ribbon_eval))
+        {
+            return;
+        }
+        if(last_prepare_ms >= 0 && std::abs(sample_ms - last_prepare_ms) < prepare_step_ms)
+        {
+            return;
+        }
         applyOrigin();
+        const std::uint64_t seq = ++s_timeline_field_seq;
         if(field_eval)
         {
-            Action::volume_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+            Action::volume_field::PrepareForClip(sample, sample_ms, seq);
         }
         if(particle_eval)
         {
-            Action::particle_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+            Action::particle_field::PrepareForClip(sample, sample_ms, seq);
         }
         if(ribbon_eval)
         {
-            Action::ribbon_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+            Action::ribbon_field::PrepareForClip(sample, sample_ms, seq);
         }
-    }
+        last_prepare_ms = sample_ms;
+    };
 
     auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
         constexpr float k0 = 0.0f;
@@ -156,10 +169,8 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
                                                    c, intens);
         }
         if(world_eval || field_eval || particle_eval || ribbon_eval
-           || sample.axis_space == Action::AxisSpace::Room)
+           || sample.play_bounds == Action::PlayBounds::RoomBox)
         {
-            // Do not fake Room/world previews with pack LED index order — that reads as
-            // top-to-bottom list march on All (this pack).
             const float t = (led_n <= 1) ? 0.5f : (float)led_slot / (float)(led_n - 1);
             return Action::EvaluateClipAtAxis(sample, ms, t, led_slot, c, intens);
         }
@@ -182,22 +193,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         const float t = (img.width() <= 1) ? 0.0f : (float)x / (float)(img.width() - 1);
         const int ms = sample.start_ms + (int)std::lround(t * (float)dur);
         const int sample_ms = std::min(std::max(ms, sample.start_ms), sample.end_ms - 1);
-        if(field_eval || particle_eval || ribbon_eval)
-        {
-            applyOrigin();
-        }
-        if(field_eval)
-        {
-            Action::volume_field::PrepareForClip(sample, sample_ms, 0);
-        }
-        if(particle_eval)
-        {
-            Action::particle_field::PrepareForClip(sample, sample_ms, 0);
-        }
-        if(ribbon_eval)
-        {
-            Action::ribbon_field::PrepareForClip(sample, sample_ms, 0);
-        }
+        prepareFieldsAt(sample_ms);
 
         int row = 0;
         for(int led = 0; led < led_n; led += skip, ++row)
@@ -345,6 +341,21 @@ void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const P
     p.drawRect(br);
 
     paintClipSpatialRaster(p, br, pb, sample);
+
+    if(sample.effect_id == "media_text" && sample.media_text.empty() && br.width() > 24)
+    {
+        p.setPen(QColor(160, 160, 170));
+        p.drawText(br.adjusted(4, 0, -4, 0), Qt::AlignCenter, QStringLiteral("(no text)"));
+    }
+    else if(sample.effect_id == "media_text" && !sample.media_text.empty() && br.width() > 32)
+    {
+        // Caption helps when the spatial raster is sparse / dark mid-scroll.
+        const QString label = QString::fromStdString(sample.media_text);
+        p.setPen(QColor(20, 20, 24, 180));
+        p.drawText(br.adjusted(5, 1, -3, 1), Qt::AlignLeft | Qt::AlignVCenter, label);
+        p.setPen(QColor(240, 230, 160, 220));
+        p.drawText(br.adjusted(4, 0, -4, 0), Qt::AlignLeft | Qt::AlignVCenter, label);
+    }
 
     {
         const int grip = std::min(3, std::max(2, br.width() / 10));

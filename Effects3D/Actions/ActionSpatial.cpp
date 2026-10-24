@@ -461,20 +461,44 @@ bool ClipUsesSequenceAxis(const Clip& clip)
     return !script::UsesWorld(script::FileId(clip));
 }
 
-bool ClipUsesSharedWorldBounds(const Clip& clip)
+bool ClipUsesRoomBoxBounds(const Clip& clip)
 {
-    if(clip.axis_space == AxisSpace::Room)
+    return clip.play_bounds == PlayBounds::RoomBox;
+}
+
+bool ClipUsesTrackWorldUnion(const Clip& clip)
+{
+    if(clip.play_bounds != PlayBounds::TrackLights)
     {
-        return true;
+        return false;
     }
-    // GPU field / CPU particle tools sample shared room space — always use world AABB.
-    const std::string effect_id = script::FileId(clip);
-    if(script::UsesField(effect_id) || script::UsesParticles(effect_id)
-       || script::UsesRibbons(effect_id))
+    if(clip.axis_space == AxisSpace::Device)
     {
-        return true;
+        return false;
     }
-    return clip.axis_space == AxisSpace::Sequence && !ClipUsesSequenceAxis(clip);
+    if(ClipUsesSequenceAxis(clip))
+    {
+        return false;
+    }
+    return true;
+}
+
+std::vector<std::string> CollectPackOriginRefs(const Pack& pack)
+{
+    std::vector<std::string> names;
+    for(const Track& track : pack.tracks)
+    {
+        for(const Clip& clip : track.clips)
+        {
+            if(!clip.origin_ref.empty())
+            {
+                names.push_back(clip.origin_ref);
+            }
+        }
+    }
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
+    return names;
 }
 
 namespace
@@ -583,7 +607,11 @@ bool EvaluateClipAtWorld(const Clip& clip,
         const bool collapse_v = (spans[v_axis] <= eps);
         const float u = coords[u_axis];
         const float v = collapse_v ? 0.5f : coords[v_axis];
-        return EvaluateMediaAtUv(clip, local_ms, u, v, out_color, out_intensity, collapse_v);
+        // Device/room aspect for marquee window sizing (readable letter proportions).
+        const float span_u = std::max(eps, spans[u_axis]);
+        const float span_v = collapse_v ? span_u : std::max(eps, spans[v_axis]);
+        const float uv_aspect = span_u / span_v;
+        return EvaluateMediaAtUv(clip, local_ms, u, v, out_color, out_intensity, collapse_v, uv_aspect);
     }
 
     WorldCtx ctx;

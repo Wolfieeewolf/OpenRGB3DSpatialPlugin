@@ -174,9 +174,9 @@ void ActionEditorDialog::buildUi()
     loop_combo_->addItem(QStringLiteral("Once"), QStringLiteral("once"));
     loop_combo_->addItem(QStringLiteral("Forever"), QStringLiteral("forever"));
     loop_combo_->addItem(QStringLiteral("While active"), QStringLiteral("while_active"));
-    controllers_button_ = new QPushButton(QStringLiteral("Controllers…"));
+    controllers_button_ = new QPushButton(QStringLiteral("Controllers..."));
     controllers_button_->setToolTip(QStringLiteral("Choose which scene controllers appear on this pack's timeline"));
-    map_controllers_button_ = new QPushButton(QStringLiteral("Map…"));
+    map_controllers_button_ = new QPushButton(QStringLiteral("Map..."));
     map_controllers_button_->setToolTip(QStringLiteral("Point this pack's controller names at controllers in your scene"));
     auto* timeline_buttons = new QWidget();
     auto* timeline_row = new QHBoxLayout(timeline_buttons);
@@ -257,8 +257,8 @@ void ActionEditorDialog::buildUi()
     save_dest_combo_->addItem(QStringLiteral("Triggers"), QStringLiteral("triggers"));
     save_dest_combo_->addItem(QStringLiteral("Movie Sync"), QStringLiteral("movie-sync"));
     save_dest_combo_->setToolTip(QStringLiteral(
-        "Triggers → triggers/effects/\n"
-        "Movie Sync → movie-sync/effects/<category>/"));
+        "Triggers -> triggers/effects/\n"
+        "Movie Sync -> movie-sync/effects/<category>/"));
     movie_category_combo_ = new QComboBox();
     for(const char* cat : {"explosions", "pulses", "washes", "wraps"})
     {
@@ -317,8 +317,8 @@ void ActionEditorDialog::buildUi()
     media_section_ = new EffectCollapsibleSection(QStringLiteral("Media / Matrix"));
     static_cast<EffectCollapsibleSection*>(media_section_)->setExpanded(true);
     media_path_edit_ = new QLineEdit();
-    media_path_edit_->setPlaceholderText(QStringLiteral("Path to image or GIFâ€¦"));
-    media_browse_button_ = new QPushButton(QStringLiteral("Browseâ€¦"));
+    media_path_edit_->setPlaceholderText(QStringLiteral("Path to image or GIF..."));
+    media_browse_button_ = new QPushButton(QStringLiteral("Browse..."));
     media_text_edit_ = new QLineEdit();
     media_text_edit_->setPlaceholderText(QStringLiteral("Marquee text"));
     media_scroll_check_ = new QCheckBox(QStringLiteral("Scroll / marquee"));
@@ -343,11 +343,11 @@ void ActionEditorDialog::buildUi()
     color_sec->setExpanded(true);
     color_sec->bodyLayout()->setSpacing(6);
     color_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
-    color_button_ = new QPushButton(QStringLiteral("Pickâ€¦"));
+    color_button_ = new QPushButton(QStringLiteral("Pick..."));
     color_button_->setMinimumHeight(28);
     color_button_->setMaximumHeight(28);
     color_button_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    color_to_button_ = new QPushButton(QStringLiteral("Pickâ€¦"));
+    color_to_button_ = new QPushButton(QStringLiteral("Pick..."));
     color_to_button_->setMinimumHeight(28);
     color_to_button_->setMaximumHeight(28);
     color_to_button_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -400,8 +400,8 @@ void ActionEditorDialog::buildUi()
     swatch_layout->addStretch(1);
     color_sec->bodyLayout()->addWidget(swatch_row);
     auto* grad_help = new QLabel(
-        QStringLiteral("Gradient: drag stops Â· click bar to add Â· right-click remove.\n"
-                       "Swatches: Add/Remove for blink (on/off) and alternating (colourâ†”off or colourâ†”colour)."));
+        QStringLiteral("Gradient: drag stops - click bar to add - right-click remove.\n"
+                       "Swatches: Add/Remove for blink (on/off) and alternating (colour<->off or colour<->colour)."));
     grad_help->setWordWrap(true);
     PluginUiApplyMutedSecondaryLabel(grad_help);
     color_sec->bodyLayout()->addWidget(grad_help);
@@ -458,7 +458,7 @@ void ActionEditorDialog::buildUi()
     props_inner_layout->addWidget(bright_sec);
 
     direction_section_ = new EffectCollapsibleSection(QStringLiteral("Direction"));
-    static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(false);
+    static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(true);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setSpacing(6);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setContentsMargins(2, 4, 2, 2);
     direction_combo_ = new QComboBox();
@@ -467,24 +467,24 @@ void ActionEditorDialog::buildUi()
         direction_combo_->setItemData(direction_combo_->count() - 1, tip, Qt::ToolTipRole);
     };
     add_dir(QStringLiteral("Left"), Action::Direction::Left,
-            QStringLiteral("Room âˆ’X. Along the key row on a typical keyboard."));
+            QStringLiteral("Room -X. Along the key row on a typical keyboard."));
     add_dir(QStringLiteral("Right"), Action::Direction::Right,
             QStringLiteral("Room +X."));
     add_dir(QStringLiteral("Up"), Action::Direction::Up,
-            QStringLiteral("Room +Y (vertical). On a flat keyboard Y is thin â€” uses depth (Z) as fallback."));
+            QStringLiteral("Room +Y (vertical). On a flat keyboard Y is thin - uses depth (Z) as fallback."));
     add_dir(QStringLiteral("Down"), Action::Direction::Down,
-            QStringLiteral("Room âˆ’Y. Flat boards fall back to depth (Z), not Left/Right."));
+            QStringLiteral("Room -Y. Flat boards fall back to depth (Z), not Left/Right."));
     add_dir(QStringLiteral("Forward"), Action::Direction::Forward,
-            QStringLiteral("Toward Front wall (Z=0 / room âˆ’Z). Wipe: Back â†’ Front."));
+            QStringLiteral("Toward Front wall (Z=0 / room -Z). Wipe: Back -> Front."));
     add_dir(QStringLiteral("Back"), Action::Direction::Back,
-            QStringLiteral("Toward Back wall (+Z). Wipe: Front â†’ Back."));
+            QStringLiteral("Toward Back wall (+Z). Wipe: Front -> Back."));
     direction_combo_->insertSeparator(direction_combo_->count());
     add_dir(QStringLiteral("+X"), Action::Direction::PosX, QStringLiteral("Explicit room +X (toward Right wall)"));
-    add_dir(QStringLiteral("âˆ’X"), Action::Direction::NegX, QStringLiteral("Explicit room âˆ’X (toward Left wall)"));
+    add_dir(QStringLiteral("-X"), Action::Direction::NegX, QStringLiteral("Explicit room -X (toward Left wall)"));
     add_dir(QStringLiteral("+Y"), Action::Direction::PosY, QStringLiteral("Explicit room +Y (toward Ceiling)"));
-    add_dir(QStringLiteral("âˆ’Y"), Action::Direction::NegY, QStringLiteral("Explicit room âˆ’Y (toward Floor)"));
+    add_dir(QStringLiteral("-Y"), Action::Direction::NegY, QStringLiteral("Explicit room -Y (toward Floor)"));
     add_dir(QStringLiteral("+Z"), Action::Direction::PosZ, QStringLiteral("Explicit room +Z (toward Back wall)"));
-    add_dir(QStringLiteral("âˆ’Z"), Action::Direction::NegZ, QStringLiteral("Explicit room âˆ’Z (toward Front wall)"));
+    add_dir(QStringLiteral("-Z"), Action::Direction::NegZ, QStringLiteral("Explicit room -Z (toward Front wall)"));
     direction_combo_->setToolTip(
         QStringLiteral("Travel / spin axis. With Space=Device this follows the controller orientation from the viewport."));
     axis_space_combo_ = new QComboBox();
@@ -492,9 +492,18 @@ void ActionEditorDialog::buildUi()
     axis_space_combo_->addItem(QStringLiteral("Room"), (int)Action::AxisSpace::Room);
     axis_space_combo_->addItem(QStringLiteral("Sequence (order)"), (int)Action::AxisSpace::Sequence);
     axis_space_combo_->setToolTip(
-        QStringLiteral("Device: per-controller local space.\n"
-                       "Room: one shared 3D box across the target (All / scene zone).\n"
-                       "Sequence: wipe/chase along timeline controller order (drag to reorder)."));
+        QStringLiteral("Travel frame for direction / wipes.\n"
+                       "Device: per-controller local axes.\n"
+                       "Room: world XYZ.\n"
+                       "Sequence: march along timeline controller order."));
+    play_bounds_combo_ = new QComboBox();
+    play_bounds_combo_->addItem(QStringLiteral("This track's lights"), (int)Action::PlayBounds::TrackLights);
+    play_bounds_combo_->addItem(QStringLiteral("Whole room"), (int)Action::PlayBounds::RoomBox);
+    play_bounds_combo_->setToolTip(
+        QStringLiteral("Where the pattern is stretched (UV / world normalize).\n"
+                       "This track's lights: keyboard marquee stays on the keyboard.\n"
+                       "Whole room: room washes and Roomscape across the full box.\n"
+                       "Origin still uses layout reference points (me, screen, rear, …)."));
     axis_mode_combo_ = new QComboBox();
     axis_mode_combo_->addItem(QStringLiteral("Preset direction"), (int)Action::AxisMode::Preset);
     axis_mode_combo_->addItem(QStringLiteral("Custom yaw/pitch"), (int)Action::AxisMode::Custom);
@@ -502,35 +511,36 @@ void ActionEditorDialog::buildUi()
     axis_yaw_spin_->setRange(-180.0, 180.0);
     axis_yaw_spin_->setDecimals(1);
     axis_yaw_spin_->setSingleStep(1.0);
-    axis_yaw_spin_->setSuffix(QStringLiteral("Â°"));
+    axis_yaw_spin_->setSuffix(QStringLiteral(" deg"));
     axis_pitch_spin_ = new QDoubleSpinBox();
     axis_pitch_spin_->setRange(-90.0, 90.0);
     axis_pitch_spin_->setDecimals(1);
     axis_pitch_spin_->setSingleStep(1.0);
-    axis_pitch_spin_->setSuffix(QStringLiteral("Â°"));
+    axis_pitch_spin_->setSuffix(QStringLiteral(" deg"));
     const auto yaw_field = attachDoubleSpinSlider(axis_yaw_spin_, QStringLiteral("Drag to set yaw"));
     const auto pitch_field = attachDoubleSpinSlider(axis_pitch_spin_, QStringLiteral("Drag to set pitch"));
     auto* dir_form = new QFormLayout();
     dir_form->setContentsMargins(0, 0, 0, 0);
     dir_form->setSpacing(6);
     dir_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    dir_form->addRow(QStringLiteral("Space"), axis_space_combo_);
+    dir_form->addRow(QStringLiteral("Play on"), play_bounds_combo_);
+    dir_form->addRow(QStringLiteral("Travel"), axis_space_combo_);
     dir_form->addRow(QStringLiteral("Axis"), axis_mode_combo_);
     dir_form->addRow(QStringLiteral("Direction"), direction_combo_);
     flip_direction_button_ = new QPushButton(QStringLiteral("Flip direction"));
-    flip_direction_button_->setToolTip(QStringLiteral("Swap to the opposite direction (Leftâ†”Right, Forwardâ†”Back, â€¦)"));
+    flip_direction_button_->setToolTip(QStringLiteral("Swap to the opposite direction (Left<->Right, Forward<->Back, ...)"));
     reverse_check_ = new QCheckBox(QStringLiteral("Reverse time"));
-    reverse_check_->setToolTip(QStringLiteral("Play this clipâ€™s progress backwards (dissolve/fade/wipe reverse)"));
+    reverse_check_->setToolTip(QStringLiteral("Play this clip's progress backwards (dissolve/fade/wipe reverse)"));
     flip_h_check_ = new QCheckBox(QStringLiteral("Flip H"));
-    flip_h_check_->setToolTip(QStringLiteral("Mirror leftâ†”right (media UV / wipe axis)"));
+    flip_h_check_->setToolTip(QStringLiteral("Mirror left<->right (media UV / wipe axis)"));
     flip_v_check_ = new QCheckBox(QStringLiteral("Flip V"));
-    flip_v_check_->setToolTip(QStringLiteral("Mirror topâ†”bottom (media UV / height)"));
+    flip_v_check_->setToolTip(QStringLiteral("Mirror top<->bottom (media UV / height)"));
     rotate_combo_ = new QComboBox();
-    rotate_combo_->addItem(QStringLiteral("0Â°"), 0);
-    rotate_combo_->addItem(QStringLiteral("90Â° CW"), 1);
-    rotate_combo_->addItem(QStringLiteral("180Â°"), 2);
-    rotate_combo_->addItem(QStringLiteral("270Â° CW"), 3);
-    rotate_combo_->setToolTip(QStringLiteral("Rotate media / UV mapping in 90Â° steps"));
+    rotate_combo_->addItem(QStringLiteral("0 deg"), 0);
+    rotate_combo_->addItem(QStringLiteral("90 deg CW"), 1);
+    rotate_combo_->addItem(QStringLiteral("180 deg"), 2);
+    rotate_combo_->addItem(QStringLiteral("270 deg CW"), 3);
+    rotate_combo_->setToolTip(QStringLiteral("Rotate media / UV mapping in 90 deg steps"));
     auto* flip_row = new QWidget();
     auto* flip_layout = new QHBoxLayout(flip_row);
     flip_layout->setContentsMargins(0, 0, 0, 0);
@@ -594,7 +604,7 @@ void ActionEditorDialog::buildUi()
     auto* speed_row_layout = new QVBoxLayout(speed_row_);
     speed_row_layout->setContentsMargins(0, 0, 0, 0);
     speed_row_layout->setSpacing(2);
-    speed_row_layout->addWidget(new QLabel(QStringLiteral("Speed Ã—")));
+    speed_row_layout->addWidget(new QLabel(QStringLiteral("Speed x")));
     speed_row_layout->addWidget(speed_field.first);
     period_row_ = new QWidget();
     auto* period_layout = new QVBoxLayout(period_row_);
@@ -607,7 +617,7 @@ void ActionEditorDialog::buildUi()
     props_inner_layout->addWidget(speed_section_);
 
     pulse_section_ = new EffectCollapsibleSection(QStringLiteral("Pulse / Chase"));
-    static_cast<EffectCollapsibleSection*>(pulse_section_)->setExpanded(false);
+    static_cast<EffectCollapsibleSection*>(pulse_section_)->setExpanded(true);
     pulse_length_spin_ = new QSpinBox();
     pulse_length_spin_->setRange(2, 100);
     pulse_length_spin_->setValue(25);
@@ -623,7 +633,11 @@ void ActionEditorDialog::buildUi()
     placement_section_ = new EffectCollapsibleSection(QStringLiteral("Placement"));
     static_cast<EffectCollapsibleSection*>(placement_section_)->setExpanded(true);
     origin_ref_combo_ = new QComboBox();
-    origin_ref_combo_->setToolTip(QStringLiteral("Scene reference point for the effect centre (Room center if none)"));
+    origin_ref_combo_->setToolTip(
+        QStringLiteral("Layout reference point for the cue centre (same names as viewport refs).\n"
+                       "Prefer shared role names: me, screen, tv, front, rear, left, right, ceiling, floor…\n"
+                       "Missing names show as (missing) — add a matching ref on your layout.\n"
+                       "Empty = room center. Independent of stack Spatial Anchor."));
     origin_offset_x_spin_ = new QSpinBox();
     origin_offset_x_spin_->setRange(-100, 100);
     origin_offset_x_spin_->setSuffix(QStringLiteral("%"));
@@ -673,9 +687,11 @@ void ActionEditorDialog::buildUi()
     preview_button_ = new QPushButton(QStringLiteral("Preview"));
     preview_button_->setToolTip(QStringLiteral("Preview pack (Space)"));
     preview_menu_button_ = new QToolButton();
-    preview_menu_button_->setText(QStringLiteral("â–¾"));
+    preview_menu_button_->setText(QString());
+    preview_menu_button_->setArrowType(Qt::DownArrow);
     preview_menu_button_->setToolTip(QStringLiteral("Preview options"));
     preview_menu_button_->setPopupMode(QToolButton::InstantPopup);
+    preview_menu_button_->setFixedWidth(22);
     auto* preview_menu = new QMenu(preview_menu_button_);
     preview_menu->addAction(QStringLiteral("Preview pack\tSpace"), this, [this]() { onPreviewPack(0); });
     preview_menu->addAction(QStringLiteral("Preview selected track\tShift+Space"), this, [this]() {
@@ -778,6 +794,10 @@ void ActionEditorDialog::buildUi()
     connect(flip_v_check_, &QCheckBox::toggled, this, &ActionEditorDialog::onClipFieldChanged);
     connect(rotate_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(axis_space_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    if(play_bounds_combo_)
+    {
+        connect(play_bounds_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    }
     connect(axis_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(axis_yaw_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(axis_pitch_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
@@ -789,6 +809,7 @@ void ActionEditorDialog::buildUi()
     connect(media_browse_button_, &QPushButton::clicked, this, &ActionEditorDialog::onBrowseMediaPath);
     connect(media_path_edit_, &QLineEdit::editingFinished, this, &ActionEditorDialog::onClipFieldChanged);
     connect(media_text_edit_, &QLineEdit::editingFinished, this, &ActionEditorDialog::onClipFieldChanged);
+    connect(media_text_edit_, &QLineEdit::textChanged, this, &ActionEditorDialog::onClipFieldChanged);
     connect(media_scroll_check_, &QCheckBox::toggled, this, &ActionEditorDialog::onClipFieldChanged);
     connect(color_button_, &QPushButton::clicked, this, &ActionEditorDialog::onPickColor);
     connect(color_to_button_, &QPushButton::clicked, this, &ActionEditorDialog::onPickColorTo);
@@ -851,7 +872,7 @@ void ActionEditorDialog::NewPack(const filesystem::path& save_dir)
     }
 
     loadIntoUi(pack_);
-    setWindowTitle(QStringLiteral("Action Editor — New"));
+    setWindowTitle(QStringLiteral("Action Editor  -  New"));
     status_label_->setText(QStringLiteral("Drag tools onto a row · right-click to add · Delete removes"));
     show();
     raise();
@@ -912,9 +933,49 @@ void ActionEditorDialog::EditPack(const filesystem::path& path)
     {
         promptMapControllers();
     }
-    setWindowTitle(QStringLiteral("Action Editor — %1").arg(QString::fromStdString(pack_.name)));
-    status_label_->setText(QStringLiteral("Editing %1").arg(
-        QString::fromStdString(path.filename().string())));
+    setWindowTitle(QStringLiteral("Action Editor  -  %1").arg(QString::fromStdString(pack_.name)));
+    {
+        QString status = QStringLiteral("Editing %1")
+                             .arg(QString::fromStdString(path.filename().string()));
+        const std::vector<std::string> refs = Action::CollectPackOriginRefs(pack_);
+        if(!refs.empty())
+        {
+            QStringList missing;
+            Action::ApplySpatialContext room;
+            if(tab_)
+            {
+                tab_->GetActionRoomWorldBounds(&room);
+            }
+            for(const std::string& name : refs)
+            {
+                bool found = false;
+                for(const Action::NamedWorldPoint& p : room.reference_points)
+                {
+                    if(p.name == name)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if(!found)
+                {
+                    missing << QString::fromStdString(name);
+                }
+            }
+            QStringList all;
+            for(const std::string& name : refs)
+            {
+                all << QString::fromStdString(name);
+            }
+            status += QStringLiteral(" · refs: %1").arg(all.join(QStringLiteral(", ")));
+            if(!missing.isEmpty())
+            {
+                status += QStringLiteral(" · missing: %1 (add matching layout refs)")
+                              .arg(missing.join(QStringLiteral(", ")));
+            }
+        }
+        status_label_->setText(status);
+    }
     show();
     raise();
     activateWindow();
@@ -1725,7 +1786,7 @@ void ActionEditorDialog::onSave()
                              QStringLiteral("Save failed:\n%1").arg(QString::fromStdString(err)));
         return;
     }
-    setWindowTitle(QStringLiteral("Action Editor — %1").arg(QString::fromStdString(pack_.name)));
+    setWindowTitle(QStringLiteral("Action Editor  -  %1").arg(QString::fromStdString(pack_.name)));
     status_label_->setText(QStringLiteral("Saved %1").arg(QString::fromStdString(pack_path_.filename().string())));
 #ifdef _WIN32
     emit packSaved(QString::fromStdWString(pack_path_.wstring()));
@@ -1857,7 +1918,7 @@ void ActionEditorDialog::startPreview(const Action::Pack& play_pack, int start_m
     {
         timeline_->setPlayheadMs(player_.LocalMs());
     }
-    status_label_->setText(status.isEmpty() ? QStringLiteral("Previewingâ€¦") : status);
+    status_label_->setText(status.isEmpty() ? QStringLiteral("Previewing...") : status);
 }
 
 void ActionEditorDialog::onPreview()
@@ -1875,8 +1936,8 @@ void ActionEditorDialog::onPreviewPack(int start_ms)
     applyFormToSelectedClip();
     applyMetaToPack();
     startPreview(pack_, start_ms, start_ms > 0
-                 ? QStringLiteral("Previewing pack from %1 msâ€¦").arg(start_ms)
-                 : QStringLiteral("Previewing packâ€¦"),
+                 ? QStringLiteral("Previewing pack from %1 ms...").arg(start_ms)
+                 : QStringLiteral("Previewing pack..."),
                  false);
 }
 
@@ -1901,7 +1962,7 @@ void ActionEditorDialog::onPreviewRow(int row_index, int start_ms)
                                  QStringLiteral("No effects on \"%1\" (or its children).").arg(label));
         return;
     }
-    startPreview(solo, start_ms, QStringLiteral("Previewing \"%1\"â€¦").arg(label), true);
+    startPreview(solo, start_ms, QStringLiteral("Previewing \"%1\"...").arg(label), true);
 }
 
 void ActionEditorDialog::onPreviewTrack(int track_index, int start_ms)
@@ -1923,8 +1984,8 @@ void ActionEditorDialog::onPreviewTrack(int track_index, int start_ms)
     const QString label = QString::fromStdString(solo.tracks.front().name);
     startPreview(solo, start_ms,
                  start_ms > 0
-                     ? QStringLiteral("Previewing \"%1\" from %2 msâ€¦").arg(label).arg(start_ms)
-                     : QStringLiteral("Previewing \"%1\"â€¦").arg(label),
+                     ? QStringLiteral("Previewing \"%1\" from %2 ms...").arg(label).arg(start_ms)
+                     : QStringLiteral("Previewing \"%1\"...").arg(label),
                  true);
 }
 

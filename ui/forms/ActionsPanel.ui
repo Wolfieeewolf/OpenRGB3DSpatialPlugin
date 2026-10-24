@@ -20,6 +20,30 @@
     </widget>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="categoryRow">
+     <item>
+      <widget class="QLabel" name="categoryLabel">
+       <property name="text">
+        <string>Category</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="categoryCombo">
+       <property name="toolTip">
+        <string>Filter by category folder under triggers/effects/</string>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QListWidget" name="packList">
      <property name="minimumSize">
       <size>
@@ -79,7 +103,7 @@
         <string>Import…</string>
        </property>
        <property name="toolTip">
-        <string>Import into triggers/effects/</string>
+        <string>Import into the selected Category folder (or root when All/(root))</string>
        </property>
       </widget>
      </item>

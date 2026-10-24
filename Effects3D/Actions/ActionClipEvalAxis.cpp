@@ -143,8 +143,9 @@ bool EvaluateClipAtAxis(const Clip& clip,
     if(IsMediaClip(clip))
     {
         // Strip / 1D fallback: map along U and project the full image column onto each LED.
+        // Wide aspect so scrolling marquee shows a short readable window, not the whole string.
         const float u = std::clamp(axis_pos, 0.0f, 1.0f);
-        return EvaluateMediaAtUv(clip, local_ms, u, 0.5f, out_color, out_intensity, true);
+        return EvaluateMediaAtUv(clip, local_ms, u, 0.5f, out_color, out_intensity, true, 8.0f);
     }
 
     if(script::UsesWorld(script::FileId(clip)))

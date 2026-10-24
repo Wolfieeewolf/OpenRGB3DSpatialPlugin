@@ -652,9 +652,9 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
     clip.max_intensity = 1.0f;
     clip.intensity = 1.0f;
     clip.direction = Action::Direction::Right;
-    clip.axis_space = Action::TargetIsMultiDeviceGroup(row.target)
-        ? Action::AxisSpace::Room
-        : Action::AxisSpace::Device;
+    const bool multi = Action::TargetIsMultiDeviceGroup(row.target);
+    clip.axis_space = multi ? Action::AxisSpace::Room : Action::AxisSpace::Device;
+    clip.play_bounds = multi ? Action::PlayBounds::RoomBox : Action::PlayBounds::TrackLights;
     clip.axis_mode = Action::AxisMode::Preset;
     clip.axis_yaw_deg = 0.0f;
     clip.axis_pitch_deg = 0.0f;
@@ -663,13 +663,23 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
     if(Action::IsMediaEffect(clip.effect_id))
     {
         clip.axis_space = Action::AxisSpace::Device;
+        clip.play_bounds = Action::PlayBounds::TrackLights;
         clip.period_ms = 2000;
         clip.media_scroll = (clip.effect_id == "media_text");
-        if(clip.media_scroll)
+        if(clip.effect_id == "media_text")
         {
-            clip.media_text.clear();
+            clip.media_text = "Hello";
             clip.color = ToRGBColor(255, 220, 60);
+            clip.direction = Action::Direction::Left;
         }
+    }
+    else if(multi
+            && (Action::script::UsesField(clip.effect_id)
+                || Action::script::UsesParticles(clip.effect_id)
+                || Action::script::UsesRibbons(clip.effect_id)))
+    {
+        clip.play_bounds = Action::PlayBounds::RoomBox;
+        clip.axis_space = Action::AxisSpace::Room;
     }
     Action::EnsureClipGradient(&clip);
     if(gradient_preset_)
@@ -695,17 +705,13 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
     if(status_label_)
     {
         QString space_tip;
-        if(clip.axis_space == Action::AxisSpace::Sequence)
+        if(clip.play_bounds == Action::PlayBounds::RoomBox)
         {
-            space_tip = QStringLiteral("Sequence space — marches along controller order (drag rows to reorder)");
-        }
-        else if(clip.axis_space == Action::AxisSpace::Room)
-        {
-            space_tip = QStringLiteral("Room space — shared 3D box across devices in this target");
+            space_tip = QStringLiteral("Play on whole room");
         }
         else
         {
-            space_tip = QStringLiteral("Device space — per-controller local axes");
+            space_tip = QStringLiteral("Play on this track's lights");
         }
         const QString title = effect_id.isEmpty() ? QString::fromStdString(Action::ClipFileId(clip)) : effect_id;
         status_label_->setText(QStringLiteral("Added %1 — %2").arg(title, space_tip));
