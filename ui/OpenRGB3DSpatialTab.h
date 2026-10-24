@@ -36,7 +36,11 @@ class QHideEvent;
 class QShowEvent;
 class QStackedWidget;
 
-namespace Action { struct Pack; }
+namespace Action
+{
+struct Pack;
+struct ApplySpatialContext;
+}
 
 #include "OpenRGBPluginInterface.h"
 #include "LEDPosition3D.h"
@@ -125,6 +129,8 @@ public:
     }
     ZoneManager3D* GetZoneManager() { return zone_manager.get(); }
     const ZoneManager3D* GetZoneManager() const { return zone_manager.get(); }
+    /** Full room AABB for Action Room/field sampling (never LED cluster). */
+    bool GetActionRoomWorldBounds(Action::ApplySpatialContext* out) const;
 
 protected:
     void showEvent(QShowEvent* event) override;

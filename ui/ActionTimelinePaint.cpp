@@ -4,7 +4,10 @@
 #include "ActionCatalog.h"
 #include "Actions/ActionApplier.h"
 #include "Actions/ActionScript.h"
+#include "Actions/ActionVolumeField.h"
 #include "ZoneManager3D.h"
+
+#include <cstdint>
 
 #include <QCursor>
 #include <QDragEnterEvent>
@@ -47,7 +50,8 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     {
         Action::BuildSpatialAxesForTarget(*pack_, pb.view_target, sample,
                                               transforms_, &axes, &seeds, &nxs, &nys, &nzs,
-                                              zone_manager_);
+                                              zone_manager_,
+                                              room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
     }
 
     std::vector<int> order;
@@ -81,7 +85,15 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     img.fill(Qt::transparent);
 
     const int dur = std::max(1, sample.end_ms - sample.start_ms);
-    const bool world_eval = Action::ActionScriptUsesWorld(Action::ClipFileId(sample));
+    const std::string effect_id = Action::ClipFileId(sample);
+    const bool world_eval = Action::ActionScriptUsesWorld(effect_id);
+    const bool field_eval = Action::script::UsesField(effect_id);
+    // Match ApplyPackFrame: prepare GPU field once before any field_* samples.
+    if(field_eval)
+    {
+        static std::uint64_t s_timeline_field_seq = 0;
+        Action::volume_field::PrepareForClip(sample, sample.start_ms, ++s_timeline_field_seq);
+    }
 
     auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
         constexpr float k0 = 0.0f;
@@ -107,12 +119,13 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
                                                    axes[(size_t)idx], seeds[(size_t)idx],
                                                    c, intens);
         }
-        if(world_eval)
+        if(world_eval || field_eval
+           || sample.axis_space == Action::AxisSpace::Room)
         {
+            // Do not fake Room/world previews with pack LED index order — that reads as
+            // top-to-bottom list march on All (this pack).
             const float t = (led_n <= 1) ? 0.5f : (float)led_slot / (float)(led_n - 1);
-            return Action::EvaluateClipAtWorld(sample, ms, t, 0.5f, 0.5f,
-                                                    k0, k1, k0, k1, k0, k1,
-                                                    led_slot, c, intens);
+            return Action::EvaluateClipAtAxis(sample, ms, t, led_slot, c, intens);
         }
         return Action::EvaluateClipAtLed(sample, ms, led_slot, led_n, c, intens);
     };
@@ -133,6 +146,10 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         const float t = (img.width() <= 1) ? 0.0f : (float)x / (float)(img.width() - 1);
         const int ms = sample.start_ms + (int)std::lround(t * (float)dur);
         const int sample_ms = std::min(std::max(ms, sample.start_ms), sample.end_ms - 1);
+        if(field_eval)
+        {
+            Action::volume_field::PrepareForClip(sample, sample_ms, 0);
+        }
 
         int row = 0;
         for(int led = 0; led < led_n; led += skip, ++row)

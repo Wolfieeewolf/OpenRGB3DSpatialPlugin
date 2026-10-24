@@ -7,8 +7,10 @@
 #include "EffectGlobalSettingsPanel.h"
 #include "EffectLibraryPanel.h"
 #include "ActionsPanel.h"
+#include "Actions/Action.h"
 #include "Actions/ActionApplier.h"
 #include "Actions/ActionScript.h"
+#include "Actions/ActionVolumeField.h"
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
@@ -199,6 +201,33 @@ void OpenRGB3DSpatialTab::PrepareActionPreview()
     Action::PrepareControllersForPreview(resource_manager->GetRGBControllers());
 }
 
+bool OpenRGB3DSpatialTab::GetActionRoomWorldBounds(Action::ApplySpatialContext* out) const
+{
+    if(!out)
+    {
+        return false;
+    }
+    ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                              manual_room_width,
+                                                              manual_room_height,
+                                                              manual_room_depth);
+    GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+    out->has_world_bounds = (world_bounds.max_x > world_bounds.min_x)
+        && (world_bounds.max_y > world_bounds.min_y)
+        && (world_bounds.max_z > world_bounds.min_z);
+    if(!out->has_world_bounds)
+    {
+        return false;
+    }
+    out->min_x = world_bounds.min_x;
+    out->max_x = world_bounds.max_x;
+    out->min_y = world_bounds.min_y;
+    out->max_y = world_bounds.max_y;
+    out->min_z = world_bounds.min_z;
+    out->max_z = world_bounds.max_z;
+    return true;
+}
+
 void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack, int local_ms, bool force_hw_update)
 {
     ApplyActionPreviewFrame(pack, local_ms, force_hw_update, nullptr);
@@ -217,7 +246,15 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
 
     Action::ApplySpatialContext spatial;
     const Action::ApplySpatialContext* spatial_ptr = nullptr;
-    if(layer_effect)
+    // Full room box for Action Editor preview (LEDs + overlay). Never LED cluster AABB.
+    if(!layer_effect)
+    {
+        if(GetActionRoomWorldBounds(&spatial))
+        {
+            spatial_ptr = &spatial;
+        }
+    }
+    else
     {
         spatial.layer_zone_index = -1;
         if(layer_effect == current_effect_ui && effectStackList())
@@ -329,6 +366,114 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
 
     Action::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
                                force_hw_update, zone_manager.get(), spatial_ptr);
+
+    // Room-grid overlay is a separate buffer from LED preview_color (filled by the effect
+    // stack only). While Action preview runs, sample active world/field clips into it.
+    if(viewport && viewport->GetShowRoomGridOverlay())
+    {
+        static std::uint64_t s_action_overlay_seq = 0;
+        const std::uint64_t overlay_seq = ++s_action_overlay_seq;
+        if((overlay_seq & 1ull) == 0ull)
+        {
+            float min_x = 0.0f, max_x = 0.0f, min_y = 0.0f, max_y = 0.0f, min_z = 0.0f, max_z = 0.0f;
+            bool have_bounds = false;
+            if(spatial_ptr && spatial_ptr->has_world_bounds)
+            {
+                min_x = spatial_ptr->min_x; max_x = spatial_ptr->max_x;
+                min_y = spatial_ptr->min_y; max_y = spatial_ptr->max_y;
+                min_z = spatial_ptr->min_z; max_z = spatial_ptr->max_z;
+                have_bounds = true;
+            }
+            else
+            {
+                Action::ApplySpatialContext room;
+                if(GetActionRoomWorldBounds(&room))
+                {
+                    min_x = room.min_x; max_x = room.max_x;
+                    min_y = room.min_y; max_y = room.max_y;
+                    min_z = room.min_z; max_z = room.max_z;
+                    have_bounds = true;
+                }
+            }
+
+            if(have_bounds)
+            {
+                viewport->SetRoomGridOverlayBounds(min_x, max_x, min_y, max_y, min_z, max_z);
+                int nx = 0, ny = 0, nz = 0;
+                viewport->GetRoomGridOverlayDimensions(&nx, &ny, &nz);
+                const size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
+                if(count > 0 && count <= 500000u)
+                {
+                    if(room_grid_overlay_buffer.size() != count)
+                    {
+                        room_grid_overlay_buffer.assign(count, ToRGBColor(0, 0, 0));
+                    }
+                    else
+                    {
+                        std::fill(room_grid_overlay_buffer.begin(), room_grid_overlay_buffer.end(),
+                                  ToRGBColor(0, 0, 0));
+                    }
+
+                    std::vector<const Action::Clip*> world_clips;
+                    world_clips.reserve(pack.tracks.size());
+                    for(const Action::Track& track : pack.tracks)
+                    {
+                        const Action::Clip* top = Action::FindActiveClip(track, local_ms);
+                        if(!top)
+                        {
+                            continue;
+                        }
+                        const std::string id = Action::script::FileId(*top);
+                        if(Action::script::UsesWorld(id) || Action::script::UsesField(id)
+                           || Action::IsMediaClip(*top))
+                        {
+                            world_clips.push_back(top);
+                        }
+                    }
+
+                    if(!world_clips.empty())
+                    {
+                        // One field atlas at a time — prepare per clip, then stamp voxels.
+                        static std::uint64_t s_overlay_field_seq = 0;
+                        for(const Action::Clip* clip : world_clips)
+                        {
+                            if(Action::script::UsesField(Action::script::FileId(*clip)))
+                            {
+                                Action::volume_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            for(int ix = 0; ix < nx; ++ix)
+                            {
+                                for(int iy = 0; iy < ny; ++iy)
+                                {
+                                    for(int iz = 0; iz < nz; ++iz)
+                                    {
+                                        float sx = 0.0f, sy = 0.0f, sz = 0.0f;
+                                        viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sx, sy, sz);
+                                        RGBColor color = ToRGBColor(0, 0, 0);
+                                        float intensity = 0.0f;
+                                        const int seed = ix * 73856093 ^ iy * 19349663 ^ iz * 83492791;
+                                        if(!Action::EvaluateClipAtWorld(*clip, local_ms,
+                                                                        sx, sy, sz,
+                                                                        min_x, max_x, min_y, max_y, min_z, max_z,
+                                                                        seed, &color, &intensity))
+                                        {
+                                            continue;
+                                        }
+                                        const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
+                                            + (size_t)iy * (size_t)nz + (size_t)iz;
+                                        room_grid_overlay_buffer[idx] = color;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    viewport->SetRoomGridColorCallback(nullptr);
+                    viewport->SwapRoomGridColorBuffer(room_grid_overlay_buffer);
+                }
+            }
+        }
+    }
+
     if(viewport)
     {
         viewport->UpdateColors();

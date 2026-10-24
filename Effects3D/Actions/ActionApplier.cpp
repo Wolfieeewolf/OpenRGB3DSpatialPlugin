@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ActionApplier.h"
+#include "ActionScript.h"
+#include "ActionVolumeField.h"
 #include "ActionApplierDetail.h"
 #include "ZoneManager3D.h"
 
@@ -130,6 +132,8 @@ ApplyStats ApplyPackFrame(const Pack& pack,
     const bool use_transforms = transforms && !transforms->empty();
     const RGBColor off = ToRGBColor(0, 0, 0);
     const int layer_zone = spatial ? spatial->layer_zone_index : -1;
+    static std::uint64_t s_field_sequence = 0;
+    const std::uint64_t field_sequence = ++s_field_sequence;
 
     if(use_transforms)
     {
@@ -166,13 +170,22 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         if(use_transforms)
         {
             const Clip* top = FindActiveClip(track, local_ms);
+            if(top && script::UsesField(script::FileId(*top)))
+            {
+                volume_field::PrepareForClip(*top, local_ms, field_sequence);
+            }
             applier_detail::SampleBounds shared_bounds;
             applier_detail::SeqAxesMap seq_map;
             const bool want_shared = top && ClipUsesSharedWorldBounds(*top);
             const bool want_sequence = top && ClipUsesSequenceAxis(*top);
 
-            if(want_shared && spatial && spatial->has_world_bounds)
+            // Room / field clips: full room AABB only (never shrink to LED cluster).
+            if(want_shared)
             {
+                if(!spatial || !spatial->has_world_bounds)
+                {
+                    continue;
+                }
                 shared_bounds.min_x = spatial->min_x;
                 shared_bounds.max_x = spatial->max_x;
                 shared_bounds.min_y = spatial->min_y;
@@ -181,16 +194,16 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 shared_bounds.max_z = spatial->max_z;
                 shared_bounds.valid = true;
             }
-            else if(want_shared || want_sequence)
+            if(want_sequence)
             {
                 std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
                 applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
-                if(want_sequence)
+                // Sequence march must match the zone filter used when painting, or visible
+                // LEDs get the wrong slice of the 0..1 wipe.
+                if(layer_zone != -1)
                 {
-                    applier_detail::BuildSequenceAxesMap(ordered, &seq_map);
-                }
-                if(want_shared)
-                {
+                    std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> filtered;
+                    filtered.reserve(ordered.size());
                     for(const auto& pair : ordered)
                     {
                         int ti = -1;
@@ -202,17 +215,14 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                                 break;
                             }
                         }
-                        if(!LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
+                        if(LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
                         {
-                            continue;
+                            filtered.push_back(pair);
                         }
-                        applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
                     }
-                    if(!shared_bounds.valid && TargetIsMultiDeviceGroup(track.target))
-                    {
-                        continue;
-                    }
+                    ordered.swap(filtered);
                 }
+                applier_detail::BuildSequenceAxesMap(ordered, &seq_map);
             }
 
             int painted = 0;

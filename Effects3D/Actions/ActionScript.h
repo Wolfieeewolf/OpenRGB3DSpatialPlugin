@@ -46,6 +46,9 @@ void ReloadDirectory();
 bool Has(const std::string& id);
 std::string FileId(const Clip& clip);
 bool UsesWorld(const std::string& id);
+/** Non-empty when `.fx` declares `shader:` / `field:` (GPU volume sample). */
+std::string FieldShader(const std::string& id);
+bool UsesField(const std::string& id);
 bool ColorEnds(const std::string& id);
 bool PreviewPulse(const std::string& id);
 bool AxisAngle(const std::string& id);

@@ -35,6 +35,21 @@ bool TrackAppliesToTransform(const Pack& pack,
                              int transform_index,
                              ZoneManager3D* zone_manager);
 
+/** Room / Movie Sync spatial settings. Room/field clips require has_world_bounds. */
+struct ApplySpatialContext
+{
+    /** Effect global zone (-1 = all). Filters which controllers/transforms are painted. */
+    int layer_zone_index = -1;
+    /** Full room AABB — never shrink to LED cluster. */
+    bool has_world_bounds = false;
+    float min_x = 0.0f;
+    float max_x = 0.0f;
+    float min_y = 0.0f;
+    float max_y = 0.0f;
+    float min_z = 0.0f;
+    float max_z = 0.0f;
+};
+
 void BuildSpatialAxesForTarget(const Pack& pack,
                                const Target& target,
                                const Clip& sample,
@@ -44,7 +59,9 @@ void BuildSpatialAxesForTarget(const Pack& pack,
                                std::vector<float>* out_nx = nullptr,
                                std::vector<float>* out_ny = nullptr,
                                std::vector<float>* out_nz = nullptr,
-                               ZoneManager3D* zone_manager = nullptr);
+                               ZoneManager3D* zone_manager = nullptr,
+                               /** Required for Room/field — full room AABB; never LED cluster. */
+                               const ApplySpatialContext* room_bounds = nullptr);
 
 ApplyStats ApplyPackFrame(const Pack& pack,
                           int local_ms,
@@ -52,21 +69,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                           std::vector<std::unique_ptr<ControllerTransform>>* transforms = nullptr,
                           bool force_hw_update = false,
                           ZoneManager3D* zone_manager = nullptr);
-
-/** Optional stack-layer spatial settings (Movie Sync / Triggers). */
-struct ApplySpatialContext
-{
-    /** Effect global zone (-1 = all). Filters which controllers/transforms are painted. */
-    int layer_zone_index = -1;
-    /** When set, Room / world clips sample against this AABB (Spatial Anchor occupancy). */
-    bool has_world_bounds = false;
-    float min_x = 0.0f;
-    float max_x = 0.0f;
-    float min_y = 0.0f;
-    float max_y = 0.0f;
-    float min_z = 0.0f;
-    float max_z = 0.0f;
-};
 
 ApplyStats ApplyPackFrame(const Pack& pack,
                           int local_ms,

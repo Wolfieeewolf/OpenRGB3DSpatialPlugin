@@ -252,6 +252,11 @@ void ActionEditorDialog::onRebuildTimelineModel()
     {
         timeline_->setControllerTransforms(tab_->GetControllerTransformsMutable());
         timeline_->setZoneManager(tab_->GetZoneManager());
+        Action::ApplySpatialContext room;
+        if(tab_->GetActionRoomWorldBounds(&room))
+        {
+            timeline_->setRoomWorldBounds(room);
+        }
         const auto& transforms = tab_->GetControllerTransforms();
         ZoneManager3D* zones = tab_->GetZoneManager();
 

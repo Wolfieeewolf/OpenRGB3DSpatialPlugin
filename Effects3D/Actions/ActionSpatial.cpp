@@ -467,6 +467,11 @@ bool ClipUsesSharedWorldBounds(const Clip& clip)
     {
         return true;
     }
+    // GPU field tools sample a shared room atlas — always use world AABB.
+    if(script::UsesField(script::FileId(clip)))
+    {
+        return true;
+    }
     return clip.axis_space == AxisSpace::Sequence && !ClipUsesSequenceAxis(clip);
 }
 

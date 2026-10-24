@@ -326,7 +326,16 @@ bool ActionTimelineWidget::expandClipAcrossRows(int src_track, int src_clip, int
 
     Action::Clip moved = pack_->tracks[(size_t)src_track].clips[(size_t)src_clip];
     // Continuous wipe across the span (not per-LED Sequence loops).
-    if(moved.axis_space == Action::AxisSpace::Sequence)
+    // All / scene zone → Room; single-device destination → Device from Sequence.
+    if(Action::TargetIsMultiDeviceGroup(new_target))
+    {
+        if(moved.axis_space == Action::AxisSpace::Sequence
+           || moved.axis_space == Action::AxisSpace::Device)
+        {
+            moved.axis_space = Action::AxisSpace::Room;
+        }
+    }
+    else if(moved.axis_space == Action::AxisSpace::Sequence)
     {
         moved.axis_space = Action::AxisSpace::Device;
     }
@@ -876,6 +885,12 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
             const int start = snapMs(std::clamp(ms + copy.start_ms, 0, std::max(0, duration_ms_ - len)));
             copy.start_ms = start;
             copy.end_ms = start + len;
+            if(Action::TargetIsMultiDeviceGroup(pack_->tracks[(size_t)dest_track].target)
+               && (copy.axis_space == Action::AxisSpace::Device
+                   || copy.axis_space == Action::AxisSpace::Sequence))
+            {
+                copy.axis_space = Action::AxisSpace::Room;
+            }
             pack_->tracks[(size_t)dest_track].clips.push_back(std::move(copy));
             last = (int)pack_->tracks[(size_t)dest_track].clips.size() - 1;
             selection_.push_back({dest_track, last});
@@ -893,6 +908,13 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
     const int start = snapMs(std::clamp(ms, 0, std::max(0, duration_ms_ - len)));
     copy.start_ms = start;
     copy.end_ms = start + len;
+    if(dest_track >= 0 && dest_track < (int)pack_->tracks.size()
+       && Action::TargetIsMultiDeviceGroup(pack_->tracks[(size_t)dest_track].target)
+       && (copy.axis_space == Action::AxisSpace::Device
+           || copy.axis_space == Action::AxisSpace::Sequence))
+    {
+        copy.axis_space = Action::AxisSpace::Room;
+    }
     pack_->tracks[(size_t)dest_track].clips.push_back(std::move(copy));
     selected_track_ = dest_track;
     selected_clip_ = (int)pack_->tracks[(size_t)dest_track].clips.size() - 1;

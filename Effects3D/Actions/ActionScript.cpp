@@ -2,6 +2,7 @@
 
 #include "ActionScript.h"
 #include "ActionDetail.h"
+#include "ActionVolumeField.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -66,6 +67,8 @@ struct Program
     bool color_ends = false;
     bool preview_pulse = false;
     bool axis_angle = false;
+    /** GPU volume body id (`shader:` / `field:` header) — empty = CPU-only tool. */
+    std::string field_shader;
     std::vector<std::string> aliases;
 };
 
@@ -141,6 +144,11 @@ enum Fn
     FnAxisY,
     FnAxisZ,
     FnSampleAxis,
+    FnFieldR,
+    FnFieldG,
+    FnFieldB,
+    FnFieldA,
+    FnFieldPaint,
 };
 
 struct Tok
@@ -238,6 +246,11 @@ int FnId(const std::string& name)
     if(name == "axis_y") return FnAxisY;
     if(name == "axis_z") return FnAxisZ;
     if(name == "sample_axis") return FnSampleAxis;
+    if(name == "field_r") return FnFieldR;
+    if(name == "field_g") return FnFieldG;
+    if(name == "field_b") return FnFieldB;
+    if(name == "field_a") return FnFieldA;
+    if(name == "field_paint") return FnFieldPaint;
     return -1;
 }
 
@@ -651,6 +664,39 @@ struct Machine
                 return ApplyClipAxisMirror(*led->clip,
                     SampleAxisPos(*led->clip, led->x, led->y, led->z,
                                   led->min_x, led->max_x, led->min_y, led->max_y, led->min_z, led->max_z));
+            case FnFieldR:
+            case FnFieldG:
+            case FnFieldB:
+            case FnFieldA:
+            case FnFieldPaint:
+            {
+                if(!led)
+                {
+                    return 0.0f;
+                }
+                const volume_field::SampleRgb samp = volume_field::Sample01(led->nx, led->ny, led->nz);
+                if(fn == FnFieldR)
+                {
+                    return samp.r;
+                }
+                if(fn == FnFieldG)
+                {
+                    return samp.g;
+                }
+                if(fn == FnFieldB)
+                {
+                    return samp.b;
+                }
+                if(fn == FnFieldA)
+                {
+                    return volume_field::SampleA01(led->nx, led->ny, led->nz);
+                }
+                const int r = (int)std::lround(std::clamp(samp.r, 0.0f, 1.0f) * 255.0f);
+                const int g = (int)std::lround(std::clamp(samp.g, 0.0f, 1.0f) * 255.0f);
+                const int b = (int)std::lround(std::clamp(samp.b, 0.0f, 1.0f) * 255.0f);
+                color = ToRGBColor(r, g, b);
+                return std::max(samp.r, std::max(samp.g, samp.b));
+            }
             default:
                 return 0.0f;
         }
@@ -834,6 +880,26 @@ void ReadProgram(const filesystem::path& file, const std::string& section)
             else if(key == "color") prog.color_ends = (val == "ends");
             else if(key == "preview") prog.preview_pulse = (val == "pulse");
             else if(key == "axis") prog.axis_angle = (val == "angle");
+            else if(key == "shader" || key == "field")
+            {
+                prog.field_shader = val;
+                while(!prog.field_shader.empty()
+                      && (prog.field_shader.back() == ' ' || prog.field_shader.back() == '\t'))
+                {
+                    prog.field_shader.pop_back();
+                }
+                for(char& c : prog.field_shader)
+                {
+                    if(c >= 'A' && c <= 'Z')
+                    {
+                        c = (char)(c - 'A' + 'a');
+                    }
+                }
+                if(!prog.field_shader.empty())
+                {
+                    prog.world = true;
+                }
+            }
             else if(key == "swatch")
             {
                 int r = 180, g = 180, b = 190;
@@ -927,27 +993,35 @@ std::string FileId(const Clip& clip)
 
 void SetDirectory(const filesystem::path& dir)
 {
-    std::lock_guard<std::mutex> lock(g_mu);
-    if(dir == g_dir && !g_programs.empty())
     {
-        return;
+        std::lock_guard<std::mutex> lock(g_mu);
+        if(dir == g_dir && !g_programs.empty())
+        {
+            volume_field::SetToolboxDirectory(dir);
+            return;
+        }
+        g_dir = dir;
+        g_programs.clear();
+        g_alias.clear();
+        ScanDir(dir, "", 0);
     }
-    g_dir = dir;
-    g_programs.clear();
-    g_alias.clear();
-    ScanDir(dir, "", 0);
+    volume_field::SetToolboxDirectory(dir);
+    volume_field::Reset();
 }
 
 void ReloadDirectory()
 {
-    std::lock_guard<std::mutex> lock(g_mu);
-    if(g_dir.empty())
     {
-        return;
+        std::lock_guard<std::mutex> lock(g_mu);
+        if(g_dir.empty())
+        {
+            return;
+        }
+        g_programs.clear();
+        g_alias.clear();
+        ScanDir(g_dir, "", 0);
     }
-    g_programs.clear();
-    g_alias.clear();
-    ScanDir(g_dir, "", 0);
+    volume_field::Reset();
 }
 
 bool Has(const std::string& id)
@@ -961,6 +1035,18 @@ bool UsesWorld(const std::string& id)
     std::lock_guard<std::mutex> lock(g_mu);
     const Program* prog = FindProgram(id);
     return prog && prog->world;
+}
+
+std::string FieldShader(const std::string& id)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    const Program* prog = FindProgram(id);
+    return prog ? prog->field_shader : std::string();
+}
+
+bool UsesField(const std::string& id)
+{
+    return !FieldShader(id).empty();
 }
 
 bool ColorEnds(const std::string& id)

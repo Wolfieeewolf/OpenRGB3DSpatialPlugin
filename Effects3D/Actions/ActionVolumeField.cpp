@@ -1,0 +1,231 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "ActionVolumeField.h"
+#include "ActionScript.h"
+#include "SpatialShaderCatalog.h"
+#include "SpatialVolumeFieldAssist.h"
+
+#include <QFile>
+#include <QString>
+#include <QTextStream>
+#include <QVector3D>
+
+#include <algorithm>
+#include <cmath>
+#include <memory>
+#include <mutex>
+#include <string>
+
+namespace Action
+{
+namespace volume_field
+{
+namespace
+{
+
+std::unique_ptr<SpatialVolumeFieldAssist> g_assist;
+filesystem::path g_toolbox_dir;
+std::string g_loaded_shader_id;
+std::mutex g_mu;
+
+SpatialVolumeFieldAssist& Assist()
+{
+    if(!g_assist)
+    {
+        g_assist = std::make_unique<SpatialVolumeFieldAssist>();
+    }
+    return *g_assist;
+}
+
+bool IsFsHeaderKey(const QString& key)
+{
+    static const char* kKeys[] = {
+        "name", "description", "section", "pattern", "index", "palette", "class", "category",
+        "finish", "param", "pattern_key", "colors", "supports_strip_colormap", "supports_height_bands",
+        "slider", "resolution", "rainbow", "needs_frequency", "needs_arms", "show_axis",
+        "user_colors", "pattern_label", "combo", "option", "pattern_index", "pattern_source",
+        "sample", "flow", "global", "media", "drive", "audio_preset", "audio_media", "shader",
+        "media_layout", "instances", "duration_ms", "loop", "swatch"
+    };
+    for(const char* k : kKeys)
+    {
+        if(key == QLatin1String(k))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+QString StripFsHeader(const QString& raw)
+{
+    QString body;
+    const QStringList lines = raw.split(QLatin1Char('\n'));
+    bool header = true;
+    for(const QString& line : lines)
+    {
+        const QString trimmed = line.trimmed();
+        if(header)
+        {
+            if(trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('#')))
+            {
+                continue;
+            }
+            const int colon = trimmed.indexOf(QLatin1Char(':'));
+            if(colon > 0)
+            {
+                const QString key = trimmed.left(colon).trimmed();
+                if(IsFsHeaderKey(key))
+                {
+                    continue;
+                }
+            }
+            header = false;
+        }
+        body += line;
+        body += QLatin1Char('\n');
+    }
+    return body;
+}
+
+QString LoadFsFromToolbox(const std::string& shader_id)
+{
+    if(g_toolbox_dir.empty() || shader_id.empty())
+    {
+        return QString();
+    }
+    const std::string file_name = shader_id + ".fs";
+    std::error_code ec;
+    if(!filesystem::is_directory(g_toolbox_dir, ec))
+    {
+        return QString();
+    }
+    for(const auto& entry : filesystem::recursive_directory_iterator(g_toolbox_dir, ec))
+    {
+        if(ec || !entry.is_regular_file())
+        {
+            continue;
+        }
+        if(entry.path().filename().string() != file_name)
+        {
+            continue;
+        }
+        QFile file(QString::fromStdString(entry.path().string()));
+        if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+            return QString();
+        }
+        return StripFsHeader(QString::fromUtf8(file.readAll()));
+    }
+    return QString();
+}
+
+QString LoadShaderBody(const std::string& shader_id)
+{
+    QString body = LoadFsFromToolbox(shader_id);
+    if(body.trimmed().isEmpty())
+    {
+        body = SpatialShaderCatalog::LoadEffectShader(QString::fromStdString(shader_id));
+    }
+    return body;
+}
+
+} // namespace
+
+void SetToolboxDirectory(const filesystem::path& dir)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_toolbox_dir = dir;
+}
+
+void Reset()
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_assist.reset();
+    g_loaded_shader_id.clear();
+}
+
+bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence)
+{
+    const std::string effect_id = script::FileId(clip);
+    const std::string shader_id = script::FieldShader(effect_id);
+    if(shader_id.empty())
+    {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(shader_id != g_loaded_shader_id)
+    {
+        const QString body = LoadShaderBody(shader_id);
+        if(body.trimmed().isEmpty())
+        {
+            g_loaded_shader_id.clear();
+            return false;
+        }
+        Assist().setFragmentBody(body);
+        Assist().setResolution(18);
+        g_loaded_shader_id = shader_id;
+    }
+
+    const float progress = ClipProgress(clip, local_ms);
+    const float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
+    const float size = std::clamp(clip.pulse_length, 0.02f, 1.0f);
+    const float speed = std::max(0.01f, clip.speed);
+    float params[8] = {
+        progress,
+        intensity,
+        size,
+        speed,
+        std::clamp(clip.min_intensity, 0.0f, 1.0f),
+        std::clamp(clip.max_intensity, 0.0f, 1.0f),
+        0.0f,
+        0.0f
+    };
+    const float time_sec = (float)local_ms * 0.001f * speed;
+    return Assist().prepare(render_sequence, time_sec, params, 6);
+}
+
+bool IsAvailable()
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    return g_assist && g_assist->isAvailable();
+}
+
+SampleRgb Sample01(float nx, float ny, float nz)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    SampleRgb out;
+    if(!g_assist || !g_assist->isAvailable())
+    {
+        return out;
+    }
+    const QVector3D s = g_assist->sample01(std::clamp(nx, 0.0f, 1.0f),
+                                           std::clamp(ny, 0.0f, 1.0f),
+                                           std::clamp(nz, 0.0f, 1.0f));
+    out.r = s.x();
+    out.g = s.y();
+    out.b = s.z();
+    return out;
+}
+
+float SampleScalar01(float nx, float ny, float nz)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(!g_assist || !g_assist->isAvailable())
+    {
+        return 0.0f;
+    }
+    return g_assist->sampleScalar01(std::clamp(nx, 0.0f, 1.0f),
+                                    std::clamp(ny, 0.0f, 1.0f),
+                                    std::clamp(nz, 0.0f, 1.0f));
+}
+
+float SampleA01(float nx, float ny, float nz)
+{
+    const SampleRgb s = Sample01(nx, ny, nz);
+    return (s.r + s.g + s.b) > 1e-4f ? 1.0f : 0.0f;
+}
+
+} // namespace volume_field
+} // namespace Action

@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Actions/Action.h"
+#include "Actions/ActionApplier.h"
 #include "LEDPosition3D.h"
 #include "filesystem.h"
 #include <QMenu>
@@ -66,6 +67,8 @@ public:
     /** Scene transforms for world-space wipe/chase preview inside clips. */
     void setControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms);
     void setZoneManager(ZoneManager3D* zone_manager);
+    /** Full room AABB for Room/field timeline rasters (never LED cluster). */
+    void setRoomWorldBounds(const Action::ApplySpatialContext& room);
     void setModel(QVector<Node> roots);
     void setDurationMs(int duration_ms);
     void setPlayheadMs(int ms);
@@ -256,6 +259,7 @@ private:
     Action::Pack* pack_ = nullptr;
     std::vector<std::unique_ptr<ControllerTransform>>* transforms_ = nullptr;
     ZoneManager3D* zone_manager_ = nullptr;
+    Action::ApplySpatialContext room_bounds_;
     QVector<Node> roots_;
     QVector<Row> visible_rows_;
     int duration_ms_ = 5000;

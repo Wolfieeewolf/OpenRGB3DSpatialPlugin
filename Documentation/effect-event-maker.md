@@ -69,10 +69,14 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 |----------|--------|
 | Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve`, `wave` |
 | Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars`, `scanner` |
-| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst` |
+| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst`, `field_ripple` (GPU field) |
 | Media | `media_image`, `media_gif`, `media_text` — still/GIF/marquee mapped onto Device UV (PixelScreen / xLights matrix style) |
 
 **Tools** (Basic / Pixel / Volume / Media) are **not** bundled — they load from `action-editor/toolbox/` after you install the presets pack. Editor chrome only: solid colors, gradients, and intensity/period curves in `ActionCatalog`.
+
+### Action volume-field engine (Atmos sample)
+
+World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares `SpatialVolumeFieldAssist` once per pack frame; `.fx` samples with `field_r` / `field_g` / `field_b` / `field_a` / `field_paint()` at the LED’s room-normalized XYZ. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
 
 ## Pack file schema (v4)
 

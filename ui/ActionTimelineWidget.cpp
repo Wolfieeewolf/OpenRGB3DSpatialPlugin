@@ -68,6 +68,12 @@ void ActionTimelineWidget::setZoneManager(ZoneManager3D* zone_manager)
     update();
 }
 
+void ActionTimelineWidget::setRoomWorldBounds(const Action::ApplySpatialContext& room)
+{
+    room_bounds_ = room;
+    update();
+}
+
 QString ActionTimelineWidget::targetKey(const Action::Target& t) const
 {
     QString key = QString::number((int)t.kind) + QLatin1Char('|')

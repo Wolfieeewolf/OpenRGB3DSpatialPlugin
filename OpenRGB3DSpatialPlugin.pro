@@ -176,6 +176,7 @@ HEADERS += \
     Effects3D/Actions/ActionPlayer.h \
     Effects3D/Actions/ActionApplier.h \
     Effects3D/Actions/ActionApplierDetail.h \
+    Effects3D/Actions/ActionVolumeField.h \
     Effects3D/Actions/ActionLibrary.h \
     Effects3D/Triggers/TriggerBinding.h \
     Effects3D/Triggers/TriggerSource.h \
@@ -365,6 +366,7 @@ SOURCES += \
     Effects3D/Actions/ActionClipEvalAxis.cpp \
     Effects3D/Actions/ActionSpatial.cpp \
     Effects3D/Actions/ActionScript.cpp \
+    Effects3D/Actions/ActionVolumeField.cpp \
     Effects3D/Actions/ActionApplier.cpp \
     Effects3D/Actions/ActionApplierMatch.cpp \
     Effects3D/Actions/ActionApplierSpatial.cpp \

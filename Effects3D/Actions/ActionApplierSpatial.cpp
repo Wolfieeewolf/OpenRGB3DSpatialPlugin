@@ -186,16 +186,15 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                 on = EvaluateClipAtAxis(*top, local_ms, axis, seed, &color, &intensity);
             }
         }
+        // Off means "this clip does not contribute" — do not write black or later
+        // device/zone tracks erase earlier LED-row (and vice versa) paints.
         if(!on)
         {
-            color = ToRGBColor(0, 0, 0);
+            continue;
         }
         led->preview_color = color;
         ApplyColorToMappedLed(*led, transform->controller, color, touched);
-        if(on)
-        {
-            ++painted;
-        }
+        ++painted;
     }
     return painted;
 }
@@ -327,7 +326,8 @@ void BuildSpatialAxesForTarget(const Pack& pack,
                                std::vector<float>* out_nx,
                                std::vector<float>* out_ny,
                                std::vector<float>* out_nz,
-                               ZoneManager3D* zone_manager)
+                               ZoneManager3D* zone_manager,
+                               const ApplySpatialContext* room_bounds)
 {
     if(!out_axes || !out_seeds)
     {
@@ -354,7 +354,21 @@ void BuildSpatialAxesForTarget(const Pack& pack,
     applier_detail::BuildOrderedSequenceLeds(pack, probe, transforms, zone_manager, &ordered);
 
     applier_detail::SampleBounds shared_bounds;
-    if(use_shared || !use_device)
+    if(use_shared)
+    {
+        if(!room_bounds || !room_bounds->has_world_bounds)
+        {
+            return;
+        }
+        shared_bounds.min_x = room_bounds->min_x;
+        shared_bounds.max_x = room_bounds->max_x;
+        shared_bounds.min_y = room_bounds->min_y;
+        shared_bounds.max_y = room_bounds->max_y;
+        shared_bounds.min_z = room_bounds->min_z;
+        shared_bounds.max_z = room_bounds->max_z;
+        shared_bounds.valid = true;
+    }
+    else if(!use_device)
     {
         for(const auto& pair : ordered)
         {
