@@ -501,16 +501,17 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                             {
                                 Action::builtin_gpu::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
                             }
+                            const bool gpu_field_clip = field_fast || particle_fast || ribbon_fast || builtin_fast;
                             const bool field_true = field_fast && Action::volume_field::IsAvailable();
                             const bool particle_true = particle_fast && Action::particle_field::IsAvailable();
                             const bool ribbon_true = ribbon_fast && Action::ribbon_field::IsAvailable();
                             const bool builtin_true = builtin_fast && Action::builtin_gpu::IsAvailable();
-                            const bool true_gpu = field_true || particle_true || ribbon_true || builtin_true;
                             const int grid_n = nx * ny * nz;
                             std::vector<float> grid_xyz;
                             std::vector<float> grid_rgb;
                             bool grid_ok = false;
-                            if(true_gpu && grid_n > 0)
+                            if(gpu_field_clip && grid_n > 0
+                               && (field_true || particle_true || ribbon_true || builtin_true))
                             {
                                 const float span_x = std::max(1e-5f, max_x - min_x);
                                 const float span_y = std::max(1e-5f, max_y - min_y);
@@ -565,8 +566,13 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                         RGBColor color = ToRGBColor(0, 0, 0);
                                         const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
                                             + (size_t)iy * (size_t)nz + (size_t)iz;
-                                        if(grid_ok)
+                                        if(gpu_field_clip)
                                         {
+                                            // Fail closed: GPU field clips stay dark if GL is down.
+                                            if(!grid_ok)
+                                            {
+                                                continue;
+                                            }
                                             const float r = grid_rgb[idx * 3u + 0u];
                                             const float g = grid_rgb[idx * 3u + 1u];
                                             const float b = grid_rgb[idx * 3u + 2u];

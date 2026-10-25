@@ -264,7 +264,7 @@ FolderVolumeSpec ReadSpec(const QString& path)
         }
         else if(key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis"))
         {
-            /* Catalog / UI hints — ignore so later finish/param lines still parse. */
+            /* Catalog / UI hints - ignore so later finish/param lines still parse. */
         }
         else if(key == QStringLiteral("user_colors"))
         {
@@ -602,7 +602,7 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
     {
         auto* pick_row = new QHBoxLayout();
         pick_row->setContentsMargins(0, 0, 0, 0);
-        browse_button = new QPushButton(tr("Choose image / GIF…"), panel);
+        browse_button = new QPushButton(tr("Choose image / GIF..."), panel);
         browse_button->setObjectName(QStringLiteral("browseButton"));
         path_label = new QLabel(media_path.isEmpty() ? tr("(no file)") : media_path, panel);
         path_label->setObjectName(QStringLiteral("pathLabel"));
@@ -1258,7 +1258,7 @@ void FolderVolumeEffect::BindMediaAmbienceBlock(QVBoxLayout* layout)
     bind_slider(media->ambienceDistRow(), "ambience_dist_falloff", tr("Distance dim:"),
                 tr("Darkens LEDs farther from the effect origin."));
     bind_slider(media->ambienceCurveRow(), "ambience_falloff_curve", tr("Falloff curve:"),
-                tr("Shapes how fast the vignette drops (soft → hard)."));
+                tr("Shapes how fast the vignette drops (soft ? hard)."));
     bind_slider(media->ambienceEdgeRow(), "ambience_edge_soft", tr("Edge fade:"),
                 tr("Fades toward room walls/floor/ceiling."));
     bind_slider(media->ambiencePropRow(), "ambience_propagation", tr("Wave delay:"),
@@ -1451,9 +1451,114 @@ void FolderVolumeEffect::ApplyGifPlaybackSpeed()
     gif_frame_timer->start();
 }
 
+void FolderVolumeEffect::SubmitVolumeGpu(std::uint64_t render_sequence,
+                                         float time_sec,
+                                         const float* params,
+                                         int count)
+{
+    // Program only ? LEDs and room-grid overlay both use true evaluateAtPoints.
+    volume_assist_.prepareProgram(render_sequence, time_sec, params, count);
+}
+
+std::uint32_t FolderVolumeEffect::PackNorm01Key(float n1, float n2, float n3)
+{
+    const auto q = [](float v) -> std::uint32_t {
+        return (std::uint32_t)std::lround(std::clamp(v, 0.0f, 1.0f) * 1023.0f) & 1023u;
+    };
+    return (q(n1) << 20) | (q(n2) << 10) | q(n3);
+}
+
+QVector3D FolderVolumeEffect::SampleField01(float n1, float n2, float n3)
+{
+    const std::uint32_t key = PackNorm01Key(n1, n2, n3);
+    const auto it = true_sample_map_.find(key);
+    if(it != true_sample_map_.end())
+    {
+        return it->second;
+    }
+    // True single-point GPU when outside the batched set (should be rare).
+    return volume_assist_.sampleTrue01(n1, n2, n3);
+}
+
+void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
+                                                  int count,
+                                                  float /*time*/,
+                                                  const GridContext3D& grid)
+{
+    true_sample_map_.clear();
+    if(!sample_xyz || count <= 0 || !volume_assist_.isAvailable())
+    {
+        return;
+    }
+
+    Vector3D origin = GetEffectOriginGrid(grid);
+    std::vector<float> n01((size_t)count * 3u);
+    std::vector<std::uint32_t> keys((size_t)count);
+    int valid = 0;
+    for(int i = 0; i < count; ++i)
+    {
+        const float x = sample_xyz[(size_t)i * 3u + 0u];
+        const float y = sample_xyz[(size_t)i * 3u + 1u];
+        const float z = sample_xyz[(size_t)i * 3u + 2u];
+        float n1 = 0.5f, n2 = 0.5f, n3 = 0.5f;
+        bool ok = false;
+        if(spec_.sample_room)
+        {
+            SampleGpuRoomVolume01(x, y, z, grid, &n1, &n2, &n3);
+            ok = true;
+        }
+        else
+        {
+            ok = SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &n1, &n2, &n3);
+        }
+        if(!ok)
+        {
+            keys[(size_t)i] = 0xFFFFFFFFu;
+            continue;
+        }
+        keys[(size_t)i] = PackNorm01Key(n1, n2, n3);
+        n01[(size_t)valid * 3u + 0u] = n1;
+        n01[(size_t)valid * 3u + 1u] = n2;
+        n01[(size_t)valid * 3u + 2u] = n3;
+        ++valid;
+    }
+    if(valid <= 0)
+    {
+        return;
+    }
+
+    // Compact keys for valid entries only.
+    std::vector<std::uint32_t> valid_keys((size_t)valid);
+    int w = 0;
+    for(int i = 0; i < count; ++i)
+    {
+        if(keys[(size_t)i] == 0xFFFFFFFFu)
+        {
+            continue;
+        }
+        valid_keys[(size_t)w++] = keys[(size_t)i];
+    }
+
+    std::vector<float> rgb((size_t)valid * 3u, 0.0f);
+    if(!volume_assist_.evaluateAtPoints(n01.data(), valid, rgb.data()))
+    {
+        return;
+    }
+    true_sample_map_.reserve((size_t)valid);
+    for(int i = 0; i < valid; ++i)
+    {
+        true_sample_map_[valid_keys[(size_t)i]] = QVector3D(
+            rgb[(size_t)i * 3u + 0u],
+            rgb[(size_t)i * 3u + 1u],
+            rgb[(size_t)i * 3u + 2u]);
+    }
+}
+
 void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid)
 {
     this->time_sec = time_sec;
+    true_sample_map_.clear();
+    true_sample_seq_ = render_sequence;
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
@@ -1519,7 +1624,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
         {
             volume_assist_.clearMediaTexture();
             float zp[13] = {};
-            volume_assist_.prepare(render_sequence, time_sec, zp, 13);
+            SubmitVolumeGpu(render_sequence, time_sec, zp, 13);
             return;
         }
 
@@ -1612,7 +1717,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
                 packed_v,
                 tile_repeat_enabled ? 1.0f : 0.0f
             };
-            volume_assist_.prepare(render_sequence, time_sec, vp, 13);
+            SubmitVolumeGpu(render_sequence, time_sec, vp, 13);
             return;
         }
 
@@ -1654,12 +1759,12 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
                 R_local,
                 packed_wrap
             };
-            volume_assist_.prepare(render_sequence, time_sec, vp, 13);
+            SubmitVolumeGpu(render_sequence, time_sec, vp, 13);
             return;
         }
 
         float zp[13] = {};
-        volume_assist_.prepare(render_sequence, time_sec, zp, 13);
+        SubmitVolumeGpu(render_sequence, time_sec, zp, 13);
         return;
     }
 
@@ -1932,7 +2037,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
             audio_packed_color_slots[slot] = p.color_slot;
         }
 
-        volume_assist_.prepare(render_sequence, time_sec, vp, 24);
+        SubmitVolumeGpu(render_sequence, time_sec, vp, 24);
         return;
     }
 
@@ -1986,7 +2091,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
         vp[20] = (float)audio_note_count;
         vp[21] = time_sec * speed_mul * GetNormalizedSpeed();
 
-        volume_assist_.prepare(render_sequence, time_sec, vp, 22);
+        SubmitVolumeGpu(render_sequence, time_sec, vp, 22);
         return;
     }
 
@@ -1998,7 +2103,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
     }
     if(count > 0)
     {
-        volume_assist_.prepare(render_sequence, time_sec, vp, count);
+        SubmitVolumeGpu(render_sequence, time_sec, vp, count);
     }
 }
 
@@ -2044,14 +2149,14 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
     const float pshift = EffectStratumBlend::PhaseShift01(bb);
     if(spec_.finish_rgb)
     {
-        const QVector3D samp = volume_assist_.sample01(n1, n2, n3);
+        const QVector3D samp = SampleField01(n1, n2, n3);
         return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));
     }
     if(spec_.finish_surface)
     {
-        const QVector3D samp = volume_assist_.sample01(n1, n2, n3);
+        const QVector3D samp = SampleField01(n1, n2, n3);
         float intensity = samp.x();
         const float plasma = samp.y();
         const float hot = samp.z();
@@ -2162,7 +2267,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
     }
     if(spec_.finish_hsv)
     {
-        const QVector3D samp = volume_assist_.sample01(n1, n2, n3);
+        const QVector3D samp = SampleField01(n1, n2, n3);
         const float sat = samp.x();
         float val = samp.y();
         float h = samp.z();
@@ -2212,7 +2317,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
     }
     if(spec_.finish_hex)
     {
-        const QVector3D samp = volume_assist_.sample01(n1, n2, n3);
+        const QVector3D samp = SampleField01(n1, n2, n3);
         float v = samp.x();
         float h01 = samp.y();
         if(spec_.finish_atlas)
@@ -2269,7 +2374,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
     }
     if(spec_.finish_audio)
     {
-        const QVector3D samp = volume_assist_.sample01(n1, n2, n3);
+        const QVector3D samp = SampleField01(n1, n2, n3);
         float intensity = samp.x();
         if(GetStratumLayoutMode() == 1)
             intensity = EffectStratumBlend::ApplyMotionToUnit01(intensity, stratum_mot01, 0.18f);
@@ -2334,7 +2439,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         return BrightenAudioEffectColor(color, intensity);
     }
 
-    float value = volume_assist_.sampleScalar01(n1, n2, n3);
+    float value = SampleField01(n1, n2, n3).x();
     value = EffectStratumBlend::ApplyMotionToUnit01(value, stratum_mot01, 0.28f);
 
     float depth_factor = 1.0f;

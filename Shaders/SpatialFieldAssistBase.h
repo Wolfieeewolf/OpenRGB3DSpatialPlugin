@@ -44,8 +44,35 @@ public:
         return engine_ ? engine_->lastError() : QString();
     }
 
-    /** Rebuild the field for this render_sequence. Idempotent for the same sequence. */
+    /** Rebuild the field atlas for this render_sequence. Idempotent for the same sequence. */
     bool prepare(std::uint64_t render_sequence, float time_sec, const float* params, int param_count)
+    {
+        return finishPrepare(render_sequence, time_sec, params, param_count, true);
+    }
+
+    bool isAvailable() const
+    {
+        return !unavailable_ && engine_ && engine_->isAvailable();
+    }
+
+protected:
+    ~SpatialFieldAssistBase() = default;
+
+    /** Push the derived size (resolution / width) onto a newly created engine. */
+    virtual void applyEngineSize(EngineT& engine) = 0;
+
+    /** True when the engine must re-render even if sequence/time are unchanged (e.g. media). */
+    virtual bool engineNeedsRefresh() const { return false; }
+
+    /**
+     * atlas=true → ensureReady (FolderVolume / strip).
+     * atlas=false → ensureProgramReady (Action true point-eval). Only call false on volume engines.
+     */
+    bool finishPrepare(std::uint64_t render_sequence,
+                       float time_sec,
+                       const float* params,
+                       int param_count,
+                       bool atlas)
     {
         if(unavailable_)
         {
@@ -66,8 +93,6 @@ public:
             applyEngineSize(*engine_);
         }
 
-        // Safety net if prepare is invoked more than once for the same sequence.
-        // Media textures can change without time/params (GIF); derived assists may force refresh.
         const bool same_frame =
             (render_sequence != 0 && render_sequence == last_sequence_ && engine_->isAvailable());
         const bool same_preview_tick =
@@ -88,7 +113,8 @@ public:
         last_sequence_ = render_sequence;
         last_time_sec_ = time_sec;
 
-        if(!engine_->ensureReady())
+        const bool ok = atlas ? engine_->ensureReady() : engine_->ensureProgramReady();
+        if(!ok)
         {
             const QString err = engine_->lastError();
             if(err.contains(QStringLiteral("Host GL")) || err.contains(QStringLiteral("makeCurrent")))
@@ -98,7 +124,9 @@ public:
             if(!logged_unavailable_)
             {
                 logged_unavailable_ = true;
-                const QByteArray err_bytes = err.isEmpty() ? QByteArray("ensureReady failed") : err.toUtf8();
+                const QByteArray err_bytes = err.isEmpty()
+                    ? QByteArray(atlas ? "ensureReady failed" : "ensureProgramReady failed")
+                    : err.toUtf8();
                 LOG_WARNING("[OpenRGB3DSpatialPlugin] Field assist unavailable: %s",
                             err_bytes.constData());
             }
@@ -107,20 +135,6 @@ public:
         }
         return true;
     }
-
-    bool isAvailable() const
-    {
-        return !unavailable_ && engine_ && engine_->isAvailable();
-    }
-
-protected:
-    ~SpatialFieldAssistBase() = default;
-
-    /** Push the derived size (resolution / width) onto a newly created engine. */
-    virtual void applyEngineSize(EngineT& engine) = 0;
-
-    /** True when the engine must re-render even if sequence/time are unchanged (e.g. media). */
-    virtual bool engineNeedsRefresh() const { return false; }
 
     std::unique_ptr<EngineT> engine_;
 

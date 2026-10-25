@@ -3,7 +3,10 @@
 #include "ActionBuiltinGpu.h"
 #include "ActionClipEval.h"
 #include "ActionMedia.h"
+#include "ActionParticleField.h"
+#include "ActionRibbonField.h"
 #include "ActionScript.h"
+#include "ActionVolumeField.h"
 
 #include <algorithm>
 #include <cmath>
@@ -582,9 +585,25 @@ bool EvaluateClipAtWorld(const Clip& clip,
 
     {
         const std::string bid = script::FileId(clip);
-        if(builtin_gpu::Uses(bid) && builtin_gpu::IsAvailable()
-           && script::FieldShader(bid).empty())
+        // GPU field engines fail closed (no silent CPU / black-as-success dual).
+        if(script::UsesField(bid) && !volume_field::IsAvailable())
         {
+            return false;
+        }
+        if(script::UsesParticles(bid) && !particle_field::IsAvailable())
+        {
+            return false;
+        }
+        if(script::UsesRibbons(bid) && !ribbon_field::IsAvailable())
+        {
+            return false;
+        }
+        if(builtin_gpu::Uses(bid) && script::FieldShader(bid).empty())
+        {
+            if(!builtin_gpu::IsAvailable())
+            {
+                return false;
+            }
             const WorldNorm s = MakeNormSample(x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
             float nx = s.nx;
             float ny = s.ny;

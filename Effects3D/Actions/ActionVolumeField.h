@@ -28,8 +28,8 @@ void Reset();
 void SetSampleOrigin01(float ox, float oy, float oz, float size);
 
 /**
- * Prepare field shader params (and preview atlas). No-op if the effect has no
- * `shader:` / `field:` header. LED playback prefers EvaluateAtPoints after this.
+ * Compile field shader + params (GPU required). No-op if the effect has no
+ * `shader:` / `field:` header.
  */
 bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence);
 
@@ -41,11 +41,10 @@ bool IsAvailable();
  */
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 
-/** Preview/fallback: trilinear sample of prepared atlas at normalized room coords. */
+/** Single-point true GPU sample (for .fx field_* helpers). */
 SampleRgb Sample01(float nx, float ny, float nz);
-float SampleScalar01(float nx, float ny, float nz);
 
-/** Phase 1: atlas RGB only — returns 1 when any channel is lit, else 0. */
+/** 1 when any channel is lit, else 0. */
 float SampleA01(float nx, float ny, float nz);
 
 } // namespace volume_field

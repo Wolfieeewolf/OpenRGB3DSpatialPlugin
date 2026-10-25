@@ -1058,8 +1058,16 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    // Prepare GPU atlases against the same per-slot active grid used for LED eval
+    // Room-grid overlay can be tens of thousands of voxels × every effect. While effects
+    // are running, refresh every other frame so LED output keeps CPU/GPU budget.
+    const bool refresh_room_grid_overlay =
+        viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0 &&
+        (!effect_running || (effect_render_sequence & 1ull) == 0ull);
+
+    // Prepare GPU fields against the same per-slot active grid used for LED eval
     // (zone / target-bounds / world), not always the full room.
+    std::vector<const GridContext3D*> prepared_grids(active_effects.size(), nullptr);
+    bool any_true_volume = false;
     for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
     {
         SpatialEffect3D* effect = active_effects[effect_idx].effect;
@@ -1067,21 +1075,21 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         {
             continue;
         }
+        if(effect->PrefersTrueGpuVolumeSamples())
+        {
+            any_true_volume = true;
+        }
         const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
         const bool use_world_bounds = effect->UseWorldGridBounds();
         const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
         const GridContext3D* local_grid =
             ResolveActiveSlotGrid(grid_override, use_world_bounds);
         const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
+        prepared_grids[effect_idx] = &active_grid;
         effect->PrepareGpuFields(effect_render_sequence, effect_time, active_grid);
         effect->PrepareStripColormapAssist(effect_render_sequence, effect_time);
     }
 
-    // Room-grid overlay can be tens of thousands of voxels × every effect. While effects
-    // are running, refresh every other frame so LED output keeps CPU/GPU budget.
-    const bool refresh_room_grid_overlay =
-        viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0 &&
-        (!effect_running || (effect_render_sequence & 1ull) == 0ull);
     if(refresh_room_grid_overlay)
     {
         SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(-1);
@@ -1099,6 +1107,62 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 room_grid_overlay_buffer.resize(count);
             }
             const float time_val = effect_time;
+
+            // True GPU: one evaluateAtPoints batch per volume effect across all overlay voxels.
+            if(any_true_volume)
+            {
+                std::vector<std::vector<float>> overlay_xyz(active_effects.size());
+                for(int ix = 0; ix < nx; ++ix)
+                {
+                    for(int iy = 0; iy < ny; ++iy)
+                    {
+                        for(int iz = 0; iz < nz; ++iz)
+                        {
+                            float sample_x = 0.0f, sample_y = 0.0f, sample_z = 0.0f;
+                            viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sample_x, sample_y, sample_z);
+                            for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
+                            {
+                                SpatialEffect3D* effect = active_effects[effect_idx].effect;
+                                if(!effect || !effect->PrefersTrueGpuVolumeSamples()
+                                   || !prepared_grids[effect_idx])
+                                {
+                                    continue;
+                                }
+                                const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                                if(effect->UseZoneGrid() && active_effects[effect_idx].zone_index != -1
+                                   && !grid_override.use_zone_grid)
+                                {
+                                    continue;
+                                }
+                                const GridContext3D& active_grid = *prepared_grids[effect_idx];
+                                float sx = sample_x, sy = sample_y, sz = sample_z;
+                                if(!effect->SkipsSpatialSampleWarp())
+                                {
+                                    effect->ApplyAxisScale(sx, sy, sz, active_grid);
+                                    effect->ApplyEffectRotation(sx, sy, sz, active_grid);
+                                }
+                                overlay_xyz[effect_idx].push_back(sx);
+                                overlay_xyz[effect_idx].push_back(sy);
+                                overlay_xyz[effect_idx].push_back(sz);
+                            }
+                        }
+                    }
+                }
+                for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
+                {
+                    SpatialEffect3D* effect = active_effects[effect_idx].effect;
+                    if(!effect || !effect->PrefersTrueGpuVolumeSamples()
+                       || overlay_xyz[effect_idx].empty() || !prepared_grids[effect_idx])
+                    {
+                        continue;
+                    }
+                    effect->BakeTrueGpuVolumeSamples(overlay_xyz[effect_idx].data(),
+                                                     (int)(overlay_xyz[effect_idx].size() / 3u),
+                                                     time_val,
+                                                     *prepared_grids[effect_idx]);
+                }
+            }
+
             SpatialRoom::BeginRoomGridOverlayPass();
             const SpatialEffect3D* overlay_shade_source = ResolveOverlayAmbientShadeSource(active_effects);
 
@@ -1157,6 +1221,87 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             SpatialRoom::EndRoomGridOverlayPass();
             viewport->SetRoomGridColorCallback(nullptr);
             viewport->SwapRoomGridColorBuffer(room_grid_overlay_buffer);
+        }
+    }
+
+    // Batch true volumeMain samples for LEDs (after overlay so its bake does not wipe LED map).
+    if(any_true_volume)
+    {
+        std::vector<std::vector<float>> true_xyz(active_effects.size());
+        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ++ctrl_idx)
+        {
+            ControllerTransform* transform = controller_transforms[ctrl_idx].get();
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+            if(transform->controller &&
+               controllers_managed_by_virtuals.find(transform->controller)
+                   != controllers_managed_by_virtuals.end())
+            {
+                continue;
+            }
+            ControllerLayout3D::UpdateWorldPositions(transform);
+            for(const LEDPosition3D& led_position : transform->led_positions)
+            {
+                for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
+                {
+                    const RenderEffectSlot& slot = active_effects[effect_idx];
+                    SpatialEffect3D* effect = slot.effect;
+                    if(!effect || !effect->PrefersTrueGpuVolumeSamples() || !prepared_grids[effect_idx])
+                    {
+                        continue;
+                    }
+                    if(!EffectSlotAppliesToController(slot.zone_index,
+                                                      static_cast<int>(ctrl_idx),
+                                                      zone_manager.get()))
+                    {
+                        continue;
+                    }
+                    if(!ShouldApplyStackLayerToController(effect,
+                                                          effect_idx,
+                                                          relay_stack_index,
+                                                          relay_layer_effect != nullptr,
+                                                          static_cast<int>(ctrl_idx)))
+                    {
+                        continue;
+                    }
+                    const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                    if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
+                    {
+                        continue;
+                    }
+                    const bool requires_world = effect->RequiresWorldSpaceCoordinates();
+                    float sample_x = requires_world ? led_position.world_position.x
+                                                    : led_position.room_position.x;
+                    float sample_y = requires_world ? led_position.world_position.y
+                                                    : led_position.room_position.y;
+                    float sample_z = requires_world ? led_position.world_position.z
+                                                    : led_position.room_position.z;
+                    const GridContext3D& stack_grid = *prepared_grids[effect_idx];
+                    if(!effect->SkipsSpatialSampleWarp())
+                    {
+                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
+                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
+                    }
+                    true_xyz[effect_idx].push_back(sample_x);
+                    true_xyz[effect_idx].push_back(sample_y);
+                    true_xyz[effect_idx].push_back(sample_z);
+                }
+            }
+        }
+        for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
+        {
+            SpatialEffect3D* effect = active_effects[effect_idx].effect;
+            if(!effect || !effect->PrefersTrueGpuVolumeSamples()
+               || true_xyz[effect_idx].empty() || !prepared_grids[effect_idx])
+            {
+                continue;
+            }
+            effect->BakeTrueGpuVolumeSamples(true_xyz[effect_idx].data(),
+                                             (int)(true_xyz[effect_idx].size() / 3u),
+                                             effect_time,
+                                             *prepared_grids[effect_idx]);
         }
     }
 

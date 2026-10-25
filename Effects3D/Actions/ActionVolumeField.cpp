@@ -8,7 +8,6 @@
 #include <QFile>
 #include <QString>
 #include <QTextStream>
-#include <QVector3D>
 
 #include <algorithm>
 #include <cmath>
@@ -188,8 +187,6 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
             return false;
         }
         Assist().setFragmentBody(body);
-        // Prefer higher atlas density for Action playback (engine max is 32).
-        Assist().setResolution(28);
         g_loaded_shader_id = shader_id;
     }
 
@@ -208,7 +205,7 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
         0.0f
     };
     const float time_sec = (float)local_ms * 0.001f * speed;
-    return Assist().prepare(render_sequence, time_sec, params, 6);
+    return Assist().prepareProgram(render_sequence, time_sec, params, 6);
 }
 
 bool IsAvailable()
@@ -244,35 +241,17 @@ bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)
 
 SampleRgb Sample01(float nx, float ny, float nz)
 {
-    std::lock_guard<std::mutex> lock(g_mu);
     SampleRgb out;
-    if(!g_assist || !g_assist->isAvailable())
+    float xyz[3] = {nx, ny, nz};
+    float rgb[3] = {};
+    if(!EvaluateAtPoints(xyz, 1, rgb))
     {
         return out;
     }
-    float x = nx, y = ny, z = nz;
-    RemapSample01(&x, &y, &z);
-    const QVector3D s = g_assist->sample01(std::clamp(x, 0.0f, 1.0f),
-                                           std::clamp(y, 0.0f, 1.0f),
-                                           std::clamp(z, 0.0f, 1.0f));
-    out.r = s.x();
-    out.g = s.y();
-    out.b = s.z();
+    out.r = rgb[0];
+    out.g = rgb[1];
+    out.b = rgb[2];
     return out;
-}
-
-float SampleScalar01(float nx, float ny, float nz)
-{
-    std::lock_guard<std::mutex> lock(g_mu);
-    if(!g_assist || !g_assist->isAvailable())
-    {
-        return 0.0f;
-    }
-    float x = nx, y = ny, z = nz;
-    RemapSample01(&x, &y, &z);
-    return g_assist->sampleScalar01(std::clamp(x, 0.0f, 1.0f),
-                                    std::clamp(y, 0.0f, 1.0f),
-                                    std::clamp(z, 0.0f, 1.0f));
 }
 
 float SampleA01(float nx, float ny, float nz)

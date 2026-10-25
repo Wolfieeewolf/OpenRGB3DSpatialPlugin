@@ -90,11 +90,11 @@ Stack Spatial Anchor and Action `origin_ref` both read the **same layout referen
 
 ### Action volume-field engine (Roomscape sample)
 
-World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares the field once per pack frame, then **evaluates `volumeMain` at each LED’s exact room-normalized XYZ** (true effect). `.fx` `field_*` / `field_paint()` remain for scripts; room-grid preview may still sample a low-res atlas. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
+World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares the program once per pack frame, then **evaluates `volumeMain` at each LED’s exact room-normalized XYZ** (OpenGL 4.1 required — no CPU dual). `.fx` `field_*` / `field_paint()` sample the same GPU path. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
 
-World tools may declare `particles: burst` for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED position. `.fx` can still use `particle_d` / `particle_paint()` (CPU fallback if GL is unavailable).
+World tools may declare `particles: burst` for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED. GL required — if unavailable the clip paints nothing.
 
-World tools may declare `ribbons: arc` for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; LED apply is true point-eval. `.fx` can use `ribbon_d` / `ribbon_paint()` (CPU fallback if GL is unavailable). Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
+World tools may declare `ribbons: arc` for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
 
 **Placement (world / field / particle / ribbon):** clip `origin_ref` (layout reference point name, or empty = room center), `origin_offset_x/y/z` (% of half-room), and `effect_size` (0.05–2.0). Scripts can read `ox` / `oy` / `oz` / `effect_size`. Sample normalize uses `play_bounds` (track LED AABB vs full room box).
 

@@ -73,9 +73,9 @@ struct Program
     bool axis_angle = false;
     /** GPU volume body id (`shader:` / `field:` header) — empty = no volume field. */
     std::string field_shader;
-    /** Particle field mode (`particles:` header) — GPU atlas bake; empty = off. */
+    /** Particle field mode (`particles:` header) — GPGPU volumeMain; empty = off. */
     std::string particles;
-    /** Ribbon/tube mode (`ribbons:` header) — GPU atlas bake; empty = off. */
+    /** Ribbon/tube mode (`ribbons:` header) — GPGPU volumeMain; empty = off. */
     std::string ribbons;
     std::vector<std::string> aliases;
 };

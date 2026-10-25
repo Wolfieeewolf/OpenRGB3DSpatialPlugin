@@ -5,7 +5,6 @@
 #include "SpatialVolumeFieldAssist.h"
 
 #include <QString>
-#include <QVector3D>
 
 #include <algorithm>
 #include <cmath>
@@ -147,7 +146,6 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
     if(g_loaded_id != id)
     {
         g_assist->setFragmentBody(QString::fromUtf8(body));
-        g_assist->setResolution(28);
         g_loaded_id = id;
     }
     const float progress = ClipProgress(clip, local_ms);
@@ -163,7 +161,7 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
         0.0f
     };
     const float time_sec = (float)local_ms * 0.001f * speed;
-    g_ready = g_assist->prepare(render_sequence ? render_sequence : 1, time_sec, params, 6);
+    g_ready = g_assist->prepareProgram(render_sequence ? render_sequence : 1, time_sec, params, 6);
     return g_ready;
 }
 
@@ -196,18 +194,16 @@ bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)
 
 SampleRgb Sample01(float nx, float ny, float nz)
 {
-    std::lock_guard<std::mutex> lock(g_mu);
     SampleRgb out;
-    if(!g_ready || !g_assist || !g_assist->isAvailable())
+    float xyz[3] = {nx, ny, nz};
+    float rgb[3] = {};
+    if(!EvaluateAtPoints(xyz, 1, rgb))
     {
         return out;
     }
-    const QVector3D s = g_assist->sample01(std::clamp(nx, 0.0f, 1.0f),
-                                           std::clamp(ny, 0.0f, 1.0f),
-                                           std::clamp(nz, 0.0f, 1.0f));
-    out.r = s.x();
-    out.g = s.y();
-    out.b = s.z();
+    out.r = rgb[0];
+    out.g = rgb[1];
+    out.b = rgb[2];
     return out;
 }
 

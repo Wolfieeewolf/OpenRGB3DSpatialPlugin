@@ -14,9 +14,9 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 
 ## Phase order (gated)
 
-1. **Volume field** — prepare once / true `volumeMain` at each LED + `field_*` builtins + one minimal `.fx`.
-2. **Particle** — GPGPU `volumeMain` (positions in shader) at each LED + builtins + `spark_burst` (CPU fallback).
-3. **Ribbon / tube** — GPGPU `volumeMain` (curve in shader) at each LED + `neon_ribbon` (CPU fallback).
+1. **Volume field** — prepare once / true `volumeMain` at each LED + `field_*` builtins + one minimal `.fx` (GL required).
+2. **Particle** — GPGPU `volumeMain` (positions in shader) at each LED + builtins + `spark_burst` (GL required).
+3. **Ribbon / tube** — GPGPU `volumeMain` (curve in shader) at each LED + `neon_ribbon` (GL required).
 4. **Toolbox coverage** — thin tools that exercise engines (`field_strata`, `field_burst`, `particle_rain`, `particle_fireflies`, `ribbon_helix`).
 5. **Showcase Actions** — first Roomscape packs landed (`roomscape_*` in triggers + one Movie Sync wash). Expand later as needed.
 

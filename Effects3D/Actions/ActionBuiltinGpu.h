@@ -30,7 +30,7 @@ bool IsAvailable();
 /** True effect: volumeMain at each room-normalized XYZ (interleaved in/out). */
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 
-/** Preview/fallback atlas sample. */
+/** Single-point true GPU sample. */
 SampleRgb Sample01(float nx, float ny, float nz);
 
 } // namespace builtin_gpu

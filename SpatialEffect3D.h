@@ -380,8 +380,20 @@ public:
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
 
-    /** Once-per-frame GPU atlas/strip rebuild. Default no-op; LED samples only in CalculateColorGrid. */
+    /** Once-per-frame GPU field prepare (true program and/or dense atlas preview). */
     virtual void PrepareGpuFields(std::uint64_t /*render_sequence*/, float /*time_sec*/, const GridContext3D& /*grid*/) {}
+
+    /**
+     * Engines that evaluate volumeMain at exact LED UVs (not atlas). EffectsRender batches
+     * warped sample XYZ then calls BakeTrueGpuVolumeSamples before the LED color loop.
+     */
+    virtual bool PrefersTrueGpuVolumeSamples() const { return false; }
+    /** sample_xyz: interleaved warped sample positions (same space as CalculateColorGrid). */
+    virtual void BakeTrueGpuVolumeSamples(const float* /*sample_xyz*/,
+                                          int /*count*/,
+                                          float /*time*/,
+                                          const GridContext3D& /*grid*/) {}
+
     RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
     static const SpatialEffect3D* GetEvaluatingEffect();
     virtual bool UsesSpatialSamplingQuantization() const { return true; }

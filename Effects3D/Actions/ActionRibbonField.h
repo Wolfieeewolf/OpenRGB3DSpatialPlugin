@@ -24,9 +24,7 @@ void Reset();
 void SetSampleOrigin01(float ox, float oy, float oz, float size);
 
 /**
- * Rebuild ribbon params and compile the GPGPU volumeMain (OpenGL 4.1).
- * Preview may still bake an atlas; LED apply uses EvaluateAtPoints.
- * Falls back to CPU tube sampling if GL is unavailable.
+ * Compile GPGPU volumeMain + params (OpenGL 4.1 required — no CPU fallback).
  * No-op unless the effect declares `ribbons:` in its `.fx` header.
  */
 bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence);
@@ -36,10 +34,10 @@ bool IsAvailable();
 /** True effect: volumeMain at each room-normalized XYZ (interleaved in/out). */
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 
-/** Soft tube density at normalized room coords (0..1). */
+/** Soft tube density at normalized room coords (0..1) via true GPU sample. */
 float SampleDensity01(float nx, float ny, float nz);
 
-/** Preview/fallback atlas or CPU sample. */
+/** Single-point true GPU sample (for .fx ribbon_* helpers). */
 SampleRgb Sample01(float nx, float ny, float nz);
 
 } // namespace ribbon_field

@@ -10,9 +10,12 @@
 #include <QImage>
 #include <QMutex>
 #include <QString>
+#include <QVector3D>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class QCheckBox;
@@ -122,6 +125,11 @@ public:
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
+    bool PrefersTrueGpuVolumeSamples() const override { return true; }
+    void BakeTrueGpuVolumeSamples(const float* sample_xyz,
+                                  int count,
+                                  float time,
+                                  const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool UsesSpatialSamplingQuantization() const override;
 
@@ -138,6 +146,10 @@ private:
     float ParamValue(const std::string& name, float detail, float size) const;
     int SliderRaw(const std::string& key) const;
     int ComboIndex(const std::string& key) const;
+    /** True LED sample, or atlas when room-grid overlay pass. */
+    QVector3D SampleField01(float n1, float n2, float n3);
+    static std::uint32_t PackNorm01Key(float n1, float n2, float n3);
+    void SubmitVolumeGpu(std::uint64_t render_sequence, float time_sec, const float* params, int count);
 
     void ClearMovie();
     void LoadMediaFile(const QString& path);
@@ -167,6 +179,8 @@ private:
     float room_zmin = 0.0f;
     float room_zmax = 1.0f;
     SpatialVolumeFieldAssist volume_assist_;
+    std::unordered_map<std::uint32_t, QVector3D> true_sample_map_;
+    std::uint64_t true_sample_seq_ = 0;
 
     // Audio reactive state (populated when spec_.uses_audio)
     AudioReactiveSettings3D audio_settings;
