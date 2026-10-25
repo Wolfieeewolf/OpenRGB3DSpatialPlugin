@@ -615,7 +615,7 @@ bool EvaluateClipAtWorld(const Clip& clip,
                 return false;
             }
             float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
-            ModulateClipIntensity(clip, ClipProgress(clip, local_ms),
+            ModulateClipIntensity(clip, ClipSpanProgress(clip, local_ms),
                                   ClipPeriodProgress(clip, local_ms), &intensity);
             if(out_color)
             {
@@ -738,7 +738,9 @@ bool EvaluateClipAtWorld(const Clip& clip,
     ctx.color = led.color;
     ctx.intensity = led.intensity;
 
-    ModulateClipIntensity(clip, ctx.progress, ClipPeriodProgress(clip, local_ms), &ctx.intensity);
+    // Span progress for intensity curves (speed wrap must not re-fire envelopes mid-clip).
+    ModulateClipIntensity(clip, ClipSpanProgress(clip, local_ms),
+                          ClipPeriodProgress(clip, local_ms), &ctx.intensity);
 
     if(out_color)
     {

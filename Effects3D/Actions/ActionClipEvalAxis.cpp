@@ -183,7 +183,8 @@ bool EvaluateClipAtAxis(const Clip& clip,
         led.color = sample.gradient.empty() ? sample.color : SampleGradient(sample, led.progress);
         led.intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
     }
-    ModulateClipIntensity(clip, led.progress, ClipPeriodProgress(clip, local_ms), &led.intensity);
+    ModulateClipIntensity(clip, ClipSpanProgress(clip, local_ms),
+                          ClipPeriodProgress(clip, local_ms), &led.intensity);
 
     if(out_color)
     {

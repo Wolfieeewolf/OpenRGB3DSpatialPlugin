@@ -79,7 +79,9 @@ int GpuAnimMsOr(int local_ms)
 
 float ClipPeriodProgress(const Clip& clip, int local_ms)
 {
-    const int elapsed = std::max(0, local_ms - clip.start_ms);
+    // Prefer continuous anim clock so period curves do not hitch when LocalMs wraps.
+    const int anim_ms = GpuAnimMsOr(local_ms);
+    const int elapsed = std::max(0, anim_ms - clip.start_ms);
     const float speed = std::max(0.05f, clip.speed);
     const float period = std::max(1.0f, (float)std::max(1, clip.period_ms) / speed);
     float phase = std::fmod((float)elapsed, period);

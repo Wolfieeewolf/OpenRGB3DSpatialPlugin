@@ -210,7 +210,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
             }
 
             float intensity = std::clamp(top->intensity, 0.0f, 1.0f);
-            ModulateClipIntensity(*top, ClipProgress(*top, local_ms),
+            ModulateClipIntensity(*top, ClipSpanProgress(*top, local_ms),
                                   ClipPeriodProgress(*top, local_ms), &intensity);
             int painted = 0;
             for(int i = 0; i < n; ++i)
