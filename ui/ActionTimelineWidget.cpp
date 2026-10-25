@@ -60,8 +60,9 @@ void ActionTimelineWidget::clearGpuThumbCache()
 
 void ActionTimelineWidget::setPack(Action::Pack* pack)
 {
+    // Do not wipe GPU thumbs here — add/remove keep the same pack* and keys already
+    // hash clip look; loadIntoUi clears when content is replaced wholesale.
     pack_ = pack;
-    clearGpuThumbCache();
     requestContentRepaint();
 }
 
@@ -146,7 +147,6 @@ void ActionTimelineWidget::setModel(QVector<Node> roots)
     captureExpandState(&expanded);
     roots_ = std::move(roots);
     restoreExpandState(expanded);
-    clearGpuThumbCache();
     rebuildVisibleRows();
 }
 

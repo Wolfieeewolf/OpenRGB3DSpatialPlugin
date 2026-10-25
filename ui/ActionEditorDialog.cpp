@@ -1384,6 +1384,10 @@ void ActionEditorDialog::loadIntoUi(const Action::Pack& pack)
     selected_track_ = -1;
     selected_clip_ = -1;
     suppress_ui_ = false;
+    if(timeline_)
+    {
+        timeline_->clearGpuThumbCache();
+    }
     timeline_->setPack(&pack_);
     timeline_->setDurationMs(pack_.duration_ms);
     timeline_->setPlayheadMs(0);
@@ -1409,6 +1413,10 @@ void ActionEditorDialog::onDurationChanged(int value)
         }
     }
     timeline_->setDurationMs(value);
+    if(player_.IsPlaying())
+    {
+        preview_pack_dirty_ = true;
+    }
     applyClipToForm();
     timeline_->requestContentRepaint();
 }
@@ -1493,7 +1501,7 @@ void ActionEditorDialog::updateSelectionActions()
     const bool has = clip != nullptr;
     if(remove_clip_button_)
     {
-        remove_clip_button_->setEnabled(has && !player_.IsPlaying());
+        remove_clip_button_->setEnabled(has);
     }
     if(props_hint_)
     {
@@ -1650,7 +1658,7 @@ void ActionEditorDialog::onRemoveClip()
     }
     if(player_.IsPlaying())
     {
-        player_.UpdatePack(pack_);
+        preview_pack_dirty_ = true;
     }
     suppress_ui_ = false;
     applyClipToForm();
@@ -1907,6 +1915,7 @@ void ActionEditorDialog::startPreview(const Action::Pack& play_pack, int start_m
     tab_->PrepareActionPreview();
     if(tab_->resource_manager && tab_->resource_manager->GetRGBControllers().empty())
     {
+        tab_->ClearActionPreview(true);
         QMessageBox::warning(this, QStringLiteral("Action Editor"),
                              QStringLiteral("No OpenRGB controllers available."));
         return;
@@ -1930,6 +1939,10 @@ void ActionEditorDialog::startPreview(const Action::Pack& play_pack, int start_m
     {
         timeline_->setPlayheadMs(player_.LocalMs());
     }
+    // First frame now — avoid a timer tick of leftover LED state after Prepare.
+    Action::SetGpuAnimMs(player_.ElapsedMs());
+    tab_->ApplyActionPreviewFrame(preview_pack_, player_.LocalMs());
+    Action::SetGpuAnimMs(-1);
     status_label_->setText(status.isEmpty() ? QStringLiteral("Previewing...") : status);
 }
 
@@ -2020,6 +2033,7 @@ void ActionEditorDialog::syncPreviewPackFromAuthoring()
         }
         refreshed.duration_ms = pack_.duration_ms;
         refreshed.loop = pack_.loop;
+        refreshed.devices = pack_.devices;
         preview_pack_ = std::move(refreshed);
     }
     else

@@ -66,6 +66,8 @@ public:
     explicit ActionTimelineWidget(QWidget* parent = nullptr);
 
     void setPack(Action::Pack* pack);
+    /** Drop deferred GPU thumbs (e.g. wholesale pack load). Add/remove keep cache. */
+    void clearGpuThumbCache();
     void setEffectFilesDir(const filesystem::path& dir);
     /** Scene transforms for world-space wipe/chase preview inside clips. */
     void setControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms);
@@ -283,7 +285,6 @@ private:
         bool ribbon = false;
         bool builtin = false;
     };
-    void clearGpuThumbCache();
     void enqueueGpuThumb(GpuThumbRequest req) const;
     QImage renderGpuEngineThumb(const GpuThumbRequest& req) const;
     QString makeGpuThumbCacheKey(const Action::Clip& sample,

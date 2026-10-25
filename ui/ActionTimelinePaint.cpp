@@ -358,26 +358,6 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         && Action::script::FieldShader(effect_id).empty();
     const bool gpu_engine = field_eval || particle_eval || ribbon_eval || builtin_eval;
 
-    auto applyOrigin = [&]() {
-        Action::ClipOrigin01 origin;
-        if(room_bounds_.has_world_bounds)
-        {
-            origin = Action::ResolveClipOrigin01(sample,
-                                                room_bounds_.min_x, room_bounds_.max_x,
-                                                room_bounds_.min_y, room_bounds_.max_y,
-                                                room_bounds_.min_z, room_bounds_.max_z,
-                                                room_bounds_.reference_points);
-        }
-        else
-        {
-            origin = Action::ResolveClipOrigin01(sample, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
-        }
-        Action::SetActiveClipOrigin01(origin);
-        Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-        Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-        Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-    };
-
     // GPU engines — best path under the single shared offscreen GL pool:
     // batched EvaluateAtPoints, low-res, cached, deferred off paintEvent.
     // Fail closed to black (no gradient / CPU fake).
@@ -481,12 +461,12 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     QImage img(sample_w, rows, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
 
-    // Throttle field prepares — full rebuild per pixel column stalls the editor.
+    // GPU engines returned above; only media still prepares on this CPU path.
     int last_prepare_ms = -1;
     const int prepare_step_ms = std::max(24, dur / std::max(1, img.width() / 6));
-    static std::uint64_t s_timeline_field_seq = 0;
-    auto prepareFieldsAt = [&](int sample_ms) {
-        if(!(field_eval || particle_eval || ribbon_eval || media_eval || builtin_eval))
+    static std::uint64_t s_timeline_media_seq = 0;
+    auto prepareMediaAt = [&](int sample_ms) {
+        if(!media_eval)
         {
             return;
         }
@@ -494,28 +474,21 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         {
             return;
         }
-        applyOrigin();
-        const std::uint64_t seq = ++s_timeline_field_seq;
-        if(field_eval)
+        Action::ClipOrigin01 origin;
+        if(room_bounds_.has_world_bounds)
         {
-            Action::volume_field::PrepareForClip(sample, sample_ms, seq);
+            origin = Action::ResolveClipOrigin01(sample,
+                                                room_bounds_.min_x, room_bounds_.max_x,
+                                                room_bounds_.min_y, room_bounds_.max_y,
+                                                room_bounds_.min_z, room_bounds_.max_z,
+                                                room_bounds_.reference_points);
         }
-        if(particle_eval)
+        else
         {
-            Action::particle_field::PrepareForClip(sample, sample_ms, seq);
+            origin = Action::ResolveClipOrigin01(sample, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
         }
-        if(ribbon_eval)
-        {
-            Action::ribbon_field::PrepareForClip(sample, sample_ms, seq);
-        }
-        if(media_eval)
-        {
-            Action::PrepareMediaForClip(sample, sample_ms, seq);
-        }
-        if(builtin_eval)
-        {
-            Action::builtin_gpu::PrepareForClip(sample, sample_ms, seq);
-        }
+        Action::SetActiveClipOrigin01(origin);
+        Action::PrepareMediaForClip(sample, sample_ms, ++s_timeline_media_seq);
         last_prepare_ms = sample_ms;
     };
 
@@ -543,8 +516,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
                                                    axes[(size_t)idx], seeds[(size_t)idx],
                                                    c, intens);
         }
-        if(world_eval || field_eval || particle_eval || ribbon_eval
-           || sample.play_bounds == Action::PlayBounds::RoomBox)
+        if(world_eval || sample.play_bounds == Action::PlayBounds::RoomBox)
         {
             const float t = (led_n <= 1) ? 0.5f : (float)led_slot / (float)(led_n - 1);
             return Action::EvaluateClipAtAxis(sample, ms, t, led_slot, c, intens);
@@ -568,7 +540,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         const float t = (img.width() <= 1) ? 0.0f : (float)x / (float)(img.width() - 1);
         const int ms = sample.start_ms + (int)std::lround(t * (float)dur);
         const int sample_ms = std::min(std::max(ms, sample.start_ms), sample.end_ms - 1);
-        prepareFieldsAt(sample_ms);
+        prepareMediaAt(sample_ms);
 
         int row = 0;
         for(int led = 0; led < led_n; led += skip, ++row)

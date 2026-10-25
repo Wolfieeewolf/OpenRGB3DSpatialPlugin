@@ -697,7 +697,8 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
     timeline_->setSelectedClip(selected_track_, selected_clip_);
     if(player_.IsPlaying())
     {
-        player_.UpdatePack(pack_);
+        // Solo preview must refresh via syncPreviewPackFromAuthoring, not raw pack_.
+        preview_pack_dirty_ = true;
     }
     applyClipToForm();
     updateSelectionActions();
