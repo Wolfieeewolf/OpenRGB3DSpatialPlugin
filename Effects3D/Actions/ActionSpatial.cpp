@@ -670,7 +670,7 @@ bool EvaluateClipAtWorld(const Clip& clip,
     WorldCtx ctx;
     ctx.clip = &clip;
     ctx.local_ms = local_ms;
-    ctx.progress = ClipProgress(clip, local_ms);
+    ctx.progress = ClipSweepProgress(clip, local_ms);
     ctx.twinkle_seed = twinkle_seed;
     ctx.x = x;
     ctx.y = y;

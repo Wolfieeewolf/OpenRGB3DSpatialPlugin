@@ -211,6 +211,11 @@ bool ApplyGradientPresetId(Clip* clip, const char* preset_id, RGBColor accent = 
 float ClipProgress(const Clip& clip, int local_ms);
 /** Linear 0..1 over the clip span (no speed-based wrap). For one-shot GPU timelines. */
 float ClipSpanProgress(const Clip& clip, int local_ms);
+/**
+ * Span scaled by speed, clamped to [0, 1] (no wrap). Script wipe/dissolve/fade and
+ * gradient fallbacks — once finishes early when speed > 1 instead of restarting.
+ */
+float ClipSweepProgress(const Clip& clip, int local_ms);
 /** Period-curve phase; uses GpuAnimMs when set so forever/while_active wraps stay smooth. */
 float ClipPeriodProgress(const Clip& clip, int local_ms);
 void ModulateClipIntensity(const Clip& clip, float clip_progress, float period_progress, float* intensity);

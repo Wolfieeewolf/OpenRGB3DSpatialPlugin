@@ -59,6 +59,19 @@ float ClipSpanProgress(const Clip& clip, int local_ms)
     return t;
 }
 
+float ClipSweepProgress(const Clip& clip, int local_ms)
+{
+    const float dur = (float)std::max(1, clip.end_ms - clip.start_ms);
+    float t = (float)(local_ms - clip.start_ms) / dur;
+    t = std::clamp(t, 0.0f, 1.0f);
+    t = std::clamp(t * std::max(0.05f, clip.speed), 0.0f, 1.0f);
+    if(clip.reverse)
+    {
+        t = 1.0f - t;
+    }
+    return t;
+}
+
 namespace
 {
 std::mutex g_gpu_anim_mu;

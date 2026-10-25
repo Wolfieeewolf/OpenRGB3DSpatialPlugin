@@ -25,9 +25,9 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 
 ## Playback seams (once vs loop)
 
-- **`loop: once`** — drive the look with span `progress` (0→1), fade density to **black** before the end, then the player clears LEDs. No recycle/`fract` on progress.
-- **`loop: forever` / `while_active`** — animate with continuous **`u_time`** only. Do not key motion off wrapping `progress` or wrapped `local_ms` (that flashes/jumps at the pack seam). Rain, helix, fireflies, aurora, portal, etc. already follow this.
-- Engines feed `u_time` from continuous elapsed time when playing; GPU one-shot params use non-wrapping span progress.
+- **`loop: once`** — drive the look with span/sweep `progress` (0→1, speed may finish early but must not wrap), fade density to **black** before the end, then the player clears LEDs. No recycle/`fract` on progress.
+- **`loop: forever` / `while_active`** — animate with continuous **`u_time`** / script `time_ms` only. Do not key ambient motion off wrapping `progress` or wrapped `local_ms` (that flashes/jumps at the pack seam). Rain, helix, fireflies, aurora, portal, etc. already follow this.
+- Engines feed `u_time` from continuous elapsed time when playing; GPU one-shot params use non-wrapping span progress; script `progress` is sweep (span × speed, clamped).
 
 ## Catch-all multi-pass (any file / tool)
 

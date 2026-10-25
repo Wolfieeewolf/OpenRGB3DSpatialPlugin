@@ -161,7 +161,7 @@ bool EvaluateClipAtAxis(const Clip& clip,
     led.clip = &clip;
     led.local_ms = local_ms;
     led.axis = ApplyClipAxisMirror(clip, axis_pos);
-    led.progress = ClipProgress(clip, local_ms);
+    led.progress = ClipSweepProgress(clip, local_ms);
     led.seed = twinkle_seed;
     led.intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
     led.color = clip.color;
