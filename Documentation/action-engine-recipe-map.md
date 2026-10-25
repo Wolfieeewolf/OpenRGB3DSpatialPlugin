@@ -9,14 +9,14 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 | Burst / sparks / rain / fireflies (Effekseer, Godot VFX, cube) | Particle | `spark_burst`, `particle_rain`, `particle_fireflies` | P1 — Phase 2 gate |
 | Swarm / flock (neighborhood-grid idea) | Particle (+ spatial hash) | later | P2 |
 | Neon tubes / ribbons (TubesCursor / FreeFrontend — look only) | Ribbon | `neon_ribbon` (`arc`), `ribbon_helix` (`helix`) | P2 — Phase 3 gate |
-| Dreamy glow dense cloud (Codrops GPGPU idea) | Particle (CPU first; GPGPU later) | later | P2 |
+| Dreamy glow dense cloud (Codrops GPGPU idea) | Particle (true per-LED GPU eval) | later | P2 |
 | Dense splat / three.js cloud | Volume field data source | optional later | P3 |
 
 ## Phase order (gated)
 
-1. **Volume field** — prepare once / sample per LED + `field_*` builtins + one minimal `.fx`.
-2. **Particle** — CPU density sample + builtins + `spark_burst` gate tool.
-3. **Ribbon / tube** — curve falloff + colour knobs + `neon_ribbon` gate tool.
+1. **Volume field** — prepare once / true `volumeMain` at each LED + `field_*` builtins + one minimal `.fx`.
+2. **Particle** — GPGPU `volumeMain` (positions in shader) at each LED + builtins + `spark_burst` (CPU fallback).
+3. **Ribbon / tube** — GPGPU `volumeMain` (curve in shader) at each LED + `neon_ribbon` (CPU fallback).
 4. **Toolbox coverage** — thin tools that exercise engines (`field_strata`, `field_burst`, `particle_rain`, `particle_fireflies`, `ribbon_helix`).
 5. **Showcase Actions** — first Roomscape packs landed (`roomscape_*` in triggers + one Movie Sync wash). Expand later as needed.
 

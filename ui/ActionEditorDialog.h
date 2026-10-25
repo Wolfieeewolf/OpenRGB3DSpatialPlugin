@@ -106,6 +106,9 @@ private:
     int ensureTrackForTarget(const Action::Target& target, const QString& label);
     void applyClipToForm();
     void applyFormToSelectedClip();
+    /** Coalesce slider/keystroke-driven timeline rasters (~60ms). */
+    void scheduleTimelineRefresh();
+    void syncPreviewPackFromAuthoring();
     void updatePropVisibility();
     void syncGradientBar();
     void syncCurveBar();
@@ -207,9 +210,12 @@ private:
     QPushButton* save_button_ = nullptr;
 
     QTimer* timer_ = nullptr;
+    QTimer* timeline_refresh_timer_ = nullptr;
     Action::Player player_;
     Action::Pack preview_pack_;
     bool preview_solo_ = false;
+    /** Authoring edits during preview — refresh player pack on next tick only. */
+    bool preview_pack_dirty_ = false;
     QElapsedTimer wall_;
     int last_elapsed_ms_ = 0;
     int selected_track_ = -1;

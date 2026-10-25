@@ -130,6 +130,14 @@ void ReadJsonFiles(const filesystem::path& dir, const QString& section, QList<En
 
 QList<Entry> LoadEntries(const filesystem::path& dir)
 {
+    // Property-panel / context menus call this repeatedly — cache for the session path.
+    static filesystem::path s_cached_dir;
+    static QList<Entry> s_cached;
+    if(!dir.empty() && dir == s_cached_dir && !s_cached.isEmpty())
+    {
+        return s_cached;
+    }
+
     QList<Entry> entries;
     std::error_code ec;
     if(dir.empty() || !filesystem::is_directory(dir, ec))
@@ -163,6 +171,8 @@ QList<Entry> LoadEntries(const filesystem::path& dir)
             ReadJsonFiles(group, section, &entries);
         }
     }
+    s_cached_dir = dir;
+    s_cached = entries;
     return entries;
 }
 

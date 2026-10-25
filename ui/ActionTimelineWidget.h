@@ -6,6 +6,7 @@
 #include "LEDPosition3D.h"
 #include "filesystem.h"
 #include <QMenu>
+#include <QPixmap>
 #include <QPoint>
 #include <QSet>
 #include <QString>
@@ -72,6 +73,8 @@ public:
     void setModel(QVector<Node> roots);
     void setDurationMs(int duration_ms);
     void setPlayheadMs(int ms);
+    /** Mark clip/row content stale and schedule a full timeline rebuild (not playhead-only). */
+    void requestContentRepaint();
     int playheadMs() const { return playhead_ms_; }
     void setPixelsPerSecond(double pps);
     double pixelsPerSecond() const { return pixels_per_second_; }
@@ -255,6 +258,7 @@ private:
     void paintClipSpatialRaster(QPainter& p, const QRect& br, const PaintClip& pb,
                                  const Action::Clip& sample) const;
     void paintClipIntensityCurve(QPainter& p, const QRect& br, const Action::Clip& clip) const;
+    void paintTimelineContent(QPainter& p) const;
 
     Action::Pack* pack_ = nullptr;
     std::vector<std::unique_ptr<ControllerTransform>>* transforms_ = nullptr;
@@ -264,6 +268,9 @@ private:
     QVector<Row> visible_rows_;
     int duration_ms_ = 5000;
     int playhead_ms_ = 0;
+    /** Cached timeline without playhead — playhead ticks blit this instead of re-rasterizing clips. */
+    mutable QPixmap content_cache_;
+    mutable bool content_dirty_ = true;
     filesystem::path effect_files_dir_;
     double pixels_per_second_ = 80.0;
     int row_height_ = 28;

@@ -15,8 +15,10 @@ class QOpenGLFramebufferObject;
 class QOpenGLShaderProgram;
 
 /**
- * Offscreen volume atlas: GLSL `volumeMain(out, p01)` on a unit cube, CPU sample.
- * Uniforms: u_time, u_params[], optional u_media. Sibling to SpatialShaderEngine (2D).
+ * Volume field GPU: GLSL `volumeMain(out, p01)` with optional `u_media`.
+ *
+ * True path: evaluateAtPoints runs volumeMain at exact LED positions (1×N FBO readback).
+ * Atlas path: ensureReady bakes a low-res cube for dense preview / Sample01 (approximation).
  */
 class SpatialVolumeFieldEngine
 {
@@ -25,6 +27,7 @@ public:
     static constexpr int kMinResolution = 8;
     static constexpr int kMaxResolution = 32;
     static constexpr int kMaxMediaEdge = 1024;
+    static constexpr int kMaxPointEdge = 2048;
 
     struct Params
     {
@@ -48,8 +51,20 @@ public:
     void clearMediaTexture();
     bool mediaDirty() const;
 
+    /**
+     * Compile program + upload media/params (no atlas bake). Enough for evaluateAtPoints.
+     * Returns false if GL unavailable or compile failed.
+     */
+    bool ensureProgramReady();
+
     /** Rebuild atlas if dirty. Returns false if GL unavailable or compile failed. */
     bool ensureReady();
+
+    /**
+     * True effect: run volumeMain at each XYZ in [0,1]^3 (interleaved xyz, count points).
+     * Writes interleaved RGB float [0,1] into out_rgb (count*3). Sync readback.
+     */
+    bool evaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 
     /** Trilinear sample of atlas RGB (0..1). Safe if ensureReady failed (returns 0). */
     QVector3D sample01(float x, float y, float z) const;
@@ -63,14 +78,17 @@ public:
 private:
     bool initGl();
     void shutdownGl();
-    bool compileProgram(const QString& body);
+    bool compilePrograms(const QString& body);
     bool ensureFbo(int n);
+    bool ensurePointFbo(int w, int h);
     bool renderAtlas();
     void readbackAtlas(int n);
     void destroyPbos();
     bool ensurePbos(int n);
     void destroyMediaTexture();
     bool uploadMediaTexture();
+    void destroyPointsTexture();
+    bool uploadPointsTexture(const float* xyz01, int count, int w, int h);
 
     QString fragment_body_;
     Params params_{};
@@ -94,8 +112,15 @@ private:
     int media_tex_h_ = 0;
 
     std::unique_ptr<QOpenGLShaderProgram> program_;
+    std::unique_ptr<QOpenGLShaderProgram> point_program_;
     std::unique_ptr<QOpenGLFramebufferObject> fbo_;
+    std::unique_ptr<QOpenGLFramebufferObject> point_fbo_;
     int fbo_n_ = 0;
+    int point_fbo_w_ = 0;
+    int point_fbo_h_ = 0;
+    unsigned int points_tex_id_ = 0;
+    int points_tex_w_ = 0;
+    int points_tex_h_ = 0;
     bool gl_ok_ = false;
 
     unsigned int pbos_[2] = {0, 0};
@@ -104,4 +129,5 @@ private:
     bool pbo_has_pending_ = false;
     int pbo_pending_n_ = 0;
     std::vector<unsigned char> readback_staging_;
+    std::vector<float> points_upload_;
 };

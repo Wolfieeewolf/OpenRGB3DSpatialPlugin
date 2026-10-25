@@ -12,7 +12,7 @@ The player ships a **small set of engines** (power only). Authors drop **content
 | **Shader Field** | `effects/shader-field/*.fs` | Authors — thin `.fs` |
 | **Patterns** | `effects/patterns/*.kernel` | Authors — strip kernels |
 | **Triggers / Actions** | `triggers/effects/*.action.json` | Action Editor → Save for Triggers |
-| **Action Editor Tools** | `action-editor/toolbox/` | Authors — `.fx` tools; optional `shader:`/`field_*` (GPU), `particles:`/`particle_*`, or `ribbons:`/`ribbon_*` (CPU) |
+| **Action Editor Tools** | `action-editor/toolbox/` | Authors — `.fx` tools; optional `shader:`/`field_*`, `particles:`/`particle_*`, or `ribbons:`/`ribbon_*`. LED apply runs **true** `volumeMain` at each LED (point-eval); low-res atlases are preview/fallback only. Built-in GPU covers `plasma` / `fire` / `snow` / `colorwash` when no toolbox `shader:` is set. Media samples the full prepared frame at LED UVs. |
 | **Reactive** | Player codec (no Effect Library folder) | HID input + waves |
 | **Ambilight** | Player codec (no Effect Library folder) | Screen Mirror capture |
 | **Movie Sync** | Player codec + `movie-sync/effects/` | Script API + VLC sidecars |

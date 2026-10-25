@@ -23,6 +23,9 @@ public:
     float sampleScalar01(float x, float y, float z) const;
     QVector3D sample01(float x, float y, float z) const;
 
+    /** True effect: volumeMain at each point (interleaved xyz → interleaved rgb). */
+    bool evaluateAtPoints(const float* xyz01, int count, float* out_rgb);
+
 private:
     void applyEngineSize(SpatialVolumeFieldEngine& engine) override;
     bool engineNeedsRefresh() const override;

@@ -28,14 +28,20 @@ void Reset();
 void SetSampleOrigin01(float ox, float oy, float oz, float size);
 
 /**
- * Prepare the GPU volume atlas for this clip's field shader (once per pack frame
- * / render_sequence). No-op if the effect has no `shader:` / `field:` header.
+ * Prepare field shader params (and preview atlas). No-op if the effect has no
+ * `shader:` / `field:` header. LED playback prefers EvaluateAtPoints after this.
  */
 bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence);
 
 bool IsAvailable();
 
-/** Sample prepared field at normalized room coords (0..1). */
+/**
+ * True effect: run volumeMain at each room-normalized XYZ (interleaved in/out).
+ * Applies sample-origin remap. Requires PrepareForClip first.
+ */
+bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb);
+
+/** Preview/fallback: trilinear sample of prepared atlas at normalized room coords. */
 SampleRgb Sample01(float nx, float ny, float nz);
 float SampleScalar01(float nx, float ny, float nz);
 

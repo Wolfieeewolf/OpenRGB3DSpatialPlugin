@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "Action.h"
+#include "ActionBuiltinGpu.h"
 #include "ActionClipEval.h"
 #include "ActionMedia.h"
 #include "ActionScript.h"
@@ -577,6 +578,39 @@ bool EvaluateClipAtWorld(const Clip& clip,
     if(local_ms < clip.start_ms || local_ms >= clip.end_ms || clip.end_ms <= clip.start_ms)
     {
         return false;
+    }
+
+    {
+        const std::string bid = script::FileId(clip);
+        if(builtin_gpu::Uses(bid) && builtin_gpu::IsAvailable()
+           && script::FieldShader(bid).empty())
+        {
+            const WorldNorm s = MakeNormSample(x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
+            float nx = s.nx;
+            float ny = s.ny;
+            ApplyClipUvTransform(clip, &nx, &ny);
+            const builtin_gpu::SampleRgb samp = builtin_gpu::Sample01(nx, ny, s.nz);
+            const float peak = std::max(samp.r, std::max(samp.g, samp.b));
+            if(peak < 0.02f)
+            {
+                return false;
+            }
+            float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
+            ModulateClipIntensity(clip, ClipProgress(clip, local_ms),
+                                  ClipPeriodProgress(clip, local_ms), &intensity);
+            if(out_color)
+            {
+                *out_color = ToRGBColor(
+                    (int)std::lround(std::clamp(samp.r * intensity, 0.0f, 1.0f) * 255.0f),
+                    (int)std::lround(std::clamp(samp.g * intensity, 0.0f, 1.0f) * 255.0f),
+                    (int)std::lround(std::clamp(samp.b * intensity, 0.0f, 1.0f) * 255.0f));
+            }
+            if(out_intensity)
+            {
+                *out_intensity = intensity * peak;
+            }
+            return true;
+        }
     }
 
     if(IsMediaClip(clip))

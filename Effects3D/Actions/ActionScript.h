@@ -49,11 +49,11 @@ bool UsesWorld(const std::string& id);
 /** Non-empty when `.fx` declares `shader:` / `field:` (GPU volume sample). */
 std::string FieldShader(const std::string& id);
 bool UsesField(const std::string& id);
-/** True when `.fx` declares `particles:` (CPU room particle field). */
+/** True when `.fx` declares `particles:` (GPU-baked room particle field). */
 bool UsesParticles(const std::string& id);
 /** Particle mode string (`burst` / `rain` / `fireflies`); empty if unused. */
 std::string ParticlesMode(const std::string& id);
-/** True when `.fx` declares `ribbons:` (CPU room ribbon/tube field). */
+/** True when `.fx` declares `ribbons:` (GPU-baked room ribbon/tube field). */
 bool UsesRibbons(const std::string& id);
 /** Ribbon mode string (`arc` / `helix`); empty if unused. */
 std::string RibbonsMode(const std::string& id);

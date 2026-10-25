@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ActionApplier.h"
+#include "ActionBuiltinGpu.h"
+#include "ActionMedia.h"
 #include "ActionParticleField.h"
 #include "ActionRibbonField.h"
 #include "ActionScript.h"
@@ -203,6 +205,14 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 if(script::UsesRibbons(effect_id))
                 {
                     ribbon_field::PrepareForClip(*top, local_ms, field_sequence);
+                }
+                if(IsMediaClip(*top))
+                {
+                    PrepareMediaForClip(*top, local_ms, field_sequence);
+                }
+                if(builtin_gpu::Uses(effect_id))
+                {
+                    builtin_gpu::PrepareForClip(*top, local_ms, field_sequence);
                 }
             }
             applier_detail::SampleBounds shared_bounds;

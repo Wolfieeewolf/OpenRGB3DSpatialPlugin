@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ActionScript.h"
+#include "ActionBuiltinGpu.h"
 #include "ActionDetail.h"
+#include "ActionMedia.h"
 #include "ActionParticleField.h"
 #include "ActionRibbonField.h"
 #include "ActionVolumeField.h"
@@ -69,11 +71,11 @@ struct Program
     bool color_ends = false;
     bool preview_pulse = false;
     bool axis_angle = false;
-    /** GPU volume body id (`shader:` / `field:` header) — empty = CPU-only tool. */
+    /** GPU volume body id (`shader:` / `field:` header) — empty = no volume field. */
     std::string field_shader;
-    /** CPU particle field mode (`particles:` header) — empty = off. */
+    /** Particle field mode (`particles:` header) — GPU atlas bake; empty = off. */
     std::string particles;
-    /** CPU ribbon/tube mode (`ribbons:` header) — empty = off. */
+    /** Ribbon/tube mode (`ribbons:` header) — GPU atlas bake; empty = off. */
     std::string ribbons;
     std::vector<std::string> aliases;
 };
@@ -1112,6 +1114,8 @@ void SetDirectory(const filesystem::path& dir)
     volume_field::Reset();
     particle_field::Reset();
     ribbon_field::Reset();
+    builtin_gpu::Reset();
+    ResetMediaGpu();
 }
 
 void ReloadDirectory()
@@ -1129,6 +1133,8 @@ void ReloadDirectory()
     volume_field::Reset();
     particle_field::Reset();
     ribbon_field::Reset();
+    builtin_gpu::Reset();
+    ResetMediaGpu();
 }
 
 bool Has(const std::string& id)

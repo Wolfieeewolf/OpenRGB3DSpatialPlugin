@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace Action
 {
@@ -187,7 +188,8 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
             return false;
         }
         Assist().setFragmentBody(body);
-        Assist().setResolution(18);
+        // Prefer higher atlas density for Action playback (engine max is 32).
+        Assist().setResolution(28);
         g_loaded_shader_id = shader_id;
     }
 
@@ -213,6 +215,31 @@ bool IsAvailable()
 {
     std::lock_guard<std::mutex> lock(g_mu);
     return g_assist && g_assist->isAvailable();
+}
+
+bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)
+{
+    if(!xyz01 || !out_rgb || count <= 0)
+    {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(!g_assist || !g_assist->isAvailable())
+    {
+        return false;
+    }
+    std::vector<float> remapped((size_t)count * 3u);
+    for(int i = 0; i < count; ++i)
+    {
+        float x = xyz01[(size_t)i * 3u + 0u];
+        float y = xyz01[(size_t)i * 3u + 1u];
+        float z = xyz01[(size_t)i * 3u + 2u];
+        RemapSample01(&x, &y, &z);
+        remapped[(size_t)i * 3u + 0u] = std::clamp(x, 0.0f, 1.0f);
+        remapped[(size_t)i * 3u + 1u] = std::clamp(y, 0.0f, 1.0f);
+        remapped[(size_t)i * 3u + 2u] = std::clamp(z, 0.0f, 1.0f);
+    }
+    return g_assist->evaluateAtPoints(remapped.data(), count, out_rgb);
 }
 
 SampleRgb Sample01(float nx, float ny, float nz)

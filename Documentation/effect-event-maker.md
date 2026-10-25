@@ -67,7 +67,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 |----------|--------|
 | Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve`, `wave` |
 | Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars`, `scanner` |
-| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst`, `field_ripple` / `field_strata` / `field_burst` (GPU field), `spark_burst` / `particle_rain` / `particle_fireflies` (CPU particles), `neon_ribbon` / `ribbon_helix` (CPU tube) |
+| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst`, `field_ripple` / `field_strata` / `field_burst` (GPU field), `spark_burst` / `particle_rain` / `particle_fireflies` (GPGPU particles), `neon_ribbon` / `ribbon_helix` (GPGPU ribbons), `plasma` / `fire` / `snow` / `colorwash` (built-in GPU when no toolbox `shader:`) |
 | Media | `media_image`, `media_gif`, `media_text`  -  still/GIF/marquee mapped onto track UV (PixelScreen / xLights matrix style) |
 
 **Tools** (Basic / Pixel / Volume / Media) are **not** bundled  -  they load from `action-editor/toolbox/` after you install the presets pack. Editor chrome only: solid colors, gradients, and intensity/period curves in `ActionCatalog`.
@@ -90,11 +90,11 @@ Stack Spatial Anchor and Action `origin_ref` both read the **same layout referen
 
 ### Action volume-field engine (Roomscape sample)
 
-World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares `SpatialVolumeFieldAssist` once per pack frame; `.fx` samples with `field_r` / `field_g` / `field_b` / `field_a` / `field_paint()` at the LED’s room-normalized XYZ. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
+World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares the field once per pack frame, then **evaluates `volumeMain` at each LED’s exact room-normalized XYZ** (true effect). `.fx` `field_*` / `field_paint()` remain for scripts; room-grid preview may still sample a low-res atlas. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
 
-World tools may declare `particles: burst` for a CPU room particle field. The applier rebuilds the particle set once per pack frame; `.fx` samples with `particle_d` / `particle_paint()` at room-normalized XYZ.
+World tools may declare `particles: burst` for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED position. `.fx` can still use `particle_d` / `particle_paint()` (CPU fallback if GL is unavailable).
 
-World tools may declare `ribbons: arc` for a CPU room ribbon/tube. The applier rebuilds a soft polyline tube once per pack frame; `.fx` samples with `ribbon_d` / `ribbon_paint()` at room-normalized XYZ. Ideas from reference VFX only  -  no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
+World tools may declare `ribbons: arc` for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; LED apply is true point-eval. `.fx` can use `ribbon_d` / `ribbon_paint()` (CPU fallback if GL is unavailable). Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
 
 **Placement (world / field / particle / ribbon):** clip `origin_ref` (layout reference point name, or empty = room center), `origin_offset_x/y/z` (% of half-room), and `effect_size` (0.05–2.0). Scripts can read `ox` / `oy` / `oz` / `effect_size`. Sample normalize uses `play_bounds` (track LED AABB vs full room box).
 

@@ -111,6 +111,16 @@ ActionEditorDialog::ActionEditorDialog(OpenRGB3DSpatialTab* tab, QWidget* parent
     timer_ = new QTimer(this);
     timer_->setInterval(33);
     connect(timer_, &QTimer::timeout, this, &ActionEditorDialog::onTick);
+
+    timeline_refresh_timer_ = new QTimer(this);
+    timeline_refresh_timer_->setSingleShot(true);
+    timeline_refresh_timer_->setInterval(64);
+    connect(timeline_refresh_timer_, &QTimer::timeout, this, [this]() {
+        if(timeline_)
+        {
+            timeline_->requestContentRepaint();
+        }
+    });
 }
 
 ActionEditorDialog::~ActionEditorDialog()
@@ -808,8 +818,8 @@ void ActionEditorDialog::buildUi()
     connect(period_curve_bar_, &ActionCurveBar::pointsChanged, this, &ActionEditorDialog::onPeriodCurvePointsChanged);
     connect(media_browse_button_, &QPushButton::clicked, this, &ActionEditorDialog::onBrowseMediaPath);
     connect(media_path_edit_, &QLineEdit::editingFinished, this, &ActionEditorDialog::onClipFieldChanged);
+    // editingFinished only - textChanged re-rasterized the whole timeline on every keystroke.
     connect(media_text_edit_, &QLineEdit::editingFinished, this, &ActionEditorDialog::onClipFieldChanged);
-    connect(media_text_edit_, &QLineEdit::textChanged, this, &ActionEditorDialog::onClipFieldChanged);
     connect(media_scroll_check_, &QCheckBox::toggled, this, &ActionEditorDialog::onClipFieldChanged);
     connect(color_button_, &QPushButton::clicked, this, &ActionEditorDialog::onPickColor);
     connect(color_to_button_, &QPushButton::clicked, this, &ActionEditorDialog::onPickColorTo);
@@ -1400,7 +1410,7 @@ void ActionEditorDialog::onDurationChanged(int value)
     }
     timeline_->setDurationMs(value);
     applyClipToForm();
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onPlayheadChanged(int ms)
@@ -1534,7 +1544,7 @@ void ActionEditorDialog::onColorDropped(int row_index, int ms, unsigned int rgb)
         applyClipToForm();
         if(timeline_)
         {
-            timeline_->update();
+            timeline_->requestContentRepaint();
         }
     }
     updateSelectionActions();
@@ -1634,7 +1644,7 @@ void ActionEditorDialog::onRemoveClip()
     {
         timeline_->setPack(&pack_);
         timeline_->setSelectedClip(selected_track_, selected_clip_);
-        timeline_->update();
+        timeline_->requestContentRepaint();
     }
     if(player_.IsPlaying())
     {
@@ -1905,6 +1915,7 @@ void ActionEditorDialog::startPreview(const Action::Pack& play_pack, int start_m
     preview_pack_.loop = pack_.loop;
     preview_pack_.devices = pack_.devices;
     preview_solo_ = solo;
+    preview_pack_dirty_ = false;
     emit previewStarted();
     player_.SetPack(preview_pack_);
     const int seek = std::clamp(start_ms, 0, std::max(0, preview_pack_.duration_ms - 1));
@@ -1989,16 +2000,8 @@ void ActionEditorDialog::onPreviewTrack(int track_index, int start_ms)
                  true);
 }
 
-void ActionEditorDialog::onTick()
+void ActionEditorDialog::syncPreviewPackFromAuthoring()
 {
-    if(!tab_ || !player_.IsPlaying())
-    {
-        stopPreview();
-        return;
-    }
-    const int elapsed = (int)wall_.elapsed();
-    const int dt = std::max(0, elapsed - last_elapsed_ms_);
-    last_elapsed_ms_ = elapsed;
     if(preview_solo_)
     {
         Action::Pack refreshed = preview_pack_;
@@ -2016,13 +2019,43 @@ void ActionEditorDialog::onTick()
         }
         refreshed.duration_ms = pack_.duration_ms;
         refreshed.loop = pack_.loop;
-        preview_pack_ = refreshed;
+        preview_pack_ = std::move(refreshed);
     }
     else
     {
         preview_pack_ = pack_;
     }
-    player_.UpdatePack(preview_pack_);
+}
+
+void ActionEditorDialog::scheduleTimelineRefresh()
+{
+    if(timeline_refresh_timer_)
+    {
+        timeline_refresh_timer_->start();
+    }
+    else if(timeline_)
+    {
+        timeline_->requestContentRepaint();
+    }
+}
+
+void ActionEditorDialog::onTick()
+{
+    if(!tab_ || !player_.IsPlaying())
+    {
+        stopPreview();
+        return;
+    }
+    const int elapsed = (int)wall_.elapsed();
+    const int dt = std::max(0, elapsed - last_elapsed_ms_);
+    last_elapsed_ms_ = elapsed;
+    // Freeze authoring pack during preview unless a live edit dirtied it.
+    if(preview_pack_dirty_)
+    {
+        syncPreviewPackFromAuthoring();
+        preview_pack_dirty_ = false;
+        player_.UpdatePack(preview_pack_);
+    }
     if(!player_.Tick(dt, true))
     {
         stopPreview();

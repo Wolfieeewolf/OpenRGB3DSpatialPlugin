@@ -3,6 +3,7 @@
 #include "ActionTimelineWidget.h"
 #include "ActionCatalog.h"
 #include "Actions/ActionApplier.h"
+#include "Actions/ActionBuiltinGpu.h"
 #include "Actions/ActionMedia.h"
 #include "Actions/ActionScript.h"
 #include "Actions/ActionParticleField.h"
@@ -22,6 +23,7 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QSet>
 #include <QWheelEvent>
@@ -74,9 +76,9 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         ? 1
         : (!order.empty() ? (int)order.size() : std::max(1, pb.led_count > 1 ? pb.led_count : 24));
 
-    // Use full clip height so multi-LED patterns stay readable; odd skip so
-    // every-other-LED effects (alternating) are not aliased to a solid colour.
-    const int max_rows = pb.single_led_row ? 1 : std::max(2, br.height());
+    // Cap LED preview rows — full clip height × many LEDs stalls the UI thread.
+    constexpr int kMaxPreviewRows = 16;
+    const int max_rows = pb.single_led_row ? 1 : std::max(2, std::min(br.height(), kMaxPreviewRows));
     int skip = (led_n > max_rows) ? std::max(1, (led_n + max_rows - 1) / max_rows) : 1;
     if(skip > 1 && (skip % 2) == 0)
     {
@@ -84,7 +86,10 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     }
     const int rows = pb.single_led_row ? 1 : std::max(1, (led_n + skip - 1) / skip);
 
-    QImage img(std::max(1, br.width()), rows, QImage::Format_ARGB32_Premultiplied);
+    // Sample fewer time columns then scale up — clip thumbnails are illustrative.
+    constexpr int kMaxSampleWidth = 96;
+    const int sample_w = std::max(1, std::min(br.width(), kMaxSampleWidth));
+    QImage img(sample_w, rows, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
 
     const int dur = std::max(1, sample.end_ms - sample.start_ms);
@@ -94,6 +99,9 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     const bool field_eval = Action::script::UsesField(effect_id);
     const bool particle_eval = Action::script::UsesParticles(effect_id);
     const bool ribbon_eval = Action::script::UsesRibbons(effect_id);
+    const bool media_eval = Action::IsMediaClip(sample);
+    const bool builtin_eval = Action::builtin_gpu::Uses(effect_id)
+        && Action::script::FieldShader(effect_id).empty();
     auto applyOrigin = [&]() {
         Action::ClipOrigin01 origin;
         if(room_bounds_.has_world_bounds)
@@ -119,7 +127,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     const int prepare_step_ms = std::max(24, dur / std::max(1, img.width() / 6));
     static std::uint64_t s_timeline_field_seq = 0;
     auto prepareFieldsAt = [&](int sample_ms) {
-        if(!(field_eval || particle_eval || ribbon_eval))
+        if(!(field_eval || particle_eval || ribbon_eval || media_eval || builtin_eval))
         {
             return;
         }
@@ -140,6 +148,14 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         if(ribbon_eval)
         {
             Action::ribbon_field::PrepareForClip(sample, sample_ms, seq);
+        }
+        if(media_eval)
+        {
+            Action::PrepareMediaForClip(sample, sample_ms, seq);
+        }
+        if(builtin_eval)
+        {
+            Action::builtin_gpu::PrepareForClip(sample, sample_ms, seq);
         }
         last_prepare_ms = sample_ms;
     };
@@ -371,9 +387,28 @@ void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const P
     p.restore();
 }
 
-void ActionTimelineWidget::paintEvent(QPaintEvent*)
+void ActionTimelineWidget::paintEvent(QPaintEvent* event)
 {
+    if(content_dirty_ || content_cache_.size() != size())
+    {
+        content_cache_ = QPixmap(size());
+        content_cache_.fill(QColor(32, 32, 36));
+        QPainter cache_painter(&content_cache_);
+        paintTimelineContent(cache_painter);
+        content_dirty_ = false;
+    }
+
     QPainter p(this);
+    const QRect damage = event ? event->rect() : rect();
+    p.drawPixmap(damage, content_cache_, damage);
+
+    const int px = timeToX(playhead_ms_);
+    p.setPen(QPen(QColor(255, 80, 80), 2));
+    p.drawLine(px, 0, px, height());
+}
+
+void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
+{
     p.fillRect(rect(), QColor(32, 32, 36));
 
     p.fillRect(0, 0, gutter_width_, height(), QColor(40, 40, 44));
@@ -562,9 +597,5 @@ void ActionTimelineWidget::paintEvent(QPaintEvent*)
 
     p.setPen(QPen(QColor(168, 168, 176), 2));
     p.drawLine(gutter_width_, 0, gutter_width_, height());
-
-    const int px = timeToX(playhead_ms_);
-    p.setPen(QPen(QColor(255, 80, 80), 2));
-    p.drawLine(px, 0, px, height());
 }
 

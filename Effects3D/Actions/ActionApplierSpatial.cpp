@@ -3,7 +3,11 @@
 #include "ActionApplier.h"
 #include "ActionScript.h"
 #include "ActionApplierDetail.h"
+#include "ActionBuiltinGpu.h"
 #include "ActionMedia.h"
+#include "ActionParticleField.h"
+#include "ActionRibbonField.h"
+#include "ActionVolumeField.h"
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"
 #include "ZoneManager3D.h"
@@ -131,6 +135,95 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
             min_y = local_bounds.min_y; max_y = local_bounds.max_y;
             min_z = local_bounds.min_z; max_z = local_bounds.max_z;
             have_bounds = true;
+        }
+    }
+
+    // True GPU field path: evaluate volumeMain at each LED's exact room-normalized
+    // position (one draw + N-pixel readback). Atlas Sample01 is preview/fallback only.
+    if(top && have_bounds && !use_sequence)
+    {
+        const std::string effect_id = script::FileId(*top);
+        const bool field_true = script::UsesField(effect_id) && volume_field::IsAvailable();
+        const bool particle_true = script::UsesParticles(effect_id) && particle_field::IsAvailable();
+        const bool ribbon_true = script::UsesRibbons(effect_id) && ribbon_field::IsAvailable();
+        const bool builtin_true = builtin_gpu::Uses(effect_id)
+            && script::FieldShader(effect_id).empty()
+            && builtin_gpu::IsAvailable();
+        if(field_true || particle_true || ribbon_true || builtin_true)
+        {
+            const int n = (int)matching.size();
+            const float span_x = max_x - min_x;
+            const float span_y = max_y - min_y;
+            const float span_z = max_z - min_z;
+            const float diag = std::max(1e-5f, std::sqrt(span_x * span_x + span_y * span_y + span_z * span_z));
+            const float eps = diag * 0.02f;
+            auto flat_norm = [&](float v, float vmin, float span) -> float {
+                if(span <= eps)
+                {
+                    return 0.5f;
+                }
+                return std::clamp((v - vmin) / span, 0.0f, 1.0f);
+            };
+
+            std::vector<float> xyz((size_t)n * 3u);
+            for(int i = 0; i < n; ++i)
+            {
+                const Vector3D& p = sample_pos[(size_t)i];
+                float nx = flat_norm(p.x, min_x, span_x);
+                float ny = flat_norm(p.y, min_y, span_y);
+                float nz = flat_norm(p.z, min_z, span_z);
+                ApplyClipUvTransform(*top, &nx, &ny);
+                xyz[(size_t)i * 3u + 0u] = nx;
+                xyz[(size_t)i * 3u + 1u] = ny;
+                xyz[(size_t)i * 3u + 2u] = nz;
+            }
+
+            std::vector<float> rgb((size_t)n * 3u, 0.0f);
+            bool ok = false;
+            if(field_true)
+            {
+                ok = volume_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
+            }
+            else if(particle_true)
+            {
+                ok = particle_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
+            }
+            else if(ribbon_true)
+            {
+                ok = ribbon_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
+            }
+            else
+            {
+                ok = builtin_gpu::EvaluateAtPoints(xyz.data(), n, rgb.data());
+            }
+
+            if(ok)
+            {
+                float intensity = std::clamp(top->intensity, 0.0f, 1.0f);
+                ModulateClipIntensity(*top, ClipProgress(*top, local_ms),
+                                      ClipPeriodProgress(*top, local_ms), &intensity);
+                int painted = 0;
+                for(int i = 0; i < n; ++i)
+                {
+                    const float r = rgb[(size_t)i * 3u + 0u];
+                    const float g = rgb[(size_t)i * 3u + 1u];
+                    const float b = rgb[(size_t)i * 3u + 2u];
+                    const float peak = std::max(r, std::max(g, b));
+                    if(peak < 0.02f)
+                    {
+                        continue;
+                    }
+                    const RGBColor color = ToRGBColor(
+                        (int)std::lround(std::clamp(r * intensity, 0.0f, 1.0f) * 255.0f),
+                        (int)std::lround(std::clamp(g * intensity, 0.0f, 1.0f) * 255.0f),
+                        (int)std::lround(std::clamp(b * intensity, 0.0f, 1.0f) * 255.0f));
+                    LEDPosition3D* led = matching[(size_t)i];
+                    led->preview_color = color;
+                    ApplyColorToMappedLed(*led, transform->controller, color, touched);
+                    ++painted;
+                }
+                return painted;
+            }
         }
     }
 

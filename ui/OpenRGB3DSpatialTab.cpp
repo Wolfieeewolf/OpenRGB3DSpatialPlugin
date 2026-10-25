@@ -9,6 +9,7 @@
 #include "ActionsPanel.h"
 #include "Actions/Action.h"
 #include "Actions/ActionApplier.h"
+#include "Actions/ActionBuiltinGpu.h"
 #include "Actions/ActionScript.h"
 #include "Actions/ActionParticleField.h"
 #include "Actions/ActionRibbonField.h"
@@ -479,17 +480,79 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                             Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
                             Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
                             Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-                            if(Action::script::UsesField(cid))
+                            const bool field_fast = Action::script::UsesField(cid);
+                            const bool particle_fast = Action::script::UsesParticles(cid);
+                            const bool ribbon_fast = Action::script::UsesRibbons(cid);
+                            const bool builtin_fast = Action::builtin_gpu::Uses(cid)
+                                && Action::script::FieldShader(cid).empty();
+                            if(field_fast)
                             {
                                 Action::volume_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
                             }
-                            if(Action::script::UsesParticles(cid))
+                            if(particle_fast)
                             {
                                 Action::particle_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
                             }
-                            if(Action::script::UsesRibbons(cid))
+                            if(ribbon_fast)
                             {
                                 Action::ribbon_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            if(builtin_fast)
+                            {
+                                Action::builtin_gpu::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            const bool field_true = field_fast && Action::volume_field::IsAvailable();
+                            const bool particle_true = particle_fast && Action::particle_field::IsAvailable();
+                            const bool ribbon_true = ribbon_fast && Action::ribbon_field::IsAvailable();
+                            const bool builtin_true = builtin_fast && Action::builtin_gpu::IsAvailable();
+                            const bool true_gpu = field_true || particle_true || ribbon_true || builtin_true;
+                            const int grid_n = nx * ny * nz;
+                            std::vector<float> grid_xyz;
+                            std::vector<float> grid_rgb;
+                            bool grid_ok = false;
+                            if(true_gpu && grid_n > 0)
+                            {
+                                const float span_x = std::max(1e-5f, max_x - min_x);
+                                const float span_y = std::max(1e-5f, max_y - min_y);
+                                const float span_z = std::max(1e-5f, max_z - min_z);
+                                grid_xyz.resize((size_t)grid_n * 3u);
+                                grid_rgb.resize((size_t)grid_n * 3u, 0.0f);
+                                for(int ix = 0; ix < nx; ++ix)
+                                {
+                                    for(int iy = 0; iy < ny; ++iy)
+                                    {
+                                        for(int iz = 0; iz < nz; ++iz)
+                                        {
+                                            float sx = 0.0f, sy = 0.0f, sz = 0.0f;
+                                            viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sx, sy, sz);
+                                            const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
+                                                + (size_t)iy * (size_t)nz + (size_t)iz;
+                                            grid_xyz[idx * 3u + 0u] = (sx - min_x) / span_x;
+                                            grid_xyz[idx * 3u + 1u] = (sy - min_y) / span_y;
+                                            grid_xyz[idx * 3u + 2u] = (sz - min_z) / span_z;
+                                        }
+                                    }
+                                }
+                                if(field_true)
+                                {
+                                    grid_ok = Action::volume_field::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
+                                else if(particle_true)
+                                {
+                                    grid_ok = Action::particle_field::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
+                                else if(ribbon_true)
+                                {
+                                    grid_ok = Action::ribbon_field::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
+                                else
+                                {
+                                    grid_ok = Action::builtin_gpu::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
                             }
                             for(int ix = 0; ix < nx; ++ix)
                             {
@@ -500,17 +563,36 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                         float sx = 0.0f, sy = 0.0f, sz = 0.0f;
                                         viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sx, sy, sz);
                                         RGBColor color = ToRGBColor(0, 0, 0);
-                                        float intensity = 0.0f;
-                                        const int seed = ix * 73856093 ^ iy * 19349663 ^ iz * 83492791;
-                                        if(!Action::EvaluateClipAtWorld(*clip, local_ms,
-                                                                        sx, sy, sz,
-                                                                        min_x, max_x, min_y, max_y, min_z, max_z,
-                                                                        seed, &color, &intensity))
-                                        {
-                                            continue;
-                                        }
                                         const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
                                             + (size_t)iy * (size_t)nz + (size_t)iz;
+                                        if(grid_ok)
+                                        {
+                                            const float r = grid_rgb[idx * 3u + 0u];
+                                            const float g = grid_rgb[idx * 3u + 1u];
+                                            const float b = grid_rgb[idx * 3u + 2u];
+                                            const float peak = std::max(r, std::max(g, b));
+                                            if(peak < 0.02f)
+                                            {
+                                                continue;
+                                            }
+                                            const float inten = std::clamp(clip->intensity, 0.0f, 1.0f);
+                                            color = ToRGBColor(
+                                                (int)std::lround(std::clamp(r * inten, 0.0f, 1.0f) * 255.0f),
+                                                (int)std::lround(std::clamp(g * inten, 0.0f, 1.0f) * 255.0f),
+                                                (int)std::lround(std::clamp(b * inten, 0.0f, 1.0f) * 255.0f));
+                                        }
+                                        else
+                                        {
+                                            float intensity = 0.0f;
+                                            const int seed = ix * 73856093 ^ iy * 19349663 ^ iz * 83492791;
+                                            if(!Action::EvaluateClipAtWorld(*clip, local_ms,
+                                                                            sx, sy, sz,
+                                                                            min_x, max_x, min_y, max_y, min_z, max_z,
+                                                                            seed, &color, &intensity))
+                                            {
+                                                continue;
+                                            }
+                                        }
                                         room_grid_overlay_buffer[idx] = color;
                                     }
                                 }

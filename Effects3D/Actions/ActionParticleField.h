@@ -24,17 +24,22 @@ void Reset();
 void SetSampleOrigin01(float ox, float oy, float oz, float size);
 
 /**
- * Advance / rebuild the room-space particle set for this clip (once per pack frame).
+ * Rebuild particle params and compile the GPGPU volumeMain (OpenGL 4.1).
+ * Preview may still bake an atlas; LED apply uses EvaluateAtPoints.
+ * Falls back to CPU Gaussian sampling if GL is unavailable.
  * No-op unless the effect declares `particles:` in its `.fx` header.
  */
 bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence);
 
 bool IsAvailable();
 
+/** True effect: volumeMain at each room-normalized XYZ (interleaved in/out). */
+bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb);
+
 /** Soft density at normalized room coords (0..1). */
 float SampleDensity01(float nx, float ny, float nz);
 
-/** Density-tinted RGB (uses clip colour via paint path separately). */
+/** Preview/fallback atlas or CPU sample. */
 SampleRgb Sample01(float nx, float ny, float nz);
 
 } // namespace particle_field

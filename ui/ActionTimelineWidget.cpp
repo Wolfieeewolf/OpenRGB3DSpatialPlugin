@@ -53,25 +53,25 @@ void ActionTimelineWidget::setEffectFilesDir(const filesystem::path& dir)
 void ActionTimelineWidget::setPack(Action::Pack* pack)
 {
     pack_ = pack;
-    update();
+    requestContentRepaint();
 }
 
 void ActionTimelineWidget::setControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms)
 {
     transforms_ = transforms;
-    update();
+    requestContentRepaint();
 }
 
 void ActionTimelineWidget::setZoneManager(ZoneManager3D* zone_manager)
 {
     zone_manager_ = zone_manager;
-    update();
+    requestContentRepaint();
 }
 
 void ActionTimelineWidget::setRoomWorldBounds(const Action::ApplySpatialContext& room)
 {
     room_bounds_ = room;
-    update();
+    requestContentRepaint();
 }
 
 QString ActionTimelineWidget::targetKey(const Action::Target& t) const
@@ -194,7 +194,7 @@ void ActionTimelineWidget::rebuildVisibleRows()
     }
     updateGeometrySize();
     emit contentHeightChanged(contentHeight());
-    update();
+    requestContentRepaint();
 }
 
 ActionTimelineWidget::Node* ActionTimelineWidget::nodeAtPath(const QVector<int>& path)
@@ -236,20 +236,36 @@ void ActionTimelineWidget::setDurationMs(int duration_ms)
 {
     duration_ms_ = std::clamp(duration_ms, 100, Action::kMaxDurationMs);
     updateGeometrySize();
+    requestContentRepaint();
+}
+
+void ActionTimelineWidget::requestContentRepaint()
+{
+    content_dirty_ = true;
     update();
 }
 
 void ActionTimelineWidget::setPlayheadMs(int ms)
 {
+    const int old_ms = playhead_ms_;
     playhead_ms_ = std::clamp(ms, 0, duration_ms_);
-    update();
+    if(playhead_ms_ == old_ms)
+    {
+        return;
+    }
+    // Playhead motion must not rebuild clip rasters — invalidate only the two strips.
+    constexpr int kPad = 3;
+    const int old_x = timeToX(old_ms);
+    const int new_x = timeToX(playhead_ms_);
+    update(QRect(old_x - kPad, 0, kPad * 2 + 1, height()));
+    update(QRect(new_x - kPad, 0, kPad * 2 + 1, height()));
 }
 
 void ActionTimelineWidget::setPixelsPerSecond(double pps)
 {
     pixels_per_second_ = std::clamp(pps, 20.0, 400.0);
     updateGeometrySize();
-    update();
+    requestContentRepaint();
 }
 
 void ActionTimelineWidget::setSelectedClip(int track_index, int clip_index)
@@ -263,7 +279,7 @@ void ActionTimelineWidget::cancelDrag()
     row_reorder_hover_ = -1;
     if(drag_op_ == DragOp::None)
     {
-        update();
+        requestContentRepaint();
         return;
     }
     drag_op_ = DragOp::None;
@@ -283,7 +299,7 @@ void ActionTimelineWidget::cancelDrag()
     marquee_current_ = QPoint();
     releaseMouse();
     unsetCursor();
-    update();
+    requestContentRepaint();
 }
 
 int ActionTimelineWidget::trackIndexForRow(int row) const

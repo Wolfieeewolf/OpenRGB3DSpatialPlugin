@@ -17,6 +17,10 @@
 #include <cmath>
 #include <cstring>
 
+#ifndef GL_RGB32F
+#define GL_RGB32F 0x8815
+#endif
+
 namespace
 {
 
@@ -43,6 +47,36 @@ QString BuildFragmentShader(const QString& user_body)
                "    float slice = floor(fy / n);\n"
                "    float ly = fy - slice * n;\n"
                "    vec3 p01 = vec3((fx + 0.5) / n, (ly + 0.5) / n, (slice + 0.5) / n);\n"
+               "    vec4 c = vec4(0.0);\n"
+               "    volumeMain(c, clamp(p01, 0.0, 1.0));\n"
+               "    frag_color = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
+               "}\n");
+}
+
+QString BuildPointFragmentShader(const QString& user_body)
+{
+    return QStringLiteral(
+               "#version 410 core\n"
+               "uniform float u_time;\n")
+           + QStringLiteral("uniform float u_params[%1];\n").arg(SpatialVolumeFieldEngine::kMaxParams)
+           + QStringLiteral(
+               "uniform sampler2D u_media;\n"
+               "uniform sampler2D u_points;\n"
+               "uniform vec2 u_point_atlas;\n"
+               "uniform int u_point_count;\n"
+               "out vec4 frag_color;\n"
+               "void volumeMain(out vec4 out_color, in vec3 p01);\n")
+           + user_body
+           + QStringLiteral(
+               "\nvoid main() {\n"
+               "    int ix = int(floor(gl_FragCoord.x));\n"
+               "    int iy = int(floor(gl_FragCoord.y));\n"
+               "    int i = iy * int(u_point_atlas.x) + ix;\n"
+               "    if(i < 0 || i >= u_point_count) {\n"
+               "        frag_color = vec4(0.0);\n"
+               "        return;\n"
+               "    }\n"
+               "    vec3 p01 = texelFetch(u_points, ivec2(ix, iy), 0).rgb;\n"
                "    vec4 c = vec4(0.0);\n"
                "    volumeMain(c, clamp(p01, 0.0, 1.0));\n"
                "    frag_color = vec4(clamp(c.rgb, 0.0, 1.0), 1.0);\n"
@@ -124,18 +158,28 @@ void SpatialVolumeFieldEngine::shutdownGl()
     if(gl)
     {
         destroyMediaTexture();
+        destroyPointsTexture();
         fbo_.reset();
+        point_fbo_.reset();
         program_.reset();
+        point_program_.reset();
     }
     else
     {
         media_tex_id_ = 0;
         media_tex_w_ = 0;
         media_tex_h_ = 0;
+        points_tex_id_ = 0;
+        points_tex_w_ = 0;
+        points_tex_h_ = 0;
         fbo_.reset();
+        point_fbo_.reset();
         program_.reset();
+        point_program_.reset();
     }
     fbo_n_ = 0;
+    point_fbo_w_ = 0;
+    point_fbo_h_ = 0;
     gl_ok_ = false;
 }
 
@@ -232,6 +276,54 @@ QString SpatialVolumeFieldEngine::lastError() const
     return last_error_;
 }
 
+bool SpatialVolumeFieldEngine::ensureProgramReady()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(fragment_body_.trimmed().isEmpty())
+    {
+        last_error_ = QStringLiteral("Empty volume field body.");
+        available_.store(false);
+        return false;
+    }
+    if(!initGl())
+    {
+        available_.store(false);
+        return false;
+    }
+
+    SpatialOffscreenGlPool::Session gl;
+    if(!gl)
+    {
+        last_error_ = QStringLiteral("OpenGL makeCurrent failed.");
+        available_.store(false);
+        return false;
+    }
+
+    if(body_dirty_ || !program_ || !point_program_)
+    {
+        if(!compilePrograms(fragment_body_))
+        {
+            available_.store(false);
+            return false;
+        }
+        body_dirty_ = false;
+    }
+
+    if(media_dirty_ || media_tex_id_ == 0)
+    {
+        if(!uploadMediaTexture())
+        {
+            available_.store(false);
+            return false;
+        }
+    }
+
+    params_dirty_ = false;
+    last_error_.clear();
+    available_.store(true);
+    return true;
+}
+
 bool SpatialVolumeFieldEngine::ensureReady()
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -261,7 +353,7 @@ bool SpatialVolumeFieldEngine::initGl()
     return true;
 }
 
-bool SpatialVolumeFieldEngine::compileProgram(const QString& body)
+bool SpatialVolumeFieldEngine::compilePrograms(const QString& body)
 {
     QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
     if(!ctx || !ctx->isValid())
@@ -270,23 +362,36 @@ bool SpatialVolumeFieldEngine::compileProgram(const QString& body)
         return false;
     }
 
-    program_ = std::make_unique<QOpenGLShaderProgram>();
-    if(!program_->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader))
+    auto link_one = [&](std::unique_ptr<QOpenGLShaderProgram>& prog, const QString& frag) -> bool {
+        prog = std::make_unique<QOpenGLShaderProgram>();
+        if(!prog->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader))
+        {
+            last_error_ = prog->log();
+            prog.reset();
+            return false;
+        }
+        if(!prog->addShaderFromSourceCode(QOpenGLShader::Fragment, frag.toUtf8()))
+        {
+            last_error_ = prog->log();
+            prog.reset();
+            return false;
+        }
+        if(!prog->link())
+        {
+            last_error_ = prog->log();
+            prog.reset();
+            return false;
+        }
+        return true;
+    };
+
+    if(!link_one(program_, BuildFragmentShader(body)))
     {
-        last_error_ = program_->log();
-        program_.reset();
+        point_program_.reset();
         return false;
     }
-    const QString frag = BuildFragmentShader(body);
-    if(!program_->addShaderFromSourceCode(QOpenGLShader::Fragment, frag.toUtf8()))
+    if(!link_one(point_program_, BuildPointFragmentShader(body)))
     {
-        last_error_ = program_->log();
-        program_.reset();
-        return false;
-    }
-    if(!program_->link())
-    {
-        last_error_ = program_->log();
         program_.reset();
         return false;
     }
@@ -310,6 +415,84 @@ bool SpatialVolumeFieldEngine::ensureFbo(int n)
         fbo_n_ = 0;
     }
     return ok;
+}
+
+bool SpatialVolumeFieldEngine::ensurePointFbo(int w, int h)
+{
+    if(point_fbo_ && point_fbo_w_ == w && point_fbo_h_ == h && point_fbo_->isValid())
+    {
+        return true;
+    }
+    point_fbo_ = std::make_unique<QOpenGLFramebufferObject>(w, h);
+    point_fbo_w_ = w;
+    point_fbo_h_ = h;
+    if(!point_fbo_->isValid())
+    {
+        last_error_ = QStringLiteral("Point-eval FBO allocation failed.");
+        point_fbo_.reset();
+        point_fbo_w_ = 0;
+        point_fbo_h_ = 0;
+        return false;
+    }
+    return true;
+}
+
+void SpatialVolumeFieldEngine::destroyPointsTexture()
+{
+    if(points_tex_id_ == 0)
+    {
+        return;
+    }
+    QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
+    QOpenGLFunctions* gl = ctx ? ctx->functions() : nullptr;
+    if(gl)
+    {
+        gl->glDeleteTextures(1, &points_tex_id_);
+    }
+    points_tex_id_ = 0;
+    points_tex_w_ = 0;
+    points_tex_h_ = 0;
+}
+
+bool SpatialVolumeFieldEngine::uploadPointsTexture(const float* xyz01, int count, int w, int h)
+{
+    QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
+    QOpenGLFunctions* gl = ctx ? ctx->functions() : nullptr;
+    if(!gl || !xyz01 || count <= 0 || w < 1 || h < 1)
+    {
+        return false;
+    }
+
+    const int cells = w * h;
+    points_upload_.assign((size_t)cells * 3u, 0.0f);
+    for(int i = 0; i < count; ++i)
+    {
+        points_upload_[(size_t)i * 3u + 0u] = xyz01[(size_t)i * 3u + 0u];
+        points_upload_[(size_t)i * 3u + 1u] = xyz01[(size_t)i * 3u + 1u];
+        points_upload_[(size_t)i * 3u + 2u] = xyz01[(size_t)i * 3u + 2u];
+    }
+
+    if(points_tex_id_ == 0)
+    {
+        gl->glGenTextures(1, &points_tex_id_);
+        if(points_tex_id_ == 0)
+        {
+            last_error_ = QStringLiteral("Points texture allocation failed.");
+            return false;
+        }
+    }
+
+    gl->glBindTexture(GL_TEXTURE_2D, points_tex_id_);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, w, h, 0, GL_RGB, GL_FLOAT, points_upload_.data());
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    points_tex_w_ = w;
+    points_tex_h_ = h;
+    return true;
 }
 
 bool SpatialVolumeFieldEngine::ensurePbos(int n)
@@ -432,9 +615,9 @@ bool SpatialVolumeFieldEngine::renderAtlas()
         return false;
     }
 
-    if(body_dirty_ || !program_)
+    if(body_dirty_ || !program_ || !point_program_)
     {
-        if(!compileProgram(fragment_body_))
+        if(!compilePrograms(fragment_body_))
         {
             available_.store(false);
             return false;
@@ -501,6 +684,133 @@ bool SpatialVolumeFieldEngine::renderAtlas()
     last_error_.clear();
     available_.store(atlas_res_ > 0 && !atlas_rgb_.empty());
     return available_.load();
+}
+
+bool SpatialVolumeFieldEngine::evaluateAtPoints(const float* xyz01, int count, float* out_rgb)
+{
+    if(!xyz01 || !out_rgb || count <= 0)
+    {
+        return false;
+    }
+    if(count > kMaxPointEdge * kMaxPointEdge)
+    {
+        last_error_ = QStringLiteral("Point count exceeds GPU limit.");
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(fragment_body_.trimmed().isEmpty())
+    {
+        last_error_ = QStringLiteral("Empty volume field body.");
+        return false;
+    }
+    if(!initGl())
+    {
+        return false;
+    }
+
+    SpatialOffscreenGlPool::Session gl;
+    if(!gl)
+    {
+        last_error_ = QStringLiteral("OpenGL makeCurrent failed.");
+        return false;
+    }
+
+    if(body_dirty_ || !program_ || !point_program_)
+    {
+        if(!compilePrograms(fragment_body_))
+        {
+            available_.store(false);
+            return false;
+        }
+        body_dirty_ = false;
+    }
+
+    if(media_dirty_ || media_tex_id_ == 0)
+    {
+        if(!uploadMediaTexture())
+        {
+            available_.store(false);
+            return false;
+        }
+    }
+
+    const int w = std::min(count, kMaxPointEdge);
+    const int h = (count + w - 1) / w;
+    if(!ensurePointFbo(w, h))
+    {
+        return false;
+    }
+    if(!uploadPointsTexture(xyz01, count, w, h))
+    {
+        return false;
+    }
+
+    QOpenGLFunctions* glf = SpatialOffscreenGlPool::sharedContext()->functions();
+    float param_bins[kMaxParams] = {};
+    for(int i = 0; i < kMaxParams; ++i)
+    {
+        param_bins[i] = params_.values[i];
+    }
+
+    point_program_->bind();
+    point_fbo_->bind();
+    glf->glViewport(0, 0, w, h);
+    point_program_->setUniformValue("u_time", params_.time_sec);
+    SetGlslFloatUniformArray(*point_program_, glf, "u_params", param_bins, kMaxParams);
+    point_program_->setUniformValue("u_point_atlas", QVector2D((float)w, (float)h));
+    point_program_->setUniformValue("u_point_count", count);
+
+    glf->glActiveTexture(GL_TEXTURE0);
+    glf->glBindTexture(GL_TEXTURE_2D, media_tex_id_);
+    point_program_->setUniformValue("u_media", 0);
+
+    glf->glActiveTexture(GL_TEXTURE1);
+    glf->glBindTexture(GL_TEXTURE_2D, points_tex_id_);
+    point_program_->setUniformValue("u_points", 1);
+
+    if(!FieldFullscreenQuad410::Draw(SpatialOffscreenGlPool::sharedContext()))
+    {
+        last_error_ = QStringLiteral("Point-eval quad draw failed.");
+        glf->glActiveTexture(GL_TEXTURE1);
+        glf->glBindTexture(GL_TEXTURE_2D, 0);
+        glf->glActiveTexture(GL_TEXTURE0);
+        glf->glBindTexture(GL_TEXTURE_2D, 0);
+        point_fbo_->release();
+        point_program_->release();
+        return false;
+    }
+
+    const size_t bytes = (size_t)w * (size_t)h * 4u;
+    if(readback_staging_.size() < bytes)
+    {
+        readback_staging_.resize(bytes);
+    }
+    glf->glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glf->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, readback_staging_.data());
+
+    glf->glActiveTexture(GL_TEXTURE1);
+    glf->glBindTexture(GL_TEXTURE_2D, 0);
+    glf->glActiveTexture(GL_TEXTURE0);
+    glf->glBindTexture(GL_TEXTURE_2D, 0);
+    point_fbo_->release();
+    point_program_->release();
+
+    const float inv255 = 1.0f / 255.0f;
+    for(int i = 0; i < count; ++i)
+    {
+        const int ix = i % w;
+        const int iy = i / w;
+        const unsigned char* src = readback_staging_.data() + ((size_t)iy * (size_t)w + (size_t)ix) * 4u;
+        out_rgb[(size_t)i * 3u + 0u] = src[0] * inv255;
+        out_rgb[(size_t)i * 3u + 1u] = src[1] * inv255;
+        out_rgb[(size_t)i * 3u + 2u] = src[2] * inv255;
+    }
+
+    params_dirty_ = false;
+    last_error_.clear();
+    available_.store(true);
+    return true;
 }
 
 void SpatialVolumeFieldEngine::readbackAtlas(int n)

@@ -86,7 +86,7 @@ void ActionEditorDialog::onToolbarColorClicked(unsigned int rgb)
     b->gradient = {{0.0f, color}};
     setColorButton(color_button_, b->color);
     syncGradientBar();
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onToolbarGradientClicked(const QString& preset_id)
@@ -121,7 +121,7 @@ void ActionEditorDialog::onToolbarCurveClicked(const QString& preset_id)
             curve_combo_->setCurrentIndex(idx);
         }
     }
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onCurvePresetApplied(int track_index, int clip_index, const QString& preset_id)
@@ -148,7 +148,7 @@ void ActionEditorDialog::onCurvePresetApplied(int track_index, int clip_index, c
         ActionUserCurves::Apply(b, preset_id, PluginSettingsPaths::ActionEditorCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     }
     applyClipToForm();
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onGradientPresetApplied(int track_index, int clip_index, const QString& preset_id)
@@ -201,7 +201,7 @@ void ActionEditorDialog::applyGradientPresetToClip(Action::Clip* b, const QStrin
     }
     if(timeline_)
     {
-        timeline_->update();
+        timeline_->requestContentRepaint();
     }
 }
 
@@ -857,7 +857,7 @@ void ActionEditorDialog::onCurvePointsChanged()
             suppress_ui_ = false;
         }
     }
-    timeline_->update();
+    scheduleTimelineRefresh();
 }
 
 void ActionEditorDialog::onPeriodCurvePointsChanged()
@@ -888,7 +888,7 @@ void ActionEditorDialog::onPeriodCurvePointsChanged()
         period_curve_combo_->setCurrentIndex(idx >= 0 ? idx : period_curve_combo_->findData(QStringLiteral("custom")));
         suppress_ui_ = false;
     }
-    timeline_->update();
+    scheduleTimelineRefresh();
 }
 
 void ActionEditorDialog::onCurvePresetChanged()
@@ -916,7 +916,7 @@ void ActionEditorDialog::onCurvePresetChanged()
         ActionUserCurves::Apply(b, cid, PluginSettingsPaths::ActionEditorCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     }
     syncCurveBar();
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onPeriodCurvePresetChanged()
@@ -944,7 +944,7 @@ void ActionEditorDialog::onPeriodCurvePresetChanged()
         Action::ApplyBuiltinPeriodCurve(b, cid.toUtf8().constData());
     }
     syncPeriodCurveBar();
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onBrowseMediaPath()
@@ -977,7 +977,7 @@ void ActionEditorDialog::onBrowseMediaPath()
             b->effect_id = "media_gif";
         }
     }
-    timeline_->update();
+    timeline_->requestContentRepaint();
     applyClipToForm();
 }
 
@@ -1023,7 +1023,7 @@ void ActionEditorDialog::onSaveUserCurve()
         curve_combo_->setCurrentIndex(idx);
         suppress_ui_ = false;
     }
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onFlipDirection()
@@ -1065,7 +1065,7 @@ void ActionEditorDialog::onGradientStopsChanged()
     {
         remove_color_button_->setEnabled(b->gradient.size() > 1);
     }
-    timeline_->update();
+    scheduleTimelineRefresh();
 }
 
 void ActionEditorDialog::onAddColorStop()
@@ -1105,7 +1105,7 @@ void ActionEditorDialog::onAddColorStop()
     {
         remove_color_button_->setEnabled(b->gradient.size() > 1);
     }
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::onRemoveColorStop()
@@ -1138,7 +1138,7 @@ void ActionEditorDialog::onRemoveColorStop()
     {
         remove_color_button_->setEnabled(b->gradient.size() > 1);
     }
-    timeline_->update();
+    timeline_->requestContentRepaint();
 }
 
 void ActionEditorDialog::applyClipToForm()
@@ -1492,7 +1492,7 @@ void ActionEditorDialog::applyFormToSelectedClip()
         if(new_text != b->media_text)
         {
             b->media_text = new_text;
-            Action::InvalidateMediaCache();
+            Action::InvalidateMediaTextCache();
         }
     }
     if(media_scroll_check_)
@@ -1525,7 +1525,11 @@ void ActionEditorDialog::applyFormToSelectedClip()
     {
         b->gradient.front().color = c;
     }
-    timeline_->update();
+    if(player_.IsPlaying())
+    {
+        preview_pack_dirty_ = true;
+    }
+    scheduleTimelineRefresh();
 }
 
 void ActionEditorDialog::onTypeChanged()
@@ -1566,7 +1570,7 @@ void ActionEditorDialog::onTypeChanged()
     }
     updatePropVisibility();
     syncGradientBar();
-    timeline_->update();
+    scheduleTimelineRefresh();
 }
 
 void ActionEditorDialog::onGradientPreset()
@@ -1586,7 +1590,7 @@ void ActionEditorDialog::onClipFieldChanged()
     if(!suppress_ui_)
     {
         syncGradientBar();
-        timeline_->update();
+        // applyFormToSelectedClip already scheduled a coalesced timeline refresh.
     }
 }
 

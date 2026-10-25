@@ -179,6 +179,7 @@ HEADERS += \
     Effects3D/Actions/ActionVolumeField.h \
     Effects3D/Actions/ActionParticleField.h \
     Effects3D/Actions/ActionRibbonField.h \
+    Effects3D/Actions/ActionBuiltinGpu.h \
     Effects3D/Actions/ActionLibrary.h \
     Effects3D/Triggers/TriggerBinding.h \
     Effects3D/Triggers/TriggerSource.h \
@@ -371,6 +372,7 @@ SOURCES += \
     Effects3D/Actions/ActionVolumeField.cpp \
     Effects3D/Actions/ActionParticleField.cpp \
     Effects3D/Actions/ActionRibbonField.cpp \
+    Effects3D/Actions/ActionBuiltinGpu.cpp \
     Effects3D/Actions/ActionApplier.cpp \
     Effects3D/Actions/ActionApplierMatch.cpp \
     Effects3D/Actions/ActionApplierSpatial.cpp \

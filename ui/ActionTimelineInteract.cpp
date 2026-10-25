@@ -49,7 +49,7 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
     {
         marquee_current_ = QPoint(mouse_x, mouse_y);
         drag_moved_ = true;
-        update();
+        requestContentRepaint();
         return;
     }
 
@@ -128,7 +128,7 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
         }
     }
     drag_moved_ = true;
-    update();
+    requestContentRepaint();
 }
 
 int ActionTimelineWidget::copyClipToTrack(int src_track, int src_clip, int dest_track, int start_ms)
@@ -511,7 +511,7 @@ void ActionTimelineWidget::setPrimarySelection(int track, int clip)
     {
         selection_.push_back({track, clip});
     }
-    update();
+    requestContentRepaint();
 }
 
 void ActionTimelineWidget::toggleClipSelection(int track, int clip)
@@ -538,14 +538,14 @@ void ActionTimelineWidget::toggleClipSelection(int track, int clip)
                     selected_clip_ = selection_.last().clip;
                 }
             }
-            update();
+            requestContentRepaint();
             return;
         }
     }
     selection_.push_back({track, clip});
     selected_track_ = track;
     selected_clip_ = clip;
-    update();
+    requestContentRepaint();
 }
 
 bool ActionTimelineWidget::isClipSelected(int track, int clip) const
@@ -788,7 +788,7 @@ bool ActionTimelineWidget::deleteSelectedClips()
         }
     }
     clearClipSelection();
-    update();
+    requestContentRepaint();
     emit clipEdited(-1, -1);
     return true;
 }
@@ -818,7 +818,7 @@ bool ActionTimelineWidget::mutateSelectedClips(const std::function<void(Action::
     {
         return false;
     }
-    update();
+    requestContentRepaint();
     emit clipEdited(primary_track, primary_clip);
     return true;
 }
@@ -913,7 +913,7 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
         selected_row_ = row;
         emit clipCreated(selected_track_, selected_clip_);
         emit clipSelected(selected_track_, selected_clip_);
-        update();
+        requestContentRepaint();
         return true;
     }
     Action::Clip copy = clipboard_clip_;
@@ -939,7 +939,7 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
     setPrimarySelection(selected_track_, selected_clip_);
     emit clipCreated(selected_track_, selected_clip_);
     emit clipSelected(selected_track_, selected_clip_);
-    update();
+    requestContentRepaint();
     return true;
 }
 
@@ -983,7 +983,7 @@ bool ActionTimelineWidget::duplicateSelectedClip()
             emit clipSelected(selected_track_, selected_clip_);
         }
         drag_group_.clear();
-        update();
+        requestContentRepaint();
         return !created.isEmpty();
     }
     if(selected_track_ < 0 || selected_clip_ < 0
@@ -1006,7 +1006,7 @@ bool ActionTimelineWidget::duplicateSelectedClip()
     setPrimarySelection(selected_track_, selected_clip_);
     emit clipCreated(selected_track_, selected_clip_);
     emit clipSelected(selected_track_, selected_clip_);
-    update();
+    requestContentRepaint();
     return true;
 }
 
@@ -1055,7 +1055,7 @@ bool ActionTimelineWidget::pasteClipboardRowEffectsAt(int row)
         emit clipCreated(selected_track_, selected_clip_);
         emit clipSelected(selected_track_, selected_clip_);
     }
-    update();
+    requestContentRepaint();
     return true;
 }
 
@@ -1152,7 +1152,7 @@ void ActionTimelineWidget::finishDrag()
             selectClipsInRect(box, marquee_add);
             emit clipSelected(selected_track_, selected_clip_);
         }
-        update();
+        requestContentRepaint();
         return;
     }
 
@@ -1187,7 +1187,7 @@ void ActionTimelineWidget::finishDrag()
             emit clipSelected(out_track, out_clip);
             emit clipEdited(out_track, out_clip);
         }
-        update();
+        requestContentRepaint();
         return;
     }
 
@@ -1197,7 +1197,7 @@ void ActionTimelineWidget::finishDrag()
         selected_track_ = track;
         selected_clip_ = clip;
         emit clipEdited(track, clip);
-        update();
+        requestContentRepaint();
     }
 }
 
@@ -1470,7 +1470,7 @@ void ActionTimelineWidget::applyColorToClip(int track, int clip, RGBColor color)
     selected_track_ = track;
     selected_clip_ = clip;
     emit clipSelected(track, clip);
-    update();
+    requestContentRepaint();
     emit clipEdited(track, clip);
 }
 
@@ -1620,7 +1620,7 @@ void ActionTimelineWidget::editClipColorAt(int track, int clip, const QPoint& /*
         b->gradient.front().color = rgb;
     }
     Action::EnsureClipGradient(b);
-    update();
+    requestContentRepaint();
     emit clipEdited(track, clip);
 }
 
@@ -1684,7 +1684,7 @@ void ActionTimelineWidget::keyPressEvent(QKeyEvent* event)
             }
         }
         emit clipSelected(selected_track_, selected_clip_);
-        update();
+        requestContentRepaint();
         event->accept();
         return;
     }
@@ -1715,7 +1715,7 @@ void ActionTimelineWidget::keyPressEvent(QKeyEvent* event)
         {
             clearClipSelection();
             emit clipSelected(-1, -1);
-            update();
+            requestContentRepaint();
             event->accept();
             return;
         }
@@ -1769,7 +1769,7 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
                 emit playheadChanged(ms);
             }
             showRowContextMenu(row, ms, event->globalPosition().toPoint());
-            update();
+            requestContentRepaint();
         }
         return;
     }
@@ -1788,7 +1788,7 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
             drag_op_ = DragOp::ScrubHeader;
             playhead_ms_ = xToTime(x);
             emit playheadChanged(playhead_ms_);
-            update();
+            requestContentRepaint();
         }
         return;
     }
@@ -1820,7 +1820,7 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
             row_reorder_hover_ = row;
             setCursor(Qt::ClosedHandCursor);
         }
-        update();
+        requestContentRepaint();
         return;
     }
 
@@ -1839,7 +1839,7 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
             // Ctrl+click toggles multi-select like a file manager (no drag).
             toggleClipSelection(track, clip);
             emit clipSelected(selected_track_, selected_clip_);
-            update();
+            requestContentRepaint();
             return;
         }
 
@@ -1905,7 +1905,7 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
             setCursor(Qt::ClosedHandCursor);
         }
         grabMouse();
-        update();
+        requestContentRepaint();
         return;
     }
 
@@ -1925,7 +1925,7 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
     marquee_current_ = marquee_origin_;
     marquee_additive_ = (event->modifiers() & Qt::ControlModifier) != 0;
     grabMouse();
-    update();
+    requestContentRepaint();
 }
 
 void ActionTimelineWidget::mouseMoveEvent(QMouseEvent* event)
@@ -1946,7 +1946,7 @@ void ActionTimelineWidget::mouseMoveEvent(QMouseEvent* event)
                 row_reorder_hover_ = row;
             }
         }
-        update();
+        requestContentRepaint();
         return;
     }
     if(drag_op_ != DragOp::None && (event->buttons() & Qt::LeftButton))
@@ -1994,7 +1994,7 @@ void ActionTimelineWidget::mouseReleaseEvent(QMouseEvent* event)
                     }
                 }
             }
-            update();
+            requestContentRepaint();
             return;
         }
         finishDrag();

@@ -11,8 +11,10 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPainter>
+#include <QString>
 
 #include <cmath>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +33,13 @@ struct MediaFrames
 QMutex g_media_mutex;
 std::unordered_map<std::string, MediaFrames> g_image_cache;
 std::unordered_map<std::string, QImage> g_text_cache;
+
+/* Once-per-frame prepared media (avoids QImage copy on every LED). */
+QImage g_prepared_frame;
+std::uint64_t g_prepared_seq = 0;
+int g_prepared_ms = -1;
+std::string g_prepared_key;
+bool g_prepared_ok = false;
 
 QString PathToQString(const std::string& path)
 {
@@ -379,6 +388,73 @@ void InvalidateMediaCache(const std::string& path)
     g_image_cache.erase(path);
 }
 
+void InvalidateMediaTextCache()
+{
+    QMutexLocker lock(&g_media_mutex);
+    g_text_cache.clear();
+}
+
+void ResetMediaGpu()
+{
+    QMutexLocker lock(&g_media_mutex);
+    g_prepared_frame = QImage();
+    g_prepared_ok = false;
+    g_prepared_seq = 0;
+    g_prepared_ms = -1;
+    g_prepared_key.clear();
+}
+
+bool CopyCachedFrame(const std::string& path, int elapsed_ms, QImage* out_frame);
+
+bool PrepareMediaForClip(const Clip& clip, int local_ms, std::uint64_t render_sequence)
+{
+    if(!IsMediaClip(clip))
+    {
+        return false;
+    }
+    if(clip.effect_id == "media_text" && clip.media_text.empty())
+    {
+        return false;
+    }
+
+    const std::string key = (clip.effect_id == "media_text")
+        ? ("text|" + clip.media_text + "|" + std::to_string(clip.color))
+        : ("img|" + clip.media_path);
+    const bool same = g_prepared_ok
+        && g_prepared_seq == render_sequence
+        && g_prepared_ms == local_ms
+        && g_prepared_key == key;
+    if(same)
+    {
+        return true;
+    }
+
+    QImage frame;
+    if(clip.effect_id == "media_text")
+    {
+        frame = RasterizeText(clip);
+    }
+    else if(!CopyCachedFrame(clip.media_path, std::max(0, local_ms - clip.start_ms), &frame))
+    {
+        g_prepared_ok = false;
+        return false;
+    }
+    if(frame.isNull())
+    {
+        g_prepared_ok = false;
+        return false;
+    }
+
+    g_prepared_frame = frame;
+    g_prepared_ok = true;
+    g_prepared_seq = render_sequence;
+    g_prepared_ms = local_ms;
+    g_prepared_key = key;
+
+    // Full-resolution frame for true UV sampling at each LED (not a low-res atlas bake).
+    return true;
+}
+
 bool CopyCachedFrame(const std::string& path, int elapsed_ms, QImage* out_frame)
 {
     if(!out_frame || path.empty())
@@ -429,39 +505,26 @@ bool EvaluateMediaAtUv(const Clip& clip,
 
     RGBColor color = 0;
     bool lit = false;
-    if(clip.effect_id == "media_text")
+
+    // Prefer the frame pinned by PrepareMediaForClip; otherwise load once here.
+    if(!g_prepared_ok || g_prepared_ms != local_ms)
     {
-        const QImage text = RasterizeText(clip);
-        if(text.isNull())
-        {
-            return false;
-        }
-        float su = u;
-        float sv = v;
-        MapSampleUv(clip, text, u, v, uv_aspect, local_ms, &su, &sv);
-        color = collapse_v ? SampleColumnReduce(text, su, &lit)
-                           : SampleNearestAlpha(text, su, sv, &lit);
-        if(!lit)
-        {
-            return false;
-        }
+        PrepareMediaForClip(clip, local_ms, 0);
     }
-    else
+    if(!g_prepared_ok || g_prepared_frame.isNull())
     {
-        QImage frame;
-        if(!CopyCachedFrame(clip.media_path, std::max(0, local_ms - clip.start_ms), &frame))
-        {
-            return false;
-        }
-        float su = u;
-        float sv = v;
-        MapSampleUv(clip, frame, u, v, uv_aspect, local_ms, &su, &sv);
-        color = collapse_v ? SampleColumnReduce(frame, su, &lit)
-                           : SampleNearestAlpha(frame, su, sv, &lit);
-        if(!lit)
-        {
-            return false;
-        }
+        return false;
+    }
+
+    float su = u;
+    float sv = v;
+    MapSampleUv(clip, g_prepared_frame, u, v, uv_aspect, local_ms, &su, &sv);
+
+    color = collapse_v ? SampleColumnReduce(g_prepared_frame, su, &lit)
+                       : SampleNearestAlpha(g_prepared_frame, su, sv, &lit);
+    if(!lit)
+    {
+        return false;
     }
 
     float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);

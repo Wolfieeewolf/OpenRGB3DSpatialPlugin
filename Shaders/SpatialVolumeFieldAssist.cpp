@@ -66,3 +66,12 @@ QVector3D SpatialVolumeFieldAssist::sample01(float x, float y, float z) const
     }
     return engine_->sample01(x, y, z);
 }
+
+bool SpatialVolumeFieldAssist::evaluateAtPoints(const float* xyz01, int count, float* out_rgb)
+{
+    if(!engine_ || !xyz01 || !out_rgb || count <= 0)
+    {
+        return false;
+    }
+    return engine_->evaluateAtPoints(xyz01, count, out_rgb);
+}

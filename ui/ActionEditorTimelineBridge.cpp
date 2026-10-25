@@ -701,7 +701,7 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
     }
     applyClipToForm();
     updateSelectionActions();
-    timeline_->update();
+    timeline_->requestContentRepaint();
     if(status_label_)
     {
         QString space_tip;
