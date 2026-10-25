@@ -33,7 +33,7 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 
 Multi-pass is a **general review tool** — Action toolbox looks, engine C++, packs, docs, UI wiring, anything we touch. Showcase *and* simple utilities. A pass that concludes “already good → no edit” is a valid outcome. The point is a multi-point attack, not forced rewrites.
 
-**Skill (persistent):** `.cursor/skills/openrgb3d-multipass-review/SKILL.md` — also in the user Agent Store. Ask for “multi-pass” / “run the pass” to load it. Includes thermo-nuclear structure pressure, **deslop**, and **apply fixes/updates** (not review-only) across touched files and dependents.
+**Skill (persistent):** `.cursor/skills/openrgb3d-multipass-review/SKILL.md` — also in the user Agent Store. Ask for “multi-pass” / “run the pass” to load it. Includes thermo-nuclear structure pressure, **CONTRIBUTING hygiene** (dead/debug code, minimal comments, no legacy shims), **deslop**, **better-not-worse** gate, **end-of-run skill self-check + self-improvement** (ratchet the brief each run), and **apply fixes/updates** (not review-only) across touched files and dependents.
 
 ### Attack surfaces (run what applies)
 
@@ -45,6 +45,8 @@ Multi-pass is a **general review tool** — Action toolbox looks, engine C++, pa
 | 4 | **Seams & bugs** — once→black, forever/`while_active` continuous `u_time`, no linger/jump/recycle, intensity/size do something real |
 | 5 | **Readability / UX** — sparse-LED survival for GPU looks; clear UI/docs behaviour for utilities |
 | 6 | **Character polish** — deepen motion/colour/language only if earlier passes left it meh *and* that fits the role (don’t turn `solid` into aurora) |
+| 7–9 | Structure / deslop+CONTRIBUTING cleanup / close-the-loop (see skill); every edit must be **net better** or revert |
+| 10 | **Skill self-check + self-improvement** — audit the brief *and* upgrade it from what this run taught so the tool ratchets over time |
 
 **Positive prompts (keep):** honest role, bright cores / clear motion where the look needs it, wired knobs, matches callers/docs, additive glow, seamless loops, once dies clean.
 
