@@ -215,7 +215,9 @@ void ScrollPhase(const Clip& clip, int local_ms, float* du, float* dv)
     }
     *du = 0.0f;
     *dv = 0.0f;
-    const int elapsed = std::max(0, local_ms - clip.start_ms);
+    // Continuous anim clock when playing forever/while_active (same as .fx time_ms).
+    const int anim_ms = GpuAnimMsOr(local_ms);
+    const int elapsed = std::max(0, anim_ms - clip.start_ms);
     const float speed = std::max(0.05f, clip.speed);
     const float period = std::max(50.0f, (float)std::max(1, clip.period_ms) / speed);
     const float phase = (float)elapsed / period;
@@ -417,12 +419,13 @@ bool PrepareMediaForClip(const Clip& clip, int local_ms, std::uint64_t render_se
         return false;
     }
 
+    const int anim_ms = GpuAnimMsOr(local_ms);
     const std::string key = (clip.effect_id == "media_text")
         ? ("text|" + clip.media_text + "|" + std::to_string(clip.color))
         : ("img|" + clip.media_path);
     const bool same = g_prepared_ok
         && g_prepared_seq == render_sequence
-        && g_prepared_ms == local_ms
+        && g_prepared_ms == anim_ms
         && g_prepared_key == key;
     if(same)
     {
@@ -434,7 +437,7 @@ bool PrepareMediaForClip(const Clip& clip, int local_ms, std::uint64_t render_se
     {
         frame = RasterizeText(clip);
     }
-    else if(!CopyCachedFrame(clip.media_path, std::max(0, local_ms - clip.start_ms), &frame))
+    else if(!CopyCachedFrame(clip.media_path, std::max(0, anim_ms - clip.start_ms), &frame))
     {
         g_prepared_ok = false;
         return false;
@@ -448,7 +451,7 @@ bool PrepareMediaForClip(const Clip& clip, int local_ms, std::uint64_t render_se
     g_prepared_frame = frame;
     g_prepared_ok = true;
     g_prepared_seq = render_sequence;
-    g_prepared_ms = local_ms;
+    g_prepared_ms = anim_ms;
     g_prepared_key = key;
 
     // Full-resolution frame for true UV sampling at each LED (not a low-res atlas bake).
@@ -506,8 +509,9 @@ bool EvaluateMediaAtUv(const Clip& clip,
     RGBColor color = 0;
     bool lit = false;
 
+    const int anim_ms = GpuAnimMsOr(local_ms);
     // Prefer the frame pinned by PrepareMediaForClip; otherwise load once here.
-    if(!g_prepared_ok || g_prepared_ms != local_ms)
+    if(!g_prepared_ok || g_prepared_ms != anim_ms)
     {
         PrepareMediaForClip(clip, local_ms, 0);
     }
@@ -518,7 +522,7 @@ bool EvaluateMediaAtUv(const Clip& clip,
 
     float su = u;
     float sv = v;
-    MapSampleUv(clip, g_prepared_frame, u, v, uv_aspect, local_ms, &su, &sv);
+    MapSampleUv(clip, g_prepared_frame, u, v, uv_aspect, anim_ms, &su, &sv);
 
     color = collapse_v ? SampleColumnReduce(g_prepared_frame, su, &lit)
                        : SampleNearestAlpha(g_prepared_frame, su, sv, &lit);
@@ -528,7 +532,7 @@ bool EvaluateMediaAtUv(const Clip& clip,
     }
 
     float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
-    ModulateClipIntensity(clip, ClipProgress(clip, local_ms), ClipPeriodProgress(clip, local_ms), &intensity);
+    ModulateClipIntensity(clip, ClipSpanProgress(clip, local_ms), ClipPeriodProgress(clip, local_ms), &intensity);
 
     if(out_color)
     {
