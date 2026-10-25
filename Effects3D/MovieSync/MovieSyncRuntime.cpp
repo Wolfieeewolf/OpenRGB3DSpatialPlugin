@@ -112,7 +112,10 @@ void CueRuntime::ApplyPlays(bool force_hw)
     });
     for(ActivePlay* p : ordered)
     {
+        // Continuous elapsed for GPU u_time (LocalMs wraps on forever/while_active).
+        Action::SetGpuAnimMs(p->player.ElapsedMs());
         apply_(p->pack, p->player.LocalMs(), force_hw);
+        Action::SetGpuAnimMs(-1);
         force_hw = false;
     }
 }

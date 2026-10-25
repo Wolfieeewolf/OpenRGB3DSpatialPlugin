@@ -252,6 +252,14 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack, int 
     ApplyActionPreviewFrame(pack, local_ms, force_hw_update, nullptr);
 }
 
+void OpenRGB3DSpatialTab::ClearActionPreview(bool force_hw_update, SpatialEffect3D* layer_effect)
+{
+    Action::Pack blank;
+    blank.duration_ms = 1;
+    blank.loop = Action::LoopMode::Once;
+    ApplyActionPreviewFrame(blank, 0, force_hw_update, layer_effect);
+}
+
 void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                                      int local_ms,
                                                      bool force_hw_update,

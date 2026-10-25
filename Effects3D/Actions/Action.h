@@ -209,8 +209,17 @@ void ApplyBuiltinPeriodCurve(Clip* clip, const char* preset_id);
 const char* MatchBuiltinPeriodCurve(const std::vector<CurvePoint>& curve);
 bool ApplyGradientPresetId(Clip* clip, const char* preset_id, RGBColor accent = ToRGBColor(255, 80, 40));
 float ClipProgress(const Clip& clip, int local_ms);
+/** Linear 0..1 over the clip span (no speed-based wrap). For one-shot GPU timelines. */
+float ClipSpanProgress(const Clip& clip, int local_ms);
 float ClipPeriodProgress(const Clip& clip, int local_ms);
 void ModulateClipIntensity(const Clip& clip, float clip_progress, float period_progress, float* intensity);
+/**
+ * Continuous animation clock for GPU fields (loop-safe). Set from Player::ElapsedMs
+ * before ApplyPackFrame so u_time does not jump when LocalMs wraps on forever/while_active.
+ * Pass -1 to clear (Prepare falls back to local_ms).
+ */
+void SetGpuAnimMs(int anim_ms);
+int GpuAnimMsOr(int local_ms);
 /** Rotate (CW quarters) then flip H/V around UV center. */
 void ApplyClipUvTransform(const Clip& clip, float* u, float* v);
 /** 1D axis mirror: flip_h and 180° rotate (90/270 leave axis unchanged). */

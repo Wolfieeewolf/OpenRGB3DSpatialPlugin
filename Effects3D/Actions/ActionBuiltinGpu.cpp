@@ -148,7 +148,7 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
         g_assist->setFragmentBody(QString::fromUtf8(body));
         g_loaded_id = id;
     }
-    const float progress = ClipProgress(clip, local_ms);
+    const float progress = ClipSpanProgress(clip, local_ms);
     const float speed = std::max(0.05f, clip.speed);
     float params[8] = {
         progress,
@@ -160,7 +160,7 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
         0.0f,
         0.0f
     };
-    const float time_sec = (float)local_ms * 0.001f * speed;
+    const float time_sec = (float)GpuAnimMsOr(local_ms) * 0.001f * speed;
     g_ready = g_assist->prepareProgram(render_sequence ? render_sequence : 1, time_sec, params, 6);
     return g_ready;
 }

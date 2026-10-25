@@ -190,7 +190,8 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
         g_loaded_shader_id = shader_id;
     }
 
-    const float progress = ClipProgress(clip, local_ms);
+    // Span progress: one-shots must not mid-clip wrap when speed > 1 (ClipProgress does).
+    const float progress = ClipSpanProgress(clip, local_ms);
     const float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
     const float size = std::clamp(clip.pulse_length, 0.02f, 1.0f);
     const float speed = std::max(0.01f, clip.speed);
@@ -204,7 +205,8 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
         0.0f,
         0.0f
     };
-    const float time_sec = (float)local_ms * 0.001f * speed;
+    // Continuous elapsed so forever/while_active LocalMs wraps do not jump u_time.
+    const float time_sec = (float)GpuAnimMsOr(local_ms) * 0.001f * speed;
     return Assist().prepareProgram(render_sequence, time_sec, params, 6);
 }
 

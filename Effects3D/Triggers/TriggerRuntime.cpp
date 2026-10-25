@@ -165,7 +165,9 @@ void TriggerRuntime::ApplyPlays(bool force_hw)
 
     for(ActivePlay* p : ordered)
     {
+        Action::SetGpuAnimMs(p->player.ElapsedMs());
         apply_(p->pack, p->player.LocalMs(), force_hw);
+        Action::SetGpuAnimMs(-1);
         force_hw = false;
     }
 }

@@ -119,6 +119,8 @@ public:
                                      int local_ms,
                                      bool force_hw_update,
                                      SpatialEffect3D* layer_effect);
+    /** Black out Action preview LEDs (once packs finished / stop). */
+    void ClearActionPreview(bool force_hw_update = true, SpatialEffect3D* layer_effect = nullptr);
     const std::vector<std::unique_ptr<ControllerTransform>>& GetControllerTransforms() const
     {
         return controller_transforms;

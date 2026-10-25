@@ -267,6 +267,10 @@ void MovieSyncEffect::onApiToggled(bool on)
         stopListener();
         runtime_.StopAll();
         tick_timer_->stop();
+        if(tab_)
+        {
+            tab_->ClearActionPreview(true, this);
+        }
         setStatus(tr("Script API off"));
     }
 }
@@ -351,6 +355,11 @@ void MovieSyncEffect::onTick()
     if(!runtime_.Tick(33))
     {
         tick_timer_->stop();
+        // Once packs must go black when they finish (do not leave the last lit frame).
+        if(tab_)
+        {
+            tab_->ClearActionPreview(true, this);
+        }
         if(listener_ && listener_->isListening())
         {
             setStatus(tr("Listening on 127.0.0.1:%1 — %2 Movie Sync look(s)")

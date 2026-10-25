@@ -605,6 +605,10 @@ void TriggersPanel::onTick()
     if(!runtime_.Tick(timer_->interval()))
     {
         timer_->stop();
+        if(tab_)
+        {
+            tab_->ClearActionPreview(true);
+        }
         setStatus(QStringLiteral("Idle"));
     }
 }
@@ -613,6 +617,10 @@ void TriggersPanel::stopAll()
 {
     onStop();
     runtime_.StopAll();
+    if(tab_)
+    {
+        tab_->ClearActionPreview(true);
+    }
     if(timer_)
     {
         timer_->stop();

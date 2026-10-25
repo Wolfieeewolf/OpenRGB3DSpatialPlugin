@@ -1824,12 +1824,11 @@ void ActionEditorDialog::stopPreview()
     {
         timer_->stop();
     }
+    player_.Stop();
     if(was_playing && tab_)
     {
-        tab_->ApplyActionPreviewFrame(preview_pack_.tracks.empty() ? pack_ : preview_pack_,
-                                          player_.LocalMs(), true);
+        tab_->ClearActionPreview(true);
     }
-    player_.Stop();
     preview_pack_ = Action::Pack();
     preview_solo_ = false;
     setPlayingUi(false);
@@ -2062,7 +2061,9 @@ void ActionEditorDialog::onTick()
         status_label_->setText(QStringLiteral("Preview finished"));
         return;
     }
+    Action::SetGpuAnimMs(player_.ElapsedMs());
     tab_->ApplyActionPreviewFrame(preview_pack_, player_.LocalMs());
+    Action::SetGpuAnimMs(-1);
     timeline_->setPlayheadMs(player_.LocalMs());
     status_label_->setText(
         QStringLiteral("Preview %1 / %2 ms")

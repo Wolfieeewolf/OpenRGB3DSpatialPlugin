@@ -269,11 +269,11 @@ void ActionsPanel::stopPreview()
     {
         timer_->stop();
     }
+    player_.Stop();
     if(was_playing && tab_)
     {
-        tab_->ApplyActionPreviewFrame(player_.GetPack(), player_.LocalMs(), true);
+        tab_->ClearActionPreview(true);
     }
-    player_.Stop();
     setPlayingUi(false);
     if(ui)
     {
@@ -574,7 +574,9 @@ void ActionsPanel::onTick()
         return;
     }
 
+    Action::SetGpuAnimMs(player_.ElapsedMs());
     tab_->ApplyActionPreviewFrame(player_.GetPack(), player_.LocalMs());
+    Action::SetGpuAnimMs(-1);
 
     const int local = player_.LocalMs();
     const int dur = std::max(1, player_.GetPack().duration_ms);

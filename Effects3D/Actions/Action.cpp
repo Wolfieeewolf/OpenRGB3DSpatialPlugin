@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 namespace Action
 {
@@ -44,6 +45,36 @@ float ClipProgress(const Clip& clip, int local_ms)
         result = 1.0f - result;
     }
     return result;
+}
+
+float ClipSpanProgress(const Clip& clip, int local_ms)
+{
+    const float dur = (float)std::max(1, clip.end_ms - clip.start_ms);
+    float t = (float)(local_ms - clip.start_ms) / dur;
+    t = std::clamp(t, 0.0f, 1.0f);
+    if(clip.reverse)
+    {
+        t = 1.0f - t;
+    }
+    return t;
+}
+
+namespace
+{
+std::mutex g_gpu_anim_mu;
+int g_gpu_anim_ms = -1;
+} // namespace
+
+void SetGpuAnimMs(int anim_ms)
+{
+    std::lock_guard<std::mutex> lock(g_gpu_anim_mu);
+    g_gpu_anim_ms = anim_ms;
+}
+
+int GpuAnimMsOr(int local_ms)
+{
+    std::lock_guard<std::mutex> lock(g_gpu_anim_mu);
+    return (g_gpu_anim_ms >= 0) ? g_gpu_anim_ms : local_ms;
 }
 
 float ClipPeriodProgress(const Clip& clip, int local_ms)

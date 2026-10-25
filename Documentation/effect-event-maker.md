@@ -96,6 +96,8 @@ World tools may declare `particles: burst` for a room particle field. Particle m
 
 World tools may declare `ribbons: arc` for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
 
+**Seamless play:** looping packs should animate from `u_time` (continuous); once packs should finish at black. See [action-engine-recipe-map.md](action-engine-recipe-map.md#playback-seams-once-vs-loop).
+
 **Placement (world / field / particle / ribbon):** clip `origin_ref` (layout reference point name, or empty = room center), `origin_offset_x/y/z` (% of half-room), and `effect_size` (0.05–2.0). Scripts can read `ox` / `oy` / `oz` / `effect_size`. Sample normalize uses `play_bounds` (track LED AABB vs full room box).
 
 ## Pack file schema (v5)
