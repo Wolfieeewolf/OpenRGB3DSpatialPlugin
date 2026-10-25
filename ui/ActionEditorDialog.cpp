@@ -1424,7 +1424,9 @@ void ActionEditorDialog::onPlayheadChanged(int ms)
         last_elapsed_ms_ = 0;
         if(tab_)
         {
+            Action::SetGpuAnimMs(player_.ElapsedMs());
             tab_->ApplyActionPreviewFrame(preview_pack_, ms);
+            Action::SetGpuAnimMs(-1);
         }
     }
 }
