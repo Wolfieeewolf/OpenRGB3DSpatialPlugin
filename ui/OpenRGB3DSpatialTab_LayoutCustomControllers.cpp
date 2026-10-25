@@ -28,6 +28,35 @@
 
 namespace filesystem = std::filesystem;
 
+namespace
+{
+
+/* Keep presets-style nesting when the source path sits under a controllers/ root. */
+filesystem::path ControllerImportRelativePath(const filesystem::path& src)
+{
+    filesystem::path after_controllers;
+    bool seen_controllers = false;
+    for(const filesystem::path& part : src)
+    {
+        if(!seen_controllers)
+        {
+            if(part == "controllers")
+            {
+                seen_controllers = true;
+            }
+            continue;
+        }
+        after_controllers /= part;
+    }
+    if(seen_controllers && !after_controllers.empty())
+    {
+        return after_controllers;
+    }
+    return src.filename();
+}
+
+} // namespace
+
 void OpenRGB3DSpatialTab::createCustomControllerClicked()
 {
     CustomControllerDialog dialog(resource_manager, this);
@@ -123,6 +152,9 @@ void OpenRGB3DSpatialTab::createCustomControllerClicked()
         dialog.GetLayerNames(),
         dialog.GetLedsPerCluster()
     );
+    virtual_ctrl->SetCategory(dialog.GetPresetCategory().toStdString());
+    virtual_ctrl->SetBrand(dialog.GetPresetBrand().toStdString());
+    virtual_ctrl->SetModel(dialog.GetPresetModel().toStdString());
 
     int new_index = (int)virtual_controllers.size();
     virtual_controllers.push_back(std::move(virtual_ctrl));
@@ -158,12 +190,12 @@ void OpenRGB3DSpatialTab::exportCustomControllerClicked()
 
     VirtualController3D* ctrl = virtual_controllers[list_row].get();
 
-    const QString default_dir = QString::fromStdString(
-        PluginSettingsPaths::ControllersDir(resource_manager).string());
-    const std::string default_filename =
-        VirtualController3D::PresetFilenameSlug(ctrl->GetName()) + ".json";
+    const filesystem::path controllers_dir = PluginSettingsPaths::ControllersDir(resource_manager);
+    const std::string relative = VirtualController3D::PresetLibraryRelativePath(
+        ctrl->GetCategory(), ctrl->GetBrand(), ctrl->GetName());
+    const QString default_path = QString::fromStdString((controllers_dir / relative).string());
     QString filename = QFileDialog::getSaveFileName(this, tr("Export portable controller preset"),
-                                                    default_dir + "/" + QString::fromStdString(default_filename),
+                                                    default_path,
                                                     PluginSettingsPaths::kControllerLayoutJsonFilter);
     if(filename.isEmpty())
     {
@@ -251,8 +283,14 @@ void OpenRGB3DSpatialTab::importCustomControllerClicked()
             continue;
         }
 
-        const std::string dest_name = src_info.fileName().toStdString();
-        const filesystem::path dest_path = controllers_dir / dest_name;
+#ifdef _WIN32
+        const filesystem::path src_path(src_info.absoluteFilePath().toStdWString());
+#else
+        const filesystem::path src_path(src_info.absoluteFilePath().toStdString());
+#endif
+        const filesystem::path relative = ControllerImportRelativePath(src_path);
+        const std::string relative_key = relative.generic_string();
+        const filesystem::path dest_path = controllers_dir / relative;
 
         if(filesystem::exists(dest_path))
         {
@@ -260,7 +298,7 @@ void OpenRGB3DSpatialTab::importCustomControllerClicked()
                 this,
                 "Replace File?",
                 QString("'%1' already exists in the controllers folder.\n\nReplace it?")
-                    .arg(QString::fromStdString(dest_name)),
+                    .arg(QString::fromStdString(relative_key)),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::No);
             if(reply != QMessageBox::Yes)
@@ -270,6 +308,9 @@ void OpenRGB3DSpatialTab::importCustomControllerClicked()
             }
         }
 
+        std::error_code mkdir_ec;
+        filesystem::create_directories(dest_path.parent_path(), mkdir_ec);
+
         if(QFile::exists(QString::fromStdString(dest_path.string())))
         {
             QFile::remove(QString::fromStdString(dest_path.string()));
@@ -278,14 +319,14 @@ void OpenRGB3DSpatialTab::importCustomControllerClicked()
         if(!QFile::copy(src_q, QString::fromStdString(dest_path.string())))
         {
             failed++;
-            failed_names.append(src_info.fileName());
+            failed_names.append(QString::fromStdString(relative_key));
             continue;
         }
 
         if(!LoadControllerFromJsonFile(dest_path, true))
         {
             failed++;
-            failed_names.append(src_info.fileName());
+            failed_names.append(QString::fromStdString(relative_key));
             std::error_code remove_ec;
             filesystem::remove(dest_path, remove_ec);
             continue;
@@ -393,13 +434,15 @@ void OpenRGB3DSpatialTab::editCustomControllerClicked()
                                   virtual_ctrl->GetRowHeightsMm(),
                                   virtual_ctrl->GetLayerDepthsMm(),
                                   virtual_ctrl->GetLayerNames(),
-                                  virtual_ctrl->GetLedsPerCluster());
+                                  virtual_ctrl->GetLedsPerCluster(),
+                                  virtual_ctrl->GetCategory(),
+                                  virtual_ctrl->GetBrand(),
+                                  virtual_ctrl->GetModel());
 
     dialog.SetLayoutGridScaleMm(grid_scale_mm);
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        std::string old_name = virtual_ctrl->GetName();
         std::string new_name = dialog.GetControllerName().toStdString();
 
         int other_index = -1;
@@ -472,14 +515,6 @@ void OpenRGB3DSpatialTab::editCustomControllerClicked()
             RefreshHiddenControllerStates();
         }
 
-        if(old_name != new_name && list_row < (int)virtual_controller_json_files.size())
-        {
-            const filesystem::path previous_filepath =
-                PluginSettingsPaths::ControllersDir(resource_manager) / virtual_controller_json_files[list_row];
-            std::error_code remove_ec;
-            filesystem::remove(previous_filepath, remove_ec);
-        }
-
         VirtualController3D* old_ptr = virtual_controllers[list_row].get();
 
         virtual_controllers[list_row] = std::make_unique<VirtualController3D>(
@@ -498,6 +533,9 @@ void OpenRGB3DSpatialTab::editCustomControllerClicked()
             dialog.GetLayerNames(),
             dialog.GetLedsPerCluster()
         );
+        virtual_controllers[list_row]->SetCategory(dialog.GetPresetCategory().toStdString());
+        virtual_controllers[list_row]->SetBrand(dialog.GetPresetBrand().toStdString());
+        virtual_controllers[list_row]->SetModel(dialog.GetPresetModel().toStdString());
 
         VirtualController3D* new_ptr = virtual_controllers[list_row].get();
         for(size_t i = 0; i < controller_transforms.size(); i++)
@@ -732,12 +770,20 @@ bool OpenRGB3DSpatialTab::LoadControllerFromJsonFile(const filesystem::path& jso
         return false;
     }
 
-    const std::string filename = json_path.filename().string();
+    /* Keep presets-style nesting (controllers/brand/device/*.json) on later save/delete. */
+    const filesystem::path controllers_dir = PluginSettingsPaths::ControllersDir(resource_manager);
+    std::error_code rel_ec;
+    filesystem::path relative = filesystem::relative(json_path, controllers_dir, rel_ec);
+    if(rel_ec || relative.empty() || *relative.begin() == "..")
+    {
+        relative = json_path.filename();
+    }
+    const std::string relative_key = relative.generic_string();
 
     int existing_index = -1;
     for(size_t i = 0; i < virtual_controller_json_files.size(); ++i)
     {
-        if(virtual_controller_json_files[i] == filename)
+        if(virtual_controller_json_files[i] == relative_key)
         {
             existing_index = static_cast<int>(i);
             break;
@@ -769,17 +815,17 @@ bool OpenRGB3DSpatialTab::LoadControllerFromJsonFile(const filesystem::path& jso
         std::unique_ptr<VirtualController3D> virtual_ctrl = VirtualController3D::FromJson(ctrl_json, controllers);
         if(!virtual_ctrl)
         {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to create controller from: %s", filename.c_str());
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to create controller from: %s", relative_key.c_str());
             return false;
         }
 
         virtual_controllers.push_back(std::move(virtual_ctrl));
-        virtual_controller_json_files.push_back(filename);
+        virtual_controller_json_files.push_back(relative_key);
         return true;
     }
     catch(const std::exception& e)
     {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load controller %s: %s", filename.c_str(), e.what());
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load controller %s: %s", relative_key.c_str(), e.what());
         return false;
     }
 }
@@ -810,27 +856,31 @@ bool OpenRGB3DSpatialTab::SaveCustomController(unsigned int index)
 
     PluginSettingsPaths::EnsurePluginDataLayout(resource_manager);
     const filesystem::path controllers_dir = PluginSettingsPaths::ControllersDir(resource_manager);
-    std::error_code ec;
-    filesystem::create_directories(controllers_dir, ec);
 
     if(virtual_controller_json_files.size() < virtual_controllers.size())
     {
         virtual_controller_json_files.resize(virtual_controllers.size());
     }
 
-    const std::string json_filename = SafeControllerJsonFilename(virtual_controllers[index]->GetName());
-    const filesystem::path filepath = controllers_dir / json_filename;
+    VirtualController3D* ctrl = virtual_controllers[index].get();
+    const std::string relative_key = VirtualController3D::PresetLibraryRelativePath(
+        ctrl->GetCategory(), ctrl->GetBrand(), ctrl->GetName());
+    const filesystem::path relative(relative_key);
+    const filesystem::path filepath = controllers_dir / relative;
+
+    std::error_code ec;
+    filesystem::create_directories(filepath.parent_path(), ec);
 
     if(index < virtual_controller_json_files.size()
        && !virtual_controller_json_files[index].empty()
-       && virtual_controller_json_files[index] != json_filename)
+       && virtual_controller_json_files[index] != relative_key)
     {
         const filesystem::path old_path = controllers_dir / virtual_controller_json_files[index];
         std::error_code remove_ec;
         filesystem::remove(old_path, remove_ec);
     }
 
-    virtual_controller_json_files[index] = json_filename;
+    virtual_controller_json_files[index] = relative_key;
 
     std::ofstream file(filepath.string());
     if(!file.is_open())

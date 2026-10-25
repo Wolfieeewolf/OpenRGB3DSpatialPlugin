@@ -82,7 +82,10 @@ public:
                                 const std::vector<float>& row_heights_mm = {},
                                 const std::vector<float>& layer_depths_mm = {},
                                 const std::vector<std::string>& layer_names = {},
-                                int leds_per_cluster = 1);
+                                int leds_per_cluster = 1,
+                                const std::string& category = {},
+                                const std::string& brand = {},
+                                const std::string& model = {});
 
     void SetLayoutGridScaleMm(float mm) { layout_grid_scale_mm = mm; }
     float GetLayoutGridScaleMm() const { return layout_grid_scale_mm; }
@@ -90,6 +93,9 @@ public:
     std::vector<GridLEDMapping> GetLEDMappings() const { return led_mappings; }
     std::vector<CustomControllerLightBlocker> GetLightBlockers() const;
     QString GetControllerName() const;
+    QString GetPresetCategory() const;
+    QString GetPresetBrand() const;
+    QString GetPresetModel() const;
     int GetGridWidth() const;
     int GetGridHeight() const;
     int GetGridDepth() const;
@@ -254,11 +260,19 @@ private:
     static QColor RGBToQColor(unsigned int rgb_value);
     void InferMappingGranularity();
     void WarnIfMappingCollisions() const;
+    void PopulatePresetCategoryCombo();
+    void SetPresetMetaFields(const std::string& category,
+                             const std::string& brand,
+                             const std::string& model);
+    void AutofillPresetMetaFromMappings();
 
     OpenRGBPluginAPIInterface* resource_manager;
     Ui::CustomControllerDialog* ui = nullptr;
 
     QLineEdit*      name_edit;
+    QComboBox*      category_combo_ = nullptr;
+    QLineEdit*      brand_edit_ = nullptr;
+    QLineEdit*      model_edit_ = nullptr;
     CustomControllerDeviceList* device_list;
     QSpinBox*       width_spin;
     QSpinBox*       height_spin;

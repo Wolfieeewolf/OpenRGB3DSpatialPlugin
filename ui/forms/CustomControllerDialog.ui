@@ -183,6 +183,80 @@
     </layout>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="presetMetaRow">
+     <property name="spacing">
+      <number>8</number>
+     </property>
+     <item>
+      <widget class="QLabel" name="categoryCaption">
+       <property name="text">
+        <string>Category:</string>
+       </property>
+       <property name="toolTip">
+        <string>Presets repo folder group (controllers/&lt;category&gt;/…)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="categoryCombo">
+       <property name="toolTip">
+        <string>Matches OpenRGB3DSpatialPresets controllers/ folders</string>
+       </property>
+       <property name="minimumContentsLength">
+        <number>14</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="brandCaption">
+       <property name="text">
+        <string>Brand:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="brandEdit">
+       <property name="placeholderText">
+        <string>Razer</string>
+       </property>
+       <property name="toolTip">
+        <string>Vendor folder under the category (controllers/…/razer/)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="modelCaption">
+       <property name="text">
+        <string>Model:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="modelEdit">
+       <property name="placeholderText">
+        <string>BlackWidow X Chroma</string>
+       </property>
+       <property name="toolTip">
+        <string>Product model for the portable preset JSON</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="presetMetaSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QSplitter" name="mainSplitter">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>

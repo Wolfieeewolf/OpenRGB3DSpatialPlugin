@@ -81,8 +81,9 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
            "Use controller_name = OpenRGB device name and controller_location \"1:1\"."));
     ui->exportCustomControllerButton->setToolTip(
         tr("Export selected layout as a portable preset JSON (OpenRGB device names, location \"1:1\", "
-           "brand/model) for sharing or the presets repo"));
-    ui->editCustomControllerButton->setToolTip("Edit selected custom controller");
+           "category/brand/model) into the presets-style controllers/<category>/<brand>/ path"));
+    ui->editCustomControllerButton->setToolTip(
+        tr("Edit layout and preset filing fields (category, brand, model)"));
     ui->deleteCustomControllerButton->setToolTip(
         "Remove selected custom controller from library (remove from 3D scene first if in use)");
     ui->editReferencePointButton->setToolTip("Edit selected reference point");

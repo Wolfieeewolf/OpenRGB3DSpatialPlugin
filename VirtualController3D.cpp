@@ -116,6 +116,8 @@ std::string DeviceTypeToPresetCategory(device_type type)
     case DEVICE_TYPE_HEADSET:
     case DEVICE_TYPE_HEADSET_STAND:
         return "headsets";
+    case DEVICE_TYPE_SPEAKER:
+        return "speakers";
     case DEVICE_TYPE_CASE:
         return "cases";
     case DEVICE_TYPE_MONITOR:
@@ -135,6 +137,11 @@ std::string DeviceTypeToPresetCategory(device_type type)
         {
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         }
+    }
+    /* OpenRGB "Fan" / similar → presets fans folder taxonomy. */
+    if(slug == "fan" || slug == "fans")
+    {
+        return "fans";
     }
     return slug;
 }
@@ -538,6 +545,18 @@ json VirtualController3D::ToJson() const
     j["format"]  = kCustomControllerFormat;
     j["version"] = kCustomControllerVersion;
     j["name"] = name;
+    if(!category.empty())
+    {
+        j["category"] = category;
+    }
+    if(!brand.empty())
+    {
+        j["brand"] = brand;
+    }
+    if(!model.empty())
+    {
+        j["model"] = model;
+    }
     j["width"] = width;
     j["height"] = height;
     j["depth"] = depth;
@@ -615,19 +634,32 @@ json VirtualController3D::ToPortablePresetJson() const
         }
     }
 
-    if(RGBControllerInterface* primary = PrimaryMappedController(led_mappings))
+    /* Prefer author-edited meta; fall back to OpenRGB device inference. */
+    if(category.empty() || brand.empty() || model.empty())
     {
-        const std::string vendor = TrimCopy(primary->GetVendor());
-        const std::string model  = InferPresetModel(primary);
-        if(!vendor.empty())
+        if(RGBControllerInterface* primary = PrimaryMappedController(led_mappings))
         {
-            j["brand"] = vendor;
+            if(category.empty())
+            {
+                j["category"] = DeviceTypeToPresetCategory(primary->GetDeviceType());
+            }
+            if(brand.empty())
+            {
+                const std::string vendor = TrimCopy(primary->GetVendor());
+                if(!vendor.empty())
+                {
+                    j["brand"] = vendor;
+                }
+            }
+            if(model.empty())
+            {
+                const std::string inferred = InferPresetModel(primary);
+                if(!inferred.empty())
+                {
+                    j["model"] = inferred;
+                }
+            }
         }
-        if(!model.empty())
-        {
-            j["model"] = model;
-        }
-        j["category"] = DeviceTypeToPresetCategory(primary->GetDeviceType());
     }
 
     return j;
@@ -662,6 +694,79 @@ std::string VirtualController3D::PresetFilenameSlug(const std::string& layout_na
     }
 
     return slug.empty() ? std::string("custom_controller") : slug;
+}
+
+std::string VirtualController3D::PresetCategoryFolder(const std::string& category_in)
+{
+    const std::string category = TrimCopy(category_in);
+    if(category.empty())
+    {
+        return "other";
+    }
+    if(category == "graphics_cards" || category == "graphics-cards")
+    {
+        return "graphics-cards";
+    }
+    if(category == "cpu_cooler" || category == "cpu-coolers" || category == "cpu_coolers")
+    {
+        return "cpu-coolers";
+    }
+    if(category == "mouses" || category == "mice" || category == "mouse")
+    {
+        return "mice";
+    }
+    if(category == "motherboard" || category == "motherboards")
+    {
+        return "motherboards";
+    }
+    if(category == "ledstrips" || category == "led_strips" || category == "led-strips")
+    {
+        return "led-strips";
+    }
+    if(category == "keyboards" || category == "fans" || category == "speakers"
+       || category == "headsets" || category == "cases" || category == "monitors")
+    {
+        return category;
+    }
+
+    std::string folder = PresetFilenameSlug(category);
+    for(char& c : folder)
+    {
+        if(c == '_')
+        {
+            c = '-';
+        }
+    }
+    return folder.empty() ? "other" : folder;
+}
+
+std::string VirtualController3D::PresetLibraryRelativePath(const std::string& category_in,
+                                                            const std::string& brand_in,
+                                                            const std::string& layout_name)
+{
+    const std::string folder = PresetCategoryFolder(category_in);
+    std::string brand_slug = PresetFilenameSlug(brand_in);
+    if(brand_slug.empty() || brand_slug == "custom_controller")
+    {
+        brand_slug = "other";
+    }
+    const std::string file = PresetFilenameSlug(layout_name) + ".json";
+    return folder + "/" + brand_slug + "/" + file;
+}
+
+std::string VirtualController3D::InferCategoryFromDevice(RGBControllerInterface* controller)
+{
+    return controller ? DeviceTypeToPresetCategory(controller->GetDeviceType()) : std::string();
+}
+
+std::string VirtualController3D::InferBrandFromDevice(RGBControllerInterface* controller)
+{
+    return controller ? TrimCopy(controller->GetVendor()) : std::string();
+}
+
+std::string VirtualController3D::InferModelFromDevice(RGBControllerInterface* controller)
+{
+    return InferPresetModel(controller);
 }
 
 std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j, std::vector<RGBControllerInterface*>& controllers)
@@ -736,7 +841,7 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
 
     const int leds_per_cluster = (j["leds_per_cluster"].get<int>() > 1) ? 3 : 1;
 
-    return std::make_unique<VirtualController3D>(name,
+    auto controller = std::make_unique<VirtualController3D>(name,
                                                width,
                                                height,
                                                depth,
@@ -750,4 +855,17 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
                                                std::move(layer_depths),
                                                std::move(layer_names),
                                                leds_per_cluster);
+    if(j.contains("category") && j["category"].is_string())
+    {
+        controller->SetCategory(j["category"].get<std::string>());
+    }
+    if(j.contains("brand") && j["brand"].is_string())
+    {
+        controller->SetBrand(j["brand"].get<std::string>());
+    }
+    if(j.contains("model") && j["model"].is_string())
+    {
+        controller->SetModel(j["model"].get<std::string>());
+    }
+    return controller;
 }

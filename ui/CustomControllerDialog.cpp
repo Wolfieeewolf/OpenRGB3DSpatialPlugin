@@ -13,6 +13,7 @@
 #include "custom-controller-grid/CustomControllerGridLayoutMath.h"
 #include "MatrixWiringOrder.h"
 #include "PluginUiUtils.h"
+#include "VirtualController3D.h"
 
 #include <QCloseEvent>
 #include <QHideEvent>
@@ -172,6 +173,10 @@ void CustomControllerDialog::SetupUI()
     PluginUiApplyMutedSecondaryLabel(ui->helpLabel->label());
 
     name_edit         = ui->nameEdit;
+    category_combo_   = ui->categoryCombo;
+    brand_edit_       = ui->brandEdit;
+    model_edit_       = ui->modelEdit;
+    PopulatePresetCategoryCombo();
     width_spin        = ui->widthSpin;
     height_spin       = ui->heightSpin;
     depth_spin        = ui->depthSpin;
@@ -616,6 +621,128 @@ std::vector<CustomControllerLightBlocker> CustomControllerDialog::GetLightBlocke
 QString CustomControllerDialog::GetControllerName() const
 {
     return name_edit->text();
+}
+
+QString CustomControllerDialog::GetPresetCategory() const
+{
+    if(!category_combo_)
+    {
+        return {};
+    }
+    const QString data = category_combo_->currentData().toString();
+    return data.isEmpty() ? category_combo_->currentText().trimmed() : data;
+}
+
+QString CustomControllerDialog::GetPresetBrand() const
+{
+    return brand_edit_ ? brand_edit_->text().trimmed() : QString();
+}
+
+QString CustomControllerDialog::GetPresetModel() const
+{
+    return model_edit_ ? model_edit_->text().trimmed() : QString();
+}
+
+void CustomControllerDialog::PopulatePresetCategoryCombo()
+{
+    if(!category_combo_)
+    {
+        return;
+    }
+    const QSignalBlocker block(category_combo_);
+    category_combo_->clear();
+    struct Entry
+    {
+        const char* label;
+        const char* category;
+    };
+    /* Labels match presets folders; data is JSON taxonomy slug. */
+    static const Entry kEntries[] = {
+        {"Keyboards", "keyboards"},
+        {"Mice", "mouses"},
+        {"Fans", "fans"},
+        {"Graphics cards", "graphics_cards"},
+        {"CPU coolers", "cpu_cooler"},
+        {"Motherboards", "motherboard"},
+        {"Speakers", "speakers"},
+        {"Headsets", "headsets"},
+        {"Cases", "cases"},
+        {"Monitors", "monitors"},
+        {"LED strips", "ledstrips"},
+        {"Other", "other"},
+    };
+    for(const Entry& entry : kEntries)
+    {
+        category_combo_->addItem(QString::fromUtf8(entry.label), QString::fromUtf8(entry.category));
+    }
+}
+
+void CustomControllerDialog::SetPresetMetaFields(const std::string& category,
+                                                 const std::string& brand,
+                                                 const std::string& model)
+{
+    if(category_combo_)
+    {
+        const QSignalBlocker block(category_combo_);
+        int idx = category_combo_->findData(QString::fromStdString(category));
+        if(idx < 0 && !category.empty())
+        {
+            category_combo_->addItem(QString::fromStdString(category), QString::fromStdString(category));
+            idx = category_combo_->count() - 1;
+        }
+        if(idx >= 0)
+        {
+            category_combo_->setCurrentIndex(idx);
+        }
+    }
+    if(brand_edit_)
+    {
+        brand_edit_->setText(QString::fromStdString(brand));
+    }
+    if(model_edit_)
+    {
+        model_edit_->setText(QString::fromStdString(model));
+    }
+}
+
+void CustomControllerDialog::AutofillPresetMetaFromMappings()
+{
+    RGBControllerInterface* primary = nullptr;
+    for(const GridLEDMapping& mapping : led_mappings)
+    {
+        if(!mapping.controller)
+        {
+            continue;
+        }
+        if(!primary)
+        {
+            primary = mapping.controller;
+        }
+        else if(primary != mapping.controller)
+        {
+            return;
+        }
+    }
+    if(!primary)
+    {
+        return;
+    }
+
+    const bool fresh_meta = GetPresetBrand().isEmpty() && GetPresetModel().isEmpty();
+    if(fresh_meta || GetPresetCategory().isEmpty() || GetPresetCategory() == QStringLiteral("other"))
+    {
+        SetPresetMetaFields(VirtualController3D::InferCategoryFromDevice(primary),
+                            GetPresetBrand().toStdString(),
+                            GetPresetModel().toStdString());
+    }
+    if(GetPresetBrand().isEmpty() && brand_edit_)
+    {
+        brand_edit_->setText(QString::fromStdString(VirtualController3D::InferBrandFromDevice(primary)));
+    }
+    if(GetPresetModel().isEmpty() && model_edit_)
+    {
+        model_edit_->setText(QString::fromStdString(VirtualController3D::InferModelFromDevice(primary)));
+    }
 }
 
 int CustomControllerDialog::GetGridWidth() const

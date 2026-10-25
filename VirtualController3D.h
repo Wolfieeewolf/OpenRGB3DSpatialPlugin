@@ -33,6 +33,15 @@ public:
 
     std::string GetName() const { return name; }
     void SetName(const std::string& n) { name = n; }
+
+    /** Preset taxonomy (`keyboards`, `graphics_cards`, …) — see OpenRGB3DSpatialPresets. */
+    std::string GetCategory() const { return category; }
+    void SetCategory(const std::string& value) { category = value; }
+    std::string GetBrand() const { return brand; }
+    void SetBrand(const std::string& value) { brand = value; }
+    std::string GetModel() const { return model; }
+    void SetModel(const std::string& value) { model = value; }
+
     int GetWidth() const { return width; }
     int GetHeight() const { return height; }
     int GetDepth() const { return depth; }
@@ -81,6 +90,15 @@ public:
     json ToJson() const;
     json ToPortablePresetJson() const;
     static std::string PresetFilenameSlug(const std::string& layout_name);
+    /** Map taxonomy category → presets repo folder (`graphics_cards` → `graphics-cards`). */
+    static std::string PresetCategoryFolder(const std::string& category);
+    /** Relative path under controllers/: `<folder>/<brand-slug>/<name-slug>.json`. */
+    static std::string PresetLibraryRelativePath(const std::string& category,
+                                                 const std::string& brand,
+                                                 const std::string& layout_name);
+    static std::string InferCategoryFromDevice(RGBControllerInterface* controller);
+    static std::string InferBrandFromDevice(RGBControllerInterface* controller);
+    static std::string InferModelFromDevice(RGBControllerInterface* controller);
     static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBControllerInterface*>& controllers);
 
 private:
@@ -94,6 +112,9 @@ private:
     std::vector<float> LayerDepthsSnapshotMm() const;
 
     std::string name;
+    std::string category;
+    std::string brand;
+    std::string model;
     int width;
     int height;
     int depth;

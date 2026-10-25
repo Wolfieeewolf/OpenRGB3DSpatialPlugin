@@ -381,6 +381,7 @@ bool CustomControllerDialog::assignSource(const CustomControllerSourceRef& sourc
     }
 
     CommitHistoryBaseline();
+    AutofillPresetMetaFromMappings();
     UpdateCellInfo();
     UpdateIdentifyButtonUi();
     UpdateGridDisplay();
@@ -1455,10 +1456,14 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
                                                     const std::vector<float>& row_heights_mm,
                                                     const std::vector<float>& layer_depths_mm,
                                                     const std::vector<std::string>& layer_names,
-                                                    int leds_per_cluster)
+                                                    int leds_per_cluster,
+                                                    const std::string& category,
+                                                    const std::string& brand,
+                                                    const std::string& model)
 {
     setWindowTitle(tr("Edit Custom 3D Controller"));
     name_edit->setText(QString::fromStdString(name));
+    SetPresetMetaFields(category, brand, model);
 
     const QSignalBlocker width_block(width_spin);
     const QSignalBlocker height_block(height_spin);
@@ -1496,6 +1501,10 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
     UpdateGridDisplay();
     EnsureGridAnchorSelected();
     refreshDeviceList();
+    if(category.empty() && brand.empty() && model.empty())
+    {
+        AutofillPresetMetaFromMappings();
+    }
     ResetHistoryFromCurrent();
 }
 
