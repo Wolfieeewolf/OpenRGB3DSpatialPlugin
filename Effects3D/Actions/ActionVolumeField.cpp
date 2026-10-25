@@ -14,6 +14,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Action
@@ -26,6 +27,7 @@ namespace
 std::unique_ptr<SpatialVolumeFieldAssist> g_assist;
 filesystem::path g_toolbox_dir;
 std::string g_loaded_shader_id;
+std::unordered_map<std::string, QString> g_shader_body_cache;
 std::mutex g_mu;
 float g_ox = 0.5f;
 float g_oy = 0.5f;
@@ -134,11 +136,21 @@ QString LoadFsFromToolbox(const std::string& shader_id)
 
 QString LoadShaderBody(const std::string& shader_id)
 {
+    if(shader_id.empty())
+    {
+        return QString();
+    }
+    const auto cached = g_shader_body_cache.find(shader_id);
+    if(cached != g_shader_body_cache.end())
+    {
+        return cached->second;
+    }
     QString body = LoadFsFromToolbox(shader_id);
     if(body.trimmed().isEmpty())
     {
         body = SpatialShaderCatalog::LoadEffectShader(QString::fromStdString(shader_id));
     }
+    g_shader_body_cache.emplace(shader_id, body);
     return body;
 }
 
@@ -147,6 +159,11 @@ QString LoadShaderBody(const std::string& shader_id)
 void SetToolboxDirectory(const filesystem::path& dir)
 {
     std::lock_guard<std::mutex> lock(g_mu);
+    if(dir != g_toolbox_dir)
+    {
+        g_shader_body_cache.clear();
+        g_loaded_shader_id.clear();
+    }
     g_toolbox_dir = dir;
 }
 
@@ -155,6 +172,7 @@ void Reset()
     std::lock_guard<std::mutex> lock(g_mu);
     g_assist.reset();
     g_loaded_shader_id.clear();
+    g_shader_body_cache.clear();
     g_ox = g_oy = g_oz = 0.5f;
     g_size = 1.0f;
 }

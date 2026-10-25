@@ -356,7 +356,22 @@ void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const P
     p.setBrush(QColor(8, 8, 10));
     p.drawRect(br);
 
-    paintClipSpatialRaster(p, br, pb, sample);
+    // GPU field/particle/ribbon thumbs must not Sample01 per timeline pixel — that
+    // freezes the UI for seconds (compile + ~1.5k makeCurrent/readbacks). Gradient
+    // swatch is enough; live Preview still does batched EvaluateAtPoints.
+    const std::string effect_id = Action::ClipFileId(sample);
+    const bool gpu_engine_thumb = Action::script::UsesField(effect_id)
+        || Action::script::UsesParticles(effect_id)
+        || Action::script::UsesRibbons(effect_id)
+        || (Action::builtin_gpu::Uses(effect_id) && Action::script::FieldShader(effect_id).empty());
+    if(gpu_engine_thumb)
+    {
+        paintClipGradientBar(p, br, sample, 255);
+    }
+    else
+    {
+        paintClipSpatialRaster(p, br, pb, sample);
+    }
 
     if(sample.effect_id == "media_text" && sample.media_text.empty() && br.width() > 24)
     {

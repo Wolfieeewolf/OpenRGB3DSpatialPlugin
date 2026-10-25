@@ -955,6 +955,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
 
 void OpenRGB3DSpatialTab::stopEffectClicked()
 {
+    const bool was_running = effect_running;
     effect_running = false;
     if(viewport)
     {
@@ -969,7 +970,11 @@ void OpenRGB3DSpatialTab::stopEffectClicked()
     if(start_effect_button) start_effect_button->setEnabled(true);
     if(stop_effect_button) stop_effect_button->setEnabled(false);
     UpdateStartStopAllButtons();
-    RenderEffectStack();
+    // Action Preview calls this while idle — skip a full stack redraw when nothing ran.
+    if(was_running)
+    {
+        RenderEffectStack();
+    }
 }
 
 void OpenRGB3DSpatialTab::startAllEffectsClicked()
