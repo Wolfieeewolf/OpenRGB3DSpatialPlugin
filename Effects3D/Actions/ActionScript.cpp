@@ -1238,7 +1238,12 @@ bool Run(const std::string& id, LedView* led)
     set("axis", led->axis);
     set("local_ms", (float)led->local_ms);
     set("start_ms", clip ? (float)clip->start_ms : 0.0f);
-    set("time_ms", clip ? (float)(led->local_ms - clip->start_ms) : 0.0f);
+    // Prefer continuous anim clock when playing forever/while_active so blink/pulse/noise
+    // tools do not jump when LocalMs wraps (GpuAnimMs set by CueRuntime / preview tick).
+    {
+        const int anim_ms = GpuAnimMsOr(led->local_ms);
+        set("time_ms", clip ? (float)std::max(0, anim_ms - clip->start_ms) : 0.0f);
+    }
     set("speed", clip ? clip->speed : 1.0f);
     set("period_ms", clip ? (float)clip->period_ms : 1000.0f);
     set("period_progress", clip ? ClipPeriodProgress(*clip, led->local_ms) : 0.0f);

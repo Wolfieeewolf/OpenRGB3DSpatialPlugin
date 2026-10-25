@@ -98,10 +98,13 @@ void volumeMain(out vec4 out_color, vec3 p01)
     float dens = exp(-best_d2 / r2);
     float head_dist = abs(along - head);
     float head_win = min(head_dist, 1.0 - head_dist);
-    dens *= 0.45 + 0.55 * exp(-head_win * head_win * 28.0);
-    dens = clamp(dens * 1.5, 0.0, 1.0);
+    dens *= 0.4 + 0.6 * exp(-head_win * head_win * 24.0);
+    dens += 0.22 * exp(-best_d2 / (r2 * 4.0));
+    dens = clamp(dens * 1.55, 0.0, 1.0);
+    if(dens < 1e-4) { out_color = vec4(0.0); return; }
     float h = along * 6.2831853;
     vec3 col = vec3(0.55 + 0.45 * sin(h), 0.35 + 0.45 * sin(h + 2.094), 0.65 + 0.35 * sin(h + 4.188));
+    col = mix(col, vec3(1.0), exp(-head_win * head_win * 36.0) * 0.5);
     out_color = vec4(col * dens, dens);
 }
 )GLSL";

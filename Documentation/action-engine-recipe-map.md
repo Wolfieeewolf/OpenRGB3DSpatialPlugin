@@ -29,19 +29,28 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 - **`loop: forever` / `while_active`** — animate with continuous **`u_time`** only. Do not key motion off wrapping `progress` or wrapped `local_ms` (that flashes/jumps at the pack seam). Rain, helix, fireflies, aurora, portal, etc. already follow this.
 - Engines feed `u_time` from continuous elapsed time when playing; GPU one-shot params use non-wrapping span progress.
 
-## Multi-pass look brief (treat like image gen)
+## Catch-all multi-pass (any file / tool)
 
-Author looks in **three passes**. First pass = readable silhouette. Second = motion + colour character. Third = sparse-LED survival + seam polish.
+Multi-pass is a **general review tool** — Action toolbox looks, engine C++, packs, docs, UI wiring, anything we touch. Showcase *and* simple utilities. A pass that concludes “already good → no edit” is a valid outcome. The point is a multi-point attack, not forced rewrites.
 
-| Pass | Goal |
-|------|------|
-| 1 | Something lights the room with clear shape (not mush) |
-| 2 | Hot heads / cool tails, gravity or wind, asymmetric timing |
-| 3 | Fat kernels, floor/ceiling catch, seamless `u_time`, once→black |
+**Skill (persistent):** `.cursor/skills/openrgb3d-multipass-review/SKILL.md` — also in the user Agent Store. Ask for “multi-pass” / “run the pass” to load it. Includes thermo-nuclear structure pressure, **deslop**, and **apply fixes/updates** (not review-only) across touched files and dependents.
 
-**Positive prompts (keep):** bright cores, streak kernels, unique per-particle phase/speed, Lissajous drift, dive directions, floor splash, ring beads, filament accents, additive glow.
+### Attack surfaces (run what applies)
 
-**Negative prompts (kill):** thin 1px misses, synced blink, orange wash, progress-wrap flash, linger after once, all meteors same angle, flat disc stamps, rigid spring helix.
+| Pass | Attack surface |
+|------|----------------|
+| 1 | **Purpose / role** — does it fulfill the intended job? A simple tool must still *be* that tool (e.g. `blink` blinks, `solid` holds a level, `chase` travels). Wrong category, misleading name, or “looks cool but isn’t the role” fails. |
+| 2 | **Correctness** — compiles/loads, headers match body (`shader:` / `particles:` / `ribbons:`), swatch/description match, knobs wired, no dead code |
+| 3 | **Fit & integration** — check everything it touches: engines, applier, player loop modes, Movie Sync / Triggers packs, Action Editor toolbar, docs, AppData install paths. No orphan headers, broken call sites, or “works alone / breaks in stack”. |
+| 4 | **Seams & bugs** — once→black, forever/`while_active` continuous `u_time`, no linger/jump/recycle, intensity/size do something real |
+| 5 | **Readability / UX** — sparse-LED survival for GPU looks; clear UI/docs behaviour for utilities |
+| 6 | **Character polish** — deepen motion/colour/language only if earlier passes left it meh *and* that fits the role (don’t turn `solid` into aurora) |
+
+**Positive prompts (keep):** honest role, bright cores / clear motion where the look needs it, wired knobs, matches callers/docs, additive glow, seamless loops, once dies clean.
+
+**Negative prompts (kill):** wrong job for the name, thin 1px misses, synced blink, orange wash, progress-wrap flash, linger, orphan/`TODO` wiring, docs drift, unused knobs, silent fail, over-polishing a utility into a showcase.
+
+Basics (`solid`, `blink`, `chase`, …) and media still get **purpose + correctness + fit + seams** every time; readability/character only if something’s wrong or the role isn’t being served.
 
 | Mode | Engine | Notes |
 |------|--------|-------|
