@@ -49,24 +49,6 @@ bool SpatialVolumeFieldAssist::engineNeedsRefresh() const
     return engine_ && engine_->mediaDirty();
 }
 
-float SpatialVolumeFieldAssist::sampleScalar01(float x, float y, float z) const
-{
-    if(!isAvailable())
-    {
-        return 0.0f;
-    }
-    return engine_->sampleScalar01(x, y, z);
-}
-
-QVector3D SpatialVolumeFieldAssist::sample01(float x, float y, float z) const
-{
-    if(!isAvailable())
-    {
-        return QVector3D(0.0f, 0.0f, 0.0f);
-    }
-    return engine_->sample01(x, y, z);
-}
-
 bool SpatialVolumeFieldAssist::prepareProgram(std::uint64_t render_sequence,
                                               float time_sec,
                                               const float* params,

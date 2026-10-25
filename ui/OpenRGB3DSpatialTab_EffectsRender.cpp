@@ -1108,56 +1108,60 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             }
             const float time_val = effect_time;
 
-            // True GPU: one evaluateAtPoints batch per volume effect across all overlay voxels.
-            if(any_true_volume)
+            std::vector<float> overlay_room_xyz(count * 3u);
+            std::vector<std::vector<float>> overlay_bake_xyz(active_effects.size());
+            size_t voxel_i = 0;
+            for(int ix = 0; ix < nx; ++ix)
             {
-                std::vector<std::vector<float>> overlay_xyz(active_effects.size());
-                for(int ix = 0; ix < nx; ++ix)
+                for(int iy = 0; iy < ny; ++iy)
                 {
-                    for(int iy = 0; iy < ny; ++iy)
+                    for(int iz = 0; iz < nz; ++iz)
                     {
-                        for(int iz = 0; iz < nz; ++iz)
+                        float sample_x = 0.0f, sample_y = 0.0f, sample_z = 0.0f;
+                        viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sample_x, sample_y, sample_z);
+                        overlay_room_xyz[voxel_i * 3u + 0u] = sample_x;
+                        overlay_room_xyz[voxel_i * 3u + 1u] = sample_y;
+                        overlay_room_xyz[voxel_i * 3u + 2u] = sample_z;
+                        ++voxel_i;
+                        if(!any_true_volume)
                         {
-                            float sample_x = 0.0f, sample_y = 0.0f, sample_z = 0.0f;
-                            viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sample_x, sample_y, sample_z);
-                            for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
+                            continue;
+                        }
+                        for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
+                        {
+                            SpatialEffect3D* effect = active_effects[effect_idx].effect;
+                            if(!effect || !effect->PrefersTrueGpuVolumeSamples()
+                               || !prepared_grids[effect_idx])
                             {
-                                SpatialEffect3D* effect = active_effects[effect_idx].effect;
-                                if(!effect || !effect->PrefersTrueGpuVolumeSamples()
-                                   || !prepared_grids[effect_idx])
-                                {
-                                    continue;
-                                }
-                                const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
-                                if(effect->UseZoneGrid() && active_effects[effect_idx].zone_index != -1
-                                   && !grid_override.use_zone_grid)
-                                {
-                                    continue;
-                                }
-                                const GridContext3D& active_grid = *prepared_grids[effect_idx];
-                                float sx = sample_x, sy = sample_y, sz = sample_z;
-                                if(!effect->SkipsSpatialSampleWarp())
-                                {
-                                    effect->ApplyAxisScale(sx, sy, sz, active_grid);
-                                    effect->ApplyEffectRotation(sx, sy, sz, active_grid);
-                                }
-                                overlay_xyz[effect_idx].push_back(sx);
-                                overlay_xyz[effect_idx].push_back(sy);
-                                overlay_xyz[effect_idx].push_back(sz);
+                                continue;
                             }
+                            const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                            if(effect->UseZoneGrid() && active_effects[effect_idx].zone_index != -1
+                               && !grid_override.use_zone_grid)
+                            {
+                                continue;
+                            }
+                            float sx = sample_x, sy = sample_y, sz = sample_z;
+                            effect->PrepareTrueGpuSamplePoint(sx, sy, sz, *prepared_grids[effect_idx]);
+                            overlay_bake_xyz[effect_idx].push_back(sx);
+                            overlay_bake_xyz[effect_idx].push_back(sy);
+                            overlay_bake_xyz[effect_idx].push_back(sz);
                         }
                     }
                 }
+            }
+            if(any_true_volume)
+            {
                 for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
                 {
                     SpatialEffect3D* effect = active_effects[effect_idx].effect;
                     if(!effect || !effect->PrefersTrueGpuVolumeSamples()
-                       || overlay_xyz[effect_idx].empty() || !prepared_grids[effect_idx])
+                       || overlay_bake_xyz[effect_idx].empty() || !prepared_grids[effect_idx])
                     {
                         continue;
                     }
-                    effect->BakeTrueGpuVolumeSamples(overlay_xyz[effect_idx].data(),
-                                                     (int)(overlay_xyz[effect_idx].size() / 3u),
+                    effect->BakeTrueGpuVolumeSamples(overlay_bake_xyz[effect_idx].data(),
+                                                     (int)(overlay_bake_xyz[effect_idx].size() / 3u),
                                                      time_val,
                                                      *prepared_grids[effect_idx]);
                 }
@@ -1166,57 +1170,46 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             SpatialRoom::BeginRoomGridOverlayPass();
             const SpatialEffect3D* overlay_shade_source = ResolveOverlayAmbientShadeSource(active_effects);
 
-            for(int ix = 0; ix < nx; ix++)
+            for(size_t vi = 0; vi < count; ++vi)
             {
-                for(int iy = 0; iy < ny; iy++)
+                const float sample_x = overlay_room_xyz[vi * 3u + 0u];
+                const float sample_y = overlay_room_xyz[vi * 3u + 1u];
+                const float sample_z = overlay_room_xyz[vi * 3u + 2u];
+                RGBColor final_color = ToRGBColor(0, 0, 0);
+                for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                 {
-                    for(int iz = 0; iz < nz; iz++)
+                    const RenderEffectSlot& slot = active_effects[effect_idx];
+                    if(!slot.effect || !prepared_grids[effect_idx])
                     {
-                        RGBColor final_color = ToRGBColor(0, 0, 0);
-                        float sample_x = 0.0f;
-                        float sample_y = 0.0f;
-                        float sample_z = 0.0f;
-                        viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sample_x, sample_y, sample_z);
-                        for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
-                        {
-                            const RenderEffectSlot& slot = active_effects[effect_idx];
-                            if(!slot.effect)
-                            {
-                                continue;
-                            }
-                            const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
-                            if(slot.effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
-                            {
-                                continue;
-                            }
-                            const bool use_world_bounds = slot.effect->UseWorldGridBounds();
-                            const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                            const GridContext3D* local_grid =
-                                ResolveActiveSlotGrid(grid_override, use_world_bounds);
-                            const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
-                            float sx = sample_x;
-                            float sy = sample_y;
-                            float sz = sample_z;
-                            if(!slot.effect->SkipsSpatialSampleWarp())
-                            {
-                                slot.effect->ApplyAxisScale(sx, sy, sz, active_grid);
-                                slot.effect->ApplyEffectRotation(sx, sy, sz, active_grid);
-                            }
-                            RGBColor effect_color =
-                                slot.effect->EvaluateColorGrid(sx, sy, sz, time_val, active_grid);
-                            if(!slot.effect->IsPointOnActiveSurface(sx, sy, sz, active_grid))
-                                effect_color = 0x00000000;
-                            effect_color = slot.effect->PostProcessColorGrid(effect_color);
-                            final_color = BlendColors(final_color, effect_color, slot.blend_mode);
-                        }
-                        if(overlay_shade_source)
-                        {
-                            final_color = overlay_shade_source->ApplyLayerRoomAmbientShading(
-                                sample_x, sample_y, sample_z, final_color, room_grid);
-                        }
-                        room_grid_overlay_buffer[(size_t)ix * (size_t)ny * (size_t)nz + (size_t)iy * (size_t)nz + (size_t)iz] = final_color;
+                        continue;
                     }
+                    const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                    if(slot.effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
+                    {
+                        continue;
+                    }
+                    const GridContext3D& active_grid = *prepared_grids[effect_idx];
+                    float sx = sample_x;
+                    float sy = sample_y;
+                    float sz = sample_z;
+                    if(!slot.effect->SkipsSpatialSampleWarp())
+                    {
+                        slot.effect->ApplyAxisScale(sx, sy, sz, active_grid);
+                        slot.effect->ApplyEffectRotation(sx, sy, sz, active_grid);
+                    }
+                    RGBColor effect_color =
+                        slot.effect->EvaluateColorGrid(sx, sy, sz, time_val, active_grid);
+                    if(!slot.effect->IsPointOnActiveSurface(sx, sy, sz, active_grid))
+                        effect_color = 0x00000000;
+                    effect_color = slot.effect->PostProcessColorGrid(effect_color);
+                    final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                 }
+                if(overlay_shade_source)
+                {
+                    final_color = overlay_shade_source->ApplyLayerRoomAmbientShading(
+                        sample_x, sample_y, sample_z, final_color, room_grid);
+                }
+                room_grid_overlay_buffer[vi] = final_color;
             }
             SpatialRoom::EndRoomGridOverlayPass();
             viewport->SetRoomGridColorCallback(nullptr);
@@ -1278,12 +1271,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                     : led_position.room_position.y;
                     float sample_z = requires_world ? led_position.world_position.z
                                                     : led_position.room_position.z;
-                    const GridContext3D& stack_grid = *prepared_grids[effect_idx];
-                    if(!effect->SkipsSpatialSampleWarp())
-                    {
-                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
-                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
-                    }
+                    effect->PrepareTrueGpuSamplePoint(sample_x, sample_y, sample_z,
+                                                      *prepared_grids[effect_idx]);
                     true_xyz[effect_idx].push_back(sample_x);
                     true_xyz[effect_idx].push_back(sample_y);
                     true_xyz[effect_idx].push_back(sample_z);

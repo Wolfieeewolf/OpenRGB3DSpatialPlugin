@@ -1456,7 +1456,6 @@ void FolderVolumeEffect::SubmitVolumeGpu(std::uint64_t render_sequence,
                                          const float* params,
                                          int count)
 {
-    // Program only ? LEDs and room-grid overlay both use true evaluateAtPoints.
     volume_assist_.prepareProgram(render_sequence, time_sec, params, count);
 }
 
@@ -1476,7 +1475,6 @@ QVector3D FolderVolumeEffect::SampleField01(float n1, float n2, float n3)
     {
         return it->second;
     }
-    // True single-point GPU when outside the batched set (should be rare).
     return volume_assist_.sampleTrue01(n1, n2, n3);
 }
 
@@ -1492,9 +1490,10 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
     }
 
     Vector3D origin = GetEffectOriginGrid(grid);
-    std::vector<float> n01((size_t)count * 3u);
-    std::vector<std::uint32_t> keys((size_t)count);
-    int valid = 0;
+    std::unordered_map<std::uint32_t, int> unique_index;
+    unique_index.reserve((size_t)std::max(16, count / 2));
+    std::vector<float> n01;
+    n01.reserve((size_t)count * 3u);
     for(int i = 0; i < count; ++i)
     {
         const float x = sample_xyz[(size_t)i * 3u + 0u];
@@ -1513,41 +1512,35 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
         }
         if(!ok)
         {
-            keys[(size_t)i] = 0xFFFFFFFFu;
             continue;
         }
-        keys[(size_t)i] = PackNorm01Key(n1, n2, n3);
-        n01[(size_t)valid * 3u + 0u] = n1;
-        n01[(size_t)valid * 3u + 1u] = n2;
-        n01[(size_t)valid * 3u + 2u] = n3;
-        ++valid;
-    }
-    if(valid <= 0)
-    {
-        return;
-    }
-
-    // Compact keys for valid entries only.
-    std::vector<std::uint32_t> valid_keys((size_t)valid);
-    int w = 0;
-    for(int i = 0; i < count; ++i)
-    {
-        if(keys[(size_t)i] == 0xFFFFFFFFu)
+        const std::uint32_t key = PackNorm01Key(n1, n2, n3);
+        if(unique_index.find(key) != unique_index.end())
         {
             continue;
         }
-        valid_keys[(size_t)w++] = keys[(size_t)i];
+        const int idx = (int)unique_index.size();
+        unique_index.emplace(key, idx);
+        n01.push_back(n1);
+        n01.push_back(n2);
+        n01.push_back(n3);
     }
-
-    std::vector<float> rgb((size_t)valid * 3u, 0.0f);
-    if(!volume_assist_.evaluateAtPoints(n01.data(), valid, rgb.data()))
+    const int unique = (int)unique_index.size();
+    if(unique <= 0)
     {
         return;
     }
-    true_sample_map_.reserve((size_t)valid);
-    for(int i = 0; i < valid; ++i)
+
+    std::vector<float> rgb((size_t)unique * 3u, 0.0f);
+    if(!volume_assist_.evaluateAtPoints(n01.data(), unique, rgb.data()))
     {
-        true_sample_map_[valid_keys[(size_t)i]] = QVector3D(
+        return;
+    }
+    true_sample_map_.reserve((size_t)unique);
+    for(const auto& kv : unique_index)
+    {
+        const int i = kv.second;
+        true_sample_map_[kv.first] = QVector3D(
             rgb[(size_t)i * 3u + 0u],
             rgb[(size_t)i * 3u + 1u],
             rgb[(size_t)i * 3u + 2u]);

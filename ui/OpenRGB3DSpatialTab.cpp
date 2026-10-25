@@ -510,14 +510,10 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                             std::vector<float> grid_xyz;
                             std::vector<float> grid_rgb;
                             bool grid_ok = false;
-                            if(gpu_field_clip && grid_n > 0
-                               && (field_true || particle_true || ribbon_true || builtin_true))
+                            std::vector<float> overlay_room_xyz;
+                            if(grid_n > 0)
                             {
-                                const float span_x = std::max(1e-5f, max_x - min_x);
-                                const float span_y = std::max(1e-5f, max_y - min_y);
-                                const float span_z = std::max(1e-5f, max_z - min_z);
-                                grid_xyz.resize((size_t)grid_n * 3u);
-                                grid_rgb.resize((size_t)grid_n * 3u, 0.0f);
+                                overlay_room_xyz.resize((size_t)grid_n * 3u);
                                 for(int ix = 0; ix < nx; ++ix)
                                 {
                                     for(int iy = 0; iy < ny; ++iy)
@@ -528,11 +524,29 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                             viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sx, sy, sz);
                                             const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
                                                 + (size_t)iy * (size_t)nz + (size_t)iz;
-                                            grid_xyz[idx * 3u + 0u] = (sx - min_x) / span_x;
-                                            grid_xyz[idx * 3u + 1u] = (sy - min_y) / span_y;
-                                            grid_xyz[idx * 3u + 2u] = (sz - min_z) / span_z;
+                                            overlay_room_xyz[idx * 3u + 0u] = sx;
+                                            overlay_room_xyz[idx * 3u + 1u] = sy;
+                                            overlay_room_xyz[idx * 3u + 2u] = sz;
                                         }
                                     }
+                                }
+                            }
+                            if(gpu_field_clip && grid_n > 0
+                               && (field_true || particle_true || ribbon_true || builtin_true))
+                            {
+                                const float span_x = std::max(1e-5f, max_x - min_x);
+                                const float span_y = std::max(1e-5f, max_y - min_y);
+                                const float span_z = std::max(1e-5f, max_z - min_z);
+                                grid_xyz.resize((size_t)grid_n * 3u);
+                                grid_rgb.resize((size_t)grid_n * 3u, 0.0f);
+                                for(int i = 0; i < grid_n; ++i)
+                                {
+                                    grid_xyz[(size_t)i * 3u + 0u] =
+                                        (overlay_room_xyz[(size_t)i * 3u + 0u] - min_x) / span_x;
+                                    grid_xyz[(size_t)i * 3u + 1u] =
+                                        (overlay_room_xyz[(size_t)i * 3u + 1u] - min_y) / span_y;
+                                    grid_xyz[(size_t)i * 3u + 2u] =
+                                        (overlay_room_xyz[(size_t)i * 3u + 2u] - min_z) / span_z;
                                 }
                                 if(field_true)
                                 {
@@ -561,14 +575,15 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                 {
                                     for(int iz = 0; iz < nz; ++iz)
                                     {
-                                        float sx = 0.0f, sy = 0.0f, sz = 0.0f;
-                                        viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sx, sy, sz);
-                                        RGBColor color = ToRGBColor(0, 0, 0);
                                         const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
                                             + (size_t)iy * (size_t)nz + (size_t)iz;
+                                        const float sx = overlay_room_xyz[idx * 3u + 0u];
+                                        const float sy = overlay_room_xyz[idx * 3u + 1u];
+                                        const float sz = overlay_room_xyz[idx * 3u + 2u];
+                                        RGBColor color = ToRGBColor(0, 0, 0);
                                         if(gpu_field_clip)
                                         {
-                                            // Fail closed: GPU field clips stay dark if GL is down.
+                                            // Fail closed when GL is down; skip empty texels so earlier clips stay.
                                             if(!grid_ok)
                                             {
                                                 continue;

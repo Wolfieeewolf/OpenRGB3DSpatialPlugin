@@ -65,8 +65,8 @@ protected:
     virtual bool engineNeedsRefresh() const { return false; }
 
     /**
-     * atlas=true → ensureReady (FolderVolume / strip).
-     * atlas=false → ensureProgramReady (Action true point-eval). Only call false on volume engines.
+     * atlas=true  → ensureReady (strip colormap / engines that still bake a field).
+     * atlas=false → ensureProgramReady (Volume/Action true point-eval). Volume engines only.
      */
     bool finishPrepare(std::uint64_t render_sequence,
                        float time_sec,

@@ -17,8 +17,8 @@ class QOpenGLShaderProgram;
 /**
  * Volume field GPU: GLSL `volumeMain(out, p01)` with optional `u_media`.
  *
- * True path: evaluateAtPoints runs volumeMain at exact LED positions (1×N FBO readback).
- * Atlas path: ensureReady bakes a low-res cube for dense preview / Sample01 (approximation).
+ * Production path: ensureProgramReady + evaluateAtPoints (exact sample UVs).
+ * ensureReady / sample01 remain for callers that still request a dense bake.
  */
 class SpatialVolumeFieldEngine
 {

@@ -474,6 +474,8 @@ void FillCompassSpinFromPreset(int preset, int out_spin[3])
     }
 }
 
+} // namespace
+
 void ApplySpatialSamplingQuantization(float& x, float& y, float& z, const GridContext3D& grid, unsigned int resolution_pct)
 {
     if(resolution_pct >= 100u)
@@ -495,6 +497,17 @@ void ApplySpatialSamplingQuantization(float& x, float& y, float& z, const GridCo
     z = grid.min_z + nz * sz;
 }
 
+void SpatialEffect3D::PrepareTrueGpuSamplePoint(float& x, float& y, float& z, const GridContext3D& grid) const
+{
+    if(!SkipsSpatialSampleWarp())
+    {
+        ApplyAxisScale(x, y, z, grid);
+        ApplyEffectRotation(x, y, z, grid);
+    }
+    if(UsesSpatialSamplingQuantization())
+    {
+        ApplySpatialSamplingQuantization(x, y, z, grid, GetSamplingResolution());
+    }
 }
 
 static thread_local const SpatialEffect3D* g_tls_eval_effect = nullptr;

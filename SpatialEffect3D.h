@@ -134,7 +134,7 @@ inline EffectGridAxisHalfExtents MakeEffectGridAxisHalfExtents(const GridContext
     return {hw, hh, hd};
 }
 
-/** GPU atlas coverage from an arbitrary Spatial Anchor: each axis reaches the farther grid face. */
+/** Origin-local GPU UV domain: each axis reaches the farther active-grid face. */
 inline EffectGridAxisHalfExtents MakeEffectGridOriginLocalHalfExtents(const GridContext3D& grid,
                                                                       const Vector3D& origin,
                                                                       float normalized_scale)
@@ -156,6 +156,11 @@ inline EffectGridAxisHalfExtents MakeEffectGpuAtlasHalfExtents(const GridContext
 {
     return MakeEffectGridOriginLocalHalfExtents(grid, origin, std::max(0.05f, normalized_scale));
 }
+
+/** Same snap EvaluateColorGrid applies before CalculateColorGrid (resolution_pct < 100). */
+void ApplySpatialSamplingQuantization(float& x, float& y, float& z,
+                                      const GridContext3D& grid,
+                                      unsigned int resolution_pct);
 
 inline float EffectGridHorizontalRadialNormXZ(float rx, float rz, float hw, float hd)
 {
@@ -186,21 +191,21 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   (front-left floor = 0,0,0 → right / ceiling / back = 1,1,1).
  *   Target zone bounds change that AABB. Use only for wall/floor/ceiling
  *   surface fields (Surface Ambient) and room-edge fade.
- *   Sample those GPU atlases with SampleGpuRoomVolume01 — no axis flips.
+ *   Sample those GPU fields with SampleGpuRoomVolume01 — no axis flips.
  *   Screen Mirror samples the 2D capture per LED; occupancy still uses
  *   EffectGridSampleOutsideVolume.
  *
  * ORIGIN-LOCAL UV — EffectGpuAtlasUvFromGrid / SampleGpuVolumeOriginLocal01
  *   (+ GLSL `l = p01 * 2.0 - 1.0`):
  *   Maps sample relative to GetEffectOriginGrid(); 0.5 = Spatial Anchor hub.
- *   X→right, Y→up, Z→back. Atlas readback has no Y/Z flip.
+ *   X→right, Y→up, Z→back. Point-eval / UV packing has no Y/Z flip.
  *   Pack GPU origins with EffectGpuAtlasUvFromGrid (unclamped). Sample LEDs with
  *   SampleGpuVolumeOriginLocal01 so samples outside the scaled box are unlit.
-   *   Half-extents are origin → farthest *active grid* face, multiplied by Scale
+ *   Half-extents are origin → farthest *active grid* face, multiplied by Scale
  *   (occupancy in the room; 100% Scale = 1.0). Scale < 1 makes the effect smaller inside the layout;
- *   samples outside that box are unlit — do not clamp UV onto atlas faces
+ *   samples outside that box are unlit — do not clamp UV onto occupancy faces
  *   (that is the four-quadrant artifact). Size is feature size (ring width, etc.)
- *   via u_params, not atlas coverage. Reconstruct world distance with
+ *   via u_params, not occupancy coverage. Reconstruct world distance with
  *   MakeEffectGpuAtlasHalfExtents (same extents as the UV lookup).
  *   All origin-centric GPU volumes and Shader Field projections use this helper.
  *
@@ -380,19 +385,25 @@ public:
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
 
-    /** Once-per-frame GPU field prepare (true program and/or dense atlas preview). */
+    /** Once-per-frame GPU field prepare (program bind / uniforms for true point eval). */
     virtual void PrepareGpuFields(std::uint64_t /*render_sequence*/, float /*time_sec*/, const GridContext3D& /*grid*/) {}
 
     /**
-     * Engines that evaluate volumeMain at exact LED UVs (not atlas). EffectsRender batches
-     * warped sample XYZ then calls BakeTrueGpuVolumeSamples before the LED color loop.
+     * Engines that evaluate volumeMain at exact LED UVs (not a dense atlas). EffectsRender
+     * batches warped+quantized sample XYZ then BakeTrueGpuVolumeSamples before LED colors.
      */
     virtual bool PrefersTrueGpuVolumeSamples() const { return false; }
-    /** sample_xyz: interleaved warped sample positions (same space as CalculateColorGrid). */
+    /** sample_xyz: interleaved warped+quantized sample positions (same space as CalculateColorGrid). */
     virtual void BakeTrueGpuVolumeSamples(const float* /*sample_xyz*/,
                                           int /*count*/,
                                           float /*time*/,
                                           const GridContext3D& /*grid*/) {}
+
+    /**
+     * Match EvaluateColorGrid sample space for true-GPU bake collectors:
+     * optional axis/rotation warp, then sampling quantization when enabled.
+     */
+    void PrepareTrueGpuSamplePoint(float& x, float& y, float& z, const GridContext3D& grid) const;
 
     RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
     static const SpatialEffect3D* GetEvaluatingEffect();

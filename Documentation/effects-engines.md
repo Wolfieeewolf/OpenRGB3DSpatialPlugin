@@ -34,12 +34,12 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 
 ## Shared author rules
 
-1. Pick an engine first. If none fits, that is a new **programmed** effect â€” not a fake Volume file.
-2. One effect â†’ one primary content file (plus kernels/assets it references).
-3. No parallel CPU formula beside a GPU atlas for the same field.
-4. Prefer shared globals (`speed`, `brightness`, `size`, `scale`, â€¦) over one-off knobs when â‰¥2 effects need the same control.
+1. Pick an engine first. If none fits, that is a new **programmed** effect — not a fake Volume file.
+2. One effect → one primary content file (plus kernels/assets it references).
+3. No parallel CPU formula beside a GPU `volumeMain` / field program for the same look (fail closed if GL is unavailable).
+4. Prefer shared globals (`speed`, `brightness`, `size`, `scale`, ...) over one-off knobs when >=2 effects need the same control.
 5. Reject ports that need `iChannel`, `iMouse`, raymarch, webcam, or per-effect native hooks unless you are writing a programmed addon.
-6. **GPU standard:** viewport, preview, and all field atlases run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, â€¦).
+6. **GPU standard:** viewport, preview, Volume/Audio/Media LED+overlay point eval, and remaining field engines (strip kernels, Shader Field atlas where used) run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, ...).
 
 Porting helpers: [shader-conversion.md](shader-conversion.md).
 
@@ -56,14 +56,14 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 category: Volume
 ```
 
-(`category:` in the file is optional for library grouping â€” registration uses the folder. Prefer `category: Volume` in new files.)
+(`category:` in the file is optional for library grouping — registration uses the folder. Prefer `category: Volume` in new files.)
 
 | Header keys | Meaning |
 |-------------|---------|
 | `media_layout:` | `projection` or `omni` selects the shared media prepare codec (not `class_name` forks). Legacy class ids still map if this key is omitted |
 | `sample: room` | Wall/floor/ceiling UV (`SampleGpuRoomVolume01`); default is origin-local occupancy |
 
-(See full Volume / Audio / Media / Shader Field sections below for controls â€” paths above supersede older `effects/spatial` wording.)
+(See full Volume / Audio / Media / Shader Field sections below for controls — paths above supersede older `effects/spatial` wording.)
 
 ## Shader Field engine
 

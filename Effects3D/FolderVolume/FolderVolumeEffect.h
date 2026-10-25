@@ -146,7 +146,7 @@ private:
     float ParamValue(const std::string& name, float detail, float size) const;
     int SliderRaw(const std::string& key) const;
     int ComboIndex(const std::string& key) const;
-    /** True LED sample, or atlas when room-grid overlay pass. */
+    /** Batched true-GPU sample, or single-point evaluateAtPoints on miss. */
     QVector3D SampleField01(float n1, float n2, float n3);
     static std::uint32_t PackNorm01Key(float n1, float n2, float n3);
     void SubmitVolumeGpu(std::uint64_t render_sequence, float time_sec, const float* params, int count);
