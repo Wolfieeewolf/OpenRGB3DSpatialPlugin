@@ -33,7 +33,7 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 
 Multi-pass is a **general review tool** — Action toolbox looks, engine C++, packs, docs, UI wiring, anything we touch. Showcase *and* simple utilities. A pass that concludes “already good → no edit” is a valid outcome. The point is a multi-point attack, not forced rewrites.
 
-**Skill (persistent):** `.cursor/skills/openrgb3d-multipass-review/SKILL.md` — also in the user Agent Store. Ask for “multi-pass” / “run the pass” to load it. Includes thermo-nuclear structure pressure, **CONTRIBUTING hygiene** (dead/debug code, minimal comments, no legacy shims), **deslop**, **better-not-worse** gate, **end-of-run skill self-check** (propose process upgrades; apply only if you OK — not file-specific bans), and **apply fixes/updates** (not review-only) across touched files and dependents.
+**Skill (persistent):** `.cursor/skills/openrgb3d-multipass-review/SKILL.md` — also in the user Agent Store. Ask for “multi-pass” / “run the pass” to load it. Includes thermo-nuclear structure pressure, **CONTRIBUTING hygiene**, **deslop**, **better-not-worse**, **architectural ceiling** (best path inside real limits — no “good enough” when stronger fits), **end-of-run skill self-check** (propose only; apply if you OK), and **apply fixes/updates** across touched files.
 
 ### Attack surfaces (run what applies)
 

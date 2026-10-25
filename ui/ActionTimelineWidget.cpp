@@ -50,27 +50,39 @@ void ActionTimelineWidget::setEffectFilesDir(const filesystem::path& dir)
     effect_files_dir_ = dir;
 }
 
+void ActionTimelineWidget::clearGpuThumbCache()
+{
+    gpu_thumb_cache_.clear();
+    gpu_thumb_queue_.clear();
+    gpu_thumb_queued_keys_.clear();
+    gpu_thumb_pump_scheduled_ = false;
+}
+
 void ActionTimelineWidget::setPack(Action::Pack* pack)
 {
     pack_ = pack;
+    clearGpuThumbCache();
     requestContentRepaint();
 }
 
 void ActionTimelineWidget::setControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms)
 {
     transforms_ = transforms;
+    clearGpuThumbCache();
     requestContentRepaint();
 }
 
 void ActionTimelineWidget::setZoneManager(ZoneManager3D* zone_manager)
 {
     zone_manager_ = zone_manager;
+    clearGpuThumbCache();
     requestContentRepaint();
 }
 
 void ActionTimelineWidget::setRoomWorldBounds(const Action::ApplySpatialContext& room)
 {
     room_bounds_ = room;
+    clearGpuThumbCache();
     requestContentRepaint();
 }
 
@@ -134,6 +146,7 @@ void ActionTimelineWidget::setModel(QVector<Node> roots)
     captureExpandState(&expanded);
     roots_ = std::move(roots);
     restoreExpandState(expanded);
+    clearGpuThumbCache();
     rebuildVisibleRows();
 }
 

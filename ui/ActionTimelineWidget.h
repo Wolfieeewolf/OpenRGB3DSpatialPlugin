@@ -5,6 +5,8 @@
 #include "Actions/ActionApplier.h"
 #include "LEDPosition3D.h"
 #include "filesystem.h"
+#include <QHash>
+#include <QImage>
 #include <QMenu>
 #include <QPixmap>
 #include <QPoint>
@@ -128,6 +130,15 @@ signals:
     void stopPreviewRequested();
     /** A clip was added via paste/duplicate/vertical span (selection already updated). */
     void clipCreated(int track_index, int clip_index);
+
+private slots:
+    /**
+     * Drain GPU thumb queue on the UI thread.
+     * Ceiling: SpatialOffscreenGlPool is a single shared offscreen context (extra
+     * contexts destabilize Windows drivers — see pool header). Thumbs therefore
+     * cannot run on a background GL thread; we cache + defer on this pool instead.
+     */
+    void pumpGpuThumbQueue();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -260,6 +271,28 @@ private:
     void paintClipIntensityCurve(QPainter& p, const QRect& br, const Action::Clip& clip) const;
     void paintTimelineContent(QPainter& p) const;
 
+    struct GpuThumbRequest
+    {
+        QString key;
+        Action::Clip clip;
+        std::vector<float> xyz;
+        int sample_w = 0;
+        int rows = 0;
+        bool field = false;
+        bool particle = false;
+        bool ribbon = false;
+        bool builtin = false;
+    };
+    void clearGpuThumbCache();
+    void enqueueGpuThumb(GpuThumbRequest req) const;
+    QImage renderGpuEngineThumb(const GpuThumbRequest& req) const;
+    QString makeGpuThumbCacheKey(const Action::Clip& sample,
+                                 const Action::Target& target,
+                                 int sample_w,
+                                 int rows,
+                                 int led_n,
+                                 const std::vector<float>& xyz) const;
+
     Action::Pack* pack_ = nullptr;
     std::vector<std::unique_ptr<ControllerTransform>>* transforms_ = nullptr;
     ZoneManager3D* zone_manager_ = nullptr;
@@ -271,6 +304,11 @@ private:
     /** Cached timeline without playhead — playhead ticks blit this instead of re-rasterizing clips. */
     mutable QPixmap content_cache_;
     mutable bool content_dirty_ = true;
+    /** GPU field/particle/ribbon thumbs — rebuilt off paintEvent so add/remove stays snappy. */
+    mutable QHash<QString, QImage> gpu_thumb_cache_;
+    mutable QVector<GpuThumbRequest> gpu_thumb_queue_;
+    mutable QSet<QString> gpu_thumb_queued_keys_;
+    mutable bool gpu_thumb_pump_scheduled_ = false;
     filesystem::path effect_files_dir_;
     double pixels_per_second_ = 80.0;
     int row_height_ = 28;

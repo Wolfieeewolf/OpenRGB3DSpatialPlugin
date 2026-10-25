@@ -9,6 +9,7 @@
 #include "Actions/ActionParticleField.h"
 #include "Actions/ActionRibbonField.h"
 #include "Actions/ActionVolumeField.h"
+#include "SpatialOffscreenGlPool.h"
 #include "ZoneManager3D.h"
 
 #include <cstdint>
@@ -17,6 +18,7 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QImage>
 #include <QKeyEvent>
@@ -26,10 +28,12 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QSet>
+#include <QTimer>
 #include <QWheelEvent>
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace
 {
@@ -39,8 +43,274 @@ QColor RgbToQColor(RGBColor c)
     return QColor(RGBGetRValue(c), RGBGetGValue(c), RGBGetBValue(c));
 }
 
+quint32 MixHash(quint32 h, quint32 v)
+{
+    h ^= v;
+    h *= 16777619u;
+    return h;
+}
+
+quint32 HashFloatBits(quint32 h, float v)
+{
+    quint32 bits = 0;
+    static_assert(sizeof(bits) == sizeof(v), "float size");
+    std::memcpy(&bits, &v, sizeof(bits));
+    return MixHash(h, bits);
+}
+
+quint32 HashClipLook(const Action::Clip& sample)
+{
+    quint32 h = 2166136261u;
+    h = HashFloatBits(h, sample.speed);
+    h = HashFloatBits(h, sample.intensity);
+    h = HashFloatBits(h, sample.min_intensity);
+    h = HashFloatBits(h, sample.max_intensity);
+    h = HashFloatBits(h, sample.pulse_length);
+    h = HashFloatBits(h, sample.origin_offset_x);
+    h = HashFloatBits(h, sample.origin_offset_y);
+    h = HashFloatBits(h, sample.origin_offset_z);
+    h = HashFloatBits(h, sample.effect_size);
+    h = MixHash(h, (quint32)sample.start_ms);
+    h = MixHash(h, (quint32)sample.end_ms);
+    h = MixHash(h, (quint32)sample.period_ms);
+    h = MixHash(h, (quint32)sample.color);
+    h = MixHash(h, (quint32)sample.color_from);
+    h = MixHash(h, (quint32)sample.color_to);
+    h = MixHash(h, (quint32)sample.direction);
+    h = MixHash(h, (quint32)sample.reverse);
+    h = MixHash(h, (quint32)sample.flip_h);
+    h = MixHash(h, (quint32)sample.flip_v);
+    h = MixHash(h, (quint32)sample.rotate_quarters);
+    h = MixHash(h, (quint32)sample.play_bounds);
+    for(char c : sample.origin_ref)
+    {
+        h = MixHash(h, (quint32)(unsigned char)c);
+    }
+    for(const Action::GradientStop& s : sample.gradient)
+    {
+        h = HashFloatBits(h, s.pos);
+        h = MixHash(h, (quint32)s.color);
+    }
+    for(const Action::CurvePoint& s : sample.intensity_curve)
+    {
+        h = HashFloatBits(h, s.pos);
+        h = HashFloatBits(h, s.value);
+    }
+    for(const Action::CurvePoint& s : sample.period_curve)
+    {
+        h = HashFloatBits(h, s.pos);
+        h = HashFloatBits(h, s.value);
+    }
+    return h;
+}
+
 } // namespace
 
+QString ActionTimelineWidget::makeGpuThumbCacheKey(const Action::Clip& sample,
+                                                    const Action::Target& target,
+                                                    int sample_w,
+                                                    int rows,
+                                                    int led_n,
+                                                    const std::vector<float>& xyz) const
+{
+    quint32 xyz_hash = 2166136261u;
+    for(float v : xyz)
+    {
+        xyz_hash = HashFloatBits(xyz_hash, v);
+    }
+    return QStringLiteral("%1|%2|%3|%4|%5|%6|%7")
+        .arg(QString::fromStdString(Action::ClipFileId(sample)))
+        .arg(targetKey(target))
+        .arg(sample_w)
+        .arg(rows)
+        .arg(led_n)
+        .arg(HashClipLook(sample), 0, 16)
+        .arg(xyz_hash, 0, 16);
+}
+
+void ActionTimelineWidget::enqueueGpuThumb(GpuThumbRequest req) const
+{
+    if(req.key.isEmpty() || gpu_thumb_queued_keys_.contains(req.key))
+    {
+        return;
+    }
+    gpu_thumb_queued_keys_.insert(req.key);
+    // Newest clip first — add/remove should light the clip you just touched ASAP.
+    gpu_thumb_queue_.prepend(std::move(req));
+    if(gpu_thumb_pump_scheduled_)
+    {
+        return;
+    }
+    gpu_thumb_pump_scheduled_ = true;
+    QTimer::singleShot(0, const_cast<ActionTimelineWidget*>(this), &ActionTimelineWidget::pumpGpuThumbQueue);
+}
+
+QImage ActionTimelineWidget::renderGpuEngineThumb(const GpuThumbRequest& req) const
+{
+    QImage img(req.sample_w, req.rows, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::black);
+    if(req.xyz.empty() || req.sample_w <= 0 || req.rows <= 0)
+    {
+        return img;
+    }
+
+    const int n = (int)req.xyz.size() / 3;
+    if(n <= 0 || n != req.rows)
+    {
+        return img;
+    }
+
+    Action::ClipOrigin01 origin;
+    if(room_bounds_.has_world_bounds)
+    {
+        origin = Action::ResolveClipOrigin01(req.clip,
+                                            room_bounds_.min_x, room_bounds_.max_x,
+                                            room_bounds_.min_y, room_bounds_.max_y,
+                                            room_bounds_.min_z, room_bounds_.max_z,
+                                            room_bounds_.reference_points);
+    }
+    else
+    {
+        origin = Action::ResolveClipOrigin01(req.clip, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
+    }
+    Action::SetActiveClipOrigin01(origin);
+    Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+    Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+    Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+
+    const int dur = std::max(1, req.clip.end_ms - req.clip.start_ms);
+    const int time_keys = std::max(4, std::min(req.sample_w, 8));
+    static std::uint64_t s_timeline_gpu_seq = 0;
+    std::vector<float> rgb((size_t)n * 3u, 0.0f);
+    std::vector<float> xyz = req.xyz;
+
+    for(int k = 0; k < time_keys; ++k)
+    {
+        const float t = (time_keys <= 1) ? 0.0f : (float)k / (float)(time_keys - 1);
+        const int ms = req.clip.start_ms + (int)std::lround(t * (float)dur);
+        const int sample_ms = std::min(std::max(ms, req.clip.start_ms), req.clip.end_ms - 1);
+        const std::uint64_t seq = ++s_timeline_gpu_seq;
+        bool prepared = false;
+        if(req.field)
+        {
+            prepared = Action::volume_field::PrepareForClip(req.clip, sample_ms, seq);
+        }
+        else if(req.particle)
+        {
+            prepared = Action::particle_field::PrepareForClip(req.clip, sample_ms, seq);
+        }
+        else if(req.ribbon)
+        {
+            prepared = Action::ribbon_field::PrepareForClip(req.clip, sample_ms, seq);
+        }
+        else if(req.builtin)
+        {
+            prepared = Action::builtin_gpu::PrepareForClip(req.clip, sample_ms, seq);
+        }
+        if(!prepared)
+        {
+            break;
+        }
+
+        bool ok = false;
+        if(req.field)
+        {
+            ok = Action::volume_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
+        }
+        else if(req.particle)
+        {
+            ok = Action::particle_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
+        }
+        else if(req.ribbon)
+        {
+            ok = Action::ribbon_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
+        }
+        else if(req.builtin)
+        {
+            ok = Action::builtin_gpu::EvaluateAtPoints(xyz.data(), n, rgb.data());
+        }
+        if(!ok)
+        {
+            break;
+        }
+
+        float intensity = std::clamp(req.clip.intensity, 0.0f, 1.0f);
+        Action::ModulateClipIntensity(req.clip, Action::ClipSpanProgress(req.clip, sample_ms),
+                                      Action::ClipPeriodProgress(req.clip, sample_ms), &intensity);
+        const int x0 = (k * req.sample_w) / time_keys;
+        const int x1 = ((k + 1) * req.sample_w) / time_keys;
+        for(int r = 0; r < n; ++r)
+        {
+            const float rr = rgb[(size_t)r * 3u + 0u];
+            const float gg = rgb[(size_t)r * 3u + 1u];
+            const float bb = rgb[(size_t)r * 3u + 2u];
+            const float peak = std::max(rr, std::max(gg, bb));
+            QColor pix(0, 0, 0);
+            if(peak * intensity >= 0.02f)
+            {
+                pix = QColor(
+                    (int)std::lround(std::clamp(rr * intensity, 0.0f, 1.0f) * 255.0f),
+                    (int)std::lround(std::clamp(gg * intensity, 0.0f, 1.0f) * 255.0f),
+                    (int)std::lround(std::clamp(bb * intensity, 0.0f, 1.0f) * 255.0f));
+            }
+            for(int x = x0; x < x1; ++x)
+            {
+                img.setPixelColor(x, r, pix);
+            }
+        }
+    }
+    return img;
+}
+
+void ActionTimelineWidget::pumpGpuThumbQueue()
+{
+    gpu_thumb_pump_scheduled_ = false;
+    if(gpu_thumb_queue_.isEmpty())
+    {
+        return;
+    }
+
+    // Host GL not live yet (editor opened before viewport init) — retry shortly.
+    if(!SpatialOffscreenGlPool::hostContextReady())
+    {
+        gpu_thumb_pump_scheduled_ = true;
+        QTimer::singleShot(32, this, &ActionTimelineWidget::pumpGpuThumbQueue);
+        return;
+    }
+
+    // Spend a short budget filling thumbs without freezing the UI thread.
+    // Still uses the single shared offscreen pool (no second context).
+    QElapsedTimer budget;
+    budget.start();
+    constexpr qint64 kBudgetMs = 12;
+    bool any = false;
+    while(!gpu_thumb_queue_.isEmpty() && budget.elapsed() < kBudgetMs)
+    {
+        GpuThumbRequest req = std::move(gpu_thumb_queue_.front());
+        gpu_thumb_queue_.pop_front();
+        gpu_thumb_queued_keys_.remove(req.key);
+
+        if(!gpu_thumb_cache_.contains(req.key))
+        {
+            if(gpu_thumb_cache_.size() >= 64)
+            {
+                gpu_thumb_cache_.clear();
+            }
+            gpu_thumb_cache_.insert(req.key, renderGpuEngineThumb(req));
+            any = true;
+        }
+    }
+
+    if(any)
+    {
+        requestContentRepaint();
+    }
+    if(!gpu_thumb_queue_.isEmpty())
+    {
+        gpu_thumb_pump_scheduled_ = true;
+        QTimer::singleShot(0, this, &ActionTimelineWidget::pumpGpuThumbQueue);
+    }
+}
 
 void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, const PaintClip& pb,
                                                        const Action::Clip& sample) const
@@ -76,22 +346,6 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         ? 1
         : (!order.empty() ? (int)order.size() : std::max(1, pb.led_count > 1 ? pb.led_count : 24));
 
-    // Cap LED preview rows — full clip height × many LEDs stalls the UI thread.
-    constexpr int kMaxPreviewRows = 16;
-    const int max_rows = pb.single_led_row ? 1 : std::max(2, std::min(br.height(), kMaxPreviewRows));
-    int skip = (led_n > max_rows) ? std::max(1, (led_n + max_rows - 1) / max_rows) : 1;
-    if(skip > 1 && (skip % 2) == 0)
-    {
-        ++skip;
-    }
-    const int rows = pb.single_led_row ? 1 : std::max(1, (led_n + skip - 1) / skip);
-
-    // Sample fewer time columns then scale up — clip thumbnails are illustrative.
-    constexpr int kMaxSampleWidth = 96;
-    const int sample_w = std::max(1, std::min(br.width(), kMaxSampleWidth));
-    QImage img(sample_w, rows, QImage::Format_ARGB32_Premultiplied);
-    img.fill(Qt::transparent);
-
     const int dur = std::max(1, sample.end_ms - sample.start_ms);
     const std::string effect_id = Action::ClipFileId(sample);
     const bool world_eval = Action::ActionScriptUsesWorld(effect_id)
@@ -102,6 +356,8 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     const bool media_eval = Action::IsMediaClip(sample);
     const bool builtin_eval = Action::builtin_gpu::Uses(effect_id)
         && Action::script::FieldShader(effect_id).empty();
+    const bool gpu_engine = field_eval || particle_eval || ribbon_eval || builtin_eval;
+
     auto applyOrigin = [&]() {
         Action::ClipOrigin01 origin;
         if(room_bounds_.has_world_bounds)
@@ -121,6 +377,109 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
         Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
     };
+
+    // GPU engines — best path under the single shared offscreen GL pool:
+    // batched EvaluateAtPoints, low-res, cached, deferred off paintEvent.
+    // Fail closed to black (no gradient / CPU fake).
+    if(gpu_engine)
+    {
+        constexpr int kGpuMaxW = 32;
+        constexpr int kGpuMaxRows = 8;
+        const int max_rows = pb.single_led_row ? 1 : std::max(2, std::min(br.height(), kGpuMaxRows));
+        int skip = (led_n > max_rows) ? std::max(1, (led_n + max_rows - 1) / max_rows) : 1;
+        if(skip > 1 && (skip % 2) == 0)
+        {
+            ++skip;
+        }
+        const int rows = pb.single_led_row ? 1 : std::max(1, (led_n + skip - 1) / skip);
+        const int sample_w = std::max(1, std::min(br.width(), kGpuMaxW));
+
+        std::vector<int> row_led;
+        row_led.reserve((size_t)rows);
+        for(int led = 0; led < led_n && (int)row_led.size() < rows; led += skip)
+        {
+            row_led.push_back(led);
+        }
+        const int n = (int)row_led.size();
+        std::vector<float> xyz((size_t)n * 3u);
+        for(int r = 0; r < n; ++r)
+        {
+            const int led_slot = row_led[(size_t)r];
+            float nx = 0.5f;
+            float ny = 0.5f;
+            float nz = 0.5f;
+            if(!order.empty() && !nxs.empty())
+            {
+                const int idx = order[(size_t)std::clamp(led_slot, 0, (int)order.size() - 1)];
+                if(idx < (int)nxs.size())
+                {
+                    nx = nxs[(size_t)idx];
+                    ny = nys[(size_t)idx];
+                    nz = nzs[(size_t)idx];
+                }
+            }
+            else if(pb.single_led_row)
+            {
+                const float u = (pb.led_count <= 1)
+                    ? 0.5f
+                    : (float)pb.led_index / (float)(pb.led_count - 1);
+                nx = u;
+                ny = 0.45f + 0.1f * u;
+                nz = 0.5f;
+            }
+            else
+            {
+                const float u = (led_n <= 1) ? 0.5f : (float)led_slot / (float)(led_n - 1);
+                nx = u;
+                ny = 0.45f + 0.1f * u;
+                nz = 0.5f;
+            }
+            Action::ApplyClipUvTransform(sample, &nx, &ny);
+            xyz[(size_t)r * 3u + 0u] = nx;
+            xyz[(size_t)r * 3u + 1u] = ny;
+            xyz[(size_t)r * 3u + 2u] = nz;
+        }
+
+        const QString cache_key = makeGpuThumbCacheKey(sample, pb.view_target, sample_w, n, led_n, xyz);
+        const auto cached = gpu_thumb_cache_.constFind(cache_key);
+        if(cached != gpu_thumb_cache_.cend())
+        {
+            p.setRenderHint(QPainter::SmoothPixmapTransform, false);
+            p.drawImage(br, cached.value());
+            return;
+        }
+
+        GpuThumbRequest req;
+        req.key = cache_key;
+        req.clip = sample;
+        req.xyz = std::move(xyz);
+        req.sample_w = sample_w;
+        req.rows = n;
+        req.field = field_eval;
+        req.particle = particle_eval;
+        req.ribbon = ribbon_eval;
+        req.builtin = builtin_eval;
+        enqueueGpuThumb(std::move(req));
+
+        p.fillRect(br, QColor(0, 0, 0));
+        return;
+    }
+
+    // Cap LED preview rows — full clip height × many LEDs stalls the UI thread.
+    constexpr int kMaxPreviewRows = 16;
+    const int max_rows = pb.single_led_row ? 1 : std::max(2, std::min(br.height(), kMaxPreviewRows));
+    int skip = (led_n > max_rows) ? std::max(1, (led_n + max_rows - 1) / max_rows) : 1;
+    if(skip > 1 && (skip % 2) == 0)
+    {
+        ++skip;
+    }
+    const int rows = pb.single_led_row ? 1 : std::max(1, (led_n + skip - 1) / skip);
+
+    // Sample fewer time columns then scale up — clip thumbnails are illustrative.
+    constexpr int kMaxSampleWidth = 96;
+    const int sample_w = std::max(1, std::min(br.width(), kMaxSampleWidth));
+    QImage img(sample_w, rows, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
 
     // Throttle field prepares — full rebuild per pixel column stalls the editor.
     int last_prepare_ms = -1;
@@ -356,22 +715,7 @@ void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const P
     p.setBrush(QColor(8, 8, 10));
     p.drawRect(br);
 
-    // GPU field/particle/ribbon thumbs must not Sample01 per timeline pixel — that
-    // freezes the UI for seconds (compile + ~1.5k makeCurrent/readbacks). Gradient
-    // swatch is enough; live Preview still does batched EvaluateAtPoints.
-    const std::string effect_id = Action::ClipFileId(sample);
-    const bool gpu_engine_thumb = Action::script::UsesField(effect_id)
-        || Action::script::UsesParticles(effect_id)
-        || Action::script::UsesRibbons(effect_id)
-        || (Action::builtin_gpu::Uses(effect_id) && Action::script::FieldShader(effect_id).empty());
-    if(gpu_engine_thumb)
-    {
-        paintClipGradientBar(p, br, sample, 255);
-    }
-    else
-    {
-        paintClipSpatialRaster(p, br, pb, sample);
-    }
+    paintClipSpatialRaster(p, br, pb, sample);
 
     if(sample.effect_id == "media_text" && sample.media_text.empty() && br.width() > 24)
     {
