@@ -657,6 +657,31 @@ void ActionToolBar::reloadUserGradients()
     }
 }
 
+void ActionToolBar::reloadUserCurves()
+{
+    if(!tabs_ || curves_page_index_ < 0 || curves_page_index_ >= tabs_->count())
+    {
+        return;
+    }
+    QWidget* old = tabs_->widget(curves_page_index_);
+    const bool was_current = tabs_->currentIndex() == curves_page_index_;
+    const bool was_enabled = tabs_->isTabEnabled(curves_page_index_);
+    QWidget* replacement = BuildCurvesPage(
+        this,
+        user_curves_path_,
+        [this](const QString& id) { emit curvePresetClicked(id); });
+    tabs_->removeTab(curves_page_index_);
+    tabs_->insertTab(curves_page_index_, replacement, QStringLiteral("Curves"));
+    tabs_->setTabToolTip(curves_page_index_,
+                         QStringLiteral("Drag onto a clip once the timeline has one."));
+    old->deleteLater();
+    setCurvesEnabled(was_enabled);
+    if(was_current)
+    {
+        tabs_->setCurrentIndex(curves_page_index_);
+    }
+}
+
 void ActionToolBar::setCurvesEnabled(bool enabled)
 {
     if(!tabs_ || curves_page_index_ < 0 || curves_page_index_ >= tabs_->count())

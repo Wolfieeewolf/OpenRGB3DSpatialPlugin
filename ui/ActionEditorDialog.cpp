@@ -738,12 +738,26 @@ void ActionEditorDialog::buildUi()
     setColorButton(color_to_button_, ToRGBColor(0, 128, 255));
 
     connect(duration_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onDurationChanged);
+    connect(loop_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        if(suppress_ui_)
+        {
+            return;
+        }
+        applyMetaToPack();
+        markPreviewDirtyIfPlaying();
+    });
     connect(controllers_button_, &QPushButton::clicked, this, &ActionEditorDialog::onPickControllers);
     connect(map_controllers_button_, &QPushButton::clicked, this, &ActionEditorDialog::onMapControllers);
     connect(timeline_, &ActionTimelineWidget::playheadChanged, this, &ActionEditorDialog::onPlayheadChanged);
     connect(timeline_, &ActionTimelineWidget::clipSelected, this, &ActionEditorDialog::onClipSelected);
-    connect(timeline_, &ActionTimelineWidget::clipEdited, this, &ActionEditorDialog::onClipSelected);
-    connect(timeline_, &ActionTimelineWidget::clipCreated, this, &ActionEditorDialog::onClipSelected);
+    connect(timeline_, &ActionTimelineWidget::clipEdited, this, [this](int track, int clip) {
+        onClipSelected(track, clip);
+        markPreviewDirtyIfPlaying();
+    });
+    connect(timeline_, &ActionTimelineWidget::clipCreated, this, [this](int track, int clip) {
+        onClipSelected(track, clip);
+        markPreviewDirtyIfPlaying();
+    });
     connect(timeline_, &ActionTimelineWidget::clipDeleteRequested, this, &ActionEditorDialog::onClipDeleteRequested);
     connect(timeline_, &ActionTimelineWidget::effectAddRequested, this, &ActionEditorDialog::onEffectAddRequested);
     connect(timeline_, &ActionTimelineWidget::gradientPresetApplied, this, &ActionEditorDialog::onGradientPresetApplied);
@@ -1413,10 +1427,7 @@ void ActionEditorDialog::onDurationChanged(int value)
         }
     }
     timeline_->setDurationMs(value);
-    if(player_.IsPlaying())
-    {
-        preview_pack_dirty_ = true;
-    }
+    markPreviewDirtyIfPlaying();
     applyClipToForm();
     timeline_->requestContentRepaint();
 }
@@ -1508,17 +1519,10 @@ void ActionEditorDialog::updateSelectionActions()
         QString title = QStringLiteral("Select a clip to edit");
         if(has)
         {
-            title = QString::fromStdString(Action::ClipFileId(*clip));
             const QList<ActionCatalog::Entry> entries = ActionCatalog::LoadEntries(
                 PluginSettingsPaths::ActionToolboxDir(tab_ ? tab_->resource_manager : nullptr));
-            for(const ActionCatalog::Entry& entry : entries)
-            {
-                if(entry.id == title)
-                {
-                    title = entry.name;
-                    break;
-                }
-            }
+            title = ActionCatalog::EffectNameForId(
+                entries, QString::fromStdString(Action::ClipFileId(*clip)));
         }
         props_hint_->setText(title);
     }
@@ -1656,10 +1660,7 @@ void ActionEditorDialog::onRemoveClip()
         timeline_->setSelectedClip(selected_track_, selected_clip_);
         timeline_->requestContentRepaint();
     }
-    if(player_.IsPlaying())
-    {
-        preview_pack_dirty_ = true;
-    }
+    markPreviewDirtyIfPlaying();
     suppress_ui_ = false;
     applyClipToForm();
     updateSelectionActions();
@@ -2012,6 +2013,14 @@ void ActionEditorDialog::onPreviewTrack(int track_index, int start_ms)
                      ? QStringLiteral("Previewing \"%1\" from %2 ms...").arg(label).arg(start_ms)
                      : QStringLiteral("Previewing \"%1\"...").arg(label),
                  true);
+}
+
+void ActionEditorDialog::markPreviewDirtyIfPlaying()
+{
+    if(player_.IsPlaying())
+    {
+        preview_pack_dirty_ = true;
+    }
 }
 
 void ActionEditorDialog::syncPreviewPackFromAuthoring()

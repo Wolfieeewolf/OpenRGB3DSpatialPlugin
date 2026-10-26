@@ -10,6 +10,7 @@
 #include "Actions/ActionScript.h"
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
+#include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
 #include "VirtualController3D.h"
 #include "ZoneManager3D.h"
@@ -695,11 +696,8 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
     selected_clip_ = (int)pack_.tracks[(size_t)track].clips.size() - 1;
     timeline_->setPack(&pack_);
     timeline_->setSelectedClip(selected_track_, selected_clip_);
-    if(player_.IsPlaying())
-    {
-        // Solo preview must refresh via syncPreviewPackFromAuthoring, not raw pack_.
-        preview_pack_dirty_ = true;
-    }
+    // Solo preview must refresh via syncPreviewPackFromAuthoring, not raw pack_.
+    markPreviewDirtyIfPlaying();
     applyClipToForm();
     updateSelectionActions();
     timeline_->requestContentRepaint();
@@ -714,7 +712,12 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
         {
             space_tip = QStringLiteral("Play on this track's lights");
         }
-        const QString title = effect_id.isEmpty() ? QString::fromStdString(Action::ClipFileId(clip)) : effect_id;
+        const QString raw_id = effect_id.isEmpty()
+            ? QString::fromStdString(Action::ClipFileId(clip))
+            : effect_id;
+        const QList<ActionCatalog::Entry> entries = ActionCatalog::LoadEntries(
+            PluginSettingsPaths::ActionToolboxDir(tab_ ? tab_->resource_manager : nullptr));
+        const QString title = ActionCatalog::EffectNameForId(entries, raw_id);
         status_label_->setText(QStringLiteral("Added %1 — %2").arg(title, space_tip));
     }
 }

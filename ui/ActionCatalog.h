@@ -147,6 +147,23 @@ inline QString EffectTooltip(const Entry& e)
     return name + QStringLiteral(" — ") + desc + QStringLiteral(" — drag onto a timeline row");
 }
 
+/** Human label for a toolbox effect id; falls back to the id when unknown. */
+inline QString EffectNameForId(const QList<Entry>& entries, const QString& id)
+{
+    if(id.isEmpty())
+    {
+        return QStringLiteral("Effect");
+    }
+    for(const Entry& e : entries)
+    {
+        if(e.id.compare(id, Qt::CaseInsensitive) == 0)
+        {
+            return e.name.isEmpty() ? id : e.name;
+        }
+    }
+    return id;
+}
+
 inline QList<ColorEntry> ColorEntries()
 {
     return {

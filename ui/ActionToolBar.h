@@ -19,6 +19,7 @@ public:
                                QWidget* parent = nullptr);
 
     void reloadUserGradients();
+    void reloadUserCurves();
     void setCurvesEnabled(bool enabled);
 
 signals:

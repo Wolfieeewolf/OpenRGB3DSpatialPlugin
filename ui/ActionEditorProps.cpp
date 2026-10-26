@@ -86,6 +86,7 @@ void ActionEditorDialog::onToolbarColorClicked(unsigned int rgb)
     b->gradient = {{0.0f, color}};
     setColorButton(color_button_, b->color);
     syncGradientBar();
+    markPreviewDirtyIfPlaying();
     timeline_->requestContentRepaint();
 }
 
@@ -121,6 +122,7 @@ void ActionEditorDialog::onToolbarCurveClicked(const QString& preset_id)
             curve_combo_->setCurrentIndex(idx);
         }
     }
+    markPreviewDirtyIfPlaying();
     timeline_->requestContentRepaint();
 }
 
@@ -147,6 +149,7 @@ void ActionEditorDialog::onCurvePresetApplied(int track_index, int clip_index, c
     {
         ActionUserCurves::Apply(b, preset_id, PluginSettingsPaths::ActionEditorCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     }
+    markPreviewDirtyIfPlaying();
     applyClipToForm();
     timeline_->requestContentRepaint();
 }
@@ -199,6 +202,7 @@ void ActionEditorDialog::applyGradientPresetToClip(Action::Clip* b, const QStrin
         }
         syncGradientBar();
     }
+    markPreviewDirtyIfPlaying();
     if(timeline_)
     {
         timeline_->requestContentRepaint();
@@ -857,6 +861,7 @@ void ActionEditorDialog::onCurvePointsChanged()
             suppress_ui_ = false;
         }
     }
+    markPreviewDirtyIfPlaying();
     scheduleTimelineRefresh();
 }
 
@@ -888,6 +893,7 @@ void ActionEditorDialog::onPeriodCurvePointsChanged()
         period_curve_combo_->setCurrentIndex(idx >= 0 ? idx : period_curve_combo_->findData(QStringLiteral("custom")));
         suppress_ui_ = false;
     }
+    markPreviewDirtyIfPlaying();
     scheduleTimelineRefresh();
 }
 
@@ -916,6 +922,7 @@ void ActionEditorDialog::onCurvePresetChanged()
         ActionUserCurves::Apply(b, cid, PluginSettingsPaths::ActionEditorCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     }
     syncCurveBar();
+    markPreviewDirtyIfPlaying();
     timeline_->requestContentRepaint();
 }
 
@@ -944,6 +951,7 @@ void ActionEditorDialog::onPeriodCurvePresetChanged()
         Action::ApplyBuiltinPeriodCurve(b, cid.toUtf8().constData());
     }
     syncPeriodCurveBar();
+    markPreviewDirtyIfPlaying();
     timeline_->requestContentRepaint();
 }
 
@@ -977,6 +985,7 @@ void ActionEditorDialog::onBrowseMediaPath()
             b->effect_id = "media_gif";
         }
     }
+    markPreviewDirtyIfPlaying();
     timeline_->requestContentRepaint();
     applyClipToForm();
 }
@@ -1016,12 +1025,21 @@ void ActionEditorDialog::onSaveUserCurve()
         return;
     }
     refillCurvePresets();
+    if(effect_toolbar_)
+    {
+        effect_toolbar_->reloadUserCurves();
+    }
     const int idx = curve_combo_->findData(entry.id);
     if(idx >= 0)
     {
         suppress_ui_ = true;
         curve_combo_->setCurrentIndex(idx);
         suppress_ui_ = false;
+    }
+    markPreviewDirtyIfPlaying();
+    if(status_label_)
+    {
+        status_label_->setText(QStringLiteral("Saved curve preset %1").arg(entry.label));
     }
     timeline_->requestContentRepaint();
 }
@@ -1065,6 +1083,7 @@ void ActionEditorDialog::onGradientStopsChanged()
     {
         remove_color_button_->setEnabled(b->gradient.size() > 1);
     }
+    markPreviewDirtyIfPlaying();
     scheduleTimelineRefresh();
 }
 
@@ -1105,6 +1124,7 @@ void ActionEditorDialog::onAddColorStop()
     {
         remove_color_button_->setEnabled(b->gradient.size() > 1);
     }
+    markPreviewDirtyIfPlaying();
     timeline_->requestContentRepaint();
 }
 
@@ -1138,6 +1158,7 @@ void ActionEditorDialog::onRemoveColorStop()
     {
         remove_color_button_->setEnabled(b->gradient.size() > 1);
     }
+    markPreviewDirtyIfPlaying();
     timeline_->requestContentRepaint();
 }
 
@@ -1525,10 +1546,7 @@ void ActionEditorDialog::applyFormToSelectedClip()
     {
         b->gradient.front().color = c;
     }
-    if(player_.IsPlaying())
-    {
-        preview_pack_dirty_ = true;
-    }
+    markPreviewDirtyIfPlaying();
     scheduleTimelineRefresh();
 }
 
@@ -1567,6 +1585,7 @@ void ActionEditorDialog::onTypeChanged()
             }
         }
         Action::EnsureClipGradient(b);
+        markPreviewDirtyIfPlaying();
     }
     updatePropVisibility();
     syncGradientBar();

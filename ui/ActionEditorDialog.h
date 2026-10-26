@@ -109,6 +109,8 @@ private:
     /** Coalesce slider/keystroke-driven timeline rasters (~60ms). */
     void scheduleTimelineRefresh();
     void syncPreviewPackFromAuthoring();
+    /** Live-edit during preview: refresh player pack on next tick. */
+    void markPreviewDirtyIfPlaying();
     void updatePropVisibility();
     void syncGradientBar();
     void syncCurveBar();

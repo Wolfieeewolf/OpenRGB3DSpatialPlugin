@@ -33,7 +33,7 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 
 Multi-pass is a **general review tool** — Action toolbox looks, engine C++, packs, docs, UI wiring, anything we touch. Showcase *and* simple utilities. A pass that concludes “already good → no edit” is a valid outcome. The point is a multi-point attack, not forced rewrites.
 
-**Skill (persistent):** `.cursor/skills/openrgb3d-multipass-review/SKILL.md` — also in the user Agent Store. Ask for “multi-pass” / “run the pass” to load it. Includes thermo-nuclear structure pressure, **CONTRIBUTING hygiene**, **deslop**, **better-not-worse**, **architectural ceiling** (best path inside real limits — no “good enough” when stronger fits), **end-of-run skill self-check** (propose only; apply if you OK), and **apply fixes/updates** across touched files.
+**Skill (persistent):** `.cursor/skills/openrgb3d-multipass-review/SKILL.md` — also in the user Agent Store. Ask for “multi-pass” / “run the pass” to load it. Includes thermo-nuclear structure pressure, **CONTRIBUTING hygiene**, **deslop**, **better-not-worse**, **architectural ceiling**, **wiring + UI integrity**, **ratchet re-check** (re-apply new gates on recent/high-traffic surfaces — not a full historical redo), **end-of-run skill self-check** (propose only; apply if you OK), and **apply fixes/updates** across touched files.
 
 ### Attack surfaces (run what applies)
 
@@ -41,16 +41,16 @@ Multi-pass is a **general review tool** — Action toolbox looks, engine C++, pa
 |------|----------------|
 | 1 | **Purpose / role** — does it fulfill the intended job? A simple tool must still *be* that tool (e.g. `blink` blinks, `solid` holds a level, `chase` travels). Wrong category, misleading name, or “looks cool but isn’t the role” fails. |
 | 2 | **Correctness** — compiles/loads, headers match body (`shader:` / `particles:` / `ribbons:`), swatch/description match, knobs wired, no dead code |
-| 3 | **Fit & integration** — check everything it touches: engines, applier, player loop modes, Movie Sync / Triggers packs, Action Editor toolbar, docs, AppData install paths. No orphan headers, broken call sites, or “works alone / breaks in stack”. |
+| 3 | **Fit, integration & wiring** — engines, applier, player, Movie Sync / Triggers, Action Editor toolbar, docs, AppData; **trace signals/slots and knob↔field links**; live-preview dirty flag must cover mutators that bypass the form-write path; no orphans, half-wired actions, or “works alone / breaks in stack”. |
 | 4 | **Seams & bugs** — once→black, forever/`while_active` continuous `u_time`, no linger/jump/recycle, intensity/size do something real |
-| 5 | **Readability / UX** — sparse-LED survival for GPU looks; clear UI/docs behaviour for utilities |
+| 5 | **Readability / UX + UI integrity** — sparse-LED survival; clear utility behaviour; **human UI copy** (no placeholder/raw-id junk); usable layout; broken/empty controls fail |
 | 6 | **Character polish** — deepen motion/colour/language only if earlier passes left it meh *and* that fits the role (don’t turn `solid` into aurora) |
 | 7–9 | Structure / deslop+CONTRIBUTING (the tidy pass) / close-the-loop + diff tidy sweep; **net better** incl. snappy/feel, or revert |
 | 10 | **Skill self-check** — propose “do existing passes better” ideas; don’t auto-edit the skill or memorialize one-off bugs |
 
-**Positive prompts (keep):** honest role, bright cores / clear motion where the look needs it, wired knobs, matches callers/docs, additive glow, seamless loops, once dies clean.
+**Positive prompts (keep):** honest role, bright cores / clear motion where the look needs it, wired knobs, matches callers/docs, additive glow, seamless loops, once dies clean, human-readable UI copy.
 
-**Negative prompts (kill):** wrong job for the name, thin 1px misses, synced blink, orange wash, progress-wrap flash, linger, orphan/`TODO` wiring, docs drift, unused knobs, silent fail, over-polishing a utility into a showcase.
+**Negative prompts (kill):** wrong job for the name, thin 1px misses, synced blink, orange wash, progress-wrap flash, linger, orphan/`TODO` wiring, dead connects, garbage UI strings, docs drift, unused knobs, silent fail, over-polishing a utility into a showcase.
 
 Basics (`solid`, `blink`, `chase`, …) and media still get **purpose + correctness + fit + seams** every time; readability/character only if something’s wrong or the role isn’t being served.
 
