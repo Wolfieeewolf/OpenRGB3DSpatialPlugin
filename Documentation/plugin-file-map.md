@@ -27,13 +27,13 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 
 | Path | Role | Engine | Merge | Notes |
 |------|------|--------|-------|-------|
-| `Effects3D/Actions/*` | Action orchestration | engines/actions | keep/split later | 2026-10-27 ratchet keep: clocks + field bridges OK |
-| `Effects3D/Actions/ActionVolumeField.*` | Volume field bridge | engines/volume-field | keep | ClipSpan + GpuAnimMs prepare |
-| `Effects3D/Actions/ActionParticleField.*` | Particle field bridge | engines/particle-field | keep | per-clip setParams on shared seq |
-| `Effects3D/Actions/ActionRibbonField.*` | Ribbon field bridge | engines/ribbon-field | keep | per-clip setParams on shared seq |
-| `Effects3D/FolderVolume/*` | Content host | engines/folder-volume | keep / **split later** | ~2.6k lines; header parse OK |
-| `Effects3D/ShaderField/*` | Shader field effect | engines/shader-field | fixed | 2026-10-27: shared `LoadShaderBodyFromPath`; `\u2013` labels |
-| `Effects3D/ScreenMirror/*` | Ambilight / capture | engines/screen-mirror | fixed | 2026-10-27: QStringLiteral tooltips/empty label |
+| `Effects3D/Actions/*` | Action orchestration | engines/actions | pending ratchet | 2026-10-27 agent stop; earlier Oct clocks/setParams already landed |
+| `Effects3D/Actions/ActionVolumeField.*` | Volume field bridge | engines/volume-field | pending ratchet | |
+| `Effects3D/Actions/ActionParticleField.*` | Particle field bridge | engines/particle-field | pending ratchet | |
+| `Effects3D/Actions/ActionRibbonField.*` | Ribbon field bridge | engines/ribbon-field | pending ratchet | |
+| `Effects3D/FolderVolume/*` | Content host | engines/folder-volume | pending ratchet / **split later** | ~2.6k; agent stop |
+| `Effects3D/ShaderField/*` | Shader field effect | engines/shader-field | fixed (partial) | local pickup: `LoadShaderBodyFromPath` |
+| `Effects3D/ScreenMirror/*` | Ambilight / capture | engines/screen-mirror | fixed (partial) | local pickup: QStringLiteral hygiene |
 | `Effects3D/Reactive/Reactive.cpp` | Reactive effect body | engines/reactive | **split** UI vs wave tick later | ~1563 lines; legacy ring_width remap removed 2026-10-27 |
 | `Effects3D/Reactive/Reactive.h` | Reactive API | engines/reactive | keep with cpp | |
 | `Effects3D/Games/*` | Minecraft stack | engines/game | | 2026-10-27: MinecraftGame.cpp dead code removed (`MakeRgb`, `RoomLedToSpatialCore`); include path fixed; strip-axis UI gap patched; MinecraftRoomAmbilightEffect3D description updated |
@@ -94,8 +94,8 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `SpatialSamplers/SpatialLayerCore.*` | Compass stratum + vertical layer math | shared | fixed | 2026-10-27: `(void)w0` suppressor removed; restructured to p0/p1/sector_t; trailing blank line removed |
 | `SpatialSamplers/SpatialBasisUtils.h` | Orthonormal basis build + ToLocal | shared | keep | 2026-10-27: math correct; inline-only header fine |
 | `Game/*` `integrations/*` | Game SHM / telemetry | engines/game | | 2026-10-27: reviewed; wiring, seqlock, SHM paths kept; no changes needed |
-| `ui/custom-controller-grid/*` | Custom controller LED grid editor | ui | keep | 2026-10-27: layout math / hit / fit reviewed; tip em-dashes escaped |
-| `ui/viewport/*` | Viewport GL math + mesh import | ui | keep | 2026-10-27: Rodrigues fix already landed; MeshImport AABB OK |
+| `ui/custom-controller-grid/*` | Custom controller LED grid editor | ui | pending | 2026-10-27 agent stop; local skim + tip escapes only — not finished multipass |
+| `ui/viewport/*` | Viewport GL math + mesh import | ui | pending | 2026-10-27 agent stop; local skim only |
 | `ui/ActionsPanel.*` | Actions list + pack preview | ui | keep | 2026-10-27: ClearActionPreview on stop/finish; human copy OK |
 | `ui/ActionEditorDialog.*` `ui/ActionEditorProps.*` `ui/ActionEditorTimelineBridge.*` | Action Editor shell / props / timeline bridge | ui | fixed | 2026-10-27: `\uXXXX` status/tooltips; live-preview dirty wiring kept |
 | `ui/ActionToolBar.*` | Editor toolbox tabs (tools/colors/gradients/curves) | ui | fixed | 2026-10-27: em-dash tooltips → `\u2014` |
