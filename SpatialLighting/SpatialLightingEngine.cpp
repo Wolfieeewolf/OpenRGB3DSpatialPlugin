@@ -428,13 +428,12 @@ void AppendRoomWallOccluders(std::vector<OccluderQuad>& out,
                              float max_y,
                              float max_z)
 {
-    const float eps = 1e-4f;
-    PushQuad(out, {min_x, min_y, min_z}, {min_x, max_y, min_z}, {min_x, max_y, max_z}, {min_x, min_z, max_z});
+    PushQuad(out, {min_x, min_y, min_z}, {min_x, max_y, min_z}, {min_x, max_y, max_z}, {min_x, min_y, max_z});
     PushQuad(out, {max_x, min_y, min_z}, {max_x, min_y, max_z}, {max_x, max_y, max_z}, {max_x, max_y, min_z});
     PushQuad(out, {min_x, min_y, min_z}, {max_x, min_y, min_z}, {max_x, min_y, max_z}, {min_x, min_y, max_z});
     PushQuad(out, {min_x, max_y, min_z}, {min_x, max_y, max_z}, {max_x, max_y, max_z}, {max_x, max_y, min_z});
-    PushQuad(out, {min_x, min_y, min_z}, {min_x, min_y, max_z}, {max_x, min_y, max_z}, {max_x, min_y, min_z});
-    (void)eps;
+    PushQuad(out, {min_x, min_y, min_z}, {min_x, max_y, min_z}, {max_x, max_y, min_z}, {max_x, min_y, min_z});
+    PushQuad(out, {min_x, min_y, max_z}, {max_x, min_y, max_z}, {max_x, max_y, max_z}, {min_x, max_y, max_z});
 }
 
 static Vec3 ControllerLocalToWorld(const ::ControllerTransform* ctrl,

@@ -220,23 +220,20 @@ bool MapPositionToCompassStrata(const Basis& basis,
 
     out.sector_i0 = ((int)std::floor(pos)) & 7;
     out.sector_i1 = (out.sector_i0 + 1) & 7;
-    float t = pos - std::floor(pos);
-    float w0 = 1.0f - t;
-    float w1 = t;
+    const float t = pos - std::floor(pos);
     const float sharp = std::max(0.8f, settings.directional_sharpness);
+    float sector_t = t;
     if(sharp > 1.001f)
     {
-        w0 = std::pow(w0, sharp);
-        w1 = std::pow(w1, sharp);
-        const float s = w0 + w1;
+        const float p0 = std::pow(1.0f - t, sharp);
+        const float p1 = std::pow(t, sharp);
+        const float s = p0 + p1;
         if(s > 1e-6f)
         {
-            w0 /= s;
-            w1 /= s;
+            sector_t = p1 / s;
         }
     }
-    (void)w0;
-    out.sector_t = w1;
+    out.sector_t = sector_t;
     out.directional_blend = 1.0f - center_w;
 
     detail::ComputeLayerWeights(sample.y_norm, settings, layer_count, out.layer_w);
@@ -327,5 +324,3 @@ float CompassStratumHueOffsetDegrees(const Basis& basis,
 }
 
 }
-
-

@@ -11,7 +11,7 @@ namespace RoomSampleMapping
 {
 namespace
 {
-static float SampleChannel(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
+float SampleChannel(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
                            int ix,
                            int iy,
                            int iz,
@@ -32,7 +32,7 @@ static float SampleChannel(const GameTelemetryBridge::RoomSampleFrameChannel& rs
     return (float)(*rs.rgba)[bi] / 255.0f;
 }
 
-static RGBColor PackRgb(float r, float g, float b, float a, bool& out_valid)
+RGBColor PackRgb(float r, float g, float b, float a, bool& out_valid)
 {
     out_valid = false;
     if(a <= 0.02f)
@@ -48,7 +48,7 @@ static RGBColor PackRgb(float r, float g, float b, float a, bool& out_valid)
 }
 
 /** Nearest cubemap texel — matches LED-mapped fill (no bilinear flash at high face sizes). */
-static RGBColor NearestFaceSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
+RGBColor NearestFaceSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
                                   int face,
                                   float u,
                                   float v,
@@ -117,7 +117,7 @@ static RGBColor NearestFaceSample(const GameTelemetryBridge::RoomSampleFrameChan
     return (RGBColor)0;
 }
 
-static RGBColor CubemapSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
+RGBColor CubemapSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
                               float grid_x,
                               float grid_y,
                               float grid_z,

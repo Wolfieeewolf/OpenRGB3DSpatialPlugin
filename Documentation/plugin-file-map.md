@@ -62,15 +62,37 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `Effects3D/Triggers/WindowsTriggerSource.cpp` | WTS/power/device/focus events | engines/triggers | keep | fixed: 7 display names to Title Case |
 | `Effects3D/Triggers/MacTriggerSource.h` | macOS source header | engines/triggers | keep | |
 | `Effects3D/Triggers/MacTriggerSource.cpp` | CF/IOKit lock/sleep events | engines/triggers | keep | |
-| `Effects3D/SpatialLighting/*` | Room light UI bits | shared or room | | |
-| `Effects3D/SpatialPatternKernels/*` | Strip kernels | shared | | |
+| `Effects3D/SpatialLighting/RoomSpatialLightingUi.*` | Room spatial light param struct + JSON save/load | shared / room | keep | 2026-10-27: role and wiring kept (thin JSON bridge only) |
+| `Effects3D/SpatialPatternKernels/SpatialPatternKernels.*` | Strip kernel disk loader + GLSL atlas builder | shared | keep | 2026-10-27: kept; correctness OK |
+| `Effects3D/SpatialPatternKernels/SpatialPatternPalettes.*` | CPU palette lookup for strip colormap | shared | keep | 2026-10-27: kept; palette set matches kernel ids |
 | `Effects3D/AudioReactiveCommon.h` | Audio effect shared helpers | engines/audio | keep / maybe split .cpp later | Large header-only |
 | `Effects3D/AudioReactiveUi.h` | Audio UI helpers | engines/audio + ui | | |
 | `Audio/AudioInputManager.*` | Capture + FFT bands | engines/audio | **split** capture vs analyze later | ~1378 lines |
 | `Input/Reactive*` | Reactive input | engines/reactive | keep | Gated by effect running |
 | `Input/ControllerTilt*` | DualSense tilt | parked | | Feature branch |
-| `Shaders/*` | GL pool / field engines | shared | | |
-| `SpatialLighting/*` `SpatialRoom/*` `SpatialSamplers/*` | Room core | shared / room | | |
+| `Shaders/SpatialOffscreenGlPool.*` | Singleton shared GL context (4.1 Core) for all field assists | shared | keep | 2026-10-27: first-registered host wins guard OK; RAII Session correct |
+| `Shaders/SpatialFieldAssistBase.h` | Template fail-latch + lazy-create + per-frame prepare gate | shared | keep | 2026-10-27: per-track param push noted in comment; atlas vs program path correct |
+| `Shaders/SpatialVolumeFieldAssist.*` | Per-effect volume field assist (thin owner over Engine) | shared | keep | 2026-10-27: evaluateAtPoints path, mediaDirty refresh, prepareProgram path all correct |
+| `Shaders/SpatialStripFieldAssist.*` | Per-effect strip field assist | shared | keep | 2026-10-27: width clamp, sample01/sampleKernelSigned delegates correct |
+| `Shaders/SpatialVolumeFieldEngine.*` | GPGPU volumeMain + point-eval + media tex + PBO readback | shared | keep | 2026-10-27: role correct; ~1k lines — within limit |
+| `Shaders/SpatialStripFieldEngine.*` | Offscreen 1D strip atlas | shared | keep | 2026-10-27: role correct |
+| `Shaders/SpatialShaderEngine.*` | 2D spatialMain renderer for Shader Field | engines/shader-field | keep | 2026-10-27: role, compile, FBO, uniforms correct |
+| `Shaders/SpatialShaderCatalog.*` | `.fs` disk loader + pattern reader | engines/shader-field | fixed | 2026-10-27: `EffectShaderPatterns` header-key set aligned (drive/audio_preset/audio_media/shader/media_layout/instances added) |
+| `Shaders/FieldFullscreenQuad410.*` | Shared VAO/VBO fullscreen quad for all field atlases | shared | keep | 2026-10-27: correct; Destroy always clears CPU handles |
+| `Shaders/GlslUniformArray.h` | Float array uniform upload helper | shared | keep | 2026-10-27: fallback location resolution correct |
+| `Shaders/SpatialShaderUniforms.h` | Plain struct for Shader Field uniforms | shared | keep | |
+| `SpatialLighting/SpatialLightingEngine.*` | Occluder build + segment tests + AO + LED shading | shared | fixed | 2026-10-27: `AppendRoomWallOccluders` left-wall corner typo fixed; duplicate floor→front+back Z quads; dead `eps` removed |
+| `SpatialLighting/BlockerGridOccluder.*` | Dense blocker grid + room blocker field | shared | keep | 2026-10-27: DDA ray walk contracts kept |
+| `SpatialLighting/OccluderSpatialIndex.*` | Uniform grid AABB spatial index for sub-linear queries | shared | keep | 2026-10-27: Build+CollectSegmentCandidates correct |
+| `SpatialLighting/EmitterRelayMirror.*` | Emitter surface splat + bilinear sample + receiver shading | shared | keep | 2026-10-27: SplatSampleDominant, falloff, occlusion path correct |
+| `SpatialLighting/EmitterLocalSampling.*` | Combined emitter canvas builder | shared | keep | 2026-10-27: header reviewed; role clear |
+| `SpatialLighting/SpatialLightingSceneProvider.*` | Singleton scene state + cached AO shade | shared | keep | 2026-10-27: cache keying, geometry epoch, first-host guard correct |
+| `SpatialRoom/SpatialRoomTypes.h` | Room taxonomy enums + capability flags + frame context | shared | keep | 2026-10-27: types clear; exhaustive switch not needed (no switch on these enums in this file) |
+| `SpatialRoom/SpatialRoomDefaults.*` | DefaultCapabilitiesForMode (mode→caps mapping) | shared | keep | 2026-10-27: switch has default: break for OriginField; EmissiveRelay + RoomMappedPattern both set CapSkipSampleWarp correctly |
+| `SpatialRoom/SpatialRoomFrame.*` | Per-frame overlay pass depth tracker | shared | keep | 2026-10-27: nested depth tracking correct; EndEffectRenderFrame reset is defensive (not a bug) |
+| `SpatialSamplers/RoomSampleMapping.*` | Cubemap LED→color lookup from SHM frame | shared | fixed | 2026-10-27: redundant `static` removed from anon-namespace functions |
+| `SpatialSamplers/SpatialLayerCore.*` | Compass stratum + vertical layer math | shared | fixed | 2026-10-27: `(void)w0` suppressor removed; restructured to p0/p1/sector_t; trailing blank line removed |
+| `SpatialSamplers/SpatialBasisUtils.h` | Orthonormal basis build + ToLocal | shared | keep | 2026-10-27: math correct; inline-only header fine |
 | `Game/*` `integrations/*` | Game SHM / telemetry | engines/game | | 2026-10-27: reviewed; wiring, seqlock, SHM paths kept; no changes needed |
 | `ui/*` | Plugin UI | ui | | |
 | Root `SpatialEffect3D.*` etc. | Effect base / types | shared | | Map individually as touched |

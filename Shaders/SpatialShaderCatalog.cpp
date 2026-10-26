@@ -159,7 +159,9 @@ QList<EffectShaderPattern> EffectShaderPatterns(const QString& id)
             || key == QStringLiteral("user_colors") || key == QStringLiteral("pattern_label")
             || key == QStringLiteral("combo") || key == QStringLiteral("option") || key == QStringLiteral("pattern_index")
             || key == QStringLiteral("pattern_source") || key == QStringLiteral("sample")
-            || key == QStringLiteral("flow") || key == QStringLiteral("global") || key == QStringLiteral("media"))
+            || key == QStringLiteral("flow") || key == QStringLiteral("global") || key == QStringLiteral("media")
+            || key == QStringLiteral("drive") || key == QStringLiteral("audio_preset") || key == QStringLiteral("audio_media")
+            || key == QStringLiteral("shader") || key == QStringLiteral("media_layout") || key == QStringLiteral("instances"))
         {
             continue;
         }

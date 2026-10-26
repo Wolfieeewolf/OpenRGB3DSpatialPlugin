@@ -18,12 +18,12 @@ Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 | Effects3D/Games | fixed | 2026-10-27 | Dead `MakeRgb` + `RoomLedToSpatialCore` removed; include path fixed; strip-axis UI gap patched (standalone Hunger/Air/Dura now expose axis controls); RoomAmbilight description updated; per-strip labels corrected |
 | Effects3D/MovieSync | fixed | 2026-10-27 | Curly-quote literals in tr() replaced with \u201c/\u201d escapes (CONTRIBUTING hygiene); LOG_WARNING text aligned to UI label Allow photosensitive looks; ec reuse across nested directory_iterator fixed with ec2 |
 | Effects3D/Triggers | fixed | 2026-10-27 | LoadCatalog stale ec from is_regular_file(ec) fixed (use cached status); 7 of 16 WindowsTriggerSource::ListEvents display names normalised to Title Case |
-| Effects3D/SpatialLighting + SpatialPatternKernels | pending | | |
+| Effects3D/SpatialLighting + SpatialPatternKernels | fixed | 2026-10-27 | `EffectShaderPatterns` stopped early on newer header keys (`drive`, `audio_preset`, `audio_media`, `shader`, `media_layout`, `instances`) — added to recognized set; SpatialPatternKernels.cpp/SpatialPatternPalettes.cpp kept (role, wiring, palette coverage OK) |
 | Audio/ | keep | 2026-10-27 | No printf/debug leftovers; **AudioInputManager ~1.4k — split later** |
 | Input/Reactive* | keep | 2026-10-27 | Session start/stop gated by PlaybackUsesReactive |
 | Input/ControllerTilt* | parked | | DualSense tilt on feat branch |
-| Shaders/ | pending | | Shared GL — map to `shared/` |
-| SpatialLighting/ SpatialRoom/ SpatialSamplers/ | pending | | Room core |
+| Shaders/ | fixed | 2026-10-27 | Shared GL pool/engines reviewed; SpatialFieldAssistBase.h per-track param push OK; SpatialShaderCatalog header-key set aligned with LoadEffectShader |
+| SpatialLighting/ SpatialRoom/ SpatialSamplers/ | fixed | 2026-10-27 | `AppendRoomWallOccluders`: left-wall corner typo fixed (`min_z`→`min_y`), duplicate floor replaced with correct front (Z=min_z) + back (Z=max_z) quads, dead `eps` variable removed; SpatialLayerCore.cpp: `(void)w0` suppressor removed (restructured to `p0/p1/sector_t`); RoomSampleMapping.cpp: redundant `static` removed from anonymous-namespace functions; SpatialRoomFrame/Defaults/Types kept |
 | Game/ + integrations/ | fixed | 2026-10-27 | Partial: GameTelemetryBridge wiring reviewed (keep); RoomSampleFrameProtocol / ShmWriter / ConfigReader kept; include path in MinecraftGame.cpp corrected to `Game/` prefix |
 | ui/ | pending | | forms/widgets fresher; grid/viewport staler |
 | Documentation/ | pending | | |
