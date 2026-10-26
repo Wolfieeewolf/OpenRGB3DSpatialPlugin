@@ -103,7 +103,7 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `ui/ActionEffectFiles.*` | Toolbox `.fx` loader | ui | fixed | 2026-10-27: nested directory_iterator `ec2` |
 | `ui/TriggersPanel.*` | Trigger bindings + manual fire | ui | fixed | 2026-10-27: edit/delete clear preview when idle; arrow `\u2192` |
 | `ui/EffectLibraryPanel.*` | Effect library bind shell | ui | fixed | 2026-10-27: `bound_` once-guard (match sibling panels) |
-| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | | remaining surfaces still pending |
+| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | pending | remaining: LEDViewport3D*, SpatialTab_*, CustomControllerDialog*, Zones/ObjectCreator, Effect stack, widgets/* |
 | Root `SpatialEffect3D.*` etc. | Effect base / types | shared | | Map individually as touched |
 
 ## Presets → engine (from volume toolbox multipass)
