@@ -123,7 +123,7 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->boundsCombo->addItem(tr("Target zone bounds"), QVariant((int)SpatialEffect3D::BOUNDS_MODE_TARGET_ZONE));
     ui->boundsCombo->setItemData(
         1,
-        tr("Build a local grid from the Zone target's bounding box and sample the effect in that space—useful when LEDs "
+        tr("Build a local grid from the Zone target's bounding box and sample the effect in that space\u2014useful when LEDs "
            "only cover part of the room."),
         Qt::ToolTipRole);
     connect(ui->boundsCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,

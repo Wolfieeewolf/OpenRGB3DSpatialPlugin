@@ -141,7 +141,7 @@ void OpenRGB3DSpatialTab::audioStopClicked()
     if(audioSpectrumLabel())
     {
         audioSpectrumLabel()->setPixmap(QPixmap());
-        audioSpectrumLabel()->setText("Start listening to see spectrum");
+        audioSpectrumLabel()->setText(QStringLiteral("Start listening to see spectrum"));
     }
 }
 
@@ -246,7 +246,7 @@ void OpenRGB3DSpatialTab::audioLevelUpdated(float level)
     else if(audioSpectrumLabel() && !AudioInputManager::instance()->isRunning())
     {
         audioSpectrumLabel()->setPixmap(QPixmap());
-        audioSpectrumLabel()->setText("Start listening to see spectrum");
+        audioSpectrumLabel()->setText(QStringLiteral("Start listening to see spectrum"));
     }
 }
 

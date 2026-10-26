@@ -52,12 +52,12 @@ void SceneTransformPanel::wireRotationRow(OpenRGB3DSpatialTab* tab, QSlider* sl,
 {
     sl->setRange(-180, 180);
     sl->setValue(0);
-    sl->setToolTip("Rotation in degrees.");
+    sl->setToolTip(QStringLiteral("Rotation in degrees."));
 
     sp->setRange(-180, 180);
     sp->setDecimals(1);
     sp->setSuffix(QString::fromUtf8(" °"));
-    sp->setToolTip("Rotation in degrees.");
+    sp->setToolTip(QStringLiteral("Rotation in degrees."));
 
     QObject::connect(sl, &QSlider::valueChanged, tab, [tab, sl, sp, axis](int value) {
         double rot_value = (double)value;
@@ -120,12 +120,12 @@ void SceneTransformPanel::bindTab(OpenRGB3DSpatialTab* tab)
     }
 
     const QString x_tip =
-        QStringLiteral("Left–right in mm. Drag the slider handle to move smoothly across the room width; "
+        QStringLiteral("Left\u2013right in mm. Drag the slider handle to move smoothly across the room width; "
                        "Shift = finer, Ctrl = medium. Wheel on slider: 0.1 mm per step.");
     const QString y_tip =
-        QStringLiteral("Floor–ceiling in mm. Drag handle across room height; Shift/Ctrl adjust sensitivity. Clamps to ≥0.");
+        QStringLiteral("Floor\u2013ceiling in mm. Drag handle across room height; Shift/Ctrl adjust sensitivity. Clamps to \u22650.");
     const QString z_tip =
-        QStringLiteral("Front–back in mm. Drag handle across room depth; Shift/Ctrl adjust sensitivity.");
+        QStringLiteral("Front\u2013back in mm. Drag handle across room depth; Shift/Ctrl adjust sensitivity.");
 
     if(ui->posXSlider)
     {

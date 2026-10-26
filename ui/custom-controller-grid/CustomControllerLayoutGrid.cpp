@@ -994,13 +994,13 @@ bool CustomControllerLayoutGrid::event(QEvent* event)
             QString tip;
             if(col_header >= 0)
             {
-                tip = tr("Column %1 — %2 mm\nClick to change width")
+                tip = tr("Column %1 \u2014 %2 mm\nClick to change width")
                           .arg(col_header + 1)
                           .arg(static_cast<double>(grid_item_->ColumnWidthsMm()[col_header]), 0, 'f', 1);
             }
             else if(row_header >= 0)
             {
-                tip = tr("Row %1 — %2 mm\nClick to change height")
+                tip = tr("Row %1 \u2014 %2 mm\nClick to change height")
                           .arg(row_header + 1)
                           .arg(static_cast<double>(grid_item_->RowHeightsMm()[row_header]), 0, 'f', 1);
             }

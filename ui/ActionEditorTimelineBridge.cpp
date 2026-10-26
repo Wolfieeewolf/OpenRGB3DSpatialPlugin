@@ -589,7 +589,7 @@ void ActionEditorDialog::onSceneZoneControllersReordered(const QString& scene_zo
         else
         {
             status_label_->setText(
-                QStringLiteral("Reordered controllers in “%1” (Sequence space uses this order)")
+                QStringLiteral("Reordered controllers in \u201c%1\u201d (Sequence space uses this order)")
                     .arg(scene_zone_name));
         }
     }
@@ -718,7 +718,7 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
         const QList<ActionCatalog::Entry> entries = ActionCatalog::LoadEntries(
             PluginSettingsPaths::ActionToolboxDir(tab_ ? tab_->resource_manager : nullptr));
         const QString title = ActionCatalog::EffectNameForId(entries, raw_id);
-        status_label_->setText(QStringLiteral("Added %1 — %2").arg(title, space_tip));
+        status_label_->setText(QStringLiteral("Added %1 \u2014 %2").arg(title, space_tip));
     }
 }
 

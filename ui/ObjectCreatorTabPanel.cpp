@@ -91,12 +91,12 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
         tr("Edit layout and preset filing fields (category, brand, model)"));
     ui->deleteCustomControllerButton->setToolTip(
         "Remove selected custom controller from library (remove from 3D scene first if in use)");
-    ui->editReferencePointButton->setToolTip("Edit selected reference point");
-    ui->removeRefPointButton->setToolTip("Delete selected reference point");
-    ui->editDisplayPlaneButton->setToolTip("Edit selected display plane name and size");
-    ui->removeDisplayPlaneButton->setToolTip("Delete selected display plane");
+    ui->editReferencePointButton->setToolTip(QStringLiteral("Edit selected reference point"));
+    ui->removeRefPointButton->setToolTip(QStringLiteral("Delete selected reference point"));
+    ui->editDisplayPlaneButton->setToolTip(QStringLiteral("Edit selected display plane name and size"));
+    ui->removeDisplayPlaneButton->setToolTip(QStringLiteral("Delete selected display plane"));
     ui->displayCaptureCombo->setToolTip(
-        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …)."));
+        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, \u2026)."));
 
     connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
             &OpenRGB3DSpatialTab::customControllerSelectionChanged);

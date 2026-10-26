@@ -82,7 +82,7 @@ void TriggersPanel::bindTab(OpenRGB3DSpatialTab* tab)
         else
         {
             setStatus(runtime_.IsPlaying()
-                          ? tr("Playing bound actions…")
+                          ? tr("Playing bound actions\u2026")
                           : tr("Idle"));
         }
     });

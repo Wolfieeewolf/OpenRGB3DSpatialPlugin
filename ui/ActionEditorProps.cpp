@@ -218,7 +218,7 @@ void ActionEditorDialog::refillGradientPresets()
     const QString current = gradient_preset_->currentData().toString();
     gradient_preset_->blockSignals(true);
     gradient_preset_->clear();
-    gradient_preset_->addItem(QStringLiteral("Preset…"), QString());
+    gradient_preset_->addItem(QStringLiteral("Preset\u2026"), QString());
     const filesystem::path path = PluginSettingsPaths::ActionEditorGradientsFile(tab_ ? tab_->resource_manager : nullptr);
     bool separated = false;
     for(const ActionUserGradients::Entry& entry : ActionUserGradients::Visible(path))
@@ -275,10 +275,10 @@ void ActionEditorDialog::onSaveUserGradient()
         QMessageBox box(this);
         box.setIcon(QMessageBox::Question);
         box.setWindowTitle(QStringLiteral("Save gradient"));
-        box.setText(QStringLiteral("Preset “%1” is selected.").arg(selected_label));
+        box.setText(QStringLiteral("Preset \u201c%1\u201d is selected.").arg(selected_label));
         box.setInformativeText(QStringLiteral("Overwrite it (including renaming), or save as a new preset?"));
-        QPushButton* overwrite_btn = box.addButton(QStringLiteral("Overwrite…"), QMessageBox::AcceptRole);
-        QPushButton* new_btn = box.addButton(QStringLiteral("Save as new…"), QMessageBox::ActionRole);
+        QPushButton* overwrite_btn = box.addButton(QStringLiteral("Overwrite\u2026"), QMessageBox::AcceptRole);
+        QPushButton* new_btn = box.addButton(QStringLiteral("Save as new\u2026"), QMessageBox::ActionRole);
         box.addButton(QMessageBox::Cancel);
         box.exec();
         if(box.clickedButton() == overwrite_btn)
@@ -356,7 +356,7 @@ void ActionEditorDialog::onSaveUserGradient()
         const QMessageBox::StandardButton reply = QMessageBox::question(
             this,
             QStringLiteral("Save gradient"),
-            QStringLiteral("A preset named “%1” already exists. Overwrite it?").arg(existing_label),
+            QStringLiteral("A preset named \u201c%1\u201d already exists. Overwrite it?").arg(existing_label),
             QMessageBox::Yes | QMessageBox::Cancel,
             QMessageBox::Yes);
         if(reply != QMessageBox::Yes)

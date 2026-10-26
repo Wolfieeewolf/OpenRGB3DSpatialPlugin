@@ -158,9 +158,10 @@ QList<Entry> LoadEntries(const filesystem::path& dir)
         const QString section = QString::fromStdString(section_dir.filename().string());
         ReadJsonFiles(section_dir, section, &entries);
         std::vector<filesystem::path> groups;
-        for(const filesystem::directory_entry& item : filesystem::directory_iterator(section_dir, ec))
+        std::error_code ec2;
+        for(const filesystem::directory_entry& item : filesystem::directory_iterator(section_dir, ec2))
         {
-            if(!ec && item.is_directory())
+            if(!ec2 && item.is_directory())
             {
                 groups.push_back(item.path());
             }

@@ -69,7 +69,7 @@ void OpenRGB3DSpatialTab::BindSettingsPanels()
         profile_unsaved_banner_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         profile_unsaved_banner_->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
         profile_unsaved_banner_->setText(
-            tr("Unsaved Spatial changes — save your OpenRGB profile."));
+            tr("Unsaved Spatial changes \u2014 save your OpenRGB profile."));
         profile_unsaved_banner_->setToolTip(
             tr("Save in OpenRGB using File → Profiles, or layout and effect changes will be lost."));
         profile_unsaved_banner_->setVisible(false);

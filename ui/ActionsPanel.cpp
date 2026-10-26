@@ -563,7 +563,8 @@ void ActionsPanel::onPreview()
     last_elapsed_ms_ = 0;
     setPlayingUi(true);
     timer_->start();
-    ui->statusLabel->setText(tr("Playing “%1”…").arg(QString::fromStdString(pack.name)));
+    ui->statusLabel->setText(
+        tr("Playing \u201c%1\u201d\u2026").arg(QString::fromStdString(pack.name)));
 }
 
 void ActionsPanel::onStop()

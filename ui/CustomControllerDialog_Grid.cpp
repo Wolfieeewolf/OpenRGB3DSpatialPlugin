@@ -224,12 +224,12 @@ void CustomControllerDialog::PopulateCellVisual(int col,
     }
     else if(visual.is_hole)
     {
-        visual.tooltip = tr("OpenRGB matrix unused cell (0xFFFFFFFF) — no LED here");
+        visual.tooltip = tr("OpenRGB matrix unused cell (0xFFFFFFFF) \u2014 no LED here");
         visual.label.clear();
     }
     else if(visual.is_light_blocker)
     {
-        visual.tooltip = tr("Light blocker — spatial lighting cannot pass through this cell");
+        visual.tooltip = tr("Light blocker \u2014 spatial lighting cannot pass through this cell");
         if(cell_mappings.empty())
         {
             visual.label = QStringLiteral("B");
@@ -237,7 +237,7 @@ void CustomControllerDialog::PopulateCellVisual(int col,
     }
     else
     {
-        visual.tooltip = tr("Empty — click to assign");
+        visual.tooltip = tr("Empty \u2014 click to assign");
         visual.label.clear();
     }
 
@@ -719,11 +719,11 @@ void CustomControllerDialog::ShowGridContextMenu(const QPoint& global_pos)
     QAction* cut_action  = menu.addAction(tr("Cut"));
     QAction* paste_action = menu.addAction(tr("Paste"));
     menu.addSeparator();
-    QAction* set_col_sel_action = menu.addAction(tr("Set column width for selection…"));
-    QAction* set_row_sel_action = menu.addAction(tr("Set row height for selection…"));
+    QAction* set_col_sel_action = menu.addAction(tr("Set column width for selection\u2026"));
+    QAction* set_row_sel_action = menu.addAction(tr("Set row height for selection\u2026"));
     menu.addSeparator();
-    QAction* set_all_cols_action = menu.addAction(tr("Set all column widths…"));
-    QAction* set_all_rows_action = menu.addAction(tr("Set all row heights…"));
+    QAction* set_all_cols_action = menu.addAction(tr("Set all column widths\u2026"));
+    QAction* set_all_rows_action = menu.addAction(tr("Set all row heights\u2026"));
     menu.addSeparator();
     QAction* clear_action = menu.addAction(tr("Clear selection"));
     QAction* add_blocker_action = menu.addAction(tr("Add light blocker"));
@@ -817,8 +817,8 @@ void CustomControllerDialog::ShowGridHeaderContextMenu(const QPoint& global_pos,
     QAction* chosen = nullptr;
     if(column_header >= 0)
     {
-        QAction* set_col_action = menu.addAction(tr("Set column %1 width…").arg(column_header + 1));
-        QAction* set_all_cols   = menu.addAction(tr("Set all column widths…"));
+        QAction* set_col_action = menu.addAction(tr("Set column %1 width\u2026").arg(column_header + 1));
+        QAction* set_all_cols   = menu.addAction(tr("Set all column widths\u2026"));
         chosen                  = menu.exec(global_pos);
         if(!chosen)
         {
@@ -844,8 +844,8 @@ void CustomControllerDialog::ShowGridHeaderContextMenu(const QPoint& global_pos,
 
     if(row_header >= 0)
     {
-        QAction* set_row_action = menu.addAction(tr("Set row %1 height…").arg(row_header + 1));
-        QAction* set_all_rows     = menu.addAction(tr("Set all row heights…"));
+        QAction* set_row_action = menu.addAction(tr("Set row %1 height\u2026").arg(row_header + 1));
+        QAction* set_all_rows     = menu.addAction(tr("Set all row heights\u2026"));
         chosen                    = menu.exec(global_pos);
         if(!chosen)
         {
@@ -1235,7 +1235,7 @@ void CustomControllerDialog::UpdateCellInfo()
     const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
     if(selected_cells.empty())
     {
-        cell_info_label->setText("Click a cell to select it");
+        cell_info_label->setText(QStringLiteral("Click a cell to select it"));
         return;
     }
 
@@ -1246,11 +1246,11 @@ void CustomControllerDialog::UpdateCellInfo()
         QString info = tr("Selected %1 cells on layer %2").arg(selected_cells.size()).arg(current_layer);
         if(cell_mappings.empty())
         {
-            info += tr(" — empty");
+            info += tr(" \u2014 empty");
         }
         else
         {
-            info += tr(" — %1 LED(s)").arg(cell_mappings.size());
+            info += tr(" \u2014 %1 LED(s)").arg(cell_mappings.size());
         }
         cell_info_label->setText(info);
         return;

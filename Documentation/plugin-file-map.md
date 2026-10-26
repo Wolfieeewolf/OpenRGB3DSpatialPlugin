@@ -94,9 +94,10 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `SpatialSamplers/SpatialLayerCore.*` | Compass stratum + vertical layer math | shared | fixed | 2026-10-27: `(void)w0` suppressor removed; restructured to p0/p1/sector_t; trailing blank line removed |
 | `SpatialSamplers/SpatialBasisUtils.h` | Orthonormal basis build + ToLocal | shared | keep | 2026-10-27: math correct; inline-only header fine |
 | `Game/*` `integrations/*` | Game SHM / telemetry | engines/game | | 2026-10-27: reviewed; wiring, seqlock, SHM paths kept; no changes needed |
-| `ui/custom-controller-grid/*` | Custom controller LED grid editor | ui | keep | 2026-10-27: layout math / hit / fit reviewed |
+| `ui/custom-controller-grid/*` | Custom controller LED grid editor | ui | keep | 2026-10-27: layout math / hit / fit reviewed; tip em-dashes escaped |
 | `ui/viewport/*` | Viewport GL math + mesh import | ui | keep | 2026-10-27: Rodrigues fix already landed; MeshImport AABB OK |
-| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | | remaining surfaces still pending |
+| `ui/ActionsPanel.*` `ui/ActionEditor*` `ui/ActionEffectFiles.*` `ui/TriggersPanel.*` | Action / Triggers UI | ui | fixed | 2026-10-27: curly/ellipsis escapes; nested directory_iterator `ec2` |
+| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | fixed | 2026-10-27: QStringLiteral tooltips / selection labels; SceneTransform `\u2013` |
 | Root `SpatialEffect3D.*` etc. | Effect base / types | shared | | Map individually as touched |
 
 ## Presets → engine (from volume toolbox multipass)

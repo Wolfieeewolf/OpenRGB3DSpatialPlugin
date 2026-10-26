@@ -47,7 +47,7 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
     const QString amp_tip = QStringLiteral(
         "Capture amplitude (OpenRGB-style). Master level for all audio effects.");
     const QString decay_tip = QStringLiteral(
-        "How fast analyzer peaks fall (OpenRGB “Decay”). Higher = smoother, less twitchy.");
+        "How fast analyzer peaks fall (OpenRGB \u201cDecay\u201d). Higher = smoother, less twitchy.");
 
     ui->gainRow->setCaptionText(QStringLiteral("Amplitude:"));
     ui->gainRow->setValueLabelMinimumWidth(48);

@@ -46,7 +46,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         "One grid unit = this many mm. Positions × scale = real size "
         "(e.g. scale 10 → 10 mm per unit).");
 
-    ui->gridSnapCheckbox->setToolTip("When moving controllers, snap to grid intersections.");
+    ui->gridSnapCheckbox->setToolTip(
+        QStringLiteral("When moving controllers, snap to grid intersections."));
     if(tab->viewport)
     {
         ui->gridSnapCheckbox->setChecked(tab->viewport->IsGridSnapEnabled());
@@ -77,7 +78,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->frameSelectionButton->setToolTip(
         "Re-center the orbit on the current selection, set zoom from its size, and use the default "
         "3/4 view angle (45° yaw, 30° pitch). Right-drag still orbits afterward.");
-    ui->resetCameraButton->setToolTip("Restore default orbit distance, angle, and target (0,0,0). Shortcut: Home.");
+    ui->resetCameraButton->setToolTip(
+        QStringLiteral("Restore default orbit distance, angle, and target (0,0,0). Shortcut: Home."));
 
     ui->overlayBrightSlider->setRange(0, 100);
     ui->overlayPointSlider->setRange(1, 12);
@@ -85,7 +87,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     ui->overlayBrightSlider->setToolTip(
         "Display gain for overlay points only (100% matches computed LED/light levels).");
-    ui->overlayPointSlider->setToolTip("OpenGL point size for each overlay dot (1–12).");
+    ui->overlayPointSlider->setToolTip(
+        QStringLiteral("OpenGL point size for each overlay dot (1\u201312)."));
     ui->overlayStepSlider->setToolTip(
         "Overlay sample step: sample from the room origin (0) along each axis every N grid cells, "
         "through to the far wall. Smaller N = denser preview dots; does not change room or LED layout size. "

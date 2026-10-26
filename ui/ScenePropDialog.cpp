@@ -119,16 +119,16 @@ ScenePropDialog::ScenePropDialog(QWidget* parent)
     width_spin_ = MakeMmSpin(this);
     height_spin_ = MakeMmSpin(this);
     depth_spin_ = MakeMmSpin(this);
-    color_button_ = new QPushButton(tr("Pick…"), this);
+    color_button_ = new QPushButton(tr("Pick\u2026"), this);
     color_button_->setMinimumHeight(28);
-    glass_color_button_ = new QPushButton(tr("Pick…"), this);
+    glass_color_button_ = new QPushButton(tr("Pick\u2026"), this);
     glass_color_button_->setMinimumHeight(28);
     glass_color_label_ = new QLabel(tr("Glass colour"), this);
 
     mesh_body_combo_ = makeFaceCombo();
     mesh_path_label_ = new QLabel(tr("No file imported"), this);
     mesh_path_label_->setWordWrap(true);
-    import_mesh_button_ = new QPushButton(tr("Import mesh…"), this);
+    import_mesh_button_ = new QPushButton(tr("Import mesh\u2026"), this);
     mesh_body_label_ = new QLabel(tr("Body mode"), this);
 
     mesh_panel_ = new QWidget(this);
@@ -442,14 +442,14 @@ void ScenePropDialog::onImportMesh()
         QMessageBox::warning(
             this,
             tr("Import Mesh"),
-            tr("Native Blender (.blend) files are not supported — Assimp's Blender "
+            tr("Native Blender (.blend) files are not supported \u2014 Assimp's Blender "
                "importer is deprecated and can freeze the app.\n\n"
-               "In Blender: File → Export → glTF 2.0 (.glb) or Wavefront (.obj), "
+               "In Blender: File \u2192 Export \u2192 glTF 2.0 (.glb) or Wavefront (.obj), "
                "then import that file here."));
         return;
     }
 
-    QProgressDialog progress(tr("Importing mesh…"), QString(), 0, 0, this);
+    QProgressDialog progress(tr("Importing mesh\u2026"), QString(), 0, 0, this);
     progress.setWindowModality(Qt::WindowModal);
     progress.setMinimumDuration(0);
     progress.setCancelButton(nullptr);

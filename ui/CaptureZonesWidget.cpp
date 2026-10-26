@@ -71,7 +71,8 @@ public:
     {
         setMinimumHeight(200);
         setMaximumHeight(300);
-        setToolTip("Click and drag corner handles to resize zones. Click and drag zone to move it. Right-click to delete.");
+        setToolTip(QStringLiteral(
+            "Click and drag corner handles to resize zones. Click and drag zone to move it. Right-click to delete."));
         setMouseTracking(true);
 
         refresh_timer = new QTimer(this);

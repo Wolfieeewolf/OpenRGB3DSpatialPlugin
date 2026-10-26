@@ -1355,12 +1355,12 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
 
     if(viewport->IsRoomViewportSelected())
     {
-        selectionInfoLabel()->setText("Selected: Room (viewport spin)");
+        selectionInfoLabel()->setText(QStringLiteral("Selected: Room (viewport spin)"));
         info_font.setItalic(false);
     }
     else if(selected.empty())
     {
-        selectionInfoLabel()->setText("No selection");
+        selectionInfoLabel()->setText(QStringLiteral("No selection"));
         info_font.setItalic(true);
     }
     else if(selected.size() == 1)
