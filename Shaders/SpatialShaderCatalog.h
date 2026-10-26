@@ -17,6 +17,8 @@ struct EffectShaderPattern
     QString tip;
 };
 
+/** Strip `#` / `key: value` header lines from a `.fs` file; returns GLSL body. */
+QString LoadShaderBodyFromPath(const QString& path);
 QString LoadEffectShader(const QString& id);
 QList<EffectShaderPattern> EffectShaderPatterns(const QString& id);
 

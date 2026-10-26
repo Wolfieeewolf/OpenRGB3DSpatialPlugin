@@ -27,13 +27,13 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 
 | Path | Role | Engine | Merge | Notes |
 |------|------|--------|-------|-------|
-| `Effects3D/Actions/*` | Action orchestration | engines/actions | keep/split later | Calls volume/particle/ribbon |
-| `Effects3D/Actions/ActionVolumeField.*` | Volume field bridge | engines/volume-field | | |
-| `Effects3D/Actions/ActionParticleField.*` | Particle field bridge | engines/particle-field | | |
-| `Effects3D/Actions/ActionRibbonField.*` | Ribbon field bridge | engines/ribbon-field | | |
-| `Effects3D/FolderVolume/*` | Content host | engines/folder-volume | | |
-| `Effects3D/ShaderField/*` | Shader field effect | engines/shader-field | | |
-| `Effects3D/ScreenMirror/*` | Ambilight / capture | engines/screen-mirror | | |
+| `Effects3D/Actions/*` | Action orchestration | engines/actions | keep/split later | 2026-10-27 ratchet keep: clocks + field bridges OK |
+| `Effects3D/Actions/ActionVolumeField.*` | Volume field bridge | engines/volume-field | keep | ClipSpan + GpuAnimMs prepare |
+| `Effects3D/Actions/ActionParticleField.*` | Particle field bridge | engines/particle-field | keep | per-clip setParams on shared seq |
+| `Effects3D/Actions/ActionRibbonField.*` | Ribbon field bridge | engines/ribbon-field | keep | per-clip setParams on shared seq |
+| `Effects3D/FolderVolume/*` | Content host | engines/folder-volume | keep / **split later** | ~2.6k lines; header parse OK |
+| `Effects3D/ShaderField/*` | Shader field effect | engines/shader-field | fixed | 2026-10-27: shared `LoadShaderBodyFromPath`; `\u2013` labels |
+| `Effects3D/ScreenMirror/*` | Ambilight / capture | engines/screen-mirror | fixed | 2026-10-27: QStringLiteral tooltips/empty label |
 | `Effects3D/Reactive/Reactive.cpp` | Reactive effect body | engines/reactive | **split** UI vs wave tick later | ~1563 lines; legacy ring_width remap removed 2026-10-27 |
 | `Effects3D/Reactive/Reactive.h` | Reactive API | engines/reactive | keep with cpp | |
 | `Effects3D/Games/*` | Minecraft stack | engines/game | | 2026-10-27: MinecraftGame.cpp dead code removed (`MakeRgb`, `RoomLedToSpatialCore`); include path fixed; strip-axis UI gap patched; MinecraftRoomAmbilightEffect3D description updated |
@@ -77,7 +77,7 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `Shaders/SpatialVolumeFieldEngine.*` | GPGPU volumeMain + point-eval + media tex + PBO readback | shared | keep | 2026-10-27: role correct; ~1k lines — within limit |
 | `Shaders/SpatialStripFieldEngine.*` | Offscreen 1D strip atlas | shared | keep | 2026-10-27: role correct |
 | `Shaders/SpatialShaderEngine.*` | 2D spatialMain renderer for Shader Field | engines/shader-field | keep | 2026-10-27: role, compile, FBO, uniforms correct |
-| `Shaders/SpatialShaderCatalog.*` | `.fs` disk loader + pattern reader | engines/shader-field | fixed | 2026-10-27: `EffectShaderPatterns` header-key set aligned (drive/audio_preset/audio_media/shader/media_layout/instances added) |
+| `Shaders/SpatialShaderCatalog.*` | `.fs` disk loader + pattern reader | engines/shader-field | fixed | 2026-10-27: shared `LoadShaderBodyFromPath` + `IsEffectShaderHeaderKey` (single key set for body strip + pattern scan) |
 | `Shaders/FieldFullscreenQuad410.*` | Shared VAO/VBO fullscreen quad for all field atlases | shared | keep | 2026-10-27: correct; Destroy always clears CPU handles |
 | `Shaders/GlslUniformArray.h` | Float array uniform upload helper | shared | keep | 2026-10-27: fallback location resolution correct |
 | `Shaders/SpatialShaderUniforms.h` | Plain struct for Shader Field uniforms | shared | keep | |
@@ -94,7 +94,9 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `SpatialSamplers/SpatialLayerCore.*` | Compass stratum + vertical layer math | shared | fixed | 2026-10-27: `(void)w0` suppressor removed; restructured to p0/p1/sector_t; trailing blank line removed |
 | `SpatialSamplers/SpatialBasisUtils.h` | Orthonormal basis build + ToLocal | shared | keep | 2026-10-27: math correct; inline-only header fine |
 | `Game/*` `integrations/*` | Game SHM / telemetry | engines/game | | 2026-10-27: reviewed; wiring, seqlock, SHM paths kept; no changes needed |
-| `ui/*` | Plugin UI | ui | | |
+| `ui/custom-controller-grid/*` | Custom controller LED grid editor | ui | keep | 2026-10-27: layout math / hit / fit reviewed |
+| `ui/viewport/*` | Viewport GL math + mesh import | ui | keep | 2026-10-27: Rodrigues fix already landed; MeshImport AABB OK |
+| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | | remaining surfaces still pending |
 | Root `SpatialEffect3D.*` etc. | Effect base / types | shared | | Map individually as touched |
 
 ## Presets → engine (from volume toolbox multipass)

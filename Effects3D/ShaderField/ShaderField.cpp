@@ -28,45 +28,6 @@
 namespace
 {
 
-QString ShaderBody(const QString& path)
-{
-    QFile file(path);
-    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        return QString();
-    }
-    QString body;
-    QTextStream stream(&file);
-    bool header = true;
-    while(!stream.atEnd())
-    {
-        const QString line = stream.readLine();
-        const QString trimmed = line.trimmed();
-        if(header)
-        {
-            if(trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('#')))
-            {
-                continue;
-            }
-            const int colon = trimmed.indexOf(QLatin1Char(':'));
-            if(colon > 0)
-            {
-                const QString key = trimmed.left(colon).trimmed();
-                if(key == QStringLiteral("name") || key == QStringLiteral("description")
-                   || key == QStringLiteral("section") || key == QStringLiteral("class")
-                   || key == QStringLiteral("category"))
-                {
-                    continue;
-                }
-            }
-            header = false;
-        }
-        body += line;
-        body += QLatin1Char('\n');
-    }
-    return body;
-}
-
 ShaderFieldSpec ReadShaderFieldSpec(const QString& path)
 {
     ShaderFieldSpec spec;
@@ -193,7 +154,7 @@ void ShaderField::LoadShaderBody()
     {
         return;
     }
-    const QString body = ShaderBody(spec_.path);
+    const QString body = SpatialShaderCatalog::LoadShaderBodyFromPath(spec_.path);
     if(body.trimmed().isEmpty())
     {
         return;
@@ -296,13 +257,13 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     EffectLabeledComboRow* projection_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Projection:"));
     projection_row->setObjectName(QStringLiteral("projectionRow"));
     projection_combo = projection_row->combo();
-    projection_combo->addItem(QStringLiteral("Floor (X–Z)"));
-    projection_combo->addItem(QStringLiteral("Front wall (X–Y)"));
-    projection_combo->addItem(QStringLiteral("Left wall (Y–Z)"));
+    projection_combo->addItem(QStringLiteral("Floor (X\u2013Z)"));
+    projection_combo->addItem(QStringLiteral("Front wall (X\u2013Y)"));
+    projection_combo->addItem(QStringLiteral("Left wall (Y\u2013Z)"));
     projection_combo->addItem(QStringLiteral("Sphere (from origin)"));
-    projection_combo->addItem(QStringLiteral("Ceiling (X–Z)"));
-    projection_combo->addItem(QStringLiteral("Back wall (X–Y)"));
-    projection_combo->addItem(QStringLiteral("Right wall (Y–Z)"));
+    projection_combo->addItem(QStringLiteral("Ceiling (X\u2013Z)"));
+    projection_combo->addItem(QStringLiteral("Back wall (X\u2013Y)"));
+    projection_combo->addItem(QStringLiteral("Right wall (Y\u2013Z)"));
     projection_combo->addItem(QStringLiteral("Cylinder around Y"));
     projection_combo->addItem(QStringLiteral("Radial floor (polar XZ)"));
     projection_combo->addItem(QStringLiteral("Triplanar (dominant face)"));

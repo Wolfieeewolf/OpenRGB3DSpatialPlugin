@@ -299,7 +299,8 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
 
     if(monitor_settings.empty())
     {
-        QLabel* no_monitors_label = new QLabel("No monitors configured. Set up Display Planes first.");
+        QLabel* no_monitors_label = new QLabel(
+            QStringLiteral("No monitors configured. Set up Display Planes first."));
         PluginUiApplyItalicSecondaryLabel(no_monitors_label);
         monitors_layout->addWidget(no_monitors_label);
     }
@@ -459,11 +460,13 @@ void ScreenMirror::RefreshMonitorStatus()
             
             if(has_capture_source)
             {
-                settings.group_box->setToolTip("Enable or disable this monitor's influence.");
+                settings.group_box->setToolTip(
+                    QStringLiteral("Enable or disable this monitor's influence."));
             }
             else
             {
-                settings.group_box->setToolTip("Pick the Windows display this plane should capture.");
+                settings.group_box->setToolTip(
+                    QStringLiteral("Pick the Windows display this plane should capture."));
             }
             if(settings.capture_combo)
             {

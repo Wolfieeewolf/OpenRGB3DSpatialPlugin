@@ -47,9 +47,31 @@ QString FindEffectShaderPath(const QString& id)
     return QString();
 }
 
-QString LoadEffectShader(const QString& id)
+namespace
 {
-    const QString path = FindEffectShaderPath(id);
+
+bool IsEffectShaderHeaderKey(const QString& key)
+{
+    return key == QStringLiteral("name") || key == QStringLiteral("description") || key == QStringLiteral("section")
+        || key == QStringLiteral("pattern") || key == QStringLiteral("index") || key == QStringLiteral("palette")
+        || key == QStringLiteral("class") || key == QStringLiteral("category") || key == QStringLiteral("finish")
+        || key == QStringLiteral("param") || key == QStringLiteral("pattern_key") || key == QStringLiteral("colors")
+        || key == QStringLiteral("supports_strip_colormap") || key == QStringLiteral("supports_height_bands")
+        || key == QStringLiteral("slider") || key == QStringLiteral("resolution") || key == QStringLiteral("rainbow")
+        || key == QStringLiteral("needs_frequency") || key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis")
+        || key == QStringLiteral("user_colors") || key == QStringLiteral("pattern_label")
+        || key == QStringLiteral("combo") || key == QStringLiteral("option") || key == QStringLiteral("pattern_index")
+        || key == QStringLiteral("pattern_source") || key == QStringLiteral("sample")
+        || key == QStringLiteral("flow") || key == QStringLiteral("global") || key == QStringLiteral("media")
+        || key == QStringLiteral("drive") || key == QStringLiteral("audio_preset") || key == QStringLiteral("audio_media")
+        || key == QStringLiteral("shader") || key == QStringLiteral("media_layout")
+        || key == QStringLiteral("instances");
+}
+
+} // namespace
+
+QString LoadShaderBodyFromPath(const QString& path)
+{
     if(path.isEmpty())
     {
         return QString();
@@ -76,20 +98,7 @@ QString LoadEffectShader(const QString& id)
             if(colon > 0)
             {
                 const QString key = trimmed.left(colon).trimmed();
-                if(key == QStringLiteral("name") || key == QStringLiteral("description") || key == QStringLiteral("section")
-                    || key == QStringLiteral("pattern") || key == QStringLiteral("index") || key == QStringLiteral("palette")
-                    || key == QStringLiteral("class") || key == QStringLiteral("category") || key == QStringLiteral("finish")
-                    || key == QStringLiteral("param") || key == QStringLiteral("pattern_key") || key == QStringLiteral("colors")
-                    || key == QStringLiteral("supports_strip_colormap") || key == QStringLiteral("supports_height_bands")
-                    || key == QStringLiteral("slider") || key == QStringLiteral("resolution") || key == QStringLiteral("rainbow")
-                    || key == QStringLiteral("needs_frequency") || key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis")
-                    || key == QStringLiteral("user_colors") || key == QStringLiteral("pattern_label")
-                    || key == QStringLiteral("combo") || key == QStringLiteral("option") || key == QStringLiteral("pattern_index")
-                    || key == QStringLiteral("pattern_source") || key == QStringLiteral("sample")
-                    || key == QStringLiteral("flow") || key == QStringLiteral("global") || key == QStringLiteral("media")
-                    || key == QStringLiteral("drive") || key == QStringLiteral("audio_preset") || key == QStringLiteral("audio_media")
-                    || key == QStringLiteral("shader") || key == QStringLiteral("media_layout")
-                    || key == QStringLiteral("instances"))
+                if(IsEffectShaderHeaderKey(key))
                 {
                     continue;
                 }
@@ -100,6 +109,11 @@ QString LoadEffectShader(const QString& id)
         body += QLatin1Char('\n');
     }
     return body;
+}
+
+QString LoadEffectShader(const QString& id)
+{
+    return LoadShaderBodyFromPath(FindEffectShaderPath(id));
 }
 
 QList<EffectShaderPattern> EffectShaderPatterns(const QString& id)
@@ -149,19 +163,7 @@ QList<EffectShaderPattern> EffectShaderPatterns(const QString& id)
             }
             continue;
         }
-        if(key == QStringLiteral("name") || key == QStringLiteral("description") || key == QStringLiteral("section")
-            || key == QStringLiteral("index") || key == QStringLiteral("palette")
-            || key == QStringLiteral("class") || key == QStringLiteral("category") || key == QStringLiteral("finish")
-            || key == QStringLiteral("param") || key == QStringLiteral("pattern_key") || key == QStringLiteral("colors")
-            || key == QStringLiteral("supports_strip_colormap") || key == QStringLiteral("supports_height_bands")
-            || key == QStringLiteral("slider") || key == QStringLiteral("resolution") || key == QStringLiteral("rainbow")
-            || key == QStringLiteral("needs_frequency") || key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis")
-            || key == QStringLiteral("user_colors") || key == QStringLiteral("pattern_label")
-            || key == QStringLiteral("combo") || key == QStringLiteral("option") || key == QStringLiteral("pattern_index")
-            || key == QStringLiteral("pattern_source") || key == QStringLiteral("sample")
-            || key == QStringLiteral("flow") || key == QStringLiteral("global") || key == QStringLiteral("media")
-            || key == QStringLiteral("drive") || key == QStringLiteral("audio_preset") || key == QStringLiteral("audio_media")
-            || key == QStringLiteral("shader") || key == QStringLiteral("media_layout") || key == QStringLiteral("instances"))
+        if(IsEffectShaderHeaderKey(key))
         {
             continue;
         }
