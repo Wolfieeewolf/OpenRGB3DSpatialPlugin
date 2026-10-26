@@ -68,7 +68,15 @@ category: Volume
 
 ## Shader Field engine
 
+**Runs:** 2D `spatialMain` → offscreen atlas via `SpatialShaderEngine`, then sample onto LEDs by projection mode (floor/walls/sphere/…). Bodies load through `SpatialShaderCatalog::LoadShaderBodyFromPath` (same `#` / `key: value` header strip as Volume `.fs`).  
 **Library category:** Shader Field (`effects/shader-field/`).
+
+| Header keys (common) | Meaning |
+|----------------------|---------|
+| `class:` / `name:` / `description:` | Registration id + UI |
+| `category:` | Library grouping (optional; folder wins) |
+
+Author body: versionless GLSL with `spatialMain(out, frag_coord)`; uniforms `u_time`, `u_resolution`, `u_params[0..3]` (zoom / contrast / hue / detail). Do not put `#version` in the file.
 
 ## Media engine
 

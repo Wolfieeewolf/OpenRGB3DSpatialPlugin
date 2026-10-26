@@ -20,7 +20,7 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 ## Adapters
 
-**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`.
+**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`. Plugin strips `#` / `key: value` headers via `LoadShaderBodyFromPath` before compile.
 
 **2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `effects/volume/` for **Volume** (or `effects/audio/` / `effects/media/`) with a FolderVolume `class:` header.
 
