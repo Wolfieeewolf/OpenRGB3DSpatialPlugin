@@ -8,7 +8,7 @@
 #include "RoomSampleMapping.h"
 #include "Game/RoomSampleConfigPublisher.h"
 #include "Game/RoomSampleFrameProtocol.h"
-#include "RoomSampleFrameShmReader.h"
+#include "Game/RoomSampleFrameShmReader.h"
 #include "Game/GameTelemetryBridge.h"
 #include "GridSpaceUtils.h"
 
@@ -196,11 +196,6 @@ RGBColor BlendLedTemporal(RGBColor previous, RGBColor current, unsigned int smoo
     return LerpColor(current, previous, keep);
 }
 
-RGBColor MakeRgb(unsigned char r, unsigned char g, unsigned char b)
-{
-    return (RGBColor)(((int)b << 16) | ((int)g << 8) | (int)r);
-}
-
 static bool ch(std::uint32_t mask, std::uint32_t bit) { return (mask & bit) != 0u; }
 
 static float ComputeRoomToWorldScale(const GridContext3D& grid, float blocks_per_m)
@@ -258,27 +253,6 @@ const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridConte
     return snapshot;
 }
 
-static inline void RoomLedToSpatialCore(float rx,
-                                        float ry,
-                                        float rz,
-                                        float rox,
-                                        float roy,
-                                        float roz,
-                                        float& sx,
-                                        float& sy,
-                                        float& sz,
-                                        float& sox,
-                                        float& soy,
-                                        float& soz)
-{
-    sx = rx;
-    sy = ry;
-    sz = rz;
-    sox = rox;
-    soy = roy;
-    soz = roz;
-}
-
 static bool ComputeNormalizedSampleVector(float grid_x,
                                           float grid_y,
                                           float grid_z,
@@ -289,20 +263,8 @@ static bool ComputeNormalizedSampleVector(float grid_x,
                                           float& out_y,
                                           float& out_z)
 {
-    float sx, sy, sz, sox, soy, soz;
-    RoomLedToSpatialCore(grid_x,
-                         grid_y,
-                         grid_z,
-                         origin_x,
-                         origin_y,
-                         origin_z,
-                         sx,
-                         sy,
-                         sz,
-                         sox,
-                         soy,
-                         soz);
-    return SpatialBasisUtils::NormalizeDirection(sx - sox, sy - soy, sz - soz, out_x, out_y, out_z);
+    return SpatialBasisUtils::NormalizeDirection(
+        grid_x - origin_x, grid_y - origin_y, grid_z - origin_z, out_x, out_y, out_z);
 }
 
 static float ComputeDirectionalFactorFullPose(const GameTelemetryBridge::TelemetrySnapshot& t,
@@ -515,21 +477,66 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                     [&s](bool v) { s.health_strip_invert = v; });
 
     }
+    // Strip axis / invert / slots controls are shared across all per-strip channels.
+    // When the Health channel is not present the controls above are not shown, so render
+    // them here once so standalone Hunger / Air / Durability effects can be configured.
+    const bool has_health_controls = ch(channels, ChHealth);
+    const bool has_non_health_per_strip =
+        ch(channels, ChHunger) || ch(channels, ChAir) || ch(channels, ChDurability);
+    if(!has_health_controls && has_non_health_per_strip)
+    {
+        AddSpinRow(vitals_layout,
+                   panel,
+                   QStringLiteral("Strip slots per unit"),
+                   1,
+                   32,
+                   std::clamp(s.health_leds_per_heart, 1, 32),
+                   [&s](int v) { s.health_leds_per_heart = std::clamp(v, 1, 32); },
+                   QStringLiteral("How many LEDs span one game unit (food level, breath bubble, durability point). "
+                                  "Same field as 'LEDs per heart' when Health is stacked on the same controller."));
+        if(QComboBox* axis_combo = AddComboRow(vitals_layout, QStringLiteral("Strip axis")))
+        {
+            axis_combo->addItem(QStringLiteral("Auto (longest span)"));
+            axis_combo->addItem(QStringLiteral("Along X"));
+            axis_combo->addItem(QStringLiteral("Along Y"));
+            axis_combo->addItem(QStringLiteral("Along Z"));
+            axis_combo->setCurrentIndex(std::clamp(s.health_strip_axis, 0, 3));
+            axis_combo->setToolTip(
+                QStringLiteral("Which room axis maps each game unit's LEDs when Per-strip is on. "
+                               "Auto picks the longest layout span."));
+            QObject::connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel,
+                             [&s](int idx) { s.health_strip_axis = std::clamp(idx, 0, 3); });
+        }
+        AddCheckRow(vitals_layout, panel, QStringLiteral("Invert strip direction"), s.health_strip_invert,
+                    [&s](bool v) { s.health_strip_invert = v; });
+    }
+
+    // Label suffix that honestly describes which controls are driving the strip.
+    const QString strip_ref = has_health_controls
+        ? QStringLiteral(" (uses strip/index settings above)")
+        : QStringLiteral(" (uses strip axis above)");
+
     if(ch(channels, ChHunger))
     {
-        AddCheckRow(vitals_layout, panel, "Per-strip hunger (uses strip/index settings above)", s.hunger_per_strip,
+        AddCheckRow(vitals_layout, panel,
+                    QStringLiteral("Per-strip hunger") + strip_ref,
+                    s.hunger_per_strip,
                     [&s](bool v) { s.hunger_per_strip = v; });
         AddPctSlider(vitals_layout, panel, QStringLiteral("Hunger gradient strength"), &s.hunger_mix);
     }
     if(ch(channels, ChAir))
     {
-        AddCheckRow(vitals_layout, panel, "Per-strip air (uses strip/index settings above)", s.air_per_strip,
+        AddCheckRow(vitals_layout, panel,
+                    QStringLiteral("Per-strip air") + strip_ref,
+                    s.air_per_strip,
                     [&s](bool v) { s.air_per_strip = v; });
         AddPctSlider(vitals_layout, panel, QStringLiteral("Air gradient strength"), &s.air_mix);
     }
     if(ch(channels, ChDurability))
     {
-        AddCheckRow(vitals_layout, panel, "Per-strip durability (uses strip/index settings above)", s.durability_per_strip,
+        AddCheckRow(vitals_layout, panel,
+                    QStringLiteral("Per-strip durability") + strip_ref,
+                    s.durability_per_strip,
                     [&s](bool v) { s.durability_per_strip = v; });
         AddPctSlider(vitals_layout, panel, QStringLiteral("Item durability gradient strength"), &s.durability_mix);
     }

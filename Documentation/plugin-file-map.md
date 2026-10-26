@@ -36,7 +36,7 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `Effects3D/ScreenMirror/*` | Ambilight / capture | engines/screen-mirror | | |
 | `Effects3D/Reactive/Reactive.cpp` | Reactive effect body | engines/reactive | **split** UI vs wave tick later | ~1563 lines; legacy ring_width remap removed 2026-10-27 |
 | `Effects3D/Reactive/Reactive.h` | Reactive API | engines/reactive | keep with cpp | |
-| `Effects3D/Games/*` | Minecraft stack | engines/game | | |
+| `Effects3D/Games/*` | Minecraft stack | engines/game | | 2026-10-27: MinecraftGame.cpp dead code removed (`MakeRgb`, `RoomLedToSpatialCore`); include path fixed; strip-axis UI gap patched; MinecraftRoomAmbilightEffect3D description updated |
 | `Effects3D/MovieSync/*` | Movie Sync | engines/movie-sync | | |
 | `Effects3D/Triggers/*` | Triggers | engines/triggers | | |
 | `Effects3D/SpatialLighting/*` | Room light UI bits | shared or room | | |
@@ -48,7 +48,7 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `Input/ControllerTilt*` | DualSense tilt | parked | | Feature branch |
 | `Shaders/*` | GL pool / field engines | shared | | |
 | `SpatialLighting/*` `SpatialRoom/*` `SpatialSamplers/*` | Room core | shared / room | | |
-| `Game/*` `integrations/*` | Game SHM / telemetry | engines/game | | |
+| `Game/*` `integrations/*` | Game SHM / telemetry | engines/game | | 2026-10-27: reviewed; wiring, seqlock, SHM paths kept; no changes needed |
 | `ui/*` | Plugin UI | ui | | |
 | Root `SpatialEffect3D.*` etc. | Effect base / types | shared | | Map individually as touched |
 

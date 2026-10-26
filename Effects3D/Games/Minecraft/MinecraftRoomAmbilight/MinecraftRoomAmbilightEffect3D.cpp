@@ -20,6 +20,7 @@ EffectInfo3D MinecraftRoomAmbilightEffect3D::GetEffectInfo() const
     info.effect_type = SPATIAL_EFFECT_MC_ROOM_AMBILIGHT;
     info.effect_description =
         "Room LEDs mirror what you see in-game (line-of-sight). "
+        "Requires the Fabric mod (≥ 0.9.46) and shared-memory link. "
         "Place a reference point at eye height and set this effect's 3D origin there. "
         "Use Output shaping → Smoothing only if LEDs flicker.";
     return info;

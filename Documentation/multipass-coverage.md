@@ -15,7 +15,7 @@ Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 | Effects3D/ShaderField | pending | | Oct multipass — ratchet |
 | Effects3D/ScreenMirror | pending | | Oct multipass — ratchet |
 | Effects3D/Reactive | fixed | 2026-10-27 | Removed legacy `ring_width_pct` LoadSettings remap; wiring only-while-running OK; **~1.5k lines — split later** |
-| Effects3D/Games | pending | | Stale |
+| Effects3D/Games | fixed | 2026-10-27 | Dead `MakeRgb` + `RoomLedToSpatialCore` removed; include path fixed; strip-axis UI gap patched (standalone Hunger/Air/Dura now expose axis controls); RoomAmbilight description updated; per-strip labels corrected |
 | Effects3D/MovieSync | pending | | |
 | Effects3D/Triggers | pending | | |
 | Effects3D/SpatialLighting + SpatialPatternKernels | pending | | |
@@ -24,7 +24,7 @@ Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 | Input/ControllerTilt* | parked | | DualSense tilt on feat branch |
 | Shaders/ | pending | | Shared GL — map to `shared/` |
 | SpatialLighting/ SpatialRoom/ SpatialSamplers/ | pending | | Room core |
-| Game/ + integrations/ | pending | | |
+| Game/ + integrations/ | fixed | 2026-10-27 | Partial: GameTelemetryBridge wiring reviewed (keep); RoomSampleFrameProtocol / ShmWriter / ConfigReader kept; include path in MinecraftGame.cpp corrected to `Game/` prefix |
 | ui/ | pending | | forms/widgets fresher; grid/viewport staler |
 | Documentation/ | pending | | |
 
