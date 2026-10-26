@@ -84,6 +84,7 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 ## Deferred / next (later)
 
 - **3D grid placement editor** — place volume clips in the viewport (translate/rotate/scale); keep timeline; switch modes. Separate branch.
+- **DualSense controller torch** — parked on `feat/dualsense-controller-torch`; notes in [dualsense-torch-notes.md](dualsense-torch-notes.md) (Madgwick / factory calib / 9-axis).
 - **Swarm / flock** particle mode (spatial hash).
 - **More showcase packs** once the first five feel good in real rooms.
 - **Ribbon polish** (multi-tube, accent lights) if neon looks need it.

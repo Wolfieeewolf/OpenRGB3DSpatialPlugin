@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ControllerTiltManager.h"
+#include "MadgwickImu.h"
 #include "PluginLog.h"
 
 #include <QMutex>
@@ -207,20 +208,6 @@ float SoftDeadzone(float v, float dz)
     return (v > 0.0f) ? (v - dz) : (v + dz);
 }
 
-Vector3D RotateAroundAxis(Vector3D v, Vector3D axis, float angle_rad)
-{
-    axis = Normalize3(axis);
-    const float c = std::cos(angle_rad);
-    const float s = std::sin(angle_rad);
-    const float d = Dot3(axis, v);
-    const Vector3D cross = Cross3(axis, v);
-    return {
-        v.x * c + cross.x * s + axis.x * d * (1.0f - c),
-        v.y * c + cross.y * s + axis.y * d * (1.0f - c),
-        v.z * c + cross.z * s + axis.z * d * (1.0f - c)
-    };
-}
-
 void OrthonormalizeBasis(Vector3D* aim_inout, Vector3D* up_inout)
 {
     *aim_inout = Normalize3(*aim_inout);
@@ -235,8 +222,6 @@ void OrthonormalizeBasis(Vector3D* aim_inout, Vector3D* up_inout)
         *up_inout = {0.0f, 1.0f, 0.0f};
     }
 }
-
-/** Room home aim/up are built by BasisFromPadEulerDeg(0,0,0). */
 
 constexpr float kRadToDeg = 180.0f / kPi;
 
@@ -268,99 +253,45 @@ Vector3D ApplyRoomEulerXYZDeg(Vector3D v, float rx_deg, float ry_deg, float rz_d
 }
 
 /**
- * Absolute pitch / roll from accelerometer (degrees).
- * Body: +X right, +Y face/buttons, +Z toward light bar.
- * Uses a stable form so large left/right rolls don't blow up atan2.
+ * DualSense body → Madgwick filter frame:
+ *   body +X right → filter +X
+ *   body +Z light bar → filter +Y (forward)
+ *   body +Y face up → filter +Z (up)
+ * Madgwick identity then matches flat desk home after FilterEarthToRoom.
  */
-bool PitchRollDegFromAccel(float ax, float ay, float az, float* pitch_deg, float* roll_deg)
+void DualSenseBodyToFilter(float bx, float by, float bz, float* fx, float* fy, float* fz)
 {
-    const float amag = std::sqrt(ax * ax + ay * ay + az * az);
-    if(amag < 1e-4f)
-    {
-        return false;
-    }
-    if(std::fabs(amag - 1.0f) > 0.25f)
-    {
-        return false;
-    }
-    // Tip (pitch): light bar up = positive. Roll: right side down = positive
-    // (matches +rotation about torch aim / forward).
-    const float pitch_den = std::sqrt(ax * ax + ay * ay);
-    if(pitch_den < 0.12f)
-    {
-        return false; // nearly vertical on an edge — angles undefined
-    }
-    *pitch_deg = std::atan2(-az, pitch_den) * kRadToDeg;
-    *roll_deg = std::atan2(-ax, ay) * kRadToDeg;
-    // Clamp away from ±90° singularity where noise becomes spin.
-    *pitch_deg = std::clamp(*pitch_deg, -80.0f, 80.0f);
-    *roll_deg = std::clamp(*roll_deg, -80.0f, 80.0f);
-    return true;
+    *fx = bx;
+    *fy = bz;
+    *fz = by;
+}
+
+/** Filter/earth (+X right, +Y forward, +Z up) → RoomGrid (+X right, +Y up, +Z back). */
+Vector3D FilterEarthToRoom(float ex, float ey, float ez)
+{
+    return {ex, ez, -ey};
 }
 
 /**
- * Pad-native basis: yaw about world up, pitch about right, roll about aim.
- * (Not RoomGrid Rx→Ry→Rz — that gimbal-locks and spins when rolling left/right.)
- * (0,0,0) = flat, light bar toward front wall (−Z).
+ * Pad-native Euler for status UI from room aim/up (before layout rotation).
+ * X tip, Y twist, Z roll about beam — same labels as before.
  */
-void BasisFromPadEulerDeg(float pitch_deg, float yaw_deg, float roll_deg,
-                          Vector3D* aim_out, Vector3D* up_out)
+void PadEulerFromAimUp(const Vector3D& aim, const Vector3D& up,
+                       float* pitch_deg, float* yaw_deg, float* roll_deg)
 {
-    Vector3D aim{0.0f, 0.0f, -1.0f};
-    Vector3D up{0.0f, 1.0f, 0.0f};
+    const float aim_y = std::clamp(aim.y, -1.0f, 1.0f);
+    *pitch_deg = std::asin(aim_y) * kRadToDeg;
+    *yaw_deg = std::atan2(aim.x, -aim.z) * kRadToDeg;
+
     const Vector3D world_up{0.0f, 1.0f, 0.0f};
-
-    aim = RotateAroundAxis(aim, world_up, yaw_deg * kDegToRad);
-    up = RotateAroundAxis(up, world_up, yaw_deg * kDegToRad);
-
-    Vector3D right = Cross3(aim, up);
-    if(Length3(right) < 1e-5f)
+    Vector3D right = Cross3(aim, world_up);
+    if(Length3(right) < 1e-4f)
     {
-        right = {1.0f, 0.0f, 0.0f};
+        right = Cross3(aim, {0.0f, 0.0f, 1.0f});
     }
-    else
-    {
-        right = Normalize3(right);
-    }
-    aim = RotateAroundAxis(aim, right, pitch_deg * kDegToRad);
-    up = RotateAroundAxis(up, right, pitch_deg * kDegToRad);
-
-    // Left/right tilt = roll the face about the beam (aim), not world Z.
-    up = RotateAroundAxis(up, aim, roll_deg * kDegToRad);
-    OrthonormalizeBasis(&aim, &up);
-    *aim_out = aim;
-    *up_out = up;
-}
-
-float WrapAngleDeg(float a)
-{
-    while(a > 180.0f)
-    {
-        a -= 360.0f;
-    }
-    while(a < -180.0f)
-    {
-        a += 360.0f;
-    }
-    return a;
-}
-
-float BlendAngleDeg(float current, float target, float accel_weight)
-{
-    const float w = std::clamp(accel_weight, 0.0f, 1.0f);
-    const float err = WrapAngleDeg(target - current);
-    return WrapAngleDeg(current + err * w);
-}
-
-/** Ignore sub-degree wobble; ease larger corrections. */
-float HoldOrBlendDeg(float current, float target, float hold_deg, float blend)
-{
-    const float err = WrapAngleDeg(target - current);
-    if(std::fabs(err) < hold_deg)
-    {
-        return current;
-    }
-    return BlendAngleDeg(current, target, blend);
+    right = Normalize3(right);
+    const Vector3D up_ref = Normalize3(Cross3(right, aim));
+    *roll_deg = std::atan2(Dot3(up, right), Dot3(up, up_ref)) * kRadToDeg;
 }
 
 std::uint64_t NowMs()
@@ -459,14 +390,13 @@ public:
     bool ever_got_imu = false;
     bool calib_attempted = false;
 
-    /** Absolute spatial pose in RoomGrid Euler XYZ degrees (same as controller transforms). */
     bool have_pose = false;
     float pitch_deg = 0.0f; // X — tip
     float yaw_deg = 0.0f;   // Y — twist
     float roll_deg = 0.0f;  // Z — tilt left/right
     Vector3D fused_aim{0.0f, 0.0f, -1.0f};
     Vector3D fused_up{0.0f, 1.0f, 0.0f};
-    /** Low-pass accel (g) — kills micro shake before angle extract. */
+    /** Light LPF on accel (g) before Madgwick. */
     float filt_ax = 0.0f;
     float filt_ay = 1.0f;
     float filt_az = 0.0f;
@@ -477,6 +407,8 @@ public:
     int gyro_bias_samples = 0;
     int still_frames = 0;
     bool fusion_logged = false;
+    /** Madgwick IMU — beta ~0.05 balances settle vs lag for handheld torch. */
+    MadgwickImu madgwick{0.05f};
 
     Impl()
     {
@@ -510,13 +442,22 @@ public:
         sensor_ts_ready = false;
         last_sensor_ts = 0;
         empty_polls = 0;
+        madgwick.Reset();
     }
 
-    void RebuildBasis()
+    void RebuildBasisFromMadgwick()
     {
-        // Pad-native euler (stable for left/right roll) → room aim/up.
-        BasisFromPadEulerDeg(pitch_deg, yaw_deg, roll_deg, &fused_aim, &fused_up);
-        // Then place into the room using the DualSense layout object's rotation.
+        // Filter body: +Y = light-bar forward, +Z = face up → room aim/up.
+        float ex = 0.0f;
+        float ey = 0.0f;
+        float ez = 0.0f;
+        madgwick.RotateBodyToEarth(0.0f, 1.0f, 0.0f, &ex, &ey, &ez);
+        fused_aim = FilterEarthToRoom(ex, ey, ez);
+        madgwick.RotateBodyToEarth(0.0f, 0.0f, 1.0f, &ex, &ey, &ez);
+        fused_up = FilterEarthToRoom(ex, ey, ez);
+        OrthonormalizeBasis(&fused_aim, &fused_up);
+        PadEulerFromAimUp(fused_aim, fused_up, &pitch_deg, &yaw_deg, &roll_deg);
+
         if(has_dualsense_origin)
         {
             fused_aim = ApplyRoomEulerXYZDeg(fused_aim,
@@ -537,6 +478,7 @@ public:
         gyro_bias_dps = {0.0f, 0.0f, 0.0f};
         gyro_bias_samples = 0;
         still_frames = 0;
+        madgwick.Reset();
         pitch_deg = 0.0f;
         yaw_deg = 0.0f;
         roll_deg = 0.0f;
@@ -544,7 +486,7 @@ public:
         filt_ay = 1.0f;
         filt_az = 0.0f;
         filt_accel_ready = false;
-        RebuildBasis();
+        RebuildBasisFromMadgwick();
         have_pose = true;
         sample.aim = fused_aim;
         sample.up = fused_up;
@@ -997,14 +939,13 @@ public:
             gz_dps -= gyro_bias_dps.z;
         }
 
-        // Kill micro-shake / hand tremor so axes don't cross-talk into each other.
-        constexpr float k_gyro_deadzone_dps = 2.5f;
+        // Soft deadzone — Madgwick needs real rates; keep only tremor kill.
+        constexpr float k_gyro_deadzone_dps = 1.0f;
         gx_dps = SoftDeadzone(gx_dps, k_gyro_deadzone_dps);
         gy_dps = SoftDeadzone(gy_dps, k_gyro_deadzone_dps);
         gz_dps = SoftDeadzone(gz_dps, k_gyro_deadzone_dps);
 
-        // Smooth accel before angle math (noisy axes → false pitch while rolling).
-        constexpr float k_accel_lpf = 0.12f;
+        constexpr float k_accel_lpf = 0.20f;
         if(!filt_accel_ready)
         {
             filt_ax = ax;
@@ -1040,80 +981,45 @@ public:
             sensor_ts_ready = true;
         }
 
-        const float agx = std::fabs(gx_dps);
-        const float agy = std::fabs(gy_dps);
-        const float agz = std::fabs(gz_dps);
-        constexpr float k_dom_min_dps = 10.0f;
-        constexpr float k_dom_ratio = 1.5f;
-        const bool pitch_dominant = agx >= k_dom_min_dps && agx >= agy * k_dom_ratio && agx >= agz * k_dom_ratio;
-        const bool yaw_dominant = agy >= k_dom_min_dps && agy >= agx * k_dom_ratio && agy >= agz * k_dom_ratio;
-        const bool roll_dominant = agz >= k_dom_min_dps && agz >= agx * k_dom_ratio && agz >= agy * k_dom_ratio;
-
-        if(!have_pose)
+        // DualSense body → filter frame, then Madgwick IMU (no mag).
+        float fax = 0.0f;
+        float fay = 0.0f;
+        float faz = 0.0f;
+        float fgx_dps = 0.0f;
+        float fgy_dps = 0.0f;
+        float fgz_dps = 0.0f;
+        DualSenseBodyToFilter(filt_ax, filt_ay, filt_az, &fax, &fay, &faz);
+        // Hold gyro at 0 until residual bias is sampled — accel still settles pitch/roll.
+        if(gyro_bias_ready)
         {
-            pitch_deg = 0.0f;
-            yaw_deg = 0.0f;
-            roll_deg = 0.0f;
-            float p0 = 0.0f;
-            float r0 = 0.0f;
-            if(PitchRollDegFromAccel(filt_ax, filt_ay, filt_az, &p0, &r0))
-            {
-                pitch_deg = p0;
-                roll_deg = r0;
-            }
-            have_pose = true;
-        }
-        else if(gyro_bias_ready)
-        {
-            float pitch_acc = 0.0f;
-            float roll_acc = 0.0f;
-            const bool grav_ok = PitchRollDegFromAccel(filt_ax, filt_ay, filt_az, &pitch_acc, &roll_acc);
-
-            if(grav_ok)
-            {
-                // While rolling, don't also chase pitch from noisy accel (and vice versa).
-                constexpr float k_hold_deg = 2.0f;
-                const float blend = (still_frames > 4) ? 0.45f : 0.18f;
-                if(roll_dominant && !pitch_dominant)
-                {
-                    roll_deg = HoldOrBlendDeg(roll_deg, roll_acc, k_hold_deg, blend);
-                }
-                else if(pitch_dominant && !roll_dominant)
-                {
-                    pitch_deg = HoldOrBlendDeg(pitch_deg, pitch_acc, k_hold_deg, blend);
-                }
-                else
-                {
-                    pitch_deg = HoldOrBlendDeg(pitch_deg, pitch_acc, k_hold_deg, blend);
-                    roll_deg = HoldOrBlendDeg(roll_deg, roll_acc, k_hold_deg, blend);
-                }
-            }
-            else
-            {
-                if(pitch_dominant)
-                {
-                    pitch_deg = WrapAngleDeg(pitch_deg + gx_dps * dt);
-                    pitch_deg = std::clamp(pitch_deg, -80.0f, 80.0f);
-                }
-                if(roll_dominant)
-                {
-                    roll_deg = WrapAngleDeg(roll_deg + gz_dps * dt);
-                    roll_deg = std::clamp(roll_deg, -80.0f, 80.0f);
-                }
-            }
-
-            if(yaw_dominant && !pitch_dominant && !roll_dominant)
-            {
-                yaw_deg = WrapAngleDeg(yaw_deg + gy_dps * dt);
-            }
+            DualSenseBodyToFilter(gx_dps, gy_dps, gz_dps, &fgx_dps, &fgy_dps, &fgz_dps);
         }
 
-        RebuildBasis();
+        // Skip accel correction when |a| far from 1g (linear accel / free fall).
+        float ax_in = fax;
+        float ay_in = fay;
+        float az_in = faz;
+        const float filt_mag = std::sqrt(fax * fax + fay * fay + faz * faz);
+        if(filt_mag < 0.75f || filt_mag > 1.25f)
+        {
+            ax_in = 0.0f;
+            ay_in = 0.0f;
+            az_in = 0.0f;
+        }
+
+        madgwick.UpdateIMU(fgx_dps * kDegToRad,
+                           fgy_dps * kDegToRad,
+                           fgz_dps * kDegToRad,
+                           ax_in, ay_in, az_in,
+                           dt);
+        have_pose = true;
+        RebuildBasisFromMadgwick();
 
         if(!fusion_logged)
         {
-            LOG_INFO("[3DSpatial] ControllerTilt: pad-native spatial IMU "
-                     "(roll about beam; smoothed gravity pitch/roll)");
+            LOG_INFO("[3DSpatial] ControllerTilt: Madgwick IMU fuse "
+                     "(pitch/roll vs gravity; yaw relative to Recenter; beta=%.3f)",
+                     madgwick.Beta());
             fusion_logged = true;
         }
 
@@ -1244,7 +1150,8 @@ void ControllerTiltManager::RecenterHeading()
     }
     QMutexLocker lock(&impl_->mutex);
     impl_->RecenterPose();
-    LOG_INFO("[3DSpatial] ControllerTilt: recentered (yaw=0 home; pitch/roll follow gravity)");
+    LOG_INFO("[3DSpatial] ControllerTilt: recentered Madgwick quat "
+             "(hold flat, light bar toward front wall)");
 }
 
 bool ControllerTiltManager::ResolveDualSenseOrigin(

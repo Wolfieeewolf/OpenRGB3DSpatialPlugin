@@ -11,12 +11,11 @@
 
 /**
  * Singleton that polls supported motion controllers and exposes a RoomGrid aim vector.
- * DualSense IMU maps 1:1 into the room:
+ * DualSense IMU maps into the room via Madgwick 6-axis fusion:
  *   (0,0,0)° = flat on desk, light bar toward the front wall (−Z) — same as a DualSense
- *   controller transform at identity. X/Y/Z degrees use the same Euler XYZ convention as
- *   every other object in the room. Pitch (X) and roll (Z) come from gravity (real tilt);
- *   yaw (Y) is gyro from Recenter (no magnetometer). Layout DualSense rotation is applied
- *   on top so a pad you placed in the grid matches the physical one.
+ *   controller transform at identity. Pitch/roll track gravity; yaw is relative to the
+ *   last Recenter (no magnetometer — heading will wander). Layout DualSense rotation is
+ *   applied on top so a pad you placed in the grid matches the physical one.
  */
 class ControllerTiltManager
 {
@@ -37,8 +36,8 @@ public:
     ControllerTiltLinkStatus LinkStatus() const;
 
     /**
-     * Reset to RoomGrid (0,0,0): hold DualSense flat, light bar toward front wall, then click.
-     * Sets yaw home; pitch/roll then track real gravity tilt from that pose.
+     * Reset Madgwick quat to identity (room home): hold DualSense flat, light bar toward
+     * front wall, then click. Also restarts residual gyro bias sampling.
      */
     void RecenterHeading();
 

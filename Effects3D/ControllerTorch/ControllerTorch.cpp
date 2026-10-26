@@ -67,9 +67,9 @@ EffectInfo3D ControllerTorch::GetEffectInfo() const
     EffectInfo3D info{};
     info.effect_name = "Controller Torch";
     info.effect_description =
-        "DualSense torch from the DualSense layout position. "
-        "Spin on the table steers left/right; tip Triangle for up/down; "
-        "tip left/right rolls the beam halves.";
+        "DualSense torch from the DualSense layout position (Madgwick IMU). "
+        "Tip and roll track gravity; desk twist is relative to Recenter "
+        "(no compass — re-center if heading wanders).";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_CONTROLLER_TORCH;
     info.is_reversible = false;
@@ -80,7 +80,6 @@ EffectInfo3D ControllerTorch::GetEffectInfo() const
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
     info.needs_frequency = false;
-    info.default_speed_scale = 10.0f;
     info.use_size_parameter = false;
     info.show_speed_control = false;
     info.show_brightness_control = true;
@@ -101,10 +100,10 @@ void ControllerTorch::SetupCustomUI(QWidget* parent)
     QLabel* hint = new QLabel(
         QStringLiteral(
             "Add a DualSense to the room — its layout position is the torch apex. "
-            "Start flat on the desk, light bar toward the front wall, then Recenter. "
-            "Place the DualSense in the room like the real pad (flat = rotation 0,0,0, "
-            "light bar toward the front wall). Recenter while it sits that way. "
-            "Then real tilts match the room: X tip, Y twist, Z roll — same Euler as other objects."),
+            "Place it like the real pad (flat = rotation 0,0,0, light bar toward the front wall). "
+            "Hold that pose and click Recenter. Pitch/roll track gravity (Madgwick IMU); "
+            "twist (yaw) is relative to Recenter only — DualSense has no compass, so re-center "
+            "if heading wanders."),
         w);
     hint->setWordWrap(true);
     layout->addWidget(hint);
@@ -125,7 +124,7 @@ void ControllerTorch::SetupCustomUI(QWidget* parent)
     recenter_btn->setToolTip(
         QStringLiteral(
             "Hold the DualSense still in the home pose, then click. "
-            "Resets the beam and resamples residual gyro bias."));
+            "Resets Madgwick orientation and residual gyro bias."));
     QObject::connect(recenter_btn, &QPushButton::clicked, this, [this]() {
         if(ControllerTiltManager* tilt = ControllerTiltManager::instance())
         {

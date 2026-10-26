@@ -89,6 +89,7 @@ INCLUDEPATH += \
     OpenRGB/ \
     OpenRGB/SPDAccessor \
     OpenRGB/hidapi_wrapper \
+    OpenRGB/dependencies/hidapi-win/include \
     OpenRGB/i2c_smbus \
     OpenRGB/RGBController \
     OpenRGB/net_port \
