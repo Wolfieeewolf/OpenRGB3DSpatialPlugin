@@ -83,7 +83,9 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 
 ## Deferred / next (later)
 
+- **Multipass coverage** — exhaustive tracker: [multipass-coverage.md](multipass-coverage.md); engine regroup inventory: [plugin-file-map.md](plugin-file-map.md). Presets: sibling repo `docs/multipass-coverage.md`.
 - **3D grid placement editor** — place volume clips in the viewport (translate/rotate/scale); keep timeline; switch modes. Separate branch.
 - **Swarm / flock** particle mode (spatial hash).
 - **More showcase packs** once the first five feel good in real rooms.
 - **Ribbon polish** (multi-tube, accent lights) if neon looks need it.
+- **Engine folder regroup** — after coverage; group by engine capability (not presets sections); see plugin-file-map.
