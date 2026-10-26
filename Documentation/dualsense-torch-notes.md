@@ -11,10 +11,11 @@ Goal when revived: DualSense as a **room torch / aim** (IMU → RoomGrid beam), 
 | Main | Not merged yet |
 | Fusion | **Madgwick IMU** in `Input/MadgwickImu.h` via `ControllerTiltManager` (β≈0.05, rad/s, sensor `dt`) |
 | Recenter | Resets Madgwick quat to identity + restarts residual gyro bias |
-| Pitch / roll | Gravity-stabilized — should hold vs the floor |
-| Yaw / heading | Still **relative** (no mag) — will wander; Recenter is the fix |
+| Pitch / roll | Gravity-stabilized — better than pre-Madgwick |
+| Yaw / heading | Still drifts a lot on DualSense (no mag) — **playtest: better, not good enough for torch aim** |
 | Hardware today | 6-axis (gyro + accel); **no magnetometer** |
-| Hardware later | 9-axis + mag (compass) preferred for absolute yaw |
+| Hardware later | **Need 9-axis + mag** for usable absolute heading; DualSense alone is parked for that reason |
+| Product call | Don’t keep polishing 6-axis yaw — wait for a mag-capable controller / backend |
 
 ## What our branch already does
 
