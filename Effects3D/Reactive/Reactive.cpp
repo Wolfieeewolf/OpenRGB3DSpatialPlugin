@@ -1584,10 +1584,10 @@ void Reactive::LoadSettings(const nlohmann::json& settings)
     {
         press_glow_deci_sec_ = std::clamp(settings["press_glow_deci_sec"].get<int>(), 1, 120);
     }
-    if(!settings.contains("band_thickness") && settings.contains("ring_width_pct") && settings["ring_width_pct"].is_number())
-        effect_band_thickness = (unsigned int)std::clamp(settings["ring_width_pct"].get<int>(), 0, 100);
     if(thickness_slider)
+    {
         thickness_slider->setValue((int)effect_band_thickness);
+    }
 
     if(QWidget* panel = CustomSettingsPanelWidget())
     {

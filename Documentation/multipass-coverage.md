@@ -14,13 +14,14 @@ Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 | Effects3D/FolderVolume | pending | | Oct multipass — ratchet |
 | Effects3D/ShaderField | pending | | Oct multipass — ratchet |
 | Effects3D/ScreenMirror | pending | | Oct multipass — ratchet |
-| Effects3D/Reactive | pending | | Stale ~Sep 2026 |
+| Effects3D/Reactive | fixed | 2026-10-27 | Removed legacy `ring_width_pct` LoadSettings remap; wiring only-while-running OK; **~1.5k lines — split later** |
 | Effects3D/Games | pending | | Stale |
 | Effects3D/MovieSync | pending | | |
 | Effects3D/Triggers | pending | | |
 | Effects3D/SpatialLighting + SpatialPatternKernels | pending | | |
-| Audio/ | pending | | Stale |
-| Input/ | pending | | DualSense tilt parked on feat branch |
+| Audio/ | keep | 2026-10-27 | No printf/debug leftovers; **AudioInputManager ~1.4k — split later** |
+| Input/Reactive* | keep | 2026-10-27 | Session start/stop gated by PlaybackUsesReactive |
+| Input/ControllerTilt* | parked | | DualSense tilt on feat branch |
 | Shaders/ | pending | | Shared GL — map to `shared/` |
 | SpatialLighting/ SpatialRoom/ SpatialSamplers/ | pending | | Room core |
 | Game/ + integrations/ | pending | | |

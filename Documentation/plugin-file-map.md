@@ -34,14 +34,17 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `Effects3D/FolderVolume/*` | Content host | engines/folder-volume | | |
 | `Effects3D/ShaderField/*` | Shader field effect | engines/shader-field | | |
 | `Effects3D/ScreenMirror/*` | Ambilight / capture | engines/screen-mirror | | |
-| `Effects3D/Reactive/*` | Reactive effect | engines/reactive | | Likely large — judo candidate |
+| `Effects3D/Reactive/Reactive.cpp` | Reactive effect body | engines/reactive | **split** UI vs wave tick later | ~1563 lines; legacy ring_width remap removed 2026-10-27 |
+| `Effects3D/Reactive/Reactive.h` | Reactive API | engines/reactive | keep with cpp | |
 | `Effects3D/Games/*` | Minecraft stack | engines/game | | |
 | `Effects3D/MovieSync/*` | Movie Sync | engines/movie-sync | | |
 | `Effects3D/Triggers/*` | Triggers | engines/triggers | | |
 | `Effects3D/SpatialLighting/*` | Room light UI bits | shared or room | | |
 | `Effects3D/SpatialPatternKernels/*` | Strip kernels | shared | | |
-| `Audio/*` | Audio capture | engines/audio | | |
-| `Input/Reactive*` | Reactive input | engines/reactive | | |
+| `Effects3D/AudioReactiveCommon.h` | Audio effect shared helpers | engines/audio | keep / maybe split .cpp later | Large header-only |
+| `Effects3D/AudioReactiveUi.h` | Audio UI helpers | engines/audio + ui | | |
+| `Audio/AudioInputManager.*` | Capture + FFT bands | engines/audio | **split** capture vs analyze later | ~1378 lines |
+| `Input/Reactive*` | Reactive input | engines/reactive | keep | Gated by effect running |
 | `Input/ControllerTilt*` | DualSense tilt | parked | | Feature branch |
 | `Shaders/*` | GL pool / field engines | shared | | |
 | `SpatialLighting/*` `SpatialRoom/*` `SpatialSamplers/*` | Room core | shared / room | | |
