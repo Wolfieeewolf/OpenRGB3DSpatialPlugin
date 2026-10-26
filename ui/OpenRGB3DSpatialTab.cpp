@@ -741,7 +741,6 @@ void OpenRGB3DSpatialTab::bindUiPanels()
 
     ui->effectGlobalSettingsPanel->bindTab(this);
     SetupStackRoomOutputPanel();
-    ui->effectControlsHostPanel->bindTab(this);
     ui->audioInputPanel->bindTab(this);
 
     LoadStackPresets();

@@ -35,7 +35,7 @@ void EffectStackBlendRow::populateBlendItems()
         Qt::ToolTipRole);
     combo->addItem(QStringLiteral("Replace"), (int)BlendMode::REPLACE);
     combo->setItemData(1,
-        QStringLiteral("Completely replaces colors from previous effects (last effect wins)"),
+        QStringLiteral("Replaces the composite below with this layer's colors (this layer wins)."),
         Qt::ToolTipRole);
     combo->addItem(QStringLiteral("Add"), (int)BlendMode::ADD);
     combo->setItemData(2, QStringLiteral("Adds colors together (brightens)"), Qt::ToolTipRole);

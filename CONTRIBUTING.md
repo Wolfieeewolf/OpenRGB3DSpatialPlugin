@@ -163,7 +163,7 @@ Timeline `.fx` notes: `hash_byte(seed, local_ms, period, shift)` â€” when u
 
 **Shell Pattern / Surface Ambient:** Volume FolderVolume content (`effects/volume/shell-pattern.fs`, `surface-ambient.fs`). Palette / stratum finish stays on CPU where the host finish path requires it. Thickness and edge fade use shared motion controls (`global: thickness` / `edge`). Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
 
-**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `effects/patterns/*.kernel` via `SpatialPatternKernelShader()`. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. `EvalSpatialPatternKernel` is a single sine if the GPU assist fails. Shell Pattern content does not use this assist.
+**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `effects/patterns/*.kernel` via `SpatialPatternKernelShader()` on shared **`SpatialOffscreenGlPool`**. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. Fail closed if the GPU assist is unavailable (no CPU kernel dual). Shell Pattern content does not use this assist.
 
 When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.

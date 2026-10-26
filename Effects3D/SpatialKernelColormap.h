@@ -137,11 +137,6 @@ inline void StripColormapLoadCanonical(const nlohmann::json& settings,
                 kern = found;
             }
         }
-        else if(k.is_number_integer())
-        {
-            // Legacy profiles stored a list index.
-            kern = SpatialPatternKernelClamp(k.get<int>());
-        }
     }
     if(settings.contains("strip_cmap_rep") && settings["strip_cmap_rep"].is_number())
         rep = std::max(1.0f, std::min(40.0f, settings["strip_cmap_rep"].get<float>()));

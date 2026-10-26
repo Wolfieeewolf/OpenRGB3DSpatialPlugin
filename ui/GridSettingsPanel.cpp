@@ -124,24 +124,29 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
             overlay_point_size       = std::max(1, std::min(12, overlay_point_size));
             overlay_step             = std::max(1, std::min(24, overlay_step));
             ui->roomGridOverlayCheckbox->setChecked(show);
-            ui->overlayBrightSlider->setValue(overlay_bright_pct);
-            ui->overlayPointSlider->setValue(overlay_point_size);
-            ui->overlayStepSlider->setValue(overlay_step);
-            ui->overlayBrightLabel->setText(QString::number(overlay_bright_pct) + "%");
-            ui->overlayPointLabel->setText(QString::number(overlay_point_size));
-            ui->overlayStepLabel->setText(QString::number(overlay_step));
             if(tab->viewport)
             {
                 tab->viewport->SetShowRoomGridOverlay(show);
-                tab->viewport->SetRoomGridBrightness((float)overlay_bright_pct / 100.0f);
-                tab->viewport->SetRoomGridPointSize((float)overlay_point_size);
-                tab->viewport->SetRoomGridStep(overlay_step);
             }
         }
     }
     catch(const std::exception& e)
     {
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore room grid overlay settings: %s", e.what());
+    }
+
+    // Sync even when RoomGrid is absent — .ui placeholders (e.g. "35%") are not the code defaults.
+    ui->overlayBrightSlider->setValue(overlay_bright_pct);
+    ui->overlayPointSlider->setValue(overlay_point_size);
+    ui->overlayStepSlider->setValue(overlay_step);
+    ui->overlayBrightLabel->setText(QString::number(overlay_bright_pct) + "%");
+    ui->overlayPointLabel->setText(QString::number(overlay_point_size));
+    ui->overlayStepLabel->setText(QString::number(overlay_step));
+    if(tab->viewport)
+    {
+        tab->viewport->SetRoomGridBrightness((float)overlay_bright_pct / 100.0f);
+        tab->viewport->SetRoomGridPointSize((float)overlay_point_size);
+        tab->viewport->SetRoomGridStep(overlay_step);
     }
 
     connect(ui->roomGuideLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::roomGuideLabelsToggled);

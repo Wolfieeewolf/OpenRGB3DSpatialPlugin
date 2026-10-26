@@ -15,15 +15,6 @@ EffectControlsHostPanel::EffectControlsHostPanel(QWidget* parent)
 
 EffectControlsHostPanel::~EffectControlsHostPanel() = default;
 
-void EffectControlsHostPanel::bindTab(OpenRGB3DSpatialTab* tab)
-{
-    if(!tab)
-    {
-        return;
-    }
-
-}
-
 QVBoxLayout* EffectControlsHostPanel::contentLayout() const
 {
     return content_layout_;

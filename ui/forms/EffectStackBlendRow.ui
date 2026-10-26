@@ -18,7 +18,7 @@
    <item>
     <widget class="QLabel" name="blendLabel">
      <property name="text">
-      <string>Stack Blend Mode:</string>
+      <string>Blend mode:</string>
      </property>
     </widget>
    </item>

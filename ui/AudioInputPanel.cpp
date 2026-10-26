@@ -21,7 +21,6 @@
 #include <QSizePolicy>
 
 #include <algorithm>
-#include <cmath>
 
 AudioInputPanel::AudioInputPanel(QWidget* parent)
     : QGroupBox(parent)
@@ -102,7 +101,6 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
     /* Locked analyzer shape: 16 bands / 512 FFT. */
     AudioInputManager::instance()->setBandsCount(16);
     AudioInputManager::instance()->setFFTSize(512);
-    tab->rebuildAudioEqSliders(false);
     connect(ui->eqResetButton, &QPushButton::clicked, tab, [tab]() {
         AudioInputManager::instance()->resetEq();
         tab->sync_audio_eq_sliders_from_manager();
@@ -149,8 +147,6 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         AudioInputManager::instance()->setSmoothing(dv / 100.0f);
     }
 
-    AudioInputManager::instance()->setBandsCount(16);
-    AudioInputManager::instance()->setFFTSize(512);
     tab->rebuildAudioEqSliders(false);
 
     if(settings.contains("AudioEqGain") && settings["AudioEqGain"].is_array())
@@ -171,8 +167,6 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         }
         tab->sync_audio_eq_sliders_from_manager();
     }
-
-    AudioAnalyzerSettings::applyFromPluginSettings(tab->GetPluginSettings());
 
     setVisible(false);
 }

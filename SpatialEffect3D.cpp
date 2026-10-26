@@ -1307,6 +1307,7 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     float kernel_rep_eff = 1.0f;
     StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, time_sec,
                             phase_eff, time_eff, kernel_rep_eff);
+    (void)kernel_rep_eff;
 
     float lx = 0.0f, ly = 0.0f, lz = 0.0f;
     StripColormapLocalAxes(grid, normalized_scale, origin, rot, lx, ly, lz);
@@ -1316,10 +1317,6 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     const float s01 = StripColormapComputeS01(unfold_mode, dir_deg, phase_eff, time_eff,
                                               lx, ly, lz, phase_use, time_use);
 
-    if(strip_cmap_assist_.isAvailable())
-        return std::clamp(strip_cmap_assist_.sample01(s01), 0.0f, 1.0f);
-
-    float k = EvalSpatialPatternKernel(GetEffectStripColormapKernel(), s01, phase_use,
-                                       kernel_rep_eff, time_use);
-    return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
+    /* Fail closed: strip kernels are GPU-only (shared pool). No CPU sine dual. */
+    return std::clamp(strip_cmap_assist_.sample01(s01), 0.0f, 1.0f);
 }

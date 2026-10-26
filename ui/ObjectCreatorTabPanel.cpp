@@ -11,7 +11,6 @@
 
 #include <QComboBox>
 #include <QFont>
-#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -46,7 +45,7 @@ void ObjectCreatorTabPanel::applyVisualStyles()
     ui->displayListLabel->setFont(bold);
 
     ui->emptyHelpLabel->setText(QStringLiteral(
-        "Choose Custom Controller, Reference Point, Display Plane, Zone, Actions, or Triggers above."));
+        "Choose Custom Controller, Reference Point, Display Plane, Zone, Actions, Triggers, or Scene Prop above."));
     PluginUiApplyMutedSecondaryLabel(ui->emptyHelpLabel->label());
     QFont empty_font = ui->emptyHelpLabel->label()->font();
     empty_font.setItalic(true);
@@ -64,6 +63,12 @@ void ObjectCreatorTabPanel::applyVisualStyles()
     PluginUiApplyItalicSecondaryLabel(ui->displayPlanesEmptyLabel->label());
     ui->displayPlanesEmptyLabel->label()->setAlignment(Qt::AlignHCenter);
     PluginUiApplyMutedSecondaryLabel(ui->refHelpLabel->label());
+
+    if(scene_props_empty_label_)
+    {
+        PluginUiApplyItalicSecondaryLabel(scene_props_empty_label_);
+        scene_props_empty_label_->setAlignment(Qt::AlignHCenter);
+    }
 }
 
 void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
@@ -91,7 +96,7 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->editDisplayPlaneButton->setToolTip("Edit selected display plane name and size");
     ui->removeDisplayPlaneButton->setToolTip("Delete selected display plane");
     ui->displayCaptureCombo->setToolTip(
-        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, â€¦)."));
+        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …)."));
 
     connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
             &OpenRGB3DSpatialTab::customControllerSelectionChanged);
@@ -296,6 +301,8 @@ void ObjectCreatorTabPanel::buildScenePropsPage()
     row_layout->setContentsMargins(0, 0, 0, 0);
     edit_scene_prop_button_ = new QPushButton(tr("Edit"), row);
     remove_scene_prop_button_ = new QPushButton(tr("Remove"), row);
+    edit_scene_prop_button_->setEnabled(false);
+    remove_scene_prop_button_->setEnabled(false);
     row_layout->addWidget(edit_scene_prop_button_);
     row_layout->addWidget(remove_scene_prop_button_);
     layout->addWidget(row);

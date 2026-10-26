@@ -5,9 +5,7 @@
 #include "MediaTextureEffectUtils.h"
 #include "PluginUiUtils.h"
 #include "OpenRGB3DSpatialPlugin.h"
-#include "PluginSettingsPaths.h"
 #include "EffectListManager3D.h"
-#include "PlayerEngines.h"
 #include "EffectUiRows.h"
 
 #include <QVBoxLayout>
@@ -20,7 +18,6 @@
 #include <QTextStream>
 #include <QFileInfo>
 #include <QUrl>
-#include <QDirIterator>
 #include <algorithm>
 #include <cmath>
 
@@ -221,6 +218,10 @@ void ShaderField::PrepareGpuFields(std::uint64_t /*render_sequence*/, float time
     SyncUniforms(time_sec);
     if(!shader_engine->ensureReady())
     {
+        {
+            QMutexLocker lock(&display_mutex);
+            display_frame.reset();
+        }
         if(compile_log_label && !shader_engine->lastError().isEmpty())
         {
             compile_log_label->setVisible(true);
@@ -229,10 +230,14 @@ void ShaderField::PrepareGpuFields(std::uint64_t /*render_sequence*/, float time
         return;
     }
     const QImage img = shader_engine->latestFrame();
+    QMutexLocker lock(&display_mutex);
     if(!img.isNull())
     {
-        QMutexLocker lock(&display_mutex);
         display_frame = std::make_shared<QImage>(img);
+    }
+    else
+    {
+        display_frame.reset();
     }
 }
 

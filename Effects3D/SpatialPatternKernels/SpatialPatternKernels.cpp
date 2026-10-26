@@ -11,7 +11,6 @@
 #include <QTextStream>
 
 #include <algorithm>
-#include <cmath>
 #include <vector>
 
 namespace
@@ -143,13 +142,6 @@ const KernelFile* KernelAt(int id)
 
 } // namespace
 
-void SpatialPatternKernelsReload()
-{
-    g_kernels.clear();
-    g_loaded = false;
-    LoadKernels();
-}
-
 int SpatialPatternKernelCount()
 {
     LoadKernels();
@@ -222,14 +214,6 @@ int SpatialPatternKernelFindById(const std::string& id)
         }
     }
     return -1;
-}
-
-float EvalSpatialPatternKernel(int, float s01, float phase01, float rep, float time_sec)
-{
-    const float r = 1.0f + (std::max(1.0f, rep) - 1.0f) * 0.72f;
-    const float ph = (phase01 * 0.35f + time_sec * 0.08f);
-    const float wrapped = ph - std::floor(ph);
-    return std::sin(6.2831853f * (s01 * r + wrapped));
 }
 
 QString SpatialPatternKernelShader()

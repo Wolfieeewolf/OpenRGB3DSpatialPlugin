@@ -169,7 +169,7 @@
      <item>
       <widget class="QPushButton" name="importCustomControllerButton">
        <property name="text">
-        <string>Importâ€¦</string>
+        <string>Import…</string>
        </property>
       </widget>
      </item>
@@ -377,7 +377,7 @@
         <bool>false</bool>
        </property>
        <property name="toolTip">
-        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, â€¦).</string>
+        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …).</string>
        </property>
       </widget>
      </item>

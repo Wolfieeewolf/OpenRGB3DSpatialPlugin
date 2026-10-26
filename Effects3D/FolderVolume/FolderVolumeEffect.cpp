@@ -213,7 +213,7 @@ FolderVolumeSpec ReadSpec(const QString& path)
                         slider.show_percent = true;
                     }
                 }
-                spec.steps.push_back({true, (int)spec.sliders.size()});
+                spec.steps.push_back({1, (int)spec.sliders.size()});
                 spec.sliders.push_back(std::move(slider));
             }
         }
@@ -325,7 +325,7 @@ FolderVolumeSpec ReadSpec(const QString& path)
         {
             if(spec.patterns.empty())
             {
-                spec.steps.push_back({false, 0});
+                spec.steps.push_back({0, 0});
             }
             spec.patterns.push_back({val, tip});
         }
@@ -342,22 +342,6 @@ FolderVolumeSpec ReadSpec(const QString& path)
         {
             break;
         }
-    }
-    /* Legacy class_name fallbacks when headers omit the new canonical keys. */
-    if(spec.media_layout.empty())
-    {
-        if(spec.class_name == "OmniShapeTexture")
-        {
-            spec.media_layout = "omni";
-        }
-        else if(spec.class_name == "TextureProjection")
-        {
-            spec.media_layout = "projection";
-        }
-    }
-    if(spec.effect_instances <= 0 && spec.class_name == "RotatingConeSpotlights")
-    {
-        spec.effect_instances = 1;
     }
     if(spec.pattern_from_kernels)
     {
@@ -1258,7 +1242,7 @@ void FolderVolumeEffect::BindMediaAmbienceBlock(QVBoxLayout* layout)
     bind_slider(media->ambienceDistRow(), "ambience_dist_falloff", tr("Distance dim:"),
                 tr("Darkens LEDs farther from the effect origin."));
     bind_slider(media->ambienceCurveRow(), "ambience_falloff_curve", tr("Falloff curve:"),
-                tr("Shapes how fast the vignette drops (soft ? hard)."));
+                tr("Shapes how fast the vignette drops (soft to hard)."));
     bind_slider(media->ambienceEdgeRow(), "ambience_edge_soft", tr("Edge fade:"),
                 tr("Fades toward room walls/floor/ceiling."));
     bind_slider(media->ambiencePropRow(), "ambience_propagation", tr("Wave delay:"),
@@ -2630,48 +2614,6 @@ nlohmann::json FolderVolumeEffect::SaveSettings() const
 void FolderVolumeEffect::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    auto take_thickness = [&](const char* key) {
-        if(!settings.contains("band_thickness") && settings.contains(key) && settings[key].is_number())
-            effect_band_thickness = (unsigned int)std::clamp((int)std::lround(settings[key].get<double>() * 100.0), 0, 100);
-    };
-    take_thickness("surface_thickness");
-    take_thickness("ring_thickness");
-    take_thickness("thickness");
-    if(!settings.contains("edge_fade") && settings.contains("surface_edge_fade") && settings["surface_edge_fade"].is_number())
-        effect_edge_fade = (unsigned int)std::clamp((int)std::lround(settings["surface_edge_fade"].get<double>()), 0, 100);
-    auto take_count = [&](const char* key) {
-        if(!settings.contains("instance_count") && settings.contains(key) && settings[key].is_number())
-            effect_instance_count = (unsigned int)std::clamp((int)std::lround(settings[key].get<double>()), 1, 48);
-    };
-    take_count("num_stars");
-    take_count("pf_count");
-    take_count("max_bubbles");
-    take_count("ball_count");
-    if(!settings.contains("path_axis"))
-    {
-        if(settings.contains("depth_axis") && settings["depth_axis"].is_number_integer())
-            effect_path_axis = std::clamp(settings["depth_axis"].get<int>(), 0, 2);
-        else if(settings.contains("travel_axis") && settings["travel_axis"].is_number_integer())
-            effect_path_axis = std::clamp(settings["travel_axis"].get<int>(), 0, 2);
-    }
-    if(thickness_slider)
-        thickness_slider->setValue((int)effect_band_thickness);
-    if(edge_fade_slider)
-        edge_fade_slider->setValue((int)effect_edge_fade);
-    if(count_slider)
-        count_slider->setValue((int)effect_instance_count);
-    if(path_axis_combo)
-        path_axis_combo->setCurrentIndex(effect_path_axis);
-    if(!settings.contains("strip_cmap_unfold") && settings.contains("shellpattern_unfold_mode") && settings["shellpattern_unfold_mode"].is_number_integer())
-        effect_strip_cmap_unfold = std::clamp(settings["shellpattern_unfold_mode"].get<int>(), 0, 8);
-    if(!settings.contains("strip_cmap_dir") && settings.contains("shellpattern_direction_deg") && settings["shellpattern_direction_deg"].is_number())
-        effect_strip_cmap_dir = std::fmod(settings["shellpattern_direction_deg"].get<float>() + 360.0f, 360.0f);
-    if(!settings.contains("strip_cmap_rep") && settings.contains("shellpattern_repeats") && settings["shellpattern_repeats"].is_number())
-        effect_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["shellpattern_repeats"].get<float>()));
-    if(!settings.contains("band_thickness") && settings.contains("shellpattern_surface_thickness") && settings["shellpattern_surface_thickness"].is_number())
-        effect_band_thickness = (unsigned int)std::clamp((int)std::lround(settings["shellpattern_surface_thickness"].get<float>() * 100.0f), 0, 100);
-    if(!settings.contains("edge_fade") && settings.contains("shellpattern_edge_fade_pct") && settings["shellpattern_edge_fade_pct"].is_number())
-        effect_edge_fade = (unsigned int)std::clamp((int)std::lround(settings["shellpattern_edge_fade_pct"].get<float>()), 0, 100);
     SyncEffectStripColormapPanelFromModel();
     if(!spec_.pattern_key.empty() && settings.contains(spec_.pattern_key))
     {
@@ -2704,7 +2646,6 @@ void FolderVolumeEffect::LoadSettings(const nlohmann::json& settings)
         }
         else if(pattern_value.is_number_integer())
         {
-            // Legacy profiles stored a list index.
             pattern_index = std::clamp(pattern_value.get<int>(), 0, pattern_count - 1);
         }
     }
@@ -2739,63 +2680,6 @@ void FolderVolumeEffect::LoadSettings(const nlohmann::json& settings)
             stored = (int)std::lround(settings[key].get<double>());
         }
         slider_values[i] = std::clamp(stored, spec_.sliders[i].min, spec_.sliders[i].max);
-    }
-    if(settings.contains("cone_spot_surface") && settings["cone_spot_surface"].is_number_integer())
-    {
-        const int surf = settings["cone_spot_surface"].get<int>();
-        if(surf == 2 || surf == 3 || surf == 4)
-        {
-            const int combo = (surf == 2) ? 1 : (surf == 3) ? 2 : 3;
-            for(size_t i = 0; i < spec_.combos.size(); ++i)
-            {
-                if(spec_.combos[i].key == "cone_spot_surface")
-                    combo_values[i] = combo;
-            }
-        }
-    }
-    if(settings.contains("cone_spot_mirror") && settings["cone_spot_mirror"].is_boolean())
-    {
-        for(size_t i = 0; i < spec_.combos.size(); ++i)
-        {
-            if(spec_.combos[i].key == "cone_spot_mirror")
-                combo_values[i] = settings["cone_spot_mirror"].get<bool>() ? 1 : 0;
-        }
-    }
-    auto set_slider_from_float = [&](const char* key, float value, float mul) {
-        for(size_t i = 0; i < spec_.sliders.size(); ++i)
-        {
-            if(spec_.sliders[i].key != key)
-                continue;
-            slider_values[i] = std::clamp((int)std::lround(value * mul),
-                                          spec_.sliders[i].min, spec_.sliders[i].max);
-        }
-    };
-    if(settings.contains("cone_spot_scale") && settings["cone_spot_scale"].is_number()
-       && settings["cone_spot_scale"].get<double>() <= 1.0)
-        set_slider_from_float("cone_spot_scale", (float)settings["cone_spot_scale"].get<double>(), 1000.0f);
-    if(settings.contains("cone_spot_hue01") && settings["cone_spot_hue01"].is_number()
-       && settings["cone_spot_hue01"].get<double>() <= 1.0)
-        set_slider_from_float("cone_spot_hue01", (float)settings["cone_spot_hue01"].get<double>(), 1000.0f);
-    if(settings.contains("cone_spot_motion") && settings["cone_spot_motion"].is_number()
-       && settings["cone_spot_motion"].get<double>() <= 10.0)
-        set_slider_from_float("cone_spot_motion", (float)settings["cone_spot_motion"].get<double>(), 100.0f);
-    if(settings.contains("cone_spot_wander") && settings["cone_spot_wander"].is_number()
-       && settings["cone_spot_wander"].get<double>() <= 5.0)
-        set_slider_from_float("cone_spot_wander", (float)settings["cone_spot_wander"].get<double>(), 100.0f);
-    if(settings.contains("cone_spot_apex_u") && settings["cone_spot_apex_u"].is_array()
-       && settings.contains("cone_spot_apex_v") && settings["cone_spot_apex_v"].is_array())
-    {
-        const auto& au = settings["cone_spot_apex_u"];
-        const auto& av = settings["cone_spot_apex_v"];
-        const char* ukeys[] = {"cone1_u", "cone2_u", "cone3_u", "cone4_u"};
-        const char* vkeys[] = {"cone1_v", "cone2_v", "cone3_v", "cone4_v"};
-        for(int i = 0; i < 4; ++i)
-        {
-            if(i < (int)au.size() && au[i].is_number())
-                set_slider_from_float(ukeys[i], au[i].get<float>(), 100.0f);
-            if(i < (int)av.size() && av[i].is_number())
-                set_slider_from_float(vkeys[i], av[i].get<float>(), 100.0f);
-        }
     }
     if(spec_.uses_audio)
     {

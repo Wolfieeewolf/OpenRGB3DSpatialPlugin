@@ -646,11 +646,6 @@ void CaptureZonesWidget::SetDisplayPlane(DisplayPlane3D* plane)
         preview_widget->SetDisplayPlane(plane);
 }
 
-void CaptureZonesWidget::SetValueChangedCallback(std::function<void()> callback)
-{
-    value_changed_callback = callback;
-}
-
 void CaptureZonesWidget::SetCaptureZones(std::vector<CaptureZone>* zones)
 {
     if(preview_widget)
@@ -659,8 +654,6 @@ void CaptureZonesWidget::SetCaptureZones(std::vector<CaptureZone>* zones)
 
 void CaptureZonesWidget::onInternalChange()
 {
-    if(value_changed_callback)
-        value_changed_callback();
     emit valueChanged();
 }
 

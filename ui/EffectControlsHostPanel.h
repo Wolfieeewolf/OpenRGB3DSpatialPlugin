@@ -7,8 +7,6 @@
 
 class QVBoxLayout;
 
-class OpenRGB3DSpatialTab;
-
 class EffectControlsHostPanel : public QWidget
 {
     Q_OBJECT
@@ -16,8 +14,6 @@ class EffectControlsHostPanel : public QWidget
 public:
     explicit EffectControlsHostPanel(QWidget* parent = nullptr);
     ~EffectControlsHostPanel() override;
-
-    void bindTab(OpenRGB3DSpatialTab* tab);
 
     QVBoxLayout* contentLayout() const;
 

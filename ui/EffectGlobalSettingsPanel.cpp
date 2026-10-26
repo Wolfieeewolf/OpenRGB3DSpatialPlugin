@@ -94,7 +94,7 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
            "Target zone bounds (below) needs a real zone or a meaningful selection so the local grid can be built."));
     ui->originCombo->setToolTip(
         tr("Where patterns attach in space for this layer. "
-           "\"Room box center\" maps the pattern across the full room (replaces the old Room coordinates option). "
+           "\"Room box center\" maps the pattern across the full room. "
            "\"Mapped lights center\" keeps origin-based math on your hardware layout."));
     ui->boundsCombo->setToolTip(
         tr("Global: sample using the normal room (or world) grid. "
@@ -105,7 +105,8 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
             &OpenRGB3DSpatialTab::effectChanged);
 
     tab->PopulateZoneTargetCombo(ui->zoneCombo, -1);
-    connect(ui->zoneCombo, SIGNAL(currentIndexChanged(int)), tab, SLOT(effectZoneChanged(int)));
+    connect(ui->zoneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
+            &OpenRGB3DSpatialTab::effectZoneChanged);
 
     ui->originCombo->addItem(tr("Mapped lights center (recommended)"), QVariant(-4));
     ui->originCombo->addItem(tr("Room box center"), QVariant(-1));
@@ -129,7 +130,7 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
             &OpenRGB3DSpatialTab::effectBoundsChanged);
 
     ui->stackEffectTypeCombo->clear();
-    ui->stackEffectTypeCombo->addItem(QStringLiteral("None"), QString());
+    ui->stackEffectTypeCombo->addItem(tr("None"), QString());
     const std::vector<EffectRegistration3D> effect_list = EffectListManager3D::get()->GetAllEffects();
     for(const EffectRegistration3D& reg : effect_list)
     {

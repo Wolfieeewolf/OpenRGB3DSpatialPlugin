@@ -403,7 +403,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
         settings.top_bottom_balance,
         ui->captureZonesHost);
     zones_widget->setEnabled(has_capture_source);
-    zones_widget->SetValueChangedCallback([effect]() { effect->OnParameterChanged(); });
     QObject::connect(zones_widget, &CaptureZonesWidget::valueChanged, effect, &ScreenMirror::OnParameterChanged);
     zones_layout->addWidget(zones_widget);
 
@@ -422,31 +421,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     settings.top_bottom_balance_label  = zones_widget->getTopBottomBalanceLabel();
     settings.capture_area_preview      = zones_widget->getPreviewWidget();
     settings.add_zone_button           = zones_widget->getAddZoneButton();
-
-    if(settings.propagation_speed_slider)
-    {
-        QObject::connect(settings.propagation_speed_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    }
-    if(settings.wave_decay_slider)
-    {
-        QObject::connect(settings.wave_decay_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    }
-    if(settings.wave_time_to_edge_slider)
-    {
-        QObject::connect(settings.wave_time_to_edge_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    }
-    if(settings.front_back_balance_slider)
-    {
-        QObject::connect(settings.front_back_balance_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    }
-    if(settings.left_right_balance_slider)
-    {
-        QObject::connect(settings.left_right_balance_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    }
-    if(settings.top_bottom_balance_slider)
-    {
-        QObject::connect(settings.top_bottom_balance_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    }
 
     auto* root = qobject_cast<QVBoxLayout*>(layout());
     if(!root)

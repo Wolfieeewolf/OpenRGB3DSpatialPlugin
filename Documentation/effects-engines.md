@@ -60,7 +60,8 @@ category: Volume
 
 | Header keys | Meaning |
 |-------------|---------|
-| `media_layout:` | `projection` or `omni` selects the shared media prepare codec (not `class_name` forks). Legacy class ids still map if this key is omitted |
+| `media_layout:` | `projection` or `omni` selects the shared media prepare codec (required on those media looks — not inferred from `class_name`) |
+| `instances:` | When >0, forces the effect instance count (e.g. searchlight cone default) |
 | `sample: room` | Wall/floor/ceiling UV (`SampleGpuRoomVolume01`); default is origin-local occupancy |
 
 (See full Volume / Audio / Media / Shader Field sections below for controls — paths above supersede older `effects/spatial` wording.)

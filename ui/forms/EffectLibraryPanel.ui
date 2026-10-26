@@ -93,7 +93,7 @@
         <bool>false</bool>
        </property>
        <property name="text">
-        <string>Add To Stack</string>
+        <string>Add to stack</string>
        </property>
       </widget>
      </item>

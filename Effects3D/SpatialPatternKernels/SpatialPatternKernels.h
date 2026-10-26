@@ -14,10 +14,6 @@ const char* SpatialPatternKernelDisplayName(int kernel_id);
 const char* SpatialPatternKernelPaletteName(int kernel_id);
 /** Resolve runtime index from stable id (or display name). Returns -1 if unknown. */
 int SpatialPatternKernelFindById(const std::string& id);
-float EvalSpatialPatternKernel(int kernel_id, float s01, float phase01, float rep, float time_sec);
 QString SpatialPatternKernelShader();
-
-/** Clear cached kernels and load again from library/patterns/*.kernel. */
-void SpatialPatternKernelsReload();
 
 #endif

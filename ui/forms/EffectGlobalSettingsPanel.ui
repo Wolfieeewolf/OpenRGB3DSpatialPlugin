@@ -9,7 +9,7 @@
    <bool>false</bool>
   </property>
   <property name="toolTip">
-   <string>Same controls as other stack effects: stack layer and zone apply to the selected layer. Effect center is applied globally to every running layer when the stack renders (see RenderEffectStack).</string>
+   <string>Layer, zone, spatial anchor, and target bounds apply to the selected stack layer. Room output (when shown) controls how that layer paints the room.</string>
   </property>
   <layout class="QGridLayout" name="settingsGrid">
    <property name="horizontalSpacing">
@@ -50,7 +50,7 @@
       <set>Qt::AlignRight|Qt::AlignVCenter</set>
      </property>
      <property name="toolTip">
-      <string>Which LEDs this stack layer considers: all controllers, one zone, or one controller. Pair with Target bounds: zone bounds remap pattern coordinates into that box (good for strips or partial rooms); per-effect placement and coverage stay under Effect Controls (geometry and Scale).</string>
+      <string>Which LEDs this stack layer considers: all controllers, one zone, or one controller. Pair with Target zone bounds to remap pattern coordinates into that box (good for strips or partial rooms). Per-effect placement and coverage stay under Effect Controls (geometry and Scale).</string>
      </property>
     </widget>
    </item>

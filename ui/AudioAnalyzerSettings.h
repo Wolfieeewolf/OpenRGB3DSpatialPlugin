@@ -8,7 +8,6 @@
 class AudioAnalyzerSettings
 {
 public:
-    static void applyFromPluginSettings(const nlohmann::json& settings);
     static void writeToPluginSettings(nlohmann::json& settings);
     static void resetToFactoryDefaults();
 

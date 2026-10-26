@@ -63,15 +63,6 @@ void AudioAnalyzerSettings::resetToFactoryDefaults()
     audio->setFFTSize(kDefaultFft);
 }
 
-void AudioAnalyzerSettings::applyFromPluginSettings(const nlohmann::json& settings)
-{
-    AudioInputManager* audio = AudioInputManager::instance();
-    if(!audio)
-        return;
-    if(settings.contains("AudioSmoothingPct"))
-        audio->setSmoothing(decayFromPct(settings["AudioSmoothingPct"].get<int>(), 0.0f, 0.99f));
-}
-
 void AudioAnalyzerSettings::writeToPluginSettings(nlohmann::json& settings)
 {
     AudioInputManager* audio = AudioInputManager::instance();

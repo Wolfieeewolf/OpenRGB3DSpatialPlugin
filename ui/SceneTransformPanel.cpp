@@ -107,7 +107,10 @@ SceneTransformPanel::SceneTransformPanel(QWidget* parent)
     ConfigureTransformAxisRow(ui->rotZSlider, ui->rotZSpin, kRotSpinMinWidth);
 }
 
-SceneTransformPanel::~SceneTransformPanel() = default;
+SceneTransformPanel::~SceneTransformPanel()
+{
+    delete ui;
+}
 
 void SceneTransformPanel::bindTab(OpenRGB3DSpatialTab* tab)
 {

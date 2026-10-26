@@ -6,7 +6,6 @@
 #include <QWidget>
 #include <vector>
 #include <string>
-#include <functional>
 
 class DisplayPlane3D;
 class QGroupBox;
@@ -55,7 +54,6 @@ public:
     ~CaptureZonesWidget() override;
 
     void SetDisplayPlane(DisplayPlane3D* plane);
-    void SetValueChangedCallback(std::function<void()> callback);
     void SetCaptureZones(std::vector<CaptureZone>* zones);
 
     QPushButton* getAddZoneButton() const;
@@ -88,7 +86,6 @@ private:
 
     Ui::CaptureZonesWidget* ui = nullptr;
     CaptureAreaPreviewWidget* preview_widget = nullptr;
-    std::function<void()> value_changed_callback;
 };
 
 #endif

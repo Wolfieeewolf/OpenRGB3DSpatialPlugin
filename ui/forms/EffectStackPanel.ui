@@ -47,7 +47,7 @@
        <item>
         <widget class="QLabel" name="layersHintLabel">
          <property name="text">
-          <string>Use the Effect Library to add layers. Checkmark = enabled, X = disabled. Double-click to toggle.</string>
+          <string>Use the Effect Library to add layers. [ON] = enabled, [OFF] = disabled. Double-click a layer to toggle.</string>
          </property>
          <property name="wordWrap">
           <bool>true</bool>
@@ -175,7 +175,7 @@
          <item>
           <widget class="QPushButton" name="savePresetButton">
            <property name="text">
-            <string>Save Stack As...</string>
+            <string>Save stack as...</string>
            </property>
           </widget>
          </item>
