@@ -89,9 +89,10 @@ void ScanCategoryFolders(const filesystem::path& movie_effects_dir, Catalog* out
         {
             continue;
         }
-        for(const auto& file_entry : filesystem::directory_iterator(cat_entry.path(), ec))
+        std::error_code ec2;
+        for(const auto& file_entry : filesystem::directory_iterator(cat_entry.path(), ec2))
         {
-            if(ec || !file_entry.is_regular_file())
+            if(ec2 || !file_entry.is_regular_file())
             {
                 continue;
             }

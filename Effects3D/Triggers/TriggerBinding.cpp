@@ -192,7 +192,7 @@ void LoadCatalog(const filesystem::path& dir, std::vector<Binding>* out, std::ve
     }
     for(const filesystem::directory_entry& ent : filesystem::directory_iterator(dir, ec))
     {
-        if(ec || !ent.is_regular_file(ec))
+        if(ec || !ent.is_regular_file())
         {
             continue;
         }

@@ -22,7 +22,7 @@ void CueRuntime::OnEffect(const std::string& effect_id, const std::string& edge,
     const CatalogEffect* meta = (catalog_) ? FindEffect(*catalog_, effect_id) : nullptr;
     if(meta && meta->photosensitive && !allow_photosensitive_)
     {
-        last_warning_ = "Blocked photosensitive effect '" + effect_id + "' (enable strobe effects to allow).";
+        last_warning_ = "Blocked photosensitive effect '" + effect_id + "' (enable Allow photosensitive looks).";
         LOG_WARNING("[3DSpatial] Movie Sync: %s", last_warning_.c_str());
         return;
     }

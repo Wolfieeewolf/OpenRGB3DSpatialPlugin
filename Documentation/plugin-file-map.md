@@ -1,4 +1,4 @@
-# Plugin file map (engine regroup inventory)
+﻿# Plugin file map (engine regroup inventory)
 
 Filled during multipass. **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
@@ -37,8 +37,31 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `Effects3D/Reactive/Reactive.cpp` | Reactive effect body | engines/reactive | **split** UI vs wave tick later | ~1563 lines; legacy ring_width remap removed 2026-10-27 |
 | `Effects3D/Reactive/Reactive.h` | Reactive API | engines/reactive | keep with cpp | |
 | `Effects3D/Games/*` | Minecraft stack | engines/game | | 2026-10-27: MinecraftGame.cpp dead code removed (`MakeRgb`, `RoomLedToSpatialCore`); include path fixed; strip-axis UI gap patched; MinecraftRoomAmbilightEffect3D description updated |
-| `Effects3D/MovieSync/*` | Movie Sync | engines/movie-sync | | |
-| `Effects3D/Triggers/*` | Triggers | engines/triggers | | |
+| `Effects3D/MovieSync/*` | Movie Sync | engines/movie-sync | | 2026-10-27: curly-quote escape fix (MovieSync.cpp); log msg aligned to UI (MovieSyncRuntime.cpp); ec2 for nested iterator (MovieSyncCatalog.cpp) |
+| `Effects3D/MovieSync/MovieSync.h` | Effect host header | engines/movie-sync | keep | |
+| `Effects3D/MovieSync/MovieSync.cpp` | Effect UI + wiring | engines/movie-sync | keep | fixed: \u201c/\u201d escape sequences in tr() |
+| `Effects3D/MovieSync/MovieSyncCatalog.h` | Catalog types + API | engines/movie-sync | keep | |
+| `Effects3D/MovieSync/MovieSyncCatalog.cpp` | catalog.json loader + dir scanner | engines/movie-sync | keep | fixed: ec2 for inner directory_iterator |
+| `Effects3D/MovieSync/MovieSyncListener.h` | HTTP listener API | engines/movie-sync | keep | |
+| `Effects3D/MovieSync/MovieSyncListener.cpp` | Loopback HTTP /v1/* handler | engines/movie-sync | keep | |
+| `Effects3D/MovieSync/MovieSyncRuntime.h` | CueRuntime API | engines/movie-sync | keep | |
+| `Effects3D/MovieSync/MovieSyncRuntime.cpp` | pulse/level play engine | engines/movie-sync | keep | fixed: log msg "strobe effects" -> "Allow photosensitive looks" |
+| `Effects3D/Triggers/*` | Triggers | engines/triggers | | 2026-10-27: LoadCatalog ec fix (TriggerBinding.cpp); Title Case display names (WindowsTriggerSource.cpp) |
+| `Effects3D/Triggers/TriggerSource.h` | EventSource base + EventEdge enum | engines/triggers | keep | |
+| `Effects3D/Triggers/ManualTriggerSource.h` | Manual fire/hold source | engines/triggers | keep | |
+| `Effects3D/Triggers/TriggerBinding.h` | Binding/Document types | engines/triggers | keep | |
+| `Effects3D/Triggers/TriggerBinding.cpp` | JSON de/serialise + catalog loader | engines/triggers | keep | fixed: is_regular_file() without ec (stale-ec bug) |
+| `Effects3D/Triggers/TriggerRuntime.h` | TriggerRuntime API | engines/triggers | keep | |
+| `Effects3D/Triggers/TriggerRuntime.cpp` | event -> play engine | engines/triggers | keep | |
+| `Effects3D/Triggers/TriggerSourceRegistry.h` | Registry API | engines/triggers | keep | |
+| `Effects3D/Triggers/TriggerSourceRegistry.cpp` | Platform source builder | engines/triggers | keep | |
+| `Effects3D/Triggers/LinuxLoginWatcher.h` | D-Bus watcher header | engines/triggers | keep | |
+| `Effects3D/Triggers/LinuxTriggerSource.h` | Linux source header | engines/triggers | keep | |
+| `Effects3D/Triggers/LinuxTriggerSource.cpp` | logind lock/sleep events | engines/triggers | keep | |
+| `Effects3D/Triggers/WindowsTriggerSource.h` | Windows source header | engines/triggers | keep | |
+| `Effects3D/Triggers/WindowsTriggerSource.cpp` | WTS/power/device/focus events | engines/triggers | keep | fixed: 7 display names to Title Case |
+| `Effects3D/Triggers/MacTriggerSource.h` | macOS source header | engines/triggers | keep | |
+| `Effects3D/Triggers/MacTriggerSource.cpp` | CF/IOKit lock/sleep events | engines/triggers | keep | |
 | `Effects3D/SpatialLighting/*` | Room light UI bits | shared or room | | |
 | `Effects3D/SpatialPatternKernels/*` | Strip kernels | shared | | |
 | `Effects3D/AudioReactiveCommon.h` | Audio effect shared helpers | engines/audio | keep / maybe split .cpp later | Large header-only |

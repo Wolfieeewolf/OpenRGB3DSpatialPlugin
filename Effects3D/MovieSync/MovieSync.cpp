@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+﻿// SPDX-License-Identifier: GPL-2.0-only
 
 #include "MovieSync.h"
 
@@ -67,7 +67,7 @@ QString MovieSyncEffect::humanizeRuntimeMessage(const std::string& msg) const
         if(end > start)
         {
             const QString id = q.mid(start, end - start);
-            return tr("Blocked photosensitive look “%1” (enable Allow photosensitive looks).")
+            return tr("Blocked photosensitive look \u201c%1\u201d (enable Allow photosensitive looks).")
                 .arg(effectDisplayName(id));
         }
     }
