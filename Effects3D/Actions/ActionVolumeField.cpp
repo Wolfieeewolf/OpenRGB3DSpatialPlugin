@@ -29,6 +29,7 @@ filesystem::path g_toolbox_dir;
 std::string g_loaded_shader_id;
 std::unordered_map<std::string, QString> g_shader_body_cache;
 std::mutex g_mu;
+bool g_ready = false;
 float g_ox = 0.5f;
 float g_oy = 0.5f;
 float g_oz = 0.5f;
@@ -173,6 +174,7 @@ void Reset()
     g_assist.reset();
     g_loaded_shader_id.clear();
     g_shader_body_cache.clear();
+    g_ready = false;
     g_ox = g_oy = g_oz = 0.5f;
     g_size = 1.0f;
 }
@@ -202,6 +204,7 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
         if(body.trimmed().isEmpty())
         {
             g_loaded_shader_id.clear();
+            g_ready = false;
             return false;
         }
         Assist().setFragmentBody(body);
@@ -225,13 +228,14 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
     };
     // Continuous elapsed so forever/while_active LocalMs wraps do not jump u_time.
     const float time_sec = (float)GpuAnimMsOr(local_ms) * 0.001f * speed;
-    return Assist().prepareProgram(render_sequence, time_sec, params, 6);
+    g_ready = Assist().prepareProgram(render_sequence, time_sec, params, 6);
+    return g_ready;
 }
 
 bool IsAvailable()
 {
     std::lock_guard<std::mutex> lock(g_mu);
-    return g_assist && g_assist->isAvailable();
+    return g_ready && g_assist && g_assist->isAvailable();
 }
 
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)
@@ -241,7 +245,7 @@ bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)
         return false;
     }
     std::lock_guard<std::mutex> lock(g_mu);
-    if(!g_assist || !g_assist->isAvailable())
+    if(!g_ready || !g_assist || !g_assist->isAvailable())
     {
         return false;
     }

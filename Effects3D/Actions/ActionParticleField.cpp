@@ -25,7 +25,6 @@ std::mutex g_mu;
 std::unique_ptr<SpatialVolumeFieldAssist> g_assist;
 bool g_ready = false;
 bool g_shader_loaded = false;
-std::uint64_t g_last_seq = 0;
 float g_last_time = -1.0f;
 float g_ox = 0.5f;
 float g_oy = 0.5f;
@@ -396,7 +395,6 @@ void Reset()
     g_ready = false;
     g_shader_loaded = false;
     g_gpu_mode.clear();
-    g_last_seq = 0;
     g_last_time = -1.0f;
     g_ox = g_oy = g_oz = 0.5f;
     g_size = 1.0f;
@@ -424,16 +422,15 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
     const float progress = ClipSpanProgress(clip, local_ms);
     const int anim_ms = GpuAnimMsOr(local_ms);
     const float time_key = progress * 1000.0f + (float)anim_ms * 0.001f;
-    const bool same_frame = (render_sequence != 0 && render_sequence == g_last_seq && g_ready);
-    const bool same_tick = (render_sequence == 0 && g_ready
-                            && std::fabs(time_key - g_last_time) < 1e-3f);
-    if(same_frame || same_tick)
+    // seq==0 preview only: skip when mode+clock unchanged. Never skip on a shared
+    // pack-frame sequence — multi-track packs need a fresh setParams per clip.
+    if(render_sequence == 0 && g_ready && g_gpu_mode == mode
+       && std::fabs(time_key - g_last_time) < 1e-3f)
     {
         return g_ready;
     }
 
     g_ready = PrepareGpu(clip, progress, anim_ms, mode, render_sequence);
-    g_last_seq = render_sequence;
     g_last_time = time_key;
     return g_ready;
 }

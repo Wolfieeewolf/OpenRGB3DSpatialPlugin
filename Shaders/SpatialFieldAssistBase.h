@@ -33,6 +33,8 @@ public:
         // Allow a fresh prepare after the body changes (or after a prior compile latch).
         unavailable_ = false;
         logged_unavailable_ = false;
+        last_sequence_ = 0;
+        last_time_sec_ = -1e9f;
         if(engine_)
         {
             engine_->setFragmentBody(body_);
@@ -93,15 +95,6 @@ protected:
             applyEngineSize(*engine_);
         }
 
-        const bool same_frame =
-            (render_sequence != 0 && render_sequence == last_sequence_ && engine_->isAvailable());
-        const bool same_preview_tick =
-            (render_sequence == 0 && engine_->isAvailable() && std::fabs(time_sec - last_time_sec_) < 1e-4f);
-        if((same_frame || same_preview_tick) && !engineNeedsRefresh())
-        {
-            return true;
-        }
-
         typename EngineT::Params p;
         p.time_sec = time_sec;
         p.count = std::clamp(param_count, 0, EngineT::kMaxParams);
@@ -109,9 +102,21 @@ protected:
         {
             p.values[i] = params[i];
         }
+        // Always push params: one render_sequence is shared across tracks in ApplyPackFrame,
+        // and point-eval uploads uniforms from params_ at evaluate time.
         engine_->setParams(p);
+
+        const bool same_frame =
+            (render_sequence != 0 && render_sequence == last_sequence_ && engine_->isAvailable());
+        const bool same_preview_tick =
+            (render_sequence == 0 && engine_->isAvailable() && std::fabs(time_sec - last_time_sec_) < 1e-4f);
         last_sequence_ = render_sequence;
         last_time_sec_ = time_sec;
+        // Point-eval can skip ensureProgramReady when only uniforms changed; atlas must rebuild.
+        if(!atlas && (same_frame || same_preview_tick) && !engineNeedsRefresh())
+        {
+            return true;
+        }
 
         const bool ok = atlas ? engine_->ensureReady() : engine_->ensureProgramReady();
         if(!ok)

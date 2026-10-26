@@ -40,7 +40,7 @@ Multi-pass is a **general review tool** — Action toolbox looks, engine C++, pa
 | Pass | Attack surface |
 |------|----------------|
 | 1 | **Purpose / role** — does it fulfill the intended job? A simple tool must still *be* that tool (e.g. `blink` blinks, `solid` holds a level, `chase` travels). Wrong category, misleading name, or “looks cool but isn’t the role” fails. |
-| 2 | **Correctness** — compiles/loads, headers match body (`shader:` / `particles:` / `ribbons:`), swatch/description match, knobs wired, no dead code |
+| 2 | **Correctness** - compiles/loads; headers match body; swatch/knobs honest; sibling GPU header skeleton; `shader:`+`pulse` => `.fs` uses `u_params[2]`; no dead code |
 | 3 | **Fit, integration & wiring** — engines, applier, player, Movie Sync / Triggers, Action Editor toolbar, docs, AppData; **trace signals/slots and knob↔field links**; live-preview dirty flag must cover mutators that bypass the form-write path; **every path that empties the player must ClearActionPreview** (Stop / uncheck / level-off / natural end); no orphans, half-wired actions, or “works alone / breaks in stack”. |
 | 4 | **Seams & bugs** — once→black, forever/`while_active` continuous `u_time`, no linger/jump/recycle, clear-on-idle for every stop path, intensity/size do something real |
 | 5 | **Readability / UX + UI integrity** — sparse-LED survival; clear utility behaviour; **human UI copy** (no placeholder/raw-id junk); usable layout; broken/empty controls fail |
