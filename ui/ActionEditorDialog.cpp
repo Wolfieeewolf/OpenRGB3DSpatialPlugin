@@ -513,7 +513,7 @@ void ActionEditorDialog::buildUi()
         QStringLiteral("Where the pattern is stretched (UV / world normalize).\n"
                        "This track's lights: keyboard marquee stays on the keyboard.\n"
                        "Whole room: room washes and Roomscape across the full box.\n"
-                       "Origin still uses layout reference points (me, screen, rear, …)."));
+                       "Origin still uses layout reference points (me, screen, rear, \u2026)."));
     axis_mode_combo_ = new QComboBox();
     axis_mode_combo_->addItem(QStringLiteral("Preset direction"), (int)Action::AxisMode::Preset);
     axis_mode_combo_->addItem(QStringLiteral("Custom yaw/pitch"), (int)Action::AxisMode::Custom);
@@ -645,8 +645,8 @@ void ActionEditorDialog::buildUi()
     origin_ref_combo_ = new QComboBox();
     origin_ref_combo_->setToolTip(
         QStringLiteral("Layout reference point for the cue centre (same names as viewport refs).\n"
-                       "Prefer shared role names: me, screen, tv, front, rear, left, right, ceiling, floor…\n"
-                       "Missing names show as (missing) — add a matching ref on your layout.\n"
+                       "Prefer shared role names: me, screen, tv, front, rear, left, right, ceiling, floor\u2026\n"
+                       "Missing names show as (missing) \u2014 add a matching ref on your layout.\n"
                        "Empty = room center. Independent of stack Spatial Anchor."));
     origin_offset_x_spin_ = new QSpinBox();
     origin_offset_x_spin_->setRange(-100, 100);
@@ -897,7 +897,7 @@ void ActionEditorDialog::NewPack(const filesystem::path& save_dir)
 
     loadIntoUi(pack_);
     setWindowTitle(QStringLiteral("Action Editor  -  New"));
-    status_label_->setText(QStringLiteral("Drag tools onto a row · right-click to add · Delete removes"));
+    status_label_->setText(QStringLiteral("Drag tools onto a row \u00b7 right-click to add \u00b7 Delete removes"));
     show();
     raise();
     activateWindow();
@@ -991,10 +991,10 @@ void ActionEditorDialog::EditPack(const filesystem::path& path)
             {
                 all << QString::fromStdString(name);
             }
-            status += QStringLiteral(" · refs: %1").arg(all.join(QStringLiteral(", ")));
+            status += QStringLiteral(" \u00b7 refs: %1").arg(all.join(QStringLiteral(", ")));
             if(!missing.isEmpty())
             {
-                status += QStringLiteral(" · missing: %1 (add matching layout refs)")
+                status += QStringLiteral(" \u00b7 missing: %1 (add matching layout refs)")
                               .arg(missing.join(QStringLiteral(", ")));
             }
         }

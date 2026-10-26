@@ -422,8 +422,8 @@ void PaintSwatch(DragToolButton* btn, const Swatch& swatch)
     QPixmap pm(18, 18);
     pm.fill(swatch.color);
     btn->setIcon(QIcon(pm));
-    btn->setToolTip(swatch.label + QStringLiteral(" — ") + swatch.color.name()
-                    + QStringLiteral(" — double-click to change"));
+    btn->setToolTip(swatch.label + QStringLiteral(" \u2014 ") + swatch.color.name()
+                    + QStringLiteral(" \u2014 double-click to change"));
 }
 
 QWidget* BuildColorsPage(QWidget* owner, const filesystem::path& path, const std::function<void(unsigned int)>& on_click)
@@ -475,7 +475,7 @@ void AddGradientButton(QWidget* page, QLayout* row, QWidget* owner,
     btn->setText(label);
     btn->setIcon(QIcon(preview));
     btn->setIconSize(QSize(36, 14));
-    btn->setToolTip(label + QStringLiteral(" — drag onto the timeline. Double-click to replace with the selected gradient. Right-click to delete."));
+    btn->setToolTip(label + QStringLiteral(" \u2014 drag onto the timeline. Double-click to replace with the selected gradient. Right-click to delete."));
     btn->setMimeFactory([id]() {
         return ActionCatalog::MakeGradientPresetMime(id);
     });
@@ -555,7 +555,7 @@ QWidget* BuildCurvesPage(QWidget* owner, const filesystem::path& curves_path, co
         const QString label = c.label.isEmpty() ? c.id : c.label;
         const QString id = c.id;
         btn->setText(label);
-        btn->setToolTip(label + QStringLiteral(" — drag onto a clip"));
+        btn->setToolTip(label + QStringLiteral(" \u2014 drag onto a clip"));
         btn->setMimeFactory([id]() {
             return ActionCatalog::MakeCurvePresetMime(id);
         });

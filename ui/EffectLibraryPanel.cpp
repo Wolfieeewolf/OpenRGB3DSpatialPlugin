@@ -24,10 +24,11 @@ EffectLibraryPanel::~EffectLibraryPanel()
 
 void EffectLibraryPanel::bindTab(OpenRGB3DSpatialTab* tab)
 {
-    if(!tab)
+    if(!tab || bound_)
     {
         return;
     }
+    bound_ = true;
 
     PluginUiApplyMutedSecondaryLabel(ui->categoryLabel);
     PluginUiApplyMutedSecondaryLabel(ui->gameLabel);

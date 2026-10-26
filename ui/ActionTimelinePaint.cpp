@@ -813,7 +813,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             p.setPen(QColor(200, 200, 210));
             p.setBrush(QColor(55, 55, 62));
             p.drawRect(plus);
-            p.drawText(plus, Qt::AlignCenter, r.expanded ? QStringLiteral("−") : QStringLiteral("+"));
+            p.drawText(plus, Qt::AlignCenter, r.expanded ? QStringLiteral("\u2212") : QStringLiteral("+"));
         }
 
         p.setPen(r.depth == 0 ? QColor(230, 230, 235) : QColor(180, 180, 190));

@@ -205,7 +205,7 @@ ActionTimelineWidget::Node ActionEditorDialog::buildControllerNode(ControllerTra
             }
             if(!device.isEmpty())
             {
-                bucket.label = bucket.zone_name + QStringLiteral(" · ") + device;
+                bucket.label = bucket.zone_name + QStringLiteral(" \u00b7 ") + device;
             }
         }
 
@@ -367,7 +367,7 @@ void ActionEditorDialog::onRebuildTimelineModel()
                         }
                         ActionTimelineWidget::Node led_node;
                         led_node.label = ControllerLabel(transform, ci)
-                            + QStringLiteral(" · LED %1").arg(led.led_idx);
+                            + QStringLiteral(" \u00b7 LED %1").arg(led.led_idx);
                         led_node.target.kind = Action::TargetKind::Leds;
                         led_node.target.device_name = key;
                         led_node.target.zone_name = ZoneLabelForLed(rgb, led.zone_idx).toStdString();

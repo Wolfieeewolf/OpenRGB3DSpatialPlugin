@@ -1329,10 +1329,10 @@ void ActionTimelineWidget::showClipContextMenu(int row, int track, int clip, con
     QAction* reverse_act = xform->addAction(QStringLiteral("Reverse time"));
     QAction* flip_h_act = xform->addAction(QStringLiteral("Flip horizontal"));
     QAction* flip_v_act = xform->addAction(QStringLiteral("Flip vertical"));
-    QAction* rotate_act = xform->addAction(QStringLiteral("Rotate 90° CW"));
+    QAction* rotate_act = xform->addAction(QStringLiteral("Rotate 90\u00b0 CW"));
     QAction* flip_dir_act = xform->addAction(QStringLiteral("Flip direction"));
     menu.addSeparator();
-    QAction* color_act = menu.addAction(QStringLiteral("Change color…"));
+    QAction* color_act = menu.addAction(QStringLiteral("Change color\u2026"));
     menu.addSeparator();
     QAction* del_act = menu.addAction(QStringLiteral("Delete\tDel"));
     QAction* chosen = menu.exec(global_pos);

@@ -276,7 +276,7 @@ void TriggersPanel::populateList()
                 break;
             }
         }
-        QString label = QStringLiteral("%1  →  %2 / %3")
+        QString label = QStringLiteral("%1  \u2192  %2 / %3")
                             .arg(pack_label, QString::fromUtf8(src->displayName()), event_label);
         if(catalog)
         {
@@ -457,7 +457,7 @@ bool TriggersPanel::editBindingDialog(Trigger::Binding* binding)
     if(pack_combo->count() == 0)
     {
         QMessageBox::information(this, tr("No packs"),
-                                 tr("Create a trigger action first (Object Creator → Actions)."));
+                                 tr("Create a trigger action first (Object Creator \u2192 Actions)."));
         return false;
     }
 
@@ -528,10 +528,15 @@ void TriggersPanel::onEdit()
         {
             if(editBindingDialog(&b))
             {
+                const bool was_playing = runtime_.IsPlaying();
                 runtime_.StopBinding(b.id);
                 if(!runtime_.IsPlaying())
                 {
                     timer_->stop();
+                    if(was_playing)
+                    {
+                        clearPreviewIfIdle();
+                    }
                 }
                 syncRuntime();
                 saveDocument();
@@ -559,10 +564,15 @@ void TriggersPanel::onDelete()
     {
         return;
     }
+    const bool was_playing = runtime_.IsPlaying();
     runtime_.StopBinding(id);
     if(!runtime_.IsPlaying())
     {
         timer_->stop();
+        if(was_playing)
+        {
+            clearPreviewIfIdle();
+        }
     }
     auto& bindings = user_.bindings;
     bindings.erase(std::remove_if(bindings.begin(), bindings.end(),

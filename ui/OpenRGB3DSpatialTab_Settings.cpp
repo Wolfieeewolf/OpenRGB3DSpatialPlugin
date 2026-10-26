@@ -71,7 +71,7 @@ void OpenRGB3DSpatialTab::BindSettingsPanels()
         profile_unsaved_banner_->setText(
             tr("Unsaved Spatial changes \u2014 save your OpenRGB profile."));
         profile_unsaved_banner_->setToolTip(
-            tr("Save in OpenRGB using File → Profiles, or layout and effect changes will be lost."));
+            tr("Save in OpenRGB using File \u2192 Profiles, or layout and effect changes will be lost."));
         profile_unsaved_banner_->setVisible(false);
         profile_unsaved_banner_->setAutoFillBackground(true);
         profile_unsaved_banner_->setMargin(6);

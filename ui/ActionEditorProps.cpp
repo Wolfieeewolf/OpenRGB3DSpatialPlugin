@@ -471,7 +471,7 @@ void ActionEditorDialog::onDeleteGradientPreset(const QString& preset_id)
     const QMessageBox::StandardButton answer = QMessageBox::question(
         this,
         QStringLiteral("Delete gradient"),
-        QStringLiteral("Remove gradient \"%1\"?").arg(label));
+        QStringLiteral("Remove gradient \u201c%1\u201d?").arg(label));
     if(answer != QMessageBox::Yes)
     {
         return;

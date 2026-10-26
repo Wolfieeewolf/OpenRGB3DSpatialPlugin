@@ -36,6 +36,7 @@ public:
 
 private:
     Ui::EffectLibraryPanel* ui = nullptr;
+    bool bound_ = false;
 };
 
 #endif
