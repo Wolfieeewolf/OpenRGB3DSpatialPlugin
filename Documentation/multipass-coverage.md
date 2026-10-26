@@ -25,7 +25,7 @@ Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 | Shaders/ | fixed | 2026-10-27 | Shared GL pool/engines reviewed; SpatialFieldAssistBase.h per-track param push OK; SpatialShaderCatalog header-key set aligned with LoadEffectShader |
 | SpatialLighting/ SpatialRoom/ SpatialSamplers/ | fixed | 2026-10-27 | `AppendRoomWallOccluders`: left-wall corner typo fixed (`min_z`→`min_y`), duplicate floor replaced with correct front (Z=min_z) + back (Z=max_z) quads, dead `eps` variable removed; SpatialLayerCore.cpp: `(void)w0` suppressor removed (restructured to `p0/p1/sector_t`); RoomSampleMapping.cpp: redundant `static` removed from anonymous-namespace functions; SpatialRoomFrame/Defaults/Types kept |
 | Game/ + integrations/ | fixed | 2026-10-27 | Partial: GameTelemetryBridge wiring reviewed (keep); RoomSampleFrameProtocol / ShmWriter / ConfigReader kept; include path in MinecraftGame.cpp corrected to `Game/` prefix |
-| ui/ | fixed | 2026-10-27 | grid/viewport keep; Action/Triggers/panels: `\uXXXX` UI strings; ActionEffectFiles nested `ec2`; raw tooltips → `QStringLiteral` |
+| ui/ | fixed | 2026-10-27 | grid/viewport keep; Action panels (Actions/Editor/ToolBar/Timeline/Triggers/EffectLibrary): `\uXXXX` UI strings; Triggers edit/delete ClearActionPreview when player empties; EffectLibrary `bound_` once-guard; ActionEffectFiles nested `ec2`; remaining forms/widgets still pending |
 | Documentation/ | fixed | 2026-10-27 | Shader Field contract filled in effects-engines; LoadShaderBodyFromPath noted in shader-conversion; recipe-map deferred list (multipass in flight + DualSense park); content-library / event-maker / SpatialMeasurement kept |
 
 ## Parked

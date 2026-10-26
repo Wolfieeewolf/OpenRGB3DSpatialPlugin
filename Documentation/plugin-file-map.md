@@ -96,8 +96,14 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `Game/*` `integrations/*` | Game SHM / telemetry | engines/game | | 2026-10-27: reviewed; wiring, seqlock, SHM paths kept; no changes needed |
 | `ui/custom-controller-grid/*` | Custom controller LED grid editor | ui | keep | 2026-10-27: layout math / hit / fit reviewed; tip em-dashes escaped |
 | `ui/viewport/*` | Viewport GL math + mesh import | ui | keep | 2026-10-27: Rodrigues fix already landed; MeshImport AABB OK |
-| `ui/ActionsPanel.*` `ui/ActionEditor*` `ui/ActionEffectFiles.*` `ui/TriggersPanel.*` | Action / Triggers UI | ui | fixed | 2026-10-27: curly/ellipsis escapes; nested directory_iterator `ec2` |
-| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | fixed | 2026-10-27: QStringLiteral tooltips / selection labels; SceneTransform `\u2013` |
+| `ui/ActionsPanel.*` | Actions list + pack preview | ui | keep | 2026-10-27: ClearActionPreview on stop/finish; human copy OK |
+| `ui/ActionEditorDialog.*` `ui/ActionEditorProps.*` `ui/ActionEditorTimelineBridge.*` | Action Editor shell / props / timeline bridge | ui | fixed | 2026-10-27: `\uXXXX` status/tooltips; live-preview dirty wiring kept |
+| `ui/ActionToolBar.*` | Editor toolbox tabs (tools/colors/gradients/curves) | ui | fixed | 2026-10-27: em-dash tooltips → `\u2014` |
+| `ui/ActionTimelineWidget.*` `ui/ActionTimelinePaint.*` `ui/ActionTimelineInteract.*` | Timeline paint / interact | ui | fixed | 2026-10-27: minus/degree/ellipsis escapes; stopPreviewRequested kept |
+| `ui/ActionEffectFiles.*` | Toolbox `.fx` loader | ui | fixed | 2026-10-27: nested directory_iterator `ec2` |
+| `ui/TriggersPanel.*` | Trigger bindings + manual fire | ui | fixed | 2026-10-27: edit/delete clear preview when idle; arrow `\u2192` |
+| `ui/EffectLibraryPanel.*` | Effect library bind shell | ui | fixed | 2026-10-27: `bound_` once-guard (match sibling panels) |
+| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | | remaining surfaces still pending |
 | Root `SpatialEffect3D.*` etc. | Effect base / types | shared | | Map individually as touched |
 
 ## Presets → engine (from volume toolbox multipass)
