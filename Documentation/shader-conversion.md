@@ -8,9 +8,9 @@ Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cube
 
 | Lane | Entry point | Engine |
 |------|-------------|--------|
-| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Kernel — `library/patterns/*.kernel` |
-| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field — `library/shader-field/*.fs` |
-| **3D** | `volumeMain(out, p01)` soft field | Volume — `library/volume/<id>.fs` (or audio/media) via FolderVolume |
+| **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Kernel — `effects/patterns/*.kernel` |
+| **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field — `effects/shader-field/*.fs` |
+| **3D** | `volumeMain(out, p01)` soft field | Volume — `effects/volume/<id>.fs` (or audio/media) via FolderVolume |
 
 Also: **Media** / **Audio** (Volume host + texture or FFT), **Reactive** / **Ambilight** (player codecs), **Games** (programmed packs). Details in [effects-engines.md](effects-engines.md).
 
@@ -20,11 +20,11 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 ## Adapters
 
-**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `library/shader-field/`.
+**Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`.
 
-**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `library/volume/` for **Volume** (or `library/audio/` / `library/media/`) with a FolderVolume `class:` header.
+**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `effects/volume/` for **Volume** (or `effects/audio/` / `effects/media/`) with a FolderVolume `class:` header.
 
-**Strip → 1D:** drop a `library/patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
+**Strip → 1D:** drop a `effects/patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
 
 **Pattern labels:** a combo fed by `pattern:` lines in the effect `.fs` file. Order is the saved index. Text after `|` is the item tooltip.
 
@@ -32,4 +32,4 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 Volume/Audio/Media LED and room-grid paths, strip/Shader Field engines where they still bake fields, and the room viewport use **OpenGL 4.1 Core** with `#version 410 core` wrappers. Author `.fs` bodies must not include `#version` or legacy GLSL (`texture2D`, `attribute`, `varying`, `gl_FragColor`). Do not use GLSL reserved words as identifiers (`layout`, `packed`, `flat`, `shared`, ...) — rename them (e.g. `place`, `pack_val`, `y_fall`).
 
-GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist`. **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen`, nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.
+GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist` — runs on shared **`SpatialOffscreenGlPool`** (no second context; fail closed if GL is unavailable — no parallel CPU formula for the same look). **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen`, nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.

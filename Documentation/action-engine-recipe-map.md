@@ -25,9 +25,9 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 
 ## Playback seams (once vs loop)
 
-- **`loop: once`** — drive the look with span/sweep `progress` (0→1, speed may finish early but must not wrap), fade density to **black** before the end, then the player clears LEDs. No recycle/`fract` on progress.
-- **`loop: forever` / `while_active`** — animate with continuous **`u_time`** / script `time_ms` only. Do not key ambient motion off wrapping `progress` or wrapped `local_ms` (that flashes/jumps at the pack seam). Rain, helix, fireflies, aurora, portal, etc. already follow this.
-- Engines feed `u_time` from continuous elapsed time when playing; GPU one-shot params use non-wrapping span progress; script `progress` is sweep (span × speed, clamped).
+- **`loop: once`** — drive the look with span/sweep `progress` (0→1, speed may finish early but must not wrap), fade density to **black** before the end, then the player clears LEDs. No recycle/`fract` on progress. Canonical helpers: `ClipSpanProgress` (envelope / once fade), `ClipSweepProgress` (script `progress`).
+- **`loop: forever` / `while_active`** — animate with continuous **`u_time`** / script `time_ms` only (`GpuAnimMs` / `GpuAnimMsOr` — not wrapping `local_ms`). Do not key ambient motion off wrapping `progress` or wrapped `local_ms` (that flashes/jumps at the pack seam). Rain, helix, fireflies, aurora, portal, etc. already follow this.
+- Engines feed `u_time` from continuous elapsed time when playing; GPU one-shot params use non-wrapping span progress; script `progress` is sweep (span × speed, clamped). Timeline GPU thumbs and LED apply share **`SpatialOffscreenGlPool`** (no second GL context); true-GPU tools fail closed to black (no CPU dual / no gradient fake thumbs). Clear-on-idle: every path that empties the player calls `ClearActionPreview`.
 
 ## Catch-all multi-pass (any file / tool)
 
@@ -40,17 +40,17 @@ Multi-pass is a **general review tool** — Action toolbox looks, engine C++, pa
 | Pass | Attack surface |
 |------|----------------|
 | 1 | **Purpose / role** — does it fulfill the intended job? A simple tool must still *be* that tool (e.g. `blink` blinks, `solid` holds a level, `chase` travels). Wrong category, misleading name, or “looks cool but isn’t the role” fails. |
-| 2 | **Correctness** - compiles/loads; headers match body; swatch/knobs honest; sibling GPU header skeleton; `shader:`+`pulse` => `.fs` uses `u_params[2]`; no dead code |
+| 2 | **Correctness + dead code** — loads/compiles; headers match body (`shader:` / `particles:` / `ribbons:`); swatch/knobs honest; same-engine sibling tools share one header skeleton (icons/knobs/paint — header-only orphans fail); if `.fx` has `shader:` + `knobs:… pulse`, paired `.fs` must use `param: size` / `u_params[2]`; **remove** unused helpers/paths/debug leftovers |
 | 3 | **Fit, integration & wiring** — engines, applier, player, Movie Sync / Triggers, Action Editor toolbar, docs, AppData; **trace signals/slots and knob↔field links**; live-preview dirty flag must cover mutators that bypass the form-write path; **every path that empties the player must ClearActionPreview** (Stop / uncheck / level-off / natural end); no orphans, half-wired actions, or “works alone / breaks in stack”. |
-| 4 | **Seams & bugs** — once→black, forever/`while_active` continuous `u_time`, no linger/jump/recycle, clear-on-idle for every stop path, intensity/size do something real |
+| 4 | **Seams & bugs** — once→black; forever/`while_active` continuous `u_time` (`GpuAnimMs`); no linger/jump/recycle; clear-on-idle for every stop path; shared ApplyPackFrame seq still pushes **per-clip** params; intensity/size do something real |
 | 5 | **Readability / UX + UI integrity** — sparse-LED survival; clear utility behaviour; **human UI copy** (no placeholder/raw-id junk); usable layout; broken/empty controls fail |
 | 6 | **Character polish** — deepen motion/colour/language only if earlier passes left it meh *and* that fits the role (don’t turn `solid` into aurora) |
-| 7–9 | Structure / deslop+CONTRIBUTING (the tidy pass) / close-the-loop + diff tidy sweep; **net better** incl. snappy/feel, or revert |
+| 7–9 | **Structure** (code judo, ~1k-line ceiling, reuse `ClipSpan`/`ClipSweep`/`GpuAnimMsOr` — no parallel stacks vs singular `SpatialOffscreenGlPool`) / **deslop+CONTRIBUTING** (the tidy pass) / **close-the-loop** + diff tidy sweep; **net better** incl. snappy/feel, or revert |
 | 10 | **Skill self-check** — propose “do existing passes better” ideas; don’t auto-edit the skill or memorialize one-off bugs |
 
-**Positive prompts (keep):** honest role, bright cores / clear motion where the look needs it, wired knobs, matches callers/docs, additive glow, seamless loops, once dies clean, human-readable UI copy.
+**Positive prompts (keep):** honest role, bright cores / clear motion where the look needs it, wired knobs, matches callers/docs, additive glow, seamless loops, once dies clean, human-readable UI copy, canonical clocks/progress (`ClipSpanProgress` / `ClipSweepProgress` / `GpuAnimMsOr`), shared offscreen pool.
 
-**Negative prompts (kill):** wrong job for the name, thin 1px misses, synced blink, orange wash, progress-wrap flash, linger, orphan/`TODO` wiring, dead connects, garbage UI strings, docs drift, unused knobs, silent fail, over-polishing a utility into a showcase.
+**Negative prompts (kill):** wrong job for the name, thin 1px misses, synced blink, orange wash, progress-wrap flash, linger, orphan/`TODO` wiring, dead connects, missing `ClearActionPreview`, garbage/raw-id UI strings, docs drift, unused knobs, silent fail / CPU dual / gradient fake thumbs, over-polishing a utility into a showcase.
 
 Basics (`solid`, `blink`, `chase`, …) and media still get **purpose + correctness + fit + seams** every time; readability/character only if something’s wrong or the role isn’t being served.
 
@@ -74,7 +74,7 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 | `roomscape_field_ripple` | `triggers/effects/roomscape/` | volume field |
 | `roomscape_spark_burst` | `triggers/effects/roomscape/` | particles |
 | `roomscape_neon_ribbon` | `triggers/effects/roomscape/` | ribbon |
-| `roomscape_strata_fireflies` | `triggers/effects/roomscape/` | field + particles |
+| `roomscape_glow_fireflies` | `triggers/effects/roomscape/` | field + particles |
 | `roomscape_helix_rain` | `movie-sync/effects/washes/` | ribbon + particles |
 | `roomscape_aurora` | triggers + movie-sync washes | `field_aurora` |
 | `roomscape_portal` | triggers + movie-sync washes | `field_portal` (+ electric) |

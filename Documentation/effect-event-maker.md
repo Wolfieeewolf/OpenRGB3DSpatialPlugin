@@ -90,11 +90,19 @@ Stack Spatial Anchor and Action `origin_ref` both read the **same layout referen
 
 ### Action volume-field engine (Roomscape sample)
 
-World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares the program once per pack frame, then **evaluates `volumeMain` at each LED’s exact room-normalized XYZ** (OpenGL 4.1 required — no CPU dual). `.fx` `field_*` / `field_paint()` sample the same GPU path. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
+World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares the program once per pack frame, then **evaluates `volumeMain` at each LED’s exact room-normalized XYZ** (OpenGL 4.1 required — true-GPU fail-closed, no CPU dual). `.fx` `field_*` / `field_paint()` sample the same GPU path. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
 
-World tools may declare `particles: burst` for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED. GL required — if unavailable the clip paints nothing.
+World tools may declare `particles: burst` for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED. GL required — if unavailable the clip paints nothing (fail closed).
 
 World tools may declare `ribbons: arc` for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
+
+**GL pool / thumbs:** field, particle, ribbon, and built-in GPU clips share **`SpatialOffscreenGlPool`** with the room viewport (no second offscreen context). Action Editor timeline thumbs use the same pool — deferred, cached, fail closed to black (no gradient / CPU fake).
+
+**Clocks / progress:** once fades and envelopes use `ClipSpanProgress`; script `progress` uses `ClipSweepProgress`; forever / `while_active` ambient time uses `GpuAnimMs` / `GpuAnimMsOr` (continuous player elapsed — not wrapping `local_ms`).
+
+**Clear-on-idle:** every path that empties the action player (Stop, uncheck, level-off, natural end, Movie Sync / Triggers stop) must call `ClearActionPreview` — not only the timer-finish path.
+
+**Toolbox headers:** same-engine sibling `.fx` tools share one header skeleton (icons / knobs / paint). If an `.fx` has `shader:` and a `pulse` knob, the paired `.fs` must read size via `param: size` / `u_params[2]`. UI copy stays human-readable (no raw ids / placeholder junk).
 
 **Seamless play:** looping packs should animate from `u_time` (continuous); once packs should finish at black. See [action-engine-recipe-map.md](action-engine-recipe-map.md#playback-seams-once-vs-loop).
 
