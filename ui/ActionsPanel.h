@@ -5,6 +5,7 @@
 #include "filesystem.h"
 #include <QElapsedTimer>
 #include <QGroupBox>
+#include <QString>
 
 class QTimer;
 class ActionEditorDialog;
@@ -24,7 +25,7 @@ public:
     ~ActionsPanel() override;
 
     void bindTab(OpenRGB3DSpatialTab* tab);
-    void stopPreview();
+    void stopPreview(const QString& status = QString());
 
 private slots:
     void onRefresh();

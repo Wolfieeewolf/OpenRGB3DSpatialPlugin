@@ -32,6 +32,48 @@ namespace
 constexpr SpatialEffectType kMovieSyncEffectType = static_cast<SpatialEffectType>(36);
 } // namespace
 
+QString MovieSyncEffect::effectDisplayName(const QString& effect_id) const
+{
+    const MovieSync::CatalogEffect* meta = MovieSync::FindEffect(catalog_, effect_id.toStdString());
+    if(meta && !meta->name.empty())
+    {
+        return QString::fromStdString(meta->name);
+    }
+    return effect_id;
+}
+
+QString MovieSyncEffect::humanizeRuntimeMessage(const std::string& msg) const
+{
+    if(msg.empty())
+    {
+        return {};
+    }
+    const QString q = QString::fromStdString(msg);
+    if(msg == "effect_id required")
+    {
+        return tr("Look id required");
+    }
+    const QString unknown_prefix = QStringLiteral("unknown effect_id: ");
+    if(q.startsWith(unknown_prefix))
+    {
+        return tr("Unknown look: %1").arg(effectDisplayName(q.mid(unknown_prefix.size())));
+    }
+    // "Blocked photosensitive effect 'id' (...)"
+    if(q.startsWith(QStringLiteral("Blocked photosensitive effect '"))
+       && q.contains(QLatin1Char('\'')))
+    {
+        const int start = QStringLiteral("Blocked photosensitive effect '").size();
+        const int end = q.indexOf(QLatin1Char('\''), start);
+        if(end > start)
+        {
+            const QString id = q.mid(start, end - start);
+            return tr("Blocked photosensitive look “%1” (enable Allow photosensitive looks).")
+                .arg(effectDisplayName(id));
+        }
+    }
+    return q;
+}
+
 void RegisterMovieSyncEngine()
 {
     EffectListManager3D::get()->RegisterEffect(
@@ -54,18 +96,30 @@ MovieSyncEffect::MovieSyncEffect(QWidget* parent)
 
     listener_->SetEffectHandler([this](const std::string& effect_id, const std::string& edge, bool active) {
         bindTab();
+        const bool was_playing = runtime_.IsPlaying();
         runtime_.OnEffect(effect_id, edge, active);
+        const bool playing = runtime_.IsPlaying();
+        if(!playing)
+        {
+            tick_timer_->stop();
+            setPlayingUi(false);
+            if(was_playing)
+            {
+                clearPreviewIfIdle();
+            }
+        }
         if(!runtime_.lastWarning().empty())
         {
-            setStatus(QString::fromStdString(runtime_.lastWarning()));
+            setStatus(humanizeRuntimeMessage(runtime_.lastWarning()));
         }
         else if(!runtime_.lastError().empty())
         {
-            setStatus(QString::fromStdString(runtime_.lastError()));
+            setStatus(humanizeRuntimeMessage(runtime_.lastError()));
         }
-        else if(runtime_.IsPlaying())
+        else if(playing)
         {
-            setStatus(tr("Playing cue: %1").arg(QString::fromStdString(effect_id)));
+            setStatus(tr("Playing cue: %1").arg(effectDisplayName(QString::fromStdString(effect_id))));
+            setPlayingUi(true);
             if(!tick_timer_->isActive())
             {
                 tick_timer_->start();
@@ -74,7 +128,6 @@ MovieSyncEffect::MovieSyncEffect(QWidget* parent)
         else if(listener_->isListening())
         {
             setStatus(tr("Listening on 127.0.0.1:%1").arg(listener_->port()));
-            tick_timer_->stop();
         }
     });
     listener_->SetCatalogJson([this]() { return catalogJson(); });
@@ -189,10 +242,15 @@ void MovieSyncEffect::SetupCustomUI(QWidget* parent)
     QPushButton* reload = new QPushButton(tr("Reload"), panel);
     connect(reload, &QPushButton::clicked, this, &MovieSyncEffect::onReloadCatalog);
     row->addWidget(reload);
-    QPushButton* preview = new QPushButton(tr("Preview"), panel);
-    preview->setToolTip(tr("Play the selected look once"));
-    connect(preview, &QPushButton::clicked, this, &MovieSyncEffect::onPreview);
-    row->addWidget(preview);
+    preview_button_ = new QPushButton(tr("Preview"), panel);
+    preview_button_->setToolTip(tr("Play the selected look once"));
+    connect(preview_button_, &QPushButton::clicked, this, &MovieSyncEffect::onPreview);
+    row->addWidget(preview_button_);
+    stop_button_ = new QPushButton(tr("Stop"), panel);
+    stop_button_->setEnabled(false);
+    stop_button_->setToolTip(tr("Stop the current preview or cue"));
+    connect(stop_button_, &QPushButton::clicked, this, &MovieSyncEffect::onStopPreview);
+    row->addWidget(stop_button_);
     row->addStretch(1);
     layout->addLayout(row);
 
@@ -267,10 +325,8 @@ void MovieSyncEffect::onApiToggled(bool on)
         stopListener();
         runtime_.StopAll();
         tick_timer_->stop();
-        if(tab_)
-        {
-            tab_->ClearActionPreview(true, this);
-        }
+        setPlayingUi(false);
+        clearPreviewIfIdle();
         setStatus(tr("Script API off"));
     }
 }
@@ -323,6 +379,15 @@ void MovieSyncEffect::onPreview()
     fireSelectedCatalogEffect();
 }
 
+void MovieSyncEffect::onStopPreview()
+{
+    runtime_.StopAll();
+    tick_timer_->stop();
+    setPlayingUi(false);
+    clearPreviewIfIdle();
+    restoreIdleStatus();
+}
+
 void MovieSyncEffect::onEffectSelectionChanged()
 {
     const QString id = selectedEffectId();
@@ -338,10 +403,11 @@ void MovieSyncEffect::onEffectSelectionChanged()
     const MovieSync::CatalogEffect* meta = MovieSync::FindEffect(catalog_, id.toStdString());
     if(!meta)
     {
-        notes_label_->setText(tr("Notes: id: %1").arg(id));
+        notes_label_->setText(tr("Notes: unknown look (%1)").arg(id));
         return;
     }
     const QString notes = meta->photosensitive ? tr("photosensitive") : tr("none");
+    // Sidecar authors need the stable Movie Sync id next to the display name.
     notes_label_->setText(tr("Notes: %1  ·  id: %2").arg(notes, id));
 }
 
@@ -355,17 +421,10 @@ void MovieSyncEffect::onTick()
     if(!runtime_.Tick(33))
     {
         tick_timer_->stop();
+        setPlayingUi(false);
         // Once packs must go black when they finish (do not leave the last lit frame).
-        if(tab_)
-        {
-            tab_->ClearActionPreview(true, this);
-        }
-        if(listener_ && listener_->isListening())
-        {
-            setStatus(tr("Listening on 127.0.0.1:%1 — %2 Movie Sync look(s)")
-                          .arg(listener_->port())
-                          .arg(catalog_.effects.size()));
-        }
+        clearPreviewIfIdle();
+        restoreIdleStatus();
     }
 }
 
@@ -505,6 +564,48 @@ void MovieSyncEffect::setStatus(const QString& text)
     }
 }
 
+void MovieSyncEffect::setPlayingUi(bool playing)
+{
+    if(preview_button_)
+    {
+        preview_button_->setEnabled(!playing);
+    }
+    if(stop_button_)
+    {
+        stop_button_->setEnabled(playing);
+    }
+}
+
+void MovieSyncEffect::clearPreviewIfIdle()
+{
+    if(tab_ && !runtime_.IsPlaying())
+    {
+        tab_->ClearActionPreview(true, this);
+    }
+}
+
+void MovieSyncEffect::restoreIdleStatus()
+{
+    if(listener_ && listener_->isListening())
+    {
+        setStatus(tr("Listening on 127.0.0.1:%1 — %2 Movie Sync look(s)")
+                      .arg(listener_->port())
+                      .arg(catalog_.effects.size()));
+    }
+    else if(!api_enabled_)
+    {
+        setStatus(tr("Script API off"));
+    }
+    else if(catalog_.effects.empty())
+    {
+        setStatus(tr("No looks in movie-sync/"));
+    }
+    else
+    {
+        setStatus(tr("Catalog: %1 Movie Sync look(s)").arg(catalog_.effects.size()));
+    }
+}
+
 void MovieSyncEffect::startListener()
 {
     bindTab();
@@ -537,7 +638,7 @@ void MovieSyncEffect::fireSelectedCatalogEffect()
     const QString id = selectedEffectId();
     if(id.isEmpty())
     {
-        setStatus(tr("Select a catalog effect first"));
+        setStatus(tr("Select a look first"));
         return;
     }
     if(!api_enabled_ || !listener_->isListening())
@@ -547,18 +648,22 @@ void MovieSyncEffect::fireSelectedCatalogEffect()
     bindTab();
     runtime_.SetAllowPhotosensitive(allow_photosensitive_);
     runtime_.StopAll();
+    clearPreviewIfIdle();
     runtime_.OnEffect(id.toStdString(), "pulse", true);
     if(!runtime_.lastWarning().empty())
     {
-        setStatus(QString::fromStdString(runtime_.lastWarning()));
+        setPlayingUi(false);
+        setStatus(humanizeRuntimeMessage(runtime_.lastWarning()));
         return;
     }
     if(!runtime_.lastError().empty())
     {
-        setStatus(QString::fromStdString(runtime_.lastError()));
+        setPlayingUi(false);
+        setStatus(humanizeRuntimeMessage(runtime_.lastError()));
         return;
     }
-    setStatus(tr("Preview: %1").arg(id));
+    setStatus(tr("Preview: %1").arg(effectDisplayName(id)));
+    setPlayingUi(runtime_.IsPlaying());
     if(runtime_.IsPlaying() && !tick_timer_->isActive())
     {
         tick_timer_->start();

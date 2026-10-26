@@ -42,6 +42,7 @@ private:
     void saveDocument();
     void populateList();
     void setStatus(const QString& text);
+    void clearPreviewIfIdle();
     bool editBindingDialog(Trigger::Binding* binding);
     filesystem::path bindingsPath() const;
     filesystem::path triggerEffectsDir() const;

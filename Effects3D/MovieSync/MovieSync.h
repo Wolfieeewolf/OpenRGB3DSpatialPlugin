@@ -10,6 +10,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QListWidget;
+class QPushButton;
 class QTimer;
 class OpenRGB3DSpatialTab;
 
@@ -37,6 +38,7 @@ private slots:
     void onReloadCatalog();
     void onCategoryChanged(int index);
     void onPreview();
+    void onStopPreview();
     void onEffectSelectionChanged();
     void onEffectDoubleClicked();
     void onTick();
@@ -46,6 +48,11 @@ private:
     void refreshCategoryCombo();
     void refreshEffectList();
     void setStatus(const QString& text);
+    void setPlayingUi(bool playing);
+    void clearPreviewIfIdle();
+    void restoreIdleStatus();
+    QString effectDisplayName(const QString& effect_id) const;
+    QString humanizeRuntimeMessage(const std::string& msg) const;
     void startListener();
     void stopListener();
     void fireSelectedCatalogEffect();
@@ -66,6 +73,8 @@ private:
     QLabel* notes_label_ = nullptr;
     QComboBox* category_combo_ = nullptr;
     QListWidget* effect_list_ = nullptr;
+    QPushButton* preview_button_ = nullptr;
+    QPushButton* stop_button_ = nullptr;
     OpenRGB3DSpatialTab* tab_ = nullptr;
     bool api_enabled_ = true;
     bool allow_photosensitive_ = false;

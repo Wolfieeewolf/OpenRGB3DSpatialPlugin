@@ -50,6 +50,23 @@ bool IsActionFilename(const QString& name)
 
 /** Sentinel for "show every category". */
 constexpr const char* kCategoryAll = "__all__";
+
+QString LoopModeLabel(const QString& loop)
+{
+    if(loop == QLatin1String("while_active"))
+    {
+        return QObject::tr("while active");
+    }
+    if(loop == QLatin1String("forever"))
+    {
+        return QObject::tr("forever");
+    }
+    if(loop == QLatin1String("once"))
+    {
+        return QObject::tr("once");
+    }
+    return loop;
+}
 } // namespace
 
 ActionsPanel::ActionsPanel(QWidget* parent)
@@ -195,7 +212,7 @@ void ActionsPanel::populateList()
     const filesystem::path dir = triggerEffectsDir();
     if(dir.empty())
     {
-        ui->statusLabel->setText(QStringLiteral("No plugin data path"));
+        ui->statusLabel->setText(tr("No plugin data path"));
         return;
     }
 
@@ -220,13 +237,13 @@ void ActionsPanel::populateList()
             }
         }
 
-        QString label = QStringLiteral("%1 (%2 ms, %3)")
+        QString label = tr("%1 (%2 ms, %3)")
                             .arg(QString::fromStdString(entry.name))
                             .arg(entry.duration_ms)
-                            .arg(QString::fromStdString(entry.loop));
+                            .arg(LoopModeLabel(QString::fromStdString(entry.loop)));
         if(filter == QLatin1String(kCategoryAll) && !entry.category.empty())
         {
-            label = QStringLiteral("[%1] %2").arg(cat, label);
+            label = tr("[%1] %2").arg(cat, label);
         }
         auto* item = new QListWidgetItem(label);
         item->setData(Qt::UserRole, PathToQString(entry.path));
@@ -238,12 +255,11 @@ void ActionsPanel::populateList()
 
     if(shown == 0)
     {
-        ui->statusLabel->setText(QStringLiteral("No actions"));
+        ui->statusLabel->setText(tr("No actions"));
     }
     else if(!player_.IsPlaying())
     {
-        ui->statusLabel->setText(
-            QStringLiteral("%1 action(s) in triggers/effects/").arg(shown));
+        ui->statusLabel->setText(tr("%1 action(s) in triggers/effects/").arg(shown));
     }
 }
 
@@ -262,7 +278,7 @@ void ActionsPanel::setPlayingUi(bool playing)
     ui->exportButton->setEnabled(!playing);
 }
 
-void ActionsPanel::stopPreview()
+void ActionsPanel::stopPreview(const QString& status)
 {
     const bool was_playing = player_.IsPlaying();
     if(timer_ && timer_->isActive())
@@ -277,7 +293,7 @@ void ActionsPanel::stopPreview()
     setPlayingUi(false);
     if(ui)
     {
-        ui->statusLabel->setText(QStringLiteral("Stopped"));
+        ui->statusLabel->setText(status.isEmpty() ? tr("Stopped") : status);
     }
 }
 
@@ -289,7 +305,7 @@ ActionEditorDialog* ActionsPanel::ensureEditor()
     }
     if(!editor_)
     {
-    editor_ = new ActionEditorDialog(tab_, tab_);
+        editor_ = new ActionEditorDialog(tab_, tab_);
         connect(editor_, &ActionEditorDialog::packSaved, this, &ActionsPanel::onEditorSaved);
         connect(editor_, &ActionEditorDialog::previewStarted, this, &ActionsPanel::onEditorPreviewStarted);
     }
@@ -511,8 +527,8 @@ void ActionsPanel::onPreview()
     QListWidgetItem* item = ui->packList->currentItem();
     if(!item)
     {
-        QMessageBox::information(this, QStringLiteral("Actions"),
-                                 QStringLiteral("Select a pack to preview."));
+        QMessageBox::information(this, tr("Actions"),
+                                 tr("Select a pack to preview."));
         return;
     }
 
@@ -526,20 +542,20 @@ void ActionsPanel::onPreview()
     std::string err;
     if(!Action::LoadActionByPath(path, &pack, &err))
     {
-        QMessageBox::warning(this, QStringLiteral("Actions"),
-                             QStringLiteral("Failed to load pack:\n%1").arg(QString::fromStdString(err)));
+        QMessageBox::warning(this, tr("Actions"),
+                             tr("Failed to load pack:\n%1").arg(QString::fromStdString(err)));
         return;
     }
-
-    tab_->PrepareActionPreview();
 
     const auto controllers = tab_->resource_manager->GetRGBControllers();
     if(controllers.empty())
     {
-        QMessageBox::warning(this, QStringLiteral("Actions"),
-                             QStringLiteral("No OpenRGB controllers available."));
+        QMessageBox::warning(this, tr("Actions"),
+                             tr("No OpenRGB controllers available."));
         return;
     }
+
+    tab_->PrepareActionPreview();
 
     player_.SetPack(pack);
     player_.Play();
@@ -547,7 +563,7 @@ void ActionsPanel::onPreview()
     last_elapsed_ms_ = 0;
     setPlayingUi(true);
     timer_->start();
-    ui->statusLabel->setText(QStringLiteral("Playing “%1”…").arg(QString::fromStdString(pack.name)));
+    ui->statusLabel->setText(tr("Playing “%1”…").arg(QString::fromStdString(pack.name)));
 }
 
 void ActionsPanel::onStop()
@@ -569,8 +585,7 @@ void ActionsPanel::onTick()
 
     if(!player_.Tick(dt, true))
     {
-        stopPreview();
-        ui->statusLabel->setText(QStringLiteral("Finished"));
+        stopPreview(tr("Finished"));
         return;
     }
 
@@ -580,8 +595,5 @@ void ActionsPanel::onTick()
 
     const int local = player_.LocalMs();
     const int dur = std::max(1, player_.GetPack().duration_ms);
-    ui->statusLabel->setText(
-        QStringLiteral("Playing %1 / %2 ms")
-            .arg(local)
-            .arg(dur));
+    ui->statusLabel->setText(tr("Playing %1 / %2 ms").arg(local).arg(dur));
 }

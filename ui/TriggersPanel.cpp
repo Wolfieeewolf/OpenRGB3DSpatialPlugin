@@ -53,6 +53,7 @@ void TriggersPanel::bindTab(OpenRGB3DSpatialTab* tab)
                                  const std::string& event,
                                  bool active,
                                  Trigger::EventEdge edge) {
+        const bool was_playing = runtime_.IsPlaying();
         runtime_.OnEvent(source, event, active, edge);
         const QString error = QString::fromStdString(runtime_.lastError());
         if(runtime_.IsPlaying())
@@ -69,6 +70,10 @@ void TriggersPanel::bindTab(OpenRGB3DSpatialTab* tab)
         else
         {
             timer_->stop();
+            if(was_playing)
+            {
+                clearPreviewIfIdle();
+            }
         }
         if(!error.isEmpty())
         {
@@ -77,8 +82,8 @@ void TriggersPanel::bindTab(OpenRGB3DSpatialTab* tab)
         else
         {
             setStatus(runtime_.IsPlaying()
-                          ? QStringLiteral("Playing bound actions…")
-                          : QStringLiteral("Idle"));
+                          ? tr("Playing bound actions…")
+                          : tr("Idle"));
         }
     });
     runtime_.SetEffectsDir(triggerEffectsDir());
@@ -192,7 +197,7 @@ void TriggersPanel::reloadDocument()
     std::string err;
     if(!Trigger::LoadOrEmpty(bindingsPath(), &doc, &err))
     {
-        setStatus(QStringLiteral("Load failed: %1").arg(QString::fromStdString(err)));
+        setStatus(tr("Load failed: %1").arg(QString::fromStdString(err)));
         return;
     }
     user_ = std::move(doc);
@@ -205,7 +210,7 @@ void TriggersPanel::reloadDocument()
         setStatus(QString::fromStdString(warnings.front()));
         return;
     }
-    setStatus(QStringLiteral("Idle"));
+    setStatus(tr("Idle"));
 }
 
 void TriggersPanel::saveDocument()
@@ -213,12 +218,12 @@ void TriggersPanel::saveDocument()
     std::string err;
     if(!Trigger::SaveToFile(bindingsPath(), user_, &err))
     {
-        setStatus(QStringLiteral("Save failed: %1").arg(QString::fromStdString(err)));
+        setStatus(tr("Save failed: %1").arg(QString::fromStdString(err)));
         return;
     }
     if(!runtime_.IsPlaying())
     {
-        setStatus(QStringLiteral("Bindings saved"));
+        setStatus(tr("Bindings saved"));
     }
 }
 
@@ -249,7 +254,7 @@ void TriggersPanel::populateList()
                 }
             }
         }
-        QString pack_label = QString::fromStdString(b.pack_id);
+        QString pack_label;
         for(const Action::ActionListEntry& p : packs)
         {
             if(p.id == b.pack_id)
@@ -257,6 +262,10 @@ void TriggersPanel::populateList()
                 pack_label = QString::fromStdString(p.name);
                 break;
             }
+        }
+        if(pack_label.isEmpty())
+        {
+            pack_label = tr("Missing: %1").arg(QString::fromStdString(b.pack_id));
         }
         QString event_label = QString::fromStdString(b.event);
         for(const Trigger::EventInfo& ev : src->ListEvents())
@@ -342,11 +351,16 @@ void TriggersPanel::onItemChanged(QListWidgetItem* item)
     }
     if(!on)
     {
+        const bool was_playing = runtime_.IsPlaying();
         runtime_.StopBinding(id);
         if(!runtime_.IsPlaying())
         {
             timer_->stop();
-            setStatus(QStringLiteral("Idle"));
+            if(was_playing)
+            {
+                clearPreviewIfIdle();
+            }
+            setStatus(tr("Idle"));
         }
     }
     syncRuntime();
@@ -569,6 +583,7 @@ void TriggersPanel::onFire()
 
 void TriggersPanel::onStop()
 {
+    const bool was_playing = runtime_.IsPlaying();
     if(registry_.manual())
     {
         registry_.manual()->StopFire();
@@ -580,7 +595,11 @@ void TriggersPanel::onStop()
     if(!runtime_.IsPlaying())
     {
         timer_->stop();
-        setStatus(QStringLiteral("Idle"));
+        if(was_playing)
+        {
+            clearPreviewIfIdle();
+        }
+        setStatus(tr("Idle"));
     }
 }
 
@@ -605,11 +624,16 @@ void TriggersPanel::onTick()
     if(!runtime_.Tick(timer_->interval()))
     {
         timer_->stop();
-        if(tab_)
-        {
-            tab_->ClearActionPreview(true);
-        }
-        setStatus(QStringLiteral("Idle"));
+        clearPreviewIfIdle();
+        setStatus(tr("Idle"));
+    }
+}
+
+void TriggersPanel::clearPreviewIfIdle()
+{
+    if(tab_ && !runtime_.IsPlaying())
+    {
+        tab_->ClearActionPreview(true);
     }
 }
 
@@ -617,16 +641,13 @@ void TriggersPanel::stopAll()
 {
     onStop();
     runtime_.StopAll();
-    if(tab_)
-    {
-        tab_->ClearActionPreview(true);
-    }
+    clearPreviewIfIdle();
     if(timer_)
     {
         timer_->stop();
     }
     if(ui)
     {
-        setStatus(QStringLiteral("Idle"));
+        setStatus(tr("Idle"));
     }
 }
