@@ -122,7 +122,8 @@ INCLUDEPATH += \
     SpatialLighting \
     Shaders \
     Audio \
-    engines/reactive
+    engines/reactive \
+    engines/screen-mirror
 
 HEADERS += \
     OpenRGB3DSpatialPlugin.h \
@@ -145,9 +146,9 @@ HEADERS += \
     SceneProp3D.h \
     DisplayPlaneManager.h \
     ScenePropManager.h \
-    ScreenCaptureManager.h \
-    ScreenCaptureDownscale.h \
-    DisplayPlaneCaptureLabels.h \
+    engines/screen-mirror/ScreenCaptureManager.h \
+    engines/screen-mirror/ScreenCaptureDownscale.h \
+    engines/screen-mirror/DisplayPlaneCaptureLabels.h \
     Geometry3DUtils.h \
     TransformJson.h \
     MediaTextureEffectUtils.h \
@@ -322,11 +323,11 @@ HEADERS += \
     engines/reactive/ReactiveInputManager.h \
     engines/reactive/Reactive.h \
     Effects3D/FolderVolume/FolderVolumeEffect.h \
-    Effects3D/ScreenMirror/ScreenMirror.h \
-    Effects3D/ScreenMirror/ScreenMirror_Internal.h \
-    Effects3D/ScreenMirror/ScreenMirrorWaveMath.h \
-    Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h \
-    Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
+    engines/screen-mirror/ScreenMirror.h \
+    engines/screen-mirror/ScreenMirror_Internal.h \
+    engines/screen-mirror/ScreenMirrorWaveMath.h \
+    engines/screen-mirror/ScreenMirrorCalibrationPattern.h \
+    engines/screen-mirror/ScreenMirrorMonitorPanel.h \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.h \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.h \
 
@@ -347,7 +348,7 @@ SOURCES += \
     ZoneManager3D.cpp \
     DisplayPlane3D.cpp \
     SceneProp3D.cpp \
-    ScreenCaptureManager.cpp \
+    engines/screen-mirror/ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
     engines/game/Game/GameTelemetryBridge.cpp \
     engines/game/Game/RoomSampleFrameShmReader.cpp \
@@ -504,10 +505,10 @@ SOURCES += \
     engines/reactive/Reactive.cpp \
     engines/reactive/ReactiveKeyMap.cpp \
     engines/reactive/ReactiveInputManager.cpp \
-    Effects3D/ScreenMirror/ScreenMirror.cpp \
-    Effects3D/ScreenMirror/ScreenMirror_Render.cpp \
-    Effects3D/ScreenMirror/ScreenMirror_Settings.cpp \
-    Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.cpp \
+    engines/screen-mirror/ScreenMirror.cpp \
+    engines/screen-mirror/ScreenMirror_Render.cpp \
+    engines/screen-mirror/ScreenMirror_Settings.cpp \
+    engines/screen-mirror/ScreenMirrorMonitorPanel.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.cpp \
     Audio/AudioInputManager.cpp

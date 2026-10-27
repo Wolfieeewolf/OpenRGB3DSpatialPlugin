@@ -6,7 +6,7 @@
 #include "ScreenCaptureManager.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
-#include "ScreenMirror/ScreenMirrorWaveMath.h"
+#include "ScreenMirrorWaveMath.h"
 
 #include <algorithm>
 #include <cstdint>

@@ -7,8 +7,8 @@
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
-#include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
-#include "ScreenMirror/ScreenMirror_Internal.h"
+#include "ScreenMirrorCalibrationPattern.h"
+#include "ScreenMirror_Internal.h"
 
 #include <chrono>
 #include <cmath>

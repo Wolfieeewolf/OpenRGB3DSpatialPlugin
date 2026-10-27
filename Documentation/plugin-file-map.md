@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phase 1 applied** on branch `chore/engines-phase1-leaf` (movie-sync, triggers, reactive, game under `engines/`). Phases 2–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–2 applied** — phase 1 on `chore/engines-phase1-leaf` (merged); phase 2 on `chore/engines-phase2-screen-mirror` (screen-mirror + capture). Phases 3–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phase 1 landed; later buckets still proposed)
+## Tree (phases 1–2 landed; later buckets still proposed)
 
 ```text
 engines/
@@ -38,6 +38,8 @@ engines/
   game/
     Game/           ← DONE  (was root Game/*); StripPatternSurface.h stays here until shared/
     Minecraft/      ← DONE  (was Effects3D/Games/Minecraft/*)
+  screen-mirror/    ← DONE  (was Effects3D/ScreenMirror/* + root ScreenCapture* + DisplayPlaneCaptureLabels.h)
+                    DisplayPlane3D.* stays shared (room object)
   volume-field/     ActionVolumeField.*
                     Shaders/SpatialVolumeField{Assist,Engine}.*
   particle-field/   ActionParticleField.*
@@ -46,9 +48,6 @@ engines/
                     (+ strip assist/engine if only FolderVolume-owned — see note)
   shader-field/     Effects3D/ShaderField/*
                     Shaders/SpatialShader{Engine,Catalog,Uniforms}.*
-  screen-mirror/    Effects3D/ScreenMirror/*
-                    ScreenCaptureManager.*  ScreenCaptureDownscale.h
-                    DisplayPlaneCaptureLabels.h   # labels for capture UI
   audio/            Audio/*
                     Effects3D/AudioReactiveCommon.h  AudioReactiveUi.h
   actions/          Effects3D/Actions/*  except *Volume/Particle/Ribbon*Field*
@@ -131,14 +130,14 @@ ui/                 unchanged paths for now (affinity notes below)
 | `Shaders/SpatialShaderCatalog.*` | `.fs` load / patterns | move | shared header-key helper |
 | `Shaders/SpatialShaderUniforms.h` | Uniform blob | move | |
 
-### `engines/screen-mirror`
+### `engines/screen-mirror` (phase 2)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Effects3D/ScreenMirror/*` | Effect / settings / render / monitor panel | fixed (partial) | |
-| `ScreenCaptureManager.*` | DXGI/GDI capture | move | **hub** for planes UI too |
-| `ScreenCaptureDownscale.h` | Scale helper | move | |
-| `DisplayPlaneCaptureLabels.h` | Combo labels | move or ui | Thin |
+| `engines/screen-mirror/ScreenMirror*` | Effect / settings / render / monitor panel | fixed (partial) | |
+| `engines/screen-mirror/ScreenCaptureManager.*` | DXGI/GDI capture | keep | **hub** for planes UI too |
+| `engines/screen-mirror/ScreenCaptureDownscale.h` | Scale helper | keep | |
+| `engines/screen-mirror/DisplayPlaneCaptureLabels.h` | Combo labels | keep | Thin; ui includes across |
 
 `DisplayPlane3D.*` stays **shared** (room object); capture *source id* on the plane is the seam.
 
@@ -262,8 +261,8 @@ ui/                 unchanged paths for now (affinity notes below)
 
 ## Suggested move phases
 
-1. **Leaf engines first** — **DONE** on `chore/engines-phase1-leaf` (movie-sync, triggers, reactive, game; integrations stay sibling).
-2. **Screen-mirror** — ScreenMirror + ScreenCaptureManager; keep DisplayPlane in shared.
+1. **Leaf engines first** — **DONE** on `chore/engines-phase1-leaf` (merged to main).
+2. **Screen-mirror** — **DONE** on `chore/engines-phase2-screen-mirror` (ScreenMirror + ScreenCapture*; DisplayPlane stays shared).
 3. **Shader-field** — ShaderField + SpatialShader*.
 4. **Volume/particle/ribbon** — move bridges + SpatialVolumeField*; update Actions includes.
 5. **Folder-volume** — after volume-field stable (calls assist).
@@ -280,7 +279,7 @@ Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 | Item | Issue | Lean |
 |------|-------|------|
 | `engines/game/Game/StripPatternSurface.h` | Used outside game | → `shared` in phase 7 |
-| `ScreenCaptureManager` | Used by Screen Mirror + plane UI | → `engines/screen-mirror`, ui includes across |
+| `engines/screen-mirror/ScreenCaptureManager` | Used by Screen Mirror + plane UI | phase 2 done; ui includes across |
 | `SpatialStripField*` | FolderVolume + patterns | → `shared` (hub) |
 | `SpatialVolumeField*` | Actions + FolderVolume | → `engines/volume-field` |
 | `ActionBuiltinGpu` / `ActionMedia` | Live under Actions but touch volume assist | stay `engines/actions` |

@@ -47,7 +47,7 @@
 #include "CustomControllerDialog.h"
 #include "DisplayPlaneManager.h"
 #include "ScenePropManager.h"
-#include "Effects3D/ScreenMirror/ScreenMirror.h"
+#include "ScreenMirror.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "GridSpaceUtils.h"
 #include "ZoneGrid3D.h"
@@ -477,7 +477,7 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
 
                     if(!world_clips.empty())
                     {
-                        // One field/particle/ribbon set at a time â€” prepare per clip, then stamp voxels.
+                        // One field/particle/ribbon set at a time — prepare per clip, then stamp voxels.
                         static std::uint64_t s_overlay_field_seq = 0;
                         for(const Action::Clip* clip : world_clips)
                         {

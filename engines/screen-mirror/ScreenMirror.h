@@ -4,7 +4,7 @@
 #define SCREENMIRROR_H
 
 #include "SpatialEffect3D.h"
-#include "ScreenMirror/ScreenMirrorWaveMath.h"
+#include "ScreenMirrorWaveMath.h"
 #include <map>
 #include <unordered_map>
 #include <deque>

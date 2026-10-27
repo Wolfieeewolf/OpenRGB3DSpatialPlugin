@@ -9,7 +9,7 @@
 #include "SpatialControllerEntryKey.h"
 #include "DisplayPlaneManager.h"
 #include "ScreenCaptureManager.h"
-#include "Effects3D/ScreenMirror/ScreenMirror.h"
+#include "ScreenMirror.h"
 #include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
 #include "PluginLog.h"

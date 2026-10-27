@@ -5,7 +5,7 @@
 #include "DisplayPlane3D.h"
 #include "QtCompat.h"
 #include "ScreenCaptureManager.h"
-#include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
+#include "ScreenMirrorCalibrationPattern.h"
 
 #include <QVBoxLayout>
 #include <QGroupBox>

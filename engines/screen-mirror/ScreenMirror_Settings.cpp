@@ -5,7 +5,7 @@
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
 #include "VirtualReferencePoint3D.h"
-#include "ScreenMirror/ScreenMirror_Internal.h"
+#include "ScreenMirror_Internal.h"
 
 #include <QSignalBlocker>
 #include <algorithm>

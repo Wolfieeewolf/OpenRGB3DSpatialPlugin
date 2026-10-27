@@ -4,7 +4,7 @@
 #include "EffectListManager3D.h"
 #include "ZoneGrid3D.h"
 #include "Minecraft/MinecraftGame.h"
-#include "Effects3D/ScreenMirror/ScreenMirror.h"
+#include "ScreenMirror.h"
 #include "ScreenCaptureManager.h"
 #include "ReactiveInputManager.h"
 #include "ReactiveInputTypes.h"
@@ -546,7 +546,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                               manual_room_width,
                                                               manual_room_height,
                                                               manual_room_depth);
-    // room_position equals world_position today (Documentation/PluginSpatialMeasurement.md Â§4), so one bounds/centroid pass.
+    // room_position equals world_position today (Documentation/PluginSpatialMeasurement.md §4), so one bounds/centroid pass.
     GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
     const GridBounds& room_bounds = world_bounds;
 
@@ -573,7 +573,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     }
 
     // LED-first Room Ambilight: publish against the global room grid + all layout LED room positions.
-    // (Effect-local zone grids must not be used for room bounds â€” that mapped LEDs to the wrong side.)
+    // (Effect-local zone grids must not be used for room bounds — that mapped LEDs to the wrong side.)
     {
         RoomSampleConfigPublisher::SetPublishRoomGrid(room_grid);
         std::vector<float> led_xyz;
@@ -1080,7 +1080,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    // Room-grid overlay can be tens of thousands of voxels Ã— every effect. While effects
+    // Room-grid overlay can be tens of thousands of voxels × every effect. While effects
     // are running, refresh every other frame so LED output keeps CPU/GPU budget.
     const bool refresh_room_grid_overlay =
         viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0 &&
