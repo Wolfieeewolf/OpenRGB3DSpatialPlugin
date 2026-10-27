@@ -24,7 +24,7 @@ Skill: `.cursor/skills/openrgb3d-multipass-review/SKILL.md`. Tracker was wrong o
 |--------|--------|------|-------|
 | Effects3D/Actions | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop) |
 | Effects3D/FolderVolume | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop) |
-| Effects3D/ShaderField | fixed | 2026-10-27 | Picked up locally after agent stop: shared `LoadShaderBodyFromPath`; `\u2013` labels (not a full agent ratchet) |
+| engines/shader-field (was Effects3D/ShaderField + SpatialShader*) | fixed | 2026-10-27 | Picked up locally after agent stop: shared `LoadShaderBodyFromPath`; `\u2013` labels (not a full agent ratchet); tree moved phase 3 |
 | engines/screen-mirror (was Effects3D/ScreenMirror + ScreenCapture*) | fixed | 2026-10-27 | Picked up locally after agent stop: `QStringLiteral` tooltips/empty label (hygiene; not full agent ratchet); tree moved phase 2 |
 | engines/reactive (was Effects3D/Reactive + Input) | fixed | 2026-10-27 | Removed legacy `ring_width_pct` LoadSettings remap; wiring only-while-running OK; **~1.5k lines — split later**; tree moved phase 1 |
 | engines/game/Minecraft (was Effects3D/Games) | fixed | 2026-10-27 | Dead `MakeRgb` + `RoomLedToSpatialCore` removed; include path fixed; strip-axis UI gap patched (standalone Hunger/Air/Dura now expose axis controls); RoomAmbilight description updated; per-strip labels corrected; tree moved phase 1 |

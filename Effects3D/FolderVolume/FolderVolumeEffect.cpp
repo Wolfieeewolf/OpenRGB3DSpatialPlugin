@@ -9,7 +9,7 @@
 #include "MediaTextureEffectUtils.h"
 #include "OpenRGB3DSpatialPlugin.h"
 #include "PluginSettingsPaths.h"
-#include "Shaders/SpatialShaderCatalog.h"
+#include "SpatialShaderCatalog.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"

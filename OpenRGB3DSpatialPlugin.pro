@@ -123,7 +123,8 @@ INCLUDEPATH += \
     Shaders \
     Audio \
     engines/reactive \
-    engines/screen-mirror
+    engines/screen-mirror \
+    engines/shader-field
 
 HEADERS += \
     OpenRGB3DSpatialPlugin.h \
@@ -298,16 +299,16 @@ HEADERS += \
     ui/widgets/MediaTextureAmbienceBlock.h \
     ui/widgets/AudioEqBandColumn.h \
     ui/widgets/EffectControlsRoot.h \
-    Effects3D/ShaderField/ShaderField.h \
+    engines/shader-field/ShaderField.h \
     Effects3D/PlayerEngines.h \
     engines/movie-sync/MovieSync.h \
     engines/movie-sync/MovieSyncCatalog.h \
     engines/movie-sync/MovieSyncListener.h \
     engines/movie-sync/MovieSyncRuntime.h \
     EffectListManager3D.h \
-    Shaders/SpatialShaderEngine.h \
-    Shaders/SpatialShaderUniforms.h \
-    Shaders/SpatialShaderCatalog.h \
+    engines/shader-field/SpatialShaderEngine.h \
+    engines/shader-field/SpatialShaderUniforms.h \
+    engines/shader-field/SpatialShaderCatalog.h \
     Shaders/GlslUniformArray.h \
     Shaders/SpatialFieldAssistBase.h \
     Shaders/SpatialVolumeFieldEngine.h \
@@ -493,9 +494,9 @@ SOURCES += \
     engines/movie-sync/MovieSyncCatalog.cpp \
     engines/movie-sync/MovieSyncListener.cpp \
     engines/movie-sync/MovieSyncRuntime.cpp \
-    Effects3D/ShaderField/ShaderField.cpp \
-    Shaders/SpatialShaderEngine.cpp \
-    Shaders/SpatialShaderCatalog.cpp \
+    engines/shader-field/ShaderField.cpp \
+    engines/shader-field/SpatialShaderEngine.cpp \
+    engines/shader-field/SpatialShaderCatalog.cpp \
     Shaders/SpatialVolumeFieldEngine.cpp \
     Shaders/SpatialOffscreenGlPool.cpp \
     Shaders/FieldFullscreenQuad410.cpp \

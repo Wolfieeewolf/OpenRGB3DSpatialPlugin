@@ -4,7 +4,7 @@
 #define SHADERFIELD_H
 
 #include "SpatialEffect3D.h"
-#include "Shaders/SpatialShaderEngine.h"
+#include "SpatialShaderEngine.h"
 
 #include <QImage>
 #include <QMutex>

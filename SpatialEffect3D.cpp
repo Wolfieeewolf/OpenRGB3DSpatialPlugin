@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpatialEffect3D.h"
-#include "Shaders/SpatialShaderCatalog.h"
+#include "SpatialShaderCatalog.h"
 
 #include "EffectMotionPanel.h"
 #include "EffectOutputPanel.h"

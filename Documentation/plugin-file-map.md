@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–2 applied** — phase 1 on `chore/engines-phase1-leaf` (merged); phase 2 on `chore/engines-phase2-screen-mirror` (screen-mirror + capture). Phases 3–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–3 applied** — phase 1 on `chore/engines-phase1-leaf` (merged); phase 2 on `chore/engines-phase2-screen-mirror` (merged); phase 3 on `chore/engines-phase3-shader-field` (shader-field + SpatialShader*). Phases 4–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–2 landed; later buckets still proposed)
+## Tree (phases 1–3 landed; later buckets still proposed)
 
 ```text
 engines/
@@ -40,14 +40,13 @@ engines/
     Minecraft/      ← DONE  (was Effects3D/Games/Minecraft/*)
   screen-mirror/    ← DONE  (was Effects3D/ScreenMirror/* + root ScreenCapture* + DisplayPlaneCaptureLabels.h)
                     DisplayPlane3D.* stays shared (room object)
+  shader-field/     ← DONE  (was Effects3D/ShaderField/* + Shaders/SpatialShader{Engine,Catalog,Uniforms}.*)
   volume-field/     ActionVolumeField.*
                     Shaders/SpatialVolumeField{Assist,Engine}.*
   particle-field/   ActionParticleField.*
   ribbon-field/     ActionRibbonField.*
   folder-volume/    Effects3D/FolderVolume/*
                     (+ strip assist/engine if only FolderVolume-owned — see note)
-  shader-field/     Effects3D/ShaderField/*
-                    Shaders/SpatialShader{Engine,Catalog,Uniforms}.*
   audio/            Audio/*
                     Effects3D/AudioReactiveCommon.h  AudioReactiveUi.h
   actions/          Effects3D/Actions/*  except *Volume/Particle/Ribbon*Field*
@@ -121,14 +120,14 @@ ui/                 unchanged paths for now (affinity notes below)
 |------|------|-------|-------|
 | `Effects3D/FolderVolume/FolderVolumeEffect.*` | `.fs` host + UI | pending Claude ratchet / **split** | ~2.6k |
 
-### `engines/shader-field`
+### `engines/shader-field` (phase 3)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Effects3D/ShaderField/ShaderField.*` | Effect + projection | fixed (partial hygiene) | |
-| `Shaders/SpatialShaderEngine.*` | 2D atlas | move w/ engine | |
-| `Shaders/SpatialShaderCatalog.*` | `.fs` load / patterns | move | shared header-key helper |
-| `Shaders/SpatialShaderUniforms.h` | Uniform blob | move | |
+| `engines/shader-field/ShaderField.*` | Effect + projection | fixed (partial hygiene) | |
+| `engines/shader-field/SpatialShaderEngine.*` | 2D atlas | keep | |
+| `engines/shader-field/SpatialShaderCatalog.*` | `.fs` load / patterns | keep | shared header-key helper |
+| `engines/shader-field/SpatialShaderUniforms.h` | Uniform blob | keep | |
 
 ### `engines/screen-mirror` (phase 2)
 
@@ -262,8 +261,8 @@ ui/                 unchanged paths for now (affinity notes below)
 ## Suggested move phases
 
 1. **Leaf engines first** — **DONE** on `chore/engines-phase1-leaf` (merged to main).
-2. **Screen-mirror** — **DONE** on `chore/engines-phase2-screen-mirror` (ScreenMirror + ScreenCapture*; DisplayPlane stays shared).
-3. **Shader-field** — ShaderField + SpatialShader*.
+2. **Screen-mirror** — **DONE** on `chore/engines-phase2-screen-mirror` (merged to main).
+3. **Shader-field** — **DONE** on `chore/engines-phase3-shader-field` (ShaderField + SpatialShader*).
 4. **Volume/particle/ribbon** — move bridges + SpatialVolumeField*; update Actions includes.
 5. **Folder-volume** — after volume-field stable (calls assist).
 6. **Actions core** — remaining Actions/* into `engines/actions`.

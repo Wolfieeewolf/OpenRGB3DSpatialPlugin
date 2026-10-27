@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ShaderField.h"
-#include "Shaders/SpatialShaderCatalog.h"
+#include "SpatialShaderCatalog.h"
 #include "MediaTextureEffectUtils.h"
 #include "PluginUiUtils.h"
 #include "OpenRGB3DSpatialPlugin.h"
