@@ -4,7 +4,7 @@
 #define FOLDERVOLUMEEFFECT_H
 
 #include "SpatialEffect3D.h"
-#include "Shaders/SpatialVolumeFieldAssist.h"
+#include "SpatialVolumeFieldAssist.h"
 #include "Effects3D/AudioReactiveCommon.h"
 
 #include <QImage>

@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–3 applied** — phase 1 on `chore/engines-phase1-leaf` (merged); phase 2 on `chore/engines-phase2-screen-mirror` (merged); phase 3 on `chore/engines-phase3-shader-field` (shader-field + SpatialShader*). Phases 4–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–4 applied** — phase 1–3 merged; phase 4 on `chore/engines-phase4-fields` (volume/particle/ribbon + SpatialVolumeField*). Phases 5–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–3 landed; later buckets still proposed)
+## Tree (phases 1–4 landed; later buckets still proposed)
 
 ```text
 engines/
@@ -41,15 +41,14 @@ engines/
   screen-mirror/    ← DONE  (was Effects3D/ScreenMirror/* + root ScreenCapture* + DisplayPlaneCaptureLabels.h)
                     DisplayPlane3D.* stays shared (room object)
   shader-field/     ← DONE  (was Effects3D/ShaderField/* + Shaders/SpatialShader{Engine,Catalog,Uniforms}.*)
-  volume-field/     ActionVolumeField.*
-                    Shaders/SpatialVolumeField{Assist,Engine}.*
-  particle-field/   ActionParticleField.*
-  ribbon-field/     ActionRibbonField.*
+  volume-field/     ← DONE  (was Actions/ActionVolumeField.* + Shaders/SpatialVolumeField{Assist,Engine}.*)
+  particle-field/   ← DONE  (was Actions/ActionParticleField.*)
+  ribbon-field/     ← DONE  (was Actions/ActionRibbonField.*)
   folder-volume/    Effects3D/FolderVolume/*
                     (+ strip assist/engine if only FolderVolume-owned — see note)
   audio/            Audio/*
                     Effects3D/AudioReactiveCommon.h  AudioReactiveUi.h
-  actions/          Effects3D/Actions/*  except *Volume/Particle/Ribbon*Field*
+  actions/          Effects3D/Actions/*  (field bridges already moved)
                     ActionBuiltinGpu.*  ActionMedia.* stay here (call volume assist)
 integrations/minecraft/   unchanged (Fabric mod sibling)
 shared/
@@ -93,24 +92,21 @@ ui/                 unchanged paths for now (affinity notes below)
 | `Effects3D/Actions/ActionSpatial.cpp` | Spatial apply helpers | keep | |
 | `Effects3D/Actions/ActionBuiltinGpu.*` | plasma/fire/snow/colorwash GPU | keep w/ actions | Uses volume assist |
 | `Effects3D/Actions/ActionMedia.*` | Image/GIF clips | keep w/ actions | Uses volume/media path |
-| `Effects3D/Actions/ActionVolumeField.*` | → **volume-field** | move | Bridge only |
-| `Effects3D/Actions/ActionParticleField.*` | → **particle-field** | move | |
-| `Effects3D/Actions/ActionRibbonField.*` | → **ribbon-field** | move | |
 
-### `engines/volume-field`
+### `engines/volume-field` (phase 4)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Effects3D/Actions/ActionVolumeField.*` | Prepare/eval bridge | move from Actions | |
-| `Shaders/SpatialVolumeFieldAssist.*` | Per-effect assist | move from Shaders | |
-| `Shaders/SpatialVolumeFieldEngine.*` | GPGPU engine | move | ~1k — OK |
+| `engines/volume-field/ActionVolumeField.*` | Prepare/eval bridge | keep | |
+| `engines/volume-field/SpatialVolumeFieldAssist.*` | Per-effect assist | keep | |
+| `engines/volume-field/SpatialVolumeFieldEngine.*` | GPGPU engine | keep | ~1k — OK |
 
-### `engines/particle-field` / `engines/ribbon-field`
+### `engines/particle-field` / `engines/ribbon-field` (phase 4)
 
 | Path | Role | Merge |
 |------|------|-------|
-| `Effects3D/Actions/ActionParticleField.*` | Particle bridge | move |
-| `Effects3D/Actions/ActionRibbonField.*` | Ribbon bridge | move |
+| `engines/particle-field/ActionParticleField.*` | Particle bridge | keep |
+| `engines/ribbon-field/ActionRibbonField.*` | Ribbon bridge | keep |
 
 (No separate GPGPU engine files yet — both reuse volume assist/program path.)
 
@@ -263,7 +259,7 @@ ui/                 unchanged paths for now (affinity notes below)
 1. **Leaf engines first** — **DONE** on `chore/engines-phase1-leaf` (merged to main).
 2. **Screen-mirror** — **DONE** on `chore/engines-phase2-screen-mirror` (merged to main).
 3. **Shader-field** — **DONE** on `chore/engines-phase3-shader-field` (ShaderField + SpatialShader*).
-4. **Volume/particle/ribbon** — move bridges + SpatialVolumeField*; update Actions includes.
+4. **Volume/particle/ribbon** — **DONE** on `chore/engines-phase4-fields` (bridges + SpatialVolumeField*).
 5. **Folder-volume** — after volume-field stable (calls assist).
 6. **Actions core** — remaining Actions/* into `engines/actions`.
 7. **shared polish** — SpatialLighting/Room/Samplers, strip field hub, effect base, zones/controllers; promote `StripPatternSurface.h`; optional `Effects3D/` dissolve.
@@ -280,7 +276,7 @@ Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 | `engines/game/Game/StripPatternSurface.h` | Used outside game | → `shared` in phase 7 |
 | `engines/screen-mirror/ScreenCaptureManager` | Used by Screen Mirror + plane UI | phase 2 done; ui includes across |
 | `SpatialStripField*` | FolderVolume + patterns | → `shared` (hub) |
-| `SpatialVolumeField*` | Actions + FolderVolume | → `engines/volume-field` |
+| `SpatialVolumeField*` | Actions + FolderVolume | phase 4 done under `engines/volume-field` |
 | `ActionBuiltinGpu` / `ActionMedia` | Live under Actions but touch volume assist | stay `engines/actions` |
 | `PlayerEngines.cpp` | Multi-engine register | → `shared` |
 | `DisplayPlane3D` vs capture | Plane is room; capture is screen-mirror | split by type, not file force-merge |

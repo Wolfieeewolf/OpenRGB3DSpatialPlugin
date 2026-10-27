@@ -124,7 +124,10 @@ INCLUDEPATH += \
     Audio \
     engines/reactive \
     engines/screen-mirror \
-    engines/shader-field
+    engines/shader-field \
+    engines/volume-field \
+    engines/particle-field \
+    engines/ribbon-field
 
 HEADERS += \
     OpenRGB3DSpatialPlugin.h \
@@ -178,9 +181,9 @@ HEADERS += \
     Effects3D/Actions/ActionPlayer.h \
     Effects3D/Actions/ActionApplier.h \
     Effects3D/Actions/ActionApplierDetail.h \
-    Effects3D/Actions/ActionVolumeField.h \
-    Effects3D/Actions/ActionParticleField.h \
-    Effects3D/Actions/ActionRibbonField.h \
+    engines/volume-field/ActionVolumeField.h \
+    engines/particle-field/ActionParticleField.h \
+    engines/ribbon-field/ActionRibbonField.h \
     Effects3D/Actions/ActionBuiltinGpu.h \
     Effects3D/Actions/ActionLibrary.h \
     engines/triggers/TriggerBinding.h \
@@ -311,10 +314,10 @@ HEADERS += \
     engines/shader-field/SpatialShaderCatalog.h \
     Shaders/GlslUniformArray.h \
     Shaders/SpatialFieldAssistBase.h \
-    Shaders/SpatialVolumeFieldEngine.h \
+    engines/volume-field/SpatialVolumeFieldEngine.h \
     Shaders/SpatialOffscreenGlPool.h \
     Shaders/FieldFullscreenQuad410.h \
-    Shaders/SpatialVolumeFieldAssist.h \
+    engines/volume-field/SpatialVolumeFieldAssist.h \
     Shaders/SpatialStripFieldEngine.h \
     Shaders/SpatialStripFieldAssist.h \
     Effects3D/AudioReactiveUi.h \
@@ -371,9 +374,9 @@ SOURCES += \
     Effects3D/Actions/ActionClipEvalAxis.cpp \
     Effects3D/Actions/ActionSpatial.cpp \
     Effects3D/Actions/ActionScript.cpp \
-    Effects3D/Actions/ActionVolumeField.cpp \
-    Effects3D/Actions/ActionParticleField.cpp \
-    Effects3D/Actions/ActionRibbonField.cpp \
+    engines/volume-field/ActionVolumeField.cpp \
+    engines/particle-field/ActionParticleField.cpp \
+    engines/ribbon-field/ActionRibbonField.cpp \
     Effects3D/Actions/ActionBuiltinGpu.cpp \
     Effects3D/Actions/ActionApplier.cpp \
     Effects3D/Actions/ActionApplierMatch.cpp \
@@ -497,10 +500,10 @@ SOURCES += \
     engines/shader-field/ShaderField.cpp \
     engines/shader-field/SpatialShaderEngine.cpp \
     engines/shader-field/SpatialShaderCatalog.cpp \
-    Shaders/SpatialVolumeFieldEngine.cpp \
+    engines/volume-field/SpatialVolumeFieldEngine.cpp \
     Shaders/SpatialOffscreenGlPool.cpp \
     Shaders/FieldFullscreenQuad410.cpp \
-    Shaders/SpatialVolumeFieldAssist.cpp \
+    engines/volume-field/SpatialVolumeFieldAssist.cpp \
     Shaders/SpatialStripFieldEngine.cpp \
     Shaders/SpatialStripFieldAssist.cpp \
     engines/reactive/Reactive.cpp \

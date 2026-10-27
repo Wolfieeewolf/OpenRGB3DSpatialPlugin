@@ -6,9 +6,9 @@
 #include "Actions/ActionBuiltinGpu.h"
 #include "Actions/ActionMedia.h"
 #include "Actions/ActionScript.h"
-#include "Actions/ActionParticleField.h"
-#include "Actions/ActionRibbonField.h"
-#include "Actions/ActionVolumeField.h"
+#include "ActionParticleField.h"
+#include "ActionRibbonField.h"
+#include "ActionVolumeField.h"
 #include "SpatialOffscreenGlPool.h"
 #include "ZoneManager3D.h"
 
