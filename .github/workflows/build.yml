@@ -118,9 +118,10 @@ jobs:
           chmod +x scripts/build-package-files.sh
           docker run --rm -v "$PWD":/src -w /src fedora:44 bash -lc '
             set -euo pipefail
-            dnf install -y rpmdevtools dnf-plugins-core gcc-c++ cmake ninja-build qt6-qtbase-devel qt6-linguist mesa-libGL-devel git make
+            dnf install -y rpmdevtools dnf-plugins-core gcc-c++ cmake ninja-build qt6-qtbase-devel qt6-linguist mesa-libGL-devel zlib-devel git make
             chmod +x scripts/build-assimp.sh
             ./scripts/build-assimp.sh
+            test -f dependencies/assimp-install/lib/libassimp.a
             ./scripts/build-package-files.sh fedora/OpenRGB3DSpatialPlugin.spec
             rpmdev-setuptree
             cp fedora/OpenRGB3DSpatialPlugin.spec /root/rpmbuild/SPECS

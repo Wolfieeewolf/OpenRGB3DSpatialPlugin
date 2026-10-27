@@ -542,7 +542,12 @@ win32 {
 }
 unix:!macx {
     DEFINES += ASSIMP_STATIC
-    LIBS += -L$$ASSIMP_DIR/lib -lassimp -lz
+    # Fedora/CMake often installs to lib64; prefer lib then lib64.
+    ASSIMP_LIBDIR = $$ASSIMP_DIR/lib
+    !exists($$ASSIMP_LIBDIR/libassimp.a):exists($$ASSIMP_DIR/lib64/libassimp.a) {
+        ASSIMP_LIBDIR = $$ASSIMP_DIR/lib64
+    }
+    LIBS += -L$$ASSIMP_LIBDIR -lassimp -lz
 }
 macx {
     DEFINES += ASSIMP_STATIC
