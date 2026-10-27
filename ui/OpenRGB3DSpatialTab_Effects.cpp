@@ -833,7 +833,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
         return;
     }
 
-    /* Bake Mapped lights hub at play start — fixed ref while controllers move through the field. */
+    /* Bake Mapped lights hub at play start - fixed ref while controllers move through the field. */
     RefreshMappedLightsAnchor();
 
     bool stack_has_entries = false;
@@ -973,7 +973,7 @@ void OpenRGB3DSpatialTab::stopEffectClicked()
     if(start_effect_button) start_effect_button->setEnabled(true);
     if(stop_effect_button) stop_effect_button->setEnabled(false);
     UpdateStartStopAllButtons();
-    // Action Preview calls this while idle — skip a full stack redraw when nothing ran.
+    // Action Preview calls this while idle - skip a full stack redraw when nothing ran.
     if(was_running)
     {
         RenderEffectStack();

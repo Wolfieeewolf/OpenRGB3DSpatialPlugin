@@ -291,7 +291,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
         (int)std::lround(std::clamp(settings.screen_map_roll_deg, -180.0f, 180.0f) *
                          (float)kScreenMapRollTicksPerDegree),
         QStringLiteral(
-            "Optional extra twist in the capture plane after calibrated directional mapping. 0° = geometry only. Steps 0.5°."));
+            "Optional extra twist in the capture plane after calibrated directional mapping. 0 deg = geometry only. Steps 0.5 deg."));
     ui->screenMapRollRow->setEnabled(has_capture_source);
     BindSliderRow(ui->screenMapRollRow, settings.screen_map_roll_slider, settings.screen_map_roll_label);
     QObject::connect(settings.screen_map_roll_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
