@@ -65,7 +65,7 @@ bool IsEffectShaderHeaderKey(const QString& key)
         || key == QStringLiteral("flow") || key == QStringLiteral("global") || key == QStringLiteral("media")
         || key == QStringLiteral("drive") || key == QStringLiteral("audio_preset") || key == QStringLiteral("audio_media")
         || key == QStringLiteral("shader") || key == QStringLiteral("media_layout")
-        || key == QStringLiteral("instances");
+        || key == QStringLiteral("instances") || key == QStringLiteral("soft_catch");
 }
 
 } // namespace
