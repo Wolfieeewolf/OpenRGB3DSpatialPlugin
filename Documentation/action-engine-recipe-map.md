@@ -83,10 +83,11 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 
 ## Deferred / next (later)
 
-- **Multipass coverage** — in flight: [multipass-coverage.md](multipass-coverage.md); engine regroup inventory: [plugin-file-map.md](plugin-file-map.md). Presets: sibling repo `docs/multipass-coverage.md`.
+- **Multipass (Claude)** — **parked until ~2026-11-23** (other-models usage reset). Resume list in [multipass-coverage.md](multipass-coverage.md) § Parked for Claude reset. Do not finish Actions/FolderVolume ratchet or grid/viewport/residual UI with a weaker model.
+- **Engine folder regroup** — next non-Claude track: map-only then dedicated branch; [plugin-file-map.md](plugin-file-map.md).
+- **Line splits (later)** — FolderVolume ~2.6k, Reactive ~1.5k, AudioInputManager ~1.4k (after Claude ratchet where noted).
 - **3D grid placement editor** — place volume clips in the viewport (translate/rotate/scale); keep timeline; switch modes. Separate branch.
 - **Swarm / flock** particle mode (spatial hash).
 - **More showcase packs** once the first five feel good in real rooms.
 - **Ribbon polish** (multi-tube, accent lights) if neon looks need it.
-- **Engine folder regroup** — after coverage; group by engine capability (not presets sections); see plugin-file-map.
 - **DualSense ControllerTorch** — parked on `feat/dualsense-controller-torch` until 9-axis mag.

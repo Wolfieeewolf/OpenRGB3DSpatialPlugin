@@ -2,7 +2,7 @@
 
 Filled during multipass. **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear owner / wrong tree / merge fodder.
+Status of regroup: **active next track** (map only until a dedicated branch). Incomplete multipasses parked for Claude ~2026-11-23 — see [multipass-coverage.md](multipass-coverage.md). Flag **rogue** = unclear owner / wrong tree / merge fodder.
 
 ## Engine buckets
 
@@ -103,8 +103,36 @@ Status of regroup: map only until a dedicated branch. Flag **rogue** = unclear o
 | `ui/ActionEffectFiles.*` | Toolbox `.fx` loader | ui | fixed | 2026-10-27: nested directory_iterator `ec2` |
 | `ui/TriggersPanel.*` | Trigger bindings + manual fire | ui | fixed | 2026-10-27: edit/delete clear preview when idle; arrow `\u2192` |
 | `ui/EffectLibraryPanel.*` | Effect library bind shell | ui | fixed | 2026-10-27: `bound_` once-guard (match sibling panels) |
-| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | pending | remaining: LEDViewport3D*, SpatialTab_*, CustomControllerDialog*, Zones/ObjectCreator, Effect stack, widgets/* |
-| Root `SpatialEffect3D.*` etc. | Effect base / types | shared | | Map individually as touched |
+| `ui/*` | Plugin UI (forms/widgets/tabs) | ui | parked→Claude | residual UI — resume ~2026-11-23 |
+| `SpatialEffect3D.*` `SpatialEffect3D_Eval.*` `SpatialEffect3D_Settings.*` | Effect base / eval / settings | shared | map | Root; stays shared under regroup |
+| `EffectInstance3D.*` `EffectListManager3D.*` `StackPreset3D.*` | Effect stack host | shared / ui | map | |
+| `VirtualController3D.*` `ControllerLayout3D.*` `MatrixWiringOrder.*` | Custom / virtual controllers | shared | map | |
+| `Zone3D.*` `ZoneGrid3D.*` `ZoneManager3D.*` `GridSpaceUtils.*` | Zones + grid math | shared | map | |
+| `DisplayPlane3D.*` `ScreenCaptureManager.*` | Display planes + capture | engines/screen-mirror + shared | map | |
+| `SceneProp3D.*` `VirtualReferencePoint3D.*` | Scene props / refs | shared | map | |
+| `OpenRGB3DSpatialPlugin.*` | Plugin entry | shared | map | |
+| `Audio/*` | Capture + FFT | engines/audio | map | split capture vs analyze later |
+| `Input/*` | Reactive + tilt | engines/reactive (+ parked tilt) | map | |
+| `scripts/` `resources/` `images/` `debian/` `fedora/` `flatpak/` | Packaging / assets | n/a | keep | Not engine regroup |
+
+## Proposed regroup layout (map only — no moves yet)
+
+```text
+engines/volume-field/     ← ActionVolumeField + SpatialVolumeField*
+engines/particle-field/   ← ActionParticleField
+engines/ribbon-field/     ← ActionRibbonField
+engines/folder-volume/    ← FolderVolume*
+engines/shader-field/     ← ShaderField + SpatialShaderEngine/Catalog
+engines/screen-mirror/    ← ScreenMirror* (+ DisplayPlane capture glue)
+engines/audio/            ← Audio/ + AudioReactive*
+engines/reactive/         ← Reactive* + Input/Reactive*
+engines/game/             ← Effects3D/Games + Game/ + integrations/
+engines/movie-sync/       ← MovieSync*
+engines/triggers/         ← Triggers*
+engines/actions/          ← Action player/applier/script (calls field engines)
+shared/                   ← GL pool, SpatialLighting/Room/Samplers, SpatialEffect3D, zones, controllers
+ui/                       ← unchanged tree for now
+```
 
 ## Presets → engine (from volume toolbox multipass)
 

@@ -6,12 +6,24 @@ File → engine map (regroup later): [plugin-file-map.md](plugin-file-map.md).
 
 Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 
+## Parked for Claude reset (~2026-11-23)
+
+Other-models / Claude usage exhausted 2026-10-27. **Do not resume these with a weaker model** — judgment passes (ratchet, grid/viewport, residual UI). Resume order when Claude is available again:
+
+1. **Effects3D/Actions** — full ratchet (clocks/setParams already from earlier Oct; agent skim only after token stop)
+2. **Effects3D/FolderVolume** — full ratchet (~2.6k; split later after pass)
+3. **ui/custom-controller-grid + ui/viewport** — real multipass (agent stopped; local “keep” was not a finish)
+4. **ui residual** — LEDViewport3D*, OpenRGB3DSpatialTab_*, CustomControllerDialog*, Zones/ObjectCreator, Effect stack, `ui/widgets/*`
+5. Optional: Game/integrations deep pass (was partial); ShaderField/ScreenMirror full ratchet (hygiene-only pickup already landed)
+
+Skill: `.cursor/skills/openrgb3d-multipass-review/SKILL.md`. Tracker was wrong once — verify with commits, not row status alone.
+
 ## Engines / surfaces
 
 | Family | Status | Date | Notes |
 |--------|--------|------|-------|
-| Effects3D/Actions | pending | 2026-10-27 | **Ratchet incomplete** — Claude subagent hit token limit; local skim only (clocks/setParams already from earlier Oct work). Needs real ratchet re-pass |
-| Effects3D/FolderVolume | pending | 2026-10-27 | **Ratchet incomplete** — same stop; no FolderVolume code in that batch. **~2.6k — split later** |
+| Effects3D/Actions | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop) |
+| Effects3D/FolderVolume | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop) |
 | Effects3D/ShaderField | fixed | 2026-10-27 | Picked up locally after agent stop: shared `LoadShaderBodyFromPath`; `\u2013` labels (not a full agent ratchet) |
 | Effects3D/ScreenMirror | fixed | 2026-10-27 | Picked up locally after agent stop: `QStringLiteral` tooltips/empty label (hygiene; not full agent ratchet) |
 | Effects3D/Reactive | fixed | 2026-10-27 | Removed legacy `ring_width_pct` LoadSettings remap; wiring only-while-running OK; **~1.5k lines — split later** |
@@ -24,12 +36,13 @@ Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 | Input/ControllerTilt* | parked | | DualSense tilt on feat branch |
 | Shaders/ | fixed | 2026-10-27 | Shared GL pool/engines reviewed; SpatialFieldAssistBase.h per-track param push OK; SpatialShaderCatalog header-key set aligned with LoadEffectShader |
 | SpatialLighting/ SpatialRoom/ SpatialSamplers/ | fixed | 2026-10-27 | `AppendRoomWallOccluders`: left-wall corner typo fixed (`min_z`→`min_y`), duplicate floor replaced with correct front (Z=min_z) + back (Z=max_z) quads, dead `eps` variable removed; SpatialLayerCore.cpp: `(void)w0` suppressor removed (restructured to `p0/p1/sector_t`); RoomSampleMapping.cpp: redundant `static` removed from anonymous-namespace functions; SpatialRoomFrame/Defaults/Types kept |
-| Game/ + integrations/ | keep | 2026-10-27 | Partial pass: GameTelemetryBridge + SHM paths kept; MinecraftGame include fixed. Full Game/integrations deep pass not re-run after token stop |
-| ui/ | pending | 2026-10-27 | **Done later (different pass):** Action/Triggers/EffectLibrary stack (`\uXXXX`, ClearActionPreview, `bound_`, ActionEffectFiles `ec2`) — local + subagent after grid/viewport stop. **Not done:** `custom-controller-grid` + `viewport` (agent stopped; local “keep” only — not a finished multipass); LEDViewport3D*, OpenRGB3DSpatialTab_*, CustomControllerDialog*, Zones/ObjectCreator, Effect stack, `ui/widgets/*` |
-| Documentation/ | fixed | 2026-10-27 | Shader Field contract filled in effects-engines; LoadShaderBodyFromPath noted in shader-conversion; recipe-map deferred list (multipass in flight + DualSense park); content-library / event-maker / SpatialMeasurement kept |
+| Game/ + integrations/ | parked | 2026-10-27 | Partial only — optional deep pass on Claude resume list |
+| ui/ | parked | 2026-10-27 | Action stack done. Grid/viewport + residual UI on Claude resume list above |
+| Documentation/ | fixed | 2026-10-27 | Shader Field contract filled; recipe-map / coverage park notes |
 
-## Parked
+## Parked (other)
 
 | Item | Reason |
 |------|--------|
 | DualSense / ControllerTorch | `feat/dualsense-controller-torch` — wait for 9-axis mag |
+| Incomplete multipasses | See **Parked for Claude reset** — resume ~2026-11-23 |
