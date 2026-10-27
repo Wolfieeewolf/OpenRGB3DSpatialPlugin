@@ -112,17 +112,17 @@ INCLUDEPATH += \
     ui \
     ui/widgets \
     Effects3D \
-    Effects3D/MovieSync \
+    engines/movie-sync \
     Effects3D/Actions \
-    Effects3D/Triggers \
+    engines/triggers \
     Effects3D/FolderVolume \
-    Game \
+    engines/game \
     SpatialSamplers \
     SpatialRoom \
     SpatialLighting \
     Shaders \
     Audio \
-    Input
+    engines/reactive
 
 HEADERS += \
     OpenRGB3DSpatialPlugin.h \
@@ -151,26 +151,26 @@ HEADERS += \
     Geometry3DUtils.h \
     TransformJson.h \
     MediaTextureEffectUtils.h \
-    Game/StripPatternSurface.h \
+    engines/game/Game/StripPatternSurface.h \
     QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
-    Game/GameTelemetryBridge.h \
-    Game/RoomSampleFrameProtocol.h \
-    Game/RoomSampleShmPaths.h \
-    Game/RoomSampleFrameShmReader.h \
-    Game/RoomSampleConfigPublisher.h \
+    engines/game/Game/GameTelemetryBridge.h \
+    engines/game/Game/RoomSampleFrameProtocol.h \
+    engines/game/Game/RoomSampleShmPaths.h \
+    engines/game/Game/RoomSampleFrameShmReader.h \
+    engines/game/Game/RoomSampleConfigPublisher.h \
     SpatialSamplers/SpatialBasisUtils.h \
     SpatialSamplers/SpatialLayerCore.h \
     SpatialSamplers/RoomSampleMapping.h \
-    Effects3D/Games/Minecraft/MinecraftGame.h \
-    Effects3D/Games/Minecraft/MinecraftGameSettings.h \
-    Effects3D/Games/Minecraft/MinecraftSubEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftHealth/MinecraftHealthEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftHunger/MinecraftHungerEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftAir/MinecraftAirEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
+    engines/game/Minecraft/MinecraftGame.h \
+    engines/game/Minecraft/MinecraftGameSettings.h \
+    engines/game/Minecraft/MinecraftSubEffect3D.h \
+    engines/game/Minecraft/MinecraftHealth/MinecraftHealthEffect3D.h \
+    engines/game/Minecraft/MinecraftHunger/MinecraftHungerEffect3D.h \
+    engines/game/Minecraft/MinecraftAir/MinecraftAirEffect3D.h \
+    engines/game/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.h \
+    engines/game/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
+    engines/game/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
     Effects3D/Actions/Action.h \
     Effects3D/Actions/ActionMedia.h \
     Effects3D/Actions/ActionPlayer.h \
@@ -181,14 +181,14 @@ HEADERS += \
     Effects3D/Actions/ActionRibbonField.h \
     Effects3D/Actions/ActionBuiltinGpu.h \
     Effects3D/Actions/ActionLibrary.h \
-    Effects3D/Triggers/TriggerBinding.h \
-    Effects3D/Triggers/TriggerSource.h \
-    Effects3D/Triggers/ManualTriggerSource.h \
-    Effects3D/Triggers/WindowsTriggerSource.h \
-    Effects3D/Triggers/LinuxTriggerSource.h \
-    Effects3D/Triggers/MacTriggerSource.h \
-    Effects3D/Triggers/TriggerSourceRegistry.h \
-    Effects3D/Triggers/TriggerRuntime.h \
+    engines/triggers/TriggerBinding.h \
+    engines/triggers/TriggerSource.h \
+    engines/triggers/ManualTriggerSource.h \
+    engines/triggers/WindowsTriggerSource.h \
+    engines/triggers/LinuxTriggerSource.h \
+    engines/triggers/MacTriggerSource.h \
+    engines/triggers/TriggerSourceRegistry.h \
+    engines/triggers/TriggerRuntime.h \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
@@ -299,10 +299,10 @@ HEADERS += \
     ui/widgets/EffectControlsRoot.h \
     Effects3D/ShaderField/ShaderField.h \
     Effects3D/PlayerEngines.h \
-    Effects3D/MovieSync/MovieSync.h \
-    Effects3D/MovieSync/MovieSyncCatalog.h \
-    Effects3D/MovieSync/MovieSyncListener.h \
-    Effects3D/MovieSync/MovieSyncRuntime.h \
+    engines/movie-sync/MovieSync.h \
+    engines/movie-sync/MovieSyncCatalog.h \
+    engines/movie-sync/MovieSyncListener.h \
+    engines/movie-sync/MovieSyncRuntime.h \
     EffectListManager3D.h \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
@@ -317,10 +317,10 @@ HEADERS += \
     Shaders/SpatialStripFieldAssist.h \
     Effects3D/AudioReactiveUi.h \
     Audio/AudioInputManager.h \
-    Input/ReactiveInputTypes.h \
-    Input/ReactiveKeyMap.h \
-    Input/ReactiveInputManager.h \
-    Effects3D/Reactive/Reactive.h \
+    engines/reactive/ReactiveInputTypes.h \
+    engines/reactive/ReactiveKeyMap.h \
+    engines/reactive/ReactiveInputManager.h \
+    engines/reactive/Reactive.h \
     Effects3D/FolderVolume/FolderVolumeEffect.h \
     Effects3D/ScreenMirror/ScreenMirror.h \
     Effects3D/ScreenMirror/ScreenMirror_Internal.h \
@@ -349,20 +349,20 @@ SOURCES += \
     SceneProp3D.cpp \
     ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
-    Game/GameTelemetryBridge.cpp \
-    Game/RoomSampleFrameShmReader.cpp \
-    Game/RoomSampleConfigPublisher.cpp \
+    engines/game/Game/GameTelemetryBridge.cpp \
+    engines/game/Game/RoomSampleFrameShmReader.cpp \
+    engines/game/Game/RoomSampleConfigPublisher.cpp \
     SpatialSamplers/SpatialLayerCore.cpp \
     SpatialSamplers/RoomSampleMapping.cpp \
-    Effects3D/Games/Minecraft/MinecraftGame.cpp \
-    Effects3D/Games/Minecraft/MinecraftGameSettings.cpp \
-    Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp \
-    Effects3D/Games/Minecraft/MinecraftHealth/MinecraftHealthEffect3D.cpp \
-    Effects3D/Games/Minecraft/MinecraftHunger/MinecraftHungerEffect3D.cpp \
-    Effects3D/Games/Minecraft/MinecraftAir/MinecraftAirEffect3D.cpp \
-    Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.cpp \
-    Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
-    Effects3D/Games/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
+    engines/game/Minecraft/MinecraftGame.cpp \
+    engines/game/Minecraft/MinecraftGameSettings.cpp \
+    engines/game/Minecraft/MinecraftSubEffect3D.cpp \
+    engines/game/Minecraft/MinecraftHealth/MinecraftHealthEffect3D.cpp \
+    engines/game/Minecraft/MinecraftHunger/MinecraftHungerEffect3D.cpp \
+    engines/game/Minecraft/MinecraftAir/MinecraftAirEffect3D.cpp \
+    engines/game/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.cpp \
+    engines/game/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
+    engines/game/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
     Effects3D/Actions/Action.cpp \
     Effects3D/Actions/ActionMedia.cpp \
     Effects3D/Actions/ActionSerialize.cpp \
@@ -377,12 +377,12 @@ SOURCES += \
     Effects3D/Actions/ActionApplierMatch.cpp \
     Effects3D/Actions/ActionApplierSpatial.cpp \
     Effects3D/Actions/ActionLibrary.cpp \
-    Effects3D/Triggers/TriggerBinding.cpp \
-    Effects3D/Triggers/WindowsTriggerSource.cpp \
-    Effects3D/Triggers/LinuxTriggerSource.cpp \
-    Effects3D/Triggers/MacTriggerSource.cpp \
-    Effects3D/Triggers/TriggerSourceRegistry.cpp \
-    Effects3D/Triggers/TriggerRuntime.cpp \
+    engines/triggers/TriggerBinding.cpp \
+    engines/triggers/WindowsTriggerSource.cpp \
+    engines/triggers/LinuxTriggerSource.cpp \
+    engines/triggers/MacTriggerSource.cpp \
+    engines/triggers/TriggerSourceRegistry.cpp \
+    engines/triggers/TriggerRuntime.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/BlockerGridOccluder.cpp \
@@ -488,10 +488,10 @@ SOURCES += \
     Effects3D/FolderVolume/FolderVolumeEffect.cpp \
     Effects3D/PlayerEngines.cpp \
     EffectListManager3D.cpp \
-    Effects3D/MovieSync/MovieSync.cpp \
-    Effects3D/MovieSync/MovieSyncCatalog.cpp \
-    Effects3D/MovieSync/MovieSyncListener.cpp \
-    Effects3D/MovieSync/MovieSyncRuntime.cpp \
+    engines/movie-sync/MovieSync.cpp \
+    engines/movie-sync/MovieSyncCatalog.cpp \
+    engines/movie-sync/MovieSyncListener.cpp \
+    engines/movie-sync/MovieSyncRuntime.cpp \
     Effects3D/ShaderField/ShaderField.cpp \
     Shaders/SpatialShaderEngine.cpp \
     Shaders/SpatialShaderCatalog.cpp \
@@ -501,9 +501,9 @@ SOURCES += \
     Shaders/SpatialVolumeFieldAssist.cpp \
     Shaders/SpatialStripFieldEngine.cpp \
     Shaders/SpatialStripFieldAssist.cpp \
-    Effects3D/Reactive/Reactive.cpp \
-    Input/ReactiveKeyMap.cpp \
-    Input/ReactiveInputManager.cpp \
+    engines/reactive/Reactive.cpp \
+    engines/reactive/ReactiveKeyMap.cpp \
+    engines/reactive/ReactiveInputManager.cpp \
     Effects3D/ScreenMirror/ScreenMirror.cpp \
     Effects3D/ScreenMirror/ScreenMirror_Render.cpp \
     Effects3D/ScreenMirror/ScreenMirror_Settings.cpp \
@@ -534,7 +534,7 @@ win32 {
     } else:exists($$ASSIMP_LIBDIR/assimp.lib) {
         LIBS += -L$$ASSIMP_LIBDIR -lassimp
     } else {
-        warning("Assimp not found under $$ASSIMP_DIR â€” run scripts/build-assimp.ps1")
+        warning("Assimp not found under $$ASSIMP_DIR — run scripts/build-assimp.ps1")
     }
     exists($$ASSIMP_LIBDIR/zlibstatic.lib) {
         LIBS += -L$$ASSIMP_LIBDIR -lzlibstatic
@@ -632,7 +632,7 @@ FORMS += \
 unix:!macx {
     QT += dbus
     # Q_OBJECT helper - only moc on Linux (header is #ifdef Q_OS_LINUX).
-    HEADERS += Effects3D/Triggers/LinuxLoginWatcher.h
+    HEADERS += engines/triggers/LinuxLoginWatcher.h
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/

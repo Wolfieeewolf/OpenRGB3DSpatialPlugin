@@ -7,7 +7,7 @@
 #include "EffectListManager3D.h"
 #include "ZoneGrid3D.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
-#include "Effects3D/Reactive/Reactive.h"
+#include "Reactive.h"
 #include "ScreenCaptureManager.h"
 #include "ReactiveInputManager.h"
 #include "PluginLog.h"

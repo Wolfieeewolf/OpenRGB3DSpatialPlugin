@@ -187,9 +187,9 @@ Sky is optional (`kFlagSkyEnabled`). Open-air rays use upward-biased sky/weather
 | Plugin mm/grid (do not duplicate) | [`PluginSpatialMeasurement.md`](PluginSpatialMeasurement.md), `GridSpaceUtils.cpp` |
 | Space helpers | `SpatialSamplers/SpatialBasisUtils.h`, `RoomSampleMapping.*` |
 | MC scale publish | `MinecraftGame.cpp` `ComputeRoomToWorldScale`, `RoomSampleConfigPublisher.cpp` |
-| Protocol / flags | `Game/RoomSampleFrameProtocol.h` |
+| Protocol / flags | `engines/game/Game/RoomSampleFrameProtocol.h` |
 | Sparse frame write (mod) | `integrations/minecraft/.../RoomSampleFrameShmWriter.java`, `OpenRGBSenderMod.java` |
-| Sparse frame read (plugin) | `Game/RoomSampleFrameShmReader.cpp` |
+| Sparse frame read (plugin) | `engines/game/Game/RoomSampleFrameShmReader.cpp` |
 | MC world / ray map | `RoomSampleWorldMapper.java` |
 | SHM sample → LED | `SpatialSamplers/RoomSampleMapping.cpp` |
 

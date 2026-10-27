@@ -3,7 +3,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"
 #include "ZoneGrid3D.h"
-#include "Effects3D/Games/Minecraft/MinecraftGame.h"
+#include "Minecraft/MinecraftGame.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ScreenCaptureManager.h"
 #include "ReactiveInputManager.h"

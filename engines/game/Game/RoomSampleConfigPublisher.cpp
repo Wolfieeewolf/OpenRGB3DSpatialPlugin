@@ -9,7 +9,7 @@
 #include "RoomSampleConfigPublisher.h"
 #include "RoomSampleFrameProtocol.h"
 #include "RoomSampleShmPaths.h"
-#include "Effects3D/Games/Minecraft/MinecraftGameSettings.h"
+#include "Minecraft/MinecraftGameSettings.h"
 #include "SpatialEffect3D.h"
 #include "PluginLog.h"
 

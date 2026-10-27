@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-#include "Triggers/TriggerRuntime.h"
-#include "Triggers/TriggerSourceRegistry.h"
+#include "TriggerRuntime.h"
+#include "TriggerSourceRegistry.h"
 #include <QGroupBox>
 #include <vector>
 

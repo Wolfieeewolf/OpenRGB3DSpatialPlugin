@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "GameTelemetryStatusPanel.h"
-#include "GameTelemetryBridge.h"
+#include "Game/GameTelemetryBridge.h"
 #include "PluginUiUtils.h"
 #include "ui_GameTelemetryStatusPanel.h"
 

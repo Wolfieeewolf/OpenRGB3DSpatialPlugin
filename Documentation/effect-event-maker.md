@@ -279,7 +279,7 @@ LED frames over time -> OpenRGB + 3D viewport (layout-aware)
 - `ui/ActionCatalog.h`  -  Action Editor Tools (`action-editor/toolbox/`)
 - `ui/ActionsPanel.*`  -  Object Creator -> Actions
 - `ui/TriggersPanel.*`  -  Object Creator -> Triggers
-- `Effects3D/Triggers/*`  -  `triggers.json`, sources, TriggerRuntime
+- `engines/triggers/*`  -  `triggers.json`, sources, TriggerRuntime
 - `ui/ActionEditorDialog.*`  -  Action Editor
-- `Effects3D/MovieSync/*`  -  Movie Sync player + catalog
+- `engines/movie-sync/*`  -  Movie Sync player + catalog
 - `PluginSettingsPaths`  -  feature folders under plugin data root

@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **map only** — no tree moves until a dedicated branch. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phase 1 applied** on branch `chore/engines-phase1-leaf` (movie-sync, triggers, reactive, game under `engines/`). Phases 2–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,10 +28,16 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Proposed tree (target — not applied)
+## Tree (phase 1 landed; later buckets still proposed)
 
 ```text
 engines/
+  movie-sync/       ← DONE  (was Effects3D/MovieSync/*)
+  triggers/         ← DONE  (was Effects3D/Triggers/*)
+  reactive/         ← DONE  (was Effects3D/Reactive/* + Input/Reactive*)
+  game/
+    Game/           ← DONE  (was root Game/*); StripPatternSurface.h stays here until shared/
+    Minecraft/      ← DONE  (was Effects3D/Games/Minecraft/*)
   volume-field/     ActionVolumeField.*
                     Shaders/SpatialVolumeField{Assist,Engine}.*
   particle-field/   ActionParticleField.*
@@ -45,14 +51,9 @@ engines/
                     DisplayPlaneCaptureLabels.h   # labels for capture UI
   audio/            Audio/*
                     Effects3D/AudioReactiveCommon.h  AudioReactiveUi.h
-  reactive/         Effects3D/Reactive/*
-                    Input/Reactive*
-  game/             Effects3D/Games/*
-                    Game/*  integrations/minecraft/src/**
-  movie-sync/       Effects3D/MovieSync/*
-  triggers/         Effects3D/Triggers/*
   actions/          Effects3D/Actions/*  except *Volume/Particle/Ribbon*Field*
                     ActionBuiltinGpu.*  ActionMedia.* stay here (call volume assist)
+integrations/minecraft/   unchanged (Fabric mod sibling)
 shared/
   Shaders/SpatialOffscreenGlPool.*   FieldFullscreenQuad410.*
   Shaders/SpatialFieldAssistBase.h   GlslUniformArray.h
@@ -149,49 +150,49 @@ ui/                 unchanged paths for now (affinity notes below)
 | `Effects3D/AudioReactiveCommon.h` | Shared audio effect helpers | maybe `.cpp` later | header-only hub |
 | `Effects3D/AudioReactiveUi.h` | Audio UI helpers | audio + ui | |
 
-### `engines/reactive`
+### `engines/reactive` (phase 1)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Effects3D/Reactive/Reactive.*` | Effect body | **split** UI vs tick | ~1.5k |
-| `Input/ReactiveInputManager.*` | Session / devices | keep | |
-| `Input/ReactiveInputTypes.h` | Types | keep | |
-| `Input/ReactiveKeyMap.*` | Key map | keep | |
+| `engines/reactive/Reactive.*` | Effect body | **split** UI vs tick | ~1.5k |
+| `engines/reactive/ReactiveInputManager.*` | Session / devices | keep | |
+| `engines/reactive/ReactiveInputTypes.h` | Types | keep | |
+| `engines/reactive/ReactiveKeyMap.*` | Key map | keep | |
 | `Input/ControllerTilt*` | DualSense | parked | On `feat/dualsense-controller-torch` only |
 
-### `engines/game`
+### `engines/game` (phase 1)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Effects3D/Games/Minecraft/**` | Health/Hunger/Air/Dura/Damage/Ambilight/… | parked deep-pass | |
-| `Game/GameTelemetryBridge.*` | Plugin↔SHM | keep | |
-| `Game/RoomSampleFrameProtocol.h` | Frame layout | keep | |
-| `Game/RoomSampleFrameShmReader.*` | SHM read | keep | |
-| `Game/RoomSampleConfigPublisher.*` | Config → mod | keep | |
-| `Game/RoomSampleShmPaths.h` | Paths | keep | |
-| `Game/StripPatternSurface.h` | Strip surface enum | shared-or-game | Used beyond game — **rogue-ish**; prefer `shared` if regroup fights |
+| `engines/game/Minecraft/**` | Health/Hunger/Air/Dura/Damage/Ambilight/… | parked deep-pass | |
+| `engines/game/Game/GameTelemetryBridge.*` | Plugin↔SHM | keep | |
+| `engines/game/Game/RoomSampleFrameProtocol.h` | Frame layout | keep | |
+| `engines/game/Game/RoomSampleFrameShmReader.*` | SHM read | keep | |
+| `engines/game/Game/RoomSampleConfigPublisher.*` | Config → mod | keep | |
+| `engines/game/Game/RoomSampleShmPaths.h` | Paths | keep | |
+| `engines/game/Game/StripPatternSurface.h` | Strip surface enum | shared-or-game | Used beyond game — leave here until phase 7 `shared/` |
 | `integrations/minecraft/src/**` | Fabric sender mod | keep out of DLL | Build/artifacts ignored |
 
-### `engines/movie-sync`
+### `engines/movie-sync` (phase 1)
 
 | Path | Role | Merge |
 |------|------|-------|
-| `Effects3D/MovieSync/MovieSync.*` | Effect UI + wiring | keep |
-| `Effects3D/MovieSync/MovieSyncCatalog.*` | catalog + dir scan | keep |
-| `Effects3D/MovieSync/MovieSyncListener.*` | Loopback HTTP | keep |
-| `Effects3D/MovieSync/MovieSyncRuntime.*` | Cue play | keep |
+| `engines/movie-sync/MovieSync.*` | Effect UI + wiring | keep |
+| `engines/movie-sync/MovieSyncCatalog.*` | catalog + dir scan | keep |
+| `engines/movie-sync/MovieSyncListener.*` | Loopback HTTP | keep |
+| `engines/movie-sync/MovieSyncRuntime.*` | Cue play | keep |
 
-### `engines/triggers`
+### `engines/triggers` (phase 1)
 
 | Path | Role | Merge |
 |------|------|-------|
-| `Effects3D/Triggers/TriggerSource.h` | Base + edges | keep |
-| `Effects3D/Triggers/ManualTriggerSource.h` | Manual | keep |
-| `Effects3D/Triggers/TriggerBinding.*` | JSON + catalog | keep |
-| `Effects3D/Triggers/TriggerRuntime.*` | event → play | keep |
-| `Effects3D/Triggers/TriggerSourceRegistry.*` | Platform builder | keep |
-| `Effects3D/Triggers/{Windows,Linux,Mac}TriggerSource.*` | OS sources | keep |
-| `Effects3D/Triggers/LinuxLoginWatcher.h` | D-Bus | keep |
+| `engines/triggers/TriggerSource.h` | Base + edges | keep |
+| `engines/triggers/ManualTriggerSource.h` | Manual | keep |
+| `engines/triggers/TriggerBinding.*` | JSON + catalog | keep |
+| `engines/triggers/TriggerRuntime.*` | event → play | keep |
+| `engines/triggers/TriggerSourceRegistry.*` | Platform builder | keep |
+| `engines/triggers/{Windows,Linux,Mac}TriggerSource.*` | OS sources | keep |
+| `engines/triggers/LinuxLoginWatcher.h` | D-Bus | keep |
 
 ### `shared` — GL / fields hub
 
@@ -259,15 +260,15 @@ ui/                 unchanged paths for now (affinity notes below)
 
 ---
 
-## Suggested move phases (dedicated branch later)
+## Suggested move phases
 
-1. **Leaf engines first** — movie-sync, triggers, reactive (+ Input), game (+ Game/, leave integrations as sibling). Low include fan-out.
+1. **Leaf engines first** — **DONE** on `chore/engines-phase1-leaf` (movie-sync, triggers, reactive, game; integrations stay sibling).
 2. **Screen-mirror** — ScreenMirror + ScreenCaptureManager; keep DisplayPlane in shared.
 3. **Shader-field** — ShaderField + SpatialShader*.
 4. **Volume/particle/ribbon** — move bridges + SpatialVolumeField*; update Actions includes.
 5. **Folder-volume** — after volume-field stable (calls assist).
 6. **Actions core** — remaining Actions/* into `engines/actions`.
-7. **shared polish** — SpatialLighting/Room/Samplers, strip field hub, effect base, zones/controllers; optional `Effects3D/` dissolve.
+7. **shared polish** — SpatialLighting/Room/Samplers, strip field hub, effect base, zones/controllers; promote `StripPatternSurface.h`; optional `Effects3D/` dissolve.
 8. **ui** — path renames only if include churn is already paid; else leave.
 
 Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
@@ -278,7 +279,7 @@ Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 
 | Item | Issue | Lean |
 |------|-------|------|
-| `Game/StripPatternSurface.h` | Used outside game | → `shared` |
+| `engines/game/Game/StripPatternSurface.h` | Used outside game | → `shared` in phase 7 |
 | `ScreenCaptureManager` | Used by Screen Mirror + plane UI | → `engines/screen-mirror`, ui includes across |
 | `SpatialStripField*` | FolderVolume + patterns | → `shared` (hub) |
 | `SpatialVolumeField*` | Actions + FolderVolume | → `engines/volume-field` |

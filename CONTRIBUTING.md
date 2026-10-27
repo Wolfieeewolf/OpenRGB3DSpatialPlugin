@@ -105,7 +105,7 @@ When changing plugin behaviorâ€”especially anything that touches devices, c
 
 ## Scope
 
-- Plugin rules apply to plugin-owned code in this repository (e.g. `Effects3D/`, `ui/`, `Game/`, root `.pro`).
+- Plugin rules apply to plugin-owned code in this repository (e.g. `Effects3D/`, `engines/`, `ui/`, root `.pro`).
 - Do not modify files under `OpenRGB/` (upstream subtree) unless explicitly requested.
 - **Effects engines** (Volume, Shader Field, Kernel, Media, Audio, Reactive, Ambilight, Games): authoring contracts in `Documentation/effects-engines.md`. Prefer thin content on an existing engine over a new programmed host.
 
@@ -212,7 +212,7 @@ Default rule for every effect: **reuse existing panels and helpers before writin
 
 **Add new UI only when** the control is truly effect-specific or no shared helper exists yetâ€”and if two or more effects need the same custom control, add or extend a shared helper (like `Effects3D/AudioReactiveUi.h`) instead of duplicating code.
 
-Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, â€¦) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore â€” do not add a parallel â€œlegacyâ€ UI path. **Minecraft** game layers use dedicated settings under `Effects3D/Games/Minecraft/` (**Room Ambilight** drives the SHM cubemap path). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
+Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, â€¦) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore â€” do not add a parallel â€œlegacyâ€ UI path. **Minecraft** game layers use dedicated settings under `engines/game/Minecraft/` (**Room Ambilight** drives the SHM cubemap path). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
 
 ### Effect settings tab order (stack / library)
 
