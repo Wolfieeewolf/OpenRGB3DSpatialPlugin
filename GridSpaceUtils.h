@@ -75,6 +75,8 @@ GridBounds ComputeGridBounds(const ManualRoomSettings& settings,
                              float grid_scale_mm,
                              const std::vector<std::unique_ptr<ControllerTransform>>& transforms);
 
+/** Centre of mapped controllers (equal weight each): mean of per-controller LED centroids.
+ *  Used by Spatial Anchor "Mapped lights" — effect radiates from this hub. */
 bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
                            bool room_aligned,
                            Vector3D* out_centroid);

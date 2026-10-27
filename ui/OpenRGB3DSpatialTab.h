@@ -262,6 +262,8 @@ private:
     void SetLayoutDirty(bool dirty = true);
     void ClearLayoutDirty();
     void UpdateProfileDirtyBanner();
+    /** Bake Mapped lights hub from current controller layout (fixed ref like room box). */
+    void RefreshMappedLightsAnchor();
     bool SaveCustomController(unsigned int index);
     int  IndexOfVirtualController(const VirtualController3D* controller) const;
     void LoadCustomControllers();
@@ -523,6 +525,10 @@ private:
     std::vector<std::string>                          virtual_controller_json_files;
     std::vector<std::unique_ptr<VirtualReferencePoint3D>> reference_points;
     std::unique_ptr<ZoneManager3D> zone_manager;
+
+    /** Fixed Spatial Anchor for Mapped lights — centre of controllers when last baked. */
+    Vector3D mapped_lights_anchor_{};
+    bool     mapped_lights_anchor_valid_ = false;
 
     int                         last_stack_selection_index = -1;
     QComboBox*                  stack_effect_blend_combo = nullptr;

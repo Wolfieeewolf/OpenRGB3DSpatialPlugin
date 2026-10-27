@@ -84,7 +84,9 @@ void ApplyZoneAnchorMetadata(GridContext3D& grid,
                              const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                              int zone_index,
                              const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
-                             bool room_aligned)
+                             bool room_aligned,
+                             bool mapped_lights_baked_valid,
+                             const Vector3D& mapped_lights_baked)
 {
     if(zone_index == -1)
     {
@@ -92,16 +94,24 @@ void ApplyZoneAnchorMetadata(GridContext3D& grid,
     }
     if(origin_mode == REF_MODE_LED_CENTROID)
     {
-        Vector3D centroid{};
-        if(TryComputeZoneLedCentroid(zone_manager,
-                                     controller_transforms,
-                                     zone_index,
-                                     skip_physical_controllers,
-                                     true,
-                                     room_aligned,
-                                     &centroid))
+        /* Same fixed Mapped lights hub as the stack (not a live zone chase). */
+        if(mapped_lights_baked_valid)
         {
-            grid.SetLedCentroid(centroid.x, centroid.y, centroid.z);
+            grid.SetLedCentroid(mapped_lights_baked.x, mapped_lights_baked.y, mapped_lights_baked.z);
+        }
+        else
+        {
+            Vector3D centroid{};
+            if(TryComputeZoneLedCentroid(zone_manager,
+                                         controller_transforms,
+                                         zone_index,
+                                         skip_physical_controllers,
+                                         true,
+                                         room_aligned,
+                                         &centroid))
+            {
+                grid.SetLedCentroid(centroid.x, centroid.y, centroid.z);
+            }
         }
     }
     else if(origin_mode == REF_MODE_TARGET_ZONE_CENTER)
@@ -129,7 +139,9 @@ void PopulateEffectSlotGrids(EffectSlotGridOverride& slot_override,
                              const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                              const GridContext3D& room_grid,
                              const GridContext3D& world_grid,
-                             uint64_t render_sequence)
+                             uint64_t render_sequence,
+                             bool mapped_lights_baked_valid,
+                             const Vector3D& mapped_lights_baked)
 {
     slot_override = EffectSlotGridOverride{};
     if(!effect)
@@ -170,14 +182,18 @@ void PopulateEffectSlotGrids(EffectSlotGridOverride& slot_override,
                                 controller_transforms,
                                 zone_index,
                                 skip_physical_controllers,
-                                true);
+                                true,
+                                mapped_lights_baked_valid,
+                                mapped_lights_baked);
         ApplyZoneAnchorMetadata(*slot_override.world_grid_local,
                                 stack_origin_mode,
                                 zone_manager,
                                 controller_transforms,
                                 zone_index,
                                 skip_physical_controllers,
-                                false);
+                                false,
+                                mapped_lights_baked_valid,
+                                mapped_lights_baked);
         slot_override.use_anchor_grid = true;
     }
     if(slot_override.room_grid_local)
@@ -545,11 +561,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     world_grid.render_sequence = effect_render_sequence;
     room_grid.render_sequence = effect_render_sequence;
 
-    Vector3D led_mu{};
-    if(TryComputeLedCentroid(controller_transforms, true, &led_mu))
+    /* Mapped lights uses a baked hub (RefreshMappedLightsAnchor), not a live chase. */
+    if(!mapped_lights_anchor_valid_)
     {
-        room_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
-        world_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
+        RefreshMappedLightsAnchor();
+    }
+    if(mapped_lights_anchor_valid_)
+    {
+        room_grid.SetLedCentroid(mapped_lights_anchor_.x, mapped_lights_anchor_.y, mapped_lights_anchor_.z);
+        world_grid.SetLedCentroid(mapped_lights_anchor_.x, mapped_lights_anchor_.y, mapped_lights_anchor_.z);
     }
 
     // LED-first Room Ambilight: publish against the global room grid + all layout LED room positions.
@@ -787,7 +807,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                 &controllers_managed_by_virtuals,
                                 room_grid,
                                 world_grid,
-                                effect_render_sequence);
+                                effect_render_sequence,
+                                mapped_lights_anchor_valid_,
+                                mapped_lights_anchor_);
     }
 
     SpatialLightingSceneProvider::instance()->ClearEmitterRelayFrame();

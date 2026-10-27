@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "GridSpaceUtils.h"
 #include "PluginUiUtils.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QSizePolicy>
@@ -110,6 +111,18 @@ void OpenRGB3DSpatialTab::SetLayoutDirty(bool dirty)
 void OpenRGB3DSpatialTab::ClearLayoutDirty()
 {
     SetLayoutDirty(false);
+}
+
+void OpenRGB3DSpatialTab::RefreshMappedLightsAnchor()
+{
+    Vector3D centre{};
+    if(TryComputeLedCentroid(controller_transforms, true, &centre))
+    {
+        mapped_lights_anchor_ = centre;
+        mapped_lights_anchor_valid_ = true;
+        return;
+    }
+    mapped_lights_anchor_valid_ = false;
 }
 
 void OpenRGB3DSpatialTab::UpdateProfileDirtyBanner()

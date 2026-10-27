@@ -55,7 +55,8 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_axis_scale_rotation_pitch = 0.0f;
     effect_axis_scale_rotation_roll = 0.0f;
 
-    reference_mode = REF_MODE_LED_CENTROID;
+    /* Default room-fixed hub. Mapped lights (LED_CENTROID) = centre of controllers. */
+    reference_mode = REF_MODE_ROOM_CENTER;
     global_reference_point = {0.0f, 0.0f, 0.0f};
     custom_reference_point = {0.0f, 0.0f, 0.0f};
     use_custom_reference = false;

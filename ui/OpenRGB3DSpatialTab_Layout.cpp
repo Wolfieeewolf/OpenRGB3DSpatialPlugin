@@ -582,6 +582,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     UpdateAvailableItemCombo();
     RebindCustomControllerDeviceMappings();
     SyncSpatialLightingSceneForUi();
+    RefreshMappedLightsAnchor();
     if(viewport)
     {
         viewport->ResetCameraToDefault();

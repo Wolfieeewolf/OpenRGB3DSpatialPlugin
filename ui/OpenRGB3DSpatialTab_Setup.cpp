@@ -1044,6 +1044,7 @@ bool OpenRGB3DSpatialTab::AddCustomControllerToScene(int virtual_controller_inde
         viewport->update();
     }
     SetLayoutDirty();
+    RefreshMappedLightsAnchor();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1577,6 +1578,7 @@ void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
     }
     
     SetLayoutDirty();
+    RefreshMappedLightsAnchor();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1717,6 +1719,7 @@ void OpenRGB3DSpatialTab::removeControllerClicked()
         viewport->update();
     }
     SetLayoutDirty();
+    RefreshMappedLightsAnchor();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1745,6 +1748,7 @@ void OpenRGB3DSpatialTab::removeControllerFromViewport(int index)
     }
     
     SetLayoutDirty();
+    RefreshMappedLightsAnchor();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1779,6 +1783,7 @@ void OpenRGB3DSpatialTab::clearAllClicked()
     }
     
     SetLayoutDirty();
+    RefreshMappedLightsAnchor();
 
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();

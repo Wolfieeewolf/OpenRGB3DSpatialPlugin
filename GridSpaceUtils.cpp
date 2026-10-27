@@ -136,8 +136,10 @@ bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform
     {
         return false;
     }
+    /* Equal weight per controller (not per LED) so the Mapped lights hub is the centre of
+     * devices on the grid, not biased toward dense strips. */
     double sx = 0.0, sy = 0.0, sz = 0.0;
-    std::uint64_t count = 0;
+    std::uint64_t controller_count = 0;
     for(unsigned int i = 0; i < transforms.size(); i++)
     {
         ControllerTransform* transform = transforms[i].get();
@@ -149,21 +151,32 @@ bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform
         {
             ControllerLayout3D::UpdateWorldPositions(transform);
         }
+        double cx = 0.0, cy = 0.0, cz = 0.0;
+        std::uint64_t led_count = 0;
         for(unsigned int j = 0; j < transform->led_positions.size(); j++)
         {
             const LEDPosition3D& led = transform->led_positions[j];
             const Vector3D& pos = room_aligned ? led.room_position : led.world_position;
-            sx += pos.x;
-            sy += pos.y;
-            sz += pos.z;
-            count++;
+            cx += pos.x;
+            cy += pos.y;
+            cz += pos.z;
+            led_count++;
         }
+        if(led_count == 0)
+        {
+            continue;
+        }
+        const double inv_led = 1.0 / static_cast<double>(led_count);
+        sx += cx * inv_led;
+        sy += cy * inv_led;
+        sz += cz * inv_led;
+        controller_count++;
     }
-    if(count == 0)
+    if(controller_count == 0)
     {
         return false;
     }
-    const double inv = 1.0 / static_cast<double>(count);
+    const double inv = 1.0 / static_cast<double>(controller_count);
     out_centroid->x = static_cast<float>(sx * inv);
     out_centroid->y = static_cast<float>(sy * inv);
     out_centroid->z = static_cast<float>(sz * inv);

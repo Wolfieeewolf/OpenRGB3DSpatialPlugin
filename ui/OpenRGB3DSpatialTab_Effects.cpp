@@ -833,6 +833,9 @@ void OpenRGB3DSpatialTab::startEffectClicked()
         return;
     }
 
+    /* Bake Mapped lights hub at play start — fixed ref while controllers move through the field. */
+    RefreshMappedLightsAnchor();
+
     bool stack_has_entries = false;
     for(size_t i = 0; i < effect_stack.size(); i++)
     {

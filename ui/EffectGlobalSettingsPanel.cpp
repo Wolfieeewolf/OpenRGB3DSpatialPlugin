@@ -93,13 +93,16 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         tr("Target selection for the selected layer. "
            "Target zone bounds (below) needs a real zone or a meaningful selection so the local grid can be built."));
     ui->originCombo->setToolTip(
-        tr("Where patterns attach in space for this layer. "
-           "\"Room box center\" maps the pattern across the full room. "
-           "\"Mapped lights center\" keeps origin-based math on your hardware layout."));
+        tr("Spatial Anchor for this layer (fixed hubs, like Room box / world origin). "
+           "Room box center: geometric centre of the room. "
+           "Mapped lights center: baked centre of controllers on the layout so desk clusters "
+           "get a tight focus even in a large empty room; moving devices walks through the field. "
+           "Rebaked when you start effects, load a layout, add/remove controllers, or pick this mode. "
+           "Target zone center anchors to the zone box."));
     ui->boundsCombo->setToolTip(
         tr("Global: sample using the normal room (or world) grid. "
            "Target zone: sample positions mapped across the zone (or target) bounding box so motion and detail read on "
-           "that volume."));
+           "that volume (zone box co-moves with those controllers)."));
 
     connect(ui->effectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
             &OpenRGB3DSpatialTab::effectChanged);
@@ -108,8 +111,8 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->zoneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
             &OpenRGB3DSpatialTab::effectZoneChanged);
 
-    ui->originCombo->addItem(tr("Mapped lights center (recommended)"), QVariant(-4));
-    ui->originCombo->addItem(tr("Room box center"), QVariant(-1));
+    ui->originCombo->addItem(tr("Room box center (recommended)"), QVariant(-1));
+    ui->originCombo->addItem(tr("Mapped lights center"), QVariant(-4));
     ui->originCombo->addItem(tr("Target zone center"), QVariant(-2));
     ui->originCombo->addItem(tr("No anchor (world 0,0,0)"), QVariant(-3));
     connect(ui->originCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,

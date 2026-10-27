@@ -251,30 +251,68 @@ bool TryComputeZoneLedCentroid(ZoneManager3D* zone_manager,
     {
         return false;
     }
-    ZoneLedAggregate aggregate{};
-    if(!TryAggregateZoneTargetLeds(zone_manager,
-                                   controller_transforms,
-                                   zone_index,
-                                   skip_physical_controllers,
-                                   skip_hidden_by_virtual,
-                                   aggregate) ||
-       aggregate.led_count == 0)
+    const ZoneTargetSelection selection = ResolveZoneTarget(zone_manager, controller_transforms, zone_index);
+    if(selection.mode == TargetMode::None)
     {
         return false;
     }
-    const double inv = 1.0 / static_cast<double>(aggregate.led_count);
-    if(room_aligned)
+
+    std::unordered_set<RGBControllerInterface*> owned_local;
+    const std::unordered_set<RGBControllerInterface*>* skip_phys =
+        ResolveSkipPhysicalControllers(controller_transforms, skip_physical_controllers, owned_local);
+
+    /* Equal weight per controller in the zone (Mapped lights hub), not per LED. */
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    std::uint64_t controller_count = 0;
+    for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
-        out_centroid->x = static_cast<float>(aggregate.room_cx_sum * inv);
-        out_centroid->y = static_cast<float>(aggregate.room_cy_sum * inv);
-        out_centroid->z = static_cast<float>(aggregate.room_cz_sum * inv);
+        ControllerTransform* transform = controller_transforms[ctrl_idx].get();
+        if(!transform)
+        {
+            continue;
+        }
+        if(skip_hidden_by_virtual && transform->hidden_by_virtual)
+        {
+            continue;
+        }
+        if(transform->controller && skip_phys->find(transform->controller) != skip_phys->end())
+        {
+            continue;
+        }
+        if(!ControllerMatchesTarget(selection, ctrl_idx, selection.single_controller_idx))
+        {
+            continue;
+        }
+
+        ControllerLayout3D::UpdateWorldPositions(transform);
+        double cx = 0.0, cy = 0.0, cz = 0.0;
+        std::uint64_t led_count = 0;
+        for(const LEDPosition3D& led_pos : transform->led_positions)
+        {
+            const Vector3D& pos = room_aligned ? led_pos.room_position : led_pos.world_position;
+            cx += pos.x;
+            cy += pos.y;
+            cz += pos.z;
+            led_count++;
+        }
+        if(led_count == 0)
+        {
+            continue;
+        }
+        const double inv_led = 1.0 / static_cast<double>(led_count);
+        sx += cx * inv_led;
+        sy += cy * inv_led;
+        sz += cz * inv_led;
+        controller_count++;
     }
-    else
+    if(controller_count == 0)
     {
-        out_centroid->x = static_cast<float>(aggregate.world_cx_sum * inv);
-        out_centroid->y = static_cast<float>(aggregate.world_cy_sum * inv);
-        out_centroid->z = static_cast<float>(aggregate.world_cz_sum * inv);
+        return false;
     }
+    const double inv = 1.0 / static_cast<double>(controller_count);
+    out_centroid->x = static_cast<float>(sx * inv);
+    out_centroid->y = static_cast<float>(sy * inv);
+    out_centroid->z = static_cast<float>(sz * inv);
     return true;
 }
 

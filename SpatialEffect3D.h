@@ -214,6 +214,9 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *
  * Anchor resolution: GetEffectOriginGrid(grid) only. Target zone bounds change grid, not a
  * second origin path. Do not reintroduce room-UV origin packing for GPU volumes.
+ * REF_MODE_LED_CENTROID ("Mapped lights") = baked equal-weight centre of controllers (fixed
+ * hub like room box / world origin). Tightens focus onto desk clusters in a large room;
+ * does not chase devices while they move through the field.
  *
  * --- Slider feel (shared by every effect) ---
  * Defaults: Speed / Frequency / Detail = 0 (no motion, no flashing).

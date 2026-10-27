@@ -381,6 +381,7 @@ Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
         case REF_MODE_WORLD_ORIGIN:
             return {0.0f, 0.0f, 0.0f};
         case REF_MODE_LED_CENTROID:
+            /* Baked controller-centre hub on the grid (RefreshMappedLightsAnchor). */
             if(grid.has_led_centroid)
             {
                 return {grid.led_centroid_x, grid.led_centroid_y, grid.led_centroid_z};

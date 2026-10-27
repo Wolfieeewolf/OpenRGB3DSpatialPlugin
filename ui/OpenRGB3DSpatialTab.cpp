@@ -319,10 +319,15 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                 world_bounds.min_z, world_bounds.max_z,
                                 grid_scale_mm);
 
-        Vector3D led_mu{};
-        if(TryComputeLedCentroid(controller_transforms, true, &led_mu))
+        if(!mapped_lights_anchor_valid_)
         {
-            room_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
+            RefreshMappedLightsAnchor();
+        }
+        if(mapped_lights_anchor_valid_)
+        {
+            room_grid.SetLedCentroid(mapped_lights_anchor_.x,
+                                     mapped_lights_anchor_.y,
+                                     mapped_lights_anchor_.z);
         }
 
         std::unique_ptr<GridContext3D> zone_room_grid;
@@ -349,16 +354,11 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
             const ReferenceMode mode = layer_effect->GetReferenceMode();
             if(mode == REF_MODE_LED_CENTROID)
             {
-                Vector3D centroid{};
-                if(TryComputeZoneLedCentroid(zone_manager.get(),
-                                             controller_transforms,
-                                             spatial.layer_zone_index,
-                                             nullptr,
-                                             true,
-                                             true,
-                                             &centroid))
+                if(mapped_lights_anchor_valid_)
                 {
-                    room_grid.SetLedCentroid(centroid.x, centroid.y, centroid.z);
+                    room_grid.SetLedCentroid(mapped_lights_anchor_.x,
+                                             mapped_lights_anchor_.y,
+                                             mapped_lights_anchor_.z);
                 }
             }
             else if(mode == REF_MODE_TARGET_ZONE_CENTER)
@@ -1428,8 +1428,8 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     bool restore_signals = effectOriginCombo()->blockSignals(true);
     effectOriginCombo()->clear();
 
-    effectOriginCombo()->addItem(tr("Mapped lights center (recommended)"), QVariant(-4));
-    effectOriginCombo()->addItem(tr("Room box center"), QVariant(-1));
+    effectOriginCombo()->addItem(tr("Room box center (recommended)"), QVariant(-1));
+    effectOriginCombo()->addItem(tr("Mapped lights center"), QVariant(-4));
     effectOriginCombo()->addItem(tr("Target zone center"), QVariant(-2));
     effectOriginCombo()->addItem(tr("No anchor (world 0,0,0)"), QVariant(-3));
 
@@ -1447,7 +1447,7 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     int restore_index = effectOriginCombo()->findData(desired_selection);
     if(restore_index < 0)
     {
-        restore_index = effectOriginCombo()->findData(QVariant(-4));
+        restore_index = effectOriginCombo()->findData(QVariant(-1));
     }
     if(restore_index < 0)
     {
@@ -1584,6 +1584,7 @@ void OpenRGB3DSpatialTab::effectOriginChanged(int index)
         }
         else if(ref_point_idx == -4)
         {
+            RefreshMappedLightsAnchor();
             current_effect_ui->SetReferenceMode(REF_MODE_LED_CENTROID);
         }
         else if(ref_point_idx >= 0)
