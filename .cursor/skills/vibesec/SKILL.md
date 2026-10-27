@@ -1,10 +1,11 @@
 ---
 name: VibeSec-Skill
 description: >-
-  Secure coding / bug-hunter checklist (upstream BehiSecc/VibeSec-Skill). Use for
-  web-app security depth or when OpenRGB3D multipass pass 2b needs the full
-  encyclopedia. For routine OpenRGB3D multipass, prefer the plugin-tuned subset
-  in openrgb3d-multipass-review (pass 2b) — do not dump this whole guide onto .fx looks.
+  Secure coding / bug-hunter checklist (upstream BehiSecc/VibeSec-Skill). Standalone
+  skill — still use alone for web-app security depth or when you want the full
+  encyclopedia. OpenRGB3D multipass embeds only a plugin-tuned subset as pass 2b
+  (catch-all lighten-load); multipass does not replace this skill. Do not dump
+  this whole guide onto routine .fx look passes.
 ---
 
 # Secure Coding Guide for Web Applications

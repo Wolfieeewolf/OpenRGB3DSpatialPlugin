@@ -2,7 +2,8 @@
 name: openrgb3d-multipass-review
 description: >-
   Catch-all multi-pass review AND fix for OpenRGB 3D Spatial plugin and presets
-  (toolbox .fx/.fs, engines, packs, UI, docs). Combines purpose/role fit,
+  (toolbox .fx/.fs, engines, packs, UI, docs). Lightens load — does not replace
+  standalone VibeSec, Bugbot, thermo-nuclear, or deslop. Combines purpose/role fit,
   seams, sparse-LED looks, thermo-nuclear structure pressure (code judo,
   1k-line rule, no spaghetti), CONTRIBUTING hygiene (dead code, debug leftovers,
   minimal comments, no legacy shims), deslop, better-not-worse gate,
@@ -22,14 +23,17 @@ General review **and fix** tool for **any** OpenRGB3D Spatial file (plugin or pr
 
 Sibling of thermo-nuclear code quality review **and** deslop, tuned to **this plugin’s purpose**: Action / Movie Sync / Triggers, GPU volume/particle/ribbon fields, sparse-LED rooms, once vs loop seams, and fit across engines ↔ packs ↔ UI ↔ docs — **plus** structural ambition on C++/GLSL/Qt when those files are in scope, **plus** **`CONTRIBUTING.md` hygiene** (dead/debug code out, comments minimal, no legacy/compat shims, match file + OpenRGB style), **plus** stripping AI-generated slop, **plus** **plugin-tuned VibeSec** (secure coding / bug-hunter lens — see Security pass), **plus** shipping the fixes, **plus** refusing net-worse edits, **plus** a mandatory end-of-run **self-check + self-improvement** so this skill ratchets sharper every time it runs.
 
-### Related tools (do not conflate)
+### Related tools — still used side by side
 
-| Tool | Job |
-|------|-----|
-| **This multipass skill** | Apply review+fix on OpenRGB3D files (looks, engines, UI, docs) including security when in scope |
-| **VibeSec** (`.cursor/skills/vibesec/`) | Full upstream secure-coding checklist ([BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill)); multipass uses the **tuned subset** below, not the whole web-app encyclopedia on every `.fx` |
-| **Bugbot** (`review-bugbot` / `bugbot` subagent) | Diff/PR bug finding — launch when user asks `/review-bugbot` or for a focused change review; **not** a substitute for multipass, and not auto-run on every multipass batch |
-| **security-review** subagent | Explicit security review of local diffs when user asks |
+Multipass is a **catch-all** that lightens the load on routine OpenRGB3D polish. It does **not** replace specialized skills/subagents. Keep using them alone when that is the right tool for the job.
+
+| Tool | Job | Alone vs multipass |
+|------|-----|--------------------|
+| **This multipass skill** | Catch-all review+fix on OpenRGB3D files (looks, engines, UI, docs); pulls in a **light** security lens when in scope | Default for “run the pass” / toolbox QA |
+| **VibeSec** (`.cursor/skills/vibesec/`) | Full upstream secure-coding checklist ([BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill)) | Still run **alone** for deep security / web-app depth; multipass only embeds the **tuned subset** (pass 2b), not the whole encyclopedia on every `.fx` |
+| **Bugbot** (`review-bugbot` / `bugbot` subagent) | Diff/PR bug finding | Still run **alone** when you want `/review-bugbot` or a focused change review; **not** auto-spawned by multipass |
+| **security-review** subagent | Explicit security review of local diffs | Still run **alone** when you ask for it |
+| **thermo-nuclear / deslop** | Structure pressure / AI-slop cleanup | Multipass folds their *spirit* into passes 7–8; the standalone skills remain available |
 
 ## Execute — do not only report
 
@@ -300,5 +304,5 @@ Do not flood with cosmetic nits when larger issues exist. Prefer fewer high-conv
 - Plugin brief: `Documentation/action-engine-recipe-map.md` (Catch-all multi-pass)
 - **Contributing (binding):** `CONTRIBUTING.md` — Code quality, Style, no legacy paths; plus `OpenRGB/CONTRIBUTING.md` for C++/Qt/logging
 - Upstream spirit: cursor-team-kit `thermo-nuclear-code-quality-review` and `deslop` skills
-- Security upstream: `.cursor/skills/vibesec/` ← [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill); Bugbot via `review-bugbot`
+- Security / review siblings (still standalone): `.cursor/skills/vibesec/` ← [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill); Bugbot via `review-bugbot` — multipass lightens load, does not replace them
 - Canonical clocks/progress: `GpuAnimMsOr`, `ClipSpanProgress`, `ClipSweepProgress`, `ClipPeriodProgress`
