@@ -55,9 +55,14 @@ QString BuildFragmentShader(const QString& user_body)
 
 QString BuildPointFragmentShader(const QString& user_body)
 {
+    /* Declare the same global uniforms as the atlas wrapper so volume .fs bodies
+       that reference u_res / u_atlas (e.g. particle-field, starfield) compile for
+       true point eval — not only for the dense atlas path. */
     return QStringLiteral(
                "#version 410 core\n"
-               "uniform float u_time;\n")
+               "uniform float u_time;\n"
+               "uniform float u_res;\n"
+               "uniform vec2 u_atlas;\n")
            + QStringLiteral("uniform float u_params[%1];\n").arg(SpatialVolumeFieldEngine::kMaxParams)
            + QStringLiteral(
                "uniform sampler2D u_media;\n"
@@ -757,6 +762,9 @@ bool SpatialVolumeFieldEngine::evaluateAtPoints(const float* xyz01, int count, f
     point_fbo_->bind();
     glf->glViewport(0, 0, w, h);
     point_program_->setUniformValue("u_time", params_.time_sec);
+    const float res = (float)std::max(resolution_, kMinResolution);
+    point_program_->setUniformValue("u_res", res);
+    point_program_->setUniformValue("u_atlas", QVector2D(res, res * res));
     SetGlslFloatUniformArray(*point_program_, glf, "u_params", param_bins, kMaxParams);
     point_program_->setUniformValue("u_point_atlas", QVector2D((float)w, (float)h));
     point_program_->setUniformValue("u_point_count", count);
