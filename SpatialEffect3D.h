@@ -27,11 +27,11 @@
 #include "GridSpaceUtils.h"
 #include "SpatialRoom/SpatialRoomTypes.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
-#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "RoomSpatialLightingUi.h"
 #include "SpatialLayerCore.h"
 #include "EffectStratumBlend.h"
 #include "AudioReactiveCommon.h"
-#include "Shaders/SpatialStripFieldAssist.h"
+#include "SpatialStripFieldAssist.h"
 #include <nlohmann/json.hpp>
 #include <cstdint>
 

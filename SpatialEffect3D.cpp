@@ -19,7 +19,7 @@
 #include "PluginUiUtils.h"
 #include "PluginLog.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
-#include "Game/StripPatternSurface.h"
+#include "StripPatternSurface.h"
 #include <QColorDialog>
 #include <QComboBox>
 #include <QSignalBlocker>

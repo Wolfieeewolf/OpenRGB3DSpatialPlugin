@@ -1,4 +1,4 @@
-﻿# Contributing to OpenRGB 3D Spatial Plugin
+# Contributing to OpenRGB 3D Spatial Plugin
 
 ## Repository and workflow
 
@@ -105,7 +105,7 @@ When changing plugin behaviorâ€”especially anything that touches devices, c
 
 ## Scope
 
-- Plugin rules apply to plugin-owned code in this repository (e.g. `Effects3D/`, `engines/`, `ui/`, root `.pro`).
+- Plugin rules apply to plugin-owned code in this repository (e.g. `engines/`, `shared/`, `ui/`, root `.pro`).
 - Do not modify files under `OpenRGB/` (upstream subtree) unless explicitly requested.
 - **Effects engines** (Volume, Shader Field, Kernel, Media, Audio, Reactive, Ambilight, Games): authoring contracts in `Documentation/effects-engines.md`. Prefer thin content on an existing engine over a new programmed host.
 
@@ -116,7 +116,7 @@ The plugin is a **player**: library categories are **engine names**; each engine
 At plugin Load (`OpenRGB3DSpatialPlugin.cpp`):
 
 1. **`RegisterFolderVolumeEffects()`** — scans `effects/volume|audio|media/**/*.fs`. Folder name = library category (**Volume** / **Audio** / **Media**).
-2. **`RegisterPlayerEngines()`** (`Effects3D/PlayerEngines.*`) — **Reactive**, **Ambilight** (Screen Mirror), **Movie Sync**, and one row per `effects/shader-field/*.fs`.
+2. **`RegisterPlayerEngines()`** (`shared/PlayerEngines.*`) — **Reactive**, **Ambilight** (Screen Mirror), **Movie Sync**, and one row per `effects/shader-field/*.fs`.
 3. **Minecraft** sub-effects still use **`REGISTER_EFFECT_3D`** under category **Game** (programmed pack; fat-addon work later).
 
 Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight / Movie Sync looks. New looks are files (or a new programmed Game pack).

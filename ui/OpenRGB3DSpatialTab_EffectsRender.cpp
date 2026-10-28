@@ -13,7 +13,7 @@
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"
 #include "SpatialLighting/EmitterLocalSampling.h"
-#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "RoomSpatialLightingUi.h"
 #include "VirtualController3D.h"
 #include "LEDPosition3D.h"
 #include "SpatialRoom/SpatialRoomFrame.h"

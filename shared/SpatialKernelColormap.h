@@ -3,7 +3,7 @@
 #ifndef SPATIALKERNELCOLORMAP_H
 #define SPATIALKERNELCOLORMAP_H
 
-#include "Game/StripPatternSurface.h"
+#include "StripPatternSurface.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "SpatialPatternKernels/SpatialPatternPalettes.h"
 #include "SpatialEffect3D.h"

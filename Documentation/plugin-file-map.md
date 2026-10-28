@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–7 applied** — phase 1–6 on main; phase 7 moves Actions core → `engines/actions`. Phase 8 still map-only (shared polish). Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–8 applied** — phase 1–7 on main; phase 8 stands up `shared/` (lighting/room/samplers/Shaders hubs, PlayerEngines, effect helpers, StripPatternSurface). Effect base / zones / controllers still at repo root until a later dissolve. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–7 landed; shared/ui still proposed)
+## Tree (phases 1–8 landed; effect-base/zones/ui still at root)
 
 ```text
 engines/
@@ -36,7 +36,7 @@ engines/
   triggers/         ← DONE  (was Effects3D/Triggers/*)
   reactive/         ← DONE  (was Effects3D/Reactive/* + Input/Reactive*)
   game/
-    Game/           ← DONE  (was root Game/*); StripPatternSurface.h stays here until shared/
+    Game/           ← DONE  (was root Game/*); StripPatternSurface.h → shared/ (phase 8)
     Minecraft/      ← DONE  (was Effects3D/Games/Minecraft/*)
   screen-mirror/    ← DONE  (was Effects3D/ScreenMirror/* + root ScreenCapture* + DisplayPlaneCaptureLabels.h)
                     DisplayPlane3D.* stays shared (room object)
@@ -49,21 +49,13 @@ engines/
   actions/          ← DONE  (was Effects3D/Actions/*; field bridges already in volume/particle/ribbon)
                     ActionBuiltinGpu.*  ActionMedia.* stay here (call volume assist)
 integrations/minecraft/   unchanged (Fabric mod sibling)
-shared/
-  Shaders/SpatialOffscreenGlPool.*   FieldFullscreenQuad410.*
-  Shaders/SpatialFieldAssistBase.h   GlslUniformArray.h
-  Shaders/SpatialStripField{Assist,Engine}.*   # strip atlas — FolderVolume + patterns; hub
+shared/             ← DONE phase 8
+  StripPatternSurface.h
+  PlayerEngines.*  EffectStratumBlend.h  EffectColorUtils.h  EffectUiSync.h  SpatialKernelColormap.h
+  SpatialPatternKernels/*
   SpatialLighting/*  SpatialRoom/*  SpatialSamplers/*
-  SpatialEffect3D*  SpatialEffectTypes.h  EffectRegisterer3D.h
-  EffectInstance3D.*  EffectListManager3D.*  StackPreset3D.*  PlayerEngines.*
-  Zone*  GridSpaceUtils.*  LEDPosition3D.h  Geometry3DUtils.h
-  VirtualController*  ControllerLayout*  MatrixWiringOrder.*  DeviceTypeUtils.h
-  DisplayPlane3D.*  DisplayPlaneManager.h     # room layout planes (capture id on plane)
-  SceneProp*  VirtualReferencePoint*
-  MediaTextureEffectUtils.h  TransformJson.h  PluginLog.h  QtCompat.h
-  OpenRGB3DSpatialPlugin.*
-  Effects3D/SpatialPatternKernels/*  Effects3D/SpatialLighting/RoomSpatialLightingUi.*
-  Effects3D/Effect*.h (stratum/color/ui sync helpers)
+  Shaders/*          # GL pool, strip field hub, field assist base
+# still at repo root (later dissolve): SpatialEffect3D* EffectInstance* Zone* VirtualController* DisplayPlane* SceneProp* OpenRGB3DSpatialPlugin*
 ui/                 unchanged paths for now (affinity notes below)
 ```
 
@@ -162,7 +154,7 @@ ui/                 unchanged paths for now (affinity notes below)
 | `engines/game/Game/RoomSampleFrameShmReader.*` | SHM read | keep | |
 | `engines/game/Game/RoomSampleConfigPublisher.*` | Config → mod | keep | |
 | `engines/game/Game/RoomSampleShmPaths.h` | Paths | keep | |
-| `engines/game/Game/StripPatternSurface.h` | Strip surface enum | shared-or-game | Used beyond game — leave here until phase 8 `shared/` |
+| `shared/StripPatternSurface.h` | Strip surface enum | keep | Promoted out of game in phase 8 |
 | `integrations/minecraft/src/**` | Fabric sender mod | keep out of DLL | Build/artifacts ignored |
 
 ### `engines/movie-sync` (phase 1)
@@ -190,21 +182,21 @@ ui/                 unchanged paths for now (affinity notes below)
 
 | Path | Role | Notes |
 |------|------|-------|
-| `Shaders/SpatialOffscreenGlPool.*` | **hub** — singular GL 4.1 context | Never duplicate |
-| `Shaders/FieldFullscreenQuad410.*` | Shared fullscreen quad | |
-| `Shaders/SpatialFieldAssistBase.h` | Assist template | |
-| `Shaders/GlslUniformArray.h` | Uniform upload | |
-| `Shaders/SpatialStripFieldAssist.*` `SpatialStripFieldEngine.*` | Strip atlas **hub** | |
+| `shared/Shaders/SpatialOffscreenGlPool.*` | **hub** — singular GL 4.1 context | Never duplicate |
+| `shared/Shaders/FieldFullscreenQuad410.*` | Shared fullscreen quad | |
+| `shared/Shaders/SpatialFieldAssistBase.h` | Assist template | |
+| `shared/Shaders/GlslUniformArray.h` | Uniform upload | |
+| `shared/Shaders/SpatialStripFieldAssist.*` `SpatialStripFieldEngine.*` | Strip atlas **hub** | |
 
 ### `shared` — room / lighting / sample
 
 | Path | Role | Notes |
 |------|------|-------|
-| `SpatialLighting/*` | Occluders, AO, emitters, scene provider | |
-| `SpatialRoom/*` | Types, defaults, frame depth | |
-| `SpatialSamplers/*` | Cubemap map, layer core, basis | |
-| `Effects3D/SpatialLighting/RoomSpatialLightingUi.*` | JSON param bridge | Thin; could live under SpatialLighting/ |
-| `Effects3D/SpatialPatternKernels/*` | Kernel load + palettes | |
+| `shared/SpatialLighting/*` | Occluders, AO, emitters, scene provider | |
+| `shared/SpatialRoom/*` | Types, defaults, frame depth | |
+| `shared/SpatialSamplers/*` | Cubemap map, layer core, basis | |
+| `shared/SpatialLighting/RoomSpatialLightingUi.*` | JSON param bridge | keep |
+| `shared/SpatialPatternKernels/*` | Kernel load + palettes | keep |
 
 ### `shared` — effect / stack / plugin core
 
@@ -213,8 +205,8 @@ ui/                 unchanged paths for now (affinity notes below)
 | `SpatialEffect3D.*` `_Eval` `_Settings` | Effect base | |
 | `SpatialEffectTypes.h` `EffectRegisterer3D.h` | Types / register | |
 | `EffectInstance3D.*` `EffectListManager3D.*` `StackPreset3D.*` | Stack | |
-| `Effects3D/PlayerEngines.*` | Registers Reactive/ScreenMirror/MovieSync/ShaderField | Glue — shared |
-| `Effects3D/EffectStratumBlend.h` `EffectColorUtils.h` `EffectUiSync.h` `SpatialKernelColormap.h` | Cross-effect helpers | |
+| `shared/PlayerEngines.*` | Registers Reactive/ScreenMirror/MovieSync/ShaderField | keep |
+| `shared/EffectStratumBlend.h` `EffectColorUtils.h` `EffectUiSync.h` `SpatialKernelColormap.h` | Cross-effect helpers | keep |
 | `OpenRGB3DSpatialPlugin.*` | Entry | |
 | `PluginLog.h` `QtCompat.h` `TransformJson.h` `MediaTextureEffectUtils.h` | Utilities | MediaTexture = **hub** |
 
@@ -261,7 +253,7 @@ ui/                 unchanged paths for now (affinity notes below)
 5. **Folder-volume** — **DONE** on main (`engines/folder-volume`).
 6. **Audio** — **DONE** on main (`engines/audio`).
 7. **Actions core** — **DONE** on `chore/engines-phase7-actions` (`Effects3D/Actions` → `engines/actions`).
-8. **shared polish** — SpatialLighting/Room/Samplers, strip field hub, effect base, zones/controllers; promote `StripPatternSurface.h`; optional `Effects3D/` dissolve.
+8. **shared polish** — **DONE** on `chore/engines-phase8-shared` (`shared/` hubs; effect base / zones / controllers remain at root).
 9. **ui** — path renames only if include churn is already paid; else leave.
 
 Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
@@ -272,14 +264,14 @@ Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 
 | Item | Issue | Lean |
 |------|-------|------|
-| `engines/game/Game/StripPatternSurface.h` | Used outside game | → `shared` in phase 8 |
+| `shared/StripPatternSurface.h` | Was under game | **DONE** phase 8 |
 | `engines/screen-mirror/ScreenCaptureManager` | Used by Screen Mirror + plane UI | phase 2 done; ui includes across |
-| `SpatialStripField*` | FolderVolume + patterns | → `shared` (hub) |
+| `shared/Shaders/SpatialStripField*` | FolderVolume + patterns | **DONE** phase 8 |
 | `SpatialVolumeField*` | Actions + FolderVolume | phase 4 done under `engines/volume-field` |
 | `ActionBuiltinGpu` / `ActionMedia` | Live under Actions but touch volume assist | stay `engines/actions` |
-| `PlayerEngines.cpp` | Multi-engine register | → `shared` |
+| `shared/PlayerEngines.*` | Multi-engine register | **DONE** phase 8 |
 | `DisplayPlane3D` vs capture | Plane is room; capture is screen-mirror | split by type, not file force-merge |
-| Root `Effects3D/*` helpers | Orphan headers at Effects3D root | → `shared/effects/` or keep until dissolve |
+| Root effect base / zones / controllers | Still at repo root | later dissolve |
 
 ---
 

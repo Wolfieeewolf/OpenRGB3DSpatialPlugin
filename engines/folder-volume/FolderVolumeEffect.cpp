@@ -13,7 +13,7 @@
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
-#include "Effects3D/EffectColorUtils.h"
+#include "EffectColorUtils.h"
 #include "AudioReactiveUi.h"
 #include "AudioInputManager.h"
 

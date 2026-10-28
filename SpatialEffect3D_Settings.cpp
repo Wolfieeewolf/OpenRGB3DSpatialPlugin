@@ -3,7 +3,7 @@
 #include "SpatialEffect3D.h"
 
 #include "Colors.h"
-#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "RoomSpatialLightingUi.h"
 #include "PluginLog.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"

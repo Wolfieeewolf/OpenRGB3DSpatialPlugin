@@ -111,16 +111,16 @@ RESOURCES += \
 INCLUDEPATH += \
     ui \
     ui/widgets \
-    Effects3D \
+    shared \
     engines/movie-sync \
     engines/actions \
     engines/triggers \
     engines/folder-volume \
     engines/game \
-    SpatialSamplers \
-    SpatialRoom \
-    SpatialLighting \
-    Shaders \
+    shared/SpatialSamplers \
+    shared/SpatialRoom \
+    shared/SpatialLighting \
+    shared/Shaders \
     engines/audio \
     engines/reactive \
     engines/screen-mirror \
@@ -156,7 +156,7 @@ HEADERS += \
     Geometry3DUtils.h \
     TransformJson.h \
     MediaTextureEffectUtils.h \
-    engines/game/Game/StripPatternSurface.h \
+    shared/StripPatternSurface.h \
     QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
     engines/game/Game/GameTelemetryBridge.h \
@@ -164,9 +164,9 @@ HEADERS += \
     engines/game/Game/RoomSampleShmPaths.h \
     engines/game/Game/RoomSampleFrameShmReader.h \
     engines/game/Game/RoomSampleConfigPublisher.h \
-    SpatialSamplers/SpatialBasisUtils.h \
-    SpatialSamplers/SpatialLayerCore.h \
-    SpatialSamplers/RoomSampleMapping.h \
+    shared/SpatialSamplers/SpatialBasisUtils.h \
+    shared/SpatialSamplers/SpatialLayerCore.h \
+    shared/SpatialSamplers/RoomSampleMapping.h \
     engines/game/Minecraft/MinecraftGame.h \
     engines/game/Minecraft/MinecraftGameSettings.h \
     engines/game/Minecraft/MinecraftSubEffect3D.h \
@@ -194,16 +194,16 @@ HEADERS += \
     engines/triggers/MacTriggerSource.h \
     engines/triggers/TriggerSourceRegistry.h \
     engines/triggers/TriggerRuntime.h \
-    SpatialRoom/SpatialRoomTypes.h \
-    SpatialRoom/SpatialRoomDefaults.h \
-    SpatialRoom/SpatialRoomFrame.h \
-    SpatialLighting/BlockerGridOccluder.h \
-    SpatialLighting/OccluderSpatialIndex.h \
-    SpatialLighting/SpatialLightingEngine.h \
-    SpatialLighting/EmitterRelayMirror.h \
-    SpatialLighting/EmitterLocalSampling.h \
-    SpatialLighting/SpatialLightingSceneProvider.h \
-    Effects3D/SpatialLighting/RoomSpatialLightingUi.h \
+    shared/SpatialRoom/SpatialRoomTypes.h \
+    shared/SpatialRoom/SpatialRoomDefaults.h \
+    shared/SpatialRoom/SpatialRoomFrame.h \
+    shared/SpatialLighting/BlockerGridOccluder.h \
+    shared/SpatialLighting/OccluderSpatialIndex.h \
+    shared/SpatialLighting/SpatialLightingEngine.h \
+    shared/SpatialLighting/EmitterRelayMirror.h \
+    shared/SpatialLighting/EmitterLocalSampling.h \
+    shared/SpatialLighting/SpatialLightingSceneProvider.h \
+    shared/SpatialLighting/RoomSpatialLightingUi.h \
     ui/PluginSettingsPaths.h \
     ui/GridSettingsPanel.h \
     ui/SceneTransformPanel.h \
@@ -272,11 +272,11 @@ HEADERS += \
     ui/viewport/ViewportShaders.h \
     ui/CaptureZonesWidget.h \
     ui/PluginUiUtils.h \
-    Effects3D/EffectStratumBlend.h \
-    Effects3D/EffectColorUtils.h \
-    Effects3D/EffectUiSync.h \
+    shared/EffectStratumBlend.h \
+    shared/EffectColorUtils.h \
+    shared/EffectUiSync.h \
     engines/audio/AudioReactiveCommon.h \
-    Effects3D/SpatialKernelColormap.h \
+    shared/SpatialKernelColormap.h \
     ui/widgets/StripKernelColormapPanel.h \
     ui/widgets/StratumBandPanel.h \
     ui/widgets/EffectMotionPanel.h \
@@ -303,7 +303,7 @@ HEADERS += \
     ui/widgets/AudioEqBandColumn.h \
     ui/widgets/EffectControlsRoot.h \
     engines/shader-field/ShaderField.h \
-    Effects3D/PlayerEngines.h \
+    shared/PlayerEngines.h \
     engines/movie-sync/MovieSync.h \
     engines/movie-sync/MovieSyncCatalog.h \
     engines/movie-sync/MovieSyncListener.h \
@@ -312,14 +312,14 @@ HEADERS += \
     engines/shader-field/SpatialShaderEngine.h \
     engines/shader-field/SpatialShaderUniforms.h \
     engines/shader-field/SpatialShaderCatalog.h \
-    Shaders/GlslUniformArray.h \
-    Shaders/SpatialFieldAssistBase.h \
+    shared/Shaders/GlslUniformArray.h \
+    shared/Shaders/SpatialFieldAssistBase.h \
     engines/volume-field/SpatialVolumeFieldEngine.h \
-    Shaders/SpatialOffscreenGlPool.h \
-    Shaders/FieldFullscreenQuad410.h \
+    shared/Shaders/SpatialOffscreenGlPool.h \
+    shared/Shaders/FieldFullscreenQuad410.h \
     engines/volume-field/SpatialVolumeFieldAssist.h \
-    Shaders/SpatialStripFieldEngine.h \
-    Shaders/SpatialStripFieldAssist.h \
+    shared/Shaders/SpatialStripFieldEngine.h \
+    shared/Shaders/SpatialStripFieldAssist.h \
     engines/audio/AudioReactiveUi.h \
     engines/audio/AudioInputManager.h \
     engines/reactive/ReactiveInputTypes.h \
@@ -332,8 +332,8 @@ HEADERS += \
     engines/screen-mirror/ScreenMirrorWaveMath.h \
     engines/screen-mirror/ScreenMirrorCalibrationPattern.h \
     engines/screen-mirror/ScreenMirrorMonitorPanel.h \
-    Effects3D/SpatialPatternKernels/SpatialPatternKernels.h \
-    Effects3D/SpatialPatternKernels/SpatialPatternPalettes.h \
+    shared/SpatialPatternKernels/SpatialPatternKernels.h \
+    shared/SpatialPatternKernels/SpatialPatternPalettes.h \
 
 SOURCES += \
     OpenRGB3DSpatialPlugin.cpp \
@@ -357,8 +357,8 @@ SOURCES += \
     engines/game/Game/GameTelemetryBridge.cpp \
     engines/game/Game/RoomSampleFrameShmReader.cpp \
     engines/game/Game/RoomSampleConfigPublisher.cpp \
-    SpatialSamplers/SpatialLayerCore.cpp \
-    SpatialSamplers/RoomSampleMapping.cpp \
+    shared/SpatialSamplers/SpatialLayerCore.cpp \
+    shared/SpatialSamplers/RoomSampleMapping.cpp \
     engines/game/Minecraft/MinecraftGame.cpp \
     engines/game/Minecraft/MinecraftGameSettings.cpp \
     engines/game/Minecraft/MinecraftSubEffect3D.cpp \
@@ -388,15 +388,15 @@ SOURCES += \
     engines/triggers/MacTriggerSource.cpp \
     engines/triggers/TriggerSourceRegistry.cpp \
     engines/triggers/TriggerRuntime.cpp \
-    SpatialRoom/SpatialRoomDefaults.cpp \
-    SpatialRoom/SpatialRoomFrame.cpp \
-    SpatialLighting/BlockerGridOccluder.cpp \
-    SpatialLighting/OccluderSpatialIndex.cpp \
-    SpatialLighting/SpatialLightingEngine.cpp \
-    SpatialLighting/EmitterRelayMirror.cpp \
-    SpatialLighting/EmitterLocalSampling.cpp \
-    SpatialLighting/SpatialLightingSceneProvider.cpp \
-    Effects3D/SpatialLighting/RoomSpatialLightingUi.cpp \
+    shared/SpatialRoom/SpatialRoomDefaults.cpp \
+    shared/SpatialRoom/SpatialRoomFrame.cpp \
+    shared/SpatialLighting/BlockerGridOccluder.cpp \
+    shared/SpatialLighting/OccluderSpatialIndex.cpp \
+    shared/SpatialLighting/SpatialLightingEngine.cpp \
+    shared/SpatialLighting/EmitterRelayMirror.cpp \
+    shared/SpatialLighting/EmitterLocalSampling.cpp \
+    shared/SpatialLighting/SpatialLightingSceneProvider.cpp \
+    shared/SpatialLighting/RoomSpatialLightingUi.cpp \
     ui/PluginSettingsPaths.cpp \
     ui/GridSettingsPanel.cpp \
     ui/SceneTransformPanel.cpp \
@@ -491,7 +491,7 @@ SOURCES += \
     ui/widgets/MediaTextureAmbienceBlock.cpp \
     ui/widgets/AudioEqBandColumn.cpp \
     engines/folder-volume/FolderVolumeEffect.cpp \
-    Effects3D/PlayerEngines.cpp \
+    shared/PlayerEngines.cpp \
     EffectListManager3D.cpp \
     engines/movie-sync/MovieSync.cpp \
     engines/movie-sync/MovieSyncCatalog.cpp \
@@ -501,11 +501,11 @@ SOURCES += \
     engines/shader-field/SpatialShaderEngine.cpp \
     engines/shader-field/SpatialShaderCatalog.cpp \
     engines/volume-field/SpatialVolumeFieldEngine.cpp \
-    Shaders/SpatialOffscreenGlPool.cpp \
-    Shaders/FieldFullscreenQuad410.cpp \
+    shared/Shaders/SpatialOffscreenGlPool.cpp \
+    shared/Shaders/FieldFullscreenQuad410.cpp \
     engines/volume-field/SpatialVolumeFieldAssist.cpp \
-    Shaders/SpatialStripFieldEngine.cpp \
-    Shaders/SpatialStripFieldAssist.cpp \
+    shared/Shaders/SpatialStripFieldEngine.cpp \
+    shared/Shaders/SpatialStripFieldAssist.cpp \
     engines/reactive/Reactive.cpp \
     engines/reactive/ReactiveKeyMap.cpp \
     engines/reactive/ReactiveInputManager.cpp \
@@ -513,8 +513,8 @@ SOURCES += \
     engines/screen-mirror/ScreenMirror_Render.cpp \
     engines/screen-mirror/ScreenMirror_Settings.cpp \
     engines/screen-mirror/ScreenMirrorMonitorPanel.cpp \
-    Effects3D/SpatialPatternKernels/SpatialPatternKernels.cpp \
-    Effects3D/SpatialPatternKernels/SpatialPatternPalettes.cpp \
+    shared/SpatialPatternKernels/SpatialPatternKernels.cpp \
+    shared/SpatialPatternKernels/SpatialPatternPalettes.cpp \
     engines/audio/AudioInputManager.cpp
 
 win32:CONFIG += QTPLUGIN

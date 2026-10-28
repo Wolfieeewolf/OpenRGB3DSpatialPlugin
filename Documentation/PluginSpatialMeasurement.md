@@ -245,7 +245,7 @@ Effects should use `GridContext3D` bounds and `grid_scale_mm`. Avoid hard-coded 
 | Effect origin | `SpatialEffect3D::GetReferencePointGrid`, `GetEffectOriginGrid` |
 | Viewport room box | `ui/LEDViewport3D.cpp` (`SetRoomDimensions` mm → draw via grid scale) |
 | Display planes | `DisplayPlane3D.h`, `Geometry3DUtils.h` (`SpatialMapToScreen`) |
-| Spatial lighting mm params | `Effects3D/SpatialLighting/RoomSpatialLightingUi.h`, `SpatialLightingEngine.cpp` |
+| Spatial lighting mm params | `shared/SpatialLighting/RoomSpatialLightingUi.h`, `shared/SpatialLighting/SpatialLightingEngine.cpp` |
 | Layout persistence | `ui/OpenRGB3DSpatialTab_Layout.cpp` (`grid.scale_mm`, `room.width/depth/height`) |
 
 **Change rule:** new spatial distance logic goes through `GridSpaceUtils` or uses `GridContext3D.grid_scale_mm`. No new standalone converters.

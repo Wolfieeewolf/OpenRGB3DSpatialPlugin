@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "StripKernelColormapPanel.h"
-#include "Game/StripPatternSurface.h"
+#include "StripPatternSurface.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "ui_StripKernelColormapPanel.h"
 

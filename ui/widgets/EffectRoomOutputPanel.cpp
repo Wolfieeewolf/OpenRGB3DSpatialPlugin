@@ -6,7 +6,7 @@
 #include "ControllerDisplayUtils.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "RoomSpatialLightSettingsPanel.h"
-#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "RoomSpatialLightingUi.h"
 #include "RoomOutputDeviceCard.h"
 #include "LEDPosition3D.h"
 #include "ControllerLayout3D.h"

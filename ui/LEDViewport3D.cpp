@@ -22,7 +22,7 @@
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"
 #include "viewport/ViewportGLFormat.h"
-#include "Shaders/SpatialOffscreenGlPool.h"
+#include "SpatialOffscreenGlPool.h"
 #include "VirtualReferencePoint3D.h"
 #include "ScreenCaptureManager.h"
 #include "PluginLog.h"
