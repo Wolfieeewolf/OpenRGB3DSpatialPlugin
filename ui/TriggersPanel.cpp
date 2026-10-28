@@ -3,7 +3,7 @@
 #include "TriggersPanel.h"
 
 #include "TriggerBinding.h"
-#include "Actions/ActionLibrary.h"
+#include "ActionLibrary.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"

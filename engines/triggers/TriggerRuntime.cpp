@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "TriggerRuntime.h"
-#include "Actions/ActionLibrary.h"
+#include "ActionLibrary.h"
 #include "PluginLog.h"
 
 #include <algorithm>

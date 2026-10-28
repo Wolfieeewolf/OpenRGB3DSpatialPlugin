@@ -1,4 +1,4 @@
-﻿# Multipass coverage (plugin)
+# Multipass coverage (plugin)
 
 **Rule:** anything not yet multipassed is **stale**. Presets tracker: [OpenRGB3DSpatialPresets `docs/multipass-coverage.md`](../../OpenRGB3DSpatialPresets/docs/multipass-coverage.md) (sibling repo).
 
@@ -10,7 +10,7 @@ Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 
 Other-models / Claude usage exhausted 2026-10-27. **Do not resume these with a weaker model** — judgment passes (ratchet, grid/viewport, residual UI). Resume order when Claude is available again:
 
-1. **Effects3D/Actions** — full ratchet (clocks/setParams already from earlier Oct; agent skim only after token stop)
+1. **engines/actions** — full ratchet (clocks/setParams already from earlier Oct; agent skim only after token stop)
 2. **engines/folder-volume** — full ratchet (~2.6k; split later after pass)
 3. **ui/custom-controller-grid + ui/viewport** — real multipass (agent stopped; local “keep” was not a finish)
 4. **ui residual** — LEDViewport3D*, OpenRGB3DSpatialTab_*, CustomControllerDialog*, Zones/ObjectCreator, Effect stack, `ui/widgets/*`
@@ -22,7 +22,7 @@ Skill: `.cursor/skills/openrgb3d-multipass-review/SKILL.md`. Tracker was wrong o
 
 | Family | Status | Date | Notes |
 |--------|--------|------|-------|
-| Effects3D/Actions | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop) |
+| engines/actions | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop); tree moved phase 7 |
 | engines/folder-volume | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop); tree moved phase 5 |
 | engines/shader-field (was Effects3D/ShaderField + SpatialShader*) | fixed | 2026-10-27 | Picked up locally after agent stop: shared `LoadShaderBodyFromPath`; `\u2013` labels (not a full agent ratchet); tree moved phase 3 |
 | engines/screen-mirror (was Effects3D/ScreenMirror + ScreenCapture*) | fixed | 2026-10-27 | Picked up locally after agent stop: `QStringLiteral` tooltips/empty label (hygiene; not full agent ratchet); tree moved phase 2 |

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-#include "Actions/Action.h"
-#include "Actions/ActionPlayer.h"
+#include "Action.h"
+#include "ActionPlayer.h"
 #include "ActionTimelineWidget.h"
 #include "filesystem.h"
 #include <QDialog>

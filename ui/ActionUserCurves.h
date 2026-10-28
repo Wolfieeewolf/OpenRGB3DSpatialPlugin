@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-#include "Actions/Action.h"
+#include "Action.h"
 #include "filesystem.h"
 #include <QString>
 #include <vector>

@@ -2,7 +2,7 @@
 
 #include "ActionsPanel.h"
 #include "ActionEditorDialog.h"
-#include "Actions/ActionLibrary.h"
+#include "ActionLibrary.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"

@@ -273,9 +273,9 @@ LED frames over time -> OpenRGB + 3D viewport (layout-aware)
 
 ## Code home
 
-- `Effects3D/Actions/Action.*`  -  types, playback map, track color
-- `Effects3D/Actions/ActionSerialize.cpp`  -  load/save JSON (`openrgb3d.action`, `.action.json`)
-- `Effects3D/Actions/ActionLibrary.*`  -  scan `triggers/effects/` (no bundled seed content)
+- `engines/actions/Action.*`  -  types, playback map, track color
+- `engines/actions/ActionSerialize.cpp`  -  load/save JSON (`openrgb3d.action`, `.action.json`)
+- `engines/actions/ActionLibrary.*`  -  scan `triggers/effects/` (no bundled seed content)
 - `ui/ActionCatalog.h`  -  Action Editor Tools (`action-editor/toolbox/`)
 - `ui/ActionsPanel.*`  -  Object Creator -> Actions
 - `ui/TriggersPanel.*`  -  Object Creator -> Triggers

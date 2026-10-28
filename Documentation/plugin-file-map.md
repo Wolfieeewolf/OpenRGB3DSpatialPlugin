@@ -1,8 +1,8 @@
-﻿# Plugin file map (engine regroup inventory)
+# Plugin file map (engine regroup inventory)
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–6 applied** — phase 1–5 merged; phase 6 on `chore/engines-phase6-audio` (Audio + AudioReactive* → `engines/audio`). Phases 7–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–7 applied** — phase 1–6 on main; phase 7 moves Actions core → `engines/actions`. Phase 8 still map-only (shared polish). Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–6 landed; later buckets still proposed)
+## Tree (phases 1–7 landed; shared/ui still proposed)
 
 ```text
 engines/
@@ -46,7 +46,7 @@ engines/
   ribbon-field/     ← DONE  (was Actions/ActionRibbonField.*)
   folder-volume/    ← DONE  (was Effects3D/FolderVolume/*)
   audio/            ← DONE  (was Audio/* + Effects3D/AudioReactive{Common,Ui}.h)
-  actions/          Effects3D/Actions/*  (field bridges already moved)
+  actions/          ← DONE  (was Effects3D/Actions/*; field bridges already in volume/particle/ribbon)
                     ActionBuiltinGpu.*  ActionMedia.* stay here (call volume assist)
 integrations/minecraft/   unchanged (Fabric mod sibling)
 shared/
@@ -79,17 +79,17 @@ ui/                 unchanged paths for now (affinity notes below)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Effects3D/Actions/Action.{h,cpp}` | Clip / pack / clocks (`ClipSpan` / `GpuAnimMs`) | pending Claude ratchet | |
-| `Effects3D/Actions/ActionDetail.h` | Internal detail | keep | |
-| `Effects3D/Actions/ActionPlayer.h` | Player API | keep | |
-| `Effects3D/Actions/ActionSerialize.cpp` | Pack JSON | keep | |
-| `Effects3D/Actions/ActionScript.{h,cpp}` | Script tools | **split later** | ~1.2k cpp |
-| `Effects3D/Actions/ActionLibrary.{h,cpp}` | Builtin library ids | keep | |
-| `Effects3D/Actions/ActionClipEval.h` `ActionClipEvalAxis.cpp` | Axis / LED eval | keep | |
-| `Effects3D/Actions/ActionApplier*` | Apply pack → LEDs | keep | |
-| `Effects3D/Actions/ActionSpatial.cpp` | Spatial apply helpers | keep | |
-| `Effects3D/Actions/ActionBuiltinGpu.*` | plasma/fire/snow/colorwash GPU | keep w/ actions | Uses volume assist |
-| `Effects3D/Actions/ActionMedia.*` | Image/GIF clips | keep w/ actions | Uses volume/media path |
+| `engines/actions/Action.{h,cpp}` | Clip / pack / clocks (`ClipSpan` / `GpuAnimMs`) | pending Claude ratchet | |
+| `engines/actions/ActionDetail.h` | Internal detail | keep | |
+| `engines/actions/ActionPlayer.h` | Player API | keep | |
+| `engines/actions/ActionSerialize.cpp` | Pack JSON | keep | |
+| `engines/actions/ActionScript.{h,cpp}` | Script tools | **split later** | ~1.2k cpp |
+| `engines/actions/ActionLibrary.{h,cpp}` | Builtin library ids | keep | |
+| `engines/actions/ActionClipEval.h` `ActionClipEvalAxis.cpp` | Axis / LED eval | keep | |
+| `engines/actions/ActionApplier*` | Apply pack → LEDs | keep | |
+| `engines/actions/ActionSpatial.cpp` | Spatial apply helpers | keep | |
+| `engines/actions/ActionBuiltinGpu.*` | plasma/fire/snow/colorwash GPU | keep w/ actions | Uses volume assist |
+| `engines/actions/ActionMedia.*` | Image/GIF clips | keep w/ actions | Uses volume/media path |
 
 ### `engines/volume-field` (phase 4)
 
@@ -162,7 +162,7 @@ ui/                 unchanged paths for now (affinity notes below)
 | `engines/game/Game/RoomSampleFrameShmReader.*` | SHM read | keep | |
 | `engines/game/Game/RoomSampleConfigPublisher.*` | Config → mod | keep | |
 | `engines/game/Game/RoomSampleShmPaths.h` | Paths | keep | |
-| `engines/game/Game/StripPatternSurface.h` | Strip surface enum | shared-or-game | Used beyond game — leave here until phase 7 `shared/` |
+| `engines/game/Game/StripPatternSurface.h` | Strip surface enum | shared-or-game | Used beyond game — leave here until phase 8 `shared/` |
 | `integrations/minecraft/src/**` | Fabric sender mod | keep out of DLL | Build/artifacts ignored |
 
 ### `engines/movie-sync` (phase 1)
@@ -258,10 +258,11 @@ ui/                 unchanged paths for now (affinity notes below)
 2. **Screen-mirror** — **DONE** on `chore/engines-phase2-screen-mirror` (merged to main).
 3. **Shader-field** — **DONE** on `chore/engines-phase3-shader-field` (ShaderField + SpatialShader*).
 4. **Volume/particle/ribbon** — **DONE** on `chore/engines-phase4-fields` (bridges + SpatialVolumeField*).
-5. **Folder-volume** — after volume-field stable (calls assist).
-6. **Actions core** — remaining Actions/* into `engines/actions`.
-7. **shared polish** — SpatialLighting/Room/Samplers, strip field hub, effect base, zones/controllers; promote `StripPatternSurface.h`; optional `Effects3D/` dissolve.
-8. **ui** — path renames only if include churn is already paid; else leave.
+5. **Folder-volume** — **DONE** on main (`engines/folder-volume`).
+6. **Audio** — **DONE** on main (`engines/audio`).
+7. **Actions core** — **DONE** on `chore/engines-phase7-actions` (`Effects3D/Actions` → `engines/actions`).
+8. **shared polish** — SpatialLighting/Room/Samplers, strip field hub, effect base, zones/controllers; promote `StripPatternSurface.h`; optional `Effects3D/` dissolve.
+9. **ui** — path renames only if include churn is already paid; else leave.
 
 Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 
@@ -271,7 +272,7 @@ Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 
 | Item | Issue | Lean |
 |------|-------|------|
-| `engines/game/Game/StripPatternSurface.h` | Used outside game | → `shared` in phase 7 |
+| `engines/game/Game/StripPatternSurface.h` | Used outside game | → `shared` in phase 8 |
 | `engines/screen-mirror/ScreenCaptureManager` | Used by Screen Mirror + plane UI | phase 2 done; ui includes across |
 | `SpatialStripField*` | FolderVolume + patterns | → `shared` (hub) |
 | `SpatialVolumeField*` | Actions + FolderVolume | phase 4 done under `engines/volume-field` |

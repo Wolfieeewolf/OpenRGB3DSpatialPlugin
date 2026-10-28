@@ -2,7 +2,7 @@
 
 #include "ActionTimelineWidget.h"
 #include "ActionCatalog.h"
-#include "Actions/ActionApplier.h"
+#include "ActionApplier.h"
 #include "ZoneManager3D.h"
 
 #include <QCursor>

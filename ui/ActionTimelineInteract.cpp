@@ -2,9 +2,9 @@
 
 #include "ActionTimelineWidget.h"
 #include "ActionCatalog.h"
-#include "Actions/ActionApplier.h"
-#include "Actions/ActionMedia.h"
-#include "Actions/ActionScript.h"
+#include "ActionApplier.h"
+#include "ActionMedia.h"
+#include "ActionScript.h"
 #include "ZoneManager3D.h"
 
 #include <QColorDialog>

@@ -113,7 +113,7 @@ INCLUDEPATH += \
     ui/widgets \
     Effects3D \
     engines/movie-sync \
-    Effects3D/Actions \
+    engines/actions \
     engines/triggers \
     engines/folder-volume \
     engines/game \
@@ -176,16 +176,16 @@ HEADERS += \
     engines/game/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.h \
     engines/game/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
     engines/game/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
-    Effects3D/Actions/Action.h \
-    Effects3D/Actions/ActionMedia.h \
-    Effects3D/Actions/ActionPlayer.h \
-    Effects3D/Actions/ActionApplier.h \
-    Effects3D/Actions/ActionApplierDetail.h \
+    engines/actions/Action.h \
+    engines/actions/ActionMedia.h \
+    engines/actions/ActionPlayer.h \
+    engines/actions/ActionApplier.h \
+    engines/actions/ActionApplierDetail.h \
     engines/volume-field/ActionVolumeField.h \
     engines/particle-field/ActionParticleField.h \
     engines/ribbon-field/ActionRibbonField.h \
-    Effects3D/Actions/ActionBuiltinGpu.h \
-    Effects3D/Actions/ActionLibrary.h \
+    engines/actions/ActionBuiltinGpu.h \
+    engines/actions/ActionLibrary.h \
     engines/triggers/TriggerBinding.h \
     engines/triggers/TriggerSource.h \
     engines/triggers/ManualTriggerSource.h \
@@ -368,20 +368,20 @@ SOURCES += \
     engines/game/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.cpp \
     engines/game/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
     engines/game/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
-    Effects3D/Actions/Action.cpp \
-    Effects3D/Actions/ActionMedia.cpp \
-    Effects3D/Actions/ActionSerialize.cpp \
-    Effects3D/Actions/ActionClipEvalAxis.cpp \
-    Effects3D/Actions/ActionSpatial.cpp \
-    Effects3D/Actions/ActionScript.cpp \
+    engines/actions/Action.cpp \
+    engines/actions/ActionMedia.cpp \
+    engines/actions/ActionSerialize.cpp \
+    engines/actions/ActionClipEvalAxis.cpp \
+    engines/actions/ActionSpatial.cpp \
+    engines/actions/ActionScript.cpp \
     engines/volume-field/ActionVolumeField.cpp \
     engines/particle-field/ActionParticleField.cpp \
     engines/ribbon-field/ActionRibbonField.cpp \
-    Effects3D/Actions/ActionBuiltinGpu.cpp \
-    Effects3D/Actions/ActionApplier.cpp \
-    Effects3D/Actions/ActionApplierMatch.cpp \
-    Effects3D/Actions/ActionApplierSpatial.cpp \
-    Effects3D/Actions/ActionLibrary.cpp \
+    engines/actions/ActionBuiltinGpu.cpp \
+    engines/actions/ActionApplier.cpp \
+    engines/actions/ActionApplierMatch.cpp \
+    engines/actions/ActionApplierSpatial.cpp \
+    engines/actions/ActionLibrary.cpp \
     engines/triggers/TriggerBinding.cpp \
     engines/triggers/WindowsTriggerSource.cpp \
     engines/triggers/LinuxTriggerSource.cpp \

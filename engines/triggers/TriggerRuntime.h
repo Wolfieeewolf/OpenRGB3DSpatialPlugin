@@ -3,8 +3,8 @@
 
 #include "TriggerBinding.h"
 #include "TriggerSource.h"
-#include "Actions/Action.h"
-#include "Actions/ActionPlayer.h"
+#include "Action.h"
+#include "ActionPlayer.h"
 #include "filesystem.h"
 #include <functional>
 #include <string>

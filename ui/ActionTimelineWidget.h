@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
-#include "Actions/Action.h"
-#include "Actions/ActionApplier.h"
+#include "Action.h"
+#include "ActionApplier.h"
 #include "LEDPosition3D.h"
 #include "filesystem.h"
 #include <QHash>
