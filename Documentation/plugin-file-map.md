@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–8 applied** — phase 1–7 on main; phase 8 stands up `shared/` (lighting/room/samplers/Shaders hubs, PlayerEngines, effect helpers, StripPatternSurface). Effect base / zones / controllers still at repo root until a later dissolve. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–9 applied** — phase 1–8 on main; phase 9 groups `ui/` by affinity (`actions`, `effects`, `viewport`, `controllers`, `screen`, `audio`, `shell`). Effect base / zones / controllers still at repo root until a later dissolve. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–8 landed; effect-base/zones/ui still at root)
+## Tree (phases 1–9 landed; effect-base/zones still at root)
 
 ```text
 engines/
@@ -56,7 +56,9 @@ shared/             ← DONE phase 8
   SpatialLighting/*  SpatialRoom/*  SpatialSamplers/*
   Shaders/*          # GL pool, strip field hub, field assist base
 # still at repo root (later dissolve): SpatialEffect3D* EffectInstance* Zone* VirtualController* DisplayPlane* SceneProp* OpenRGB3DSpatialPlugin*
-ui/                 unchanged paths for now (affinity notes below)
+ui/                 ← DONE phase 9 (affinity folders)
+  actions/ effects/ viewport/ controllers/ screen/ audio/ shell/
+  widgets/ custom-controller-grid/ forms/   # kept
 ```
 
 **Strip field note:** `SpatialStripField*` is a **hub** (FolderVolume strip colormap + pattern kernels). Prefer `shared/` unless a later pass proves FolderVolume-only.
@@ -220,20 +222,20 @@ ui/                 unchanged paths for now (affinity notes below)
 | `DisplayPlane3D.*` `DisplayPlaneManager.h` | Display planes | Capture id seam → screen-mirror |
 | `SceneProp3D.*` `ScenePropManager.h` `VirtualReferencePoint3D.*` | Props / refs | |
 
-### `ui` — affinity (paths stay; regroup later if needed)
+### `ui` — affinity (phase 9)
 
 | Affinity | Paths |
 |----------|-------|
-| actions / triggers | `ActionsPanel.*` `ActionEditor*` `ActionTimeline*` `ActionToolBar.*` `ActionEffectFiles.*` `ActionGradient*` `ActionCurve*` `ActionUser*` `TriggersPanel.*` |
-| effects stack | `EffectLibraryPanel.*` `EffectControlsHostPanel.*` `EffectGlobalSettingsPanel.*` `EffectStackPanel.*` `ui/widgets/Effect*` |
-| viewport / scene | `LEDViewport3D*` `Gizmo3D*` `ui/viewport/*` `SceneProp*` `SceneTransform*` `SceneObject*` |
-| controllers / grid | `CustomController*` `ui/custom-controller-grid/*` `ControllerCards.*` `ControllerListPanel.*` |
-| screen / capture | `CaptureZonesWidget.*` `DisplayPlane*` |
-| audio | `AudioInputPanel.*` `AudioAnalyzerSettings.*` `ui/widgets/Audio*` |
+| actions / triggers | `ui/actions/*` |
+| effects stack | `ui/effects/*` + `ui/widgets/Effect*` |
+| viewport / scene | `ui/viewport/*` |
+| controllers / grid | `ui/controllers/*` + `ui/custom-controller-grid/*` |
+| screen / capture | `ui/screen/*` |
+| audio | `ui/audio/*` + `ui/widgets/Audio*` |
 | game | `ui/widgets/GameTelemetryStatusPanel.*` |
-| shell / tab | `OpenRGB3DSpatialTab*` `ObjectCreatorTabPanel.*` `ZonesPanel.*` `GridSettingsPanel.*` `PluginSettingsPaths.*` `PluginUiUtils.*` |
+| shell / tab | `ui/shell/*` |
+| forms | `ui/forms/*` (unchanged) |
 | **parked Claude** | grid + viewport multipass; residual tab/dialog/widgets — see coverage |
-
 ### `n/a`
 
 | Path | Notes |
@@ -254,7 +256,7 @@ ui/                 unchanged paths for now (affinity notes below)
 6. **Audio** — **DONE** on main (`engines/audio`).
 7. **Actions core** — **DONE** on `chore/engines-phase7-actions` (`Effects3D/Actions` → `engines/actions`).
 8. **shared polish** — **DONE** on `chore/engines-phase8-shared` (`shared/` hubs; effect base / zones / controllers remain at root).
-9. **ui** — path renames only if include churn is already paid; else leave.
+9. **ui** — **DONE** on `chore/engines-phase9-ui` (affinity folders under `ui/`; bare includes via INCLUDEPATH).
 
 Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 

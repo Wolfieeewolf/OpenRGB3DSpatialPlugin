@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 #include "ScreenCaptureManager.h"
-#include "ui/CaptureZonesWidget.h"
+#include "ui/screen/CaptureZonesWidget.h"
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;

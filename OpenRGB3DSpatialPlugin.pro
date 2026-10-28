@@ -111,6 +111,14 @@ RESOURCES += \
 INCLUDEPATH += \
     ui \
     ui/widgets \
+    ui/actions \
+    ui/effects \
+    ui/viewport \
+    ui/controllers \
+    ui/screen \
+    ui/audio \
+    ui/shell \
+    ui/custom-controller-grid \
     shared \
     engines/movie-sync \
     engines/actions \
@@ -204,63 +212,63 @@ HEADERS += \
     shared/SpatialLighting/EmitterLocalSampling.h \
     shared/SpatialLighting/SpatialLightingSceneProvider.h \
     shared/SpatialLighting/RoomSpatialLightingUi.h \
-    ui/PluginSettingsPaths.h \
-    ui/GridSettingsPanel.h \
-    ui/SceneTransformPanel.h \
-    ui/SceneObjectSpacingPanel.h \
-    ui/SceneObjectEditHostPanel.h \
-    ui/PositionAxisDragController.h \
-    ui/ObjectCreatorTabPanel.h \
-    ui/ControllerListPanel.h \
-    ui/EffectLibraryPanel.h \
-    ui/ActionsPanel.h \
-    ui/ActionEditorDialog.h \
-    ui/ActionTimelineWidget.h \
-    ui/ActionGradientBar.h \
-    ui/ActionCurveBar.h \
-    ui/ActionToolBar.h \
-    ui/TriggersPanel.h \
-    ui/EffectStackPanel.h \
-    ui/ZonesPanel.h \
-    ui/EffectGlobalSettingsPanel.h \
-    ui/AudioInputPanel.h \
-    ui/AudioAnalyzerSettings.h \
-    ui/EffectControlsHostPanel.h \
-    ui/OpenRGB3DSpatialTab.h \
-    ui/SpatialTabLedHelpers.h \
-    ui/ControllerDisplayUtils.h \
-    ui/TooltipProxy.h \
-    ui/LEDViewport3D.h \
-    ui/LEDViewport3D_Internal.h \
-    ui/ZoneControllerPickerDialog.h \
-    ui/CustomControllerTypes.h \
-    ui/CustomControllerMappingUtils.h \
-    ui/CustomControllerGridKeys.h \
-    ui/CustomControllerClipboard.h \
-    ui/CustomControllerHistory.h \
-    ui/CustomControllerDialog.h \
-    ui/CustomControllerDialog_Internal.h \
-    ui/ReferencePointDialog.h \
-    ui/DisplayPlaneDialog.h \
-    ui/ScenePropDialog.h \
-    ui/ScenePropPreviewWidget.h \
-    ui/DisplayPlaneCaptureCombo.h \
+    ui/shell/PluginSettingsPaths.h \
+    ui/shell/GridSettingsPanel.h \
+    ui/viewport/SceneTransformPanel.h \
+    ui/viewport/SceneObjectSpacingPanel.h \
+    ui/viewport/SceneObjectEditHostPanel.h \
+    ui/viewport/PositionAxisDragController.h \
+    ui/shell/ObjectCreatorTabPanel.h \
+    ui/controllers/ControllerListPanel.h \
+    ui/effects/EffectLibraryPanel.h \
+    ui/actions/ActionsPanel.h \
+    ui/actions/ActionEditorDialog.h \
+    ui/actions/ActionTimelineWidget.h \
+    ui/actions/ActionGradientBar.h \
+    ui/actions/ActionCurveBar.h \
+    ui/actions/ActionToolBar.h \
+    ui/actions/TriggersPanel.h \
+    ui/effects/EffectStackPanel.h \
+    ui/shell/ZonesPanel.h \
+    ui/effects/EffectGlobalSettingsPanel.h \
+    ui/audio/AudioInputPanel.h \
+    ui/audio/AudioAnalyzerSettings.h \
+    ui/effects/EffectControlsHostPanel.h \
+    ui/shell/OpenRGB3DSpatialTab.h \
+    ui/shell/SpatialTabLedHelpers.h \
+    ui/controllers/ControllerDisplayUtils.h \
+    ui/shell/TooltipProxy.h \
+    ui/viewport/LEDViewport3D.h \
+    ui/viewport/LEDViewport3D_Internal.h \
+    ui/controllers/ZoneControllerPickerDialog.h \
+    ui/controllers/CustomControllerTypes.h \
+    ui/controllers/CustomControllerMappingUtils.h \
+    ui/controllers/CustomControllerGridKeys.h \
+    ui/controllers/CustomControllerClipboard.h \
+    ui/controllers/CustomControllerHistory.h \
+    ui/controllers/CustomControllerDialog.h \
+    ui/controllers/CustomControllerDialog_Internal.h \
+    ui/shell/ReferencePointDialog.h \
+    ui/screen/DisplayPlaneDialog.h \
+    ui/viewport/ScenePropDialog.h \
+    ui/viewport/ScenePropPreviewWidget.h \
+    ui/screen/DisplayPlaneCaptureCombo.h \
     ui/custom-controller-grid/CustomControllerGridCell.h \
     ui/custom-controller-grid/CustomControllerGridLayoutMath.h \
     ui/custom-controller-grid/CustomControllerGridItem.h \
     ui/custom-controller-grid/CustomControllerGridScene.h \
     ui/custom-controller-grid/CustomControllerLayoutGrid.h \
-    ui/CustomControllerSourceRef.h \
-    ui/CustomControllerDeviceList.h \
-    ui/SpatialControllerListBacking.h \
-    ui/SpatialControllerEntryKey.h \
-    ui/SpatialControllerCardWidget.h \
-    ui/SpatialControllerCardList.h \
-    ui/CustomControllerDeviceWidget.h \
-    ui/CustomControllerPreviewDialog.h \
-    ui/OpenRGBPluginsFont.h \
-    ui/PluginClickableLabel.h \
-    ui/Gizmo3D.h \
+    ui/controllers/CustomControllerSourceRef.h \
+    ui/controllers/CustomControllerDeviceList.h \
+    ui/controllers/SpatialControllerListBacking.h \
+    ui/controllers/SpatialControllerEntryKey.h \
+    ui/controllers/SpatialControllerCardWidget.h \
+    ui/controllers/SpatialControllerCardList.h \
+    ui/controllers/CustomControllerDeviceWidget.h \
+    ui/controllers/CustomControllerPreviewDialog.h \
+    ui/shell/OpenRGBPluginsFont.h \
+    ui/shell/PluginClickableLabel.h \
+    ui/viewport/Gizmo3D.h \
     ui/viewport/ViewportMath.h \
     ui/viewport/ViewportGLFormat.h \
     ui/viewport/GlProgram.h \
@@ -270,8 +278,8 @@ HEADERS += \
     ui/viewport/ScenePropMeshCache.h \
     ui/viewport/ScenePropMeshPaths.h \
     ui/viewport/ViewportShaders.h \
-    ui/CaptureZonesWidget.h \
-    ui/PluginUiUtils.h \
+    ui/screen/CaptureZonesWidget.h \
+    ui/shell/PluginUiUtils.h \
     shared/EffectStratumBlend.h \
     shared/EffectColorUtils.h \
     shared/EffectUiSync.h \
@@ -397,79 +405,79 @@ SOURCES += \
     shared/SpatialLighting/EmitterLocalSampling.cpp \
     shared/SpatialLighting/SpatialLightingSceneProvider.cpp \
     shared/SpatialLighting/RoomSpatialLightingUi.cpp \
-    ui/PluginSettingsPaths.cpp \
-    ui/GridSettingsPanel.cpp \
-    ui/SceneTransformPanel.cpp \
-    ui/SceneObjectSpacingPanel.cpp \
-    ui/SceneObjectEditHostPanel.cpp \
-    ui/OpenRGB3DSpatialTab_SetupSceneObjectEdit.cpp \
-    ui/PositionAxisDragController.cpp \
-    ui/ObjectCreatorTabPanel.cpp \
-    ui/ControllerListPanel.cpp \
-    ui/EffectLibraryPanel.cpp \
-    ui/ActionsPanel.cpp \
-    ui/TriggersPanel.cpp \
-    ui/ActionEditorDialog.cpp \
-    ui/ActionEditorProps.cpp \
-    ui/ActionEditorTimelineBridge.cpp \
-    ui/ActionTimelineWidget.cpp \
-    ui/ActionTimelinePaint.cpp \
-    ui/ActionTimelineInteract.cpp \
-    ui/ActionGradientBar.cpp \
-    ui/ActionCurveBar.cpp \
-    ui/ActionUserGradients.cpp \
-    ui/ActionEffectFiles.cpp \
-    ui/ActionUserCurves.cpp \
-    ui/ActionToolBar.cpp \
-    ui/EffectStackPanel.cpp \
-    ui/ZonesPanel.cpp \
-    ui/EffectGlobalSettingsPanel.cpp \
-    ui/AudioInputPanel.cpp \
-    ui/AudioAnalyzerSettings.cpp \
-    ui/EffectControlsHostPanel.cpp \
-    ui/OpenRGB3DSpatialTab.cpp \
-    ui/OpenRGB3DSpatialTab_Audio.cpp \
-    ui/OpenRGB3DSpatialTab_Setup.cpp \
-    ui/SpatialTabLedHelpers.cpp \
-    ui/OpenRGB3DSpatialTab_SetupDisplayPlanes.cpp \
-    ui/OpenRGB3DSpatialTab_SetupSceneProps.cpp \
-    ui/OpenRGB3DSpatialTab_Layout.cpp \
-    ui/OpenRGB3DSpatialTab_LayoutCustomControllers.cpp \
-    ui/OpenRGB3DSpatialTab_Settings.cpp \
-    ui/OpenRGB3DSpatialTab_Scene.cpp \
-    ui/ZoneControllerPickerDialog.cpp \
-    ui/OpenRGB3DSpatialTab_Effects.cpp \
-    ui/OpenRGB3DSpatialTab_EffectsRender.cpp \
-    ui/OpenRGB3DSpatialTab_EffectsProfiles.cpp \
-    ui/LEDViewport3D.cpp \
-    ui/LEDViewport3D_Input.cpp \
-    ui/LEDViewport3D_Camera.cpp \
-    ui/LEDViewport3D_Draw.cpp \
-    ui/LEDViewport3D_Controllers.cpp \
-    ui/LEDViewport3D_SceneObjects.cpp \
-    ui/LEDViewport3D_DisplayPlanes.cpp \
-    ui/LEDViewport3D_SceneProps.cpp \
-    ui/CustomControllerDialog.cpp \
-    ui/CustomControllerDialog_Grid.cpp \
-    ui/CustomControllerDialog_Sources.cpp \
-    ui/CustomControllerDialog_Transform.cpp \
-    ui/CustomControllerMappingUtils.cpp \
-    ui/ReferencePointDialog.cpp \
-    ui/DisplayPlaneDialog.cpp \
-    ui/ScenePropDialog.cpp \
-    ui/ScenePropPreviewWidget.cpp \
-    ui/DisplayPlaneCaptureCombo.cpp \
+    ui/shell/PluginSettingsPaths.cpp \
+    ui/shell/GridSettingsPanel.cpp \
+    ui/viewport/SceneTransformPanel.cpp \
+    ui/viewport/SceneObjectSpacingPanel.cpp \
+    ui/viewport/SceneObjectEditHostPanel.cpp \
+    ui/shell/OpenRGB3DSpatialTab_SetupSceneObjectEdit.cpp \
+    ui/viewport/PositionAxisDragController.cpp \
+    ui/shell/ObjectCreatorTabPanel.cpp \
+    ui/controllers/ControllerListPanel.cpp \
+    ui/effects/EffectLibraryPanel.cpp \
+    ui/actions/ActionsPanel.cpp \
+    ui/actions/TriggersPanel.cpp \
+    ui/actions/ActionEditorDialog.cpp \
+    ui/actions/ActionEditorProps.cpp \
+    ui/actions/ActionEditorTimelineBridge.cpp \
+    ui/actions/ActionTimelineWidget.cpp \
+    ui/actions/ActionTimelinePaint.cpp \
+    ui/actions/ActionTimelineInteract.cpp \
+    ui/actions/ActionGradientBar.cpp \
+    ui/actions/ActionCurveBar.cpp \
+    ui/actions/ActionUserGradients.cpp \
+    ui/actions/ActionEffectFiles.cpp \
+    ui/actions/ActionUserCurves.cpp \
+    ui/actions/ActionToolBar.cpp \
+    ui/effects/EffectStackPanel.cpp \
+    ui/shell/ZonesPanel.cpp \
+    ui/effects/EffectGlobalSettingsPanel.cpp \
+    ui/audio/AudioInputPanel.cpp \
+    ui/audio/AudioAnalyzerSettings.cpp \
+    ui/effects/EffectControlsHostPanel.cpp \
+    ui/shell/OpenRGB3DSpatialTab.cpp \
+    ui/shell/OpenRGB3DSpatialTab_Audio.cpp \
+    ui/shell/OpenRGB3DSpatialTab_Setup.cpp \
+    ui/shell/SpatialTabLedHelpers.cpp \
+    ui/shell/OpenRGB3DSpatialTab_SetupDisplayPlanes.cpp \
+    ui/shell/OpenRGB3DSpatialTab_SetupSceneProps.cpp \
+    ui/shell/OpenRGB3DSpatialTab_Layout.cpp \
+    ui/shell/OpenRGB3DSpatialTab_LayoutCustomControllers.cpp \
+    ui/shell/OpenRGB3DSpatialTab_Settings.cpp \
+    ui/shell/OpenRGB3DSpatialTab_Scene.cpp \
+    ui/controllers/ZoneControllerPickerDialog.cpp \
+    ui/shell/OpenRGB3DSpatialTab_Effects.cpp \
+    ui/shell/OpenRGB3DSpatialTab_EffectsRender.cpp \
+    ui/shell/OpenRGB3DSpatialTab_EffectsProfiles.cpp \
+    ui/viewport/LEDViewport3D.cpp \
+    ui/viewport/LEDViewport3D_Input.cpp \
+    ui/viewport/LEDViewport3D_Camera.cpp \
+    ui/viewport/LEDViewport3D_Draw.cpp \
+    ui/viewport/LEDViewport3D_Controllers.cpp \
+    ui/viewport/LEDViewport3D_SceneObjects.cpp \
+    ui/viewport/LEDViewport3D_DisplayPlanes.cpp \
+    ui/viewport/LEDViewport3D_SceneProps.cpp \
+    ui/controllers/CustomControllerDialog.cpp \
+    ui/controllers/CustomControllerDialog_Grid.cpp \
+    ui/controllers/CustomControllerDialog_Sources.cpp \
+    ui/controllers/CustomControllerDialog_Transform.cpp \
+    ui/controllers/CustomControllerMappingUtils.cpp \
+    ui/shell/ReferencePointDialog.cpp \
+    ui/screen/DisplayPlaneDialog.cpp \
+    ui/viewport/ScenePropDialog.cpp \
+    ui/viewport/ScenePropPreviewWidget.cpp \
+    ui/screen/DisplayPlaneCaptureCombo.cpp \
     ui/custom-controller-grid/CustomControllerGridItem.cpp \
     ui/custom-controller-grid/CustomControllerGridScene.cpp \
     ui/custom-controller-grid/CustomControllerLayoutGrid.cpp \
-    ui/ControllerCards.cpp \
-    ui/ControllerDisplayUtils.cpp \
-    ui/CustomControllerWidgets.cpp \
-    ui/CustomControllerPreviewDialog.cpp \
-    ui/OpenRGBPluginsFont.cpp \
-    ui/PluginClickableLabel.cpp \
-    ui/Gizmo3D.cpp \
-    ui/Gizmo3D_Mesh.cpp \
+    ui/controllers/ControllerCards.cpp \
+    ui/controllers/ControllerDisplayUtils.cpp \
+    ui/controllers/CustomControllerWidgets.cpp \
+    ui/controllers/CustomControllerPreviewDialog.cpp \
+    ui/shell/OpenRGBPluginsFont.cpp \
+    ui/shell/PluginClickableLabel.cpp \
+    ui/viewport/Gizmo3D.cpp \
+    ui/viewport/Gizmo3D_Mesh.cpp \
     ui/viewport/ViewportMath.cpp \
     ui/viewport/ViewportGLFormat.cpp \
     ui/viewport/GlProgram.cpp \
@@ -477,7 +485,7 @@ SOURCES += \
     ui/viewport/MeshGeometry.cpp \
     ui/viewport/MeshImport.cpp \
     ui/viewport/ViewportShaders.cpp \
-    ui/CaptureZonesWidget.cpp \
+    ui/screen/CaptureZonesWidget.cpp \
     ui/widgets/StratumBandPanel.cpp \
     ui/widgets/StripKernelColormapPanel.cpp \
     ui/widgets/EffectCommonPanels.cpp \

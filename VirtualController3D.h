@@ -7,7 +7,7 @@
 #include <vector>
 #include "RGBController.h"
 #include "LEDPosition3D.h"
-#include "ui/CustomControllerTypes.h"
+#include "ui/controllers/CustomControllerTypes.h"
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
