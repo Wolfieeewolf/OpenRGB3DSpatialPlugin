@@ -5,7 +5,7 @@
 
 #include "SpatialEffect3D.h"
 #include "SpatialVolumeFieldAssist.h"
-#include "Effects3D/AudioReactiveCommon.h"
+#include "AudioReactiveCommon.h"
 
 #include <QImage>
 #include <QMutex>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioAnalyzerSettings.h"
-#include "Audio/AudioInputManager.h"
+#include "AudioInputManager.h"
 
 #include <algorithm>
 #include <cmath>

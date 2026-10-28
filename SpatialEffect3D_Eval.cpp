@@ -9,8 +9,8 @@
 #include "SpatialKernelColormap.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
-#include "Effects3D/AudioReactiveCommon.h"
-#include "Audio/AudioInputManager.h"
+#include "AudioReactiveCommon.h"
+#include "AudioInputManager.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include <algorithm>
 #include <cmath>

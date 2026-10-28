@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–5 applied** — phase 1–4 merged; phase 5 on `chore/engines-phase5-folder-volume` (FolderVolume → `engines/folder-volume`). Phases 6–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–6 applied** — phase 1–5 merged; phase 6 on `chore/engines-phase6-audio` (Audio + AudioReactive* → `engines/audio`). Phases 7–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–5 landed; later buckets still proposed)
+## Tree (phases 1–6 landed; later buckets still proposed)
 
 ```text
 engines/
@@ -45,8 +45,7 @@ engines/
   particle-field/   ← DONE  (was Actions/ActionParticleField.*)
   ribbon-field/     ← DONE  (was Actions/ActionRibbonField.*)
   folder-volume/    ← DONE  (was Effects3D/FolderVolume/*)
-  audio/            Audio/*
-                    Effects3D/AudioReactiveCommon.h  AudioReactiveUi.h
+  audio/            ← DONE  (was Audio/* + Effects3D/AudioReactive{Common,Ui}.h)
   actions/          Effects3D/Actions/*  (field bridges already moved)
                     ActionBuiltinGpu.*  ActionMedia.* stay here (call volume assist)
 integrations/minecraft/   unchanged (Fabric mod sibling)
@@ -135,13 +134,13 @@ ui/                 unchanged paths for now (affinity notes below)
 
 `DisplayPlane3D.*` stays **shared** (room object); capture *source id* on the plane is the seam.
 
-### `engines/audio`
+### `engines/audio` (phase 6)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Audio/AudioInputManager.*` | Capture + FFT | **split** later | ~1.4k |
-| `Effects3D/AudioReactiveCommon.h` | Shared audio effect helpers | maybe `.cpp` later | header-only hub |
-| `Effects3D/AudioReactiveUi.h` | Audio UI helpers | audio + ui | |
+| `engines/audio/AudioInputManager.*` | Capture + FFT | **split** later | ~1.4k |
+| `engines/audio/AudioReactiveCommon.h` | Shared audio effect helpers | maybe `.cpp` later | header-only hub |
+| `engines/audio/AudioReactiveUi.h` | Audio UI helpers | audio + ui | |
 
 ### `engines/reactive` (phase 1)
 

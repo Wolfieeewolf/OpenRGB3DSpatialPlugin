@@ -30,7 +30,7 @@
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
 #include "SpatialLayerCore.h"
 #include "EffectStratumBlend.h"
-#include "Effects3D/AudioReactiveCommon.h"
+#include "AudioReactiveCommon.h"
 #include "Shaders/SpatialStripFieldAssist.h"
 #include <nlohmann/json.hpp>
 #include <cstdint>

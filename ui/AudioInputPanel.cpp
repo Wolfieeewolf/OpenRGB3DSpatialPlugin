@@ -3,7 +3,7 @@
 #include "AudioInputPanel.h"
 #include "AudioAnalyzerSettings.h"
 #include "OpenRGB3DSpatialTab.h"
-#include "Audio/AudioInputManager.h"
+#include "AudioInputManager.h"
 #include "EffectInfoLabel.h"
 #include "EffectLabeledComboRow.h"
 #include "EffectSectionHeading.h"

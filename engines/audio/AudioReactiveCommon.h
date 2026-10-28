@@ -8,7 +8,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "RGBController.h"
-#include "Audio/AudioInputManager.h"
+#include "AudioInputManager.h"
 #include "EffectStratumBlend.h"
 
 enum class AudioDriveMode : int

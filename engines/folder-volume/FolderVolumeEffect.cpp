@@ -14,8 +14,8 @@
 #include "SpatialLayerCore.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "Effects3D/EffectColorUtils.h"
-#include "Effects3D/AudioReactiveUi.h"
-#include "Audio/AudioInputManager.h"
+#include "AudioReactiveUi.h"
+#include "AudioInputManager.h"
 
 #include <QCheckBox>
 #include <QComboBox>

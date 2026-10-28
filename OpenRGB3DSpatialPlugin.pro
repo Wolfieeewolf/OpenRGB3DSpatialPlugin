@@ -121,7 +121,7 @@ INCLUDEPATH += \
     SpatialRoom \
     SpatialLighting \
     Shaders \
-    Audio \
+    engines/audio \
     engines/reactive \
     engines/screen-mirror \
     engines/shader-field \
@@ -275,7 +275,7 @@ HEADERS += \
     Effects3D/EffectStratumBlend.h \
     Effects3D/EffectColorUtils.h \
     Effects3D/EffectUiSync.h \
-    Effects3D/AudioReactiveCommon.h \
+    engines/audio/AudioReactiveCommon.h \
     Effects3D/SpatialKernelColormap.h \
     ui/widgets/StripKernelColormapPanel.h \
     ui/widgets/StratumBandPanel.h \
@@ -320,8 +320,8 @@ HEADERS += \
     engines/volume-field/SpatialVolumeFieldAssist.h \
     Shaders/SpatialStripFieldEngine.h \
     Shaders/SpatialStripFieldAssist.h \
-    Effects3D/AudioReactiveUi.h \
-    Audio/AudioInputManager.h \
+    engines/audio/AudioReactiveUi.h \
+    engines/audio/AudioInputManager.h \
     engines/reactive/ReactiveInputTypes.h \
     engines/reactive/ReactiveKeyMap.h \
     engines/reactive/ReactiveInputManager.h \
@@ -515,7 +515,7 @@ SOURCES += \
     engines/screen-mirror/ScreenMirrorMonitorPanel.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.cpp \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.cpp \
-    Audio/AudioInputManager.cpp
+    engines/audio/AudioInputManager.cpp
 
 win32:CONFIG += QTPLUGIN
 win32:LIBS += \
@@ -539,7 +539,7 @@ win32 {
     } else:exists($$ASSIMP_LIBDIR/assimp.lib) {
         LIBS += -L$$ASSIMP_LIBDIR -lassimp
     } else {
-        warning("Assimp not found under $$ASSIMP_DIR — run scripts/build-assimp.ps1")
+        warning("Assimp not found under $$ASSIMP_DIR â€” run scripts/build-assimp.ps1")
     }
     exists($$ASSIMP_LIBDIR/zlibstatic.lib) {
         LIBS += -L$$ASSIMP_LIBDIR -lzlibstatic

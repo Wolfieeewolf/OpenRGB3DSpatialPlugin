@@ -210,7 +210,7 @@ Default rule for every effect: **reuse existing panels and helpers before writin
 - `EffectInfo3D` flags (`supports_height_bands`, `supports_strip_colormap`, `show_*_control`) so common sections appear instead of custom duplicates.
 - `AddWidgetToParent` and the standard mount flow (`MountSettingsUi` / `createEffectSettingsUi`).
 
-**Add new UI only when** the control is truly effect-specific or no shared helper exists yetâ€”and if two or more effects need the same custom control, add or extend a shared helper (like `Effects3D/AudioReactiveUi.h`) instead of duplicating code.
+**Add new UI only when** the control is truly effect-specific or no shared helper exists yetâ€”and if two or more effects need the same custom control, add or extend a shared helper (like `engines/audio/AudioReactiveUi.h`) instead of duplicating code.
 
 Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, â€¦) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore â€” do not add a parallel â€œlegacyâ€ UI path. **Minecraft** game layers use dedicated settings under `engines/game/Minecraft/` (**Room Ambilight** drives the SHM cubemap path). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
 
@@ -224,7 +224,7 @@ Do **not** duplicate strip colormap or floor/mid/ceiling band controls in `Setup
 
 Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`EffectUiRows`** (`AppendComboRow`, `AppendSliderRow`, â€¦). Give each row a stable `objectName` when `LoadSettings` must resync after profile load (`EffectUiSync`). Prefer caching widget pointers (sliders/combos) when the effect already holds them; use `EffectUiSync` on the nested `NewEffectPanel` when controls live only inside that panel.
 
-**Audio looks:** Volume host under `effects/audio/*.fs` (`drive: audio`, `audio_preset:`). Prefer strip-first looks with zone/controller targeting for floor/wall/ceiling strips; use full-room 3D when one layer should cover everything. Shared audio UI helpers live in `Effects3D/AudioReactiveUi.h`. Global **16-band EQ** is on the **Audio Input** panel (show when any Audio-engine layer is on the stack).
+**Audio looks:** Volume host under `effects/audio/*.fs` (`drive: audio`, `audio_preset:`). Prefer strip-first looks with zone/controller targeting for floor/wall/ceiling strips; use full-room 3D when one layer should cover everything. Shared audio UI helpers live in `engines/audio/AudioReactiveUi.h`. Global **16-band EQ** is on the **Audio Input** panel (show when any Audio-engine layer is on the stack).
 
 - Spectrum / strip presets use frequency band + response and sample FFT bins in the Hz range.
 - Level presets use Role / Hz + Feel + Color mode.
