@@ -103,7 +103,7 @@ HEADERS += \
     OpenRGB/RGBController/RGBControllerInterface.h \
     OpenRGB/RGBController/RGBController.h \
     OpenRGB/LogManager.h \
-    PluginLog.h
+    shared/utils/PluginLog.h
 
 RESOURCES += \
     resources/plugin_ui.qrc
@@ -120,6 +120,11 @@ INCLUDEPATH += \
     ui/shell \
     ui/custom-controller-grid \
     shared \
+    shared/effects \
+    shared/zones \
+    shared/controllers \
+    shared/scene \
+    shared/utils \
     engines/movie-sync \
     engines/actions \
     engines/triggers \
@@ -139,33 +144,34 @@ INCLUDEPATH += \
 
 HEADERS += \
     OpenRGB3DSpatialPlugin.h \
-    LEDPosition3D.h \
-    ControllerLayout3D.h \
-    MatrixWiringOrder.h \
-    GridSpaceUtils.h \
-    ZoneGrid3D.h \
-    SpatialEffectTypes.h \
-    SpatialEffect3D.h \
-    EffectListManager3D.h \
-    EffectRegisterer3D.h \
-    EffectInstance3D.h \
-    StackPreset3D.h \
-    VirtualController3D.h \
-    VirtualReferencePoint3D.h \
-    Zone3D.h \
-    ZoneManager3D.h \
-    DisplayPlane3D.h \
-    SceneProp3D.h \
-    DisplayPlaneManager.h \
-    ScenePropManager.h \
+    shared/zones/LEDPosition3D.h \
+    shared/controllers/ControllerLayout3D.h \
+    shared/controllers/MatrixWiringOrder.h \
+    shared/controllers/DeviceTypeUtils.h \
+    shared/zones/GridSpaceUtils.h \
+    shared/zones/ZoneGrid3D.h \
+    shared/effects/SpatialEffectTypes.h \
+    shared/effects/SpatialEffect3D.h \
+    shared/effects/EffectListManager3D.h \
+    shared/effects/EffectRegisterer3D.h \
+    shared/effects/EffectInstance3D.h \
+    shared/effects/StackPreset3D.h \
+    shared/controllers/VirtualController3D.h \
+    shared/scene/VirtualReferencePoint3D.h \
+    shared/zones/Zone3D.h \
+    shared/zones/ZoneManager3D.h \
+    shared/scene/DisplayPlane3D.h \
+    shared/scene/SceneProp3D.h \
+    shared/scene/DisplayPlaneManager.h \
+    shared/scene/ScenePropManager.h \
     engines/screen-mirror/ScreenCaptureManager.h \
     engines/screen-mirror/ScreenCaptureDownscale.h \
     engines/screen-mirror/DisplayPlaneCaptureLabels.h \
-    Geometry3DUtils.h \
-    TransformJson.h \
-    MediaTextureEffectUtils.h \
+    shared/zones/Geometry3DUtils.h \
+    shared/utils/TransformJson.h \
+    shared/utils/MediaTextureEffectUtils.h \
     shared/StripPatternSurface.h \
-    QtCompat.h \
+    shared/utils/QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
     engines/game/Game/GameTelemetryBridge.h \
     engines/game/Game/RoomSampleFrameProtocol.h \
@@ -316,7 +322,7 @@ HEADERS += \
     engines/movie-sync/MovieSyncCatalog.h \
     engines/movie-sync/MovieSyncListener.h \
     engines/movie-sync/MovieSyncRuntime.h \
-    EffectListManager3D.h \
+    shared/effects/EffectListManager3D.h \
     engines/shader-field/SpatialShaderEngine.h \
     engines/shader-field/SpatialShaderUniforms.h \
     engines/shader-field/SpatialShaderCatalog.h \
@@ -345,21 +351,21 @@ HEADERS += \
 
 SOURCES += \
     OpenRGB3DSpatialPlugin.cpp \
-    ControllerLayout3D.cpp \
-    MatrixWiringOrder.cpp \
-    GridSpaceUtils.cpp \
-    ZoneGrid3D.cpp \
-    SpatialEffect3D.cpp \
-    SpatialEffect3D_Eval.cpp \
-    SpatialEffect3D_Settings.cpp \
-    EffectInstance3D.cpp \
-    StackPreset3D.cpp \
-    VirtualController3D.cpp \
-    VirtualReferencePoint3D.cpp \
-    Zone3D.cpp \
-    ZoneManager3D.cpp \
-    DisplayPlane3D.cpp \
-    SceneProp3D.cpp \
+    shared/controllers/ControllerLayout3D.cpp \
+    shared/controllers/MatrixWiringOrder.cpp \
+    shared/zones/GridSpaceUtils.cpp \
+    shared/zones/ZoneGrid3D.cpp \
+    shared/effects/SpatialEffect3D.cpp \
+    shared/effects/SpatialEffect3D_Eval.cpp \
+    shared/effects/SpatialEffect3D_Settings.cpp \
+    shared/effects/EffectInstance3D.cpp \
+    shared/effects/StackPreset3D.cpp \
+    shared/controllers/VirtualController3D.cpp \
+    shared/scene/VirtualReferencePoint3D.cpp \
+    shared/zones/Zone3D.cpp \
+    shared/zones/ZoneManager3D.cpp \
+    shared/scene/DisplayPlane3D.cpp \
+    shared/scene/SceneProp3D.cpp \
     engines/screen-mirror/ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
     engines/game/Game/GameTelemetryBridge.cpp \
@@ -500,7 +506,7 @@ SOURCES += \
     ui/widgets/AudioEqBandColumn.cpp \
     engines/folder-volume/FolderVolumeEffect.cpp \
     shared/PlayerEngines.cpp \
-    EffectListManager3D.cpp \
+    shared/effects/EffectListManager3D.cpp \
     engines/movie-sync/MovieSync.cpp \
     engines/movie-sync/MovieSyncCatalog.cpp \
     engines/movie-sync/MovieSyncListener.cpp \

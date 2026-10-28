@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–9 applied** — phase 1–8 on main; phase 9 groups `ui/` by affinity (`actions`, `effects`, `viewport`, `controllers`, `screen`, `audio`, `shell`). Effect base / zones / controllers still at repo root until a later dissolve. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–10 applied** — phase 1–9 on main; phase 10 dissolves root effect/zone/controller/scene/utils into `shared/`. Only plugin entry stays at repo root. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–9 landed; effect-base/zones still at root)
+## Tree (phases 1–10 landed)
 
 ```text
 engines/
@@ -49,13 +49,15 @@ engines/
   actions/          ← DONE  (was Effects3D/Actions/*; field bridges already in volume/particle/ribbon)
                     ActionBuiltinGpu.*  ActionMedia.* stay here (call volume assist)
 integrations/minecraft/   unchanged (Fabric mod sibling)
-shared/             ← DONE phase 8
-  StripPatternSurface.h
-  PlayerEngines.*  EffectStratumBlend.h  EffectColorUtils.h  EffectUiSync.h  SpatialKernelColormap.h
-  SpatialPatternKernels/*
-  SpatialLighting/*  SpatialRoom/*  SpatialSamplers/*
-  Shaders/*          # GL pool, strip field hub, field assist base
-# still at repo root (later dissolve): SpatialEffect3D* EffectInstance* Zone* VirtualController* DisplayPlane* SceneProp* OpenRGB3DSpatialPlugin*
+shared/             ← DONE phases 8+10
+  effects/          SpatialEffect3D* EffectInstance* EffectListManager* StackPreset* types/register
+  zones/            Zone* GridSpaceUtils LEDPosition Geometry3D
+  controllers/      VirtualController ControllerLayout MatrixWiring DeviceType
+  scene/            DisplayPlane* SceneProp* VirtualReferencePoint*
+  utils/            PluginLog QtCompat TransformJson MediaTextureEffectUtils
+  StripPatternSurface.h PlayerEngines.* EffectStratumBlend/Color/UiSync SpatialKernelColormap
+  SpatialPatternKernels/* SpatialLighting/* SpatialRoom/* SpatialSamplers/* Shaders/*
+OpenRGB3DSpatialPlugin.*   # entry stays at repo root
 ui/                 ← DONE phase 9 (affinity folders)
   actions/ effects/ viewport/ controllers/ screen/ audio/ shell/
   widgets/ custom-controller-grid/ forms/   # kept
@@ -204,23 +206,23 @@ ui/                 ← DONE phase 9 (affinity folders)
 
 | Path | Role | Notes |
 |------|------|-------|
-| `SpatialEffect3D.*` `_Eval` `_Settings` | Effect base | |
-| `SpatialEffectTypes.h` `EffectRegisterer3D.h` | Types / register | |
-| `EffectInstance3D.*` `EffectListManager3D.*` `StackPreset3D.*` | Stack | |
+| `shared/effects/SpatialEffect3D.*` `_Eval` `_Settings` | Effect base | phase 10 |
+| `shared/effects/SpatialEffectTypes.h` `EffectRegisterer3D.h` | Types / register | phase 10 |
+| `shared/effects/EffectInstance3D.*` `EffectListManager3D.*` `StackPreset3D.*` | Stack | phase 10 |
 | `shared/PlayerEngines.*` | Registers Reactive/ScreenMirror/MovieSync/ShaderField | keep |
 | `shared/EffectStratumBlend.h` `EffectColorUtils.h` `EffectUiSync.h` `SpatialKernelColormap.h` | Cross-effect helpers | keep |
-| `OpenRGB3DSpatialPlugin.*` | Entry | |
-| `PluginLog.h` `QtCompat.h` `TransformJson.h` `MediaTextureEffectUtils.h` | Utilities | MediaTexture = **hub** |
+| `OpenRGB3DSpatialPlugin.*` | Entry | stays repo root |
+| `shared/utils/PluginLog.h` `QtCompat.h` `TransformJson.h` `MediaTextureEffectUtils.h` | Utilities | MediaTexture = **hub** |
 
 ### `shared` — room objects / controllers / zones
 
 | Path | Role | Notes |
 |------|------|-------|
-| `Zone3D.*` `ZoneGrid3D.*` `ZoneManager3D.*` `GridSpaceUtils.*` | Zones / grid | |
-| `LEDPosition3D.h` `Geometry3DUtils.h` | LED / math | |
-| `VirtualController3D.*` `ControllerLayout3D.*` `MatrixWiringOrder.*` `DeviceTypeUtils.h` | Controllers | |
-| `DisplayPlane3D.*` `DisplayPlaneManager.h` | Display planes | Capture id seam → screen-mirror |
-| `SceneProp3D.*` `ScenePropManager.h` `VirtualReferencePoint3D.*` | Props / refs | |
+| `shared/zones/Zone3D.*` `ZoneGrid3D.*` `ZoneManager3D.*` `GridSpaceUtils.*` | Zones / grid | phase 10 |
+| `shared/zones/LEDPosition3D.h` `Geometry3DUtils.h` | LED / math | phase 10 |
+| `shared/controllers/VirtualController3D.*` `ControllerLayout3D.*` `MatrixWiringOrder.*` `DeviceTypeUtils.h` | Controllers | phase 10 |
+| `shared/scene/DisplayPlane3D.*` `DisplayPlaneManager.h` | Display planes | Capture id seam → screen-mirror |
+| `shared/scene/SceneProp3D.*` `ScenePropManager.h` `VirtualReferencePoint3D.*` | Props / refs | phase 10 |
 
 ### `ui` — affinity (phase 9)
 
@@ -257,6 +259,7 @@ ui/                 ← DONE phase 9 (affinity folders)
 7. **Actions core** — **DONE** on `chore/engines-phase7-actions` (`Effects3D/Actions` → `engines/actions`).
 8. **shared polish** — **DONE** on `chore/engines-phase8-shared` (`shared/` hubs; effect base / zones / controllers remain at root).
 9. **ui** — **DONE** on `chore/engines-phase9-ui` (affinity folders under `ui/`; bare includes via INCLUDEPATH).
+10. **shared core dissolve** — **DONE** on `chore/engines-phase10-shared-core` (root effect/zone/controller/scene/utils → `shared/`; plugin entry stays root).
 
 Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 
@@ -273,7 +276,7 @@ Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 | `ActionBuiltinGpu` / `ActionMedia` | Live under Actions but touch volume assist | stay `engines/actions` |
 | `shared/PlayerEngines.*` | Multi-engine register | **DONE** phase 8 |
 | `DisplayPlane3D` vs capture | Plane is room; capture is screen-mirror | split by type, not file force-merge |
-| Root effect base / zones / controllers | Still at repo root | later dissolve |
+| Root effect base / zones / controllers / scene / utils | Was at repo root | **DONE** phase 10 → `shared/*` |
 
 ---
 
