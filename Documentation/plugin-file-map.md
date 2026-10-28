@@ -2,7 +2,7 @@
 
 **Group by runtime engine**, not presets toolbox folders. Content stays in OpenRGB3DSpatialPresets.
 
-Status: **phases 1–4 applied** — phase 1–3 merged; phase 4 on `chore/engines-phase4-fields` (volume/particle/ribbon + SpatialVolumeField*). Phases 5–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
+Status: **phases 1–5 applied** — phase 1–4 merged; phase 5 on `chore/engines-phase5-folder-volume` (FolderVolume → `engines/folder-volume`). Phases 6–8 still map-only. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Packaging, assets, build |
 
-## Tree (phases 1–4 landed; later buckets still proposed)
+## Tree (phases 1–5 landed; later buckets still proposed)
 
 ```text
 engines/
@@ -44,8 +44,7 @@ engines/
   volume-field/     ← DONE  (was Actions/ActionVolumeField.* + Shaders/SpatialVolumeField{Assist,Engine}.*)
   particle-field/   ← DONE  (was Actions/ActionParticleField.*)
   ribbon-field/     ← DONE  (was Actions/ActionRibbonField.*)
-  folder-volume/    Effects3D/FolderVolume/*
-                    (+ strip assist/engine if only FolderVolume-owned — see note)
+  folder-volume/    ← DONE  (was Effects3D/FolderVolume/*)
   audio/            Audio/*
                     Effects3D/AudioReactiveCommon.h  AudioReactiveUi.h
   actions/          Effects3D/Actions/*  (field bridges already moved)
@@ -110,11 +109,11 @@ ui/                 unchanged paths for now (affinity notes below)
 
 (No separate GPGPU engine files yet — both reuse volume assist/program path.)
 
-### `engines/folder-volume`
+### `engines/folder-volume` (phase 5)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `Effects3D/FolderVolume/FolderVolumeEffect.*` | `.fs` host + UI | pending Claude ratchet / **split** | ~2.6k |
+| `engines/folder-volume/FolderVolumeEffect.*` | `.fs` host + UI | pending Claude ratchet / **split** | ~2.6k |
 
 ### `engines/shader-field` (phase 3)
 

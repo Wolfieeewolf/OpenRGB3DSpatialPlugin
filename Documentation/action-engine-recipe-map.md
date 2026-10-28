@@ -84,7 +84,7 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 ## Deferred / next (later)
 
 - **Multipass (Claude)** — **parked until ~2026-11-23** (other-models usage reset). Plugin resume: [multipass-coverage.md](multipass-coverage.md) § Parked for Claude reset. Presets every-file judgment: sibling [OpenRGB3DSpatialPresets `docs/multipass-coverage.md`](../../OpenRGB3DSpatialPresets/docs/multipass-coverage.md) (hybrid hygiene done 2026-10-27; rows `pending`/`hygiene` until Claude keep/kill). Do not finish judgment passes with a weaker model.
-- **Engine folder regroup** — phases 1–4 done (`engines/movie-sync`, `triggers`, `reactive`, `game`, `screen-mirror`, `shader-field`, `volume-field`, `particle-field`, `ribbon-field`); phases 5–8 still map-only; [plugin-file-map.md](plugin-file-map.md).
+- **Engine folder regroup** — phases 1–5 done (`engines/movie-sync`, `triggers`, `reactive`, `game`, `screen-mirror`, `shader-field`, `volume-field`, `particle-field`, `ribbon-field`, `folder-volume`); phases 6–8 still map-only; [plugin-file-map.md](plugin-file-map.md).
 - **Line splits (later)** — FolderVolume ~2.6k, Reactive ~1.5k, AudioInputManager ~1.4k (after Claude ratchet where noted).
 - **3D grid placement editor** — place volume clips in the viewport (translate/rotate/scale); keep timeline; switch modes. Separate branch.
 - **Swarm / flock** particle mode (spatial hash).

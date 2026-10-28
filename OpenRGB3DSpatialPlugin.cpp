@@ -2,7 +2,7 @@
 
 #include "OpenRGB3DSpatialPlugin.h"
 #include "OpenRGB3DSpatialTab.h"
-#include "Effects3D/FolderVolume/FolderVolumeEffect.h"
+#include "FolderVolumeEffect.h"
 #include "Effects3D/PlayerEngines.h"
 #include "Game/GameTelemetryBridge.h"
 #include "ResourceManagerCallback.h"

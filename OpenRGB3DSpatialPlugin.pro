@@ -115,7 +115,7 @@ INCLUDEPATH += \
     engines/movie-sync \
     Effects3D/Actions \
     engines/triggers \
-    Effects3D/FolderVolume \
+    engines/folder-volume \
     engines/game \
     SpatialSamplers \
     SpatialRoom \
@@ -326,7 +326,7 @@ HEADERS += \
     engines/reactive/ReactiveKeyMap.h \
     engines/reactive/ReactiveInputManager.h \
     engines/reactive/Reactive.h \
-    Effects3D/FolderVolume/FolderVolumeEffect.h \
+    engines/folder-volume/FolderVolumeEffect.h \
     engines/screen-mirror/ScreenMirror.h \
     engines/screen-mirror/ScreenMirror_Internal.h \
     engines/screen-mirror/ScreenMirrorWaveMath.h \
@@ -490,7 +490,7 @@ SOURCES += \
     ui/widgets/EffectTransportRow.cpp \
     ui/widgets/MediaTextureAmbienceBlock.cpp \
     ui/widgets/AudioEqBandColumn.cpp \
-    Effects3D/FolderVolume/FolderVolumeEffect.cpp \
+    engines/folder-volume/FolderVolumeEffect.cpp \
     Effects3D/PlayerEngines.cpp \
     EffectListManager3D.cpp \
     engines/movie-sync/MovieSync.cpp \
