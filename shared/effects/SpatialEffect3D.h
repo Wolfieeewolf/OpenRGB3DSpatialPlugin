@@ -892,8 +892,7 @@ protected:
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
     /**
      * 0 at center, 1 on the volume surface, >1 outside (shape-aware, tight).
-     * @param rel must already be in volume-local space (see VolumeWorldDeltaToLocal /
-     *        ApplyEffectRotation). Do not pass raw world deltas here.
+     * @param rel must already be in volume-local space (VolumeWorldDeltaToLocal).
      */
     float VolumeNormalizedDistance(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
     /** World-space delta from origin → volume-local (inverse rotation + unshear). */
@@ -905,10 +904,6 @@ protected:
     bool SampleVolumeLocalUv01(float world_x, float world_y, float world_z,
                                const GridContext3D& grid,
                                float* u, float* v, float* w) const;
-
-    Vector3D TransformPointByRotation(float x, float y, float z,
-                                      const Vector3D& origin) const;
-    static Vector3D RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg);
 
 private slots:
     void OnParameterChanged();

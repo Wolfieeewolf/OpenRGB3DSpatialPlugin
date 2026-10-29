@@ -384,19 +384,21 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
 
     volume->ApplyToEffect(*instance->effect, grid);
     instance->effect->SetVolumeToolsUnlocked(true);
-    if(instance->saved_settings)
-    {
-        *instance->saved_settings = instance->effect->SaveSettings();
-    }
-    else
-    {
-        instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
-    }
 
     const bool dragging = viewport->IsGizmoDragging();
-    /* Round-trip through effect clamps (offset ±100%, occupancy 1–200%, axis 1–400%)
-       so the wireframe stays honest with LED eval. During drag: update in place —
-       do not SelectEffectVolume (that cancels the gesture). */
+    /* Round-trip through effect clamps so the wireframe stays honest with LED eval.
+       Skip JSON SaveSettings while dragging — that alloc dominated per-move cost. */
+    if(!dragging)
+    {
+        if(instance->saved_settings)
+        {
+            *instance->saved_settings = instance->effect->SaveSettings();
+        }
+        else
+        {
+            instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+        }
+    }
     {
         EffectVolume3D synced = EffectVolume3D::FromEffect(*instance->effect, grid, stack_index);
         volume->transform = synced.transform;
@@ -418,6 +420,10 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
         stack_settings_updating = true;
         if(current_effect_ui && current_effect_ui != instance->effect.get())
         {
+            if(!instance->saved_settings)
+            {
+                instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+            }
             current_effect_ui->LoadSettings(*instance->saved_settings);
             current_effect_ui->SetVolumeToolsUnlocked(true);
         }

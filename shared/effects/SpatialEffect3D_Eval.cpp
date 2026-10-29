@@ -58,29 +58,12 @@ bool SpatialEffect3D::EffectGridSampleOutsideVolume(float x, float y, float z, c
 
 void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const
 {
-    /* Axis % is occupancy (volume half-extents / GPU UV domain), not a second
-       sample stretch — stretching here fought the gizmo OBB. Optional legacy
-       axis-scale-frame rotation is still applied when set. */
-    const bool use_axis_scale_rotation =
-        (effect_axis_scale_rotation_yaw != 0.0f
-         || effect_axis_scale_rotation_pitch != 0.0f
-         || effect_axis_scale_rotation_roll != 0.0f);
-    if(!use_axis_scale_rotation)
-    {
-        (void)x; (void)y; (void)z; (void)grid;
-        return;
-    }
-    Vector3D origin = GetEffectOriginGrid(grid);
-    float dx = x - origin.x;
-    float dy = y - origin.y;
-    float dz = z - origin.z;
-    Vector3D in_scale_frame = RotateVectorByEuler(dx, dy, dz,
-        -effect_axis_scale_rotation_yaw, -effect_axis_scale_rotation_pitch, -effect_axis_scale_rotation_roll);
-    Vector3D back = RotateVectorByEuler(in_scale_frame.x, in_scale_frame.y, in_scale_frame.z,
-        effect_axis_scale_rotation_yaw, effect_axis_scale_rotation_pitch, effect_axis_scale_rotation_roll);
-    x = origin.x + back.x;
-    y = origin.y + back.y;
-    z = origin.z + back.z;
+    /* Axis % is occupancy (GetVolumeHalfExtents / GPU UV), not a sample stretch.
+       A prior rotate±euler shell here was an identity no-op after stretch removal. */
+    (void)x;
+    (void)y;
+    (void)z;
+    (void)grid;
 }
 
 void SpatialEffect3D::ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const
@@ -807,62 +790,6 @@ float SpatialEffect3D::GetBoundaryMultiplier(float rel_x, float rel_y, float rel
         return 0.0f;
     }
     return ApplyEdgeToIntensity(nd);
-}
-
-Vector3D SpatialEffect3D::TransformPointByRotation(float x, float y, float z, const Vector3D& origin) const
-{
-    float tx = x - origin.x;
-    float ty = y - origin.y;
-    float tz = z - origin.z;
-    
-    float yaw_rad = effect_rotation_yaw * 3.14159265359f / 180.0f;
-    float cos_yaw = cosf(yaw_rad);
-    float sin_yaw = sinf(yaw_rad);
-    float nx = tx * cos_yaw - tz * sin_yaw;
-    float nz = tx * sin_yaw + tz * cos_yaw;
-    float ny = ty;
-
-    float pitch_rad = effect_rotation_pitch * 3.14159265359f / 180.0f;
-    float cos_pitch = cosf(pitch_rad);
-    float sin_pitch = sinf(pitch_rad);
-    float py = ny * cos_pitch - nz * sin_pitch;
-    float pz = ny * sin_pitch + nz * cos_pitch;
-    float px = nx;
-
-    float roll_rad = effect_rotation_roll * 3.14159265359f / 180.0f;
-    float cos_roll = cosf(roll_rad);
-    float sin_roll = sinf(roll_rad);
-    float fx = px * cos_roll - py * sin_roll;
-    float fy = px * sin_roll + py * cos_roll;
-    float fz = pz;
-
-    return {fx + origin.x, fy + origin.y, fz + origin.z};
-}
-
-Vector3D SpatialEffect3D::RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg)
-{
-    float yaw_rad = yaw_deg * 3.14159265359f / 180.0f;
-    float cos_yaw = cosf(yaw_rad);
-    float sin_yaw = sinf(yaw_rad);
-    float nx = dx * cos_yaw - dz * sin_yaw;
-    float nz = dx * sin_yaw + dz * cos_yaw;
-    float ny = dy;
-
-    float pitch_rad = pitch_deg * 3.14159265359f / 180.0f;
-    float cos_pitch = cosf(pitch_rad);
-    float sin_pitch = sinf(pitch_rad);
-    float py = ny * cos_pitch - nz * sin_pitch;
-    float pz = ny * sin_pitch + nz * cos_pitch;
-    float px = nx;
-
-    float roll_rad = roll_deg * 3.14159265359f / 180.0f;
-    float cos_roll = cosf(roll_rad);
-    float sin_roll = sinf(roll_rad);
-    float fx = px * cos_roll - py * sin_roll;
-    float fy = px * sin_roll + py * cos_roll;
-    float fz = pz;
-
-    return {fx, fy, fz};
 }
 
 Vector3D SpatialEffect3D::VolumeWorldDeltaToLocal(float dx, float dy, float dz) const
