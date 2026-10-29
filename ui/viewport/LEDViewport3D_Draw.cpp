@@ -68,6 +68,7 @@ const char* GizmoModeLabel(GizmoMode mode)
         case GIZMO_MODE_MOVE:     return "Move";
         case GIZMO_MODE_ROTATE:   return "Rotate";
         case GIZMO_MODE_SCALE:    return "Scale";
+        case GIZMO_MODE_SKEW:     return "Skew";
         case GIZMO_MODE_FREEROAM: return "Freeroam";
         default:                  return "Move";
     }

@@ -527,6 +527,22 @@ public:
         effect_offset_z = std::clamp(oz, -100, 100);
     }
 
+    void SetOccupancyScalePercent(unsigned int pct)
+    {
+        effect_scale = std::clamp(pct, 1u, 200u);
+    }
+    unsigned int GetOccupancyScalePercent() const { return effect_scale; }
+
+    float GetShearXY() const { return effect_shear_xy; }
+    float GetShearXZ() const { return effect_shear_xz; }
+    float GetShearYZ() const { return effect_shear_yz; }
+    void SetShear(float xy, float xz, float yz)
+    {
+        effect_shear_xy = std::clamp(xy, -2.0f, 2.0f);
+        effect_shear_xz = std::clamp(xz, -2.0f, 2.0f);
+        effect_shear_yz = std::clamp(yz, -2.0f, 2.0f);
+    }
+
     /** Occupancy 0..N (1.0 = fill grid from anchor). Public for effect-volume gizmos. */
     float GetOccupancyScale() const { return GetNormalizedScale(); }
 
@@ -711,6 +727,10 @@ protected:
     float               effect_axis_scale_rotation_yaw;
     float               effect_axis_scale_rotation_pitch;
     float               effect_axis_scale_rotation_roll;
+
+    float               effect_shear_xy = 0.0f;
+    float               effect_shear_xz = 0.0f;
+    float               effect_shear_yz = 0.0f;
 
     int                 effect_path_axis;
     int                 effect_plane;

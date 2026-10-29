@@ -346,6 +346,8 @@ void LEDViewport3D::SelectController(int index)
         }
 
         deselectRoomViewport();
+        effect_volume_active_ = false;
+        effect_volume_grid_.reset();
         selected_display_plane_idx = -1;
         selected_scene_prop_idx_ = -1;
         selected_ref_point_idx = -1;
@@ -377,6 +379,8 @@ void LEDViewport3D::SelectReferencePoint(int index)
     if(reference_points && index >= 0 && index < (int)reference_points->size())
     {
         deselectRoomViewport();
+        effect_volume_active_ = false;
+        effect_volume_grid_.reset();
         selected_controller_indices.clear();
         selected_controller_idx = -1;
         selected_display_plane_idx = -1;
@@ -558,6 +562,15 @@ void LEDViewport3D::SetRoomDimensions(float width, float depth, float height, bo
 
 void LEDViewport3D::UpdateGizmoPosition()
 {
+    if(effect_volume_active_)
+    {
+        gizmo.SetTarget(&effect_volume_);
+        gizmo.SetPosition(effect_volume_.transform.position.x,
+                          effect_volume_.transform.position.y,
+                          effect_volume_.transform.position.z);
+        return;
+    }
+
     if(scene_props_ && selected_scene_prop_idx_ >= 0 &&
        selected_scene_prop_idx_ < (int)scene_props_->size())
     {

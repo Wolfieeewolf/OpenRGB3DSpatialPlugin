@@ -1132,6 +1132,15 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     if(new_instance)
     {
         LoadStackEffectControls(new_instance);
+        if(new_instance->effect)
+        {
+            new_instance->effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
+            new_instance->effect->SetOffsetPercents(0, 0, 0);
+            if(new_instance->effect->GetOccupancyScalePercent() >= 95u)
+            {
+                new_instance->effect->SetOccupancyScalePercent(45);
+            }
+        }
         if(effectZoneCombo())
         {
             QSignalBlocker zb(effectZoneCombo());

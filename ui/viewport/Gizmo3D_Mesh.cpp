@@ -139,6 +139,9 @@ void Gizmo3D::buildDrawMesh(GizmoDrawMesh& mesh) const
         case GIZMO_MODE_SCALE:
             appendScaleGizmoMesh(mesh);
             break;
+        case GIZMO_MODE_SKEW:
+            appendSkewGizmoMesh(mesh);
+            break;
         case GIZMO_MODE_FREEROAM:
             appendFreeroamGizmoMesh(mesh);
             break;
@@ -177,6 +180,35 @@ void Gizmo3D::appendScaleGizmoMesh(GizmoDrawMesh& mesh) const
     color = axisColor(GIZMO_AXIS_Z, color_z_axis);
     meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size);
     boxTip(color, 0.0f, 0.0f, gizmo_size);
+
+    color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : color_center;
+    const float cr = center_sphere_radius;
+    meshAddTriangle(mesh, color, -cr, 0.0f, 0.0f, 0.0f, cr, 0.0f, cr, 0.0f, 0.0f);
+    meshAddTriangle(mesh, color, -cr, 0.0f, 0.0f, 0.0f, -cr, 0.0f, cr, 0.0f, 0.0f);
+}
+
+void Gizmo3D::appendSkewGizmoMesh(GizmoDrawMesh& mesh) const
+{
+    /* Skew uses angled diamond tips on the move arms. */
+    const GizmoAxis hl = dragging ? selected_axis : hover_axis;
+    const float tip = gizmo_size * 0.14f;
+    const float line_w = 6.0f;
+
+    auto axisColor = [&](GizmoAxis axis, const float base[3]) -> const float* {
+        return (hl == axis) ? color_highlight : base;
+    };
+
+    const float* color = axisColor(GIZMO_AXIS_X, color_x_axis);
+    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, 0.0f);
+    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, tip, tip * 0.5f, gizmo_size - tip, -tip, -tip * 0.5f);
+
+    color = axisColor(GIZMO_AXIS_Y, color_y_axis);
+    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
+    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, tip, gizmo_size - tip, tip * 0.5f, -tip, gizmo_size - tip, -tip * 0.5f);
+
+    color = axisColor(GIZMO_AXIS_Z, color_z_axis);
+    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size);
+    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, tip, tip * 0.5f, gizmo_size - tip, -tip, -tip * 0.5f, gizmo_size - tip);
 
     color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : color_center;
     const float cr = center_sphere_radius;

@@ -14,13 +14,17 @@
 struct EffectVolume3D
 {
     Transform3D transform{};
+    /** Shear in local space (unitless); X←Y, X←Z, Y←Z. */
+    float       shear_xy = 0.0f;
+    float       shear_xz = 0.0f;
+    float       shear_yz = 0.0f;
     int         stack_index = -1;
 
     static EffectVolume3D FromEffect(const SpatialEffect3D& effect,
                                      const GridContext3D& grid,
                                      int stack_index = -1);
 
-    /** Write position/rotation/half-extents back into effect fields. */
+    /** Write position/rotation/half-extents/shear back into effect fields. */
     void ApplyToEffect(SpatialEffect3D& effect, const GridContext3D& grid) const;
 
     /** Half-extents of the effect volume in grid units (from occupancy + axis %). */

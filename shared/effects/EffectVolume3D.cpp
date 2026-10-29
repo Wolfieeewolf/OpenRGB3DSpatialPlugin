@@ -23,7 +23,6 @@ unsigned int ClampAxisScalePercent(float half_extent, float base_half)
 Vector3D RotateLocalToWorld(float lx, float ly, float lz,
                             float yaw_deg, float pitch_deg, float roll_deg)
 {
-    /* Same yaw→pitch→roll order as SpatialEffect3D::RotateVectorByEuler. */
     const float yaw = yaw_deg * 3.14159265359f / 180.0f;
     const float pitch = pitch_deg * 3.14159265359f / 180.0f;
     const float roll = roll_deg * 3.14159265359f / 180.0f;
@@ -73,11 +72,15 @@ EffectVolume3D EffectVolume3D::FromEffect(const SpatialEffect3D& effect,
     vol.transform.rotation.y = effect.GetRotationYaw();
     vol.transform.rotation.z = effect.GetRotationRoll();
     vol.transform.scale = HalfExtentsFromEffect(effect, grid);
+    vol.shear_xy = effect.GetShearXY();
+    vol.shear_xz = effect.GetShearXZ();
+    vol.shear_yz = effect.GetShearYZ();
     return vol;
 }
 
 void EffectVolume3D::ApplyToEffect(SpatialEffect3D& effect, const GridContext3D& grid) const
 {
+    effect.SetReferenceMode(REF_MODE_ROOM_CENTER);
     const Vector3D ref = effect.GetReferencePointGrid(grid);
     const float half_w = std::max(1e-4f, grid.width * 0.5f);
     const float half_h = std::max(1e-4f, grid.height * 0.5f);
@@ -89,8 +92,14 @@ void EffectVolume3D::ApplyToEffect(SpatialEffect3D& effect, const GridContext3D&
         (int)std::lround(ClampOffsetPercent(((transform.position.z - ref.z) / half_d) * 100.0f)));
 
     effect.SetRotationDegrees(transform.rotation.y, transform.rotation.x, transform.rotation.z);
+    effect.SetShear(shear_xy, shear_xz, shear_yz);
 
-    const float occ = std::max(0.01f, effect.GetOccupancyScale());
+    /* Occupancy from the largest relative half-extent; axis % = residual non-uniformity. */
+    const float rx = transform.scale.x / half_w;
+    const float ry = transform.scale.y / half_h;
+    const float rz = transform.scale.z / half_d;
+    const float occ = std::max(0.05f, std::max(rx, std::max(ry, rz)));
+    effect.SetOccupancyScalePercent((unsigned int)std::clamp((int)std::lround(occ * 100.0f), 1, 200));
     const float base_x = half_w * occ;
     const float base_y = half_h * occ;
     const float base_z = half_d * occ;
@@ -115,8 +124,12 @@ void EffectVolume3D::GetCorners(Vector3D out_corners[8]) const
         {
             for(int iz = -1; iz <= 1; iz += 2)
             {
-                Vector3D local = RotateLocalToWorld((float)ix * sx, (float)iy * sy, (float)iz * sz,
-                                                    yaw, pitch, roll);
+                float lx = (float)ix * sx;
+                float ly = (float)iy * sy;
+                float lz = (float)iz * sz;
+                lx += shear_xy * ly + shear_xz * lz;
+                ly += shear_yz * lz;
+                Vector3D local = RotateLocalToWorld(lx, ly, lz, yaw, pitch, roll);
                 out_corners[i].x = transform.position.x + local.x;
                 out_corners[i].y = transform.position.y + local.y;
                 out_corners[i].z = transform.position.z + local.z;

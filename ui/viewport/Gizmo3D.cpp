@@ -106,6 +106,9 @@ void Gizmo3D::CycleMode()
             mode = GIZMO_MODE_SCALE;
             break;
         case GIZMO_MODE_SCALE:
+            mode = GIZMO_MODE_SKEW;
+            break;
+        case GIZMO_MODE_SKEW:
             mode = GIZMO_MODE_FREEROAM;
             break;
         case GIZMO_MODE_FREEROAM:
@@ -381,10 +384,26 @@ bool Gizmo3D::HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
         const float dist_gl = sqrtf(dx * dx + dy * dy);
         if(dist_gl >= GIZMO_DRAG_SLOP_GL_PX)
         {
+            if(mode == GIZMO_MODE_SCALE && target_effect_volume)
+            {
+                /* Center drag = uniform shrink/grow for effect volumes. */
+                dragging = true;
+                selected_axis = GIZMO_AXIS_CENTER;
+                drag_axis_dir[0] = 1.0f;
+                drag_axis_dir[1] = 0.0f;
+                drag_axis_dir[2] = 0.0f;
+                Ray3D ray = GenerateRay(gl_win_x, gl_win_y, modelview, projection, viewport);
+                float origin[3] = {gizmo_x, gizmo_y, gizmo_z};
+                drag_axis_t0 = ClosestAxisParamToRay(origin, drag_axis_dir, ray);
+                drag_axis_t_begin = drag_axis_t0;
+                captureDragStartPosition();
+                last_mouse_pos = cur;
+                last_gl_mouse_pos = QPoint(gl_win_x, gl_win_y);
+                return true;
+            }
             if(mode != GIZMO_MODE_FREEROAM)
             {
-                // Move/rotate center has no drag action: consume the gesture without
-                // cycling. A deliberate click still cycles on release.
+                // Move/rotate/skew center has no drag action: consume without cycling.
                 center_press_pending = false;
                 selected_axis = GIZMO_AXIS_NONE;
                 hover_axis = GIZMO_AXIS_NONE;
@@ -762,6 +781,33 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
 
         case GIZMO_MODE_SCALE:
             {
+                Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
+                if(selected_axis == GIZMO_AXIS_CENTER)
+                {
+                    const float origin[3] = {gizmo_x, gizmo_y, gizmo_z};
+                    float a[3] = {1.0f, 0.0f, 0.0f};
+                    const float t_now = ClosestAxisParamToRay(origin, a, ray);
+                    ApplyUniformScale(t_now - drag_axis_t_begin);
+                }
+                else if(selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z)
+                {
+                    const float origin[3] = {gizmo_x, gizmo_y, gizmo_z};
+                    float a[3] = {drag_axis_dir[0], drag_axis_dir[1], drag_axis_dir[2]};
+                    const float alen = sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+                    if(alen > 1e-6f)
+                    {
+                        a[0] /= alen;
+                        a[1] /= alen;
+                        a[2] /= alen;
+                    }
+                    const float t_now = ClosestAxisParamToRay(origin, a, ray);
+                    ApplyScaleAlongAxis(t_now - drag_axis_t_begin);
+                }
+            }
+            break;
+
+        case GIZMO_MODE_SKEW:
+            {
                 if(selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z)
                 {
                     Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
@@ -775,7 +821,7 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
                         a[2] /= alen;
                     }
                     const float t_now = ClosestAxisParamToRay(origin, a, ray);
-                    ApplyScaleAlongAxis(t_now - drag_axis_t_begin);
+                    ApplySkewAlongAxis(t_now - drag_axis_t_begin);
                 }
             }
             break;
@@ -850,9 +896,18 @@ void Gizmo3D::captureDragStartPosition()
         drag_start_position[0] = target_effect_volume->transform.position.x;
         drag_start_position[1] = target_effect_volume->transform.position.y;
         drag_start_position[2] = target_effect_volume->transform.position.z;
-        drag_start_scale[0] = target_effect_volume->transform.scale.x;
-        drag_start_scale[1] = target_effect_volume->transform.scale.y;
-        drag_start_scale[2] = target_effect_volume->transform.scale.z;
+        if(mode == GIZMO_MODE_SKEW)
+        {
+            drag_start_scale[0] = target_effect_volume->shear_xy;
+            drag_start_scale[1] = target_effect_volume->shear_xz;
+            drag_start_scale[2] = target_effect_volume->shear_yz;
+        }
+        else
+        {
+            drag_start_scale[0] = target_effect_volume->transform.scale.x;
+            drag_start_scale[1] = target_effect_volume->transform.scale.y;
+            drag_start_scale[2] = target_effect_volume->transform.scale.z;
+        }
     }
 }
 
@@ -1027,6 +1082,48 @@ void Gizmo3D::ApplyScaleAlongAxis(float along)
     transform.scale.x = sx;
     transform.scale.y = sy;
     transform.scale.z = sz;
+}
+
+void Gizmo3D::ApplyUniformScale(float along)
+{
+    if(!target_effect_volume)
+    {
+        return;
+    }
+    const float base = std::max(0.05f, (drag_start_scale[0] + drag_start_scale[1] + drag_start_scale[2]) / 3.0f);
+    const float factor = std::max(0.05f, base + along) / base;
+    Transform3D& transform = target_effect_volume->transform;
+    transform.scale.x = std::max(0.05f, drag_start_scale[0] * factor);
+    transform.scale.y = std::max(0.05f, drag_start_scale[1] * factor);
+    transform.scale.z = std::max(0.05f, drag_start_scale[2] * factor);
+}
+
+void Gizmo3D::ApplySkewAlongAxis(float along)
+{
+    if(!target_effect_volume)
+    {
+        return;
+    }
+    /* Store start shear in drag_start_scale slots during captureDragStartPosition. */
+    const float sensitivity = 0.35f;
+    float sxy = drag_start_scale[0];
+    float sxz = drag_start_scale[1];
+    float syz = drag_start_scale[2];
+    if(selected_axis == GIZMO_AXIS_X)
+    {
+        sxy = std::clamp(sxy + along * sensitivity, -2.0f, 2.0f);
+    }
+    else if(selected_axis == GIZMO_AXIS_Y)
+    {
+        syz = std::clamp(syz + along * sensitivity, -2.0f, 2.0f);
+    }
+    else if(selected_axis == GIZMO_AXIS_Z)
+    {
+        sxz = std::clamp(sxz + along * sensitivity, -2.0f, 2.0f);
+    }
+    target_effect_volume->shear_xy = sxy;
+    target_effect_volume->shear_xz = sxz;
+    target_effect_volume->shear_yz = syz;
 }
 
 void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport)

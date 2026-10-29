@@ -316,6 +316,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rotation_yaw"] = effect_rotation_yaw;
     j["rotation_pitch"] = effect_rotation_pitch;
     j["rotation_roll"] = effect_rotation_roll;
+    j["shear_xy"] = effect_shear_xy;
+    j["shear_xz"] = effect_shear_xz;
+    j["shear_yz"] = effect_shear_yz;
     j["axis_scale_rotation_yaw"] = effect_axis_scale_rotation_yaw;
     j["axis_scale_rotation_pitch"] = effect_axis_scale_rotation_pitch;
     j["axis_scale_rotation_roll"] = effect_axis_scale_rotation_roll;
@@ -452,6 +455,12 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_rotation_roll = settings["rotation_roll"].get<float>();
     else
         effect_rotation_roll = 0.0f;
+    if(settings.contains("shear_xy"))
+        effect_shear_xy = std::clamp(settings["shear_xy"].get<float>(), -2.0f, 2.0f);
+    if(settings.contains("shear_xz"))
+        effect_shear_xz = std::clamp(settings["shear_xz"].get<float>(), -2.0f, 2.0f);
+    if(settings.contains("shear_yz"))
+        effect_shear_yz = std::clamp(settings["shear_yz"].get<float>(), -2.0f, 2.0f);
     if(settings.contains("axis_scale_rotation_yaw"))
         effect_axis_scale_rotation_yaw = std::clamp(settings["axis_scale_rotation_yaw"].get<float>(), -180.0f, 180.0f);
     if(settings.contains("axis_scale_rotation_pitch"))

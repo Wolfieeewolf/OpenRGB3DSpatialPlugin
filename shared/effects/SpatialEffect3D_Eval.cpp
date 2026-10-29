@@ -881,9 +881,12 @@ Vector3D SpatialEffect3D::RotateVectorByEuler(float dx, float dy, float dz, floa
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
-    /* Oriented box: inverse effect rotation into local volume, then AABB test. */
+    /* Oriented box: inverse rotation, unshear, then AABB test. */
     Vector3D local = RotateVectorByEuler(rel_x, rel_y, rel_z,
                                          -effect_rotation_yaw, -effect_rotation_pitch, -effect_rotation_roll);
+    /* Inverse of lx+=sxy*ly+sxz*lz; ly+=syz*lz (applied bottom-up). */
+    local.y -= effect_shear_yz * local.z;
+    local.x -= effect_shear_xy * local.y + effect_shear_xz * local.z;
     const float scale_pct = std::max(0.01f, GetNormalizedScale());
     float hx = (grid.width * 0.5f) * scale_pct * ((float)effect_scale_x / 100.0f);
     float hy = (grid.height * 0.5f) * scale_pct * ((float)effect_scale_y / 100.0f);

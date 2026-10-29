@@ -240,6 +240,7 @@ private:
     void applyGizmoMoveMode();
     void applyGizmoRotateMode();
     void applyGizmoScaleMode();
+    void applyGizmoSkewMode();
     void applyGizmoFreeroamMode();
     void toggleGridSnapFromKeyboard();
     void tryDeleteSelectedFromKeyboard();

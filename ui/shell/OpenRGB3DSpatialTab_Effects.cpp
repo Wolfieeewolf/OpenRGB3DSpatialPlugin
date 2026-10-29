@@ -285,7 +285,19 @@ void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
         {
             grid.SetLedCentroid(mapped_lights_anchor_.x, mapped_lights_anchor_.y, mapped_lights_anchor_.z);
         }
+        /* Volume editor always anchors at room centre (not world 0,0,0). */
+        instance->effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
+        instance->effect->SetOffsetPercents(0, 0, 0);
         EffectVolume3D volume = EffectVolume3D::FromEffect(*instance->effect, grid, index);
+        /* Prefer a readable centred box if occupancy still fills the whole room. */
+        if(instance->effect->GetOccupancyScalePercent() >= 95u)
+        {
+            volume.transform.position = {grid.center_x, grid.center_y, grid.center_z};
+            volume.transform.scale.x = std::max(0.2f, grid.width * 0.22f);
+            volume.transform.scale.y = std::max(0.2f, grid.height * 0.22f);
+            volume.transform.scale.z = std::max(0.2f, grid.depth * 0.22f);
+            volume.ApplyToEffect(*instance->effect, grid);
+        }
         viewport->SelectEffectVolume(volume, grid);
     }
     else if(viewport)
@@ -307,6 +319,8 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
     {
         return;
     }
+    /* Keep absolute room-center placement while editing the volume. */
+    instance->effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
     volume->ApplyToEffect(*instance->effect, *grid);
     if(instance->saved_settings)
     {
@@ -316,14 +330,18 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
     {
         instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
     }
-    /* Refresh volume from effect so axis % clamp stays consistent with half-extents. */
-    *volume = EffectVolume3D::FromEffect(*instance->effect, *grid, stack_index);
-    viewport->SelectEffectVolume(*volume, *grid);
-    if(current_effect_ui == instance->effect.get())
+    /* During drag: write through only — do not rebuild/retarget the gizmo. */
+    if(!viewport->IsGizmoDragging())
     {
-        LoadStackEffectControls(instance);
+        *volume = EffectVolume3D::FromEffect(*instance->effect, *grid, stack_index);
+        viewport->SelectEffectVolume(*volume, *grid);
+        if(current_effect_ui == instance->effect.get())
+        {
+            LoadStackEffectControls(instance);
+        }
+        SetLayoutDirty();
     }
-    SetLayoutDirty();
+    viewport->update();
 }
 
 void OpenRGB3DSpatialTab::stackEffectTypeChanged(int)

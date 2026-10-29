@@ -19,7 +19,8 @@ enum GizmoMode
     GIZMO_MODE_MOVE     = 0,
     GIZMO_MODE_ROTATE   = 1,
     GIZMO_MODE_SCALE    = 2,
-    GIZMO_MODE_FREEROAM = 3
+    GIZMO_MODE_SKEW     = 3,
+    GIZMO_MODE_FREEROAM = 4
 };
 
 enum GizmoAxis
@@ -114,6 +115,8 @@ private:
     void ApplyTranslation(float delta_x, float delta_y, float delta_z);
     void ApplyRotation(float delta_x, float delta_y, float delta_z);
     void ApplyScaleAlongAxis(float along);
+    void ApplyUniformScale(float along);
+    void ApplySkewAlongAxis(float along);
     void ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport);
     void ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
     bool hasAnyTarget() const;
@@ -121,6 +124,7 @@ private:
     void appendMoveGizmoMesh(GizmoDrawMesh& mesh) const;
     void appendRotateGizmoMesh(GizmoDrawMesh& mesh) const;
     void appendScaleGizmoMesh(GizmoDrawMesh& mesh) const;
+    void appendSkewGizmoMesh(GizmoDrawMesh& mesh) const;
     void appendFreeroamGizmoMesh(GizmoDrawMesh& mesh) const;
 
     float SnapToGrid(float value);

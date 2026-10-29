@@ -98,8 +98,12 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
                                         selected_scene_prop_idx_ < (int)scene_props_->size());
 
         if(has_controller_selected || has_ref_point_selected || has_display_plane_selected
-           || has_scene_prop_selected)
+           || has_scene_prop_selected || effect_volume_active_)
         {
+            if(effect_volume_active_)
+            {
+                gizmo.SetTarget(&effect_volume_);
+            }
             gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
             syncGizmoScreenScale();
             if(gizmo.HandleMousePress(event, gl_win_x, gl_win_y, modelview, projection, viewport))
@@ -277,6 +281,11 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
                     ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
                     ControllerLayout3D::UpdateWorldPositions(ctrl);
                 }
+            }
+            else if(effect_volume_active_)
+            {
+                /* Live write-back so LEDs and the wireframe track the drag. */
+                emit EffectVolumeChanged(effect_volume_.stack_index);
             }
         }
 
@@ -479,6 +488,12 @@ void LEDViewport3D::applyGizmoScaleMode()
     showGizmoModeFeedback();
 }
 
+void LEDViewport3D::applyGizmoSkewMode()
+{
+    gizmo.SetMode(GIZMO_MODE_SKEW);
+    showGizmoModeFeedback();
+}
+
 void LEDViewport3D::applyGizmoFreeroamMode()
 {
     gizmo.SetMode(GIZMO_MODE_FREEROAM);
@@ -547,6 +562,7 @@ void LEDViewport3D::installViewportKeyboardShortcuts(QWidget* shortcut_scope)
     add_key(Qt::Key_W, &LEDViewport3D::applyGizmoMoveMode);
     add_key(Qt::Key_E, &LEDViewport3D::applyGizmoRotateMode);
     add_key(Qt::Key_R, &LEDViewport3D::applyGizmoScaleMode);
+    add_key(Qt::Key_Y, &LEDViewport3D::applyGizmoSkewMode);
     add_key(Qt::Key_T, &LEDViewport3D::applyGizmoFreeroamMode);
     add_key(Qt::Key_Q, &LEDViewport3D::toggleGridSnapFromKeyboard);
     add_key(Qt::Key_Delete, &LEDViewport3D::tryDeleteSelectedFromKeyboard);
