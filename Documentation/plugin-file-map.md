@@ -285,7 +285,7 @@ Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 | Engine | Toolbox tools |
 |--------|----------------|
 | volume-field | `field_aurora`, `field_burst`, `field_dual_vortex`, `field_electric`, `field_flash`, `field_portal`, `field_ripple`, `field_room_glow`, `field_strata` |
-| particle-field | `particle_embers`, `particle_fireflies`, `particle_meteors`, `particle_rain`, `spark_burst` |
-| ribbon-field | `laser_sweep`, `neon_ribbon`, `ribbon_helix` |
+| particle-field | `particle_embers`, `particle_fireflies`, `particle_meteors`, `particle_rain`, `particle_swarm`, `spark_burst` |
+| ribbon-field | `laser_sweep`, `neon_cables`, `neon_ribbon`, `ribbon_helix` |
 | folder-volume (scripted `.fx`) | confetti, helix, orbit, … |
 | actions builtins | plasma / fire / snow / colorwash (no toolbox `shader:`) |

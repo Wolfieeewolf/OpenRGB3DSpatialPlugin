@@ -305,6 +305,81 @@ void volumeMain(out vec4 out_color, vec3 p01)
 }
 )GLSL";
 
+/*
+ * Procedural flock: sub-swarm centers wander; agents orbit locally with
+ * velocity streaks. Closed-form (no persistent sim) — sparse-LED friendly.
+ */
+const char* kSwarmBody = R"GLSL(
+float hash11(float n) { return fract(sin(n) * 43758.5453123); }
+void volumeMain(out vec4 out_color, vec3 p01)
+{
+    int n = int(u_params[6] + 0.5);
+    float soft = max(0.001, u_params[5]);
+    vec3 origin = vec3(u_params[1], u_params[2], u_params[3]);
+    float orbit = u_params[4];
+    float rate = max(0.12, u_params[7]);
+    float t = u_time * rate;
+    float dens = 0.0;
+    vec3 col = vec3(0.0);
+    const int flocks = 4;
+    vec3 centers[4];
+    for(int f = 0; f < flocks; ++f)
+    {
+        float ff = float(f);
+        float a = t * (0.55 + 0.12 * ff) + ff * 1.7;
+        float b = t * (0.42 + 0.09 * ff) + ff * 2.3;
+        centers[f] = clamp(vec3(
+            origin.x + cos(a) * orbit * (0.55 + 0.15 * sin(b)),
+            origin.y + 0.35 * sin(b * 0.85) * orbit,
+            origin.z + sin(a * 0.9 + 0.4) * orbit * (0.55 + 0.12 * cos(a))), 0.0, 1.0);
+    }
+    for(int i = 0; i < 72; ++i)
+    {
+        if(i >= n) break;
+        float fi = float(i);
+        int flock = int(floor(hash11(fi * 3.1) * float(flocks)));
+        flock = clamp(flock, 0, flocks - 1);
+        vec3 ctr = centers[flock];
+        float a0 = hash11(fi * 19.0) * 6.2831853;
+        float b0 = hash11(fi * 37.0) * 6.2831853;
+        float rad = orbit * (0.10 + 0.22 * hash11(fi * 11.0));
+        float wob = 0.65 + 0.55 * hash11(fi * 71.0);
+        float local_t = t * (1.05 + 0.35 * hash11(fi * 13.0));
+        vec3 pos = clamp(vec3(
+            ctr.x + cos(a0 + local_t * 1.35 * wob) * rad,
+            ctr.y + 0.55 * sin(b0 + local_t * 1.1) * rad,
+            ctr.z + sin(a0 * 0.95 + local_t * 1.25 * wob) * rad), 0.0, 1.0);
+        /* Analytic velocity for streak orientation. */
+        vec3 vel = normalize(vec3(
+            -sin(a0 + local_t * 1.35 * wob) * rad * 1.35 * wob,
+            0.55 * cos(b0 + local_t * 1.1) * rad * 1.1,
+            cos(a0 * 0.95 + local_t * 1.25 * wob) * rad * 1.25 * wob) + vec3(1e-4));
+        float life = 0.55 + 0.45 * (0.5 + 0.5 * sin(local_t * 0.7 + a0));
+        float accent = pow(hash11(fi * 5.0 + floor(t * 0.35)), 10.0);
+        life += accent * 0.85;
+        vec3 d = p01 - pos;
+        float along = dot(d, vel);
+        vec3 perp = d - vel * along;
+        float rx = soft * 0.85;
+        float ry = soft * (2.2 + 1.4 * hash11(fi * 7.0));
+        float e = dot(perp, perp) / (rx * rx) + (along * along) / (ry * ry);
+        float soft2 = soft * soft;
+        float core = exp(-dot(d, d) / (soft2 * 0.30));
+        float streak = exp(-e);
+        float w = life * (1.15 * core + 0.70 * streak);
+        dens += w;
+        vec3 teal = vec3(0.15, 0.85, 0.95);
+        vec3 violet = vec3(0.55, 0.25, 1.0);
+        vec3 white = vec3(1.0, 0.97, 0.92);
+        vec3 base = mix(teal, violet, hash11(fi * 2.0 + float(flock)));
+        col += w * mix(base * 0.55, mix(base, white, accent), core);
+    }
+    dens = clamp(dens * 1.20, 0.0, 1.0);
+    if(dens < 1e-4) { out_color = vec4(0.0); return; }
+    out_color = vec4(clamp(col / max(dens, 1e-4), 0.0, 1.0) * dens, dens);
+}
+)GLSL";
+
 bool PrepareGpu(const Clip& clip,
                 float progress,
                 int anim_ms,
@@ -348,6 +423,13 @@ bool PrepareGpu(const Clip& clip,
         count = std::clamp((int)std::lround(28.0f + clip.pulse_length * 40.0f), 24, 64);
         reach_or_spread = (0.4f + clip.pulse_length * 0.35f) * size;
         soft = (0.07f + clip.pulse_length * 0.08f) * size;
+    }
+    else if(mode == "swarm")
+    {
+        body = kSwarmBody;
+        count = std::clamp((int)std::lround(36.0f + clip.pulse_length * 48.0f), 32, 72);
+        reach_or_spread = (0.26f + clip.pulse_length * 0.38f) * size;
+        soft = (0.065f + clip.pulse_length * 0.07f) * size;
     }
     if(!g_shader_loaded || g_gpu_mode != mode)
     {

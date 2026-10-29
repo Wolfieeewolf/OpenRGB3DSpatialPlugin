@@ -51,11 +51,11 @@ std::string FieldShader(const std::string& id);
 bool UsesField(const std::string& id);
 /** True when `.fx` declares `particles:` (GPGPU room particle field). */
 bool UsesParticles(const std::string& id);
-/** Particle mode string (`burst` / `rain` / `fireflies`); empty if unused. */
+/** Particle mode string (`burst` / `rain` / `fireflies` / `meteors` / `embers` / `swarm`); empty if unused. */
 std::string ParticlesMode(const std::string& id);
 /** True when `.fx` declares `ribbons:` (GPGPU room ribbon/tube field). */
 bool UsesRibbons(const std::string& id);
-/** Ribbon mode string (`arc` / `helix`); empty if unused. */
+/** Ribbon mode string (`arc` / `helix` / `sweep` / `cables`); empty if unused. */
 std::string RibbonsMode(const std::string& id);
 bool ColorEnds(const std::string& id);
 bool PreviewPulse(const std::string& id);

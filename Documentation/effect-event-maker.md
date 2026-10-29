@@ -67,7 +67,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 |----------|--------|
 | Basic | `solid`, `fade`, `pulse`, `wipe`, `chase`, `twinkle`, `alternating`, `strobe`, `spin`, `candle`, `dissolve`, `wave` |
 | Pixel | `colorwash`, `plasma`, `snow`, `fire`, `balls`, `bars`, `scanner` |
-| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst`, `field_ripple` / `field_strata` / `field_burst` (GPU field), `spark_burst` / `particle_rain` / `particle_fireflies` (GPGPU particles), `neon_ribbon` / `ribbon_helix` (GPGPU ribbons), `plasma` / `fire` / `snow` / `colorwash` (built-in GPU when no toolbox `shader:`) |
+| Volume | `spherewipe`, `orbit`, `ripple`, `meteor`, `noise3d`, `burst`, `field_ripple` / `field_strata` / `field_burst` (GPU field), `spark_burst` / `particle_rain` / `particle_fireflies` / `particle_swarm` (GPGPU particles), `neon_ribbon` / `ribbon_helix` / `neon_cables` (GPGPU ribbons), `plasma` / `fire` / `snow` / `colorwash` (built-in GPU when no toolbox `shader:`) |
 | Media | `media_image`, `media_gif`, `media_text`  -  still/GIF/marquee mapped onto track UV (PixelScreen / xLights matrix style) |
 
 **Tools** (Basic / Pixel / Volume / Media) are **not** bundled  -  they load from `action-editor/toolbox/` after you install the presets pack. Editor chrome only: solid colors, gradients, and intensity/period curves in `ActionCatalog`.
@@ -92,9 +92,9 @@ Stack Spatial Anchor and Action `origin_ref` both read the **same layout referen
 
 World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs` body (`volumeMain`). The Action applier prepares the program once per pack frame, then **evaluates `volumeMain` at each LED’s exact room-normalized XYZ** (OpenGL 4.1 required — true-GPU fail-closed, no CPU dual). `.fx` `field_*` / `field_paint()` sample the same GPU path. Bodies resolve from the toolbox tree (`<id>.fs` next to tools) or `effects/**/<id>.fs`.
 
-World tools may declare `particles: burst` for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED. GL required — if unavailable the clip paints nothing (fail closed).
+World tools may declare `particles: burst` (also `rain` / `fireflies` / `meteors` / `embers` / `swarm`) for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED. GL required — if unavailable the clip paints nothing (fail closed).
 
-World tools may declare `ribbons: arc` for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
+World tools may declare `ribbons: arc` (also `helix` / `sweep` / `cables`) for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
 
 **GL pool / thumbs:** field, particle, ribbon, and built-in GPU clips share **`SpatialOffscreenGlPool`** with the room viewport (no second offscreen context). Action Editor timeline thumbs use the same pool — deferred, cached, fail closed to black (no gradient / CPU fake).
 

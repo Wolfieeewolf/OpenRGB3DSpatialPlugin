@@ -9,8 +9,8 @@ Ideas-only map from reference looks → our engines. **No third-party code is co
 | Title / hit flash (Godot `flash_white`) | Volume field | `field_flash` (`title_flash`) | P1 |
 | Burst / sparks (Godot energy_burst one-shot) | Particle | `spark_burst` | P1 — Phase 2 gate |
 | Rain / fireflies (Godot rain_drops streaks) | Particle | `particle_rain`, `particle_fireflies` | P1 |
-| Swarm / flock (neighborhood-grid idea) | Particle (+ spatial hash) | later | P2 |
-| Neon tubes / ribbons (TubesCursor / FreeFrontend — look only) | Ribbon | `neon_ribbon` (`arc`), `ribbon_helix` (`helix`) | P2 — Phase 3 gate |
+| Swarm / flock (neighborhood-grid idea) | Particle | `particle_swarm` (`particles: swarm`) | P2 |
+| Neon tubes / ribbons (TubesCursor / FreeFrontend — look only) | Ribbon | `neon_ribbon` (`arc`), `ribbon_helix` (`helix`), `neon_cables` (`cables`) | P2 — Phase 3 gate |
 | Laser / plane sweep across room | Ribbon | `laser_sweep` (`ribbons: sweep`) | P2 |
 | Dreamy glow dense cloud (Codrops GPGPU idea) | Particle (true per-LED GPU eval) | later | P2 |
 | Dense splat / three.js cloud | Volume field data source | optional later | P3 |
@@ -61,6 +61,8 @@ Basics (`solid`, `blink`, `chase`, …) and media still get **purpose + correctn
 | `fireflies` | particles | Lissajous + asymmetric blink + core/halo |
 | `meteors` | particles | Unique dive dirs, trail beads, white→amber |
 | `embers` | particles | Slow rise, rare pops, ambient wow |
+| `swarm` | particles | Sub-flock centers + local orbit streaks (procedural flock) |
+| `arc` / `helix` / `cables` / `sweep` | ribbons | Multi-tube + accent beads / dual helix / cable bundle / ghost laser |
 | aurora / portal | volume field | Curtain filaments / ring beads (toolbox `.fs`) |
 
 ## Clean-room rule
@@ -87,7 +89,5 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 - **Engine folder regroup** — phases 1–10 done (`engines/*` + `shared/*` + `ui/` affinity); plugin entry remains at repo root; [plugin-file-map.md](plugin-file-map.md).
 - **Line splits (later)** — FolderVolume ~2.6k, Reactive ~1.5k, AudioInputManager ~1.4k (after Claude ratchet where noted).
 - **3D grid placement editor** — place volume clips in the viewport (translate/rotate/scale); keep timeline; switch modes. Separate branch.
-- **Swarm / flock** particle mode (spatial hash).
 - **More showcase packs** once the first five feel good in real rooms.
-- **Ribbon polish** (multi-tube, accent lights) if neon looks need it.
 - **DualSense ControllerTorch** — parked on `feat/dualsense-controller-torch` until 9-axis mag.
