@@ -12,12 +12,14 @@
 #include "VirtualReferencePoint3D.h"
 #include "DisplayPlane3D.h"
 #include "SceneProp3D.h"
+#include "EffectVolume3D.h"
 
 enum GizmoMode
 {
     GIZMO_MODE_MOVE     = 0,
     GIZMO_MODE_ROTATE   = 1,
-    GIZMO_MODE_FREEROAM = 2
+    GIZMO_MODE_SCALE    = 2,
+    GIZMO_MODE_FREEROAM = 3
 };
 
 enum GizmoAxis
@@ -73,6 +75,7 @@ public:
     void SetTarget(VirtualReferencePoint3D* target);
     void SetTarget(DisplayPlane3D* target);
     void SetTarget(SceneProp3D* target);
+    void SetTarget(EffectVolume3D* target);
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
     /** Keep gizmo ~constant on screen: pass eye→gizmo distance and vertical FOV (degrees). */
@@ -110,11 +113,14 @@ private:
     void setTargetWorldPosition(float x, float y, float z);
     void ApplyTranslation(float delta_x, float delta_y, float delta_z);
     void ApplyRotation(float delta_x, float delta_y, float delta_z);
+    void ApplyScaleAlongAxis(float along);
     void ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport);
     void ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
+    bool hasAnyTarget() const;
 
     void appendMoveGizmoMesh(GizmoDrawMesh& mesh) const;
     void appendRotateGizmoMesh(GizmoDrawMesh& mesh) const;
+    void appendScaleGizmoMesh(GizmoDrawMesh& mesh) const;
     void appendFreeroamGizmoMesh(GizmoDrawMesh& mesh) const;
 
     float SnapToGrid(float value);
@@ -132,6 +138,7 @@ private:
     VirtualReferencePoint3D*    target_ref_point;
     DisplayPlane3D*             target_display_plane;
     SceneProp3D*                target_scene_prop;
+    EffectVolume3D*             target_effect_volume;
 
     float                  gizmo_x;
     float                  gizmo_y;
@@ -163,6 +170,7 @@ private:
     float                  drag_axis_t0;
     float                  drag_axis_t_begin;
     float                  drag_start_position[3];
+    float                  drag_start_scale[3];
     float                  drag_axis_dir[3];
     float                  drag_plane_normal[3];
     float                  drag_start_world[3];

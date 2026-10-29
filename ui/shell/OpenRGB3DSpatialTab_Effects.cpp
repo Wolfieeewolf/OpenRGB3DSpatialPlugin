@@ -13,9 +13,16 @@
 #include "PluginLog.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
+#include "EffectVolume3D.h"
+#include "LEDViewport3D.h"
+#include "ControllerLayout3D.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QAbstractItemView>
 #include <QFont>
+#include <QFrame>
+#include <QLabel>
+#include <QHBoxLayout>
+#include <QSize>
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QLineEdit>
@@ -177,6 +184,10 @@ void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
         }
         UpdateAudioPanelVisibility();
         UpdateEffectStackRowSelectorVisibility();
+        if(viewport)
+        {
+            viewport->ClearEffectVolumeSelection();
+        }
         return;
     }
 
@@ -258,6 +269,61 @@ void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
     UpdateEffectCombo();
     UpdateAudioPanelVisibility();
     UpdateEffectStackRowSelectorVisibility();
+
+    if(viewport && instance->effect)
+    {
+        ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                                  manual_room_width,
+                                                                  manual_room_height,
+                                                                  manual_room_depth);
+        GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+        GridContext3D grid(bounds.min_x, bounds.max_x,
+                           bounds.min_y, bounds.max_y,
+                           bounds.min_z, bounds.max_z,
+                           grid_scale_mm);
+        if(mapped_lights_anchor_valid_)
+        {
+            grid.SetLedCentroid(mapped_lights_anchor_.x, mapped_lights_anchor_.y, mapped_lights_anchor_.z);
+        }
+        EffectVolume3D volume = EffectVolume3D::FromEffect(*instance->effect, grid, index);
+        viewport->SelectEffectVolume(volume, grid);
+    }
+    else if(viewport)
+    {
+        viewport->ClearEffectVolumeSelection();
+    }
+}
+
+void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
+{
+    if(!viewport || stack_index < 0 || stack_index >= (int)effect_stack.size())
+    {
+        return;
+    }
+    EffectInstance3D* instance = effect_stack[(size_t)stack_index].get();
+    EffectVolume3D* volume = viewport->ActiveEffectVolume();
+    const GridContext3D* grid = viewport->ActiveEffectVolumeGrid();
+    if(!instance || !instance->effect || !volume || !grid)
+    {
+        return;
+    }
+    volume->ApplyToEffect(*instance->effect, *grid);
+    if(instance->saved_settings)
+    {
+        *instance->saved_settings = instance->effect->SaveSettings();
+    }
+    else
+    {
+        instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+    }
+    /* Refresh volume from effect so axis % clamp stays consistent with half-extents. */
+    *volume = EffectVolume3D::FromEffect(*instance->effect, *grid, stack_index);
+    viewport->SelectEffectVolume(*volume, *grid);
+    if(current_effect_ui == instance->effect.get())
+    {
+        LoadStackEffectControls(instance);
+    }
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::stackEffectTypeChanged(int)
@@ -338,11 +404,24 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
     {
         EffectInstance3D* instance = effect_stack[i].get();
 
-        QString enabled_marker = instance->enabled ? "[ON] " : "[OFF] ";
+        QString enabled_marker = instance->enabled ? QStringLiteral("ON") : QStringLiteral("OFF");
         QString display_name   = QString::fromStdString(instance->GetDisplayName());
 
-        QListWidgetItem* item = new QListWidgetItem(enabled_marker + display_name);
+        QListWidgetItem* item = new QListWidgetItem();
+        QFrame* card = new QFrame();
+        PluginUiApplyControllerCardChrome(card, (int)i == current_row);
+        auto* row = new QHBoxLayout(card);
+        row->setContentsMargins(8, 6, 8, 6);
+        row->setSpacing(8);
+        auto* state = new QLabel(enabled_marker, card);
+        PluginUiApplyMutedSecondaryLabel(state);
+        auto* title = new QLabel(display_name, card);
+        title->setWordWrap(true);
+        row->addWidget(state, 0);
+        row->addWidget(title, 1);
+        item->setSizeHint(card->sizeHint().expandedTo(QSize(0, 40)));
         effectStackList()->addItem(item);
+        effectStackList()->setItemWidget(item, card);
     }
 
     if(current_row >= 0 && current_row < (int)effect_stack.size())

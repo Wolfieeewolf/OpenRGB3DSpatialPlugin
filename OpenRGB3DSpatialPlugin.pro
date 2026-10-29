@@ -152,6 +152,7 @@ HEADERS += \
     shared/zones/ZoneGrid3D.h \
     shared/effects/SpatialEffectTypes.h \
     shared/effects/SpatialEffect3D.h \
+    shared/effects/EffectVolume3D.h \
     shared/effects/EffectListManager3D.h \
     shared/effects/EffectRegisterer3D.h \
     shared/effects/EffectInstance3D.h \
@@ -358,6 +359,7 @@ SOURCES += \
     shared/effects/SpatialEffect3D.cpp \
     shared/effects/SpatialEffect3D_Eval.cpp \
     shared/effects/SpatialEffect3D_Settings.cpp \
+    shared/effects/EffectVolume3D.cpp \
     shared/effects/EffectInstance3D.cpp \
     shared/effects/StackPreset3D.cpp \
     shared/controllers/VirtualController3D.cpp \

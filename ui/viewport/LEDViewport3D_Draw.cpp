@@ -67,7 +67,9 @@ const char* GizmoModeLabel(GizmoMode mode)
     {
         case GIZMO_MODE_MOVE:     return "Move";
         case GIZMO_MODE_ROTATE:   return "Rotate";
+        case GIZMO_MODE_SCALE:    return "Scale";
         case GIZMO_MODE_FREEROAM: return "Freeroam";
+        default:                  return "Move";
     }
     return "Unknown";
 }
@@ -137,6 +139,7 @@ void LEDViewport3D::paintGlScene()
     DrawLightBlockerLayers();
     DrawUserFigure();
     DrawReferencePoints();
+    DrawEffectVolume();
 
     const bool has_controller_selected = (selected_controller_idx >= 0 && controller_transforms &&
                                           selected_controller_idx < (int)controller_transforms->size());
@@ -147,7 +150,8 @@ void LEDViewport3D::paintGlScene()
     const bool has_scene_prop_selected = (selected_scene_prop_idx_ >= 0 && scene_props_ &&
                                           selected_scene_prop_idx_ < (int)scene_props_->size());
 
-    if(has_controller_selected || has_ref_point_selected || has_display_plane_selected || has_scene_prop_selected)
+    if(has_controller_selected || has_ref_point_selected || has_display_plane_selected
+       || has_scene_prop_selected || effect_volume_active_)
     {
         syncGizmoScreenScale();
         drawGizmo();
@@ -906,6 +910,43 @@ void LEDViewport3D::DrawRoomViewportSelection()
     drawUnlitBatch(room_sel_fill_batch_, MeshBatch::Primitive::Triangles, 1.0f, 0.10f);
 
     glDisable(GL_BLEND);
+}
+
+void LEDViewport3D::DrawEffectVolume()
+{
+    if(!effect_volume_active_)
+    {
+        return;
+    }
+
+    Vector3D corners[8];
+    effect_volume_.GetCorners(corners);
+    static const int edges[12][2] = {
+        {0, 1}, {2, 3}, {4, 5}, {6, 7},
+        {0, 2}, {1, 3}, {4, 6}, {5, 7},
+        {0, 4}, {1, 5}, {2, 6}, {3, 7}
+    };
+
+    std::vector<float> lines;
+    lines.reserve(12 * 2 * 6);
+    const float r = 0.25f;
+    const float g = 0.95f;
+    const float b = 1.0f;
+    for(int e = 0; e < 12; ++e)
+    {
+        const Vector3D& a = corners[edges[e][0]];
+        const Vector3D& c = corners[edges[e][1]];
+        lines.push_back(a.x); lines.push_back(a.y); lines.push_back(a.z);
+        lines.push_back(r); lines.push_back(g); lines.push_back(b);
+        lines.push_back(c.x); lines.push_back(c.y); lines.push_back(c.z);
+        lines.push_back(r); lines.push_back(g); lines.push_back(b);
+    }
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    effect_volume_lines_batch_.Upload(MeshBatch::Layout::PosColor, lines.data(), lines.size() / 6);
+    drawUnlitBatch(effect_volume_lines_batch_, MeshBatch::Primitive::Lines, 2.0f, 0.95f);
 }
 
 void LEDViewport3D::DrawRoomBoundary()

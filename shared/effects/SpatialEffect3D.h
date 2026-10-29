@@ -503,6 +503,32 @@ public:
     float GetRotationYaw() const { return effect_rotation_yaw; }
     float GetRotationPitch() const { return effect_rotation_pitch; }
     float GetRotationRoll() const { return effect_rotation_roll; }
+    void SetRotationDegrees(float yaw_deg, float pitch_deg, float roll_deg)
+    {
+        effect_rotation_yaw = yaw_deg;
+        effect_rotation_pitch = pitch_deg;
+        effect_rotation_roll = roll_deg;
+    }
+
+    unsigned int GetAxisScaleX() const { return effect_scale_x; }
+    unsigned int GetAxisScaleY() const { return effect_scale_y; }
+    unsigned int GetAxisScaleZ() const { return effect_scale_z; }
+    void SetAxisScalePercents(unsigned int sx, unsigned int sy, unsigned int sz)
+    {
+        effect_scale_x = std::clamp(sx, 1u, 400u);
+        effect_scale_y = std::clamp(sy, 1u, 400u);
+        effect_scale_z = std::clamp(sz, 1u, 400u);
+    }
+
+    void SetOffsetPercents(int ox, int oy, int oz)
+    {
+        effect_offset_x = std::clamp(ox, -100, 100);
+        effect_offset_y = std::clamp(oy, -100, 100);
+        effect_offset_z = std::clamp(oz, -100, 100);
+    }
+
+    /** Occupancy 0..N (1.0 = fill grid from anchor). Public for effect-volume gizmos. */
+    float GetOccupancyScale() const { return GetNormalizedScale(); }
 
     RGBColor PostProcessColorGrid(RGBColor color) const;
 

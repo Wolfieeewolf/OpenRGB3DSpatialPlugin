@@ -881,34 +881,19 @@ Vector3D SpatialEffect3D::RotateVectorByEuler(float dx, float dy, float dz, floa
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
-    Vector3D o = GetEffectOriginGrid(grid);
-    float max_corner_sq = 0.0f;
-    for(int ix = 0; ix < 2; ++ix)
-    {
-        float cx = ix ? grid.max_x : grid.min_x;
-        float dx = cx - o.x;
-        for(int iy = 0; iy < 2; ++iy)
-        {
-            float cy = iy ? grid.max_y : grid.min_y;
-            float dy = cy - o.y;
-            for(int iz = 0; iz < 2; ++iz)
-            {
-                float cz = iz ? grid.max_z : grid.min_z;
-                float dz = cz - o.z;
-                float sq = dx * dx + dy * dy + dz * dz;
-                if(sq > max_corner_sq)
-                {
-                    max_corner_sq = sq;
-                }
-            }
-        }
-    }
-
-    float scale_percentage = GetNormalizedScale();
-    float scale_radius_sq = max_corner_sq * scale_percentage * scale_percentage;
-
-    float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
-    return dist_sq <= scale_radius_sq;
+    /* Oriented box: inverse effect rotation into local volume, then AABB test. */
+    Vector3D local = RotateVectorByEuler(rel_x, rel_y, rel_z,
+                                         -effect_rotation_yaw, -effect_rotation_pitch, -effect_rotation_roll);
+    const float scale_pct = std::max(0.01f, GetNormalizedScale());
+    float hx = (grid.width * 0.5f) * scale_pct * ((float)effect_scale_x / 100.0f);
+    float hy = (grid.height * 0.5f) * scale_pct * ((float)effect_scale_y / 100.0f);
+    float hz = (grid.depth * 0.5f) * scale_pct * ((float)effect_scale_z / 100.0f);
+    hx = std::max(hx, 1e-4f);
+    hy = std::max(hy, 1e-4f);
+    hz = std::max(hz, 1e-4f);
+    return std::fabs(local.x) <= hx
+        && std::fabs(local.y) <= hy
+        && std::fabs(local.z) <= hz;
 }
 
 bool SpatialEffect3D::IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const

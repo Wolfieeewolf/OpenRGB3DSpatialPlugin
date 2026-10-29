@@ -473,6 +473,12 @@ void LEDViewport3D::applyGizmoRotateMode()
     showGizmoModeFeedback();
 }
 
+void LEDViewport3D::applyGizmoScaleMode()
+{
+    gizmo.SetMode(GIZMO_MODE_SCALE);
+    showGizmoModeFeedback();
+}
+
 void LEDViewport3D::applyGizmoFreeroamMode()
 {
     gizmo.SetMode(GIZMO_MODE_FREEROAM);
@@ -540,7 +546,8 @@ void LEDViewport3D::installViewportKeyboardShortcuts(QWidget* shortcut_scope)
 
     add_key(Qt::Key_W, &LEDViewport3D::applyGizmoMoveMode);
     add_key(Qt::Key_E, &LEDViewport3D::applyGizmoRotateMode);
-    add_key(Qt::Key_R, &LEDViewport3D::applyGizmoFreeroamMode);
+    add_key(Qt::Key_R, &LEDViewport3D::applyGizmoScaleMode);
+    add_key(Qt::Key_T, &LEDViewport3D::applyGizmoFreeroamMode);
     add_key(Qt::Key_Q, &LEDViewport3D::toggleGridSnapFromKeyboard);
     add_key(Qt::Key_Delete, &LEDViewport3D::tryDeleteSelectedFromKeyboard);
     add_key(Qt::Key_Backspace, &LEDViewport3D::tryDeleteSelectedFromKeyboard);

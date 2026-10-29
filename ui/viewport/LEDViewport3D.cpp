@@ -625,6 +625,11 @@ bool LEDViewport3D::IsGizmoDragging() const
 
 void LEDViewport3D::emitGizmoDragCompleted()
     {
+        if(effect_volume_active_)
+        {
+            emit EffectVolumeChanged(effect_volume_.stack_index);
+            return;
+        }
         if(selected_controller_idx >= 0 && controller_transforms &&
             selected_controller_idx < (int)controller_transforms->size())
         {
@@ -985,6 +990,31 @@ void LEDViewport3D::ClearSelection()
 {
     clearSceneObjectSelection();
     deselectRoomViewport();
+}
+
+void LEDViewport3D::SelectEffectVolume(const EffectVolume3D& volume, const GridContext3D& grid)
+{
+    clearSceneObjectSelection();
+    deselectRoomViewport();
+    effect_volume_ = volume;
+    effect_volume_grid_ = std::make_unique<GridContext3D>(grid);
+    effect_volume_active_ = true;
+    gizmo.SetTarget(&effect_volume_);
+    gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+    emit EffectVolumeSelected(effect_volume_.stack_index);
+    update();
+}
+
+void LEDViewport3D::ClearEffectVolumeSelection()
+{
+    if(!effect_volume_active_)
+    {
+        return;
+    }
+    effect_volume_active_ = false;
+    effect_volume_grid_.reset();
+    gizmo.SetTarget(static_cast<EffectVolume3D*>(nullptr));
+    update();
 }
 
 bool LEDViewport3D::IsControllerSelected(int index) const

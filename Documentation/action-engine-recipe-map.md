@@ -88,6 +88,6 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 - **Multipass (Claude)** — **parked until ~2026-11-23** (other-models usage reset). Plugin resume: [multipass-coverage.md](multipass-coverage.md) § Parked for Claude reset. Presets every-file judgment: sibling [OpenRGB3DSpatialPresets `docs/multipass-coverage.md`](../../OpenRGB3DSpatialPresets/docs/multipass-coverage.md) (hybrid hygiene done 2026-10-27; rows `pending`/`hygiene` until Claude keep/kill). Do not finish judgment passes with a weaker model.
 - **Engine folder regroup** — phases 1–10 done (`engines/*` + `shared/*` + `ui/` affinity); plugin entry remains at repo root; [plugin-file-map.md](plugin-file-map.md).
 - **Line splits (later)** — FolderVolume ~2.6k, Reactive ~1.5k, AudioInputManager ~1.4k (after Claude ratchet where noted).
-- **3D grid placement editor** — place volume clips in the viewport (translate/rotate/scale); keep timeline; switch modes. Separate branch.
+- **Effect volume boxes** — in progress on `feat/effect-volume-boxes`: stack Spatial effects get a placeable OBB (gizmo move/rotate/scale) + card-style stack rows. Action-timeline placement and triggers edit UX come after this lands.
 - **More showcase packs** once the first five feel good in real rooms.
 - **DualSense ControllerTorch** — parked on `feat/dualsense-controller-torch` until 9-axis mag.

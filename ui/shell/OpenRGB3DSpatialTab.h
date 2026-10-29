@@ -217,6 +217,7 @@ private slots:
     void removeEffectFromStackClicked();
     void effectStackItemDoubleClicked(QListWidgetItem* item);
     void effectStackSelectionChanged(int index);
+    void viewportEffectVolumeChanged(int stack_index);
     void stackEffectTypeChanged(int index);
     void stackEffectZoneChanged(int index);
     void stackEffectBlendChanged(int index);

@@ -682,6 +682,7 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::displayPlaneRotationSignal);
     connect(viewport, &LEDViewport3D::ScenePropPositionChanged, this, &OpenRGB3DSpatialTab::scenePropPositionSignal);
     connect(viewport, &LEDViewport3D::ScenePropRotationChanged, this, &OpenRGB3DSpatialTab::scenePropRotationSignal);
+    connect(viewport, &LEDViewport3D::EffectVolumeChanged, this, &OpenRGB3DSpatialTab::viewportEffectVolumeChanged);
 
     viewport->installViewportKeyboardShortcuts(this);
 }

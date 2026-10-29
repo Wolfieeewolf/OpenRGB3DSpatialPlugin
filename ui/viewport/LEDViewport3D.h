@@ -19,6 +19,7 @@
 #include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
 #include "Gizmo3D.h"
+#include "EffectVolume3D.h"
 #include "SpatialEffectTypes.h"
 #include "VirtualController3D.h"
 #include "DisplayPlane3D.h"
@@ -148,6 +149,23 @@ public:
     int                     GetSelectedScenePropIndex() const { return selected_scene_prop_idx_; }
     bool                    IsRoomViewportSelected() const { return room_viewport_selected_; }
 
+    /** Stack effect volume box (gizmo target). Clears other scene-object selection. */
+    void SelectEffectVolume(const EffectVolume3D& volume, const GridContext3D& grid);
+    void ClearEffectVolumeSelection();
+    bool HasEffectVolumeSelection() const { return effect_volume_active_; }
+    int GetSelectedEffectStackIndex() const
+    {
+        return effect_volume_active_ ? effect_volume_.stack_index : -1;
+    }
+    EffectVolume3D* ActiveEffectVolume()
+    {
+        return effect_volume_active_ ? &effect_volume_ : nullptr;
+    }
+    const GridContext3D* ActiveEffectVolumeGrid() const
+    {
+        return effect_volume_grid_.get();
+    }
+
     void update();
 
     /** Register W/E/R/Q/F/Home/etc. on shortcut_scope (dialog or tab column); call once after embed. */
@@ -168,6 +186,9 @@ signals:
     void DisplayPlanePositionChanged(int index, float x, float y, float z);
     void DisplayPlaneRotationChanged(int index, float x, float y, float z);
     void RoomViewportSelected(bool selected);
+    /** Emitted when the effect-volume gizmo finishes a drag (stack index). */
+    void EffectVolumeChanged(int stack_index);
+    void EffectVolumeSelected(int stack_index);
 
 protected:
     void initializeGL() override;
@@ -218,6 +239,7 @@ private:
                            const ViewportMat4* model = nullptr);
     void applyGizmoMoveMode();
     void applyGizmoRotateMode();
+    void applyGizmoScaleMode();
     void applyGizmoFreeroamMode();
     void toggleGridSnapFromKeyboard();
     void tryDeleteSelectedFromKeyboard();
@@ -226,6 +248,7 @@ private:
     void DrawRoomFloor();
     void DrawRoomWalls();
     void DrawReferencePoints();
+    void DrawEffectVolume();
     void drawGizmo();
     void drawGizmoMeshPass(const GizmoDrawMesh& mesh, const ViewportMat4& model);
     void syncGizmoScreenScale();
@@ -311,6 +334,9 @@ private:
     int                                     selected_display_plane_idx;
     int                                     selected_scene_prop_idx_ = -1;
     int                                     selected_ref_point_idx;
+    bool                                    effect_volume_active_ = false;
+    EffectVolume3D                          effect_volume_{};
+    std::unique_ptr<GridContext3D>          effect_volume_grid_;
     bool                                    show_screen_preview;
     bool                                    effect_render_owns_preview_uploads_ = false;
     bool                                    show_calibration_pattern;
@@ -400,6 +426,7 @@ private:
     MeshBatch scene_prop_edges_batch_;
     MeshBatch gizmo_lines_batch_;
     MeshBatch gizmo_tris_batch_;
+    MeshBatch effect_volume_lines_batch_;
     float     room_boundary_cached_max_x_ = -1.0f;
     float     room_boundary_cached_max_y_ = -1.0f;
     float     room_boundary_cached_max_z_ = -1.0f;

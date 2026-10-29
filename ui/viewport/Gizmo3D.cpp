@@ -4,6 +4,7 @@
 #include "QtCompat.h"
 #include "viewport/ViewportMath.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <QMouseEvent>
@@ -33,6 +34,7 @@ Gizmo3D::Gizmo3D()
     target_ref_point = nullptr;
     target_display_plane = nullptr;
     target_scene_prop = nullptr;
+    target_effect_volume = nullptr;
 
     gizmo_x = 0.0f;
     gizmo_y = 0.0f;
@@ -60,6 +62,7 @@ Gizmo3D::Gizmo3D()
     drag_axis_t0 = 0.0f;
     drag_axis_t_begin = 0.0f;
     drag_start_position[0] = drag_start_position[1] = drag_start_position[2] = 0.0f;
+    drag_start_scale[0] = drag_start_scale[1] = drag_start_scale[2] = 1.0f;
     drag_axis_dir[0] = 1.0f; drag_axis_dir[1] = 0.0f; drag_axis_dir[2] = 0.0f;
     drag_plane_normal[0] = 0.0f; drag_plane_normal[1] = 1.0f; drag_plane_normal[2] = 0.0f;
     drag_start_world[0] = drag_start_world[1] = drag_start_world[2] = 0.0f;
@@ -100,13 +103,25 @@ void Gizmo3D::CycleMode()
             mode = GIZMO_MODE_ROTATE;
             break;
         case GIZMO_MODE_ROTATE:
+            mode = GIZMO_MODE_SCALE;
+            break;
+        case GIZMO_MODE_SCALE:
             mode = GIZMO_MODE_FREEROAM;
             break;
         case GIZMO_MODE_FREEROAM:
             mode = GIZMO_MODE_MOVE;
             break;
+        default:
+            mode = GIZMO_MODE_MOVE;
+            break;
     }
 
+}
+
+bool Gizmo3D::hasAnyTarget() const
+{
+    return target_transform || target_ref_point || target_display_plane
+        || target_scene_prop || target_effect_volume;
 }
 
 void Gizmo3D::SetPosition(float x, float y, float z)
@@ -122,6 +137,7 @@ void Gizmo3D::SetTarget(ControllerTransform* target)
     target_ref_point = nullptr;
     target_display_plane = nullptr;
     target_scene_prop = nullptr;
+    target_effect_volume = nullptr;
     active = (target != nullptr);
 
     if(target)
@@ -136,6 +152,7 @@ void Gizmo3D::SetTarget(VirtualReferencePoint3D* target)
     target_transform = nullptr;
     target_display_plane = nullptr;
     target_scene_prop = nullptr;
+    target_effect_volume = nullptr;
     active = (target != nullptr);
 
     if(target)
@@ -151,6 +168,7 @@ void Gizmo3D::SetTarget(DisplayPlane3D* target)
     target_transform = nullptr;
     target_ref_point = nullptr;
     target_scene_prop = nullptr;
+    target_effect_volume = nullptr;
     active = (target != nullptr);
 
     if(target)
@@ -166,12 +184,28 @@ void Gizmo3D::SetTarget(SceneProp3D* target)
     target_transform = nullptr;
     target_ref_point = nullptr;
     target_display_plane = nullptr;
+    target_effect_volume = nullptr;
     active = (target != nullptr);
 
     if(target)
     {
         Transform3D& t = target->GetTransform();
         SetPosition(t.position.x, t.position.y, t.position.z);
+    }
+}
+
+void Gizmo3D::SetTarget(EffectVolume3D* target)
+{
+    target_effect_volume = target;
+    target_transform = nullptr;
+    target_ref_point = nullptr;
+    target_display_plane = nullptr;
+    target_scene_prop = nullptr;
+    active = (target != nullptr);
+
+    if(target)
+    {
+        SetPosition(target->transform.position.x, target->transform.position.y, target->transform.position.z);
     }
 }
 
@@ -225,7 +259,7 @@ void Gizmo3D::SetScreenScale(float eye_distance, float fovy_degrees)
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
                                const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || (!target_transform && !target_ref_point && !target_display_plane && !target_scene_prop))
+    if(!active || !hasAnyTarget())
         return false;
 
     last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
@@ -334,7 +368,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
 bool Gizmo3D::HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
                               const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || (!target_transform && !target_ref_point && !target_display_plane && !target_scene_prop))
+    if(!active || !hasAnyTarget())
         return false;
 
     if(center_press_pending && !dragging)
@@ -635,7 +669,7 @@ bool Gizmo3D::PickGizmoCenter(int mouse_x, int mouse_y, const float* modelview, 
 
 void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!target_transform && !target_ref_point && !target_display_plane && !target_scene_prop)
+    if(!hasAnyTarget())
         return;
 
     switch(mode)
@@ -726,10 +760,33 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
             }
             break;
 
+        case GIZMO_MODE_SCALE:
+            {
+                if(selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z)
+                {
+                    Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
+                    const float origin[3] = {gizmo_x, gizmo_y, gizmo_z};
+                    float a[3] = {drag_axis_dir[0], drag_axis_dir[1], drag_axis_dir[2]};
+                    const float alen = sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+                    if(alen > 1e-6f)
+                    {
+                        a[0] /= alen;
+                        a[1] /= alen;
+                        a[2] /= alen;
+                    }
+                    const float t_now = ClosestAxisParamToRay(origin, a, ray);
+                    ApplyScaleAlongAxis(t_now - drag_axis_t_begin);
+                }
+            }
+            break;
+
         case GIZMO_MODE_FREEROAM:
             {
                 ApplyFreeroamDragRayPlane(mouse_x, mouse_y, modelview, projection, viewport);
             }
+            break;
+
+        default:
             break;
     }
 }
@@ -788,6 +845,15 @@ void Gizmo3D::captureDragStartPosition()
         drag_start_position[1] = transform.position.y;
         drag_start_position[2] = transform.position.z;
     }
+    else if(target_effect_volume)
+    {
+        drag_start_position[0] = target_effect_volume->transform.position.x;
+        drag_start_position[1] = target_effect_volume->transform.position.y;
+        drag_start_position[2] = target_effect_volume->transform.position.z;
+        drag_start_scale[0] = target_effect_volume->transform.scale.x;
+        drag_start_scale[1] = target_effect_volume->transform.scale.y;
+        drag_start_scale[2] = target_effect_volume->transform.scale.z;
+    }
 }
 
 void Gizmo3D::setTargetWorldPosition(float x, float y, float z)
@@ -822,6 +888,12 @@ void Gizmo3D::setTargetWorldPosition(float x, float y, float z)
         transform.position.x = x;
         transform.position.y = y;
         transform.position.z = z;
+    }
+    else if(target_effect_volume)
+    {
+        target_effect_volume->transform.position.x = x;
+        target_effect_volume->transform.position.y = y;
+        target_effect_volume->transform.position.z = z;
     }
 
     gizmo_x = x;
@@ -914,6 +986,47 @@ void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
         while(transform.rotation.z > 360.0f) transform.rotation.z -= 360.0f;
         while(transform.rotation.z < 0.0f) transform.rotation.z += 360.0f;
     }
+    else if(target_effect_volume)
+    {
+        Transform3D& transform = target_effect_volume->transform;
+        transform.rotation.x += delta_x;
+        transform.rotation.y += delta_y;
+        transform.rotation.z += delta_z;
+
+        while(transform.rotation.x > 360.0f) transform.rotation.x -= 360.0f;
+        while(transform.rotation.x < 0.0f) transform.rotation.x += 360.0f;
+        while(transform.rotation.y > 360.0f) transform.rotation.y -= 360.0f;
+        while(transform.rotation.y < 0.0f) transform.rotation.y += 360.0f;
+        while(transform.rotation.z > 360.0f) transform.rotation.z -= 360.0f;
+        while(transform.rotation.z < 0.0f) transform.rotation.z += 360.0f;
+    }
+}
+
+void Gizmo3D::ApplyScaleAlongAxis(float along)
+{
+    if(!target_effect_volume)
+    {
+        return;
+    }
+    Transform3D& transform = target_effect_volume->transform;
+    float sx = drag_start_scale[0];
+    float sy = drag_start_scale[1];
+    float sz = drag_start_scale[2];
+    if(selected_axis == GIZMO_AXIS_X)
+    {
+        sx = std::max(0.05f, drag_start_scale[0] + along);
+    }
+    else if(selected_axis == GIZMO_AXIS_Y)
+    {
+        sy = std::max(0.05f, drag_start_scale[1] + along);
+    }
+    else if(selected_axis == GIZMO_AXIS_Z)
+    {
+        sz = std::max(0.05f, drag_start_scale[2] + along);
+    }
+    transform.scale.x = sx;
+    transform.scale.y = sy;
+    transform.scale.z = sz;
 }
 
 void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport)
@@ -957,6 +1070,14 @@ void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* m
     else if(target_scene_prop)
     {
         Transform3D& transform = target_scene_prop->GetTransform();
+        const float x = transform.position.x + (right_x * delta_x - up_x * delta_y) * move_scale;
+        const float y = transform.position.y + (right_y * delta_x - up_y * delta_y) * move_scale;
+        const float z = transform.position.z + (right_z * delta_x - up_z * delta_y) * move_scale;
+        setTargetWorldPosition(x, y, z);
+    }
+    else if(target_effect_volume)
+    {
+        Transform3D& transform = target_effect_volume->transform;
         const float x = transform.position.x + (right_x * delta_x - up_x * delta_y) * move_scale;
         const float y = transform.position.y + (right_y * delta_x - up_y * delta_y) * move_scale;
         const float z = transform.position.z + (right_z * delta_x - up_z * delta_y) * move_scale;

@@ -209,6 +209,8 @@ void LEDViewport3D::clearSceneObjectSelection()
     selected_display_plane_idx = -1;
     selected_scene_prop_idx_ = -1;
     selected_ref_point_idx = -1;
+    effect_volume_active_ = false;
+    effect_volume_grid_.reset();
     gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
 }
 
