@@ -165,6 +165,8 @@ public:
     {
         return effect_volume_grid_.get();
     }
+    /** Refresh the grid snapshot used by ApplyToEffect / wireframe clipping. */
+    void SetEffectVolumeGrid(const GridContext3D& grid);
 
     void update();
 
@@ -188,7 +190,6 @@ signals:
     void RoomViewportSelected(bool selected);
     /** Emitted when the effect-volume gizmo finishes a drag (stack index). */
     void EffectVolumeChanged(int stack_index);
-    void EffectVolumeSelected(int stack_index);
 
 protected:
     void initializeGL() override;
@@ -252,6 +253,8 @@ private:
     void DrawEffectVolume();
     void drawGizmo();
     void drawGizmoMeshPass(const GizmoDrawMesh& mesh, const ViewportMat4& model);
+    /** Longest half-extent of the active gizmo target in grid units (0 = screen-constant). */
+    float selectedObjectGizmoRadius() const;
     void syncGizmoScreenScale();
     void DrawAxes();
     void paintRoomGuideLabels(QPainter& painter,
@@ -308,9 +311,9 @@ private:
     bool RaySphereIntersect(const Ray3D& ray,
                            const Vector3D& sphere_center, float sphere_radius, float& distance);
 
-    void CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds);
-    Vector3D GetControllerCenter(ControllerTransform* ctrl);
-    Vector3D GetControllerSize(ControllerTransform* ctrl);
+    void CalculateControllerBounds(const ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds) const;
+    Vector3D GetControllerCenter(const ControllerTransform* ctrl) const;
+    Vector3D GetControllerSize(const ControllerTransform* ctrl) const;
 
     Vector3D TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform);
 

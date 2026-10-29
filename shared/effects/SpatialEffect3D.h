@@ -381,6 +381,16 @@ public:
         BOUNDS_MODE_TARGET_ZONE = 1
     };
 
+    /** Hard volume shape for occupancy clip + gizmo wireframe (tight fit, no exterior buffer). */
+    enum EffectVolumeShape
+    {
+        VOLUME_SHAPE_BOX = 0,
+        VOLUME_SHAPE_SPHERE = 1,
+        VOLUME_SHAPE_CYLINDER = 2,
+        VOLUME_SHAPE_CONE = 3,
+        VOLUME_SHAPE_TETRA = 4
+    };
+
     explicit SpatialEffect3D(QWidget* parent = nullptr);
     virtual ~SpatialEffect3D();
 
@@ -588,6 +598,41 @@ public:
     int GetEffectBoundsMode() const { return effect_bounds_mode; }
     void SetEffectBoundsMode(int mode) { effect_bounds_mode = std::clamp(mode, (int)BOUNDS_MODE_GLOBAL, (int)BOUNDS_MODE_TARGET_ZONE); }
 
+    int GetVolumeShape() const { return effect_volume_shape; }
+    void SetVolumeShape(int shape)
+    {
+        effect_volume_shape = std::clamp(shape, (int)VOLUME_SHAPE_BOX, (int)VOLUME_SHAPE_TETRA);
+    }
+
+    /**
+     * When false (default), volume placement tools stay locked: standard fill-grid
+     * feel, geometry rotation sliders still work, shear/custom shapes ignored for eval.
+     * When true, gizmo TRS/shear/shape are live.
+     */
+    bool GetVolumeToolsUnlocked() const { return effect_volume_tools_unlocked; }
+    void SetVolumeToolsUnlocked(bool unlocked)
+    {
+        effect_volume_tools_unlocked = unlocked;
+        if(!unlocked)
+        {
+            effect_volume_world_origin_valid_ = false;
+        }
+    }
+
+    /** Absolute gizmo origin while volume tools are unlocked (ignores anchor+offset fight). */
+    void SetVolumeWorldOrigin(float x, float y, float z)
+    {
+        effect_volume_world_origin_ = {x, y, z};
+        effect_volume_world_origin_valid_ = true;
+    }
+    bool HasVolumeWorldOrigin() const
+    {
+        return effect_volume_tools_unlocked && effect_volume_world_origin_valid_;
+    }
+
+    /** Half-extents matching the gizmo OBB / volume clip (grid units). */
+    void GetVolumeHalfExtents(const GridContext3D& grid, float& hx, float& hy, float& hz) const;
+
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);
 
@@ -731,6 +776,10 @@ protected:
     float               effect_shear_xy = 0.0f;
     float               effect_shear_xz = 0.0f;
     float               effect_shear_yz = 0.0f;
+    int                 effect_volume_shape = (int)VOLUME_SHAPE_BOX;
+    bool                effect_volume_tools_unlocked = false;
+    Vector3D            effect_volume_world_origin_{};
+    bool                effect_volume_world_origin_valid_ = false;
 
     int                 effect_path_axis;
     int                 effect_plane;
@@ -841,6 +890,21 @@ protected:
                                  const GridContext3D* grid = nullptr) const;
 
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
+    /**
+     * 0 at center, 1 on the volume surface, >1 outside (shape-aware, tight).
+     * @param rel must already be in volume-local space (see VolumeWorldDeltaToLocal /
+     *        ApplyEffectRotation). Do not pass raw world deltas here.
+     */
+    float VolumeNormalizedDistance(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
+    /** World-space delta from origin → volume-local (inverse rotation + unshear). */
+    Vector3D VolumeWorldDeltaToLocal(float dx, float dy, float dz) const;
+    /**
+     * World sample → origin-local UV in [0,1]^3 using the volume frame (rotation/shear/shape extents).
+     * Returns false outside the volume (tight).
+     */
+    bool SampleVolumeLocalUv01(float world_x, float world_y, float world_z,
+                               const GridContext3D& grid,
+                               float* u, float* v, float* w) const;
 
     Vector3D TransformPointByRotation(float x, float y, float z,
                                       const Vector3D& origin) const;

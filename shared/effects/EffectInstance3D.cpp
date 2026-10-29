@@ -11,6 +11,7 @@ nlohmann::json EffectInstance3D::ToJson() const
     j["zone_index"] = zone_index;
     j["blend_mode"] = (int)blend_mode;
     j["enabled"] = enabled;
+    j["volume_tools_unlocked"] = volume_tools_unlocked;
     j["id"] = id;
 
     if(!effect_class_name.empty())
@@ -56,6 +57,11 @@ std::unique_ptr<EffectInstance3D> EffectInstance3D::FromJson(const nlohmann::jso
     if(j.contains("enabled"))
     {
         instance->enabled = j["enabled"].get<bool>();
+    }
+
+    if(j.contains("volume_tools_unlocked"))
+    {
+        instance->volume_tools_unlocked = j["volume_tools_unlocked"].get<bool>();
     }
 
     if(j.contains("id"))

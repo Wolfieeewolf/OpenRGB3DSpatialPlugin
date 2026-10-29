@@ -5,6 +5,7 @@
 
 #include <QGroupBox>
 
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -32,6 +33,7 @@ public:
     QComboBox*   gameCombo() const;
     QLineEdit*   searchEdit() const;
     QListWidget* libraryList() const;
+    QCheckBox*   unlockVolumeOnAddCheck() const;
     QPushButton* addToStackButton() const;
 
 private:

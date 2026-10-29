@@ -44,6 +44,11 @@ struct EffectInstance3D
     int zone_index;
     BlendMode blend_mode;
     bool enabled;
+    /**
+     * Volume tools (gizmo place/rotate/scale/skew, volume shape) are always part of
+     * the layer model; when false they stay locked for the standard fill-grid feel.
+     */
+    bool volume_tools_unlocked;
     int id;
     std::unique_ptr<nlohmann::json> saved_settings;
 
@@ -54,6 +59,7 @@ struct EffectInstance3D
         , zone_index(-1)
         , blend_mode(BlendMode::NO_BLEND)
         , enabled(true)
+        , volume_tools_unlocked(false)
         , id(0)
         , saved_settings(nullptr)
     {

@@ -77,9 +77,17 @@ public:
     void SetTarget(DisplayPlane3D* target);
     void SetTarget(SceneProp3D* target);
     void SetTarget(EffectVolume3D* target);
+    /** Drop in-progress drag/hover so a retarget cannot keep writing the old gesture. */
+    void CancelDrag();
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
-    /** Keep gizmo ~constant on screen: pass eye→gizmo distance and vertical FOV (degrees). */
+    /**
+     * World-space half-extent of the selected object (longest axis).
+     * When > 0, SetScreenScale sizes rings just outside that extent (with soft
+     * screen clamps). Pass 0 for screen-constant sizing (ref points, etc.).
+     */
+    void SetObjectRadius(float world_half_extent);
+    /** Pass eye→gizmo distance and vertical FOV (degrees); uses SetObjectRadius. */
     void SetScreenScale(float eye_distance, float fovy_degrees);
 
     bool HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
@@ -156,6 +164,7 @@ private:
     int                    viewport_height;
 
     float                  gizmo_size;
+    float                  object_radius_;
     float                  axis_thickness;
     float                  axis_hit_thickness_;
     float                  center_sphere_radius;

@@ -14,14 +14,29 @@
 #endif
 
 #define GIZMO_SIZE                  1.5f
+/**
+ * Absolute world-space ceiling — oversized arms inflate hit spheres and lock the UI.
+ * Hit radii below stay separately capped so visual size can grow without swallowing picks.
+ */
+#define GIZMO_SIZE_HARD_MAX         28.0f
+#define GIZMO_SIZE_HARD_MIN         0.35f
 #define AXIS_THICKNESS              0.1f
 #define AXIS_HIT_THICKNESS          0.25f
 #define CENTER_SPHERE_RADIUS        0.30f
 #define CENTER_SPHERE_HIT_RADIUS    0.40f
 #define ROTATE_RING_HIT_THICKNESS   0.35f
 #define GIZMO_DRAG_SLOP_GL_PX       3.0f
-/** Fraction of view height at the gizmo used as axis arm length. */
+#define GIZMO_DEPTH_HARD_MAX        5000.0f
+/** Fraction of view height at the gizmo used as axis arm length (screen-constant fallback). */
 #define GIZMO_ARM_VIEW_FRACTION     0.072f
+/**
+ * Object-relative growth: rings sit just outside the object median half-extent,
+ * tempered toward screen size so room-filling volumes stay usable (not diameter rings).
+ */
+#define GIZMO_OBJECT_RADIUS_FACTOR  0.72f
+#define GIZMO_OBJECT_SCREEN_MIN_FRAC 0.055f
+#define GIZMO_OBJECT_SCREEN_MAX_FRAC 0.32f
+#define GIZMO_OBJECT_MAX_SCREEN_MUL  4.0f
 
 Gizmo3D::Gizmo3D()
 {
@@ -44,17 +59,20 @@ Gizmo3D::Gizmo3D()
     viewport_height = 600;
 
     gizmo_size = GIZMO_SIZE;
+    object_radius_ = 0.0f;
     axis_thickness = AXIS_THICKNESS;
     axis_hit_thickness_ = AXIS_HIT_THICKNESS;
     center_sphere_radius = CENTER_SPHERE_RADIUS;
     center_hit_radius_ = CENTER_SPHERE_HIT_RADIUS;
     rotate_ring_hit_thickness_ = ROTATE_RING_HIT_THICKNESS;
 
-    color_x_axis[0] = 1.0f; color_x_axis[1] = 0.0f; color_x_axis[2] = 0.0f;
-    color_y_axis[0] = 0.0f; color_y_axis[1] = 1.0f; color_y_axis[2] = 0.0f;
-    color_z_axis[0] = 0.0f; color_z_axis[1] = 0.0f; color_z_axis[2] = 1.0f;
-    color_center[0] = 1.0f; color_center[1] = 1.0f; color_center[2] = 0.0f;
-    color_highlight[0] = 1.0f; color_highlight[1] = 1.0f; color_highlight[2] = 1.0f;
+    /* Match room guide labels (LEDViewport3D::paintRoomGuideLabels):
+       X red, Y blue (floor/ceiling), Z green (front/back) — not classic RGB Y-green. */
+    color_x_axis[0] = 0.95f; color_x_axis[1] = 0.18f; color_x_axis[2] = 0.15f;
+    color_y_axis[0] = 0.20f; color_y_axis[1] = 0.45f; color_y_axis[2] = 0.95f;
+    color_z_axis[0] = 0.20f; color_z_axis[1] = 0.85f; color_z_axis[2] = 0.25f;
+    color_center[0] = 1.00f; color_center[1] = 0.85f; color_center[2] = 0.20f;
+    color_highlight[0] = 1.00f; color_highlight[1] = 1.00f; color_highlight[2] = 1.00f;
 
     grid_snap_enabled = false;
     grid_size = 1.0f;
@@ -212,6 +230,17 @@ void Gizmo3D::SetTarget(EffectVolume3D* target)
     }
 }
 
+void Gizmo3D::CancelDrag()
+{
+    dragging = false;
+    center_press_pending = false;
+    selected_axis = GIZMO_AXIS_NONE;
+    hover_axis = GIZMO_AXIS_NONE;
+    rot_drag_accum_degrees = 0.0f;
+    rot_snap_remainder_degrees = 0.0f;
+    rotate_snap_active = false;
+}
+
 void Gizmo3D::SetViewportSize(int width, int height)
 {
     viewport_width = width;
@@ -224,11 +253,20 @@ void Gizmo3D::SetGridSnap(bool enabled, float size)
     grid_size = size;
 }
 
+void Gizmo3D::SetObjectRadius(float world_half_extent)
+{
+    object_radius_ = (world_half_extent > 0.0f) ? world_half_extent : 0.0f;
+}
+
 void Gizmo3D::SetScreenScale(float eye_distance, float fovy_degrees)
 {
-    if(eye_distance < 0.01f)
+    if(!std::isfinite(eye_distance) || eye_distance < 0.01f)
     {
         eye_distance = 0.01f;
+    }
+    if(eye_distance > GIZMO_DEPTH_HARD_MAX)
+    {
+        eye_distance = GIZMO_DEPTH_HARD_MAX;
     }
     if(fovy_degrees < 1.0f)
     {
@@ -239,24 +277,56 @@ void Gizmo3D::SetScreenScale(float eye_distance, float fovy_degrees)
         fovy_degrees = 179.0f;
     }
 
-    /* World arm length ∝ depth so projected size stays ~constant. */
     const float fovy_rad = fovy_degrees * (float)M_PI / 180.0f;
     const float view_height_at_depth = 2.0f * eye_distance * std::tan(fovy_rad * 0.5f);
-    gizmo_size = view_height_at_depth * GIZMO_ARM_VIEW_FRACTION;
-    if(gizmo_size < 0.35f)
+
+    const float screen_arm = view_height_at_depth * GIZMO_ARM_VIEW_FRACTION;
+    if(object_radius_ > 1.0e-4f && std::isfinite(object_radius_))
     {
-        gizmo_size = 0.35f;
+        /* Grow with object size; screen band keeps tiny objects readable and
+           huge volumes from spanning the whole viewport. */
+        gizmo_size = object_radius_ * GIZMO_OBJECT_RADIUS_FACTOR;
+        float soft_min = std::max(GIZMO_SIZE, view_height_at_depth * GIZMO_OBJECT_SCREEN_MIN_FRAC);
+        float soft_max = std::max(view_height_at_depth * GIZMO_OBJECT_SCREEN_MAX_FRAC,
+                                  screen_arm * GIZMO_OBJECT_MAX_SCREEN_MUL);
+        /* Never draw larger than the object itself. */
+        soft_max = std::min(soft_max, std::max(object_radius_ * 1.05f, soft_min));
+        soft_min = std::min(soft_min, GIZMO_SIZE_HARD_MAX);
+        soft_max = std::min(soft_max, GIZMO_SIZE_HARD_MAX);
+        if(soft_max < soft_min)
+        {
+            soft_max = soft_min;
+        }
+        if(gizmo_size < soft_min)
+        {
+            gizmo_size = soft_min;
+        }
+        if(gizmo_size > soft_max)
+        {
+            gizmo_size = soft_max;
+        }
     }
-    if(gizmo_size > 12.0f)
+    else
     {
-        gizmo_size = 12.0f;
+        /* No object extent (e.g. ref point): keep ~constant on screen. */
+        gizmo_size = screen_arm;
     }
 
-    center_sphere_radius = gizmo_size * 0.12f;
-    axis_thickness = gizmo_size * 0.06f;
-    axis_hit_thickness_ = gizmo_size * 0.16f;
-    center_hit_radius_ = gizmo_size * 0.18f;
-    rotate_ring_hit_thickness_ = gizmo_size * 0.18f;
+    if(!std::isfinite(gizmo_size) || gizmo_size > GIZMO_SIZE_HARD_MAX)
+    {
+        gizmo_size = GIZMO_SIZE_HARD_MAX;
+    }
+    if(gizmo_size < GIZMO_SIZE_HARD_MIN)
+    {
+        gizmo_size = GIZMO_SIZE_HARD_MIN;
+    }
+
+    /* Hit targets stay capped independently of visual arm length. */
+    center_sphere_radius = std::min(gizmo_size * 0.10f, 1.25f);
+    axis_thickness = std::min(gizmo_size * 0.05f, 0.65f);
+    axis_hit_thickness_ = std::min(gizmo_size * 0.12f, 1.35f);
+    center_hit_radius_ = std::min(gizmo_size * 0.14f, 1.6f);
+    rotate_ring_hit_thickness_ = std::min(gizmo_size * 0.14f, 1.6f);
 }
 
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,

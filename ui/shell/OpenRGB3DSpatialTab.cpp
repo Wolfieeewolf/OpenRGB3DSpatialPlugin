@@ -26,7 +26,9 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFrame>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -36,10 +38,10 @@
 #include <QShowEvent>
 #include <QScrollArea>
 #include <QPointer>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QSlider>
 #include <QSpinBox>
-#include <QVBoxLayout>
 #include "LEDViewport3D.h"
 #include "PluginUiUtils.h"
 #include "ControllerLayout3D.h"
@@ -97,7 +99,11 @@ void ResolveEffectLibraryItem(QListWidgetItem* item, QString& out_class, QString
         return;
     }
     out_class = item->data(Qt::UserRole).toString();
-    out_ui = item->text();
+    out_ui = item->data(Qt::UserRole + 2).toString();
+    if(out_ui.isEmpty())
+    {
+        out_ui = item->text();
+    }
 }
 }
 
@@ -907,6 +913,7 @@ bool OpenRGB3DSpatialTab::PrepareStackForPlayback()
 
         if(instance->effect)
         {
+            instance->effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
             has_enabled_effect = true;
         }
     }
@@ -1020,6 +1027,10 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
                 {
                     if(game_combo->itemText(i).contains(search, Qt::CaseInsensitive))
                     {
+                        /* Block signals — setCurrentIndex would re-enter
+                           effectLibraryGameChanged → PopulateEffectLibrary and
+                           duplicate library cards. */
+                        QSignalBlocker block(*game_combo);
                         game_combo->setCurrentIndex(i);
                         break;
                     }
@@ -1062,7 +1073,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
 
     for(const LibRow& r : rows)
     {
-        QListWidgetItem* item = new QListWidgetItem(r.text);
+        QListWidgetItem* item = new QListWidgetItem();
         if(audio_category)
         {
             item->setToolTip(tr(
@@ -1079,7 +1090,33 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         }
         item->setData(Qt::UserRole, r.class_name);
         item->setData(Qt::UserRole + 1, r.category);
+        item->setData(Qt::UserRole + 2, r.text);
+
+        QFrame* card = new QFrame();
+        PluginUiApplyControllerCardChrome(card, false);
+        auto* row = new QHBoxLayout(card);
+        row->setContentsMargins(8, 6, 8, 6);
+        row->setSpacing(8);
+        auto* title = new QLabel(r.text, card);
+        title->setWordWrap(true);
+        auto* add_btn = new QToolButton(card);
+        add_btn->setText(QStringLiteral("+"));
+        add_btn->setToolTip(tr("Add to stack"));
+        add_btn->setAutoRaise(false);
+        const QString class_name = r.class_name;
+        const QString ui_name = r.text;
+        connect(add_btn, &QToolButton::clicked, this,
+                [this, class_name, ui_name]()
+                {
+                    const bool unlock = effectLibraryUnlockVolumeOnAddCheck()
+                        && effectLibraryUnlockVolumeOnAddCheck()->isChecked();
+                    AddEffectInstanceToStack(class_name, ui_name, -1, BlendMode::NO_BLEND, nullptr, true, unlock);
+                });
+        row->addWidget(title, 1);
+        row->addWidget(add_btn, 0);
+        item->setSizeHint(card->sizeHint().expandedTo(QSize(0, 40)));
         effectLibraryList()->addItem(item);
+        effectLibraryList()->setItemWidget(item, card);
     }
 
     effectLibraryList()->blockSignals(restore_signals);
@@ -1097,7 +1134,8 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
                                                    int zone_index,
                                                    BlendMode blend_mode,
                                                    const nlohmann::json* preset_settings,
-                                                   bool enabled)
+                                                   bool enabled,
+                                                   bool volume_tools_unlocked)
 {
     if(class_name.isEmpty())
     {
@@ -1111,6 +1149,7 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     instance->zone_index    = zone_index;
     instance->blend_mode    = blend_mode;
     instance->enabled       = enabled;
+    instance->volume_tools_unlocked = volume_tools_unlocked;
     instance->effect_class_name = class_name.toStdString();
 
     if(preset_settings && !preset_settings->is_null())
@@ -1132,15 +1171,6 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     if(new_instance)
     {
         LoadStackEffectControls(new_instance);
-        if(new_instance->effect)
-        {
-            new_instance->effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
-            new_instance->effect->SetOffsetPercents(0, 0, 0);
-            if(new_instance->effect->GetOccupancyScalePercent() >= 95u)
-            {
-                new_instance->effect->SetOccupancyScalePercent(45);
-            }
-        }
         if(effectZoneCombo())
         {
             QSignalBlocker zb(effectZoneCombo());
@@ -1189,20 +1219,8 @@ void OpenRGB3DSpatialTab::effectLibraryGameChanged(int)
 
 void OpenRGB3DSpatialTab::effectLibrarySelectionChanged(int row)
 {
-    const int si = effectStackList() ? effectStackList()->currentRow() : -1;
-    if(si >= 0 && si < (int)effect_stack.size())
-    {
-        LoadStackEffectControls(effect_stack[si].get());
-    }
-    else
-    {
-        LoadStackEffectControls(nullptr);
-        if(effectConfigGroup())
-        {
-            effectConfigGroup()->setVisible(false);
-        }
-    }
-
+    /* Browsing the library must not rebuild the stack effect panel — that
+       fights in-progress volume/gizmo edits. Only gate the Add affordance. */
     if(effectLibraryAddButton())
     {
         effectLibraryAddButton()->setEnabled(row >= 0);
@@ -1236,7 +1254,9 @@ void OpenRGB3DSpatialTab::effectLibraryAddClicked()
     {
         return;
     }
-    AddEffectInstanceToStack(class_name, ui_name);
+    const bool unlock = effectLibraryUnlockVolumeOnAddCheck()
+        && effectLibraryUnlockVolumeOnAddCheck()->isChecked();
+    AddEffectInstanceToStack(class_name, ui_name, -1, BlendMode::NO_BLEND, nullptr, true, unlock);
 }
 
 void OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked(QListWidgetItem* item)
@@ -1252,7 +1272,46 @@ void OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked(QListWidgetItem* item)
     {
         return;
     }
-    AddEffectInstanceToStack(class_name, ui_name);
+    const bool unlock = effectLibraryUnlockVolumeOnAddCheck()
+        && effectLibraryUnlockVolumeOnAddCheck()->isChecked();
+    AddEffectInstanceToStack(class_name, ui_name, -1, BlendMode::NO_BLEND, nullptr, true, unlock);
+}
+
+void OpenRGB3DSpatialTab::SyncEffectLibraryUnlockVolumePreference()
+{
+    if(!effectLibraryUnlockVolumeOnAddCheck())
+    {
+        return;
+    }
+    bool prefer_unlock = false;
+    try
+    {
+        const nlohmann::json settings = GetPluginSettings();
+        if(settings.contains("effect_library_unlock_volume_on_add")
+           && settings["effect_library_unlock_volume_on_add"].is_boolean())
+        {
+            prefer_unlock = settings["effect_library_unlock_volume_on_add"].get<bool>();
+        }
+    }
+    catch(...)
+    {
+    }
+    QSignalBlocker blocker(effectLibraryUnlockVolumeOnAddCheck());
+    effectLibraryUnlockVolumeOnAddCheck()->setChecked(prefer_unlock);
+}
+
+void OpenRGB3DSpatialTab::effectLibraryUnlockVolumeOnAddToggled(bool checked)
+{
+    try
+    {
+        nlohmann::json settings = GetPluginSettings();
+        settings["effect_library_unlock_volume_on_add"] = checked;
+        SetPluginSettings(settings);
+    }
+    catch(const std::exception& e)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to persist unlock-volume-on-add: %s", e.what());
+    }
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectStackRowSelectorVisibility()
@@ -1672,6 +1731,98 @@ void OpenRGB3DSpatialTab::effectBoundsChanged(int index)
                     instance->saved_settings = std::make_unique<nlohmann::json>(current_settings);
                     SetLayoutDirty();
                 }
+            }
+        }
+    }
+
+    if(viewport) viewport->UpdateColors();
+}
+
+void OpenRGB3DSpatialTab::effectVolumeShapeChanged(int index)
+{
+    if(!effectVolumeShapeCombo())
+    {
+        return;
+    }
+    if(index < 0 || index >= effectVolumeShapeCombo()->count())
+    {
+        return;
+    }
+    const int shape = effectVolumeShapeCombo()->itemData(index).toInt();
+
+    int current_row = effectStackList() ? effectStackList()->currentRow() : -1;
+    if(current_row >= 0 && current_row < (int)effect_stack.size())
+    {
+        EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
+        if(instance && !instance->volume_tools_unlocked)
+        {
+            return;
+        }
+    }
+
+    if(current_effect_ui)
+    {
+        current_effect_ui->SetVolumeShape(shape);
+    }
+
+    if(current_row >= 0 && current_row < (int)effect_stack.size())
+    {
+        EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
+        if(instance)
+        {
+            SpatialEffect3D* settings_source = nullptr;
+            if(instance->effect)
+            {
+                instance->effect->SetVolumeShape(shape);
+                settings_source = instance->effect.get();
+            }
+            else if(current_effect_ui)
+            {
+                settings_source = current_effect_ui;
+            }
+
+            if(settings_source)
+            {
+                instance->saved_settings = std::make_unique<nlohmann::json>(settings_source->SaveSettings());
+                SetLayoutDirty();
+            }
+
+            if(viewport && instance->effect)
+            {
+                ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                                          manual_room_width,
+                                                                          manual_room_height,
+                                                                          manual_room_depth);
+                GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+                GridContext3D grid(bounds.min_x, bounds.max_x,
+                                   bounds.min_y, bounds.max_y,
+                                   bounds.min_z, bounds.max_z,
+                                   grid_scale_mm);
+                if(mapped_lights_anchor_valid_)
+                {
+                    grid.SetLedCentroid(mapped_lights_anchor_.x,
+                                        mapped_lights_anchor_.y,
+                                        mapped_lights_anchor_.z);
+                }
+                if(EffectVolume3D* active_volume = viewport->ActiveEffectVolume())
+                {
+                    active_volume->shape = shape;
+                    viewport->SetEffectVolumeGrid(grid);
+                    active_volume->ApplyToEffect(*instance->effect, grid);
+                    EffectVolume3D synced = EffectVolume3D::FromEffect(*instance->effect, grid, current_row);
+                    *active_volume = synced;
+                    instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+                    viewport->UpdateGizmoPosition();
+                }
+                else if(instance->volume_tools_unlocked)
+                {
+                    EffectVolume3D fresh_volume = EffectVolume3D::FromEffect(*instance->effect, grid, current_row);
+                    instance->effect->SetVolumeWorldOrigin(fresh_volume.transform.position.x,
+                                                          fresh_volume.transform.position.y,
+                                                          fresh_volume.transform.position.z);
+                    viewport->SelectEffectVolume(fresh_volume, grid);
+                }
+                viewport->update();
             }
         }
     }
@@ -2318,6 +2469,11 @@ QListWidget* OpenRGB3DSpatialTab::effectLibraryList() const
     return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->libraryList() : nullptr;
 }
 
+QCheckBox* OpenRGB3DSpatialTab::effectLibraryUnlockVolumeOnAddCheck() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->unlockVolumeOnAddCheck() : nullptr;
+}
+
 QPushButton* OpenRGB3DSpatialTab::effectLibraryAddButton() const
 {
     return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->addToStackButton() : nullptr;
@@ -2391,6 +2547,16 @@ QLabel* OpenRGB3DSpatialTab::effectBoundsLabel() const
 QComboBox* OpenRGB3DSpatialTab::effectBoundsCombo() const
 {
     return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->boundsCombo() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::effectVolumeShapeLabel() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->volumeShapeLabel() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectVolumeShapeCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->volumeShapeCombo() : nullptr;
 }
 
 QComboBox* OpenRGB3DSpatialTab::stackEffectTypeCombo() const

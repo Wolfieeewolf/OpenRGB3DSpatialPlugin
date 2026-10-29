@@ -1475,7 +1475,6 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
         return;
     }
 
-    Vector3D origin = GetEffectOriginGrid(grid);
     std::unordered_map<std::uint32_t, int> unique_index;
     unique_index.reserve((size_t)std::max(16, count / 2));
     std::vector<float> n01;
@@ -1489,12 +1488,15 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
         bool ok = false;
         if(spec_.sample_room)
         {
-            SampleGpuRoomVolume01(x, y, z, grid, &n1, &n2, &n3);
-            ok = true;
+            if(!EffectGridSampleOutsideVolume(x, y, z, grid))
+            {
+                SampleGpuRoomVolume01(x, y, z, grid, &n1, &n2, &n3);
+                ok = true;
+            }
         }
         else
         {
-            ok = SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &n1, &n2, &n3);
+            ok = SampleVolumeLocalUv01(x, y, z, grid, &n1, &n2, &n3);
         }
         if(!ok)
         {
@@ -1551,8 +1553,11 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
     progress = CalculateProgress(time_sec) * speed_mul;
 
     const Vector3D origin = GetEffectOriginGrid(grid);
-    const EffectGridAxisHalfExtents he = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
-    float med = EffectGridGpuAtlasMedianHalfExtent(grid, origin, GetNormalizedScale());
+    /* Same half-extents / local frame as SampleVolumeLocalUv01 + the gizmo OBB. */
+    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
+    GetVolumeHalfExtents(grid, hx, hy, hz);
+    const EffectGridAxisHalfExtents he{hx, hy, hz};
+    float med = EffectGridMedianOfHalfExtents(he);
     if(med < 1e-4f)
         med = 1.0f;
     atlas_sx = std::max(0.25f, 2.0f * he.hw / med);
@@ -1565,13 +1570,14 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
     atlas_az = std::clamp(he.hd / aspect_med, 0.15f, 1.0f);
 
     auto world_to_occ = [&](float x, float y, float z) {
+        const Vector3D local = VolumeWorldDeltaToLocal(x - origin.x, y - origin.y, z - origin.z);
         const float hw = std::max(he.hw, 1e-5f);
         const float hh = std::max(he.hh, 1e-5f);
         const float hd = std::max(he.hd, 1e-5f);
         return Vector3D{
-            0.5f + 0.5f * (x - origin.x) / hw,
-            0.5f + 0.5f * (y - origin.y) / hh,
-            0.5f + 0.5f * (z - origin.z) / hd
+            0.5f + 0.5f * local.x / hw,
+            0.5f + 0.5f * local.y / hh,
+            0.5f + 0.5f * local.z / hd
         };
     };
     const Vector3D pmin = world_to_occ(grid.min_x, grid.min_y, grid.min_z);
@@ -1968,13 +1974,15 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
                 }), audio_pulses.end());
         }
 
-        // Compute grid-derived geometry
+        // Compute grid-derived geometry (match gizmo / SampleVolumeLocalUv01 extents)
         Vector3D origin = GetEffectOriginGrid(grid);
+        float vh_x = 1.0f, vh_y = 1.0f, vh_z = 1.0f;
+        GetVolumeHalfExtents(grid, vh_x, vh_y, vh_z);
+        const EffectGridAxisHalfExtents extents{vh_x, vh_y, vh_z};
         constexpr float kExplosionFill = 3.0f;
-        float radius_basis = EffectGridGpuAtlasMedianHalfExtent(grid, origin, GetNormalizedScale())
+        float radius_basis = EffectGridMedianOfHalfExtents(extents)
             * 1.7320508f * kExplosionFill;
         radius_basis = std::max(radius_basis, 1e-3f);
-        const EffectGridAxisHalfExtents extents = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
 
         const AudioBeatWaveMode wave_mode = static_cast<AudioBeatWaveMode>(audio_settings.beat_wave_mode);
         const bool classic = (wave_mode == AudioBeatWaveMode::ClassicWave);
@@ -2088,11 +2096,18 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
 
 RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    /* World-space sample bound to the gizmo volume (rotation/move/scale/shear). */
     Vector3D origin = GetEffectOriginGrid(grid);
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
-    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    float n1 = 0.5f, n2 = 0.5f, n3 = 0.5f;
+    if(spec_.sample_room)
+    {
+        if(EffectGridSampleOutsideVolume(x, y, z, grid))
+        {
+            return 0x00000000;
+        }
+        SampleGpuRoomVolume01(x, y, z, grid, &n1, &n2, &n3);
+    }
+    else if(!SampleVolumeLocalUv01(x, y, z, grid, &n1, &n2, &n3))
     {
         return 0x00000000;
     }
@@ -2100,17 +2115,9 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
     progress = CalculateProgress(time);
     const float detail = std::max(0.05f, GetScaledDetail());
     const float size_multiplier = GetNormalizedSize();
-    Vector3D rotated_pos{x, y, z};
-    float n1 = 0.5f, n2 = 0.5f, n3 = 0.5f;
-    if(spec_.sample_room)
-    {
-        SampleGpuRoomVolume01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, &n1, &n2, &n3);
-    }
-    else if(!SampleGpuVolumeOriginLocal01(rotated_pos.x, rotated_pos.y, rotated_pos.z, grid, origin,
-                                    GetNormalizedScale(), &n1, &n2, &n3))
-    {
-        return 0x00000000;
-    }
+    /* Local-frame stand-in for stratum / audio helpers that expect a grid point. */
+    const Vector3D local = VolumeWorldDeltaToLocal(x - origin.x, y - origin.y, z - origin.z);
+    Vector3D rotated_pos{origin.x + local.x, origin.y + local.y, origin.z + local.z};
     if(!volume_assist_.isAvailable())
     {
         return 0x00000000;
@@ -2463,8 +2470,10 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         const float rot_rel_x = rotated_pos.x - origin.x;
         const float rot_rel_z = rotated_pos.z - origin.z;
         const float angle = atan2f(rot_rel_z, rot_rel_x);
-        const EffectGridAxisHalfExtents ex = MakeEffectGpuAtlasHalfExtents(grid, origin, GetNormalizedScale());
-        float norm_radius = EffectGridHorizontalRadialNorm01(EffectGridHorizontalRadialNormXZ(rot_rel_x, rot_rel_z, ex.hw, ex.hd));
+        float ex_x = 1.0f, ex_y = 1.0f, ex_z = 1.0f;
+        GetVolumeHalfExtents(grid, ex_x, ex_y, ex_z);
+        float norm_radius = EffectGridHorizontalRadialNorm01(
+            EffectGridHorizontalRadialNormXZ(rot_rel_x, rot_rel_z, ex_x, ex_z));
         norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
         const float detail_e = detail * bb.tight_mul;
         const float two_pi = 6.2831853f;

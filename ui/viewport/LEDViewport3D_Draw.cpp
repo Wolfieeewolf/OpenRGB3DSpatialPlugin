@@ -159,6 +159,84 @@ void LEDViewport3D::paintGlScene()
     }
 }
 
+float LEDViewport3D::selectedObjectGizmoRadius() const
+{
+    /* Median of three extents — long thin runs grow a little without matching length. */
+    auto median3 = [](float a, float b, float c) {
+        if(a > b) std::swap(a, b);
+        if(b > c) std::swap(b, c);
+        if(a > b) std::swap(a, b);
+        return b;
+    };
+
+    if(effect_volume_active_)
+    {
+        const Vector3D& p = effect_volume_.transform.position;
+        const Vector3D& s = effect_volume_.transform.scale;
+        float hx = std::fabs(s.x);
+        float hy = std::fabs(s.y);
+        float hz = std::fabs(s.z);
+        /* Prefer the volume∩grid box so cover-from-origin domains don't inflate the gizmo. */
+        if(effect_volume_grid_)
+        {
+            const GridContext3D& g = *effect_volume_grid_;
+            const float x0 = std::max(p.x - hx, g.min_x);
+            const float x1 = std::min(p.x + hx, g.max_x);
+            const float y0 = std::max(p.y - hy, g.min_y);
+            const float y1 = std::min(p.y + hy, g.max_y);
+            const float z0 = std::max(p.z - hz, g.min_z);
+            const float z1 = std::min(p.z + hz, g.max_z);
+            hx = 0.5f * std::max(0.0f, x1 - x0);
+            hy = 0.5f * std::max(0.0f, y1 - y0);
+            hz = 0.5f * std::max(0.0f, z1 - z0);
+        }
+        return median3(hx, hy, hz);
+    }
+
+    if(selected_scene_prop_idx_ >= 0 && scene_props_ &&
+       selected_scene_prop_idx_ < (int)scene_props_->size())
+    {
+        SceneProp3D* prop = (*scene_props_)[(size_t)selected_scene_prop_idx_].get();
+        if(prop)
+        {
+            const Transform3D& t = prop->GetTransform();
+            const float w = MMToGridUnits(prop->GetWidthMM(), grid_scale_mm) * std::max(t.scale.x, 0.001f);
+            const float h = MMToGridUnits(prop->GetHeightMM(), grid_scale_mm) * std::max(t.scale.y, 0.001f);
+            const float d = MMToGridUnits(prop->GetDepthMM(), grid_scale_mm) * std::max(t.scale.z, 0.001f);
+            return median3(0.5f * w, 0.5f * h, 0.5f * d);
+        }
+    }
+
+    if(selected_display_plane_idx >= 0 && display_planes &&
+       selected_display_plane_idx < (int)display_planes->size())
+    {
+        DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
+        if(plane)
+        {
+            const float w = MMToGridUnits(plane->GetWidthMM(), grid_scale_mm);
+            const float h = MMToGridUnits(plane->GetHeightMM(), grid_scale_mm);
+            return 0.5f * std::max(w, h);
+        }
+    }
+
+    if(selected_controller_idx >= 0 && controller_transforms &&
+       selected_controller_idx < (int)controller_transforms->size())
+    {
+        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+        if(ctrl && !ctrl->hidden_by_virtual)
+        {
+            const Vector3D size = GetControllerSize(ctrl);
+            const float sx = size.x * std::max(ctrl->transform.scale.x, 0.001f);
+            const float sy = size.y * std::max(ctrl->transform.scale.y, 0.001f);
+            const float sz = size.z * std::max(ctrl->transform.scale.z, 0.001f);
+            return median3(0.5f * sx, 0.5f * sy, 0.5f * sz);
+        }
+    }
+
+    /* Ref points and unknown targets stay screen-constant. */
+    return 0.0f;
+}
+
 void LEDViewport3D::syncGizmoScreenScale()
 {
     float gx = 0.0f;
@@ -175,10 +253,20 @@ void LEDViewport3D::syncGizmoScreenScale()
         depth = std::fabs(vz);
     }
 
-    if(depth < 0.01f)
+    if(!std::isfinite(depth) || depth < 0.01f)
     {
         depth = 0.01f;
     }
+    if(depth > 5000.0f)
+    {
+        depth = 5000.0f;
+    }
+    float object_radius = selectedObjectGizmoRadius();
+    if(!std::isfinite(object_radius) || object_radius < 0.0f)
+    {
+        object_radius = 0.0f;
+    }
+    gizmo.SetObjectRadius(object_radius);
     gizmo.SetScreenScale(depth, ViewportGLFormat::kDefaultFovyDegrees);
 }
 
@@ -920,34 +1008,132 @@ void LEDViewport3D::DrawEffectVolume()
         return;
     }
 
-    Vector3D corners[8];
-    effect_volume_.GetCorners(corners);
-    static const int edges[12][2] = {
-        {0, 1}, {2, 3}, {4, 5}, {6, 7},
-        {0, 2}, {1, 3}, {4, 6}, {5, 7},
-        {0, 4}, {1, 5}, {2, 6}, {3, 7}
+    /* Selected volume: bright wireframe only (no face fill — a room-sized fill
+       washed the LED grid cyan and lingered after remove). */
+    const float sx = std::max(1e-4f, effect_volume_.transform.scale.x);
+    const float sy = std::max(1e-4f, effect_volume_.transform.scale.y);
+    const float sz = std::max(1e-4f, effect_volume_.transform.scale.z);
+    const float wr = 0.45f;
+    const float wg = 0.98f;
+    const float wb = 1.0f;
+
+    auto push_line = [&](std::vector<float>& out, float ax, float ay, float az, float bx, float by, float bz) {
+        const Vector3D a = effect_volume_.LocalToWorld(ax, ay, az);
+        const Vector3D b = effect_volume_.LocalToWorld(bx, by, bz);
+        PushPosColor(out, a.x, a.y, a.z, wr, wg, wb);
+        PushPosColor(out, b.x, b.y, b.z, wr, wg, wb);
     };
 
     std::vector<float> lines;
-    lines.reserve(12 * 2 * 6);
-    const float r = 0.25f;
-    const float g = 0.95f;
-    const float b = 1.0f;
-    for(int e = 0; e < 12; ++e)
+    const int shape = effect_volume_.shape;
+    const int segs = 24;
+
+    switch(shape)
     {
-        const Vector3D& a = corners[edges[e][0]];
-        const Vector3D& c = corners[edges[e][1]];
-        lines.push_back(a.x); lines.push_back(a.y); lines.push_back(a.z);
-        lines.push_back(r); lines.push_back(g); lines.push_back(b);
-        lines.push_back(c.x); lines.push_back(c.y); lines.push_back(c.z);
-        lines.push_back(r); lines.push_back(g); lines.push_back(b);
+        case SpatialEffect3D::VOLUME_SHAPE_SPHERE:
+        {
+            for(int i = 0; i < segs; ++i)
+            {
+                const float a0 = 2.0f * (float)M_PI * ((float)i / (float)segs);
+                const float a1 = 2.0f * (float)M_PI * ((float)(i + 1) / (float)segs);
+                const float c0 = std::cos(a0);
+                const float s0 = std::sin(a0);
+                const float c1 = std::cos(a1);
+                const float s1 = std::sin(a1);
+                push_line(lines, sx * c0, 0.0f, sz * s0, sx * c1, 0.0f, sz * s1);
+                push_line(lines, 0.0f, sy * c0, sz * s0, 0.0f, sy * c1, sz * s1);
+                push_line(lines, sx * c0, sy * s0, 0.0f, sx * c1, sy * s1, 0.0f);
+            }
+            break;
+        }
+        case SpatialEffect3D::VOLUME_SHAPE_CYLINDER:
+        {
+            for(int i = 0; i < segs; ++i)
+            {
+                const float a0 = 2.0f * (float)M_PI * ((float)i / (float)segs);
+                const float a1 = 2.0f * (float)M_PI * ((float)(i + 1) / (float)segs);
+                const float x0 = sx * std::cos(a0);
+                const float z0 = sz * std::sin(a0);
+                const float x1 = sx * std::cos(a1);
+                const float z1 = sz * std::sin(a1);
+                push_line(lines, x0,  sy, z0, x1,  sy, z1);
+                push_line(lines, x0, -sy, z0, x1, -sy, z1);
+                if((i % 4) == 0)
+                {
+                    push_line(lines, x0, -sy, z0, x0, sy, z0);
+                }
+            }
+            break;
+        }
+        case SpatialEffect3D::VOLUME_SHAPE_CONE:
+        {
+            for(int i = 0; i < segs; ++i)
+            {
+                const float a0 = 2.0f * (float)M_PI * ((float)i / (float)segs);
+                const float a1 = 2.0f * (float)M_PI * ((float)(i + 1) / (float)segs);
+                const float x0 = sx * std::cos(a0);
+                const float z0 = sz * std::sin(a0);
+                const float x1 = sx * std::cos(a1);
+                const float z1 = sz * std::sin(a1);
+                push_line(lines, x0, -sy, z0, x1, -sy, z1);
+                if((i % 4) == 0)
+                {
+                    push_line(lines, 0.0f, sy, 0.0f, x0, -sy, z0);
+                }
+            }
+            break;
+        }
+        case SpatialEffect3D::VOLUME_SHAPE_TETRA:
+        {
+            const float v[4][3] = {
+                { sx,  sy, -sz},
+                { sx, -sy,  sz},
+                {-sx,  sy,  sz},
+                {-sx, -sy, -sz}
+            };
+            static const int edges[6][2] = {
+                {0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}
+            };
+            for(int e = 0; e < 6; ++e)
+            {
+                const float* a = v[edges[e][0]];
+                const float* b = v[edges[e][1]];
+                push_line(lines, a[0], a[1], a[2], b[0], b[1], b[2]);
+            }
+            break;
+        }
+        case SpatialEffect3D::VOLUME_SHAPE_BOX:
+        default:
+        {
+            /* Always draw the true local OBB (same frame as SampleVolumeLocalUv01).
+               Clipping to room∩AABB shifted the wireframe off the effect origin. */
+            Vector3D corners[8];
+            effect_volume_.GetCorners(corners);
+            static const int edges[12][2] = {
+                {0, 1}, {2, 3}, {4, 5}, {6, 7},
+                {0, 2}, {1, 3}, {4, 6}, {5, 7},
+                {0, 4}, {1, 5}, {2, 6}, {3, 7}
+            };
+            lines.reserve(12 * 2 * 6);
+            for(int e = 0; e < 12; ++e)
+            {
+                const Vector3D& a = corners[edges[e][0]];
+                const Vector3D& c = corners[edges[e][1]];
+                PushPosColor(lines, a.x, a.y, a.z, wr, wg, wb);
+                PushPosColor(lines, c.x, c.y, c.z, wr, wg, wb);
+            }
+            break;
+        }
     }
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    effect_volume_lines_batch_.Upload(MeshBatch::Layout::PosColor, lines.data(), lines.size() / 6);
-    drawUnlitBatch(effect_volume_lines_batch_, MeshBatch::Primitive::Lines, 2.0f, 0.95f);
+    if(!lines.empty())
+    {
+        effect_volume_lines_batch_.Upload(MeshBatch::Layout::PosColor, lines.data(), lines.size() / 6);
+        drawUnlitBatch(effect_volume_lines_batch_, MeshBatch::Primitive::Lines, 2.4f, 0.92f);
+    }
 }
 
 void LEDViewport3D::DrawRoomBoundary()

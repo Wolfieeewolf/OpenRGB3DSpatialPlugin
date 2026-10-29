@@ -204,6 +204,9 @@ bool LEDViewport3D::pickRoomVolume(const Ray3D& ray)
 
 void LEDViewport3D::clearSceneObjectSelection()
 {
+    /* Must cancel before clearing the target — release bails when !active and
+       would otherwise leave dragging true for the next object's first move. */
+    gizmo.CancelDrag();
     selected_controller_indices.clear();
     selected_controller_idx = -1;
     selected_display_plane_idx = -1;

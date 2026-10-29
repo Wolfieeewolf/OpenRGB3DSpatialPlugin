@@ -48,62 +48,49 @@ namespace
 
 bool SpatialEffect3D::EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const
 {
-    Vector3D origin_grid = GetEffectOriginGrid(grid);
-    float rel_x = x - origin_grid.x;
-    float rel_y = y - origin_grid.y;
-    float rel_z = z - origin_grid.z;
-    return !IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid);
+    /* Always world → volume-local (ApplyEffectRotation stays a no-op to avoid doubles). */
+    const Vector3D origin_grid = GetEffectOriginGrid(grid);
+    const Vector3D local = VolumeWorldDeltaToLocal(x - origin_grid.x,
+                                                   y - origin_grid.y,
+                                                   z - origin_grid.z);
+    return !IsWithinEffectBoundary(local.x, local.y, local.z, grid);
 }
 
 void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const
 {
-    if(effect_scale_x == 100 && effect_scale_y == 100 && effect_scale_z == 100)
+    /* Axis % is occupancy (volume half-extents / GPU UV domain), not a second
+       sample stretch — stretching here fought the gizmo OBB. Optional legacy
+       axis-scale-frame rotation is still applied when set. */
+    const bool use_axis_scale_rotation =
+        (effect_axis_scale_rotation_yaw != 0.0f
+         || effect_axis_scale_rotation_pitch != 0.0f
+         || effect_axis_scale_rotation_roll != 0.0f);
+    if(!use_axis_scale_rotation)
     {
+        (void)x; (void)y; (void)z; (void)grid;
         return;
     }
     Vector3D origin = GetEffectOriginGrid(grid);
     float dx = x - origin.x;
     float dy = y - origin.y;
     float dz = z - origin.z;
-
-    bool use_axis_scale_rotation = (effect_axis_scale_rotation_yaw != 0.0f || effect_axis_scale_rotation_pitch != 0.0f || effect_axis_scale_rotation_roll != 0.0f);
-    if(use_axis_scale_rotation)
-    {
-        Vector3D in_scale_frame = RotateVectorByEuler(dx, dy, dz,
-            -effect_axis_scale_rotation_yaw, -effect_axis_scale_rotation_pitch, -effect_axis_scale_rotation_roll);
-        float sx = (effect_scale_x != 100) ? (100.0f / (float)effect_scale_x) : 1.0f;
-        float sy = (effect_scale_y != 100) ? (100.0f / (float)effect_scale_y) : 1.0f;
-        float sz = (effect_scale_z != 100) ? (100.0f / (float)effect_scale_z) : 1.0f;
-        Vector3D scaled;
-        scaled.x = in_scale_frame.x * sx;
-        scaled.y = in_scale_frame.y * sy;
-        scaled.z = in_scale_frame.z * sz;
-        Vector3D back = RotateVectorByEuler(scaled.x, scaled.y, scaled.z,
-            effect_axis_scale_rotation_yaw, effect_axis_scale_rotation_pitch, effect_axis_scale_rotation_roll);
-        x = origin.x + back.x;
-        y = origin.y + back.y;
-        z = origin.z + back.z;
-        return;
-    }
-
-    if(effect_scale_x != 100) x = origin.x + dx * (100.0f / (float)effect_scale_x);
-    if(effect_scale_y != 100) y = origin.y + dy * (100.0f / (float)effect_scale_y);
-    if(effect_scale_z != 100) z = origin.z + dz * (100.0f / (float)effect_scale_z);
+    Vector3D in_scale_frame = RotateVectorByEuler(dx, dy, dz,
+        -effect_axis_scale_rotation_yaw, -effect_axis_scale_rotation_pitch, -effect_axis_scale_rotation_roll);
+    Vector3D back = RotateVectorByEuler(in_scale_frame.x, in_scale_frame.y, in_scale_frame.z,
+        effect_axis_scale_rotation_yaw, effect_axis_scale_rotation_pitch, effect_axis_scale_rotation_roll);
+    x = origin.x + back.x;
+    y = origin.y + back.y;
+    z = origin.z + back.z;
 }
 
 void SpatialEffect3D::ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const
 {
-    // When SkipsSpatialSampleWarp is false, the render path applies this before
-    // CalculateColorGrid, so sample coords there are already effect-rotated.
-    if(effect_rotation_yaw == 0.0f && effect_rotation_pitch == 0.0f && effect_rotation_roll == 0.0f)
-    {
-        return;
-    }
-    Vector3D origin = GetEffectOriginGrid(grid);
-    Vector3D rotated = TransformPointByRotation(x, y, z, origin);
-    x = rotated.x;
-    y = rotated.y;
-    z = rotated.z;
+    /* No-op: VolumeWorldDeltaToLocal / SampleVolumeLocalUv01 / EffectGridSampleOutsideVolume
+       own world→local. Warping here double-transformed FolderVolume/ShaderField. */
+    (void)x;
+    (void)y;
+    (void)z;
+    (void)grid;
 }
 
 float SpatialEffect3D::ComputeStratumMotion01(const float layer_weights[3],
@@ -395,6 +382,12 @@ Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
 
 Vector3D SpatialEffect3D::GetEffectOriginGrid(const GridContext3D& grid) const
 {
+    /* Gizmo writes an absolute origin while unlocked so the stack Spatial Anchor
+       cannot yank the lit region off the wireframe every render tick. */
+    if(HasVolumeWorldOrigin())
+    {
+        return effect_volume_world_origin_;
+    }
     Vector3D base = GetReferencePointGrid(grid);
     float half_w = grid.width * 0.5f;
     float half_h = grid.height * 0.5f;
@@ -502,8 +495,8 @@ void SpatialEffect3D::PrepareTrueGpuSamplePoint(float& x, float& y, float& z, co
 {
     if(!SkipsSpatialSampleWarp())
     {
-        ApplyAxisScale(x, y, z, grid);
         ApplyEffectRotation(x, y, z, grid);
+        ApplyAxisScale(x, y, z, grid);
     }
     if(UsesSpatialSamplingQuantization())
     {
@@ -807,20 +800,13 @@ float SpatialEffect3D::ApplyEdgeToIntensity(float normalized_dist) const
 
 float SpatialEffect3D::GetBoundaryMultiplier(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
-    float half_w = grid.width * 0.5f;
-    float half_h = grid.height * 0.5f;
-    float half_d = grid.depth * 0.5f;
-    float max_dist_sq = half_w * half_w + half_h * half_h + half_d * half_d;
-    if(max_dist_sq < 1e-10f) return 1.0f;
-
-    float scale_pct = GetNormalizedScale();
-    float scale_radius_sq = max_dist_sq * scale_pct * scale_pct;
-    float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
-    float dist = std::sqrt(std::max(0.0f, dist_sq));
-    float radius = std::sqrt(std::max(1e-10f, scale_radius_sq));
-    float normalized_dist = radius > 1e-10f ? (dist / radius) : 0.0f;
-
-    return ApplyEdgeToIntensity(normalized_dist);
+    const float nd = VolumeNormalizedDistance(rel_x, rel_y, rel_z, grid);
+    /* Tight volume: no exterior soft buffer / glow past the shape surface. */
+    if(nd > 1.0f)
+    {
+        return 0.0f;
+    }
+    return ApplyEdgeToIntensity(nd);
 }
 
 Vector3D SpatialEffect3D::TransformPointByRotation(float x, float y, float z, const Vector3D& origin) const
@@ -879,24 +865,120 @@ Vector3D SpatialEffect3D::RotateVectorByEuler(float dx, float dy, float dz, floa
     return {fx, fy, fz};
 }
 
+Vector3D SpatialEffect3D::VolumeWorldDeltaToLocal(float dx, float dy, float dz) const
+{
+    /* Inverse of EffectVolume3D::LocalToWorld — same Euler matrix as controllers
+       (Geometry3D::ComputeRotationMatrix), then undo shear. */
+    Rotation3D rot;
+    rot.x = effect_rotation_pitch;
+    rot.y = effect_rotation_yaw;
+    rot.z = effect_rotation_roll;
+    float m[9];
+    Geometry3D::ComputeRotationMatrix(rot, m);
+    /* R^T * delta (column-vector convention used by RotateVector). */
+    float lx = m[0] * dx + m[3] * dy + m[6] * dz;
+    float ly = m[1] * dx + m[4] * dy + m[7] * dz;
+    float lz = m[2] * dx + m[5] * dy + m[8] * dz;
+
+    if(effect_volume_tools_unlocked)
+    {
+        ly -= effect_shear_yz * lz;
+        lx -= effect_shear_xy * ly + effect_shear_xz * lz;
+    }
+    return {lx, ly, lz};
+}
+
+void SpatialEffect3D::GetVolumeHalfExtents(const GridContext3D& grid, float& hx, float& hy, float& hz) const
+{
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    const float cover_x = std::max(1e-4f, std::max(origin.x - grid.min_x, grid.max_x - origin.x));
+    const float cover_y = std::max(1e-4f, std::max(origin.y - grid.min_y, grid.max_y - origin.y));
+    const float cover_z = std::max(1e-4f, std::max(origin.z - grid.min_z, grid.max_z - origin.z));
+    /* Volume tools treat Scale as absolute occupancy. scale_inverted is a pattern
+       semantic and must not fight the gizmo OBB. */
+    const float scale_pct = effect_volume_tools_unlocked
+        ? std::max(0.01f, effect_scale / 100.0f)
+        : std::max(0.01f, GetNormalizedScale());
+    hx = std::max(1e-4f, cover_x * scale_pct * ((float)effect_scale_x / 100.0f));
+    hy = std::max(1e-4f, cover_y * scale_pct * ((float)effect_scale_y / 100.0f));
+    hz = std::max(1e-4f, cover_z * scale_pct * ((float)effect_scale_z / 100.0f));
+}
+
+bool SpatialEffect3D::SampleVolumeLocalUv01(float world_x, float world_y, float world_z,
+                                           const GridContext3D& grid,
+                                           float* u, float* v, float* w) const
+{
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    const Vector3D local = VolumeWorldDeltaToLocal(world_x - origin.x,
+                                                   world_y - origin.y,
+                                                   world_z - origin.z);
+    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
+    GetVolumeHalfExtents(grid, hx, hy, hz);
+    const float uu = 0.5f + 0.5f * (local.x / hx);
+    const float vv = 0.5f + 0.5f * (local.y / hy);
+    const float ww = 0.5f + 0.5f * (local.z / hz);
+    constexpr float kEps = 1e-4f;
+    if(uu < -kEps || uu > 1.0f + kEps || vv < -kEps || vv > 1.0f + kEps || ww < -kEps || ww > 1.0f + kEps)
+    {
+        return false;
+    }
+    if(u) *u = std::clamp(uu, 0.0f, 1.0f);
+    if(v) *v = std::clamp(vv, 0.0f, 1.0f);
+    if(w) *w = std::clamp(ww, 0.0f, 1.0f);
+    return VolumeNormalizedDistance(local.x, local.y, local.z, grid) <= 1.0f;
+}
+
+float SpatialEffect3D::VolumeNormalizedDistance(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
+{
+    /* rel is volume-local (VolumeWorldDeltaToLocal already applied). */
+    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
+    GetVolumeHalfExtents(grid, hx, hy, hz);
+    const float nx = rel_x / hx;
+    const float ny = rel_y / hy;
+    const float nz = rel_z / hz;
+
+    const int shape = effect_volume_tools_unlocked ? effect_volume_shape : (int)VOLUME_SHAPE_BOX;
+    switch(shape)
+    {
+        case VOLUME_SHAPE_SPHERE:
+            return std::sqrt(nx * nx + ny * ny + nz * nz);
+        case VOLUME_SHAPE_CYLINDER:
+            return std::max(std::sqrt(nx * nx + nz * nz), std::fabs(ny));
+        case VOLUME_SHAPE_CONE:
+        {
+            /* Apex at +Y, base at -Y. */
+            const float t = std::clamp(0.5f * (1.0f - ny), 0.0f, 1.0f);
+            if(ny > 1.0f)
+            {
+                return 1.0f + (ny - 1.0f);
+            }
+            if(ny < -1.0f)
+            {
+                return 1.0f + (-1.0f - ny);
+            }
+            const float radial = std::sqrt(nx * nx + nz * nz);
+            const float allow = std::max(t, 1e-4f);
+            return radial / allow;
+        }
+        case VOLUME_SHAPE_TETRA:
+        {
+            /* Regular-ish tetra inscribed in the unit cube (tight planes). */
+            const float d0 =  nx +  ny +  nz;
+            const float d1 =  nx -  ny -  nz;
+            const float d2 = -nx +  ny -  nz;
+            const float d3 = -nx -  ny +  nz;
+            const float lim = 1.0f;
+            return std::max(std::max(d0, d1), std::max(d2, d3)) / lim;
+        }
+        case VOLUME_SHAPE_BOX:
+        default:
+            return std::max(std::fabs(nx), std::max(std::fabs(ny), std::fabs(nz)));
+    }
+}
+
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
-    /* Oriented box: inverse rotation, unshear, then AABB test. */
-    Vector3D local = RotateVectorByEuler(rel_x, rel_y, rel_z,
-                                         -effect_rotation_yaw, -effect_rotation_pitch, -effect_rotation_roll);
-    /* Inverse of lx+=sxy*ly+sxz*lz; ly+=syz*lz (applied bottom-up). */
-    local.y -= effect_shear_yz * local.z;
-    local.x -= effect_shear_xy * local.y + effect_shear_xz * local.z;
-    const float scale_pct = std::max(0.01f, GetNormalizedScale());
-    float hx = (grid.width * 0.5f) * scale_pct * ((float)effect_scale_x / 100.0f);
-    float hy = (grid.height * 0.5f) * scale_pct * ((float)effect_scale_y / 100.0f);
-    float hz = (grid.depth * 0.5f) * scale_pct * ((float)effect_scale_z / 100.0f);
-    hx = std::max(hx, 1e-4f);
-    hy = std::max(hy, 1e-4f);
-    hz = std::max(hz, 1e-4f);
-    return std::fabs(local.x) <= hx
-        && std::fabs(local.y) <= hy
-        && std::fabs(local.z) <= hz;
+    return VolumeNormalizedDistance(rel_x, rel_y, rel_z, grid) <= 1.0f;
 }
 
 bool SpatialEffect3D::IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const

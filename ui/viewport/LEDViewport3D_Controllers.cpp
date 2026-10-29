@@ -236,7 +236,7 @@ size_t LEDViewport3D::populateLedDrawBuffers(ControllerTransform* ctrl)
     return led_draw_interleaved_.size() / 6;
 }
 
-void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds)
+void LEDViewport3D::CalculateControllerBounds(const ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds) const
 {
     bool have_bounds = false;
     if(ctrl && !ctrl->led_positions.empty())
@@ -328,12 +328,12 @@ void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3
     max_bounds.z += padding;
 }
 
-Vector3D LEDViewport3D::GetControllerCenter(ControllerTransform* ctrl)
+Vector3D LEDViewport3D::GetControllerCenter(const ControllerTransform* ctrl) const
 {
     return ControllerLayout3D::GetControllerCenterWorld(ctrl);
 }
 
-Vector3D LEDViewport3D::GetControllerSize(ControllerTransform* ctrl)
+Vector3D LEDViewport3D::GetControllerSize(const ControllerTransform* ctrl) const
 {
     Vector3D min_bounds, max_bounds;
     CalculateControllerBounds(ctrl, min_bounds, max_bounds);

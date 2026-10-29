@@ -131,6 +131,9 @@ void LEDViewport3D::SelectSceneProp(int index)
     if(scene_props_ && index >= 0 && index < (int)scene_props_->size())
     {
         deselectRoomViewport();
+        gizmo.CancelDrag();
+        effect_volume_active_ = false;
+        effect_volume_grid_.reset();
         selected_controller_indices.clear();
         selected_controller_idx = -1;
         selected_ref_point_idx = -1;

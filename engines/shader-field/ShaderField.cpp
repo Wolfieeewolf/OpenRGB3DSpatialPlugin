@@ -495,11 +495,6 @@ RGBColor ShaderField::SampleField(float u, float v) const
 
 RGBColor ShaderField::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    if(EffectGridSampleOutsideVolume(x, y, z, grid))
-    {
-        return 0x00000000;
-    }
-
     const bool same_sequence =
         (grid.render_sequence != 0 && grid.render_sequence == last_uniform_sequence);
     const bool same_preview_time =
@@ -511,9 +506,8 @@ RGBColor ShaderField::CalculateColorGrid(float x, float y, float z, float time, 
         SyncUniforms(time);
     }
 
-    const Vector3D origin = GetEffectOriginGrid(grid);
     float nx = 0.5f, ny = 0.5f, nz = 0.5f;
-    if(!SampleGpuVolumeOriginLocal01(x, y, z, grid, origin, GetNormalizedScale(), &nx, &ny, &nz))
+    if(!SampleVolumeLocalUv01(x, y, z, grid, &nx, &ny, &nz))
     {
         return 0x00000000;
     }

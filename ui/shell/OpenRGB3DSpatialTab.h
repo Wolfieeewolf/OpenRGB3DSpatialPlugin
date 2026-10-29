@@ -200,6 +200,7 @@ private slots:
     void effectChanged(int index);
     void effectOriginChanged(int index);
     void effectBoundsChanged(int index);
+    void effectVolumeShapeChanged(int index);
     void effectZoneChanged(int index);
     void UpdateSelectionInfo();
     void UpdateEffectOriginCombo();
@@ -210,6 +211,9 @@ private slots:
     void effectLibraryAddClicked();
     void effectLibraryItemDoubleClicked(QListWidgetItem* item);
     void effectLibrarySelectionChanged(int row);
+    void effectLibraryUnlockVolumeOnAddToggled(bool checked);
+    void SyncEffectLibraryUnlockVolumePreference();
+    void stackLayerVolumeToolsUnlockedToggled(int stack_index, bool unlocked);
 
     void startAllEffectsClicked();
     void stopAllEffectsClicked();
@@ -334,6 +338,7 @@ private:
                                                  SpatialEffectSettingsLayout layout);
     void configureScreenMirrorEffectUi(SpatialEffect3D* effect);
     void setStackLayerGlobalChromeVisible(bool visible);
+    void setStackLayerVolumeToolsChromeVisible(bool unlocked);
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);
 
@@ -393,7 +398,8 @@ private:
                                   int zone_index = -1,
                                   BlendMode blend_mode = BlendMode::NO_BLEND,
                                   const nlohmann::json* preset_settings = nullptr,
-                                  bool enabled = true);
+                                  bool enabled = true,
+                                  bool volume_tools_unlocked = false);
 
     QListWidget* zonesList() const;
     QPushButton* editZoneButton() const;
@@ -402,6 +408,7 @@ private:
     QComboBox*   effectLibraryGameCombo() const;
     QLineEdit*   effectLibrarySearch() const;
     QListWidget* effectLibraryList() const;
+    QCheckBox*   effectLibraryUnlockVolumeOnAddCheck() const;
     QPushButton* effectLibraryAddButton() const;
     QListWidget* effectStackList() const;
     QListWidget* stackPresetsList() const;
@@ -417,6 +424,8 @@ private:
     QComboBox*   effectOriginCombo() const;
     QLabel*      effectBoundsLabel() const;
     QComboBox*   effectBoundsCombo() const;
+    QLabel*      effectVolumeShapeLabel() const;
+    QComboBox*   effectVolumeShapeCombo() const;
     QComboBox*   stackEffectTypeCombo() const;
     QComboBox*   stackEffectZoneCombo() const;
 

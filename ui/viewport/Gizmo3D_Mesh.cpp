@@ -2,6 +2,7 @@
 
 #include "Gizmo3D.h"
 
+#include <algorithm>
 #include <cmath>
 
 #ifndef M_PI
@@ -65,36 +66,163 @@ void meshAddCube(GizmoDrawMesh& mesh, const float color[3], float cx, float cy, 
     meshAddQuad(mesh, color, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1);
 }
 
-void meshAddSphere(GizmoDrawMesh& mesh, const float color[3], float cx, float cy, float cz, float radius)
+/** Offset a point in the plane perpendicular to axis 0/1/2. */
+void offsetPerp(int axis, float along, float u, float v,
+                float& x, float& y, float& z)
 {
-    const int slices = 12;
-    const int stacks = 8;
-    for(int i = 0; i < stacks; i++)
+    if(axis == 0)
     {
-        const float lat0 = (float)M_PI * (-0.5f + (float)i / (float)stacks);
-        const float lat1 = (float)M_PI * (-0.5f + (float)(i + 1) / (float)stacks);
-        const float y0 = cy + radius * sinf(lat0);
-        const float y1 = cy + radius * sinf(lat1);
-        const float r0 = radius * cosf(lat0);
-        const float r1 = radius * cosf(lat1);
+        x = along;
+        y = u;
+        z = v;
+    }
+    else if(axis == 1)
+    {
+        x = u;
+        y = along;
+        z = v;
+    }
+    else
+    {
+        x = u;
+        y = v;
+        z = along;
+    }
+}
+
+/** Solid cylinder along +X/+Y/+Z (Qt3D-style arrow shaft). */
+void meshAddAxisCylinder(GizmoDrawMesh& mesh, const float color[3],
+                         int axis, float from_along, float to_along, float radius,
+                         int sides = 10)
+{
+    for(int i = 0; i < sides; i++)
+    {
+        const float a0 = 2.0f * (float)M_PI * (float)i / (float)sides;
+        const float a1 = 2.0f * (float)M_PI * (float)(i + 1) / (float)sides;
+        const float u0 = cosf(a0) * radius;
+        const float v0 = sinf(a0) * radius;
+        const float u1 = cosf(a1) * radius;
+        const float v1 = sinf(a1) * radius;
+
+        float x00, y00, z00, x01, y01, z01, x10, y10, z10, x11, y11, z11;
+        offsetPerp(axis, from_along, u0, v0, x00, y00, z00);
+        offsetPerp(axis, from_along, u1, v1, x01, y01, z01);
+        offsetPerp(axis, to_along, u0, v0, x10, y10, z10);
+        offsetPerp(axis, to_along, u1, v1, x11, y11, z11);
+
+        meshAddQuad(mesh, color, x00, y00, z00, x01, y01, z01, x11, y11, z11, x10, y10, z10);
+    }
+}
+
+/** Cone tip pointing along +axis (Qt3D arrow head). */
+void meshAddAxisCone(GizmoDrawMesh& mesh, const float color[3],
+                     int axis, float tip_along, float length, float radius,
+                     int sides = 12)
+{
+    const float base_along = tip_along - length;
+    float tip_x = 0.0f;
+    float tip_y = 0.0f;
+    float tip_z = 0.0f;
+    offsetPerp(axis, tip_along, 0.0f, 0.0f, tip_x, tip_y, tip_z);
+
+    for(int i = 0; i < sides; i++)
+    {
+        const float a0 = 2.0f * (float)M_PI * (float)i / (float)sides;
+        const float a1 = 2.0f * (float)M_PI * (float)(i + 1) / (float)sides;
+        float p0x, p0y, p0z, p1x, p1y, p1z;
+        offsetPerp(axis, base_along, cosf(a0) * radius, sinf(a0) * radius, p0x, p0y, p0z);
+        offsetPerp(axis, base_along, cosf(a1) * radius, sinf(a1) * radius, p1x, p1y, p1z);
+        meshAddTriangle(mesh, color, tip_x, tip_y, tip_z, p0x, p0y, p0z, p1x, p1y, p1z);
+    }
+
+    /* Flat base cap. */
+    float bx, by, bz;
+    offsetPerp(axis, base_along, 0.0f, 0.0f, bx, by, bz);
+    for(int i = 0; i < sides; i++)
+    {
+        const float a0 = 2.0f * (float)M_PI * (float)i / (float)sides;
+        const float a1 = 2.0f * (float)M_PI * (float)(i + 1) / (float)sides;
+        float p0x, p0y, p0z, p1x, p1y, p1z;
+        offsetPerp(axis, base_along, cosf(a0) * radius, sinf(a0) * radius, p0x, p0y, p0z);
+        offsetPerp(axis, base_along, cosf(a1) * radius, sinf(a1) * radius, p1x, p1y, p1z);
+        meshAddTriangle(mesh, color, bx, by, bz, p1x, p1y, p1z, p0x, p0y, p0z);
+    }
+}
+
+/**
+ * Thin torus ring in the plane of axis (0=YZ, 1=XZ, 2=XY) — Qt3D rotation handle.
+ * No bead spheres; the tube itself is the grabber.
+ */
+void meshAddTorusRing(GizmoDrawMesh& mesh, const float color[3],
+                      int axis, float major_r, float minor_r,
+                      int rings = 32, int slices = 6)
+{
+    for(int i = 0; i < rings; i++)
+    {
+        const float a0 = 2.0f * (float)M_PI * (float)i / (float)rings;
+        const float a1 = 2.0f * (float)M_PI * (float)(i + 1) / (float)rings;
+        const float c0 = cosf(a0);
+        const float s0 = sinf(a0);
+        const float c1 = cosf(a1);
+        const float s1 = sinf(a1);
 
         for(int j = 0; j < slices; j++)
         {
-            const float lng0 = 2.0f * (float)M_PI * (float)j / (float)slices;
-            const float lng1 = 2.0f * (float)M_PI * (float)(j + 1) / (float)slices;
-            const float x00 = cx + cosf(lng0) * r0;
-            const float z00 = cz + sinf(lng0) * r0;
-            const float x01 = cx + cosf(lng1) * r0;
-            const float z01 = cz + sinf(lng1) * r0;
-            const float x10 = cx + cosf(lng0) * r1;
-            const float z10 = cz + sinf(lng0) * r1;
-            const float x11 = cx + cosf(lng1) * r1;
-            const float z11 = cz + sinf(lng1) * r1;
+            const float b0 = 2.0f * (float)M_PI * (float)j / (float)slices;
+            const float b1 = 2.0f * (float)M_PI * (float)(j + 1) / (float)slices;
+            const float cb0 = cosf(b0);
+            const float sb0 = sinf(b0);
+            const float cb1 = cosf(b1);
+            const float sb1 = sinf(b1);
 
-            meshAddTriangle(mesh, color, x00, y0, z00, x01, y0, z01, x11, y1, z11);
-            meshAddTriangle(mesh, color, x00, y0, z00, x11, y1, z11, x10, y1, z10);
+            auto torusPoint = [&](float c, float s, float cb, float sb,
+                                  float& x, float& y, float& z) {
+                const float R = major_r + minor_r * cb;
+                if(axis == 0)
+                {
+                    x = minor_r * sb;
+                    y = R * c;
+                    z = R * s;
+                }
+                else if(axis == 1)
+                {
+                    x = R * c;
+                    y = minor_r * sb;
+                    z = R * s;
+                }
+                else
+                {
+                    x = R * c;
+                    y = R * s;
+                    z = minor_r * sb;
+                }
+            };
+
+            float x00, y00, z00, x01, y01, z01, x10, y10, z10, x11, y11, z11;
+            torusPoint(c0, s0, cb0, sb0, x00, y00, z00);
+            torusPoint(c0, s0, cb1, sb1, x01, y01, z01);
+            torusPoint(c1, s1, cb0, sb0, x10, y10, z10);
+            torusPoint(c1, s1, cb1, sb1, x11, y11, z11);
+            meshAddQuad(mesh, color, x00, y00, z00, x01, y01, z01, x11, y11, z11, x10, y10, z10);
         }
     }
+}
+
+void shadeAxisColor(float out[3], const float base[3], const float highlight[3],
+                    bool active, bool any_focus)
+{
+    if(active)
+    {
+        out[0] = highlight[0];
+        out[1] = highlight[1];
+        out[2] = highlight[2];
+        return;
+    }
+    /* Qt3D / Gizmo3D keep inactive axes readable — light dim only. */
+    const float dim = any_focus ? 0.55f : 1.0f;
+    out[0] = base[0] * dim;
+    out[1] = base[1] * dim;
+    out[2] = base[2] * dim;
 }
 
 } // namespace
@@ -151,178 +279,61 @@ void Gizmo3D::buildDrawMesh(GizmoDrawMesh& mesh) const
     }
 }
 
-void Gizmo3D::appendScaleGizmoMesh(GizmoDrawMesh& mesh) const
-{
-    /* Scale uses move arms with box tips instead of arrowheads. */
-    const GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    const float tip = gizmo_size * 0.12f;
-    const float line_w = 6.0f;
-
-    auto axisColor = [&](GizmoAxis axis, const float base[3]) -> const float* {
-        return (hl == axis) ? color_highlight : base;
-    };
-
-    auto boxTip = [&](const float* color, float ax, float ay, float az) {
-        meshAddTriangle(mesh, color, ax - tip, ay - tip, az - tip, ax + tip, ay - tip, az - tip, ax + tip, ay + tip, az - tip);
-        meshAddTriangle(mesh, color, ax - tip, ay - tip, az - tip, ax + tip, ay + tip, az - tip, ax - tip, ay + tip, az - tip);
-        meshAddTriangle(mesh, color, ax - tip, ay - tip, az + tip, ax + tip, ay - tip, az + tip, ax + tip, ay + tip, az + tip);
-        meshAddTriangle(mesh, color, ax - tip, ay - tip, az + tip, ax + tip, ay + tip, az + tip, ax - tip, ay + tip, az + tip);
-    };
-
-    const float* color = axisColor(GIZMO_AXIS_X, color_x_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, 0.0f);
-    boxTip(color, gizmo_size, 0.0f, 0.0f);
-
-    color = axisColor(GIZMO_AXIS_Y, color_y_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
-    boxTip(color, 0.0f, gizmo_size, 0.0f);
-
-    color = axisColor(GIZMO_AXIS_Z, color_z_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size);
-    boxTip(color, 0.0f, 0.0f, gizmo_size);
-
-    color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : color_center;
-    const float cr = center_sphere_radius;
-    meshAddTriangle(mesh, color, -cr, 0.0f, 0.0f, 0.0f, cr, 0.0f, cr, 0.0f, 0.0f);
-    meshAddTriangle(mesh, color, -cr, 0.0f, 0.0f, 0.0f, -cr, 0.0f, cr, 0.0f, 0.0f);
-}
-
-void Gizmo3D::appendSkewGizmoMesh(GizmoDrawMesh& mesh) const
-{
-    /* Skew uses angled diamond tips on the move arms. */
-    const GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    const float tip = gizmo_size * 0.14f;
-    const float line_w = 6.0f;
-
-    auto axisColor = [&](GizmoAxis axis, const float base[3]) -> const float* {
-        return (hl == axis) ? color_highlight : base;
-    };
-
-    const float* color = axisColor(GIZMO_AXIS_X, color_x_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, 0.0f);
-    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, tip, tip * 0.5f, gizmo_size - tip, -tip, -tip * 0.5f);
-
-    color = axisColor(GIZMO_AXIS_Y, color_y_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
-    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, tip, gizmo_size - tip, tip * 0.5f, -tip, gizmo_size - tip, -tip * 0.5f);
-
-    color = axisColor(GIZMO_AXIS_Z, color_z_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size);
-    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, tip, tip * 0.5f, gizmo_size - tip, -tip, -tip * 0.5f, gizmo_size - tip);
-
-    color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : color_center;
-    const float cr = center_sphere_radius;
-    meshAddTriangle(mesh, color, -cr, 0.0f, 0.0f, 0.0f, cr, 0.0f, cr, 0.0f, 0.0f);
-    meshAddTriangle(mesh, color, -cr, 0.0f, 0.0f, 0.0f, -cr, 0.0f, cr, 0.0f, 0.0f);
-}
-
 void Gizmo3D::appendMoveGizmoMesh(GizmoDrawMesh& mesh) const
 {
+    /* Qt3D ArrowTranslationHandle proportions: thin cylinder + cone tip. */
     const GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    const float tip = gizmo_size * 0.22f;
-    const float tip_w = gizmo_size * 0.10f;
-    const float line_w = 6.0f;
+    const bool any_focus = (hl != GIZMO_AXIS_NONE);
+    const float shaft0 = gizmo_size * 0.12f;
+    const float cone_len = gizmo_size * 0.22f;
+    const float shaft1 = gizmo_size - cone_len;
+    const float shaft_r = std::min(gizmo_size * 0.018f, 0.22f);
+    const float cone_r = std::min(gizmo_size * 0.055f, 0.65f);
+    float shaded[3];
 
-    auto axisColor = [&](GizmoAxis axis, const float base[3]) -> const float* {
-        return (hl == axis) ? color_highlight : base;
+    auto drawArrow = [&](GizmoAxis axis_id, int axis, const float base[3]) {
+        shadeAxisColor(shaded, base, color_highlight, hl == axis_id, any_focus);
+        meshAddAxisCylinder(mesh, shaded, axis, shaft0, shaft1, shaft_r);
+        meshAddAxisCone(mesh, shaded, axis, gizmo_size, cone_len, cone_r);
     };
 
-    const float* color = axisColor(GIZMO_AXIS_X, color_x_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f, 0.0f);
-    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, tip_w, 0.0f, gizmo_size - tip, -tip_w, 0.0f);
-    meshAddTriangle(mesh, color, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, 0.0f, tip_w, gizmo_size - tip, 0.0f, -tip_w);
+    drawArrow(GIZMO_AXIS_X, 0, color_x_axis);
+    drawArrow(GIZMO_AXIS_Y, 1, color_y_axis);
+    drawArrow(GIZMO_AXIS_Z, 2, color_z_axis);
 
-    color = axisColor(GIZMO_AXIS_Y, color_y_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
-    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, tip_w, gizmo_size - tip, 0.0f, -tip_w, gizmo_size - tip, 0.0f);
-    meshAddTriangle(mesh, color, 0.0f, gizmo_size, 0.0f, 0.0f, gizmo_size - tip, tip_w, 0.0f, gizmo_size - tip, -tip_w);
-
-    color = axisColor(GIZMO_AXIS_Z, color_z_axis);
-    meshAddLine(mesh, line_w, color, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size);
-    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, tip_w, 0.0f, gizmo_size - tip, -tip_w, 0.0f, gizmo_size - tip);
-    meshAddTriangle(mesh, color, 0.0f, 0.0f, gizmo_size, 0.0f, tip_w, gizmo_size - tip, 0.0f, -tip_w, gizmo_size - tip);
-
-    const float orange[3] = {1.0f, 0.5f, 0.0f};
-    color = axisColor(GIZMO_AXIS_CENTER, orange);
-    meshAddCube(mesh, color, 0.0f, 0.0f, 0.0f, center_sphere_radius);
+    shadeAxisColor(shaded, color_center, color_highlight, hl == GIZMO_AXIS_CENTER, any_focus);
+    meshAddCube(mesh, shaded, 0.0f, 0.0f, 0.0f, std::min(center_sphere_radius * 0.75f, 0.95f));
 }
 
 void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
 {
-    const float handle_radius = gizmo_size * 0.10f;
+    /* Qt3D RotationHandle: thin torus only — no bead spheres (virtualGizmo look). */
     const GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    const int ring_segments = 33;
+    const bool any_focus = (hl != GIZMO_AXIS_NONE);
+    const float major = gizmo_size;
+    const float minor = std::min(gizmo_size * 0.018f, 0.22f);
+    float shaded[3];
 
-    auto drawRingX = [&]() {
-        const float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
-        const float width = (hl == GIZMO_AXIS_X) ? 7.0f : 4.0f;
-        for(int i = 0; i < ring_segments - 1; i++)
-        {
-            const float a0 = (i / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
-            const float a1 = ((i + 1) / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
-            meshAddLine(mesh, width, color,
-                        0.0f, cosf(a0) * gizmo_size, sinf(a0) * gizmo_size,
-                        0.0f, cosf(a1) * gizmo_size, sinf(a1) * gizmo_size);
-        }
-        for(int i = 0; i < 4; i++)
-        {
-            const float angle = (i / 4.0f) * 2.0f * (float)M_PI;
-            meshAddSphere(mesh, color, 0.0f, cosf(angle) * gizmo_size, sinf(angle) * gizmo_size, handle_radius);
-        }
+    auto drawRing = [&](int axis, GizmoAxis gizmo_axis, const float base[3]) {
+        shadeAxisColor(shaded, base, color_highlight, hl == gizmo_axis, any_focus);
+        meshAddTorusRing(mesh, shaded, axis, major, minor);
     };
 
-    auto drawRingY = [&]() {
-        const float* color = (hl == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
-        const float width = (hl == GIZMO_AXIS_Y) ? 7.0f : 4.0f;
-        for(int i = 0; i < ring_segments - 1; i++)
-        {
-            const float a0 = (i / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
-            const float a1 = ((i + 1) / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
-            meshAddLine(mesh, width, color,
-                        cosf(a0) * gizmo_size, 0.0f, sinf(a0) * gizmo_size,
-                        cosf(a1) * gizmo_size, 0.0f, sinf(a1) * gizmo_size);
-        }
-        for(int i = 0; i < 4; i++)
-        {
-            const float angle = (i / 4.0f) * 2.0f * (float)M_PI;
-            meshAddSphere(mesh, color, cosf(angle) * gizmo_size, 0.0f, sinf(angle) * gizmo_size, handle_radius);
-        }
-    };
+    drawRing(0, GIZMO_AXIS_X, color_x_axis);
+    drawRing(1, GIZMO_AXIS_Y, color_y_axis);
+    drawRing(2, GIZMO_AXIS_Z, color_z_axis);
 
-    auto drawRingZ = [&]() {
-        const float* color = (hl == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
-        const float width = (hl == GIZMO_AXIS_Z) ? 7.0f : 4.0f;
-        for(int i = 0; i < ring_segments - 1; i++)
-        {
-            const float a0 = (i / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
-            const float a1 = ((i + 1) / (float)(ring_segments - 1)) * 2.0f * (float)M_PI;
-            meshAddLine(mesh, width, color,
-                        cosf(a0) * gizmo_size, sinf(a0) * gizmo_size, 0.0f,
-                        cosf(a1) * gizmo_size, sinf(a1) * gizmo_size, 0.0f);
-        }
-        for(int i = 0; i < 4; i++)
-        {
-            const float angle = (i / 4.0f) * 2.0f * (float)M_PI;
-            meshAddSphere(mesh, color, cosf(angle) * gizmo_size, sinf(angle) * gizmo_size, 0.0f, handle_radius);
-        }
-    };
-
-    drawRingX();
-    drawRingY();
-    drawRingZ();
-
-    if(dragging && mode == GIZMO_MODE_ROTATE &&
+    if(dragging &&
        (selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z))
     {
-        const float arc_radius = gizmo_size * 1.12f;
+        const float arc_radius = gizmo_size * 1.06f;
         const float start = rot_drag_start_angle;
-        /* Accum is wrapped to (-360, 360]; arc shows at most one full turn. */
         const float sweep = rot_drag_accum_degrees * ((float)M_PI / 180.0f);
         const float abs_sweep = fabsf(sweep);
-        int segments = (int)lroundf(abs_sweep / ((float)M_PI / 20.0f));
-        if(segments < 8)
+        int segments = (int)lroundf(abs_sweep / ((float)M_PI / 24.0f));
+        if(segments < 6)
         {
-            segments = 8;
+            segments = 6;
         }
         if(segments > 48)
         {
@@ -333,6 +344,8 @@ void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
             segments = 0;
         }
         const float white[3] = {1.0f, 1.0f, 1.0f};
+        const int axis = (selected_axis == GIZMO_AXIS_X) ? 0
+                        : ((selected_axis == GIZMO_AXIS_Y) ? 1 : 2);
         for(int i = 0; i < segments; i++)
         {
             const float t0 = (float)i / (float)segments;
@@ -345,14 +358,14 @@ void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
             float x1 = 0.0f;
             float y1 = 0.0f;
             float z1 = 0.0f;
-            if(selected_axis == GIZMO_AXIS_X)
+            if(axis == 0)
             {
                 y0 = cosf(a0) * arc_radius;
                 z0 = sinf(a0) * arc_radius;
                 y1 = cosf(a1) * arc_radius;
                 z1 = sinf(a1) * arc_radius;
             }
-            else if(selected_axis == GIZMO_AXIS_Y)
+            else if(axis == 1)
             {
                 x0 = cosf(a0) * arc_radius;
                 z0 = sinf(a0) * arc_radius;
@@ -366,57 +379,88 @@ void Gizmo3D::appendRotateGizmoMesh(GizmoDrawMesh& mesh) const
                 x1 = cosf(a1) * arc_radius;
                 y1 = sinf(a1) * arc_radius;
             }
-            meshAddLine(mesh, 5.0f, white, x0, y0, z0, x1, y1, z1);
+            meshAddLine(mesh, 3.0f, white, x0, y0, z0, x1, y1, z1);
         }
     }
 
-    const float orange[3] = {1.0f, 0.5f, 0.0f};
-    const float* color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
-    meshAddCube(mesh, color, 0.0f, 0.0f, 0.0f, center_sphere_radius);
+    shadeAxisColor(shaded, color_center, color_highlight, hl == GIZMO_AXIS_CENTER, any_focus);
+    meshAddCube(mesh, shaded, 0.0f, 0.0f, 0.0f, std::min(center_sphere_radius * 0.75f, 0.95f));
+}
+
+void Gizmo3D::appendScaleGizmoMesh(GizmoDrawMesh& mesh) const
+{
+    /* Gizmo3D scale: thin shaft + square tip (no cone). */
+    const GizmoAxis hl = dragging ? selected_axis : hover_axis;
+    const bool any_focus = (hl != GIZMO_AXIS_NONE);
+    const float shaft0 = gizmo_size * 0.12f;
+    const float tip = std::min(gizmo_size * 0.08f, 0.95f);
+    const float shaft_r = std::min(gizmo_size * 0.018f, 0.22f);
+    float shaded[3];
+
+    auto drawArm = [&](GizmoAxis axis_id, int axis, const float base[3]) {
+        shadeAxisColor(shaded, base, color_highlight, hl == axis_id, any_focus);
+        meshAddAxisCylinder(mesh, shaded, axis, shaft0, gizmo_size - tip * 0.15f, shaft_r);
+        float tx = 0.0f;
+        float ty = 0.0f;
+        float tz = 0.0f;
+        offsetPerp(axis, gizmo_size, 0.0f, 0.0f, tx, ty, tz);
+        meshAddCube(mesh, shaded, tx, ty, tz, tip * 0.55f);
+    };
+
+    drawArm(GIZMO_AXIS_X, 0, color_x_axis);
+    drawArm(GIZMO_AXIS_Y, 1, color_y_axis);
+    drawArm(GIZMO_AXIS_Z, 2, color_z_axis);
+
+    shadeAxisColor(shaded, color_center, color_highlight, hl == GIZMO_AXIS_CENTER, any_focus);
+    meshAddCube(mesh, shaded, 0.0f, 0.0f, 0.0f, std::min(center_sphere_radius * 0.75f, 0.95f));
+}
+
+void Gizmo3D::appendSkewGizmoMesh(GizmoDrawMesh& mesh) const
+{
+    const GizmoAxis hl = dragging ? selected_axis : hover_axis;
+    const bool any_focus = (hl != GIZMO_AXIS_NONE);
+    const float shaft0 = gizmo_size * 0.12f;
+    const float tip = gizmo_size * 0.14f;
+    const float tip_w = gizmo_size * 0.05f;
+    const float shaft_r = std::min(gizmo_size * 0.018f, 0.22f);
+    float shaded[3];
+
+    shadeAxisColor(shaded, color_x_axis, color_highlight, hl == GIZMO_AXIS_X, any_focus);
+    meshAddAxisCylinder(mesh, shaded, 0, shaft0, gizmo_size - tip * 0.5f, shaft_r);
+    meshAddTriangle(mesh, shaded, gizmo_size, 0.0f, 0.0f,
+                    gizmo_size - tip, tip_w, tip_w * 0.5f,
+                    gizmo_size - tip, -tip_w, -tip_w * 0.5f);
+
+    shadeAxisColor(shaded, color_y_axis, color_highlight, hl == GIZMO_AXIS_Y, any_focus);
+    meshAddAxisCylinder(mesh, shaded, 1, shaft0, gizmo_size - tip * 0.5f, shaft_r);
+    meshAddTriangle(mesh, shaded, 0.0f, gizmo_size, 0.0f,
+                    tip_w, gizmo_size - tip, tip_w * 0.5f,
+                    -tip_w, gizmo_size - tip, -tip_w * 0.5f);
+
+    shadeAxisColor(shaded, color_z_axis, color_highlight, hl == GIZMO_AXIS_Z, any_focus);
+    meshAddAxisCylinder(mesh, shaded, 2, shaft0, gizmo_size - tip * 0.5f, shaft_r);
+    meshAddTriangle(mesh, shaded, 0.0f, 0.0f, gizmo_size,
+                    tip_w, tip_w * 0.5f, gizmo_size - tip,
+                    -tip_w, -tip_w * 0.5f, gizmo_size - tip);
+
+    shadeAxisColor(shaded, color_center, color_highlight, hl == GIZMO_AXIS_CENTER, any_focus);
+    meshAddCube(mesh, shaded, 0.0f, 0.0f, 0.0f, std::min(center_sphere_radius * 0.75f, 0.95f));
 }
 
 void Gizmo3D::appendFreeroamGizmoMesh(GizmoDrawMesh& mesh) const
 {
     const GizmoAxis hl = dragging ? selected_axis : hover_axis;
-    const float purple[3] = {0.5f, 0.0f, 1.0f};
-    const float* stick_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : purple;
-    meshAddLine(mesh, 6.0f, stick_color, 0.0f, 0.0f, 0.0f, 0.0f, gizmo_size, 0.0f);
+    const bool any_focus = (hl != GIZMO_AXIS_NONE);
+    const float purple[3] = {0.55f, 0.35f, 0.95f};
+    float stick[3];
+    float center[3];
+    shadeAxisColor(stick, purple, color_highlight, hl == GIZMO_AXIS_CENTER, any_focus);
+    shadeAxisColor(center, color_center, color_highlight, hl == GIZMO_AXIS_CENTER, any_focus);
 
-    const float cube_size = gizmo_size * 0.12f;
-    const float stick_height = gizmo_size;
-    const float orange[3] = {1.0f, 0.5f, 0.0f};
-    const float* center_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
-
-    meshAddQuad(mesh, stick_color,
-                -cube_size, stick_height - cube_size, -cube_size,
-                +cube_size, stick_height - cube_size, -cube_size,
-                +cube_size, stick_height + cube_size, -cube_size,
-                -cube_size, stick_height + cube_size, -cube_size);
-    meshAddQuad(mesh, stick_color,
-                -cube_size, stick_height - cube_size, +cube_size,
-                +cube_size, stick_height - cube_size, +cube_size,
-                +cube_size, stick_height + cube_size, +cube_size,
-                -cube_size, stick_height + cube_size, +cube_size);
-    meshAddQuad(mesh, stick_color,
-                -cube_size, stick_height - cube_size, -cube_size,
-                -cube_size, stick_height + cube_size, -cube_size,
-                -cube_size, stick_height + cube_size, +cube_size,
-                -cube_size, stick_height - cube_size, +cube_size);
-    meshAddQuad(mesh, stick_color,
-                +cube_size, stick_height - cube_size, -cube_size,
-                +cube_size, stick_height + cube_size, -cube_size,
-                +cube_size, stick_height + cube_size, +cube_size,
-                +cube_size, stick_height - cube_size, +cube_size);
-    meshAddQuad(mesh, stick_color,
-                -cube_size, stick_height - cube_size, -cube_size,
-                +cube_size, stick_height - cube_size, -cube_size,
-                +cube_size, stick_height - cube_size, +cube_size,
-                -cube_size, stick_height - cube_size, +cube_size);
-    meshAddQuad(mesh, stick_color,
-                -cube_size, stick_height + cube_size, -cube_size,
-                +cube_size, stick_height + cube_size, -cube_size,
-                +cube_size, stick_height + cube_size, +cube_size,
-                -cube_size, stick_height + cube_size, +cube_size);
-
-    meshAddCube(mesh, center_color, 0.0f, 0.0f, 0.0f, center_sphere_radius);
+    const float shaft0 = gizmo_size * 0.12f;
+    const float shaft_r = std::min(gizmo_size * 0.018f, 0.22f);
+    const float tip = std::min(gizmo_size * 0.09f, 1.0f);
+    meshAddAxisCylinder(mesh, stick, 1, shaft0, gizmo_size - tip * 0.2f, shaft_r);
+    meshAddCube(mesh, stick, 0.0f, gizmo_size, 0.0f, tip);
+    meshAddCube(mesh, center, 0.0f, 0.0f, 0.0f, std::min(center_sphere_radius * 0.75f, 0.95f));
 }

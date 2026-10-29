@@ -32,6 +32,8 @@ public:
     QComboBox* originCombo() const;
     QLabel*   boundsLabel() const;
     QComboBox* boundsCombo() const;
+    QLabel*   volumeShapeLabel() const;
+    QComboBox* volumeShapeCombo() const;
     QComboBox* stackEffectTypeCombo() const;
     QComboBox* stackEffectZoneCombo() const;
     QLabel*    roomOutputSectionLabel() const;

@@ -18,18 +18,23 @@ struct EffectVolume3D
     float       shear_xy = 0.0f;
     float       shear_xz = 0.0f;
     float       shear_yz = 0.0f;
+    /** SpatialEffect3D::EffectVolumeShape — clip + wireframe shape. */
+    int         shape = SpatialEffect3D::VOLUME_SHAPE_BOX;
     int         stack_index = -1;
 
     static EffectVolume3D FromEffect(const SpatialEffect3D& effect,
                                      const GridContext3D& grid,
                                      int stack_index = -1);
 
-    /** Write position/rotation/half-extents/shear back into effect fields. */
+    /** Write position/rotation/half-extents/shear/shape back into effect fields. */
     void ApplyToEffect(SpatialEffect3D& effect, const GridContext3D& grid) const;
 
     /** Half-extents of the effect volume in grid units (from occupancy + axis %). */
     static Vector3D HalfExtentsFromEffect(const SpatialEffect3D& effect,
                                           const GridContext3D& grid);
+
+    /** Local (sheared) → room/grid space. */
+    Vector3D LocalToWorld(float lx, float ly, float lz) const;
 
     /** Eight corners of the oriented box in room/grid space (for wireframe draw). */
     void GetCorners(Vector3D out_corners[8]) const;

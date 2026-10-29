@@ -39,6 +39,7 @@ void EffectGlobalSettingsPanel::alignSettingsLabelColumn()
         ui->zoneLabel,
         ui->originLabel,
         ui->boundsLabel,
+        ui->volumeShapeLabel,
         ui->roomOutputSectionLabel,
     };
 
@@ -132,6 +133,18 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->boundsCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
             &OpenRGB3DSpatialTab::effectBoundsChanged);
 
+    ui->volumeShapeCombo->clear();
+    ui->volumeShapeCombo->setToolTip(
+        tr("Hard occupancy bound for this layer (tight fit, no exterior soft buffer). "
+           "Resize and place with the viewport gizmo. Custom meshes come later."));
+    ui->volumeShapeCombo->addItem(tr("Box"), QVariant((int)SpatialEffect3D::VOLUME_SHAPE_BOX));
+    ui->volumeShapeCombo->addItem(tr("Sphere"), QVariant((int)SpatialEffect3D::VOLUME_SHAPE_SPHERE));
+    ui->volumeShapeCombo->addItem(tr("Cylinder"), QVariant((int)SpatialEffect3D::VOLUME_SHAPE_CYLINDER));
+    ui->volumeShapeCombo->addItem(tr("Cone"), QVariant((int)SpatialEffect3D::VOLUME_SHAPE_CONE));
+    ui->volumeShapeCombo->addItem(tr("Tetrahedron"), QVariant((int)SpatialEffect3D::VOLUME_SHAPE_TETRA));
+    connect(ui->volumeShapeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
+            &OpenRGB3DSpatialTab::effectVolumeShapeChanged);
+
     ui->stackEffectTypeCombo->clear();
     ui->stackEffectTypeCombo->addItem(tr("None"), QString());
     const std::vector<EffectRegistration3D> effect_list = EffectListManager3D::get()->GetAllEffects();
@@ -158,6 +171,8 @@ QLabel* EffectGlobalSettingsPanel::originLabelWidget() const { return ui->origin
 QComboBox* EffectGlobalSettingsPanel::originCombo() const { return ui->originCombo; }
 QLabel* EffectGlobalSettingsPanel::boundsLabel() const { return ui->boundsLabel; }
 QComboBox* EffectGlobalSettingsPanel::boundsCombo() const { return ui->boundsCombo; }
+QLabel* EffectGlobalSettingsPanel::volumeShapeLabel() const { return ui->volumeShapeLabel; }
+QComboBox* EffectGlobalSettingsPanel::volumeShapeCombo() const { return ui->volumeShapeCombo; }
 QComboBox* EffectGlobalSettingsPanel::stackEffectTypeCombo() const { return ui->stackEffectTypeCombo; }
 QComboBox* EffectGlobalSettingsPanel::stackEffectZoneCombo() const { return ui->stackEffectZoneCombo; }
 QLabel* EffectGlobalSettingsPanel::roomOutputSectionLabel() const { return ui->roomOutputSectionLabel; }

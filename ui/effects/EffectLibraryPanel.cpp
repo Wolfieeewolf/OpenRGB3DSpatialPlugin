@@ -5,6 +5,7 @@
 #include "PluginUiUtils.h"
 #include "ui_EffectLibraryPanel.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QLineEdit>
 #include <QListWidget>
@@ -43,9 +44,12 @@ void EffectLibraryPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->libraryList, &QListWidget::itemDoubleClicked, tab,
             &OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked);
     connect(ui->addToStackButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::effectLibraryAddClicked);
+    connect(ui->unlockVolumeOnAddCheck, &QCheckBox::toggled, tab,
+            &OpenRGB3DSpatialTab::effectLibraryUnlockVolumeOnAddToggled);
 
     tab->PopulateEffectLibraryCategories();
     tab->PopulateEffectLibrary();
+    tab->SyncEffectLibraryUnlockVolumePreference();
 }
 
 QComboBox* EffectLibraryPanel::categoryCombo() const { return ui->categoryCombo; }
@@ -53,4 +57,5 @@ QLabel* EffectLibraryPanel::gameLabel() const { return ui->gameLabel; }
 QComboBox* EffectLibraryPanel::gameCombo() const { return ui->gameCombo; }
 QLineEdit* EffectLibraryPanel::searchEdit() const { return ui->searchEdit; }
 QListWidget* EffectLibraryPanel::libraryList() const { return ui->libraryList; }
+QCheckBox* EffectLibraryPanel::unlockVolumeOnAddCheck() const { return ui->unlockVolumeOnAddCheck; }
 QPushButton* EffectLibraryPanel::addToStackButton() const { return ui->addToStackButton; }

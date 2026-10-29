@@ -73,31 +73,30 @@
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="addButtonRow">
-     <item>
-      <spacer name="addButtonSpacer">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="addToStackButton">
-       <property name="enabled">
-        <bool>false</bool>
-       </property>
-       <property name="text">
-        <string>Add to stack</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
+    <widget class="QCheckBox" name="unlockVolumeOnAddCheck">
+     <property name="text">
+      <string>Unlock volume on add</string>
+     </property>
+     <property name="toolTip">
+      <string>When checked, new stack layers start with volume tools unlocked (gizmo place/rotate/scale/skew and volume shape). Off by default for the standard fill-grid feel; you can unlock any layer later on its stack card.</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="addToStackButton">
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+     <property name="text">
+      <string>Add to stack</string>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

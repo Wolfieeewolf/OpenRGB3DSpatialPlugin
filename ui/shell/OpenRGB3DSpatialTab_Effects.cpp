@@ -18,6 +18,7 @@
 #include "ControllerLayout3D.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QAbstractItemView>
+#include <QCheckBox>
 #include <QFont>
 #include <QFrame>
 #include <QLabel>
@@ -111,7 +112,15 @@ void OpenRGB3DSpatialTab::removeEffectFromStackClicked()
 
     if(effect_stack.empty())
     {
-        effectStackList()->setCurrentRow(-1);
+        /* UpdateEffectStackList blocks signals while clearing, so currentRow(-1)
+           alone may not emit — always run the empty-selection path to drop the
+           volume highlight and black out the grid. */
+        if(effectStackList())
+        {
+            QSignalBlocker blocker(effectStackList());
+            effectStackList()->setCurrentRow(-1);
+        }
+        effectStackSelectionChanged(-1);
     }
     else
     {
@@ -285,24 +294,52 @@ void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
         {
             grid.SetLedCentroid(mapped_lights_anchor_.x, mapped_lights_anchor_.y, mapped_lights_anchor_.z);
         }
-        /* Volume editor always anchors at room centre (not world 0,0,0). */
-        instance->effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
-        instance->effect->SetOffsetPercents(0, 0, 0);
-        EffectVolume3D volume = EffectVolume3D::FromEffect(*instance->effect, grid, index);
-        /* Prefer a readable centred box if occupancy still fills the whole room. */
-        if(instance->effect->GetOccupancyScalePercent() >= 95u)
+        instance->effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
+        if(instance->volume_tools_unlocked)
         {
-            volume.transform.position = {grid.center_x, grid.center_y, grid.center_z};
-            volume.transform.scale.x = std::max(0.2f, grid.width * 0.22f);
-            volume.transform.scale.y = std::max(0.2f, grid.height * 0.22f);
-            volume.transform.scale.z = std::max(0.2f, grid.depth * 0.22f);
-            volume.ApplyToEffect(*instance->effect, grid);
+            EffectVolume3D volume = EffectVolume3D::FromEffect(*instance->effect, grid, index);
+            instance->effect->SetVolumeWorldOrigin(volume.transform.position.x,
+                                                  volume.transform.position.y,
+                                                  volume.transform.position.z);
+            viewport->SelectEffectVolume(volume, grid);
         }
-        viewport->SelectEffectVolume(volume, grid);
+        else
+        {
+            viewport->ClearEffectVolumeSelection();
+        }
     }
     else if(viewport)
     {
         viewport->ClearEffectVolumeSelection();
+    }
+    setStackLayerVolumeToolsChromeVisible(instance->volume_tools_unlocked);
+}
+
+void OpenRGB3DSpatialTab::stackLayerVolumeToolsUnlockedToggled(int stack_index, bool unlocked)
+{
+    if(stack_index < 0 || stack_index >= (int)effect_stack.size())
+    {
+        return;
+    }
+    EffectInstance3D* instance = effect_stack[(size_t)stack_index].get();
+    if(!instance)
+    {
+        return;
+    }
+    instance->volume_tools_unlocked = unlocked;
+    if(instance->effect)
+    {
+        instance->effect->SetVolumeToolsUnlocked(unlocked);
+    }
+    SetLayoutDirty();
+    if(effectStackList() && effectStackList()->currentRow() == stack_index)
+    {
+        effectStackSelectionChanged(stack_index);
+    }
+    if(viewport)
+    {
+        viewport->UpdateColors();
+        viewport->update();
     }
 }
 
@@ -314,14 +351,39 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
     }
     EffectInstance3D* instance = effect_stack[(size_t)stack_index].get();
     EffectVolume3D* volume = viewport->ActiveEffectVolume();
-    const GridContext3D* grid = viewport->ActiveEffectVolumeGrid();
-    if(!instance || !instance->effect || !volume || !grid)
+    if(!instance || !instance->effect || !volume)
     {
         return;
     }
-    /* Keep absolute room-center placement while editing the volume. */
-    instance->effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
-    volume->ApplyToEffect(*instance->effect, *grid);
+    if(volume->stack_index != stack_index)
+    {
+        return;
+    }
+    if(!instance->volume_tools_unlocked)
+    {
+        return;
+    }
+
+    /* Live room grid — selection-time snapshot drifts after room resize / anchor. */
+    ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                              manual_room_width,
+                                                              manual_room_height,
+                                                              manual_room_depth);
+    GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+    GridContext3D grid(bounds.min_x, bounds.max_x,
+                       bounds.min_y, bounds.max_y,
+                       bounds.min_z, bounds.max_z,
+                       grid_scale_mm);
+    if(mapped_lights_anchor_valid_)
+    {
+        grid.SetLedCentroid(mapped_lights_anchor_.x,
+                            mapped_lights_anchor_.y,
+                            mapped_lights_anchor_.z);
+    }
+    viewport->SetEffectVolumeGrid(grid);
+
+    volume->ApplyToEffect(*instance->effect, grid);
+    instance->effect->SetVolumeToolsUnlocked(true);
     if(instance->saved_settings)
     {
         *instance->saved_settings = instance->effect->SaveSettings();
@@ -330,17 +392,41 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
     {
         instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
     }
-    /* During drag: write through only — do not rebuild/retarget the gizmo. */
-    if(!viewport->IsGizmoDragging())
+
+    const bool dragging = viewport->IsGizmoDragging();
+    /* Round-trip through effect clamps (offset ±100%, occupancy 1–200%, axis 1–400%)
+       so the wireframe stays honest with LED eval. During drag: update in place —
+       do not SelectEffectVolume (that cancels the gesture). */
     {
-        *volume = EffectVolume3D::FromEffect(*instance->effect, *grid, stack_index);
-        viewport->SelectEffectVolume(*volume, *grid);
-        if(current_effect_ui == instance->effect.get())
+        EffectVolume3D synced = EffectVolume3D::FromEffect(*instance->effect, grid, stack_index);
+        volume->transform = synced.transform;
+        volume->shear_xy = synced.shear_xy;
+        volume->shear_xz = synced.shear_xz;
+        volume->shear_yz = synced.shear_yz;
+        volume->shape = synced.shape;
+        volume->stack_index = synced.stack_index;
+        if(dragging)
         {
-            LoadStackEffectControls(instance);
+            viewport->UpdateGizmoPosition();
         }
+    }
+
+    if(!dragging)
+    {
+        /* Guard panel LoadSettings so slider signals cannot nest ParametersChanged
+           back into this handler / RefreshEffectDisplay. */
+        stack_settings_updating = true;
+        if(current_effect_ui && current_effect_ui != instance->effect.get())
+        {
+            current_effect_ui->LoadSettings(*instance->saved_settings);
+            current_effect_ui->SetVolumeToolsUnlocked(true);
+        }
+        stack_settings_updating = false;
+        viewport->SelectEffectVolume(*volume, grid);
         SetLayoutDirty();
     }
+    /* Re-eval LEDs so the pattern tracks the box live (nesting is guarded above). */
+    RefreshEffectDisplay();
     viewport->update();
 }
 
@@ -435,8 +521,20 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         PluginUiApplyMutedSecondaryLabel(state);
         auto* title = new QLabel(display_name, card);
         title->setWordWrap(true);
+        auto* volume_unlock = new QCheckBox(tr("Vol"), card);
+        volume_unlock->setChecked(instance->volume_tools_unlocked);
+        volume_unlock->setToolTip(
+            tr("Unlock volume tools for this layer (gizmo place/rotate/scale/skew and volume shape). "
+               "Locked keeps the standard fill-grid feel."));
+        const int stack_index = (int)i;
+        connect(volume_unlock, &QCheckBox::toggled, this,
+                [this, stack_index](bool unlocked)
+                {
+                    stackLayerVolumeToolsUnlockedToggled(stack_index, unlocked);
+                });
         row->addWidget(state, 0);
         row->addWidget(title, 1);
+        row->addWidget(volume_unlock, 0);
         item->setSizeHint(card->sizeHint().expandedTo(QSize(0, 40)));
         effectStackList()->addItem(item);
         effectStackList()->setItemWidget(item, card);
@@ -609,6 +707,11 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
 
     current_effect_ui = ui_effect;
+    ui_effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
+    if(instance->effect)
+    {
+        instance->effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
+    }
 
     if(settings_layout == SpatialEffectSettingsLayout::CustomOnly)
     {
@@ -658,6 +761,13 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         QSignalBlocker b(effectBoundsCombo());
         int idx = effectBoundsCombo()->findData(QVariant(ui_effect->GetEffectBoundsMode()));
         if(idx >= 0) effectBoundsCombo()->setCurrentIndex(idx);
+    }
+
+    if(effectVolumeShapeCombo())
+    {
+        QSignalBlocker b(effectVolumeShapeCombo());
+        int idx = effectVolumeShapeCombo()->findData(QVariant(ui_effect->GetVolumeShape()));
+        if(idx >= 0) effectVolumeShapeCombo()->setCurrentIndex(idx);
     }
 
     if(effectOriginCombo() && instance->effect_class_name == "MovieSync")
@@ -822,10 +932,40 @@ void OpenRGB3DSpatialTab::setStackLayerGlobalChromeVisible(bool visible)
     {
         effectBoundsCombo()->setVisible(visible);
     }
+    /* Volume shape is unlocked-volume chrome — applied separately. */
+    if(visible)
+    {
+        bool unlocked = false;
+        if(effectStackList())
+        {
+            const int row = effectStackList()->currentRow();
+            if(row >= 0 && row < (int)effect_stack.size() && effect_stack[(size_t)row])
+            {
+                unlocked = effect_stack[(size_t)row]->volume_tools_unlocked;
+            }
+        }
+        setStackLayerVolumeToolsChromeVisible(unlocked);
+    }
+    else
+    {
+        setStackLayerVolumeToolsChromeVisible(false);
+    }
     if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
     {
         global_panel->setRoomOutputSectionVisible(
             visible && current_effect_ui && current_effect_ui->GetEffectInfo().show_room_output_control);
+    }
+}
+
+void OpenRGB3DSpatialTab::setStackLayerVolumeToolsChromeVisible(bool unlocked)
+{
+    if(effectVolumeShapeLabel())
+    {
+        effectVolumeShapeLabel()->setVisible(unlocked);
+    }
+    if(effectVolumeShapeCombo())
+    {
+        effectVolumeShapeCombo()->setVisible(unlocked);
     }
 }
 

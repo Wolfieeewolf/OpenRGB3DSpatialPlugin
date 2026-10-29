@@ -346,6 +346,7 @@ void LEDViewport3D::SelectController(int index)
         }
 
         deselectRoomViewport();
+        gizmo.CancelDrag();
         effect_volume_active_ = false;
         effect_volume_grid_.reset();
         selected_display_plane_idx = -1;
@@ -379,6 +380,7 @@ void LEDViewport3D::SelectReferencePoint(int index)
     if(reference_points && index >= 0 && index < (int)reference_points->size())
     {
         deselectRoomViewport();
+        gizmo.CancelDrag();
         effect_volume_active_ = false;
         effect_volume_grid_.reset();
         selected_controller_indices.clear();
@@ -1007,6 +1009,9 @@ void LEDViewport3D::ClearSelection()
 
 void LEDViewport3D::SelectEffectVolume(const EffectVolume3D& volume, const GridContext3D& grid)
 {
+    /* Always end an in-flight drag first — effect_volume_ address is stable, so
+       SetTarget alone would not notice a stack-index change mid-gesture. */
+    gizmo.CancelDrag();
     clearSceneObjectSelection();
     deselectRoomViewport();
     effect_volume_ = volume;
@@ -1014,7 +1019,6 @@ void LEDViewport3D::SelectEffectVolume(const EffectVolume3D& volume, const GridC
     effect_volume_active_ = true;
     gizmo.SetTarget(&effect_volume_);
     gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
-    emit EffectVolumeSelected(effect_volume_.stack_index);
     update();
 }
 
@@ -1024,10 +1028,20 @@ void LEDViewport3D::ClearEffectVolumeSelection()
     {
         return;
     }
+    gizmo.CancelDrag();
     effect_volume_active_ = false;
     effect_volume_grid_.reset();
     gizmo.SetTarget(static_cast<EffectVolume3D*>(nullptr));
     update();
+}
+
+void LEDViewport3D::SetEffectVolumeGrid(const GridContext3D& grid)
+{
+    if(!effect_volume_active_)
+    {
+        return;
+    }
+    effect_volume_grid_ = std::make_unique<GridContext3D>(grid);
 }
 
 bool LEDViewport3D::IsControllerSelected(int index) const
@@ -1061,6 +1075,9 @@ void LEDViewport3D::SelectDisplayPlane(int index)
     if(display_planes && index >= 0 && index < (int)display_planes->size())
     {
         deselectRoomViewport();
+        gizmo.CancelDrag();
+        effect_volume_active_ = false;
+        effect_volume_grid_.reset();
         selected_controller_indices.clear();
         selected_controller_idx = -1;
         selected_ref_point_idx = -1;

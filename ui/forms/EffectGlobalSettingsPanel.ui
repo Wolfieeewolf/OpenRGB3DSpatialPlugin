@@ -111,6 +111,29 @@
     </widget>
    </item>
    <item row="4" column="0">
+    <widget class="QLabel" name="volumeShapeLabel">
+     <property name="text">
+      <string>Volume shape:</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignVCenter</set>
+     </property>
+     <property name="toolTip">
+      <string>Hard occupancy bound for this layer (tight fit). Box, sphere, cylinder, cone, or tetrahedron. Resize with the viewport gizmo; custom meshes come later.</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QComboBox" name="volumeShapeCombo">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+       <horstretch>1</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
     <widget class="QLabel" name="roomOutputSectionLabel">
      <property name="text">
       <string>Room output:</string>
@@ -123,7 +146,7 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="1">
+   <item row="5" column="1">
     <widget class="QWidget" name="roomOutputHost" native="true">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
@@ -133,7 +156,7 @@
      </property>
     </widget>
    </item>
-   <item row="5" column="0" colspan="2">
+   <item row="6" column="0" colspan="2">
     <widget class="QComboBox" name="stackEffectTypeCombo">
      <property name="visible">
       <bool>false</bool>
@@ -145,7 +168,7 @@
      </item>
     </widget>
    </item>
-   <item row="6" column="0" colspan="2">
+   <item row="7" column="0" colspan="2">
     <widget class="QComboBox" name="stackEffectZoneCombo">
      <property name="visible">
       <bool>false</bool>

@@ -767,12 +767,20 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     for(size_t idx = 0; idx < active_effects.size(); idx++)
     {
-        if(active_effects[idx].effect)
+        SpatialEffect3D* effect = active_effects[idx].effect;
+        if(!effect)
         {
-            active_effects[idx].effect->SetGlobalReferencePoint(stack_ref_origin);
-            active_effects[idx].effect->SetCustomReferencePoint(stack_ref_origin);
-            active_effects[idx].effect->SetReferenceMode(stack_origin_mode);
+            continue;
         }
+        /* Unlocked volume boxes own their world origin — do not let the stack
+           Spatial Anchor yank GetEffectOriginGrid off the gizmo every frame. */
+        if(effect->GetVolumeToolsUnlocked() && effect->HasVolumeWorldOrigin())
+        {
+            continue;
+        }
+        effect->SetGlobalReferencePoint(stack_ref_origin);
+        effect->SetCustomReferencePoint(stack_ref_origin);
+        effect->SetReferenceMode(stack_origin_mode);
     }
 
     std::unordered_set<RGBControllerInterface*> controllers_managed_by_virtuals;
@@ -936,8 +944,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                         if(!effect->SkipsSpatialSampleWarp())
                         {
-                            effect->ApplyAxisScale(sx, sy, sz, active_grid);
+                            /* Local frame first so axis/% occupancy matches the gizmo OBB. */
                             effect->ApplyEffectRotation(sx, sy, sz, active_grid);
+                            effect->ApplyAxisScale(sx, sy, sz, active_grid);
                         }
                         effect_color = SampleStackLayerColor(effect,
                                                              sx,
@@ -1216,8 +1225,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sz = sample_z;
                     if(!slot.effect->SkipsSpatialSampleWarp())
                     {
-                        slot.effect->ApplyAxisScale(sx, sy, sz, active_grid);
                         slot.effect->ApplyEffectRotation(sx, sy, sz, active_grid);
+                        slot.effect->ApplyAxisScale(sx, sy, sz, active_grid);
                     }
                     RGBColor effect_color =
                         slot.effect->EvaluateColorGrid(sx, sy, sz, time_val, active_grid);
@@ -1485,8 +1494,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
                         if(!effect->SkipsSpatialSampleWarp())
                         {
-                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
                             effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
+                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
                         }
                         RGBColor effect_color = SampleStackLayerColor(effect,
                                                                       sample_x,
@@ -1680,8 +1689,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
                     if(!effect->SkipsSpatialSampleWarp())
                     {
-                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
                         effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
+                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
                     }
                     RGBColor effect_color = SampleStackLayerColor(effect,
                                                                   sample_x,

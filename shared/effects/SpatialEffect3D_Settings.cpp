@@ -319,6 +319,7 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["shear_xy"] = effect_shear_xy;
     j["shear_xz"] = effect_shear_xz;
     j["shear_yz"] = effect_shear_yz;
+    j["volume_shape"] = effect_volume_shape;
     j["axis_scale_rotation_yaw"] = effect_axis_scale_rotation_yaw;
     j["axis_scale_rotation_pitch"] = effect_axis_scale_rotation_pitch;
     j["axis_scale_rotation_roll"] = effect_axis_scale_rotation_roll;
@@ -461,6 +462,9 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_shear_xz = std::clamp(settings["shear_xz"].get<float>(), -2.0f, 2.0f);
     if(settings.contains("shear_yz"))
         effect_shear_yz = std::clamp(settings["shear_yz"].get<float>(), -2.0f, 2.0f);
+    if(settings.contains("volume_shape"))
+        effect_volume_shape = std::clamp(settings["volume_shape"].get<int>(),
+                                         (int)VOLUME_SHAPE_BOX, (int)VOLUME_SHAPE_TETRA);
     if(settings.contains("axis_scale_rotation_yaw"))
         effect_axis_scale_rotation_yaw = std::clamp(settings["axis_scale_rotation_yaw"].get<float>(), -180.0f, 180.0f);
     if(settings.contains("axis_scale_rotation_pitch"))
@@ -470,22 +474,46 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(rotation_yaw_slider)
     {
+        QSignalBlocker blocker(rotation_yaw_slider);
         rotation_yaw_slider->setValue((int)effect_rotation_yaw);
+    }
+    if(rotation_yaw_label)
+    {
+        rotation_yaw_label->setText(QString::number((int)effect_rotation_yaw) + QStringLiteral("°"));
     }
     if(rotation_pitch_slider)
     {
+        QSignalBlocker blocker(rotation_pitch_slider);
         rotation_pitch_slider->setValue((int)effect_rotation_pitch);
+    }
+    if(rotation_pitch_label)
+    {
+        rotation_pitch_label->setText(QString::number((int)effect_rotation_pitch) + QStringLiteral("°"));
     }
     if(rotation_roll_slider)
     {
+        QSignalBlocker blocker(rotation_roll_slider);
         rotation_roll_slider->setValue((int)effect_rotation_roll);
     }
+    if(rotation_roll_label)
+    {
+        rotation_roll_label->setText(QString::number((int)effect_rotation_roll) + QStringLiteral("°"));
+    }
     if(axis_scale_rot_yaw_slider)
+    {
+        QSignalBlocker blocker(axis_scale_rot_yaw_slider);
         axis_scale_rot_yaw_slider->setValue((int)effect_axis_scale_rotation_yaw);
+    }
     if(axis_scale_rot_pitch_slider)
+    {
+        QSignalBlocker blocker(axis_scale_rot_pitch_slider);
         axis_scale_rot_pitch_slider->setValue((int)effect_axis_scale_rotation_pitch);
+    }
     if(axis_scale_rot_roll_slider)
+    {
+        QSignalBlocker blocker(axis_scale_rot_roll_slider);
         axis_scale_rot_roll_slider->setValue((int)effect_axis_scale_rotation_roll);
+    }
     if(settings.contains("size"))
         effect_size = std::clamp(settings["size"].get<unsigned int>(), 0u, 200u);
     if(settings.contains("scale_value"))
@@ -629,11 +657,20 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(plane_combo)
         plane_combo->setCurrentIndex(effect_plane);
     if(offset_x_slider)
+    {
+        QSignalBlocker blocker(offset_x_slider);
         offset_x_slider->setValue(effect_offset_x);
+    }
     if(offset_y_slider)
+    {
+        QSignalBlocker blocker(offset_y_slider);
         offset_y_slider->setValue(effect_offset_y);
+    }
     if(offset_z_slider)
+    {
+        QSignalBlocker blocker(offset_z_slider);
         offset_z_slider->setValue(effect_offset_z);
+    }
     if(offset_x_label)
         offset_x_label->setText(QString::number(effect_offset_x) + "%");
     if(offset_y_label)
