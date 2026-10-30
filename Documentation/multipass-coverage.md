@@ -38,6 +38,7 @@ Skill: `.cursor/skills/openrgb3d-multipass-review/SKILL.md`. Tracker was wrong o
 | SpatialLighting/ SpatialRoom/ SpatialSamplers/ | fixed | 2026-10-27 | `AppendRoomWallOccluders`: left-wall corner typo fixed (`min_z`→`min_y`), duplicate floor replaced with correct front (Z=min_z) + back (Z=max_z) quads, dead `eps` variable removed; SpatialLayerCore.cpp: `(void)w0` suppressor removed (restructured to `p0/p1/sector_t`); RoomSampleMapping.cpp: redundant `static` removed from anonymous-namespace functions; SpatialRoomFrame/Defaults/Types kept |
 | engines/game/Game + integrations/ | parked | 2026-10-27 | Partial only — optional deep pass on Claude resume list; Game/ moved under engines/game phase 1 |
 | ui/ | parked | 2026-10-27 | Action stack done. Grid/viewport + residual UI on Claude resume list above |
+| ui/ effect-volume boxes (`feat/effect-volume-boxes`) | fixed | 2026-10-30 | Scoped multipass: absolute volume origin, OBB/Euler sync, drag SaveSettings skip, dead sample-warp calls removed, RefreshEffectDisplay always re-evals (stopped preview). Full viewport residual still parked above. |
 | Documentation/ | fixed | 2026-10-27 | Shader Field contract filled; recipe-map / coverage park notes |
 
 ## Parked (other)

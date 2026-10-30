@@ -2,7 +2,6 @@
 
 #include "SpatialEffect3D.h"
 
-#include "SpatialRoom/SpatialRoomDefaults.h"
 #include "SpatialRoom/SpatialRoomFrame.h"
 #include "Colors.h"
 #include "EffectStratumBlend.h"
@@ -48,32 +47,11 @@ namespace
 
 bool SpatialEffect3D::EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const
 {
-    /* Always world → volume-local (ApplyEffectRotation stays a no-op to avoid doubles). */
     const Vector3D origin_grid = GetEffectOriginGrid(grid);
     const Vector3D local = VolumeWorldDeltaToLocal(x - origin_grid.x,
                                                    y - origin_grid.y,
                                                    z - origin_grid.z);
     return !IsWithinEffectBoundary(local.x, local.y, local.z, grid);
-}
-
-void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const
-{
-    /* Axis % is occupancy (GetVolumeHalfExtents / GPU UV), not a sample stretch.
-       A prior rotate±euler shell here was an identity no-op after stretch removal. */
-    (void)x;
-    (void)y;
-    (void)z;
-    (void)grid;
-}
-
-void SpatialEffect3D::ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const
-{
-    /* No-op: VolumeWorldDeltaToLocal / SampleVolumeLocalUv01 / EffectGridSampleOutsideVolume
-       own world→local. Warping here double-transformed FolderVolume/ShaderField. */
-    (void)x;
-    (void)y;
-    (void)z;
-    (void)grid;
 }
 
 float SpatialEffect3D::ComputeStratumMotion01(const float layer_weights[3],
@@ -311,12 +289,6 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
     return spatial_color;
 }
 
-bool SpatialEffect3D::SkipsSpatialSampleWarp() const
-{
-    return SpatialRoom::DefaultCapabilitiesForMode(GetSpatialRoomMode())
-        .has(SpatialRoom::CapSkipSampleWarp);
-}
-
 Vector3D SpatialEffect3D::GetEffectOrigin() const
 {
     switch(reference_mode)
@@ -476,11 +448,7 @@ void ApplySpatialSamplingQuantization(float& x, float& y, float& z, const GridCo
 
 void SpatialEffect3D::PrepareTrueGpuSamplePoint(float& x, float& y, float& z, const GridContext3D& grid) const
 {
-    if(!SkipsSpatialSampleWarp())
-    {
-        ApplyEffectRotation(x, y, z, grid);
-        ApplyAxisScale(x, y, z, grid);
-    }
+    /* Volume frame is applied inside SampleVolumeLocalUv01 / EffectGridSampleOutsideVolume. */
     if(UsesSpatialSamplingQuantization())
     {
         ApplySpatialSamplingQuantization(x, y, z, grid, GetSamplingResolution());

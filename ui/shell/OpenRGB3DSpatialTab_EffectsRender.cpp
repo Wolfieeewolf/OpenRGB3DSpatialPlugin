@@ -942,12 +942,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sz = requires_world ? world_pos.z : room_z;
                         const GridContext3D& active_grid = stack_grid;
 
-                        if(!effect->SkipsSpatialSampleWarp())
-                        {
-                            /* Local frame first so axis/% occupancy matches the gizmo OBB. */
-                            effect->ApplyEffectRotation(sx, sy, sz, active_grid);
-                            effect->ApplyAxisScale(sx, sy, sz, active_grid);
-                        }
                         effect_color = SampleStackLayerColor(effect,
                                                              sx,
                                                              sy,
@@ -1223,11 +1217,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sx = sample_x;
                     float sy = sample_y;
                     float sz = sample_z;
-                    if(!slot.effect->SkipsSpatialSampleWarp())
-                    {
-                        slot.effect->ApplyEffectRotation(sx, sy, sz, active_grid);
-                        slot.effect->ApplyAxisScale(sx, sy, sz, active_grid);
-                    }
                     RGBColor effect_color =
                         slot.effect->EvaluateColorGrid(sx, sy, sz, time_val, active_grid);
                     if(!slot.effect->IsPointOnActiveSurface(sx, sy, sz, active_grid))
@@ -1492,11 +1481,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             ResolveActiveSlotGrid(grid_override, use_world_bounds);
                         const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
                         MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
-                        if(!effect->SkipsSpatialSampleWarp())
-                        {
-                            effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
-                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
-                        }
                         RGBColor effect_color = SampleStackLayerColor(effect,
                                                                       sample_x,
                                                                       sample_y,
@@ -1687,11 +1671,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         ResolveActiveSlotGrid(grid_override, use_world_bounds);
                     const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
-                    if(!effect->SkipsSpatialSampleWarp())
-                    {
-                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
-                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
-                    }
                     RGBColor effect_color = SampleStackLayerColor(effect,
                                                                   sample_x,
                                                                   sample_y,

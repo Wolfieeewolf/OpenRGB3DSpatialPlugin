@@ -562,12 +562,6 @@ public:
     float GetBoundaryMultiplier(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
     float ApplyEdgeToIntensity(float normalized_dist) const;
 
-    virtual void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;
-    virtual void ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const;
-
-    /** When true, stack pre-sample axis scale / effect rotation are skipped (room-fixed patterns, lighting). */
-    virtual bool SkipsSpatialSampleWarp() const;
-
     SpatialRoom::SpatialRoomOutputRole GetRoomOutputRole() const { return effect_room_output_role_; }
     const std::vector<int>& roomEmitterControllerIndices() const { return effect_emitter_controller_indices_; }
     void setRoomEmitterControllerIndex(int index, bool enabled);

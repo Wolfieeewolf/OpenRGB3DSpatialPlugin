@@ -112,8 +112,3 @@ bool MinecraftSubEffect3D::RequiresWorldSpaceCoordinates() const
 {
     return false;
 }
-
-bool MinecraftSubEffect3D::SkipsSpatialSampleWarp() const
-{
-    return true;
-}

@@ -27,7 +27,6 @@ public:
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
     bool UsesSpatialSamplingQuantization() const override { return false; }
-    bool SkipsSpatialSampleWarp() const override { return true; }
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;

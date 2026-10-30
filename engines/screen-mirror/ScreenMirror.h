@@ -37,7 +37,6 @@ public:
     bool UsesSpatialSamplingQuantization() const override { return false; }
     bool RequiresWorldSpaceCoordinates() const override { return true; }
     bool RequiresWorldSpaceGridBounds() const override { return true; }
-    bool SkipsSpatialSampleWarp() const override { return true; }
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;

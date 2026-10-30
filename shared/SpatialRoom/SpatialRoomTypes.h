@@ -34,8 +34,6 @@ enum class SpatialRoomOutputRole : int
 enum SpatialRoomCapability : uint32_t
 {
     CapNone = 0,
-    /** Do not warp sample XYZ with stack anchor/scale (room-fixed emitters). */
-    CapSkipSampleWarp = 1u << 0,
 };
 
 struct SpatialRoomCapabilities

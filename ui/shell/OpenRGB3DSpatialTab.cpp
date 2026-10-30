@@ -1950,14 +1950,10 @@ void OpenRGB3DSpatialTab::PersistRoomGridOverlayToSettings()
 
 void OpenRGB3DSpatialTab::RefreshEffectDisplay()
 {
-    if(effect_running)
-    {
-        RenderEffectStack();
-    }
-    else if(viewport)
-    {
-        viewport->UpdateColors();
-    }
+    /* Always re-eval the stack — volume gizmo / settings must update the lit
+       preview whether playback is running or frozen. UpdateColors alone only
+       repaints stale LED colors. */
+    RenderEffectStack();
 }
 
 void OpenRGB3DSpatialTab::SetupStackRoomOutputPanel()

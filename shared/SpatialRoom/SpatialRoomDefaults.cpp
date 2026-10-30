@@ -5,20 +5,9 @@
 namespace SpatialRoom
 {
 
-SpatialRoomCapabilities DefaultCapabilitiesForMode(SpatialRoomMode mode)
+SpatialRoomCapabilities DefaultCapabilitiesForMode(SpatialRoomMode /*mode*/)
 {
-    SpatialRoomCapabilities caps{};
-    switch(mode)
-    {
-    case SpatialRoomMode::EmissiveRelay:
-    case SpatialRoomMode::RoomMappedPattern:
-        caps.set(CapSkipSampleWarp);
-        break;
-    case SpatialRoomMode::OriginField:
-    default:
-        break;
-    }
-    return caps;
+    return {};
 }
 
 } // namespace SpatialRoom
