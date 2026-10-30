@@ -27,6 +27,7 @@ public:
 
     QDoubleSpinBox* gridScaleSpin() const;
     QCheckBox*      gridSnapCheckbox() const;
+    QCheckBox*      rotateSnapCheckbox() const;
     QLabel*         selectionInfoLabel() const;
     QDoubleSpinBox* roomWidthSpin() const;
     QDoubleSpinBox* roomHeightSpin() const;

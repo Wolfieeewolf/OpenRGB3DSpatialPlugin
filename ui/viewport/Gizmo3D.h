@@ -81,6 +81,9 @@ public:
     void CancelDrag();
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
+    /** Sticky 15° rotate snap (checkbox). Shift still snaps when this is off. */
+    void SetRotateSnapEnabled(bool enabled);
+    bool IsRotateSnapEnabled() const { return rotate_snap_enabled; }
     /**
      * World-space half-extent of the selected object (longest axis).
      * When > 0, SetScreenScale sizes rings just outside that extent (with soft
@@ -178,6 +181,7 @@ private:
     float                  color_highlight[3];
 
     bool                   grid_snap_enabled;
+    bool                   rotate_snap_enabled;
     float                  grid_size;
 
     float                  drag_axis_t0;

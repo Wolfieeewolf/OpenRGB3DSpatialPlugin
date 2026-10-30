@@ -297,10 +297,27 @@ void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
         instance->effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
         if(instance->volume_tools_unlocked)
         {
-            EffectVolume3D volume = EffectVolume3D::FromEffect(*instance->effect, grid, index);
-            instance->effect->SetVolumeWorldOrigin(volume.transform.position.x,
-                                                  volume.transform.position.y,
-                                                  volume.transform.position.z);
+            const bool seed_fresh = !instance->effect->HasVolumeWorldOrigin();
+            EffectVolume3D volume = EffectVolume3D::SeedUnlocked(*instance->effect, grid, index);
+            if(seed_fresh)
+            {
+                if(instance->saved_settings)
+                {
+                    *instance->saved_settings = instance->effect->SaveSettings();
+                }
+                else
+                {
+                    instance->saved_settings =
+                        std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+                }
+                if(current_effect_ui && current_effect_ui != instance->effect.get())
+                {
+                    stack_settings_updating = true;
+                    current_effect_ui->LoadSettings(*instance->saved_settings);
+                    current_effect_ui->SetVolumeToolsUnlocked(true);
+                    stack_settings_updating = false;
+                }
+            }
             viewport->SelectEffectVolume(volume, grid);
         }
         else
@@ -386,8 +403,8 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
     instance->effect->SetVolumeToolsUnlocked(true);
 
     const bool dragging = viewport->IsGizmoDragging();
-    /* Round-trip through effect clamps so the wireframe stays honest with LED eval.
-       Skip JSON SaveSettings while dragging — that alloc dominated per-move cost. */
+    /* While dragging the gizmo owns the transform — skip SaveSettings, FromEffect
+       round-trip (that stomped rotation mid-gesture), and full LED re-eval every move. */
     if(!dragging)
     {
         if(instance->saved_settings)
@@ -398,8 +415,7 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
         {
             instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
         }
-    }
-    {
+
         EffectVolume3D synced = EffectVolume3D::FromEffect(*instance->effect, grid, stack_index);
         volume->transform = synced.transform;
         volume->shear_xy = synced.shear_xy;
@@ -407,14 +423,7 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
         volume->shear_yz = synced.shear_yz;
         volume->shape = synced.shape;
         volume->stack_index = synced.stack_index;
-        if(dragging)
-        {
-            viewport->UpdateGizmoPosition();
-        }
-    }
 
-    if(!dragging)
-    {
         /* Guard panel LoadSettings so slider signals cannot nest ParametersChanged
            back into this handler / RefreshEffectDisplay. */
         stack_settings_updating = true;
@@ -430,9 +439,24 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
         stack_settings_updating = false;
         viewport->SelectEffectVolume(*volume, grid);
         SetLayoutDirty();
+
+        volume_gizmo_led_refresh_.invalidate();
+        RefreshEffectDisplay();
     }
-    /* Re-eval LEDs so the pattern tracks the box live (nesting is guarded above). */
-    RefreshEffectDisplay();
+    else
+    {
+        /* ~30 Hz LED follow so rotate/move stay smooth; wireframe already tracks the gizmo. */
+        if(!volume_gizmo_led_refresh_.isValid())
+        {
+            volume_gizmo_led_refresh_.start();
+            RefreshEffectDisplay();
+        }
+        else if(volume_gizmo_led_refresh_.elapsed() >= 33)
+        {
+            volume_gizmo_led_refresh_.restart();
+            RefreshEffectDisplay();
+        }
+    }
     viewport->update();
 }
 

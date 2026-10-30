@@ -547,6 +547,12 @@ void LEDViewport3D::SetGridDimensions(int x, int y, int z)
     update();
 }
 
+void LEDViewport3D::SetRotateSnapEnabled(bool enabled)
+{
+    rotate_snap_enabled_ = enabled;
+    gizmo.SetRotateSnapEnabled(enabled);
+}
+
 void LEDViewport3D::SetGridSnapEnabled(bool enabled)
 {
     grid_snap_enabled = enabled;
@@ -639,80 +645,83 @@ bool LEDViewport3D::IsGizmoDragging() const
 }
 
 void LEDViewport3D::emitGizmoDragCompleted()
+{
+    if(effect_volume_active_)
     {
-        if(effect_volume_active_)
+        emit EffectVolumeChanged(effect_volume_.stack_index);
+        return;
+    }
+    if(selected_controller_idx >= 0 && controller_transforms &&
+       selected_controller_idx < (int)controller_transforms->size())
+    {
+        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+        if(ctrl)
         {
-            emit EffectVolumeChanged(effect_volume_.stack_index);
-            return;
+            emit ControllerPositionChanged(selected_controller_idx,
+                                           ctrl->transform.position.x,
+                                           ctrl->transform.position.y,
+                                           ctrl->transform.position.z);
+            emit ControllerRotationChanged(selected_controller_idx,
+                                           ctrl->transform.rotation.x,
+                                           ctrl->transform.rotation.y,
+                                           ctrl->transform.rotation.z);
         }
-        if(selected_controller_idx >= 0 && controller_transforms &&
-            selected_controller_idx < (int)controller_transforms->size())
-        {
-            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
-            if(ctrl)
-            {
-                emit ControllerPositionChanged(selected_controller_idx,
-                                             ctrl->transform.position.x,
-                                             ctrl->transform.position.y,
-                                             ctrl->transform.position.z);
-                emit ControllerRotationChanged(selected_controller_idx,
-                                             ctrl->transform.rotation.x,
-                                             ctrl->transform.rotation.y,
-                                             ctrl->transform.rotation.z);
-            }
-        }
-        else if(selected_ref_point_idx >= 0 && reference_points &&
-                selected_ref_point_idx < (int)reference_points->size())
-        {
-            VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
+    }
+    else if(selected_ref_point_idx >= 0 && reference_points &&
+            selected_ref_point_idx < (int)reference_points->size())
+    {
+        VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
         if(ref_point)
-            {
+        {
             const Vector3D pos = ref_point->GetPosition();
             emit ReferencePointPositionChanged(selected_ref_point_idx, pos.x, pos.y, pos.z);
-            }
         }
-        else if(display_planes && selected_display_plane_idx >= 0 &&
-                selected_display_plane_idx < (int)display_planes->size())
+    }
+    else if(display_planes && selected_display_plane_idx >= 0 &&
+            selected_display_plane_idx < (int)display_planes->size())
+    {
+        DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
+        if(plane)
         {
-            DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
-            if(plane)
-            {
             const Transform3D& transform = plane->GetTransform();
-                emit DisplayPlanePositionChanged(selected_display_plane_idx,
-                                                 transform.position.x,
-                                                 transform.position.y,
-                                                 transform.position.z);
-                emit DisplayPlaneRotationChanged(selected_display_plane_idx,
-                                                 transform.rotation.x,
-                                                 transform.rotation.y,
-                                                 transform.rotation.z);
-            }
+            emit DisplayPlanePositionChanged(selected_display_plane_idx,
+                                             transform.position.x,
+                                             transform.position.y,
+                                             transform.position.z);
+            emit DisplayPlaneRotationChanged(selected_display_plane_idx,
+                                             transform.rotation.x,
+                                             transform.rotation.y,
+                                             transform.rotation.z);
         }
-        else if(scene_props_ && selected_scene_prop_idx_ >= 0 &&
-                selected_scene_prop_idx_ < (int)scene_props_->size())
+    }
+    else if(scene_props_ && selected_scene_prop_idx_ >= 0 &&
+            selected_scene_prop_idx_ < (int)scene_props_->size())
+    {
+        SceneProp3D* prop = (*scene_props_)[(size_t)selected_scene_prop_idx_].get();
+        if(prop)
         {
-            SceneProp3D* prop = (*scene_props_)[(size_t)selected_scene_prop_idx_].get();
-            if(prop)
-            {
-                const Transform3D& transform = prop->GetTransform();
-                emit ScenePropPositionChanged(selected_scene_prop_idx_,
-                                              transform.position.x,
-                                              transform.position.y,
-                                              transform.position.z);
-                emit ScenePropRotationChanged(selected_scene_prop_idx_,
-                                              transform.rotation.x,
-                                              transform.rotation.y,
-                                              transform.rotation.z);
-            }
+            const Transform3D& transform = prop->GetTransform();
+            emit ScenePropPositionChanged(selected_scene_prop_idx_,
+                                          transform.position.x,
+                                          transform.position.y,
+                                          transform.position.z);
+            emit ScenePropRotationChanged(selected_scene_prop_idx_,
+                                          transform.rotation.x,
+                                          transform.rotation.y,
+                                          transform.rotation.z);
         }
+    }
 }
 
 void LEDViewport3D::NotifyControllerTransformChanged()
 {
-    if(!controller_transforms) return;
+    if(!controller_transforms)
+    {
+        return;
+    }
     if(selected_controller_idx >= 0 && selected_controller_idx < (int)controller_transforms->size())
-        {
-            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+    {
+        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
         if(ctrl && !ctrl->hidden_by_virtual)
         {
             ControllerLayout3D::MarkWorldPositionsDirty(ctrl);

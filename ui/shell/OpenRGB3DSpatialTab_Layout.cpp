@@ -230,6 +230,7 @@ nlohmann::json OpenRGB3DSpatialTab::BuildLayoutJson() const
     layout_json["grid"]["dimensions"]["y"] = custom_grid_y;
     layout_json["grid"]["dimensions"]["z"] = custom_grid_z;
     layout_json["grid"]["snap_enabled"] = (viewport && viewport->IsGridSnapEnabled());
+    layout_json["grid"]["rotate_snap_enabled"] = (viewport && viewport->IsRotateSnapEnabled());
     layout_json["grid"]["scale_mm"] = grid_scale_mm;
 
     layout_json["room"]["width"] = manual_room_width;
@@ -355,6 +356,16 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     if(viewport)
     {
         viewport->SetGridSnapEnabled(grid_snap_enabled);
+    }
+
+    const bool rotate_snap_enabled = grid_json.value("rotate_snap_enabled", false);
+    if(rotateSnapCheckbox())
+    {
+        rotateSnapCheckbox()->setChecked(rotate_snap_enabled);
+    }
+    if(viewport)
+    {
+        viewport->SetRotateSnapEnabled(rotate_snap_enabled);
     }
 
     grid_scale_mm = grid_json["scale_mm"].get<float>();

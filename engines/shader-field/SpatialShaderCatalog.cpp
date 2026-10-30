@@ -35,6 +35,12 @@ QString FindEffectShaderPath(const QString& id)
     {
         return QString();
     }
+    /* Fail closed: ids are bare stems under effects/, never path fragments. */
+    if(id.contains(QLatin1Char('/')) || id.contains(QLatin1Char('\\'))
+       || id.contains(QLatin1String("..")))
+    {
+        return QString();
+    }
     PluginSettingsPaths::EnsurePluginDataLayout(OpenRGB3DSpatialPlugin::APIPointer);
     const QString root = QString::fromStdString(
         PluginSettingsPaths::EffectsDir(OpenRGB3DSpatialPlugin::APIPointer).string());

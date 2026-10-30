@@ -26,8 +26,25 @@ struct EffectVolume3D
                                      const GridContext3D& grid,
                                      int stack_index = -1);
 
+    /**
+     * Seed an unlocked volume for the stack UI. If the effect has no absolute world
+     * origin yet (fresh Vol unlock), fit inside the room so a stomped corner Spatial
+     * Anchor cannot stick Scale-100 cover-from-origin outside the grid; then write
+     * back. If an absolute origin already exists, only refresh it from FromEffect.
+     */
+    static EffectVolume3D SeedUnlocked(SpatialEffect3D& effect,
+                                       const GridContext3D& grid,
+                                       int stack_index = -1);
+
     /** Write position/rotation/half-extents/shear/shape back into effect fields. */
     void ApplyToEffect(SpatialEffect3D& effect, const GridContext3D& grid) const;
+
+    /**
+     * Shrink/reposition the axis-aligned extents so the box stays inside the room grid.
+     * Used when seeding a fresh unlocked volume from a corner Spatial Anchor (Scale 100
+     * cover-from-origin would otherwise stick outside the room). Ignores rotation/shear.
+     */
+    void FitInsideGrid(const GridContext3D& grid);
 
     /** Half-extents of the effect volume in grid units (from occupancy + axis %). */
     static Vector3D HalfExtentsFromEffect(const SpatialEffect3D& effect,

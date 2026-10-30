@@ -61,6 +61,51 @@ EffectVolume3D EffectVolume3D::FromEffect(const SpatialEffect3D& effect,
     return vol;
 }
 
+EffectVolume3D EffectVolume3D::SeedUnlocked(SpatialEffect3D& effect,
+                                            const GridContext3D& grid,
+                                            int stack_index)
+{
+    const bool seed_fresh = !effect.HasVolumeWorldOrigin();
+    EffectVolume3D vol = FromEffect(effect, grid, stack_index);
+    if(seed_fresh)
+    {
+        vol.FitInsideGrid(grid);
+        vol.ApplyToEffect(effect, grid);
+    }
+    else
+    {
+        effect.SetVolumeWorldOrigin(vol.transform.position.x,
+                                    vol.transform.position.y,
+                                    vol.transform.position.z);
+    }
+    return vol;
+}
+
+void EffectVolume3D::FitInsideGrid(const GridContext3D& grid)
+{
+    auto fit_axis = [](float origin, float half, float min_v, float max_v,
+                       float* out_origin, float* out_half) {
+        float lo = origin - half;
+        float hi = origin + half;
+        lo = std::max(lo, min_v);
+        hi = std::min(hi, max_v);
+        if(hi < lo + 1e-3f)
+        {
+            lo = min_v;
+            hi = max_v;
+        }
+        *out_origin = 0.5f * (lo + hi);
+        *out_half = std::max(0.05f, 0.5f * (hi - lo));
+    };
+
+    fit_axis(transform.position.x, transform.scale.x, grid.min_x, grid.max_x,
+             &transform.position.x, &transform.scale.x);
+    fit_axis(transform.position.y, transform.scale.y, grid.min_y, grid.max_y,
+             &transform.position.y, &transform.scale.y);
+    fit_axis(transform.position.z, transform.scale.z, grid.min_z, grid.max_z,
+             &transform.position.z, &transform.scale.z);
+}
+
 void EffectVolume3D::ApplyToEffect(SpatialEffect3D& effect, const GridContext3D& grid) const
 {
     /* Absolute origin while unlocked — render must not re-derive from Spatial Anchor. */

@@ -161,12 +161,18 @@ void LEDViewport3D::paintGlScene()
 
 float LEDViewport3D::selectedObjectGizmoRadius() const
 {
-    /* Median of three extents — long thin runs grow a little without matching length. */
-    auto median3 = [](float a, float b, float c) {
-        if(a > b) std::swap(a, b);
-        if(b > c) std::swap(b, c);
-        if(a > b) std::swap(a, b);
-        return b;
+    /* Blend median + max so long thin runs aren't tiny, without matching full length. */
+    auto characteristic = [](float a, float b, float c) {
+        float med = a;
+        float mx = a;
+        if(b > mx) mx = b;
+        if(c > mx) mx = c;
+        float x = a, y = b, z = c;
+        if(x > y) std::swap(x, y);
+        if(y > z) std::swap(y, z);
+        if(x > y) std::swap(x, y);
+        med = y;
+        return 0.65f * med + 0.35f * mx;
     };
 
     if(effect_volume_active_)
@@ -190,7 +196,7 @@ float LEDViewport3D::selectedObjectGizmoRadius() const
             hy = 0.5f * std::max(0.0f, y1 - y0);
             hz = 0.5f * std::max(0.0f, z1 - z0);
         }
-        return median3(hx, hy, hz);
+        return characteristic(hx, hy, hz);
     }
 
     if(selected_scene_prop_idx_ >= 0 && scene_props_ &&
@@ -203,7 +209,7 @@ float LEDViewport3D::selectedObjectGizmoRadius() const
             const float w = MMToGridUnits(prop->GetWidthMM(), grid_scale_mm) * std::max(t.scale.x, 0.001f);
             const float h = MMToGridUnits(prop->GetHeightMM(), grid_scale_mm) * std::max(t.scale.y, 0.001f);
             const float d = MMToGridUnits(prop->GetDepthMM(), grid_scale_mm) * std::max(t.scale.z, 0.001f);
-            return median3(0.5f * w, 0.5f * h, 0.5f * d);
+            return characteristic(0.5f * w, 0.5f * h, 0.5f * d);
         }
     }
 
@@ -229,7 +235,7 @@ float LEDViewport3D::selectedObjectGizmoRadius() const
             const float sx = size.x * std::max(ctrl->transform.scale.x, 0.001f);
             const float sy = size.y * std::max(ctrl->transform.scale.y, 0.001f);
             const float sz = size.z * std::max(ctrl->transform.scale.z, 0.001f);
-            return median3(0.5f * sx, 0.5f * sy, 0.5f * sz);
+            return characteristic(0.5f * sx, 0.5f * sy, 0.5f * sz);
         }
     }
 
@@ -437,7 +443,9 @@ void LEDViewport3D::paintRotateReadout(QPainter& painter,
 
     const char axis_char = (gizmo.GetSelectedAxis() == GIZMO_AXIS_X) ? 'X' :
                            (gizmo.GetSelectedAxis() == GIZMO_AXIS_Y) ? 'Y' : 'Z';
-    const QString snap_text = gizmo.IsRotateSnapActive() ? " | Snap 15 deg" : " | Hold Shift to snap 15 deg";
+    const QString snap_text = gizmo.IsRotateSnapActive()
+                                  ? " | Snap 15 deg"
+                                  : " | Hold Shift or enable Snap rotate";
     const QString text = QString("Rotate %1: %2 deg%3")
                            .arg(QChar(axis_char),
                                 QString::number(gizmo.GetRotateAccumDegrees(), 'f', 1),

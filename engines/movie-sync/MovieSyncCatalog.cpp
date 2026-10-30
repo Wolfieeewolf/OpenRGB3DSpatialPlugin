@@ -18,6 +18,57 @@ filesystem::path CatalogFilePath(const filesystem::path& movie_effects_dir)
     return movie_effects_dir / "catalog.json";
 }
 
+namespace
+{
+
+bool ActionRelSafe(const std::string& action_rel)
+{
+    if(action_rel.empty())
+    {
+        return false;
+    }
+    const filesystem::path rel(action_rel);
+    if(rel.is_absolute())
+    {
+        return false;
+    }
+    for(const filesystem::path& part : rel)
+    {
+        if(part == "..")
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool PathStaysUnderRoot(const filesystem::path& root, const filesystem::path& candidate)
+{
+    std::error_code ec;
+    const filesystem::path root_abs = filesystem::weakly_canonical(root, ec);
+    if(ec)
+    {
+        return false;
+    }
+    const filesystem::path cand_abs = filesystem::weakly_canonical(candidate, ec);
+    if(ec)
+    {
+        return false;
+    }
+    auto root_it = root_abs.begin();
+    auto cand_it = cand_abs.begin();
+    for(; root_it != root_abs.end(); ++root_it, ++cand_it)
+    {
+        if(cand_it == cand_abs.end() || *cand_it != *root_it)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
 bool LoadCatalog(const filesystem::path& catalog_path, Catalog* out, std::string* error)
 {
     if(!out)
@@ -59,7 +110,7 @@ bool LoadCatalog(const filesystem::path& catalog_path, Catalog* out, std::string
         e.category = ej.value("category", "");
         e.action_rel = ej.value("action", "");
         e.photosensitive = ej.value("photosensitive", false);
-        if(!e.id.empty() && !e.action_rel.empty())
+        if(!e.id.empty() && ActionRelSafe(e.action_rel))
         {
             out->effects.push_back(std::move(e));
         }
@@ -155,7 +206,17 @@ bool LoadActionForEffect(const Catalog& catalog,
         if(error) *error = "unknown effect_id: " + effect_id;
         return false;
     }
+    if(!ActionRelSafe(e->action_rel))
+    {
+        if(error) *error = "unsafe action path for effect_id: " + effect_id;
+        return false;
+    }
     const filesystem::path path = movie_effects_dir / e->action_rel;
+    if(!PathStaysUnderRoot(movie_effects_dir, path))
+    {
+        if(error) *error = "action path escapes movie-sync effects dir";
+        return false;
+    }
     return Action::LoadFromFile(path, out, error);
 }
 

@@ -47,10 +47,15 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         "(e.g. scale 10 → 10 mm per unit).");
 
     ui->gridSnapCheckbox->setToolTip(
-        QStringLiteral("When moving controllers, snap to grid intersections."));
+        QStringLiteral("Snap controller and effect-volume moves to grid intersections."));
+    ui->rotateSnapCheckbox->setToolTip(
+        QStringLiteral(
+            "When on, gizmo rotate snaps to 15° steps. Hold Shift for the same snap "
+            "while this is off."));
     if(tab->viewport)
     {
         ui->gridSnapCheckbox->setChecked(tab->viewport->IsGridSnapEnabled());
+        ui->rotateSnapCheckbox->setChecked(tab->viewport->IsRotateSnapEnabled());
     }
 
     QFont selection_font = ui->selectionInfoLabel->font();
@@ -161,6 +166,7 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->overlayStepSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayStepChanged);
 
     connect(ui->gridSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gridSnapToggled);
+    connect(ui->rotateSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::rotateSnapToggled);
 
     connect(ui->roomWidthSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
             &GridSettingsPanel::onRoomWidthChanged);
@@ -304,6 +310,7 @@ void GridSettingsPanel::onRoomDepthChanged(double value)
 
 QDoubleSpinBox* GridSettingsPanel::gridScaleSpin() const { return ui->gridScaleSpin; }
 QCheckBox* GridSettingsPanel::gridSnapCheckbox() const { return ui->gridSnapCheckbox; }
+QCheckBox* GridSettingsPanel::rotateSnapCheckbox() const { return ui->rotateSnapCheckbox; }
 QLabel* GridSettingsPanel::selectionInfoLabel() const { return ui->selectionInfoLabel; }
 QDoubleSpinBox* GridSettingsPanel::roomWidthSpin() const { return ui->roomWidthSpin; }
 QDoubleSpinBox* GridSettingsPanel::roomHeightSpin() const { return ui->roomHeightSpin; }

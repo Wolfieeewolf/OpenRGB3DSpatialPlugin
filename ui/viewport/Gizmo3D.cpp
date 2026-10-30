@@ -15,10 +15,10 @@
 
 #define GIZMO_SIZE                  1.5f
 /**
- * Absolute world-space ceiling — oversized arms inflate hit spheres and lock the UI.
- * Hit radii below stay separately capped so visual size can grow without swallowing picks.
+ * Absolute world-space ceiling — uncapped arms + hit spheres locked the UI last time.
+ * Visual size may grow with the object; hit radii below stay separately capped.
  */
-#define GIZMO_SIZE_HARD_MAX         28.0f
+#define GIZMO_SIZE_HARD_MAX         40.0f
 #define GIZMO_SIZE_HARD_MIN         0.35f
 #define AXIS_THICKNESS              0.1f
 #define AXIS_HIT_THICKNESS          0.25f
@@ -30,13 +30,19 @@
 /** Fraction of view height at the gizmo used as axis arm length (screen-constant fallback). */
 #define GIZMO_ARM_VIEW_FRACTION     0.072f
 /**
- * Object-relative growth: rings sit just outside the object median half-extent,
- * tempered toward screen size so room-filling volumes stay usable (not diameter rings).
+ * Object-relative growth: rings track object size, soft-clamped to a screen band so
+ * room-filling volumes stay usable (not diameter rings / viewport-swallowing hits).
  */
-#define GIZMO_OBJECT_RADIUS_FACTOR  0.72f
-#define GIZMO_OBJECT_SCREEN_MIN_FRAC 0.055f
-#define GIZMO_OBJECT_SCREEN_MAX_FRAC 0.32f
-#define GIZMO_OBJECT_MAX_SCREEN_MUL  4.0f
+#define GIZMO_OBJECT_RADIUS_FACTOR  0.85f
+#define GIZMO_OBJECT_SCREEN_MIN_FRAC 0.06f
+#define GIZMO_OBJECT_SCREEN_MAX_FRAC 0.40f
+#define GIZMO_OBJECT_MAX_SCREEN_MUL  5.5f
+/** Hit targets — fixed ceiling independent of visual arm length (crash firewall). */
+#define GIZMO_HIT_CENTER_MAX        1.6f
+#define GIZMO_HIT_AXIS_MAX          1.35f
+#define GIZMO_HIT_RING_MAX          1.6f
+#define GIZMO_VIS_CENTER_MAX        1.25f
+#define GIZMO_VIS_AXIS_THICK_MAX    0.65f
 
 Gizmo3D::Gizmo3D()
 {
@@ -75,6 +81,7 @@ Gizmo3D::Gizmo3D()
     color_highlight[0] = 1.00f; color_highlight[1] = 1.00f; color_highlight[2] = 1.00f;
 
     grid_snap_enabled = false;
+    rotate_snap_enabled = false;
     grid_size = 1.0f;
 
     drag_axis_t0 = 0.0f;
@@ -253,6 +260,11 @@ void Gizmo3D::SetGridSnap(bool enabled, float size)
     grid_size = size;
 }
 
+void Gizmo3D::SetRotateSnapEnabled(bool enabled)
+{
+    rotate_snap_enabled = enabled;
+}
+
 void Gizmo3D::SetObjectRadius(float world_half_extent)
 {
     object_radius_ = (world_half_extent > 0.0f) ? world_half_extent : 0.0f;
@@ -322,11 +334,11 @@ void Gizmo3D::SetScreenScale(float eye_distance, float fovy_degrees)
     }
 
     /* Hit targets stay capped independently of visual arm length. */
-    center_sphere_radius = std::min(gizmo_size * 0.10f, 1.25f);
-    axis_thickness = std::min(gizmo_size * 0.05f, 0.65f);
-    axis_hit_thickness_ = std::min(gizmo_size * 0.12f, 1.35f);
-    center_hit_radius_ = std::min(gizmo_size * 0.14f, 1.6f);
-    rotate_ring_hit_thickness_ = std::min(gizmo_size * 0.14f, 1.6f);
+    center_sphere_radius = std::min(gizmo_size * 0.10f, GIZMO_VIS_CENTER_MAX);
+    axis_thickness = std::min(gizmo_size * 0.05f, GIZMO_VIS_AXIS_THICK_MAX);
+    axis_hit_thickness_ = std::min(gizmo_size * 0.12f, GIZMO_HIT_AXIS_MAX);
+    center_hit_radius_ = std::min(gizmo_size * 0.14f, GIZMO_HIT_CENTER_MAX);
+    rotate_ring_hit_thickness_ = std::min(gizmo_size * 0.14f, GIZMO_HIT_RING_MAX);
 }
 
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
@@ -419,7 +431,8 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
             rot_drag_start_angle = angle;
             rot_drag_accum_degrees = 0.0f;
             rot_snap_remainder_degrees = 0.0f;
-            rotate_snap_active = ((event->modifiers() & Qt::ShiftModifier) != 0);
+            rotate_snap_active = rotate_snap_enabled
+                || ((event->modifiers() & Qt::ShiftModifier) != 0);
         }
         else
         {
@@ -488,7 +501,8 @@ bool Gizmo3D::HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
     }
     else if(dragging)
     {
-        rotate_snap_active = ((event->modifiers() & Qt::ShiftModifier) != 0);
+        rotate_snap_active = rotate_snap_enabled
+            || ((event->modifiers() & Qt::ShiftModifier) != 0);
         UpdateTransform(gl_win_x, gl_win_y, modelview, projection, viewport);
         last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
         last_gl_mouse_pos = QPoint(gl_win_x, gl_win_y);

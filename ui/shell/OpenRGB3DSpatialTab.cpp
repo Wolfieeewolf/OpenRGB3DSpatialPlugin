@@ -663,6 +663,7 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
     viewport->SetGridSnapEnabled(false);
+    viewport->SetRotateSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
     viewport->SetDisplayPlanes(&display_planes);
     viewport->SetSceneProps(&scene_props_);
@@ -1388,6 +1389,15 @@ void OpenRGB3DSpatialTab::gridSnapToggled(bool enabled)
     SetLayoutDirty();
 }
 
+void OpenRGB3DSpatialTab::rotateSnapToggled(bool enabled)
+{
+    if(viewport)
+    {
+        viewport->SetRotateSnapEnabled(enabled);
+    }
+    SetLayoutDirty();
+}
+
 void OpenRGB3DSpatialTab::roomGuideLabelsToggled(bool enabled)
 {
     if(viewport)
@@ -1816,10 +1826,16 @@ void OpenRGB3DSpatialTab::effectVolumeShapeChanged(int index)
                 }
                 else if(instance->volume_tools_unlocked)
                 {
-                    EffectVolume3D fresh_volume = EffectVolume3D::FromEffect(*instance->effect, grid, current_row);
-                    instance->effect->SetVolumeWorldOrigin(fresh_volume.transform.position.x,
-                                                          fresh_volume.transform.position.y,
-                                                          fresh_volume.transform.position.z);
+                    /* Same fresh-unlock fit as Vol toggle — shape change can select a
+                       volume after Start has stomped a corner Spatial Anchor. */
+                    const bool seed_fresh = !instance->effect->HasVolumeWorldOrigin();
+                    EffectVolume3D fresh_volume =
+                        EffectVolume3D::SeedUnlocked(*instance->effect, grid, current_row);
+                    if(seed_fresh)
+                    {
+                        instance->saved_settings =
+                            std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+                    }
                     viewport->SelectEffectVolume(fresh_volume, grid);
                 }
                 viewport->update();
@@ -2568,6 +2584,11 @@ QComboBox* OpenRGB3DSpatialTab::stackEffectZoneCombo() const
 QCheckBox* OpenRGB3DSpatialTab::gridSnapCheckbox() const
 {
     return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->gridSnapCheckbox() : nullptr;
+}
+
+QCheckBox* OpenRGB3DSpatialTab::rotateSnapCheckbox() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->rotateSnapCheckbox() : nullptr;
 }
 
 QDoubleSpinBox* OpenRGB3DSpatialTab::gridScaleSpin() const

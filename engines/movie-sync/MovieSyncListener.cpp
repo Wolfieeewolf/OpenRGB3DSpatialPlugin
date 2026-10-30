@@ -71,10 +71,28 @@ void ScriptListener::onReadyRead()
     {
         return;
     }
+    constexpr int kMaxHeaderBytes = 8 * 1024;
+    constexpr int kMaxBodyBytes = 64 * 1024;
     const QByteArray raw = socket->property("buf").toByteArray() + socket->readAll();
+    if(raw.size() > kMaxHeaderBytes + kMaxBodyBytes)
+    {
+        socket->setProperty("buf", QByteArray());
+        socket->write(httpResponse(413, "Payload Too Large",
+                                   "{\"ok\":false,\"error\":\"request too large\"}"));
+        socket->disconnectFromHost();
+        return;
+    }
     const int hdr_end = raw.indexOf("\r\n\r\n");
     if(hdr_end < 0)
     {
+        if(raw.size() > kMaxHeaderBytes)
+        {
+            socket->setProperty("buf", QByteArray());
+            socket->write(httpResponse(431, "Request Header Fields Too Large",
+                                       "{\"ok\":false,\"error\":\"headers too large\"}"));
+            socket->disconnectFromHost();
+            return;
+        }
         socket->setProperty("buf", raw);
         return;
     }
@@ -87,6 +105,14 @@ void ScriptListener::onReadyRead()
         {
             content_length = t.mid(15).trimmed().toInt();
         }
+    }
+    if(content_length < 0 || content_length > kMaxBodyBytes)
+    {
+        socket->setProperty("buf", QByteArray());
+        socket->write(httpResponse(413, "Payload Too Large",
+                                   "{\"ok\":false,\"error\":\"body too large\"}"));
+        socket->disconnectFromHost();
+        return;
     }
     const QByteArray body = raw.mid(hdr_end + 4);
     if(body.size() < content_length)
@@ -162,8 +188,8 @@ void ScriptListener::handleRequest(QTcpSocket* socket, const QByteArray& raw)
                 on_effect_(effect_id, edge, active);
             }
             // Handler reports failures via status UI; always ack receipt so VLC keeps polling.
-            reply(200, "OK", QByteArray::fromStdString(
-                      std::string("{\"ok\":true,\"effect_id\":\"") + effect_id + "\"}"));
+            nlohmann::json ok = {{"ok", true}, {"effect_id", effect_id}};
+            reply(200, "OK", QByteArray::fromStdString(ok.dump()));
             return;
         }
         catch(...)

@@ -265,7 +265,7 @@ FolderVolumeSpec ReadSpec(const QString& path)
         else if(key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis")
                 || key == QStringLiteral("soft_catch"))
         {
-            /* Catalog / UI hints / legacy no-ops - ignore so later finish/param/slider lines still parse. */
+            /* Catalog / UI hints — ignore so later finish/param/slider lines still parse. */
         }
         else if(key == QStringLiteral("user_colors"))
         {

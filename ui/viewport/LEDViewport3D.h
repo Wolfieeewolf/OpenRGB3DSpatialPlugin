@@ -56,6 +56,8 @@ public:
     void SetGridDimensions(int x, int y, int z);
     void SetGridSnapEnabled(bool enabled);
     bool IsGridSnapEnabled() const { return grid_snap_enabled; }
+    void SetRotateSnapEnabled(bool enabled);
+    bool IsRotateSnapEnabled() const { return rotate_snap_enabled_; }
     void SetRoomDimensions(float width, float depth, float height, bool use_manual);
     void SetGridScaleMM(float mm_per_unit);
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
@@ -325,6 +327,7 @@ private:
     int     grid_y;
     int     grid_z;
     bool    grid_snap_enabled;
+    bool    rotate_snap_enabled_ = false;
     float   grid_scale_mm;
 
     float   room_width;

@@ -6,44 +6,35 @@ File → engine map (regroup later): [plugin-file-map.md](plugin-file-map.md).
 
 Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 
-## Parked for Claude reset (~2026-11-23)
+## Full multipass (2026-10-30)
 
-Other-models / Claude usage exhausted 2026-10-27. **Do not resume these with a weaker model** — judgment passes (ratchet, grid/viewport, residual UI). Resume order when Claude is available again:
-
-1. **engines/actions** — full ratchet (clocks/setParams already from earlier Oct; agent skim only after token stop)
-2. **engines/folder-volume** — full ratchet (~2.6k; split later after pass)
-3. **ui/custom-controller-grid + ui/viewport** — real multipass (agent stopped; local “keep” was not a finish)
-4. **ui residual** — LEDViewport3D*, OpenRGB3DSpatialTab_*, CustomControllerDialog*, Zones/ObjectCreator, Effect stack, `ui/widgets/*`
-5. Optional: Game/integrations deep pass (was partial); ShaderField/ScreenMirror full ratchet (hygiene-only pickup already landed)
-
-Skill: `.cursor/skills/openrgb3d-multipass-review/SKILL.md`. Tracker was wrong once — verify with commits, not row status alone.
-
-## Engines / surfaces
+Plugin-wide catch-all (openrgb3d-multipass-review). Focus: pass 2b path/HTTP, seams (ClearActionPreview / preview dirty / once clocks), volume residual, CONTRIBUTING hygiene. No rebuild (user builds locally). FolderVolume / AudioInputManager / Reactive still oversized — **split later**, not blocked on pass status.
 
 | Family | Status | Date | Notes |
 |--------|--------|------|-------|
-| engines/actions | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop); tree moved phase 7 |
-| engines/folder-volume | parked | 2026-10-27 | Resume ~2026-11-23 — ratchet incomplete (token stop); tree moved phase 5 |
-| engines/shader-field (was Effects3D/ShaderField + SpatialShader*) | fixed | 2026-10-27 | Picked up locally after agent stop: shared `LoadShaderBodyFromPath`; `\u2013` labels (not a full agent ratchet); tree moved phase 3 |
-| engines/screen-mirror (was Effects3D/ScreenMirror + ScreenCapture*) | fixed | 2026-10-27 | Picked up locally after agent stop: `QStringLiteral` tooltips/empty label (hygiene; not full agent ratchet); tree moved phase 2 |
-| engines/reactive (was Effects3D/Reactive + Input) | fixed | 2026-10-27 | Removed legacy `ring_width_pct` LoadSettings remap; wiring only-while-running OK; **~1.5k lines — split later**; tree moved phase 1 |
-| engines/game/Minecraft (was Effects3D/Games) | fixed | 2026-10-27 | Dead `MakeRgb` + `RoomLedToSpatialCore` removed; include path fixed; strip-axis UI gap patched (standalone Hunger/Air/Dura now expose axis controls); RoomAmbilight description updated; per-strip labels corrected; tree moved phase 1 |
-| engines/movie-sync | fixed | 2026-10-27 | Curly-quote literals in tr() replaced with \u201c/\u201d escapes (CONTRIBUTING hygiene); LOG_WARNING text aligned to UI label Allow photosensitive looks; ec reuse across nested directory_iterator fixed with ec2; tree moved phase 1 |
-| engines/triggers | fixed | 2026-10-27 | LoadCatalog stale ec from is_regular_file(ec) fixed (use cached status); 7 of 16 WindowsTriggerSource::ListEvents display names normalised to Title Case; tree moved phase 1 |
-| shared/SpatialLighting + SpatialPatternKernels | fixed | 2026-10-27 | `EffectShaderPatterns` stopped early on newer header keys (`drive`, `audio_preset`, `audio_media`, `shader`, `media_layout`, `instances`) — added to recognized set; SpatialPatternKernels.cpp/SpatialPatternPalettes.cpp kept (role, wiring, palette coverage OK) |
-| Audio/ | keep | 2026-10-27 | No printf/debug leftovers; **AudioInputManager ~1.4k — split later** |
-| engines/reactive/ReactiveInput* | keep | 2026-10-27 | Session start/stop gated by PlaybackUsesReactive; co-located under engines/reactive phase 1 |
+| engines/actions | keep | 2026-10-30 | MapPlaybackTime once/forever/while_active OK; ClearActionPreview on stop/finish/editor/triggers; preview_pack_dirty wired via clipEdited/Created/props; GpuAnimMs continuous clock OK. No high-conviction code fix this run. |
+| engines/folder-volume | fixed | 2026-10-30 | Header-hint ignore comment deslop; scans stay under PluginSettingsPaths roots; media_path is user-chosen (intentional). **~2.6k — split later.** |
+| engines/shader-field | fixed | 2026-10-30 | `FindEffectShaderPath` rejects `/` `\` `..` in id (fail closed). |
+| engines/screen-mirror | keep | 2026-10-30 | Prior hygiene still holds; no new fails. |
+| engines/reactive | keep | 2026-10-30 | No legacy LoadSettings remap; ring_width_pct is live thickness only. **~1.5k — split later.** |
+| engines/game/Minecraft + Game/ | keep | 2026-10-30 | UDP loopback; SHM magic/seq/size validated; no new fails. |
+| engines/movie-sync | fixed | 2026-10-30 | HTTP body/header size caps; JSON-safe effect_id ack; catalog `action` rejects `..`/absolute + stays under effects dir. |
+| engines/triggers | keep | 2026-10-30 | Prior ec / Title Case fixes hold; ClearActionPreview on idle tick. |
+| shared/SpatialLighting + SpatialPatternKernels | keep | 2026-10-30 | Room wall occluders already correct (6 faces); no new fails. |
+| Audio/ | keep | 2026-10-30 | **AudioInputManager ~1.4k — split later.** |
+| engines/reactive/ReactiveInput* | keep | 2026-10-30 | Session gated by PlaybackUsesReactive. |
 | Input/ControllerTilt* | parked | | DualSense tilt on feat branch |
-| Shaders/ | fixed | 2026-10-27 | Shared GL pool/engines reviewed; SpatialFieldAssistBase.h per-track param push OK; SpatialShaderCatalog header-key set aligned with LoadEffectShader |
-| SpatialLighting/ SpatialRoom/ SpatialSamplers/ | fixed | 2026-10-27 | `AppendRoomWallOccluders`: left-wall corner typo fixed (`min_z`→`min_y`), duplicate floor replaced with correct front (Z=min_z) + back (Z=max_z) quads, dead `eps` variable removed; SpatialLayerCore.cpp: `(void)w0` suppressor removed (restructured to `p0/p1/sector_t`); RoomSampleMapping.cpp: redundant `static` removed from anonymous-namespace functions; SpatialRoomFrame/Defaults/Types kept |
-| engines/game/Game + integrations/ | parked | 2026-10-27 | Partial only — optional deep pass on Claude resume list; Game/ moved under engines/game phase 1 |
-| ui/ | parked | 2026-10-27 | Action stack done. Grid/viewport + residual UI on Claude resume list above |
-| ui/ effect-volume boxes (`feat/effect-volume-boxes`) | fixed | 2026-10-30 | Scoped multipass: absolute volume origin, OBB/Euler sync, drag SaveSettings skip, dead sample-warp calls removed, RefreshEffectDisplay always re-evals (stopped preview). Full viewport residual still parked above. |
-| Documentation/ | fixed | 2026-10-27 | Shader Field contract filled; recipe-map / coverage park notes |
+| Shaders/ | keep | 2026-10-30 | Prior catalog header-key alignment holds. |
+| SpatialLighting/ SpatialRoom/ SpatialSamplers/ | keep | 2026-10-30 | Re-checked; no new fails. |
+| ui/viewport + ScenePropMeshPaths | fixed | 2026-10-30 | Mesh Resolve fail-closed under MeshesRoot; emitGizmoDragCompleted / NotifyControllerTransformChanged brace deslop. Volume absolute-origin path from 2026-10-30 scoped pass still good. |
+| ui/custom-controller-grid | keep | 2026-10-30 | Role/wiring skim OK; no high-conviction fix. |
+| ui/ residual (shell widgets controllers actions) | keep | 2026-10-30 | Action Editor dirty flag + ClearActionPreview paths OK; no garbage-string / dead-connect finds. |
+| ui/ effect-volume boxes (`feat/effect-volume-boxes`) | fixed | 2026-10-30 | Prior scoped pass + this full pass re-check. |
+| Documentation/ | fixed | 2026-10-30 | This tracker updated for full pass. |
 
 ## Parked (other)
 
 | Item | Reason |
 |------|--------|
 | DualSense / ControllerTorch | `feat/dualsense-controller-torch` — wait for 9-axis mag |
-| Incomplete multipasses | See **Parked for Claude reset** — resume ~2026-11-23 |
+| File-size splits | FolderVolume ~2.6k, Reactive ~1.5k, AudioInputManager ~1.4k — extract later, not pass blockers |

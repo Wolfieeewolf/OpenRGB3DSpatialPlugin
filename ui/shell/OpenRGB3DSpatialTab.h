@@ -194,6 +194,7 @@ private slots:
     void effectTimerTimeout();
     void RenderEffectStack();
     void gridSnapToggled(bool enabled);
+    void rotateSnapToggled(bool enabled);
     void roomGuideLabelsToggled(bool enabled);
     void frameSelectionInView();
     void resetViewportCamera();
@@ -430,6 +431,7 @@ private:
     QComboBox*   stackEffectZoneCombo() const;
 
     QCheckBox*   gridSnapCheckbox() const;
+    QCheckBox*   rotateSnapCheckbox() const;
     QDoubleSpinBox* gridScaleSpin() const;
     QLabel*      selectionInfoLabel() const;
     QCheckBox*   roomGridOverlayCheckbox() const;
@@ -513,6 +515,8 @@ private:
     bool                        effect_running = false;
     float                       effect_time = 0.0f;
     QElapsedTimer               effect_elapsed;
+    /** Throttle LED re-eval while the volume gizmo is dragged (full refresh on release). */
+    QElapsedTimer               volume_gizmo_led_refresh_;
     bool                        stack_settings_updating = false;
 
     /** Internal packing wrap when adding physical devices (not shown in Grid Settings). */
