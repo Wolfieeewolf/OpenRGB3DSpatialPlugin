@@ -9,8 +9,6 @@
 #include "GridSpaceUtils.h"
 #include "ScreenMirrorCalibrationPattern.h"
 #include "ScreenMirror_Internal.h"
-#include "VirtualReferencePoint3D.h"
-#include "SpatialEffectTypes.h"
 
 #include <chrono>
 #include <cmath>
@@ -184,42 +182,6 @@ namespace
         return t;
     }
 
-    /* Audience lobe 0..1 toward User/Chair seats (Reach origin stays the display).
-       Multi-seat = strongest lobe. Soft cone — angle knobs can come later. */
-    float AudienceLobeGain(const Vector3D& led,
-                           const Vector3D& origin,
-                           const std::vector<Vector3D>& watchers,
-                           float max_distance_mm,
-                           float tick_scale_mm)
-    {
-        float best = 0.0f;
-        for(size_t i = 0; i < watchers.size(); ++i)
-        {
-            const Vector3D& w = watchers[i];
-            const Vector3D to_w{w.x - origin.x, w.y - origin.y, w.z - origin.z};
-            const Vector3D to_led{led.x - origin.x, led.y - origin.y, led.z - origin.z};
-            const float len_w2 = to_w.x * to_w.x + to_w.y * to_w.y + to_w.z * to_w.z;
-            if(len_w2 < 1e-8f)
-            {
-                continue;
-            }
-            const float len_led2 = to_led.x * to_led.x + to_led.y * to_led.y + to_led.z * to_led.z;
-            const float len_w = std::sqrt(len_w2);
-            const float len_led = std::sqrt(std::max(len_led2, 1e-8f));
-            const float aligned = std::max(0.0f,
-                (to_led.x * to_w.x + to_led.y * to_w.y + to_led.z * to_w.z) / (len_led * len_w));
-
-            const float dx = led.x - w.x;
-            const float dy = led.y - w.y;
-            const float dz = led.z - w.z;
-            const float dist_mm = GridUnitsToMM(std::sqrt(dx * dx + dy * dy + dz * dz), tick_scale_mm);
-            const float seat_mm = std::max(max_distance_mm * 0.55f, 500.0f);
-            const float prox = 1.0f - std::clamp(dist_mm / seat_mm, 0.0f, 1.0f);
-            best = std::max(best, aligned * (0.30f + 0.70f * prox));
-        }
-        return best;
-    }
-
     void EnsureDefaultZones(ScreenMirror::MonitorSettings& mon)
     {
         if(mon.capture_zones.empty())
@@ -379,27 +341,7 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
     RefreshFrameCacheForRenderSequence(grid);
     smooth_ms_ = 0.0f;
     sample_tick_.clear();
-    audience_tick_.clear();
     tick_scale_mm_ = SafeGridScaleMm(grid.grid_scale_mm);
-
-    if(audience_bias_pct_ > 0.5f && audience_reference_points_)
-    {
-        for(size_t i = 0; i < audience_reference_points_->size(); ++i)
-        {
-            VirtualReferencePoint3D* rp = (*audience_reference_points_)[i].get();
-            if(!rp)
-            {
-                continue;
-            }
-            /* Seats only — User or Chair. Other layout types are ignored. */
-            const ReferencePointType t = rp->GetType();
-            if(t != REF_POINT_USER && t != REF_POINT_CHAIR)
-            {
-                continue;
-            }
-            audience_tick_.push_back(rp->GetPosition());
-        }
-    }
 
     const float span_x = std::max(grid.max_x - grid.min_x, 1e-4f);
     const float span_y = std::max(grid.max_y - grid.min_y, 1e-4f);
@@ -542,21 +484,6 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
             continue;
         }
 
-        /* Must multiply RGB — not weight. Weight is normalized away for a single
-           display, which made the bias slider appear dead. */
-        float audience_gain = 1.0f;
-        if(audience_bias_pct_ > 0.5f && !audience_tick_.empty())
-        {
-            const float bias = std::clamp(audience_bias_pct_ / 100.0f, 0.0f, 1.0f);
-            const float lobe = AudienceLobeGain(led, sm.falloff_origin, audience_tick_,
-                                                 sm.max_distance_mm, tick_scale_mm_);
-            /* Cone brightness toward seats; never hard-cull (Reach still fills). */
-            static constexpr float kAudienceFloor = 0.30f;
-            static constexpr float kAudiencePeak = 1.90f;
-            const float shaped = kAudienceFloor + (kAudiencePeak - kAudienceFloor) * lobe;
-            audience_gain = (1.0f - bias) + bias * shaped;
-        }
-
         const uint8_t* rgba = nullptr;
         int fw = 0;
         int fh = 0;
@@ -609,9 +536,9 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
                  s.led_output_gain_r,
                  s.led_output_gain_g,
                  s.led_output_gain_b);
-        acc_r += weight * r * audience_gain;
-        acc_g += weight * g * audience_gain;
-        acc_b += weight * b * audience_gain;
+        acc_r += weight * r;
+        acc_g += weight * g;
+        acc_b += weight * b;
         acc_w += weight;
     }
 

@@ -11,7 +11,6 @@
 #include "EffectSliderPromote.h"
 #include "ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror_Internal.h"
-#include "VirtualReferencePoint3D.h"
 #include "EffectListManager3D.h"
 #include "PlayerEngines.h"
 #include "ui_ScreenMirrorCapturePanel.h"
@@ -47,11 +46,6 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , capture_quality_combo(nullptr)
     , capture_backend_mode(0)
     , capture_backend_combo(nullptr)
-    , audience_bias_pct_(0.0f)
-    , audience_bias_slider_(nullptr)
-    , audience_bias_label_(nullptr)
-    , audience_hint_label_(nullptr)
-    , audience_reference_points_(nullptr)
     , monitor_status_label(nullptr)
     , monitor_help_label(nullptr)
     , monitors_container(nullptr)
@@ -64,11 +58,6 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , tick_scale_mm_(10.0f)
     , smooth_ms_(0.0f)
 {
-}
-
-void ScreenMirror::SetAudienceReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
-{
-    audience_reference_points_ = ref_points;
 }
 
 ScreenMirror::~ScreenMirror() = default;
@@ -276,21 +265,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_host_layout->setContentsMargins(0, 0, 0, 0);
     capture_host_layout->addWidget(capture_panel);
 
-    audience_hint_label_ = capture_ui.audienceHintLabel;
-    PluginUiApplyItalicSecondaryLabel(audience_hint_label_);
-    capture_ui.audienceBiasSlider->setValue((int)std::lround(audience_bias_pct_));
-    AlignHBoxRowCaptions({capture_ui.qualityRow, capture_ui.backendRow, capture_ui.audienceBiasRow}, 110);
-    if(EffectSliderRow* audience_row =
-            PromoteSliderLabelToEffectRow(capture_ui.audienceBiasRow, capture_ui.audienceBiasSlider,
-                                          capture_ui.audienceBiasLabel, QStringLiteral("%")))
-    {
-        audience_bias_slider_ = audience_row->slider();
-        audience_bias_label_ = audience_row->valueLabel();
-    }
-    connect(audience_bias_slider_, &QSlider::valueChanged, this, [this](int v) {
-        audience_bias_pct_ = (float)std::clamp(v, 0, 100);
-        OnParameterChanged();
-    });
+    AlignHBoxRowCaptions({capture_ui.qualityRow, capture_ui.backendRow}, 110);
 
     ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
     connect(capture_backend_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {

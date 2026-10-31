@@ -86,68 +86,6 @@
      </layout>
     </widget>
    </item>
-   <item>
-    <widget class="QGroupBox" name="audienceGroup">
-     <property name="title">
-      <string>Audience bias (experiment)</string>
-     </property>
-     <property name="toolTip">
-      <string>Optional. Cones brightness toward User/Chair layout points without turning LEDs off — Reach still fills the grid. 0 = off. Add a User or Chair ref at each seat.</string>
-     </property>
-     <layout class="QVBoxLayout" name="audienceLayout">
-      <property name="spacing">
-       <number>4</number>
-      </property>
-      <item>
-       <widget class="QLabel" name="audienceHintLabel">
-        <property name="wordWrap">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Uses layout points typed User or Chair. Reach origin stays the display. Bias does nothing until at least one seat ref exists.</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="audienceBiasRow">
-        <item>
-         <widget class="QLabel" name="audienceBiasCaption">
-          <property name="text">
-           <string>Bias:</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSlider" name="audienceBiasSlider">
-          <property name="maximum">
-           <number>100</number>
-          </property>
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="toolTip">
-           <string>0 = even Reach fill. Higher values brighten toward User/Chair seats and dim off-cone (still lit). Multi-seat = strongest lobe.</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="audienceBiasLabel">
-          <property name="minimumSize">
-           <size>
-            <width>40</width>
-            <height>0</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>0%</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-     </layout>
-    </widget>
-   </item>
   </layout>
  </widget>
  <resources/>

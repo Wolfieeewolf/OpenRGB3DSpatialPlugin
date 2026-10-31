@@ -73,7 +73,7 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 | Effect Motion / Geometry / Output | fixed | Runtime `PromoteSliderLabelToEffectRow`; load sync via `SyncEffectSliderValue` |
 | StratumBand / StripKernel / Grid overlay | fixed | `PromoteSliderLabelInGrid` |
 | SceneTransform | fixed | `EffectDoubleSliderRow::adoptExistingSpinAndSlider` (unlink; `PositionAxisDragController` / rotation wire keep sync) |
-| CaptureZones wave + audience bias | fixed | Wave rows + `ScreenMirrorCapturePanel` audience bias → `EffectSliderRow` |
+| CaptureZones wave | fixed | Wave rows → `EffectSliderRow` / `EffectDoubleSliderRow` (time to edge in seconds) |
 | Lists (stack, zones, triggers, Object Creator) | fixed | `PluginUiWireListDestructiveDelete` (button + Del/Backspace + `QMenu`) |
 | ActionGradientBar | fixed | Context menu + Del/Backspace; right-click no longer instant-deletes |
 | LEDViewport3D selection | fixed | Context menu: Delete controller / Frame + W/E/R/Y/Q hints; Del/Backspace + F |

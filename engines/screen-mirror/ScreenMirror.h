@@ -14,7 +14,6 @@
 #include "ui/screen/CaptureZonesWidget.h"
 
 class DisplayPlane3D;
-class VirtualReferencePoint3D;
 class QDoubleSpinBox;
 class QStackedWidget;
 struct CapturedFrame;
@@ -43,9 +42,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
     void RefreshMonitorStatus();
-
-    /** Layout ref list for audience bias only (User/Chair seats). Does not move Reach. */
-    void SetAudienceReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
 
     using CaptureZone = ::CaptureZone;
 
@@ -235,13 +231,6 @@ private:
     QComboBox*          capture_quality_combo;
     int                 capture_backend_mode;
     QComboBox*          capture_backend_combo;
-
-    float               audience_bias_pct_;
-    QSlider*            audience_bias_slider_;
-    QLabel*             audience_bias_label_;
-    QLabel*             audience_hint_label_;
-    std::vector<std::unique_ptr<VirtualReferencePoint3D>>* audience_reference_points_;
-    std::vector<Vector3D> audience_tick_;
 
     QLabel*             monitor_status_label;
     QLabel*             monitor_help_label;
