@@ -66,7 +66,7 @@ Baseline toolchain matches upstream OpenRGB ([`OpenRGB/Documentation/Compiling.m
    - **Windows:** Qt Maintenance Tool → *Build Tools* → **CMake**, **or** Visual Studio Installer → **C++ CMake tools for Windows** (either is enough). Ninja is optional. If you use **VS 2026**, prefer a CMake that lists the `Visual Studio 18 2026` generator (VS’s own CMake tools, or CMake 4.x) — Qt’s older *Build Tools* CMake may only know VS 2022.
    - **Linux:** install `cmake` from your distro (`apt` / `dnf` / …).
    - **macOS:** `brew install cmake`.
-3. Open `OpenRGB3DSpatialPlugin.pro` in Qt Creator (or qmake) and Build. Assimp is built automatically into the build tree (`_deps/`) on first link; Clean removes it. You do not need to run `scripts/build-assimp.*` by hand.
+3. Open `OpenRGB3DSpatialPlugin.pro` in Qt Creator (or qmake) and Build. Assimp is built automatically into the build tree (`_deps/`) on first link. Normal **Clean** keeps `_deps` (so the next Build stays fast); deleting the whole build folder or `scripts/build-assimp.* -Clean` / `--clean` forces an Assimp rebuild. You do not need to run those scripts by hand for day-to-day work.
 
 More detail: [CONTRIBUTING.md](CONTRIBUTING.md).
 

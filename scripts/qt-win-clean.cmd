@@ -8,7 +8,8 @@ if "%OUT%"=="" set "OUT=%CD%"
 
 if exist "%OUT%\_intermediate_release" rmdir /s /q "%OUT%\_intermediate_release"
 if exist "%OUT%\_intermediate_debug" rmdir /s /q "%OUT%\_intermediate_debug"
-if exist "%OUT%\_deps" rmdir /s /q "%OUT%\_deps"
+REM Keep OUT\_deps (Assimp) across Clean so the next Build does not rebuild it.
+REM Wipe Assimp with: delete the Qt build folder, or scripts\build-assimp.ps1 -Clean.
 if exist "%OUT%\release\*.obj" del /f /q "%OUT%\release\*.obj" 2>nul
 if exist "%OUT%\release\*.exp" del /f /q "%OUT%\release\*.exp" 2>nul
 if exist "%OUT%\release\*.lib" del /f /q "%OUT%\release\*.lib" 2>nul
