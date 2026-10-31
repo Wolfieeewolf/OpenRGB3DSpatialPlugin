@@ -8,6 +8,7 @@
 #include "EffectLabeledComboRow.h"
 #include "EffectLabeledSpinRow.h"
 #include "EffectCollapsibleSection.h"
+#include "EffectDoubleSliderRow.h"
 #include "EffectSliderRow.h"
 
 #include <QVBoxLayout>
@@ -111,6 +112,26 @@ inline EffectSliderRow* AppendSliderRow(QVBoxLayout* layout,
     auto* row = new EffectSliderRow();
     row->setCaptionText(caption);
     row->configure(min, max, value, tooltip);
+    layout->addWidget(row);
+    return row;
+}
+
+inline EffectDoubleSliderRow* AppendDoubleSliderRow(QVBoxLayout* layout,
+                                                   const QString& caption,
+                                                   double min,
+                                                   double max,
+                                                   double value,
+                                                   int decimals = 1,
+                                                   double single_step = 0.1,
+                                                   const QString& tooltip = QString())
+{
+    if(!layout || caption.isEmpty())
+    {
+        return nullptr;
+    }
+    auto* row = new EffectDoubleSliderRow();
+    row->setCaptionText(caption);
+    row->configure(min, max, value, decimals, single_step, tooltip);
     layout->addWidget(row);
     return row;
 }

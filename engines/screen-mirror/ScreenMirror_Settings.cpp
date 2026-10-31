@@ -7,6 +7,7 @@
 #include "EffectSliderRow.h"
 #include "ScreenMirror_Internal.h"
 
+#include <QDoubleSpinBox>
 #include <QSignalBlocker>
 #include <QSlider>
 #include <algorithm>
@@ -149,14 +150,10 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         msettings.wave_decay_label->setText(QString::number((int)msettings.wave_decay_ms) + "ms");
     }
-    if(msettings.wave_time_to_edge_slider)
+    if(msettings.wave_time_to_edge_spin)
     {
-        QSignalBlocker blocker(msettings.wave_time_to_edge_slider);
-        msettings.wave_time_to_edge_slider->setValue((int)(msettings.wave_time_to_edge_sec * 10.0f));
-    }
-    if(msettings.wave_time_to_edge_label)
-    {
-        msettings.wave_time_to_edge_label->setText(msettings.wave_time_to_edge_sec <= 0.0f ? "Off" : QString::number(msettings.wave_time_to_edge_sec, 'f', 1) + "s");
+        QSignalBlocker blocker(msettings.wave_time_to_edge_spin);
+        msettings.wave_time_to_edge_spin->setValue((double)msettings.wave_time_to_edge_sec);
     }
     SyncEffectSlider(msettings.falloff_curve_slider, (int)(msettings.falloff_curve_exponent * 100.0f));
     if(msettings.calibration_pattern_check)
@@ -449,7 +446,10 @@ void ScreenMirror::OnParameterChanged()
         if(settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
         if(settings.propagation_speed_slider) settings.propagation_speed_mm_per_ms = std::clamp((float)settings.propagation_speed_slider->value(), 0.0f, 100.0f);
         if(settings.wave_decay_slider) settings.wave_decay_ms = (float)settings.wave_decay_slider->value();
-        if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_sec = (float)settings.wave_time_to_edge_slider->value() / 10.0f;
+        if(settings.wave_time_to_edge_spin)
+        {
+            settings.wave_time_to_edge_sec = (float)settings.wave_time_to_edge_spin->value();
+        }
         if(settings.falloff_curve_slider) settings.falloff_curve_exponent = std::clamp((float)settings.falloff_curve_slider->value() / 100.0f, 0.5f, 2.0f);
 
         bool old_calibration_pattern = settings.show_calibration_pattern;

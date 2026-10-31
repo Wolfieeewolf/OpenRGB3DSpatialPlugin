@@ -2,6 +2,7 @@
 
 #include "EffectStackBlendRow.h"
 #include "EffectInstance3D.h"
+#include "EffectSliderPromote.h"
 #include "ui_EffectStackBlendRow.h"
 
 #include <QComboBox>
@@ -11,6 +12,7 @@ EffectStackBlendRow::EffectStackBlendRow(QWidget* parent)
     , ui(new Ui::EffectStackBlendRow)
 {
     ui->setupUi(this);
+    AlignHBoxRowCaptions({ui->blendRow}, 96);
     populateBlendItems();
 }
 

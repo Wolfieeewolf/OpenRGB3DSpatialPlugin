@@ -3,10 +3,13 @@
 #include "EffectSliderRow.h"
 #include "ui_EffectSliderRow.h"
 
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QSlider>
 #include <QSpinBox>
+#include <QVBoxLayout>
 
 #include <algorithm>
 
@@ -42,6 +45,7 @@ void EffectSliderRow::wireSpinSliderLink()
 void EffectSliderRow::setCaptionText(const QString& text)
 {
     ui->captionLabel->setText(text);
+    ui->captionLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     ui->captionLabel->setVisible(!text.isEmpty());
 }
 
@@ -75,6 +79,11 @@ QSpinBox* EffectSliderRow::spinBox() const
     return ui->valueSpin;
 }
 
+QLabel* EffectSliderRow::captionLabel() const
+{
+    return ui->captionLabel;
+}
+
 QLabel* EffectSliderRow::valueLabel() const
 {
     return ui->valueLabel;
@@ -103,6 +112,44 @@ void EffectSliderRow::configure(int min, int max, int value, const QString& slid
     {
         ui->valueSlider->setToolTip(slider_tooltip);
         ui->valueSpin->setToolTip(slider_tooltip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+    }
+}
+
+void EffectSliderRow::adoptExistingSpin(QSpinBox* spin)
+{
+    if(!spin || !ui || spin == ui->valueSpin)
+    {
+        return;
+    }
+
+    auto* spin_row = qobject_cast<QHBoxLayout*>(ui->spinRow);
+    if(!spin_row)
+    {
+        return;
+    }
+
+    disconnect(ui->valueSlider, nullptr, ui->valueSpin, nullptr);
+    disconnect(ui->valueSpin, nullptr, ui->valueSlider, nullptr);
+    spin_slider_linked_ = false;
+
+    spin_row->removeWidget(ui->valueSpin);
+    ui->valueSpin->hide();
+    ui->valueSpin->deleteLater();
+
+    spin->setParent(this);
+    spin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    spin->setKeyboardTracking(false);
+    spin_row->insertWidget(0, spin);
+    ui->valueSpin = spin;
+
+    configure(spin->minimum(), spin->maximum(), spin->value(), spin->toolTip());
+    if(!spin->suffix().isEmpty())
+    {
+        setSuffix(spin->suffix());
+    }
+    if(!spin->prefix().isEmpty())
+    {
+        setPrefix(spin->prefix());
     }
 }
 
@@ -169,10 +216,385 @@ void EffectSliderRow::setEnabled(bool enabled)
     ui->valueLabel->setEnabled(enabled);
     ui->captionLabel->setEnabled(enabled);
 }
+
+#include "EffectDoubleSliderRow.h"
+#include "ui_EffectDoubleSliderRow.h"
+
+#include <QDoubleSpinBox>
+#include <QSizePolicy>
+#include <QVBoxLayout>
+
+#include <cmath>
+
+EffectDoubleSliderRow::EffectDoubleSliderRow(QWidget* parent)
+    : QWidget(parent)
+    , ui(new Ui::EffectDoubleSliderRow)
+{
+    ui->setupUi(this);
+    spin_ = ui->valueSpin;
+    slider_ = ui->valueSlider;
+    ui->captionLabel->setVisible(false);
+    ui->captionLabel->setMinimumWidth(0);
+    ui->captionLabel->setMaximumWidth(0);
+    slider_->setRange(0, kSliderSteps);
+    slider_->setFixedHeight(14);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+    wireSpinSliderLink();
+}
+
+EffectDoubleSliderRow::~EffectDoubleSliderRow()
+{
+    delete ui;
+}
+
+void EffectDoubleSliderRow::syncSliderFromSpin()
+{
+    if(!spin_ || !slider_)
+    {
+        return;
+    }
+    const double lo = spin_->minimum();
+    const double hi = spin_->maximum();
+    const double span = std::max(1e-9, hi - lo);
+    const int v = (int)std::lround(std::clamp((spin_->value() - lo) / span, 0.0, 1.0) * (double)kSliderSteps);
+    QSignalBlocker b(slider_);
+    slider_->setRange(0, kSliderSteps);
+    slider_->setValue(v);
+}
+
+void EffectDoubleSliderRow::syncSpinFromSlider(int slider_value)
+{
+    if(!spin_ || !slider_)
+    {
+        return;
+    }
+    const double lo = spin_->minimum();
+    const double hi = spin_->maximum();
+    const int s_lo = slider_->minimum();
+    const int s_hi = slider_->maximum();
+    const int span_i = std::max(1, s_hi - s_lo);
+    spin_->setValue(lo + ((double)(slider_value - s_lo) / (double)span_i) * (hi - lo));
+}
+
+void EffectDoubleSliderRow::resetSpinSliderWiring()
+{
+    if(slider_)
+    {
+        disconnect(slider_, nullptr, this, nullptr);
+    }
+    if(spin_)
+    {
+        disconnect(spin_, nullptr, this, nullptr);
+    }
+    spin_slider_linked_ = false;
+}
+
+void EffectDoubleSliderRow::wireSpinSliderLink()
+{
+    if(spin_slider_linked_ || !slider_ || !spin_)
+    {
+        return;
+    }
+    spin_slider_linked_ = true;
+    QObject::connect(slider_, &QSlider::valueChanged, this, [this](int v) {
+        syncSpinFromSlider(v);
+    });
+    QObject::connect(spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double) {
+        syncSliderFromSpin();
+    });
+}
+
+void EffectDoubleSliderRow::applySliderChrome(const QString& slider_tooltip)
+{
+    if(!slider_)
+    {
+        return;
+    }
+    slider_->setFixedHeight(14);
+    const int span = std::max(1, slider_->maximum() - slider_->minimum());
+    slider_->setSingleStep(std::max(1, span / 100));
+    slider_->setPageStep(std::max(slider_->singleStep() * 5, span / 20));
+    if(!slider_tooltip.isEmpty())
+    {
+        slider_->setToolTip(slider_tooltip);
+        if(spin_)
+        {
+            spin_->setToolTip(slider_tooltip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+        }
+    }
+}
+
+void EffectDoubleSliderRow::setCaptionText(const QString& text)
+{
+    ui->captionLabel->setText(text);
+    ui->captionLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    const bool show = !text.isEmpty();
+    ui->captionLabel->setVisible(show);
+    ui->captionLabel->setMinimumWidth(show ? 96 : 0);
+    ui->captionLabel->setMaximumWidth(show ? QWIDGETSIZE_MAX : 0);
+}
+
+void EffectDoubleSliderRow::setSuffix(const QString& suffix)
+{
+    if(spin_)
+    {
+        spin_->setSuffix(suffix);
+    }
+}
+
+void EffectDoubleSliderRow::setPrefix(const QString& prefix)
+{
+    if(spin_)
+    {
+        spin_->setPrefix(prefix);
+    }
+}
+
+void EffectDoubleSliderRow::setDecimals(int decimals)
+{
+    if(spin_)
+    {
+        spin_->setDecimals(decimals);
+    }
+}
+
+void EffectDoubleSliderRow::setSingleStep(double step)
+{
+    if(spin_)
+    {
+        spin_->setSingleStep(step);
+    }
+}
+
+QSlider* EffectDoubleSliderRow::slider() const
+{
+    return slider_;
+}
+
+QDoubleSpinBox* EffectDoubleSliderRow::spinBox() const
+{
+    return spin_;
+}
+
+QLabel* EffectDoubleSliderRow::captionLabel() const
+{
+    return ui->captionLabel;
+}
+
+void EffectDoubleSliderRow::configure(double min,
+                                      double max,
+                                      double value,
+                                      int decimals,
+                                      double single_step,
+                                      const QString& slider_tooltip)
+{
+    if(!spin_ || !slider_)
+    {
+        return;
+    }
+    wireSpinSliderLink();
+    const double lo = std::min(min, max);
+    const double hi = std::max(min, max);
+    const double v = std::clamp(value, lo, hi);
+    {
+        QSignalBlocker bs(slider_);
+        QSignalBlocker bn(spin_);
+        spin_->setDecimals(decimals);
+        spin_->setSingleStep(single_step);
+        spin_->setRange(lo, hi);
+        spin_->setValue(v);
+        slider_->setRange(0, kSliderSteps);
+    }
+    syncSliderFromSpin();
+    applySliderChrome(slider_tooltip);
+}
+
+void EffectDoubleSliderRow::configureFromSpin(const QDoubleSpinBox* spin, const QString& slider_tooltip)
+{
+    if(!spin)
+    {
+        return;
+    }
+    configure(spin->minimum(),
+              spin->maximum(),
+              spin->value(),
+              spin->decimals(),
+              spin->singleStep(),
+              slider_tooltip.isEmpty() ? spin->toolTip() : slider_tooltip);
+    if(!spin->suffix().isEmpty())
+    {
+        setSuffix(spin->suffix());
+    }
+    if(!spin->prefix().isEmpty())
+    {
+        setPrefix(spin->prefix());
+    }
+}
+
+void EffectDoubleSliderRow::adoptExistingSpin(QDoubleSpinBox* spin)
+{
+    if(!spin || !ui || spin == spin_)
+    {
+        return;
+    }
+
+    auto* col = qobject_cast<QVBoxLayout*>(ui->controlColumn);
+    if(!col)
+    {
+        return;
+    }
+
+    resetSpinSliderWiring();
+
+    if(ui->valueSpin && ui->valueSpin != spin)
+    {
+        col->removeWidget(ui->valueSpin);
+        ui->valueSpin->hide();
+        ui->valueSpin->deleteLater();
+        ui->valueSpin = nullptr;
+    }
+
+    spin_ = spin;
+    spin_->setParent(this);
+    spin_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    spin_->setKeyboardTracking(false);
+    spin_->show();
+    col->insertWidget(0, spin_);
+
+    if(slider_)
+    {
+        slider_->setRange(0, kSliderSteps);
+        slider_->show();
+    }
+    syncSliderFromSpin();
+    applySliderChrome(spin_->toolTip());
+    wireSpinSliderLink();
+}
+
+void EffectDoubleSliderRow::adoptExistingSpinAndSlider(QDoubleSpinBox* spin, QSlider* slider, bool link_spin_slider)
+{
+    if(!spin || !slider || !ui)
+    {
+        return;
+    }
+
+    auto* col = qobject_cast<QVBoxLayout*>(ui->controlColumn);
+    if(!col)
+    {
+        return;
+    }
+
+    resetSpinSliderWiring();
+
+    if(ui->valueSpin && ui->valueSpin != spin)
+    {
+        col->removeWidget(ui->valueSpin);
+        ui->valueSpin->hide();
+        ui->valueSpin->deleteLater();
+        ui->valueSpin = nullptr;
+    }
+    if(ui->valueSlider && ui->valueSlider != slider)
+    {
+        col->removeWidget(ui->valueSlider);
+        ui->valueSlider->hide();
+        ui->valueSlider->deleteLater();
+        ui->valueSlider = nullptr;
+    }
+
+    spin_ = spin;
+    slider_ = slider;
+    spin_->setParent(this);
+    slider_->setParent(this);
+    spin_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    slider_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    spin_->setKeyboardTracking(false);
+    slider_->setFixedHeight(14);
+    slider_->setMinimumWidth(48);
+
+    while(col->count() > 0)
+    {
+        col->takeAt(0);
+    }
+    col->addWidget(spin_);
+    col->addWidget(slider_);
+
+    applySliderChrome(spin_->toolTip().isEmpty() ? slider_->toolTip() : spin_->toolTip());
+    if(link_spin_slider)
+    {
+        syncSliderFromSpin();
+        wireSpinSliderLink();
+    }
+}
+
+QString EffectDoubleSliderRow::captionText() const
+{
+    return ui->captionLabel->text();
+}
+
+void EffectDoubleSliderRow::syncSpinValue(double value)
+{
+    if(!spin_)
+    {
+        return;
+    }
+    const double lo = spin_->minimum();
+    const double hi = spin_->maximum();
+    const double v = std::clamp(value, lo, hi);
+    {
+        QSignalBlocker bs(slider_);
+        QSignalBlocker bn(spin_);
+        spin_->setValue(v);
+    }
+    if(spin_slider_linked_)
+    {
+        syncSliderFromSpin();
+    }
+}
+
+void EffectDoubleSliderRow::bindValueChanged(QObject* owner,
+                                            const std::function<void(double)>& apply_value,
+                                            const std::function<void()>& changed)
+{
+    if(!owner || !spin_)
+    {
+        return;
+    }
+    QObject::connect(spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), owner,
+                     [apply_value, changed](double v) {
+                         if(apply_value)
+                         {
+                             apply_value(v);
+                         }
+                         if(changed)
+                         {
+                             changed();
+                         }
+                     });
+}
+
+void EffectDoubleSliderRow::setEnabled(bool enabled)
+{
+    if(ui)
+    {
+        ui->captionLabel->setEnabled(enabled);
+    }
+    if(slider_)
+    {
+        slider_->setEnabled(enabled);
+    }
+    if(spin_)
+    {
+        spin_->setEnabled(enabled);
+    }
+}
+
 #include "EffectLabeledComboRow.h"
 #include "ui_EffectLabeledComboRow.h"
 
 #include <QComboBox>
+#include <QLabel>
+
+#include <algorithm>
 
 EffectLabeledComboRow::EffectLabeledComboRow(QWidget* parent)
     : QWidget(parent)
@@ -189,11 +611,18 @@ EffectLabeledComboRow::~EffectLabeledComboRow()
 void EffectLabeledComboRow::setCaptionText(const QString& text)
 {
     ui->captionLabel->setText(text);
+    ui->captionLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ui->captionLabel->setMinimumWidth(std::max(96, ui->captionLabel->sizeHint().width()));
 }
 
 QString EffectLabeledComboRow::captionText() const
 {
     return ui->captionLabel->text();
+}
+
+QLabel* EffectLabeledComboRow::captionLabel() const
+{
+    return ui->captionLabel;
 }
 
 QComboBox* EffectLabeledComboRow::combo() const
@@ -222,6 +651,8 @@ EffectLabeledSpinRow::~EffectLabeledSpinRow()
 void EffectLabeledSpinRow::setCaptionText(const QString& text)
 {
     ui->captionLabel->setText(text);
+    ui->captionLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ui->captionLabel->setMinimumWidth(std::max(96, ui->captionLabel->sizeHint().width()));
 }
 
 QSpinBox* EffectLabeledSpinRow::spinBox() const

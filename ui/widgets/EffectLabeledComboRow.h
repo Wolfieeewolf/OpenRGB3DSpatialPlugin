@@ -6,6 +6,7 @@
 #include <QWidget>
 
 class QComboBox;
+class QLabel;
 
 namespace Ui {
 class EffectLabeledComboRow;
@@ -19,6 +20,7 @@ public:
 
     void setCaptionText(const QString& text);
     QString captionText() const;
+    QLabel* captionLabel() const;
 
     QComboBox* combo() const;
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ReferencePointDialog.h"
+#include "EffectSliderPromote.h"
 #include "PluginUiUtils.h"
 #include "RGBController.h"
 #include "VirtualReferencePoint3D.h"
@@ -15,6 +16,7 @@ ReferencePointDialog::ReferencePointDialog(QWidget* parent)
     ui->setupUi(this);
 
     PluginUiApplyMutedSecondaryLabel(ui->helpLabel->label());
+    AlignHBoxRowCaptions({ui->nameRow, ui->typeRow, ui->colorRow}, 72);
 
     const std::vector<std::string> type_names = VirtualReferencePoint3D::GetTypeNames();
     for(const std::string& type_name : type_names)

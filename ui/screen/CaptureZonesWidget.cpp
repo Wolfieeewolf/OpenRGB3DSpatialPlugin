@@ -3,6 +3,7 @@
 #include "CaptureZonesWidget.h"
 #include "ui_CaptureZonesWidget.h"
 #include "DisplayPlane3D.h"
+#include "EffectDoubleSliderRow.h"
 #include "EffectSliderPromote.h"
 #include "QtCompat.h"
 #include "ScreenCaptureManager.h"
@@ -16,6 +17,8 @@
 #include <QMenu>
 #include <QPainter>
 #include <QMouseEvent>
+#include <QDoubleSpinBox>
+#include <QHBoxLayout>
 #include <QPushButton>
 #include <QSlider>
 #include <QTimer>
@@ -678,21 +681,29 @@ CaptureZonesWidget::CaptureZonesWidget(
 
     ui->propagationSpeedSlider->setValue((int)std::lround(propagation_speed));
     ui->waveDecaySlider->setValue((int)wave_decay_ms);
-    ui->waveTimeToEdgeSlider->setValue((int)(wave_time_to_edge_sec * 10.0f));
 
     propagation_row_ = PromoteSliderLabelToEffectRow(ui->propagationLayout, ui->propagationSpeedSlider,
                                                        ui->propagationSpeedLabel, QStringLiteral("%"));
     wave_decay_row_ = PromoteSliderLabelToEffectRow(ui->waveDecayLayout, ui->waveDecaySlider,
-                                                      ui->waveDecayLabel, QStringLiteral("ms"));
-    wave_time_row_ = PromoteSliderLabelToEffectRow(ui->waveTimeLayout, ui->waveTimeToEdgeSlider,
-                                                     ui->waveTimeToEdgeLabel);
-    if(wave_time_row_)
-    {
-        wave_time_row_->setShowFormattedLabel(true);
-        const int tenths = wave_time_row_->slider()->value();
-        wave_time_row_->valueLabel()->setText(tenths == 0 ? QStringLiteral("Off")
-                                                          : QString::number(tenths / 10.0, 'f', 1) + QStringLiteral("s"));
-    }
+                                                      ui->waveDecayLabel, QStringLiteral(" ms"));
+
+    const QString wave_time_tip = ui->waveTimeToEdgeSlider->toolTip();
+    ui->waveTimeLayout->removeWidget(ui->waveTimeToEdgeSlider);
+    ui->waveTimeLayout->removeWidget(ui->waveTimeToEdgeLabel);
+    ui->waveTimeToEdgeSlider->hide();
+    ui->waveTimeToEdgeSlider->deleteLater();
+    ui->waveTimeToEdgeLabel->hide();
+    ui->waveTimeToEdgeLabel->deleteLater();
+    wave_time_row_ = new EffectDoubleSliderRow(ui->waveTimeRow);
+    wave_time_row_->configure(0.0,
+                              10.0,
+                              std::clamp((double)wave_time_to_edge_sec, 0.0, 10.0),
+                              /*decimals=*/1,
+                              /*single_step=*/0.1,
+                              wave_time_tip);
+    wave_time_row_->setSuffix(QStringLiteral(" s"));
+    ui->waveTimeLayout->addWidget(wave_time_row_, 1);
+    AlignFormCaptions(ui->waveForm);
     syncWaveIntensityVisibility();
 
     auto* preview_layout = new QVBoxLayout(ui->previewHost);
@@ -747,18 +758,13 @@ void CaptureZonesWidget::wireSliderConnections()
             onInternalChange();
         });
     }
-    if(wave_time_row_)
+    if(wave_time_row_ && wave_time_row_->spinBox())
     {
-        connect(wave_time_row_->slider(), &QSlider::valueChanged, this, [this](int v) {
-            if(wave_time_row_->valueLabel())
-            {
-                wave_time_row_->valueLabel()->setText(
-                    v == 0 ? QStringLiteral("Off")
-                           : QString::number(v / 10.0, 'f', 1) + QStringLiteral("s"));
-            }
-            syncWaveIntensityVisibility();
-            onInternalChange();
-        });
+        connect(wave_time_row_->spinBox(), QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+                [this](double) {
+                    syncWaveIntensityVisibility();
+                    onInternalChange();
+                });
     }
 }
 
@@ -821,9 +827,9 @@ QSlider* CaptureZonesWidget::getWaveTimeToEdgeSlider() const
 {
     return wave_time_row_ ? wave_time_row_->slider() : nullptr;
 }
-QLabel* CaptureZonesWidget::getWaveTimeToEdgeLabel() const
+QDoubleSpinBox* CaptureZonesWidget::getWaveTimeToEdgeSpin() const
 {
-    return wave_time_row_ ? wave_time_row_->valueLabel() : nullptr;
+    return wave_time_row_ ? wave_time_row_->spinBox() : nullptr;
 }
 
 QGroupBox* CaptureZonesWidget::getWaveGroup() const { return ui->waveGroup; }
@@ -835,8 +841,8 @@ void CaptureZonesWidget::syncWaveIntensityVisibility()
     {
         return;
     }
-    QSlider* tte = getWaveTimeToEdgeSlider();
-    const bool tte_on = tte && tte->value() > 0;
+    QDoubleSpinBox* tte = getWaveTimeToEdgeSpin();
+    const bool tte_on = tte && tte->value() > 0.0;
     if(ui->propagationCaption)
     {
         ui->propagationCaption->setVisible(!tte_on);

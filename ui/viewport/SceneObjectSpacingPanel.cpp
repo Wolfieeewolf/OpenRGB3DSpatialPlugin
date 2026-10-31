@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SceneObjectSpacingPanel.h"
+#include "EffectSliderPromote.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "ui_SceneObjectSpacingPanel.h"
 
@@ -21,10 +22,15 @@ SceneObjectSpacingPanel::SceneObjectSpacingPanel(QWidget* parent)
         spin->setRange(0.0, 1000.0);
         spin->setDecimals(1);
         spin->setSingleStep(0.1);
+        spin->setSuffix(QStringLiteral(" mm"));
     };
     style_spin(ui->spacingXSpin);
     style_spin(ui->spacingYSpin);
     style_spin(ui->spacingZSpin);
+    StackDoubleSpinOverThinSlider(ui->spacingXSpin);
+    StackDoubleSpinOverThinSlider(ui->spacingYSpin);
+    StackDoubleSpinOverThinSlider(ui->spacingZSpin);
+    AlignGridCaptionColumn(ui->spacingLayout, 0, 48);
 
     ui->spacingGroup->setToolTip(
         tr("Distance between LEDs along each axis for the selected scene controller."));

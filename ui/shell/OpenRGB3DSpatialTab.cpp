@@ -701,7 +701,18 @@ void OpenRGB3DSpatialTab::bindUiPanels()
         return;
     }
 
-    const int kLeftPanelMinWidth = 280;
+    const int kSidePanelMinWidth = 200;
+    const int kLeftPanelStartWidth = 280;
+    const int kRightPanelStartWidth = 320;
+
+    ui->leftModeTabs->setMinimumWidth(kSidePanelMinWidth);
+    ui->rightStacked->setMinimumWidth(kSidePanelMinWidth);
+    ui->mainSplitter->setStretchFactor(0, 0);
+    ui->mainSplitter->setStretchFactor(1, 1);
+    ui->mainSplitter->setStretchFactor(2, 0);
+    ui->mainSplitter->setCollapsible(0, false);
+    ui->mainSplitter->setCollapsible(1, false);
+    ui->mainSplitter->setCollapsible(2, false);
 
     ui->effectLibraryPanel->bindTab(this);
     ui->effectStackPanel->bindTab(this);
@@ -797,7 +808,7 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     }
 
     QList<int> splitter_sizes;
-    splitter_sizes << kLeftPanelMinWidth << 400 << 320;
+    splitter_sizes << kLeftPanelStartWidth << 400 << kRightPanelStartWidth;
     ui->mainSplitter->setSizes(splitter_sizes);
 }
 

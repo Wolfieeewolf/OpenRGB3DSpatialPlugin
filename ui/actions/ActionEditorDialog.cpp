@@ -17,6 +17,8 @@
 #include "VirtualController3D.h"
 #include "ZoneManager3D.h"
 #include "EffectCollapsibleSection.h"
+#include "EffectDoubleSliderRow.h"
+#include "EffectSliderRow.h"
 
 #include <QAbstractItemView>
 #include <QAbstractSpinBox>
@@ -196,58 +198,38 @@ void ActionEditorDialog::buildUi()
     timeline_row->addWidget(map_controllers_button_);
 
     auto attachIntSpinSlider = [](QSpinBox* spin, const QString& tip, int single_step = 1, int page_step = 10) {
-        auto* slider = new QSlider(Qt::Horizontal);
-        slider->setRange(spin->minimum(), spin->maximum());
-        slider->setValue(spin->value());
-        slider->setSingleStep(single_step);
-        slider->setPageStep(page_step);
-        slider->setFixedHeight(14);
-        slider->setToolTip(tip);
-        QObject::connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
-        QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), slider, [slider](int value) {
-            const bool blocked = slider->blockSignals(true);
-            slider->setValue(value);
-            slider->blockSignals(blocked);
-        });
-        auto* wrap = new QWidget();
-        auto* lay = new QVBoxLayout(wrap);
-        lay->setContentsMargins(0, 0, 0, 0);
-        lay->setSpacing(0);
-        lay->addWidget(spin);
-        lay->addWidget(slider);
-        return std::pair<QWidget*, QSlider*>{wrap, slider};
+        auto* row = new EffectSliderRow();
+        row->adoptExistingSpin(spin);
+        if(QSlider* slider = row->slider())
+        {
+            slider->setSingleStep(single_step);
+            slider->setPageStep(page_step);
+            if(!tip.isEmpty())
+            {
+                slider->setToolTip(tip);
+            }
+        }
+        if(!tip.isEmpty() && spin)
+        {
+            spin->setToolTip(tip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+        }
+        return std::pair<QWidget*, QSlider*>{row, row->slider()};
     };
     auto attachDoubleSpinSlider = [](QDoubleSpinBox* spin, const QString& tip) {
-        int scale = 1;
-        for(int i = 0; i < spin->decimals(); ++i)
+        auto* row = new EffectDoubleSliderRow();
+        row->adoptExistingSpin(spin);
+        if(QSlider* slider = row->slider())
         {
-            scale *= 10;
+            if(!tip.isEmpty())
+            {
+                slider->setToolTip(tip);
+            }
         }
-        auto* slider = new QSlider(Qt::Horizontal);
-        const int min_i = (int)std::lround(spin->minimum() * (double)scale);
-        const int max_i = (int)std::lround(spin->maximum() * (double)scale);
-        slider->setRange(min_i, std::max(min_i, max_i));
-        slider->setValue((int)std::lround(spin->value() * (double)scale));
-        slider->setSingleStep(std::max(1, (int)std::lround(spin->singleStep() * (double)scale)));
-        slider->setPageStep(std::max(slider->singleStep() * 5, slider->singleStep()));
-        slider->setFixedHeight(14);
-        slider->setToolTip(tip);
-        QObject::connect(slider, &QSlider::valueChanged, spin, [spin, scale](int value) {
-            spin->setValue((double)value / (double)scale);
-        });
-        QObject::connect(spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), slider,
-                         [slider, scale](double value) {
-                             const bool blocked = slider->blockSignals(true);
-                             slider->setValue((int)std::lround(value * (double)scale));
-                             slider->blockSignals(blocked);
-                         });
-        auto* wrap = new QWidget();
-        auto* lay = new QVBoxLayout(wrap);
-        lay->setContentsMargins(0, 0, 0, 0);
-        lay->setSpacing(0);
-        lay->addWidget(spin);
-        lay->addWidget(slider);
-        return std::pair<QWidget*, QSlider*>{wrap, slider};
+        if(!tip.isEmpty() && spin)
+        {
+            spin->setToolTip(tip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+        }
+        return std::pair<QWidget*, QSlider*>{row, row->slider()};
     };
 
     const auto duration_field = attachIntSpinSlider(duration_spin_,

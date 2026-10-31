@@ -7,6 +7,7 @@
 #include "EffectInfoLabel.h"
 #include "EffectLabeledComboRow.h"
 #include "EffectSectionHeading.h"
+#include "EffectSliderPromote.h"
 #include "EffectSliderRow.h"
 #include "PluginUiUtils.h"
 #include "ui_AudioInputPanel.h"
@@ -60,6 +61,10 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->deviceRow->setCaptionText(QStringLiteral("Audio device:"));
     ui->deviceRow->combo()->setMinimumWidth(200);
     ui->deviceRow->combo()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    AlignCaptionLabels(
+        {ui->gainRow->captionLabel(), ui->decayRow->captionLabel(), ui->deviceRow->captionLabel()}, 110);
+    ApplyRightAlignedCaption(ui->levelCaption, 110);
+    ApplyRightAlignedCaption(ui->spectrumCaption, 110);
 
     ui->eqHeading->setTitle(QStringLiteral("Equalizer"));
 

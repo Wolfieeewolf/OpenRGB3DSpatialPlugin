@@ -310,6 +310,7 @@ HEADERS += \
     ui/widgets/EffectCustomHost.h \
     ui/widgets/EffectTransportRow.h \
     ui/widgets/EffectSliderRow.h \
+    ui/widgets/EffectDoubleSliderRow.h \
     ui/widgets/EffectLabeledComboRow.h \
     ui/widgets/EffectLabeledSpinRow.h \
     ui/widgets/EffectCheckRow.h \
@@ -663,6 +664,7 @@ FORMS += \
     ui/forms/CustomControllerDeviceWidget.ui \
     ui/forms/CustomControllerDeviceList.ui \
     ui/forms/EffectSliderRow.ui \
+    ui/forms/EffectDoubleSliderRow.ui \
     ui/forms/EffectLabeledComboRow.ui \
     ui/forms/EffectLabeledSpinRow.ui \
     ui/forms/EffectCheckRow.ui \

@@ -32,10 +32,14 @@ public:
 
     QSlider* slider() const;
     QSpinBox* spinBox() const;
+    QLabel* captionLabel() const;
     /** Optional pretty-print label (hidden unless format_value / setShowFormattedLabel). */
     QLabel* valueLabel() const;
 
     void configure(int min, int max, int value, const QString& slider_tooltip = QString());
+
+    /** Reparent an existing spin into this row (keeps the caller's pointer valid). */
+    void adoptExistingSpin(QSpinBox* spin);
 
     QString captionText() const;
     void syncSliderValue(int value, const std::function<QString(int)>& format_value = nullptr);

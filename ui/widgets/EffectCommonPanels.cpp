@@ -146,6 +146,11 @@ EffectMotionPanel::EffectMotionPanel(unsigned int speed,
     edge_fade_row_ = PromoteSliderLabelToEffectRow(ui->edgeFadeRow, ui->edgeFadeSlider, ui->edgeFadeLabel,
                                                      QStringLiteral("%"));
     count_row_ = PromoteSliderLabelToEffectRow(ui->countRow, ui->countSlider, ui->countLabel);
+
+    AlignCaptionLabels({ui->speedCaption, ui->brightnessCaption, ui->frequencyCaption, ui->detailCaption,
+                        ui->sizeCaption, ui->scaleCaption, ui->fpsCaption, ui->thicknessCaption,
+                        ui->edgeFadeCaption, ui->countCaption, ui->pathCaption},
+                       110);
 }
 
 EffectMotionPanel::~EffectMotionPanel()
@@ -203,6 +208,9 @@ EffectOutputPanel::EffectOutputPanel(unsigned int intensity,
     smoothing_row_ = PromoteSliderLabelToEffectRow(ui->smoothingRow, ui->smoothingSlider, ui->smoothingLabel);
     sampling_row_ = PromoteSliderLabelToEffectRow(ui->samplingRow, ui->samplingResolutionSlider,
                                                     ui->samplingResolutionLabel);
+
+    AlignCaptionLabels(
+        {ui->intensityCaption, ui->sharpnessCaption, ui->smoothingCaption, ui->samplingCaption}, 110);
 }
 
 EffectOutputPanel::~EffectOutputPanel()
@@ -285,6 +293,11 @@ EffectGeometryPanel::EffectGeometryPanel(unsigned int scale_x,
                                                      ui->rotationPitchLabel, deg);
     rot_roll_row_ = PromoteSliderLabelToEffectRow(ui->rotRollRow, ui->rotationRollSlider,
                                                     ui->rotationRollLabel, deg);
+
+    AlignCaptionLabels({ui->scaleXCaption, ui->scaleYCaption, ui->scaleZCaption}, 72);
+    AlignCaptionLabels({ui->asrYawCaption, ui->asrPitchCaption, ui->asrRollCaption}, 72);
+    AlignCaptionLabels({ui->offsetXCaption, ui->offsetYCaption, ui->offsetZCaption}, 72);
+    AlignCaptionLabels({ui->rotYawCaption, ui->rotPitchCaption, ui->rotRollCaption}, 72);
 }
 
 EffectGeometryPanel::~EffectGeometryPanel()

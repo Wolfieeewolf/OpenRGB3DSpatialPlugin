@@ -131,6 +131,9 @@ void StratumBandPanel::bindWidgetsFromUi()
     motion_kind_combo_[0] = ui->motionKindFloor;
     motion_kind_combo_[1] = ui->motionKindMid;
     motion_kind_combo_[2] = ui->motionKindCeiling;
+
+    AlignCaptionLabels({ui->floorBandCaption, ui->midBandCaption, ui->ceilingBandCaption}, 72);
+    AlignCaptionLabels({ui->motionFloorCaption, ui->motionMidCaption, ui->motionCeilingCaption}, 72);
 }
 
 void StratumBandPanel::populateMotionCombos()

@@ -7,7 +7,9 @@
 #include "EffectSliderPromote.h"
 #include "ui_GridSettingsPanel.h"
 
+#include <QDoubleSpinBox>
 #include <QFont>
+#include <QLabel>
 #include <QSlider>
 #include <algorithm>
 #include <cmath>
@@ -23,6 +25,12 @@ GridSettingsPanel::GridSettingsPanel(QWidget* parent)
     PluginUiApplyMutedSecondaryLabel(ui->roomHelpLabel->label());
     PluginUiApplyMutedSecondaryLabel(ui->overlayHintLabel->label());
     PluginUiApplyBoldLabel(ui->overlaySectionLabel);
+
+    StackDoubleSpinOverThinSlider(ui->roomWidthSpin);
+    StackDoubleSpinOverThinSlider(ui->roomHeightSpin);
+    StackDoubleSpinOverThinSlider(ui->roomDepthSpin);
+    StackDoubleSpinOverThinSlider(ui->gridScaleSpin);
+    AlignGridCaptionColumn(ui->settingsLayout, /*caption_col*/ 0, /*min_floor*/ 130);
 }
 
 GridSettingsPanel::~GridSettingsPanel()
@@ -109,6 +117,7 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     overlay_bright_slider_ = overlay_bright_row_ ? overlay_bright_row_->slider() : nullptr;
     overlay_point_slider_ = overlay_point_row_ ? overlay_point_row_->slider() : nullptr;
     overlay_step_slider_ = overlay_step_row_ ? overlay_step_row_->slider() : nullptr;
+    AlignGridCaptionColumn(ui->settingsLayout, /*caption_col*/ 0, /*min_floor*/ 130);
 
     int overlay_bright_pct = 100;
     int overlay_point_size = 3;

@@ -4,11 +4,14 @@
 #include "DisplayPlaneManager.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
+#include "EffectSliderPromote.h"
 #include "DisplayPlaneCaptureCombo.h"
 #include "DisplayPlaneCaptureUi.h"
 #include "ui_DisplayPlaneDialog.h"
 
 #include <QDesktopServices>
+#include <QGridLayout>
+#include <QLabel>
 #include <QUrl>
 
 DisplayPlaneDialog::DisplayPlaneDialog(OpenRGB3DSpatialTab* host_tab, QWidget* parent)
@@ -22,6 +25,28 @@ DisplayPlaneDialog::DisplayPlaneDialog(OpenRGB3DSpatialTab* host_tab, QWidget* p
     ui->captureCaption->setText(DisplayPlaneCaptureUi::Caption());
     ui->captureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
     ui->refreshCaptureButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
+
+    /* One size field per row: caption | spin-over-slider (was a cramped 4-column row). */
+    if(QGridLayout* grid = ui->sizeGrid)
+    {
+        grid->removeWidget(ui->widthCaption);
+        grid->removeWidget(ui->widthSpin);
+        grid->removeWidget(ui->heightCaption);
+        grid->removeWidget(ui->heightSpin);
+        grid->removeWidget(ui->captureCaption);
+        grid->removeWidget(ui->captureCombo);
+        grid->removeWidget(ui->refreshCaptureButton);
+
+        grid->addWidget(ui->widthCaption, 0, 0);
+        grid->addWidget(MakeDoubleSpinOverThinSliderStack(ui->widthSpin, this), 0, 1, 1, 2);
+        grid->addWidget(ui->heightCaption, 1, 0);
+        grid->addWidget(MakeDoubleSpinOverThinSliderStack(ui->heightSpin, this), 1, 1, 1, 2);
+        grid->addWidget(ui->captureCaption, 2, 0);
+        grid->addWidget(ui->captureCombo, 2, 1);
+        grid->addWidget(ui->refreshCaptureButton, 2, 2);
+        AlignGridCaptionColumn(grid, 0, 120);
+    }
+    AlignCaptionLabels({ui->nameCaption, ui->widthCaption, ui->heightCaption, ui->captureCaption}, 120);
 
     connect(ui->refreshCaptureButton, &QPushButton::clicked, this, &DisplayPlaneDialog::onRefreshCaptureClicked);
     connect(ui->openSpecsButton, &QPushButton::clicked, this, &DisplayPlaneDialog::onOpenSpecsClicked);

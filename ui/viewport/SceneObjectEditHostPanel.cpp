@@ -2,6 +2,7 @@
 
 #include "SceneObjectEditHostPanel.h"
 #include "DisplayPlaneCaptureUi.h"
+#include "EffectSliderPromote.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "SceneObjectSpacingPanel.h"
 #include "SceneTransformPanel.h"
@@ -33,6 +34,7 @@ SceneObjectEditHostPanel::SceneObjectEditHostPanel(QWidget* parent)
     ui->displayPlaneCaptureCaption->setText(DisplayPlaneCaptureUi::Caption());
     ui->displayPlaneCaptureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
     ui->displayPlaneCaptureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
+    ApplyRightAlignedCaption(ui->displayPlaneCaptureCaption, 120);
 }
 
 SceneObjectEditHostPanel::~SceneObjectEditHostPanel()

@@ -4,6 +4,7 @@
 
 #include "ActionsPanel.h"
 #include "DisplayPlaneCaptureUi.h"
+#include "EffectSliderPromote.h"
 #include "EffectInfoLabel.h"
 #include "TriggersPanel.h"
 #include "OpenRGB3DSpatialTab.h"
@@ -106,6 +107,7 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->displayCaptureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
     ui->displayCaptureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
     ui->displaySubtitleLabel->setText(DisplayPlaneCaptureUi::ObjectCreatorSubtitle());
+    ApplyRightAlignedCaption(ui->displayCaptureCaption, 120);
 
     connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
             &OpenRGB3DSpatialTab::customControllerSelectionChanged);

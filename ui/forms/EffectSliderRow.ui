@@ -18,8 +18,18 @@
    <property name="spacing">
     <number>6</number>
    </property>
-   <item>
-    <widget class="QLabel" name="captionLabel"/>
+    <item>
+    <widget class="QLabel" name="captionLabel">
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignVCenter</set>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>96</width>
+       <height>0</height>
+      </size>
+     </property>
+    </widget>
    </item>
    <item>
     <layout class="QVBoxLayout" name="controlColumn">

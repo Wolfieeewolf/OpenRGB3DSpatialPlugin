@@ -7,6 +7,7 @@
 #include "DisplayPlaneManager.h"
 #include "DisplayPlaneCaptureCombo.h"
 #include "EffectSliderRow.h"
+#include "EffectSliderPromote.h"
 #include "EffectUiRows.h"
 #include "PluginUiUtils.h"
 #include "ScreenMirror_Internal.h"
@@ -116,6 +117,12 @@ ScreenMirrorMonitorPanel::ScreenMirrorMonitorPanel(QWidget* parent)
     ui->captureCaption->setText(DisplayPlaneCaptureUi::Caption());
     ui->captureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
     ui->captureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
+    ApplyRightAlignedCaption(ui->captureCaption, 120);
+    AlignFormCaptions(ui->reachForm);
+    AlignFormCaptions(ui->brightnessForm);
+    AlignFormCaptions(ui->blackBarsForm);
+    AlignFormCaptions(ui->blendForm);
+    AlignFormCaptions(ui->previewForm);
 }
 
 ScreenMirrorMonitorPanel::~ScreenMirrorMonitorPanel()
@@ -409,7 +416,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     settings.wave_decay_slider       = zones_widget->getWaveDecaySlider();
     settings.wave_decay_label          = zones_widget->getWaveDecayLabel();
     settings.wave_time_to_edge_slider = zones_widget->getWaveTimeToEdgeSlider();
-    settings.wave_time_to_edge_label  = zones_widget->getWaveTimeToEdgeLabel();
+    settings.wave_time_to_edge_spin   = zones_widget->getWaveTimeToEdgeSpin();
     settings.capture_area_preview      = zones_widget->getPreviewWidget();
     settings.add_zone_button           = zones_widget->getAddZoneButton();
     settings.remove_zone_button        = zones_widget->getRemoveZoneButton();

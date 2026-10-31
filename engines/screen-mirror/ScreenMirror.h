@@ -15,6 +15,7 @@
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
+class QDoubleSpinBox;
 class QStackedWidget;
 struct CapturedFrame;
 
@@ -126,7 +127,7 @@ public:
         QSlider* wave_decay_slider;
         QLabel* wave_decay_label;
         QSlider* wave_time_to_edge_slider;
-        QLabel* wave_time_to_edge_label;
+        QDoubleSpinBox* wave_time_to_edge_spin;
         QSlider* falloff_curve_slider;
         QLabel* falloff_curve_label;
         QComboBox* capture_combo;
@@ -200,7 +201,7 @@ public:
             , wave_decay_slider(nullptr)
             , wave_decay_label(nullptr)
             , wave_time_to_edge_slider(nullptr)
-            , wave_time_to_edge_label(nullptr)
+            , wave_time_to_edge_spin(nullptr)
             , falloff_curve_slider(nullptr)
             , falloff_curve_label(nullptr)
             , capture_combo(nullptr)

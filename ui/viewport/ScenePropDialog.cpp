@@ -2,6 +2,7 @@
 
 #include "ScenePropDialog.h"
 
+#include "EffectSliderPromote.h"
 #include "PluginSettingsPaths.h"
 #include "ScenePropPreviewWidget.h"
 #include "viewport/MeshImport.h"
@@ -142,17 +143,20 @@ ScenePropDialog::ScenePropDialog(QWidget* parent)
     mesh_layout->addLayout(mesh_body_row);
 
     auto* form = new QFormLayout();
+    AlignFormCaptions(form);
     form->addRow(tr("Shape"), shape_combo_);
     form->addRow(tr("Name"), name_edit_);
-    form->addRow(tr("Width (X)"), width_spin_);
-    form->addRow(tr("Height (Y)"), height_spin_);
-    form->addRow(tr("Depth (Z)"), depth_spin_);
+    form->addRow(tr("Width (X)"), MakeDoubleSpinOverThinSliderStack(width_spin_, this));
+    form->addRow(tr("Height (Y)"), MakeDoubleSpinOverThinSliderStack(height_spin_, this));
+    form->addRow(tr("Depth (Z)"), MakeDoubleSpinOverThinSliderStack(depth_spin_, this));
     form->addRow(tr("Solid colour"), color_button_);
     form->addRow(glass_color_label_, glass_color_button_);
     form->addRow(tr("Mesh"), mesh_panel_);
+    ApplyRightAlignedCaption(glass_color_label_);
 
     faces_box_ = new QGroupBox(tr("Faces"), this);
     auto* faces_form = new QFormLayout(faces_box_);
+    AlignFormCaptions(faces_form);
     set_all_combo_ = makeFaceCombo();
     auto* set_all_btn = new QPushButton(tr("Apply to all"), faces_box_);
     auto* set_all_row = new QWidget(faces_box_);

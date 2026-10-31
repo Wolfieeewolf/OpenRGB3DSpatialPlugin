@@ -3,6 +3,7 @@
 #include "SceneTransformPanel.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
+#include "EffectSliderPromote.h"
 #include "PositionAxisDragController.h"
 #include "ui_SceneTransformPanel.h"
 
@@ -10,9 +11,7 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QSignalBlocker>
-#include <QSizePolicy>
 #include <QSlider>
-#include <QVBoxLayout>
 #include <cmath>
 
 namespace
@@ -32,13 +31,13 @@ void ConfigureTransformAxisGrid(QGridLayout* layout)
     layout->setColumnStretch(1, 1);
 }
 
-/** Spin over thin slider (EffectSliderRow visual standard; keeps QDoubleSpinBox). */
-void RestackSpinOverSlider(QGridLayout* grid,
-                           int row,
-                           QLabel* caption,
-                           QSlider* slider,
-                           QDoubleSpinBox* spin,
-                           int spin_min_width)
+/** Promote axis spin+slider into EffectDoubleSliderRow; external code keeps sync wiring. */
+void PromoteTransformAxisRow(QGridLayout* grid,
+                             int row,
+                             QLabel* caption,
+                             QSlider* slider,
+                             QDoubleSpinBox* spin,
+                             int spin_min_width)
 {
     if(!grid || !slider || !spin)
     {
@@ -48,23 +47,15 @@ void RestackSpinOverSlider(QGridLayout* grid,
     grid->removeWidget(slider);
     grid->removeWidget(spin);
 
-    auto* stack = new QWidget(grid->parentWidget());
-    auto* vbox = new QVBoxLayout(stack);
-    vbox->setContentsMargins(0, 0, 0, 0);
-    vbox->setSpacing(0);
     spin->setMinimumWidth(spin_min_width);
-    spin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    slider->setMinimumWidth(48);
-    slider->setFixedHeight(14);
-    vbox->addWidget(spin);
-    vbox->addWidget(slider);
+    auto* axis_row = new EffectDoubleSliderRow(grid->parentWidget());
+    axis_row->adoptExistingSpinAndSlider(spin, slider, /*link_spin_slider=*/false);
 
     if(caption)
     {
         grid->addWidget(caption, row, 0);
     }
-    grid->addWidget(stack, row, 1);
+    grid->addWidget(axis_row, row, 1);
 }
 
 } // namespace
@@ -118,12 +109,14 @@ SceneTransformPanel::SceneTransformPanel(QWidget* parent)
     ConfigureTransformAxisGrid(ui->positionLayout);
     ConfigureTransformAxisGrid(ui->rotationLayout);
 
-    RestackSpinOverSlider(ui->positionLayout, 0, ui->posXCaption, ui->posXSlider, ui->posXSpin, kPosSpinMinWidth);
-    RestackSpinOverSlider(ui->positionLayout, 1, ui->posYCaption, ui->posYSlider, ui->posYSpin, kPosSpinMinWidth);
-    RestackSpinOverSlider(ui->positionLayout, 2, ui->posZCaption, ui->posZSlider, ui->posZSpin, kPosSpinMinWidth);
-    RestackSpinOverSlider(ui->rotationLayout, 0, ui->rotXCaption, ui->rotXSlider, ui->rotXSpin, kRotSpinMinWidth);
-    RestackSpinOverSlider(ui->rotationLayout, 1, ui->rotYCaption, ui->rotYSlider, ui->rotYSpin, kRotSpinMinWidth);
-    RestackSpinOverSlider(ui->rotationLayout, 2, ui->rotZCaption, ui->rotZSlider, ui->rotZSpin, kRotSpinMinWidth);
+    PromoteTransformAxisRow(ui->positionLayout, 0, ui->posXCaption, ui->posXSlider, ui->posXSpin, kPosSpinMinWidth);
+    PromoteTransformAxisRow(ui->positionLayout, 1, ui->posYCaption, ui->posYSlider, ui->posYSpin, kPosSpinMinWidth);
+    PromoteTransformAxisRow(ui->positionLayout, 2, ui->posZCaption, ui->posZSlider, ui->posZSpin, kPosSpinMinWidth);
+    PromoteTransformAxisRow(ui->rotationLayout, 0, ui->rotXCaption, ui->rotXSlider, ui->rotXSpin, kRotSpinMinWidth);
+    PromoteTransformAxisRow(ui->rotationLayout, 1, ui->rotYCaption, ui->rotYSlider, ui->rotYSpin, kRotSpinMinWidth);
+    PromoteTransformAxisRow(ui->rotationLayout, 2, ui->rotZCaption, ui->rotZSlider, ui->rotZSpin, kRotSpinMinWidth);
+    AlignGridCaptionColumn(ui->positionLayout, 0, 100);
+    AlignGridCaptionColumn(ui->rotationLayout, 0, 100);
 }
 
 SceneTransformPanel::~SceneTransformPanel()

@@ -39,6 +39,7 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent)
     repeats_row_ = PromoteSliderLabelInGrid(ui->secondaryGrid, ui->repeatsSlider, ui->repeatsLabel);
     dir_row_ = PromoteSliderLabelInGrid(ui->secondaryGrid, ui->dirSlider, ui->dirLabel,
                                          QString(QChar(0x00B0)));
+    AlignGridCaptionColumn(ui->secondaryGrid, 0, 90);
 
     populateCombos();
 

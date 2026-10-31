@@ -63,7 +63,7 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 | Documentation/ | fixed | 2026-10-31 | Tracker + file-map + recipe-map + CONTRIBUTING tab note. |
 | scripts/, debian\|fedora\|flatpak | keep | 2026-10-31 | Build helpers + distro packaging. `release/` / `.wiki-seed/` are gitignored local/build only — not tracked packaging. |
 | .cursor/skills multipass | fixed | 2026-10-31 | Natural-seam / no-explosion + pass-2b **JSON/text size ceilings** row; synced to user store. |
-| **UI accessibility (spin-over-slider + three-ways)** | fixed | 2026-10-31 | Pass 5 gates: `EffectSliderRow` / promote helpers for effect chrome + Screen Mirror leftovers; `PluginUiWireListDestructiveDelete` on stack/zones/triggers/Object Creator; ActionGradientBar + viewport selection context menus. EQ vertical bands + Action Editor spin+slider wrappers exempt. `OpenRGB/` excluded. **Presets repo:** no Qt UI — content half of pass 5 (`name`/`description`/knobs) tracked in sibling [OpenRGB3DSpatialPresets `docs/multipass-coverage.md`](../../OpenRGB3DSpatialPresets/docs/multipass-coverage.md) § UI accessibility split. |
+| **UI accessibility (spin-over-slider + three-ways)** | fixed | 2026-11-01 | Pass 5 gates: `EffectSliderRow` / `EffectDoubleSliderRow` (+ promote helpers) for int and double/mm chrome; SceneTransform / Action Editor / grid / spacing / display plane / scene prop / controller cards on the shared rows; `PluginUiWireListDestructiveDelete` on stack/zones/triggers/Object Creator; ActionGradientBar + viewport selection context menus. EQ vertical bands stay exempt. `OpenRGB/` excluded. **Presets repo:** no Qt UI — content half of pass 5 tracked in sibling [OpenRGB3DSpatialPresets `docs/multipass-coverage.md`](../../OpenRGB3DSpatialPresets/docs/multipass-coverage.md) § UI accessibility split. |
 | OpenRGB/ | n/a | | **Excluded** from this pass. |
 
 ### UI accessibility multipass (2026-10-31) — family detail
@@ -72,13 +72,14 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 |--------|--------|-------|
 | Effect Motion / Geometry / Output | fixed | Runtime `PromoteSliderLabelToEffectRow`; load sync via `SyncEffectSliderValue` |
 | StratumBand / StripKernel / Grid overlay | fixed | `PromoteSliderLabelInGrid` |
-| SceneTransform | fixed | Spin-over-thin-slider restack (keeps `QDoubleSpinBox`) |
+| SceneTransform | fixed | `EffectDoubleSliderRow::adoptExistingSpinAndSlider` (unlink; `PositionAxisDragController` / rotation wire keep sync) |
 | CaptureZones wave + audience bias | fixed | Wave rows + `ScreenMirrorCapturePanel` audience bias → `EffectSliderRow` |
 | Lists (stack, zones, triggers, Object Creator) | fixed | `PluginUiWireListDestructiveDelete` (button + Del/Backspace + `QMenu`) |
 | ActionGradientBar | fixed | Context menu + Del/Backspace; right-click no longer instant-deletes |
 | LEDViewport3D selection | fixed | Context menu: Delete controller / Frame + W/E/R/Y/Q hints; Del/Backspace + F |
 | EQ bands (`AudioEqBandColumn`) | keep | Vertical layout; accessible names/tooltips only — not `EffectSliderRow` |
-| Action Editor internals | keep | Existing spin+slider wrappers — not forced to `EffectSliderRow` |
+| Action Editor internals | fixed | Int/double attach helpers → `EffectSliderRow` / `EffectDoubleSliderRow` (`adoptExistingSpin`) |
+| Grid / spacing / display plane / scene prop / cards | fixed | Double mm fields → `EffectDoubleSliderRow` via `Stack`/`Make` promote helpers |
 
 **Grep gates (exclude `OpenRGB/`):** `.ui` forms may still declare legacy `QSlider`+value `QLabel` when ctor promotes to `EffectSliderRow`; bare live pairs fail except EQ. `Qt::RightButton` must open a `QMenu` (or start orbit/drag), never erase immediately.
 

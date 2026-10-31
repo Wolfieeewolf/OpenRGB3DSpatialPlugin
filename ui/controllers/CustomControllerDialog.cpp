@@ -177,13 +177,16 @@ void CustomControllerDialog::SetupUI()
     brand_edit_       = ui->brandEdit;
     model_edit_       = ui->modelEdit;
     PopulatePresetCategoryCombo();
-    width_spin        = ui->widthSpin;
-    height_spin       = ui->heightSpin;
-    depth_spin        = ui->depthSpin;
     leds_per_section_combo = ui->ledsPerSectionCombo;
     layer_depth_spin  = ui->layerDepthSpin;
     fit_layout_button  = ui->fitLayoutButton;
     reset_view_button_ = ui->resetViewButton;
+
+    /* Compact top-bar dims stay plain spins — spin-over-slider is too heavy here. */
+    width_spin  = ui->widthSpin;
+    height_spin = ui->heightSpin;
+    depth_spin  = ui->depthSpin;
+
     connect(width_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::dimensionChanged);
     connect(height_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::dimensionChanged);
     connect(depth_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::dimensionChanged);

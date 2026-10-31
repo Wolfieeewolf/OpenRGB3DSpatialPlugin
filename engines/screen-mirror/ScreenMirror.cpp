@@ -155,7 +155,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.wave_decay_slider = nullptr;
         s.wave_decay_label = nullptr;
         s.wave_time_to_edge_slider = nullptr;
-        s.wave_time_to_edge_label = nullptr;
+        s.wave_time_to_edge_spin = nullptr;
         s.falloff_curve_slider = nullptr;
         s.falloff_curve_label = nullptr;
         s.calibration_pattern_check = nullptr;
@@ -279,6 +279,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     audience_hint_label_ = capture_ui.audienceHintLabel;
     PluginUiApplyItalicSecondaryLabel(audience_hint_label_);
     capture_ui.audienceBiasSlider->setValue((int)std::lround(audience_bias_pct_));
+    AlignHBoxRowCaptions({capture_ui.qualityRow, capture_ui.backendRow, capture_ui.audienceBiasRow}, 110);
     if(EffectSliderRow* audience_row =
             PromoteSliderLabelToEffectRow(capture_ui.audienceBiasRow, capture_ui.audienceBiasSlider,
                                           capture_ui.audienceBiasLabel, QStringLiteral("%")))
@@ -608,6 +609,7 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.propagation_speed_slider) settings.propagation_speed_slider->setEnabled(has_capture_source);
             if(settings.wave_decay_slider) settings.wave_decay_slider->setEnabled(has_capture_source);
             if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_slider->setEnabled(has_capture_source);
+            if(settings.wave_time_to_edge_spin) settings.wave_time_to_edge_spin->setEnabled(has_capture_source);
             if(settings.falloff_curve_slider) settings.falloff_curve_slider->setEnabled(has_capture_source);
             if(settings.calibration_pattern_check) settings.calibration_pattern_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);

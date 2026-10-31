@@ -8,7 +8,9 @@
 #include <string>
 
 class DisplayPlane3D;
+class EffectDoubleSliderRow;
 class EffectSliderRow;
+class QDoubleSpinBox;
 class QGroupBox;
 class QLabel;
 class QPushButton;
@@ -66,7 +68,7 @@ public:
     QSlider* getWaveDecaySlider() const;
     QLabel* getWaveDecayLabel() const;
     QSlider* getWaveTimeToEdgeSlider() const;
-    QLabel* getWaveTimeToEdgeLabel() const;
+    QDoubleSpinBox* getWaveTimeToEdgeSpin() const;
 
     QGroupBox* getWaveGroup() const;
     QGroupBox* getZonesGroup() const;
@@ -83,7 +85,7 @@ private:
     CaptureAreaPreviewWidget* preview_widget = nullptr;
     EffectSliderRow* propagation_row_ = nullptr;
     EffectSliderRow* wave_decay_row_ = nullptr;
-    EffectSliderRow* wave_time_row_ = nullptr;
+    EffectDoubleSliderRow* wave_time_row_ = nullptr;
 };
 
 #endif
