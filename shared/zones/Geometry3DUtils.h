@@ -287,26 +287,15 @@ namespace Geometry3D
         }
         else
         {
-            /* Direction → screen UV. Edge angle is a compromise:
-               - Old √2 (~45°) crushed ceiling/side LEDs onto one letterbox texel.
-               - Full hemisphere (1.0 / ~90°) fixed the ceiling but pulled mid-frame
-                 onto the walls — felt like being sucked into the display.
-               ~58° keeps steep ceiling fill while walls still read as edge bloom
-               (push out from the screen), not a tunnel into centre content. */
+            /* Direction → screen UV only (no bezel “bloom” — wave handles that).
+               Old √2 (~45°) crushed steep ceiling/side angles onto one edge texel.
+               ~58° keeps those angles distinct without the full-hemisphere mid-frame
+               pull. Outward motion stays on wave / time-to-edge settings. */
             static constexpr float kEdgeAngleSin =
                 0.8480480961562259f; /* sin(58°) */
             static constexpr float kScreenEdgeScale = 1.0f / kEdgeAngleSin;
-            float u = std::clamp(0.5f + 0.5f * kScreenEdgeScale * nx / len, 0.0f, 1.0f);
-            float v = std::clamp(0.5f + 0.5f * kScreenEdgeScale * ny / len, 0.0f, 1.0f);
-            /* Mild bezel bias: exponent < 1 nudges UV toward 0/1 so room LEDs
-               prefer near-edge pixels (outward glow) over picture centre. */
-            auto bezel_bias_01 = [](float t) -> float {
-                const float d = (t - 0.5f) * 2.0f;
-                const float shaped = std::copysign(std::pow(std::fabs(d), 0.82f), d);
-                return std::clamp(0.5f + 0.5f * shaped, 0.0f, 1.0f);
-            };
-            result.u = bezel_bias_01(u);
-            result.v = bezel_bias_01(v);
+            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeScale * nx / len, 0.0f, 1.0f);
+            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeScale * ny / len, 0.0f, 1.0f);
         }
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;

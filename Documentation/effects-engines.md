@@ -102,7 +102,7 @@ Library category **Ambilight**. No Effect Library content folder.
 
 **Reach / wave origin:** always each **display plane’s centre**. Screen Mirror does not use the layer Spatial Anchor (that control is for Volume / Movie Sync / etc.).
 
-**Screen UV (`SpatialMapToScreen`):** direction from the plane centre; bezel ≈ **58°** from the normal (not 45° crush, not full 90° centre-pull), plus a mild bezel bias so room LEDs prefer edge pixels — bloom **out** from the screen.
+**Screen UV (`SpatialMapToScreen`):** direction from the plane centre → UV only (bezel ≈ **58°** from the normal — not 45° letterbox crush). No bezel “bloom” in the mapper; outward travel is **wave / time-to-edge**.
 
 **Audience bias (experiment, `feat/screen-mirror-audience-bias`):** optional 0–100% pull toward layout points typed **User**. Multi-seat = strongest lobe wins. Off by default; Reach stays on the display.
 
