@@ -107,7 +107,6 @@ ScreenMirrorMonitorPanel::ScreenMirrorMonitorPanel(QWidget* parent)
     , ui(new Ui::ScreenMirrorMonitorSettings)
 {
     ui->setupUi(this);
-    PluginUiApplyItalicSecondaryLabel(ui->radialCornerInfo);
     ui->captureCaption->setText(DisplayPlaneCaptureUi::Caption());
     ui->captureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
     ui->captureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
@@ -274,86 +273,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    QStringLiteral("Crop left and right (pillarbox). 0 = no crop."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
-    ui->screenMapRollRow->setCaptionText(QStringLiteral("Map roll:"));
-    ui->screenMapRollRow->setValueLabelMinimumWidth(52);
-    ui->screenMapRollRow->configure(
-        -kScreenMapRollSliderMax,
-        kScreenMapRollSliderMax,
-        (int)std::lround(std::clamp(settings.screen_map_roll_deg, -180.0f, 180.0f) *
-                         (float)kScreenMapRollTicksPerDegree),
-        QStringLiteral(
-            "Optional extra twist in the capture plane after calibrated directional mapping. 0 deg = geometry only. Steps 0.5 deg."));
-    ui->screenMapRollRow->setEnabled(has_capture_source);
-    BindSliderRow(ui->screenMapRollRow, settings.screen_map_roll_slider, settings.screen_map_roll_label);
-    QObject::connect(settings.screen_map_roll_slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-    QObject::connect(settings.screen_map_roll_slider, &QSlider::valueChanged, effect, [&settings](int v) {
-        if(settings.screen_map_roll_label)
-        {
-            const float deg = (float)v / (float)kScreenMapRollTicksPerDegree;
-            settings.screen_map_roll_label->setText(QString::number(deg, 'f', 1) + QChar(0x00B0));
-        }
-    });
-    if(settings.screen_map_roll_label && settings.screen_map_roll_slider)
-    {
-        const float deg = (float)settings.screen_map_roll_slider->value() / (float)kScreenMapRollTicksPerDegree;
-        settings.screen_map_roll_label->setText(QString::number(deg, 'f', 1) + QChar(0x00B0));
-    }
-
-    const auto wire_radial_pct = [&](EffectSliderRow* row,
-                                     QSlider*& slider,
-                                     QLabel*& label,
-                                     const QString& caption,
-                                     int stored_ui,
-                                     const char* tip) {
-        row->setCaptionText(caption);
-        row->setValueLabelMinimumWidth(44);
-        row->configure(0, 100, std::clamp(stored_ui, 0, 100), QString::fromUtf8(tip));
-        row->setEnabled(has_capture_source);
-        BindSliderRow(row, slider, label);
-        QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-        QObject::connect(slider, &QSlider::valueChanged, effect, [label](int v) {
-            if(label)
-            {
-                label->setText(FormatRadialMapUi(v));
-            }
-        });
-        if(label)
-        {
-            label->setText(FormatRadialMapUi(slider->value()));
-        }
-    };
-
-    wire_radial_pct(ui->radialExpansionRow,
-                    settings.radial_corner_expansion_slider,
-                    settings.radial_corner_expansion_label,
-                    QStringLiteral("Corner expansion:"),
-                    settings.radial_corner_expansion_ui,
-                    "0% is baseline (slider center). Raise to push toward corners; lower to pinch.");
-    wire_radial_pct(ui->radialBiasTlRow,
-                    settings.radial_corner_bias_tl_slider,
-                    settings.radial_corner_bias_tl_label,
-                    QStringLiteral("Bottom-left:"),
-                    settings.radial_corner_bias_tl_ui,
-                    "Bias toward capture bottom-left in that quadrant. 0% = baseline (slider center).");
-    wire_radial_pct(ui->radialBiasTrRow,
-                    settings.radial_corner_bias_tr_slider,
-                    settings.radial_corner_bias_tr_label,
-                    QStringLiteral("Bottom-right:"),
-                    settings.radial_corner_bias_tr_ui,
-                    "Bias toward capture bottom-right in that quadrant. 0% = baseline (slider center).");
-    wire_radial_pct(ui->radialBiasBlRow,
-                    settings.radial_corner_bias_bl_slider,
-                    settings.radial_corner_bias_bl_label,
-                    QStringLiteral("Top-left:"),
-                    settings.radial_corner_bias_bl_ui,
-                    "Bias toward capture top-left in that quadrant. 0% = baseline (slider center).");
-    wire_radial_pct(ui->radialBiasBrRow,
-                    settings.radial_corner_bias_br_slider,
-                    settings.radial_corner_bias_br_label,
-                    QStringLiteral("Top-right:"),
-                    settings.radial_corner_bias_br_ui,
-                    "Bias toward capture top-right in that quadrant. 0% = baseline (slider center).");
-
     wire_pct_ticks(ui->smoothingRow,
                    settings.smoothing_time_slider,
                    settings.smoothing_time_label,
@@ -394,9 +313,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
         settings.propagation_speed_mm_per_ms,
         settings.wave_decay_ms,
         settings.wave_time_to_edge_sec,
-        settings.front_back_balance,
-        settings.left_right_balance,
-        settings.top_bottom_balance,
         ui->captureZonesHost);
     zones_widget->setEnabled(has_capture_source);
     QObject::connect(zones_widget, &CaptureZonesWidget::valueChanged, effect, &ScreenMirror::OnParameterChanged);
@@ -409,12 +325,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     settings.wave_decay_label          = zones_widget->getWaveDecayLabel();
     settings.wave_time_to_edge_slider = zones_widget->getWaveTimeToEdgeSlider();
     settings.wave_time_to_edge_label  = zones_widget->getWaveTimeToEdgeLabel();
-    settings.front_back_balance_slider = zones_widget->getFrontBackBalanceSlider();
-    settings.front_back_balance_label  = zones_widget->getFrontBackBalanceLabel();
-    settings.left_right_balance_slider = zones_widget->getLeftRightBalanceSlider();
-    settings.left_right_balance_label  = zones_widget->getLeftRightBalanceLabel();
-    settings.top_bottom_balance_slider = zones_widget->getTopBottomBalanceSlider();
-    settings.top_bottom_balance_label  = zones_widget->getTopBottomBalanceLabel();
     settings.capture_area_preview      = zones_widget->getPreviewWidget();
     settings.add_zone_button           = zones_widget->getAddZoneButton();
 
@@ -437,7 +347,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     EffectCollapsibleSection* advanced = EffectUiRows::AppendCollapsibleSection(
         root,
         QStringLiteral("Advanced"),
-        QStringLiteral("Black bars, radial mapping, capture zones, direction focus, and extra color/falloff."),
+        QStringLiteral("Black bars, capture zones, and extra color/falloff."),
         false);
     if(!advanced)
     {
@@ -446,11 +356,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     QVBoxLayout* advanced_body = advanced->bodyLayout();
     advanced_body->addWidget(extras_box);
     advanced_body->addWidget(ui->blackBarsGroup);
-    advanced_body->addWidget(ui->radialCornerGroup);
-    if(QGroupBox* dir = zones_widget->getDirectionGroup())
-    {
-        advanced_body->addWidget(dir);
-    }
     if(QGroupBox* zones = zones_widget->getZonesGroup())
     {
         advanced_body->addWidget(zones);

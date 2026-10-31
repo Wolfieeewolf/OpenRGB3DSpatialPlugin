@@ -4,7 +4,6 @@
 #define SCREENMIRROR_H
 
 #include "SpatialEffect3D.h"
-#include "ScreenMirrorWaveMath.h"
 #include <map>
 #include <unordered_map>
 #include <deque>
@@ -80,19 +79,9 @@ public:
         float wave_decay_ms;
         float wave_time_to_edge_sec;
         float falloff_curve_exponent;
-        float front_back_balance;
-        float left_right_balance;
-        float top_bottom_balance;
 
         bool show_calibration_pattern;
         bool show_screen_preview;
-
-        float screen_map_roll_deg;
-        int radial_corner_expansion_ui;
-        int radial_corner_bias_tl_ui;
-        int radial_corner_bias_tr_ui;
-        int radial_corner_bias_bl_ui;
-        int radial_corner_bias_br_ui;
 
         std::vector<CaptureZone> capture_zones;
 
@@ -130,12 +119,6 @@ public:
         QLabel* wave_time_to_edge_label;
         QSlider* falloff_curve_slider;
         QLabel* falloff_curve_label;
-        QSlider* front_back_balance_slider;
-        QLabel* front_back_balance_label;
-        QSlider* left_right_balance_slider;
-        QLabel* left_right_balance_label;
-        QSlider* top_bottom_balance_slider;
-        QLabel* top_bottom_balance_label;
         QComboBox* capture_combo;
         QPushButton* capture_refresh_button;
         QCheckBox* calibration_pattern_check;
@@ -143,19 +126,6 @@ public:
         QWidget* capture_area_preview;
         QPushButton* add_zone_button;
         CaptureZonesWidget* capture_zones_widget;
-
-        QSlider* screen_map_roll_slider;
-        QLabel* screen_map_roll_label;
-        QSlider* radial_corner_expansion_slider;
-        QLabel* radial_corner_expansion_label;
-        QSlider* radial_corner_bias_tl_slider;
-        QLabel* radial_corner_bias_tl_label;
-        QSlider* radial_corner_bias_tr_slider;
-        QLabel* radial_corner_bias_tr_label;
-        QSlider* radial_corner_bias_bl_slider;
-        QLabel* radial_corner_bias_bl_label;
-        QSlider* radial_corner_bias_br_slider;
-        QLabel* radial_corner_bias_br_label;
 
         MonitorSettings()
             : enabled(false)
@@ -176,17 +146,8 @@ public:
             , wave_decay_ms(0.0f)
             , wave_time_to_edge_sec(0.0f)
             , falloff_curve_exponent(1.0f)
-            , front_back_balance(0.0f)
-            , left_right_balance(0.0f)
-            , top_bottom_balance(0.0f)
             , show_calibration_pattern(false)
             , show_screen_preview(false)
-            , screen_map_roll_deg(0.0f)
-            , radial_corner_expansion_ui(kRadialMapUiNeutral)
-            , radial_corner_bias_tl_ui(kRadialMapUiNeutral)
-            , radial_corner_bias_tr_ui(kRadialMapUiNeutral)
-            , radial_corner_bias_bl_ui(kRadialMapUiNeutral)
-            , radial_corner_bias_br_ui(kRadialMapUiNeutral)
             , group_box(nullptr)
             , scale_slider(nullptr)
             , scale_label(nullptr)
@@ -221,12 +182,6 @@ public:
             , wave_time_to_edge_label(nullptr)
             , falloff_curve_slider(nullptr)
             , falloff_curve_label(nullptr)
-            , front_back_balance_slider(nullptr)
-            , front_back_balance_label(nullptr)
-            , left_right_balance_slider(nullptr)
-            , left_right_balance_label(nullptr)
-            , top_bottom_balance_slider(nullptr)
-            , top_bottom_balance_label(nullptr)
             , capture_combo(nullptr)
             , capture_refresh_button(nullptr)
             , calibration_pattern_check(nullptr)
@@ -234,18 +189,6 @@ public:
             , capture_area_preview(nullptr)
             , add_zone_button(nullptr)
             , capture_zones_widget(nullptr)
-            , screen_map_roll_slider(nullptr)
-            , screen_map_roll_label(nullptr)
-            , radial_corner_expansion_slider(nullptr)
-            , radial_corner_expansion_label(nullptr)
-            , radial_corner_bias_tl_slider(nullptr)
-            , radial_corner_bias_tl_label(nullptr)
-            , radial_corner_bias_tr_slider(nullptr)
-            , radial_corner_bias_tr_label(nullptr)
-            , radial_corner_bias_bl_slider(nullptr)
-            , radial_corner_bias_bl_label(nullptr)
-            , radial_corner_bias_br_slider(nullptr)
-            , radial_corner_bias_br_label(nullptr)
         {
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }

@@ -224,43 +224,6 @@
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="radialCornerGroup">
-     <property name="title">
-      <string>Radial corner mapping</string>
-     </property>
-     <layout class="QVBoxLayout" name="radialCornerLayout">
-      <item>
-       <widget class="QLabel" name="radialCornerInfo">
-        <property name="wordWrap">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Per-display UV tweak after radial sampling. Directional mapping is calibrated in geometry (panel basis vs. capture); Map roll is only extra twist. Corner sliders 0–100%: 0% = tuned baseline; 50% ≈ neutral warp.</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="EffectSliderRow" name="screenMapRollRow" native="true"/>
-      </item>
-      <item>
-       <widget class="EffectSliderRow" name="radialExpansionRow" native="true"/>
-      </item>
-      <item>
-       <widget class="EffectSliderRow" name="radialBiasTlRow" native="true"/>
-      </item>
-      <item>
-       <widget class="EffectSliderRow" name="radialBiasTrRow" native="true"/>
-      </item>
-      <item>
-       <widget class="EffectSliderRow" name="radialBiasBlRow" native="true"/>
-      </item>
-      <item>
-       <widget class="EffectSliderRow" name="radialBiasBrRow" native="true"/>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
     <widget class="QGroupBox" name="blendGroup">
      <property name="title">
       <string>Smoothing</string>

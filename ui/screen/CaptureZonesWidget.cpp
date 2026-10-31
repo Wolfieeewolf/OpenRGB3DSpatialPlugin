@@ -566,21 +566,11 @@ CaptureZonesWidget::CaptureZonesWidget(
     float propagation_speed,
     float wave_decay_ms,
     float wave_time_to_edge_sec,
-    float front_back_balance,
-    float left_right_balance,
-    float top_bottom_balance,
     QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::CaptureZonesWidget)
 {
     ui->setupUi(this);
-
-    ui->frontBackBalanceSlider->setValue((int)std::lround(front_back_balance));
-    ui->frontBackBalanceLabel->setText(QString::number((int)std::lround(front_back_balance)));
-    ui->leftRightBalanceSlider->setValue((int)std::lround(left_right_balance));
-    ui->leftRightBalanceLabel->setText(QString::number((int)std::lround(left_right_balance)));
-    ui->topBottomBalanceSlider->setValue((int)std::lround(top_bottom_balance));
-    ui->topBottomBalanceLabel->setText(QString::number((int)std::lround(top_bottom_balance)));
 
     ui->propagationSpeedSlider->setValue((int)std::lround(propagation_speed));
     ui->propagationSpeedLabel->setText(QString::number((int)std::lround(propagation_speed)) + "%");
@@ -629,18 +619,6 @@ void CaptureZonesWidget::wireSliderConnections()
         syncWaveIntensityVisibility();
         onInternalChange();
     });
-    connect(ui->frontBackBalanceSlider, &QSlider::valueChanged, this, [this](int v) {
-        ui->frontBackBalanceLabel->setText(QString::number(v));
-        onInternalChange();
-    });
-    connect(ui->leftRightBalanceSlider, &QSlider::valueChanged, this, [this](int v) {
-        ui->leftRightBalanceLabel->setText(QString::number(v));
-        onInternalChange();
-    });
-    connect(ui->topBottomBalanceSlider, &QSlider::valueChanged, this, [this](int v) {
-        ui->topBottomBalanceLabel->setText(QString::number(v));
-        onInternalChange();
-    });
 }
 
 void CaptureZonesWidget::SetDisplayPlane(DisplayPlane3D* plane)
@@ -668,14 +646,7 @@ QSlider* CaptureZonesWidget::getWaveDecaySlider() const { return ui->waveDecaySl
 QLabel* CaptureZonesWidget::getWaveDecayLabel() const { return ui->waveDecayLabel; }
 QSlider* CaptureZonesWidget::getWaveTimeToEdgeSlider() const { return ui->waveTimeToEdgeSlider; }
 QLabel* CaptureZonesWidget::getWaveTimeToEdgeLabel() const { return ui->waveTimeToEdgeLabel; }
-QSlider* CaptureZonesWidget::getFrontBackBalanceSlider() const { return ui->frontBackBalanceSlider; }
-QLabel* CaptureZonesWidget::getFrontBackBalanceLabel() const { return ui->frontBackBalanceLabel; }
-QSlider* CaptureZonesWidget::getLeftRightBalanceSlider() const { return ui->leftRightBalanceSlider; }
-QLabel* CaptureZonesWidget::getLeftRightBalanceLabel() const { return ui->leftRightBalanceLabel; }
-QSlider* CaptureZonesWidget::getTopBottomBalanceSlider() const { return ui->topBottomBalanceSlider; }
-QLabel* CaptureZonesWidget::getTopBottomBalanceLabel() const { return ui->topBottomBalanceLabel; }
 
-QGroupBox* CaptureZonesWidget::getDirectionGroup() const { return ui->directionGroup; }
 QGroupBox* CaptureZonesWidget::getWaveGroup() const { return ui->waveGroup; }
 QGroupBox* CaptureZonesWidget::getZonesGroup() const { return ui->zonesGroup; }
 

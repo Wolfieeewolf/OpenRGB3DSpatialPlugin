@@ -47,9 +47,6 @@ public:
         float propagation_speed = 0.0f,
         float wave_decay_ms = 0.0f,
         float wave_time_to_edge_sec = 0.0f,
-        float front_back_balance = 0.0f,
-        float left_right_balance = 0.0f,
-        float top_bottom_balance = 0.0f,
         QWidget* parent = nullptr);
     ~CaptureZonesWidget() override;
 
@@ -65,14 +62,7 @@ public:
     QLabel* getWaveDecayLabel() const;
     QSlider* getWaveTimeToEdgeSlider() const;
     QLabel* getWaveTimeToEdgeLabel() const;
-    QSlider* getFrontBackBalanceSlider() const;
-    QLabel* getFrontBackBalanceLabel() const;
-    QSlider* getLeftRightBalanceSlider() const;
-    QLabel* getLeftRightBalanceLabel() const;
-    QSlider* getTopBottomBalanceSlider() const;
-    QLabel* getTopBottomBalanceLabel() const;
 
-    QGroupBox* getDirectionGroup() const;
     QGroupBox* getWaveGroup() const;
     QGroupBox* getZonesGroup() const;
     void syncWaveIntensityVisibility();

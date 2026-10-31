@@ -12,26 +12,12 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <QString>
 
 constexpr int kWhiteRolloffSliderMax = 125;
 constexpr float kWhiteRolloffStoredMax = static_cast<float>(kWhiteRolloffSliderMax) / 100.0f;
 
-constexpr int kScreenMapRollTicksPerDegree = 2;
-constexpr int kScreenMapRollSliderMax = 180 * kScreenMapRollTicksPerDegree;
-
 constexpr std::size_t kMaxCaptureZonesPerMonitor = 64u;
 constexpr std::size_t kMaxCaptureZoneNameChars = 128u;
-
-inline QString FormatRadialMapUi(int ui_0_100)
-{
-    const int v = (int)std::lround(RadialMapUiToInternal(ui_0_100));
-    if(v > 0)
-    {
-        return QString("+%1%").arg(v);
-    }
-    return QString("%1%").arg(v);
-}
 
 const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h);
 

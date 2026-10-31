@@ -150,29 +150,11 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.wave_time_to_edge_label = nullptr;
         s.falloff_curve_slider = nullptr;
         s.falloff_curve_label = nullptr;
-        s.front_back_balance_slider = nullptr;
-        s.front_back_balance_label = nullptr;
-        s.left_right_balance_slider = nullptr;
-        s.left_right_balance_label = nullptr;
-        s.top_bottom_balance_slider = nullptr;
-        s.top_bottom_balance_label = nullptr;
         s.calibration_pattern_check = nullptr;
         s.screen_preview_check = nullptr;
         s.capture_area_preview = nullptr;
         s.add_zone_button = nullptr;
         s.capture_zones_widget = nullptr;
-        s.screen_map_roll_slider = nullptr;
-        s.screen_map_roll_label = nullptr;
-        s.radial_corner_expansion_slider = nullptr;
-        s.radial_corner_expansion_label = nullptr;
-        s.radial_corner_bias_tl_slider = nullptr;
-        s.radial_corner_bias_tl_label = nullptr;
-        s.radial_corner_bias_tr_slider = nullptr;
-        s.radial_corner_bias_tr_label = nullptr;
-        s.radial_corner_bias_bl_slider = nullptr;
-        s.radial_corner_bias_bl_label = nullptr;
-        s.radial_corner_bias_br_slider = nullptr;
-        s.radial_corner_bias_br_label = nullptr;
     }
 
     if(rotation_yaw_slider)
@@ -603,12 +585,6 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.led_output_gain_r_slider) settings.led_output_gain_r_slider->setEnabled(has_capture_source);
             if(settings.led_output_gain_g_slider) settings.led_output_gain_g_slider->setEnabled(has_capture_source);
             if(settings.led_output_gain_b_slider) settings.led_output_gain_b_slider->setEnabled(has_capture_source);
-            if(settings.screen_map_roll_slider) settings.screen_map_roll_slider->setEnabled(has_capture_source);
-            if(settings.radial_corner_expansion_slider) settings.radial_corner_expansion_slider->setEnabled(has_capture_source);
-            if(settings.radial_corner_bias_tl_slider) settings.radial_corner_bias_tl_slider->setEnabled(has_capture_source);
-            if(settings.radial_corner_bias_tr_slider) settings.radial_corner_bias_tr_slider->setEnabled(has_capture_source);
-            if(settings.radial_corner_bias_bl_slider) settings.radial_corner_bias_bl_slider->setEnabled(has_capture_source);
-            if(settings.radial_corner_bias_br_slider) settings.radial_corner_bias_br_slider->setEnabled(has_capture_source);
             if(settings.scale_invert_check) settings.scale_invert_check->setEnabled(has_capture_source);
             if(settings.smoothing_time_slider) settings.smoothing_time_slider->setEnabled(has_capture_source);
             if(settings.brightness_slider) settings.brightness_slider->setEnabled(has_capture_source);
@@ -620,9 +596,6 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.wave_decay_slider) settings.wave_decay_slider->setEnabled(has_capture_source);
             if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_slider->setEnabled(has_capture_source);
             if(settings.falloff_curve_slider) settings.falloff_curve_slider->setEnabled(has_capture_source);
-            if(settings.front_back_balance_slider) settings.front_back_balance_slider->setEnabled(has_capture_source);
-            if(settings.left_right_balance_slider) settings.left_right_balance_slider->setEnabled(has_capture_source);
-            if(settings.top_bottom_balance_slider) settings.top_bottom_balance_slider->setEnabled(has_capture_source);
             if(settings.calibration_pattern_check) settings.calibration_pattern_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);
             if(settings.capture_zones_widget)

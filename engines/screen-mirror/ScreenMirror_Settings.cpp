@@ -41,19 +41,9 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["wave_decay_ms"] = mon_settings.wave_decay_ms;
         mon["wave_time_to_edge_sec"] = mon_settings.wave_time_to_edge_sec;
         mon["falloff_curve_exponent"] = mon_settings.falloff_curve_exponent;
-        mon["front_back_balance"] = mon_settings.front_back_balance;
-        mon["left_right_balance"] = mon_settings.left_right_balance;
-        mon["top_bottom_balance"] = mon_settings.top_bottom_balance;
         mon["show_calibration_pattern"] = mon_settings.show_calibration_pattern;
         mon["show_screen_preview"] = mon_settings.show_screen_preview;
 
-        mon["radial_map_roll_deg"] = std::clamp(mon_settings.screen_map_roll_deg, -180.0f, 180.0f);
-        mon["radial_map_expansion"] = std::clamp(mon_settings.radial_corner_expansion_ui, 0, 100);
-        mon["radial_map_bias_tl"] = std::clamp(mon_settings.radial_corner_bias_tl_ui, 0, 100);
-        mon["radial_map_bias_tr"] = std::clamp(mon_settings.radial_corner_bias_tr_ui, 0, 100);
-        mon["radial_map_bias_bl"] = std::clamp(mon_settings.radial_corner_bias_bl_ui, 0, 100);
-        mon["radial_map_bias_br"] = std::clamp(mon_settings.radial_corner_bias_br_ui, 0, 100);
-        
         nlohmann::json zones_array = nlohmann::json::array();
         for(const CaptureZone& zone : mon_settings.capture_zones)
         {
@@ -236,33 +226,6 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         msettings.falloff_curve_label->setText(QString::number((int)(msettings.falloff_curve_exponent * 100.0f)) + "%");
     }
-    if(msettings.front_back_balance_slider)
-    {
-        QSignalBlocker blocker(msettings.front_back_balance_slider);
-        msettings.front_back_balance_slider->setValue((int)std::lround(msettings.front_back_balance));
-    }
-    if(msettings.front_back_balance_label)
-    {
-        msettings.front_back_balance_label->setText(QString::number((int)std::lround(msettings.front_back_balance)));
-    }
-    if(msettings.left_right_balance_slider)
-    {
-        QSignalBlocker blocker(msettings.left_right_balance_slider);
-        msettings.left_right_balance_slider->setValue((int)std::lround(msettings.left_right_balance));
-    }
-    if(msettings.left_right_balance_label)
-    {
-        msettings.left_right_balance_label->setText(QString::number((int)std::lround(msettings.left_right_balance)));
-    }
-    if(msettings.top_bottom_balance_slider)
-    {
-        QSignalBlocker blocker(msettings.top_bottom_balance_slider);
-        msettings.top_bottom_balance_slider->setValue((int)std::lround(msettings.top_bottom_balance));
-    }
-    if(msettings.top_bottom_balance_label)
-    {
-        msettings.top_bottom_balance_label->setText(QString::number((int)std::lround(msettings.top_bottom_balance)));
-    }
     if(msettings.calibration_pattern_check)
     {
         QSignalBlocker blocker(msettings.calibration_pattern_check);
@@ -277,64 +240,6 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         msettings.capture_area_preview->update();
     }
-    if(msettings.screen_map_roll_slider)
-    {
-        QSignalBlocker blocker(msettings.screen_map_roll_slider);
-        msettings.screen_map_roll_slider->setValue(
-            (int)std::lround(std::clamp(msettings.screen_map_roll_deg, -180.0f, 180.0f) *
-                             (float)kScreenMapRollTicksPerDegree));
-    }
-    if(msettings.screen_map_roll_label)
-    {
-        msettings.screen_map_roll_label->setText(
-            QString::number((double)std::clamp(msettings.screen_map_roll_deg, -180.0f, 180.0f), 'f', 1) +
-            QChar(0x00B0));
-    }
-    if(msettings.radial_corner_expansion_slider)
-    {
-        QSignalBlocker blocker(msettings.radial_corner_expansion_slider);
-        msettings.radial_corner_expansion_slider->setValue(msettings.radial_corner_expansion_ui);
-    }
-    if(msettings.radial_corner_expansion_label)
-    {
-        msettings.radial_corner_expansion_label->setText(FormatRadialMapUi(msettings.radial_corner_expansion_ui));
-    }
-    if(msettings.radial_corner_bias_tl_slider)
-    {
-        QSignalBlocker blocker(msettings.radial_corner_bias_tl_slider);
-        msettings.radial_corner_bias_tl_slider->setValue(msettings.radial_corner_bias_tl_ui);
-    }
-    if(msettings.radial_corner_bias_tl_label)
-    {
-        msettings.radial_corner_bias_tl_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_tl_ui));
-    }
-    if(msettings.radial_corner_bias_tr_slider)
-    {
-        QSignalBlocker blocker(msettings.radial_corner_bias_tr_slider);
-        msettings.radial_corner_bias_tr_slider->setValue(msettings.radial_corner_bias_tr_ui);
-    }
-    if(msettings.radial_corner_bias_tr_label)
-    {
-        msettings.radial_corner_bias_tr_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_tr_ui));
-    }
-    if(msettings.radial_corner_bias_bl_slider)
-    {
-        QSignalBlocker blocker(msettings.radial_corner_bias_bl_slider);
-        msettings.radial_corner_bias_bl_slider->setValue(msettings.radial_corner_bias_bl_ui);
-    }
-    if(msettings.radial_corner_bias_bl_label)
-    {
-        msettings.radial_corner_bias_bl_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_bl_ui));
-    }
-    if(msettings.radial_corner_bias_br_slider)
-    {
-        QSignalBlocker blocker(msettings.radial_corner_bias_br_slider);
-        msettings.radial_corner_bias_br_slider->setValue(msettings.radial_corner_bias_br_ui);
-    }
-    if(msettings.radial_corner_bias_br_label)
-    {
-        msettings.radial_corner_bias_br_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_br_ui));
-    }
 }
 
 void ScreenMirror::LoadSettings(const nlohmann::json& settings)
@@ -348,9 +253,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
     static const float default_wave_decay_ms = 0.0f;
     static const float default_wave_time_to_edge_sec = 0.0f;
     static const float default_falloff_curve_exponent = 1.0f;
-    static const float default_front_back_balance = 0.0f;
-    static const float default_left_right_balance = 0.0f;
-    static const float default_top_bottom_balance = 0.0f;
 
     if(settings.contains("capture_quality"))
     {
@@ -472,13 +374,7 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             else msettings.wave_time_to_edge_sec = default_wave_time_to_edge_sec;
             if(mon.contains("falloff_curve_exponent")) msettings.falloff_curve_exponent = mon["falloff_curve_exponent"].get<float>();
             else msettings.falloff_curve_exponent = default_falloff_curve_exponent;
-            if(mon.contains("front_back_balance")) msettings.front_back_balance = mon["front_back_balance"].get<float>();
-            else msettings.front_back_balance = default_front_back_balance;
-            if(mon.contains("left_right_balance")) msettings.left_right_balance = mon["left_right_balance"].get<float>();
-            else msettings.left_right_balance = default_left_right_balance;
-            if(mon.contains("top_bottom_balance")) msettings.top_bottom_balance = mon["top_bottom_balance"].get<float>();
-            else msettings.top_bottom_balance = default_top_bottom_balance;
-            
+
             if(mon.contains("show_calibration_pattern"))
             {
                 msettings.show_calibration_pattern = mon["show_calibration_pattern"].get<bool>();
@@ -527,52 +423,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 msettings.capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
             }
             
-            if(mon.contains("radial_map_roll_deg"))
-            {
-                msettings.screen_map_roll_deg =
-                    std::clamp(static_cast<float>(mon["radial_map_roll_deg"].get<double>()), -180.0f, 180.0f);
-            }
-            if(mon.contains("radial_map_expansion"))
-            {
-                msettings.radial_corner_expansion_ui = std::clamp(mon["radial_map_expansion"].get<int>(), 0, 100);
-            }
-            else
-            {
-                msettings.radial_corner_expansion_ui = kRadialMapUiNeutral;
-            }
-            if(mon.contains("radial_map_bias_tl"))
-            {
-                msettings.radial_corner_bias_tl_ui = std::clamp(mon["radial_map_bias_tl"].get<int>(), 0, 100);
-            }
-            else
-            {
-                msettings.radial_corner_bias_tl_ui = kRadialMapUiNeutral;
-            }
-            if(mon.contains("radial_map_bias_tr"))
-            {
-                msettings.radial_corner_bias_tr_ui = std::clamp(mon["radial_map_bias_tr"].get<int>(), 0, 100);
-            }
-            else
-            {
-                msettings.radial_corner_bias_tr_ui = kRadialMapUiNeutral;
-            }
-            if(mon.contains("radial_map_bias_bl"))
-            {
-                msettings.radial_corner_bias_bl_ui = std::clamp(mon["radial_map_bias_bl"].get<int>(), 0, 100);
-            }
-            else
-            {
-                msettings.radial_corner_bias_bl_ui = kRadialMapUiNeutral;
-            }
-            if(mon.contains("radial_map_bias_br"))
-            {
-                msettings.radial_corner_bias_br_ui = std::clamp(mon["radial_map_bias_br"].get<int>(), 0, 100);
-            }
-            else
-            {
-                msettings.radial_corner_bias_br_ui = kRadialMapUiNeutral;
-            }
-
             msettings.scale = std::clamp(msettings.scale, 0.0f, 3.0f);
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
             msettings.brightness_multiplier = std::clamp(msettings.brightness_multiplier, 0.0f, 2.0f);
@@ -589,15 +439,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             msettings.wave_decay_ms = std::clamp(msettings.wave_decay_ms, 0.0f, 3000.0f);
             msettings.wave_time_to_edge_sec = std::clamp(msettings.wave_time_to_edge_sec, 0.0f, 10.0f);
             msettings.falloff_curve_exponent = std::clamp(msettings.falloff_curve_exponent, 0.5f, 2.0f);
-            msettings.front_back_balance = std::clamp(msettings.front_back_balance, -100.0f, 100.0f);
-            msettings.left_right_balance = std::clamp(msettings.left_right_balance, -100.0f, 100.0f);
-            msettings.top_bottom_balance = std::clamp(msettings.top_bottom_balance, -100.0f, 100.0f);
-            msettings.screen_map_roll_deg = std::clamp(msettings.screen_map_roll_deg, -180.0f, 180.0f);
-            msettings.radial_corner_expansion_ui = std::clamp(msettings.radial_corner_expansion_ui, 0, 100);
-            msettings.radial_corner_bias_tl_ui = std::clamp(msettings.radial_corner_bias_tl_ui, 0, 100);
-            msettings.radial_corner_bias_tr_ui = std::clamp(msettings.radial_corner_bias_tr_ui, 0, 100);
-            msettings.radial_corner_bias_bl_ui = std::clamp(msettings.radial_corner_bias_bl_ui, 0, 100);
-            msettings.radial_corner_bias_br_ui = std::clamp(msettings.radial_corner_bias_br_ui, 0, 100);
     }
 
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
@@ -662,36 +503,7 @@ void ScreenMirror::OnParameterChanged()
         if(settings.wave_decay_slider) settings.wave_decay_ms = (float)settings.wave_decay_slider->value();
         if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_sec = (float)settings.wave_time_to_edge_slider->value() / 10.0f;
         if(settings.falloff_curve_slider) settings.falloff_curve_exponent = std::clamp((float)settings.falloff_curve_slider->value() / 100.0f, 0.5f, 2.0f);
-        if(settings.front_back_balance_slider) settings.front_back_balance = std::clamp((float)settings.front_back_balance_slider->value(), -100.0f, 100.0f);
-        if(settings.left_right_balance_slider) settings.left_right_balance = std::clamp((float)settings.left_right_balance_slider->value(), -100.0f, 100.0f);
-        if(settings.top_bottom_balance_slider) settings.top_bottom_balance = std::clamp((float)settings.top_bottom_balance_slider->value(), -100.0f, 100.0f);
 
-        if(settings.screen_map_roll_slider)
-        {
-            settings.screen_map_roll_deg = std::clamp(
-                (float)settings.screen_map_roll_slider->value() / (float)kScreenMapRollTicksPerDegree, -180.0f, 180.0f);
-        }
-        if(settings.radial_corner_expansion_slider)
-        {
-            settings.radial_corner_expansion_ui = std::clamp(settings.radial_corner_expansion_slider->value(), 0, 100);
-        }
-        if(settings.radial_corner_bias_tl_slider)
-        {
-            settings.radial_corner_bias_tl_ui = std::clamp(settings.radial_corner_bias_tl_slider->value(), 0, 100);
-        }
-        if(settings.radial_corner_bias_tr_slider)
-        {
-            settings.radial_corner_bias_tr_ui = std::clamp(settings.radial_corner_bias_tr_slider->value(), 0, 100);
-        }
-        if(settings.radial_corner_bias_bl_slider)
-        {
-            settings.radial_corner_bias_bl_ui = std::clamp(settings.radial_corner_bias_bl_slider->value(), 0, 100);
-        }
-        if(settings.radial_corner_bias_br_slider)
-        {
-            settings.radial_corner_bias_br_ui = std::clamp(settings.radial_corner_bias_br_slider->value(), 0, 100);
-        }
-        
         bool old_calibration_pattern = settings.show_calibration_pattern;
         bool old_screen_preview = settings.show_screen_preview;
         if(settings.calibration_pattern_check) settings.show_calibration_pattern = settings.calibration_pattern_check->isChecked();

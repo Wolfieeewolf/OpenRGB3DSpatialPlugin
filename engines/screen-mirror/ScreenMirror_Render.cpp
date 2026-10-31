@@ -519,13 +519,6 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
         }
         float u = proj.u;
         float v = proj.v;
-        Geometry3D::ApplyUVRotationDegrees01(u, v, s.screen_map_roll_deg);
-        Geometry3D::ApplyRadialCornerMapping01(u, v,
-                                            RadialMapUiToInternal(s.radial_corner_expansion_ui),
-                                            RadialMapUiToInternal(s.radial_corner_bias_tl_ui),
-                                            RadialMapUiToInternal(s.radial_corner_bias_tr_ui),
-                                            RadialMapUiToInternal(s.radial_corner_bias_bl_ui),
-                                            RadialMapUiToInternal(s.radial_corner_bias_br_ui));
         if(u < sm.zone_u0 || u > sm.zone_u1 || v < sm.zone_v0 || v > sm.zone_v1)
         {
             continue;
@@ -560,25 +553,6 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
             static constexpr float kAudiencePeak = 1.50f;
             const float shaped = kAudienceFloor + (kAudiencePeak - kAudienceFloor) * lobe;
             weight *= (1.0f - bias) + bias * shaped;
-        }
-
-        const float fb = s.front_back_balance;
-        const float lr = s.left_right_balance;
-        const float tb = s.top_bottom_balance;
-        if(std::fabs(fb) > 0.5f || std::fabs(lr) > 0.5f || std::fabs(tb) > 0.5f)
-        {
-            const Vector3D local = Geometry3D::TransformDisplayPlaneWorldToLocal(led, sm.plane->GetTransform());
-            const float inv_max = 1.0f / std::max(sm.max_distance_mm, 1.0f);
-            const float lat = local.x * tick_scale_mm_;
-            const float vert = local.y * tick_scale_mm_;
-            const float depth = local.z * tick_scale_mm_;
-            weight *= std::clamp(1.0f + (fb / 100.0f) * std::clamp(depth * inv_max, -1.0f, 1.0f), 0.0f, 2.0f);
-            weight *= std::clamp(1.0f + (lr / 100.0f) * std::clamp(lat * inv_max, -1.0f, 1.0f), 0.0f, 2.0f);
-            weight *= std::clamp(1.0f + (tb / 100.0f) * std::clamp(vert * inv_max, -1.0f, 1.0f), 0.0f, 2.0f);
-        }
-        if(weight <= 0.01f)
-        {
-            continue;
         }
 
         const uint8_t* rgba = nullptr;

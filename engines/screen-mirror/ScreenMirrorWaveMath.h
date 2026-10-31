@@ -9,12 +9,6 @@
 constexpr float kWaveTimeToEdgeEnableSec = 0.05f;
 constexpr float kWaveIntensityEnablePct = 5.0f;
 constexpr float kWaveHistoryDistanceMm = 5000.0f;
-constexpr int kRadialMapUiNeutral = 50;
-
-inline float RadialMapUiToInternal(int ui_0_100)
-{
-    return (float)std::clamp(ui_0_100, 0, 100) - (float)kRadialMapUiNeutral;
-}
 
 inline float RoomSpanLengthMm(float span_mm_x, float span_mm_y, float span_mm_z)
 {
