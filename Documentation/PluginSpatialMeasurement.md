@@ -99,7 +99,7 @@ When `spacing_mm_*` is unset (≤ 0.001), layout uses **1.0 grid unit** per cell
 |-------|------|
 | `VirtualReferencePoint3D.transform.position` | grid units |
 
-Reference points are RoomGrid positions. Effect origin modes (`REF_MODE_ROOM_CENTER`, custom point, LED centroid, etc.) resolve to grid units via `SpatialEffect3D::GetReferencePointGrid` / `GetEffectOriginGrid`.
+Reference points are RoomGrid positions. Effect origin modes (`REF_MODE_ROOM_CENTER`, custom point, LED centroid, etc.) resolve to grid units via `SpatialEffect3D::GetReferencePointGrid` / `GetEffectOriginGrid`. That stack **Spatial Anchor** is for Volume / Movie Sync / similar — not Screen Mirror Reach.
 
 Effect offset sliders are **percent of half room size in grid units** (`effect_offset_x/y/z / 100 * half_w/h/d`) — not mm.
 
@@ -112,7 +112,7 @@ Effect offset sliders are **percent of half room size in grid units** (`effect_o
 
 Viewport and spatial lighting convert plane size with `MMToGridUnits(plane->GetWidthMM(), grid_scale_mm)` at use time.
 
-Screen Mirror converts **distance** to mm only at the Screen Mirror API boundary (`GridUnitsToMM` in `SpatialMapToScreen` / falloff helpers). Internal ray tests use grid units.
+Screen Mirror Reach/wave radiate from each plane’s **`transform.position`** (plane centre). Distance converts to mm only at the Screen Mirror API boundary (`GridUnitsToMM` in `SpatialMapToScreen` / falloff helpers). Internal ray tests use grid units.
 
 ### 3.5 Effects and render frame
 

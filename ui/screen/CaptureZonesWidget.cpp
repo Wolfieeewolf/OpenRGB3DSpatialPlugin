@@ -6,6 +6,7 @@
 #include "QtCompat.h"
 #include "ScreenCaptureManager.h"
 #include "ScreenMirrorCalibrationPattern.h"
+#include "ScreenMirror_Internal.h"
 
 #include <QVBoxLayout>
 #include <QGroupBox>
@@ -118,6 +119,7 @@ public:
     void AddZone()
     {
         if(!capture_zones) return;
+        if(capture_zones->size() >= kMaxCaptureZonesPerMonitor) return;
         CaptureZone new_zone(0.4f, 0.6f, 0.4f, 0.6f);
         new_zone.name = "Zone " + std::to_string(capture_zones->size() + 1);
         capture_zones->push_back(new_zone);

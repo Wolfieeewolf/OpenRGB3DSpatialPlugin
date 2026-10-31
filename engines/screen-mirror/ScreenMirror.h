@@ -15,7 +15,6 @@
 #include "ui/screen/CaptureZonesWidget.h"
 
 class DisplayPlane3D;
-class VirtualReferencePoint3D;
 class QStackedWidget;
 struct CapturedFrame;
 
@@ -42,8 +41,6 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-    void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
-    void RefreshReferencePointDropdowns();
     void RefreshMonitorStatus();
 
     using CaptureZone = ::CaptureZone;
@@ -82,8 +79,6 @@ public:
         float front_back_balance;
         float left_right_balance;
         float top_bottom_balance;
-
-        int reference_point_id;
 
         bool show_calibration_pattern;
         bool show_screen_preview;
@@ -137,7 +132,6 @@ public:
         QLabel* left_right_balance_label;
         QSlider* top_bottom_balance_slider;
         QLabel* top_bottom_balance_label;
-        QComboBox* ref_point_combo;
         QComboBox* capture_combo;
         QPushButton* capture_refresh_button;
         QCheckBox* calibration_pattern_check;
@@ -181,7 +175,6 @@ public:
             , front_back_balance(0.0f)
             , left_right_balance(0.0f)
             , top_bottom_balance(0.0f)
-            , reference_point_id(-1)
             , show_calibration_pattern(false)
             , show_screen_preview(false)
             , screen_map_roll_deg(0.0f)
@@ -230,7 +223,6 @@ public:
             , left_right_balance_label(nullptr)
             , top_bottom_balance_slider(nullptr)
             , top_bottom_balance_label(nullptr)
-            , ref_point_combo(nullptr)
             , capture_combo(nullptr)
             , capture_refresh_button(nullptr)
             , calibration_pattern_check(nullptr)
@@ -284,8 +276,6 @@ private:
 
     bool                        in_parameter_change_;
 
-    std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
-
     struct FrameHistory
     {
         std::deque<std::shared_ptr<CapturedFrame>> frames;
@@ -320,7 +310,6 @@ private:
     };
     std::map<LEDKey, LEDState> led_states;
 
-    bool ResolveReferencePointById(int id, Vector3D& out) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
     float GetHistoryRetentionMs() const;
     LEDKey MakeLEDKey(float x, float y, float z) const;

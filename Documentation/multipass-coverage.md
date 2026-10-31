@@ -50,7 +50,7 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 | engines/audio | keep | 2026-10-31 | Prior split hold; no new fail this pass. |
 | engines/reactive | keep | 2026-10-31 | Prior split hold; no new fail this pass. |
 | engines/shader-field | fixed | 2026-10-31 | Shader body/spec size caps; dropped dead `shader_path` save key. Path id fail-closed holds. |
-| engines/screen-mirror | fixed | 2026-10-31 | Auto hysteresis; SDR DXGI; Y-flip fix; ref/falloff wiring; default capture 1080p (GPU scale→CPU LED). LED path stays CPU by design. |
+| engines/screen-mirror | fixed | 2026-10-31 | Auto hysteresis; SDR DXGI; Y-flip; 1080p GPU scale→CPU LED. **Follow-up:** dropped Reach-origin option (always plane centre); hid Spatial Anchor + Room output for Ambilight; `needs_3d_origin=false`; UniqueConnection on layout refresh; zone add capped; skip origin stomp when `!needs_3d_origin`. |
 | engines/volume\|particle\|ribbon-field | keep | 2026-10-31 | Shared-seq setParams + GpuAnimMs hold; leave named buckets. |
 | engines/game | fixed | 2026-10-31 | SHM apply rejects rgba size ≠ grid; Minecraft one-effect stubs ignored (security-only). |
 | engines/movie-sync | fixed | 2026-10-31 | Catalog size cap; Content-Length parse fail-closed. LocalHost + path escape hold. |

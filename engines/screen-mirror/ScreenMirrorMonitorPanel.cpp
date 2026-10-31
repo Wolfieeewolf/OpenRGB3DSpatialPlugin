@@ -182,7 +182,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    300,
                    (int)(settings.scale * 100.0f),
-                   QStringLiteral("How far Reach extends from the Spatial Anchor / reference "
+                   QStringLiteral("How far Reach extends from this display plane's centre "
                                   "(0–100% of room corner distance; 101–300% = beyond)."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
@@ -190,8 +190,8 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     ui->scaleInvertCheck->setEnabled(has_capture_source);
     ui->scaleInvertCheck->setChecked(settings.scale_inverted);
     ui->scaleInvertCheck->setToolTip(
-        QStringLiteral("On (default): bright near the Spatial Anchor / reference, darker with distance "
-                       "(Reach sets how far). Off: outer-shell mode (far LEDs stay brighter)."));
+        QStringLiteral("On (default): bright near this display plane's centre, darker with distance. "
+                       "Off: outer-shell mode (far LEDs stay brighter)."));
     QObject::connect(ui->scaleInvertCheck, &QCheckBox::toggled, effect, &ScreenMirror::OnParameterChanged);
 
     wire_pct_ticks(ui->falloffCurveRow,
@@ -200,25 +200,9 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    50,
                    200,
                    (int)(settings.falloff_curve_exponent * 100.0f),
-                   QStringLiteral("Shapes distance falloff from the reference: 50% = gradual, 100% = linear, "
-                                  "200% = sharper edge. Applies in default (inverted) Reach mode."),
+                   QStringLiteral("Shapes distance falloff from this display's centre: 50% = gradual, "
+                                  "100% = linear, 200% = sharper edge."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
-
-    settings.ref_point_combo = ui->refPointCombo;
-    ui->refPointCombo->addItem(QStringLiteral("Follow layer Spatial Anchor"), QVariant(-1));
-    ui->refPointCombo->setItemData(
-        0,
-        QStringLiteral(
-            "Use this layer's Spatial Anchor (Effect global settings: mapped-lights center by default, "
-            "room box, target zone, or a layout point)."),
-        Qt::ToolTipRole);
-    ui->refPointCombo->setEnabled(has_capture_source);
-    ui->refPointCombo->setToolTip(
-        QStringLiteral("Center of Reach / wave delay for this display — not where screen colors are sampled. "
-                       "Screen UVs always come from the display plane. Softness 0 shows a clear gradient "
-                       "from this point; raise Softness for a flatter ambilight fill."));
-    QObject::connect(ui->refPointCombo, qOverload<int>(&QComboBox::currentIndexChanged), effect,
-                     &ScreenMirror::OnParameterChanged);
 
     wire_pct_ticks(ui->softnessRow,
                    settings.softness_slider,
@@ -226,8 +210,8 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    100,
                    (int)settings.edge_softness,
-                   QStringLiteral("Flat bright core around the reference before fading (0 = pure gradient, "
-                                  "100 ≈ room-wide fill with a soft rim)."),
+                   QStringLiteral("Flat bright core around this display plane's centre before fading "
+                                  "(0 = pure gradient, 100 ≈ room-wide fill with a soft rim)."),
                    [](int v) { return QString::number(v); });
 
     wire_pct_ticks(ui->brightnessRow,

@@ -51,7 +51,6 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , monitor_select_combo(nullptr)
     , monitor_stack(nullptr)
     , in_parameter_change_(false)
-    , reference_points(nullptr)
     , frame_cache_refresh_ms_(0)
     , frame_cache_last_render_seq_(0)
     , tick_scale_mm_(10.0f)
@@ -75,10 +74,11 @@ EffectInfo3D ScreenMirror::GetEffectInfo() const
     info.min_speed              = 0;
     info.user_colors            = 0;
     info.has_custom_settings    = true;
-    info.needs_3d_origin        = true;
+    info.needs_3d_origin        = false;
     info.needs_direction        = false;
     info.needs_frequency        = false;
     info.use_size_parameter     = false;
+    info.show_room_output_control = false;
 
     info.show_color_controls    = false;
     info.show_speed_control     = false;
@@ -145,7 +145,6 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.left_right_balance_label = nullptr;
         s.top_bottom_balance_slider = nullptr;
         s.top_bottom_balance_label = nullptr;
-        s.ref_point_combo = nullptr;
         s.calibration_pattern_check = nullptr;
         s.screen_preview_check = nullptr;
         s.capture_area_preview = nullptr;
@@ -309,10 +308,6 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
         MonitorSettings& settings = settings_it->second;
-        if(settings.reference_point_id <= 0)
-        {
-            settings.reference_point_id = -1;
-        }
 
         if(!settings.group_box)
         {
@@ -515,8 +510,6 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
         monitor_select_combo->setCurrentIndex(0);
         monitor_stack->setCurrentIndex(0);
     }
-
-    RefreshReferencePointDropdowns();
 }
 
 void ScreenMirror::RefreshMonitorStatus()
@@ -548,11 +541,6 @@ void ScreenMirror::RefreshMonitorStatus()
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
         MonitorSettings& settings = settings_it->second;
-
-        if(settings.reference_point_id <= 0)
-        {
-            settings.reference_point_id = -1;
-        }
 
         if(!settings.group_box && monitors_container && monitors_layout)
         {
@@ -609,7 +597,6 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.front_back_balance_slider) settings.front_back_balance_slider->setEnabled(has_capture_source);
             if(settings.left_right_balance_slider) settings.left_right_balance_slider->setEnabled(has_capture_source);
             if(settings.top_bottom_balance_slider) settings.top_bottom_balance_slider->setEnabled(has_capture_source);
-            if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
             if(settings.calibration_pattern_check) settings.calibration_pattern_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);
             if(settings.capture_zones_widget)

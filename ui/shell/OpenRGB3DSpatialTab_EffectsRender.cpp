@@ -778,6 +778,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         {
             continue;
         }
+        /* Ambilight / other CustomOnly codecs without a 3D origin ignore the layer
+           Spatial Anchor (Reach uses display plane centres). */
+        if(!effect->GetEffectInfo().needs_3d_origin)
+        {
+            continue;
+        }
         effect->SetGlobalReferencePoint(stack_ref_origin);
         effect->SetCustomReferencePoint(stack_ref_origin);
         effect->SetReferenceMode(stack_origin_mode);

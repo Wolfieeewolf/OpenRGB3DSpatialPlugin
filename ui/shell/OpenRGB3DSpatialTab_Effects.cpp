@@ -667,7 +667,6 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
                         viewport, &LEDViewport3D::SetShowScreenPreview, Qt::UniqueConnection);
                 connect(screen_mirror, &ScreenMirror::CalibrationPatternChanged,
                         viewport, &LEDViewport3D::SetShowCalibrationPattern, Qt::UniqueConnection);
-                screen_mirror->SetReferencePoints(&reference_points);
 
                 QPointer<ScreenMirror> sm_ptr(screen_mirror);
                 viewport->SetPerPlanePreviewQuery(
@@ -751,18 +750,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
 
     setStackLayerGlobalChromeVisible(settings_layout == SpatialEffectSettingsLayout::FullWithTransport);
-    if(instance->effect_class_name == "ScreenMirror")
-    {
-        if(originLabel())
-        {
-            originLabel()->setVisible(true);
-        }
-        if(effectOriginCombo())
-        {
-            effectOriginCombo()->setVisible(true);
-        }
-        UpdateEffectOriginCombo();
-    }
     if(instance->effect_class_name == "MovieSync")
     {
         setStackLayerGlobalChromeVisible(true);
@@ -932,10 +919,9 @@ void OpenRGB3DSpatialTab::configureScreenMirrorEffectUi(SpatialEffect3D* effect)
         return;
     }
 
-    screen_mirror->SetReferencePoints(&reference_points);
-    connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
+    connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror,
+            &ScreenMirror::RefreshMonitorStatus, Qt::UniqueConnection);
     QTimer::singleShot(200, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
-    QTimer::singleShot(300, screen_mirror, &ScreenMirror::RefreshReferencePointDropdowns);
 }
 
 void OpenRGB3DSpatialTab::setStackLayerGlobalChromeVisible(bool visible)
@@ -1066,31 +1052,6 @@ void OpenRGB3DSpatialTab::SyncReactiveInputSession()
     else
     {
         mgr->stop();
-    }
-}
-
-void OpenRGB3DSpatialTab::RefreshAmbilightReferencePointDropdowns()
-{
-    for(unsigned int i = 0; i < effect_stack.size(); i++)
-    {
-        std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
-        if(inst && IsAmbilightEffectClass(inst->effect_class_name) && inst->effect)
-        {
-            ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(inst->effect.get());
-            if(screen_mirror)
-            {
-                screen_mirror->RefreshReferencePointDropdowns();
-            }
-        }
-    }
-
-    if(current_effect_ui)
-    {
-        ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(current_effect_ui);
-        if(screen_mirror)
-        {
-            screen_mirror->RefreshReferencePointDropdowns();
-        }
     }
 }
 

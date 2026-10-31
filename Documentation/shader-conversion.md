@@ -39,9 +39,9 @@ GPU for room fields — including audio visual fields via `SpatialVolumeFieldAss
 | Stage | Where | Notes |
 |-------|--------|--------|
 | Desktop duplication | **GPU** (DXGI D3D11) | Prefer SDR BGRA; HDR formats refuse → GDI |
-| Capture downscale | **GPU** (D3D11 blit) when quality &lt; native | Cap (default 1080p) before CPU readback |
+| Capture downscale | **GPU** (D3D11 blit) when quality &lt; native | Cap (default 1080p) before CPU readback; publish the just-written staging buffer (Flush+Map) so LEDs are not stuck one present behind |
 | Full-res Native / GDI / Linux·mac grab | **CPU** | BitBlt or `QScreen::grabWindow` + box scale |
 | Plane UV, zones, falloff, wave delay, EMA, grade | **CPU** | Per-LED; OpenRGB write path is CPU colours |
 | Viewport plane preview | **GPU** (GL upload of same CPU frame) | Display only |
 
-Procedural Volume/FolderVolume use true-GPU point eval because the heavy work is GLSL. Ambilight’s heavy work is already the capture; LED sample is a few loads — keeping mapping on CPU is the correct ceiling until a dedicated surface sampler exists (not volumeMain). Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.
+Procedural Volume/FolderVolume use true-GPU point eval because the heavy work is GLSL. Ambilight’s heavy work is already the capture; LED sample is a few loads — keeping mapping on CPU is the correct ceiling until a dedicated surface sampler exists (not volumeMain). Reach/wave always radiate from **each display plane’s centre** (not the layer Spatial Anchor); screen UVs always come from that plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.

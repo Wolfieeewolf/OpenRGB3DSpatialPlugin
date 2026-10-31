@@ -147,9 +147,8 @@ namespace
         const float curve_clamped = std::clamp(curve, 0.25f, 4.0f);
         if(inverted)
         {
-            // Bright at Spatial Anchor / reference, dark past Reach. Softness grows a flat
-            // core (100% ≈ old hard ball). Curve shapes the fade — so Falloff curve is live
-            // in the default (inverted) mode, and moving the reference is visible.
+            // Bright near Reach origin (display plane centre), dark past Reach.
+            // Softness grows a flat core; curve shapes the fade.
             const float range = std::max(max_mm * coverage, 10.0f);
             if(dist_mm >= range)
             {
@@ -357,7 +356,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
     const float span_x = std::max(grid.max_x - grid.min_x, 1e-4f);
     const float span_y = std::max(grid.max_y - grid.min_y, 1e-4f);
     const float span_z = std::max(grid.max_z - grid.min_z, 1e-4f);
-    const Vector3D grid_anchor_ref = GetEffectOriginGrid(grid);
 
     std::vector<DisplayPlane3D*> planes = frame_cache_planes_;
     if(planes.empty())
@@ -398,15 +396,8 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
         sm.wave_speed = 0.0f;
         ZoneUnion(mon_settings, sm.zone_u0, sm.zone_u1, sm.zone_v0, sm.zone_v1);
 
-        sm.falloff_origin = grid_anchor_ref;
-        Vector3D custom_ref;
-        if(mon_settings.reference_point_id > 0 && ResolveReferencePointById(mon_settings.reference_point_id, custom_ref))
-        {
-            sm.falloff_origin = custom_ref;
-            sm.falloff_origin.x += (effect_offset_x / 100.0f) * (grid.width * 0.5f);
-            sm.falloff_origin.y += (effect_offset_y / 100.0f) * (grid.height * 0.5f);
-            sm.falloff_origin.z += (effect_offset_z / 100.0f) * (grid.depth * 0.5f);
-        }
+        // Ambilight Reach / wave always radiate from this display plane's centre.
+        sm.falloff_origin = plane->GetTransform().position;
 
         const float span_mm_x = span_x * tick_scale_mm_;
         const float span_mm_y = span_y * tick_scale_mm_;

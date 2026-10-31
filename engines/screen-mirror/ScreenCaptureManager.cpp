@@ -398,7 +398,9 @@ void ScreenCaptureManager::SetCaptureSessionActive(bool active)
 
 #ifdef _WIN32
 
-static constexpr UINT k_dxgi_acquire_timeout_ms = 100;
+// Short acquire wait: return quickly when the desktop is idle so the capture
+// thread can keep cadence; new presents still wake immediately.
+static constexpr UINT k_dxgi_acquire_timeout_ms = 1;
 // Auto mode: stay on one API at a time. Empty DXGI timeouts reuse the last frame
 // (static desktop). Only a sustained no-frame stall drops to GDI, then dwell before
 // DXGI retry — avoids DXGI↔GDI flip-flop flicker.
@@ -1454,13 +1456,18 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
                         if(gpu_ok)
                         {
-                            const int ready = dxgi_state.staging_ready;
-                            dxgi_state.staging_ready = dxgi_state.staging_write;
-                            dxgi_state.staging_write = 1 - dxgi_state.staging_write;
-                            if(ready >= 0 && dxgi_state.staging_texture[ready])
+                            // Publish the buffer just written (this Acquire), not N-1.
+                            // Dual staging still alternates for the next copy; Flush so Map
+                            // sees the GPU copy before CPU read — kills one-frame sight lag.
+                            const int written = dxgi_state.staging_write;
+                            dxgi_state.staging_ready = written;
+                            dxgi_state.staging_write = 1 - written;
+                            if(dxgi_state.staging_texture[written] && dxgi_state.context)
                             {
+                                dxgi_state.context->Flush();
                                 D3D11_MAPPED_SUBRESOURCE mapped = {};
-                                hr = dxgi_state.context->Map(dxgi_state.staging_texture[ready], 0, D3D11_MAP_READ, 0, &mapped);
+                                hr = dxgi_state.context->Map(dxgi_state.staging_texture[written],
+                                                             0, D3D11_MAP_READ, 0, &mapped);
                                 if(SUCCEEDED(hr))
                                 {
                                     const UINT expected_row_bytes = dxgi_state.staging_w * 4u;
@@ -1473,12 +1480,12 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                             (int)mapped.RowPitch,
                                             false,
                                             frame_counter++);
-                                        dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
+                                        dxgi_state.context->Unmap(dxgi_state.staging_texture[written], 0);
                                         store_latest(frame);
                                     }
                                     else
                                     {
-                                        dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
+                                        dxgi_state.context->Unmap(dxgi_state.staging_texture[written], 0);
                                         if(allow_gdi)
                                             drop_to_gdi("staging pitch mismatch");
                                         else

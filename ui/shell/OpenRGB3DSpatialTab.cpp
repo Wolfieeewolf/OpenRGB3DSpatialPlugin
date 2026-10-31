@@ -1478,9 +1478,9 @@ void OpenRGB3DSpatialTab::effectChanged(int index)
     
     if(class_name == QLatin1String("ScreenMirror"))
     {
-        if(originLabel()) originLabel()->setVisible(true);
-        if(effectOriginCombo()) effectOriginCombo()->setVisible(true);
-        UpdateEffectOriginCombo();
+        /* Ambilight Reach is always each display plane's centre — no Spatial Anchor. */
+        if(originLabel()) originLabel()->setVisible(false);
+        if(effectOriginCombo()) effectOriginCombo()->setVisible(false);
         if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
         {
             global_panel->setRoomOutputSectionVisible(false);

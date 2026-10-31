@@ -384,7 +384,6 @@ private:
     int  FindVirtualControllerLibraryIndex(const VirtualController3D* vc) const;
     void InitLedViewport();
     bool IsAmbilightEffectClass(const std::string& class_name) const;
-    void RefreshAmbilightReferencePointDropdowns();
     bool PlaybackUsesScreenMirror() const;
     void SyncScreenCaptureSession();
     bool PlaybackUsesReactive() const;

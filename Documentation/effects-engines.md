@@ -100,6 +100,8 @@ Library category **Ambilight**. No Effect Library content folder.
 
 **GPU vs CPU:** DXGI capture + quality downscale are GPU (D3D11); LED mapping (plane UV, zones, reach/falloff, wave, grade) stays CPU — same pattern as Action Media frame sampling, not FolderVolume `volumeMain`. Default capture quality is **1080p** so DXGI GPU-scales before CPU readback; **Native** is opt-in for full-res.
 
+**Reach / wave origin:** always each **display plane’s centre**. Screen Mirror does not use the layer Spatial Anchor (that control is for Volume / Movie Sync / etc.).
+
 ## Movie Sync engine
 
 **Player codec** registered at Load via `RegisterMovieSyncEngine()`.  

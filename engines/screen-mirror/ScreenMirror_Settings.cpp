@@ -4,7 +4,6 @@
 #include "ScreenCaptureDownscale.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
-#include "VirtualReferencePoint3D.h"
 #include "ScreenMirror_Internal.h"
 
 #include <QSignalBlocker>
@@ -44,7 +43,6 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["front_back_balance"] = mon_settings.front_back_balance;
         mon["left_right_balance"] = mon_settings.left_right_balance;
         mon["top_bottom_balance"] = mon_settings.top_bottom_balance;
-        mon["reference_point_id"] = mon_settings.reference_point_id;
         mon["show_calibration_pattern"] = mon_settings.show_calibration_pattern;
         mon["show_screen_preview"] = mon_settings.show_screen_preview;
 
@@ -336,18 +334,6 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         msettings.radial_corner_bias_br_label->setText(FormatRadialMapUi(msettings.radial_corner_bias_br_ui));
     }
-    if(msettings.ref_point_combo)
-    {
-        QSignalBlocker blocker(msettings.ref_point_combo);
-        int desired = msettings.reference_point_id;
-        int idx = msettings.ref_point_combo->findData(desired);
-        if(idx < 0)
-        {
-            idx = msettings.ref_point_combo->findData(-1);
-            msettings.reference_point_id = -1;
-        }
-        if(idx >= 0) msettings.ref_point_combo->setCurrentIndex(idx);
-    }
 }
 
 void ScreenMirror::LoadSettings(const nlohmann::json& settings)
@@ -525,11 +511,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 msettings.capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
             }
             
-            if(mon.contains("reference_point_id"))
-            {
-                msettings.reference_point_id = mon["reference_point_id"].get<int>();
-            }
-
             if(mon.contains("radial_map_roll_deg"))
             {
                 msettings.screen_map_roll_deg =
@@ -610,8 +591,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
         SyncMonitorSettingsToUI(it->second);
     }
 
-    RefreshReferencePointDropdowns();
-    
     RefreshMonitorStatus();
     
     OnScreenPreviewChanged();
@@ -715,118 +694,10 @@ void ScreenMirror::OnParameterChanged()
             settings.capture_area_preview->update();
         }
 
-        if(settings.ref_point_combo)
-        {
-            int index = settings.ref_point_combo->currentIndex();
-            if(index >= 0)
-            {
-                settings.reference_point_id = settings.ref_point_combo->itemData(index).toInt();
-            }
-        }
     }
 
-    // Do not rebuild ref-point combos here — that wiped/restored on every slider tick and
-    // made layout-point selection feel dead. Refresh only when the scene ref list changes.
     RefreshMonitorStatus();
 
     emit ParametersChanged();
     in_parameter_change_ = false;
-}
-
-void ScreenMirror::SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
-{
-    reference_points = ref_points;
-    if(monitors_layout && monitor_settings.size() > 0)
-    {
-        bool has_ui_widgets = false;
-        for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin(); it != monitor_settings.end(); ++it)
-        {
-            if(it->second.ref_point_combo)
-            {
-                has_ui_widgets = true;
-                break;
-            }
-        }
-        if(has_ui_widgets)
-        {
-            RefreshReferencePointDropdowns();
-        }
-    }
-}
-
-void ScreenMirror::RefreshReferencePointDropdowns()
-{
-    if(!reference_points || !monitors_layout)
-    {
-        return;
-    }
-
-    for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
-        it != monitor_settings.end();
-        ++it)
-    {
-        MonitorSettings& settings = it->second;
-        if(!settings.ref_point_combo)
-        {
-            continue;
-        }
-
-        int desired_id = settings.reference_point_id;
-
-        settings.ref_point_combo->blockSignals(true);
-        settings.ref_point_combo->clear();
-
-        settings.ref_point_combo->addItem("Follow layer Spatial Anchor", QVariant(-1));
-        settings.ref_point_combo->setItemData(0,
-            QStringLiteral("Reach / wave origin follows this layer's Spatial Anchor. "
-                           "Does not move screen UV sampling (still the display plane)."),
-            Qt::ToolTipRole);
-
-        for(size_t i = 0; i < reference_points->size(); i++)
-        {
-            VirtualReferencePoint3D* ref_point = (*reference_points)[i].get();
-            if(!ref_point) continue;
-
-            QString name = QString::fromStdString(ref_point->GetName());
-            QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-            QString display = QString("%1 (%2)").arg(name, type);
-            settings.ref_point_combo->addItem(display, QVariant(ref_point->GetId()));
-            const int row = settings.ref_point_combo->count() - 1;
-            settings.ref_point_combo->setItemData(row,
-                QStringLiteral("Measure Reach / wave delay from \"%1\". Screen colors still sample the display plane.").arg(name),
-                Qt::ToolTipRole);
-        }
-
-        int restore_index = settings.ref_point_combo->findData(QVariant(desired_id));
-        if(restore_index < 0)
-        {
-            settings.reference_point_id = -1;
-            restore_index = settings.ref_point_combo->findData(QVariant(-1));
-        }
-        if(restore_index >= 0)
-        {
-            settings.ref_point_combo->setCurrentIndex(restore_index);
-        }
-
-        settings.ref_point_combo->blockSignals(false);
-    }
-}
-
-bool ScreenMirror::ResolveReferencePointById(int id, Vector3D& out) const
-{
-    if(!reference_points || id <= 0)
-    {
-        return false;
-    }
-
-    for(size_t i = 0; i < reference_points->size(); i++)
-    {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[i].get();
-        if(ref_point && ref_point->GetId() == id)
-        {
-            out = ref_point->GetPosition();
-            return true;
-        }
-    }
-    return false;
 }

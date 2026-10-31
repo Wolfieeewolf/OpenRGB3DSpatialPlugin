@@ -717,8 +717,6 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     }
 
     UpdateEffectOriginCombo();
-
-    RefreshAmbilightReferencePointDropdowns();
 }
 
 void OpenRGB3DSpatialTab::MergePluginUiIntoSettings(nlohmann::json& settings) const
