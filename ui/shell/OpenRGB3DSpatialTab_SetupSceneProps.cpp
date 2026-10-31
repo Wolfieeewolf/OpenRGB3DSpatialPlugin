@@ -414,8 +414,8 @@ void OpenRGB3DSpatialTab::removeScenePropClicked()
         return;
     }
     if(QMessageBox::question(this,
-                             tr("Remove Scene Prop"),
-                             tr("Remove the selected scene prop?"),
+                             tr("Delete Scene Prop"),
+                             tr("Delete the selected scene prop?"),
                              QMessageBox::Yes | QMessageBox::No,
                              QMessageBox::No)
        != QMessageBox::Yes)
@@ -1001,6 +1001,41 @@ void OpenRGB3DSpatialTab::EditDisplayPlaneForCurrentSceneSelection()
         displayPlanesList()->setCurrentRow(plane_index);
     }
     current_display_plane_index = plane_index;
+}
+
+void OpenRGB3DSpatialTab::EditScenePropForCurrentSceneSelection()
+{
+    const int scene_row = sceneObjectEditSceneRow();
+    if(scene_row < 0 || !sceneControllerRowHasUserRole(scene_row))
+    {
+        return;
+    }
+
+    const SpatialControllerEntryKey key = sceneControllerRowKey(scene_row);
+    if(key.first != -4)
+    {
+        return;
+    }
+
+    const int prop_index = FindScenePropIndexById(key.second);
+    if(prop_index < 0)
+    {
+        return;
+    }
+
+    FocusObjectCreatorTab();
+    if(ui->objectCreatorTabPanel)
+    {
+        ui->objectCreatorTabPanel->showScenePropSection();
+    }
+
+    current_scene_prop_index_ = prop_index;
+    if(scenePropsList())
+    {
+        QSignalBlocker block(scenePropsList());
+        scenePropsList()->setCurrentRow(prop_index);
+    }
+    editScenePropClicked();
 }
 
 void OpenRGB3DSpatialTab::sceneCardEdit(int scene_list_row)

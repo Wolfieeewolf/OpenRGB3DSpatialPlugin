@@ -6,6 +6,7 @@
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
 #include "DisplayPlaneCaptureCombo.h"
+#include "DisplayPlaneCaptureUi.h"
 #include "PluginUiUtils.h"
 #include "ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror_Internal.h"
@@ -216,6 +217,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     auto* capture_panel = new QWidget(shell_ui.capturePanelHost);
     Ui::ScreenMirrorCapturePanel capture_ui;
     capture_ui.setupUi(capture_panel);
+    capture_ui.statusInfoLabel->setText(DisplayPlaneCaptureUi::ScreenMirrorAssignHint());
     PluginUiApplyItalicSecondaryLabel(capture_ui.statusInfoLabel);
     monitor_status_label = capture_ui.monitorStatusLabel;
     monitor_help_label   = nullptr;

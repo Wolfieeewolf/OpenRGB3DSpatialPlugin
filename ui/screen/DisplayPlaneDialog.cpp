@@ -5,6 +5,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
 #include "DisplayPlaneCaptureCombo.h"
+#include "DisplayPlaneCaptureUi.h"
 #include "ui_DisplayPlaneDialog.h"
 
 #include <QDesktopServices>
@@ -18,6 +19,9 @@ DisplayPlaneDialog::DisplayPlaneDialog(OpenRGB3DSpatialTab* host_tab, QWidget* p
     ui->setupUi(this);
 
     PluginUiApplyMutedSecondaryLabel(ui->panelSizeHintLabel->label());
+    ui->captureCaption->setText(DisplayPlaneCaptureUi::Caption());
+    ui->captureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
+    ui->refreshCaptureButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
 
     connect(ui->refreshCaptureButton, &QPushButton::clicked, this, &DisplayPlaneDialog::onRefreshCaptureClicked);
     connect(ui->openSpecsButton, &QPushButton::clicked, this, &DisplayPlaneDialog::onOpenSpecsClicked);

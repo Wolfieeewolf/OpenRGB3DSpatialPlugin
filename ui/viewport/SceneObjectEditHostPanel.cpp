@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SceneObjectEditHostPanel.h"
+#include "DisplayPlaneCaptureUi.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "SceneObjectSpacingPanel.h"
 #include "SceneTransformPanel.h"
@@ -27,6 +28,11 @@ SceneObjectEditHostPanel::SceneObjectEditHostPanel(QWidget* parent)
         tr("Open Object Creator to edit this reference point (name, type, color)."));
     ui->editDisplayPlaneButton->setToolTip(
         tr("Edit display plane name, size, and screen capture source."));
+    ui->editScenePropButton->setToolTip(
+        tr("Open Object Creator to edit this scene prop (mesh, colours, faces)."));
+    ui->displayPlaneCaptureCaption->setText(DisplayPlaneCaptureUi::Caption());
+    ui->displayPlaneCaptureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
+    ui->displayPlaneCaptureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
 }
 
 SceneObjectEditHostPanel::~SceneObjectEditHostPanel()
@@ -97,6 +103,12 @@ void SceneObjectEditHostPanel::bindTab(OpenRGB3DSpatialTab* tab)
             tab->EditDisplayPlaneForCurrentSceneSelection();
         }
     });
+    connect(ui->editScenePropButton, &QPushButton::clicked, tab, [tab]() {
+        if(tab)
+        {
+            tab->EditScenePropForCurrentSceneSelection();
+        }
+    });
     connect(ui->displayPlaneCaptureCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
             &OpenRGB3DSpatialTab::displayPlaneCaptureComboChanged);
     connect(ui->displayPlaneCaptureRefreshButton, &QPushButton::clicked, tab,
@@ -123,6 +135,7 @@ void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
         ui->editLayoutButton->setVisible(false);
         ui->editReferencePointButton->setVisible(false);
         ui->editDisplayPlaneButton->setVisible(false);
+        ui->editScenePropButton->setVisible(false);
         ui->displayPlaneCaptureRow->setVisible(false);
         return;
     }
@@ -132,6 +145,7 @@ void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
     bool show_layout  = false;
     bool show_ref     = false;
     bool show_display = false;
+    bool show_prop    = false;
     int  transform_index = -1;
     bool show_spacing    = false;
 
@@ -145,6 +159,10 @@ void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
         else if(key.first == -3)
         {
             show_display = true;
+        }
+        else if(key.first == -4)
+        {
+            show_prop = true;
         }
     }
     else
@@ -179,6 +197,7 @@ void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
     ui->editLayoutButton->setVisible(show_layout);
     ui->editReferencePointButton->setVisible(show_ref);
     ui->editDisplayPlaneButton->setVisible(show_display);
+    ui->editScenePropButton->setVisible(show_prop);
     ui->displayPlaneCaptureRow->setVisible(show_display);
     if(show_display && tab_)
     {

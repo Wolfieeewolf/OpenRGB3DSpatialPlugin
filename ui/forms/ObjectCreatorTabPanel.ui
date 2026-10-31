@@ -329,7 +329,7 @@
    <item>
     <widget class="EffectInfoLabel" name="displaySubtitleLabel" native="true">
      <property name="text">
-      <string>Add virtual screens for Screen Mirror. Pick Monitor 1 / Monitor 2 (whatever Windows reports) on each plane, then add it to the 3D view from Available Controllers.</string>
+      <string>Add virtual screens for Screen Mirror. Pick a screen capture source on each plane (Monitor 1 / Monitor 2, …), then add it to the 3D view from Available Controllers. Capture can also be set on the Scene object panel when the plane is selected.</string>
      </property>
     </widget>
    </item>
@@ -367,7 +367,7 @@
      <item>
       <widget class="QLabel" name="displayCaptureCaption">
        <property name="text">
-        <string>Windows display:</string>
+        <string>Screen capture:</string>
        </property>
       </widget>
      </item>
@@ -377,7 +377,7 @@
         <bool>false</bool>
        </property>
        <property name="toolTip">
-        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …).</string>
+        <string>Which display this plane captures (Monitor 1, Monitor 2, …). Same list in Object Creator, Scene object edit, and Screen Mirror.</string>
        </property>
       </widget>
      </item>
@@ -390,7 +390,7 @@
         <string>Refresh</string>
        </property>
        <property name="toolTip">
-        <string>Refresh the list of monitors Windows currently reports.</string>
+        <string>Refresh the list of displays the OS currently reports.</string>
        </property>
       </widget>
      </item>

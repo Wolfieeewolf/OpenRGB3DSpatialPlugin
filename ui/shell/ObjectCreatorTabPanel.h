@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+class EffectInfoLabel;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -91,7 +92,7 @@ private:
 
     QWidget*        scene_props_page_ = nullptr;
     QListWidget*    scene_props_list_ = nullptr;
-    QLabel*         scene_props_empty_label_ = nullptr;
+    EffectInfoLabel* scene_props_empty_label_ = nullptr;
     QPushButton*    create_scene_prop_button_ = nullptr;
     QPushButton*    edit_scene_prop_button_ = nullptr;
     QPushButton*    remove_scene_prop_button_ = nullptr;

@@ -3,6 +3,8 @@
 #include "ObjectCreatorTabPanel.h"
 
 #include "ActionsPanel.h"
+#include "DisplayPlaneCaptureUi.h"
+#include "EffectInfoLabel.h"
 #include "TriggersPanel.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
@@ -66,7 +68,7 @@ void ObjectCreatorTabPanel::applyVisualStyles()
 
     if(scene_props_empty_label_)
     {
-        PluginUiApplyItalicSecondaryLabel(scene_props_empty_label_);
+        PluginUiApplyItalicSecondaryLabel(scene_props_empty_label_->label());
         scene_props_empty_label_->setAlignment(Qt::AlignHCenter);
     }
 }
@@ -95,8 +97,10 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->removeRefPointButton->setToolTip(QStringLiteral("Delete selected reference point"));
     ui->editDisplayPlaneButton->setToolTip(QStringLiteral("Edit selected display plane name and size"));
     ui->removeDisplayPlaneButton->setToolTip(QStringLiteral("Delete selected display plane"));
-    ui->displayCaptureCombo->setToolTip(
-        tr("Which Windows monitor this display plane captures (Monitor 1, Monitor 2, \u2026)."));
+    ui->displayCaptureCaption->setText(DisplayPlaneCaptureUi::Caption());
+    ui->displayCaptureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
+    ui->displayCaptureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
+    ui->displaySubtitleLabel->setText(DisplayPlaneCaptureUi::ObjectCreatorSubtitle());
 
     connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
             &OpenRGB3DSpatialTab::customControllerSelectionChanged);
@@ -277,21 +281,36 @@ void ObjectCreatorTabPanel::buildScenePropsPage()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(8);
 
-    auto* title = new QLabel(tr("Scene Props (non-RGB):"), scene_props_page_);
+    auto* title = new QLabel(tr("Scene Props:"), scene_props_page_);
     QFont bold = title->font();
     bold.setBold(true);
     title->setFont(bold);
     layout->addWidget(title);
 
+    auto* subtitle = new EffectInfoLabel(scene_props_page_);
+    subtitle->setText(tr(
+        "Non-RGB meshes and shapes for the room (decor / blockers). "
+        "Create one here, then add it to the 3D view from Available Controllers. "
+        "Use Edit for mesh, colours, and faces; the Scene object panel positions it with the gizmo."));
+    PluginUiApplyMutedSecondaryLabel(subtitle->label());
+    layout->addWidget(subtitle);
+
     scene_props_list_ = new QListWidget(scene_props_page_);
     scene_props_list_->setMinimumHeight(120);
     layout->addWidget(scene_props_list_, 1);
 
-    scene_props_empty_label_ = new QLabel(
-        tr("No scene props yet."),
-        scene_props_page_);
-    scene_props_empty_label_->setWordWrap(true);
+    scene_props_empty_label_ = new EffectInfoLabel(scene_props_page_);
+    scene_props_empty_label_->setText(
+        tr("No scene props yet. Click Create New Scene Prop to create one."));
+    scene_props_empty_label_->label()->setWordWrap(true);
     layout->addWidget(scene_props_empty_label_);
+
+    auto* help = new EffectInfoLabel(scene_props_page_);
+    help->setText(tr(
+        "Select a scene prop in the 3D view or list to position it with the Scene object tab and gizmo. "
+        "Edit opens mesh / colour / face settings."));
+    PluginUiApplyMutedSecondaryLabel(help->label());
+    layout->addWidget(help);
 
     create_scene_prop_button_ = new QPushButton(tr("Create New Scene Prop"), scene_props_page_);
     layout->addWidget(create_scene_prop_button_);
@@ -300,13 +319,16 @@ void ObjectCreatorTabPanel::buildScenePropsPage()
     auto* row_layout = new QHBoxLayout(row);
     row_layout->setContentsMargins(0, 0, 0, 0);
     edit_scene_prop_button_ = new QPushButton(tr("Edit"), row);
-    remove_scene_prop_button_ = new QPushButton(tr("Remove"), row);
+    remove_scene_prop_button_ = new QPushButton(tr("Delete"), row);
     edit_scene_prop_button_->setEnabled(false);
     remove_scene_prop_button_->setEnabled(false);
+    edit_scene_prop_button_->setToolTip(tr("Edit selected scene prop mesh, colours, and faces"));
+    remove_scene_prop_button_->setToolTip(tr("Delete selected scene prop"));
     row_layout->addWidget(edit_scene_prop_button_);
     row_layout->addWidget(remove_scene_prop_button_);
     layout->addWidget(row);
 
+    layout->addStretch(1);
     ui->contentStack->addWidget(scene_props_page_);
 }
 

@@ -171,6 +171,7 @@ private slots:
     void EditCustomControllerForCurrentSceneSelection();
     void EditReferencePointForCurrentSceneSelection();
     void EditDisplayPlaneForCurrentSceneSelection();
+    void EditScenePropForCurrentSceneSelection();
     void FocusObjectCreatorTab();
 
     void createCustomControllerClicked();

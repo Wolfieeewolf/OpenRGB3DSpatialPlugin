@@ -68,7 +68,7 @@ Shared helpers: `SpatialBasisUtils::BuildHorizontalBasis`, `RoomSampleMapping`, 
 
 | Concept | Where set | Used for |
 |---------|-----------|----------|
-| **Reference point** | Setup → Reference points (place at **eye height** where you stand) | Anchor for “where you stand” in the room |
+| **Reference point** | Object Creator → Reference Point (place at **eye height** where you stand) | Anchor for “where you stand” in the room |
 | **Effect origin** | `GetEffectOriginGrid()` = reference + % offset on half room size | Minecraft mapping origin published to SHM |
 | **Effect offset %** | Effect settings (`effect_offset_x/y/z` ÷ 100 × half room) | Fine-tune without moving reference point |
 

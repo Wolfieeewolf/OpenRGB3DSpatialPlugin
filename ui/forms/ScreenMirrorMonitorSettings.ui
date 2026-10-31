@@ -23,14 +23,14 @@
      <item>
       <widget class="QLabel" name="captureCaption">
        <property name="text">
-        <string>Windows display:</string>
+        <string>Screen capture:</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QComboBox" name="captureCombo">
        <property name="toolTip">
-        <string>Which Windows monitor this display plane captures (Monitor 1, Monitor 2, …).</string>
+        <string>Which display this plane captures (Monitor 1, Monitor 2, …). Same list in Object Creator, Scene object edit, and Screen Mirror.</string>
        </property>
       </widget>
      </item>
@@ -40,7 +40,7 @@
         <string>Refresh</string>
        </property>
        <property name="toolTip">
-        <string>Refresh the list of monitors Windows currently reports.</string>
+        <string>Refresh the list of displays the OS currently reports.</string>
        </property>
       </widget>
      </item>

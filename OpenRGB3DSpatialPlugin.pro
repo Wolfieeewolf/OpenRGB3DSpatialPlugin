@@ -265,6 +265,7 @@ HEADERS += \
     ui/viewport/ScenePropDialog.h \
     ui/viewport/ScenePropPreviewWidget.h \
     ui/screen/DisplayPlaneCaptureCombo.h \
+    ui/screen/DisplayPlaneCaptureUi.h \
     ui/custom-controller-grid/CustomControllerGridCell.h \
     ui/custom-controller-grid/CustomControllerGridLayoutMath.h \
     ui/custom-controller-grid/CustomControllerGridItem.h \

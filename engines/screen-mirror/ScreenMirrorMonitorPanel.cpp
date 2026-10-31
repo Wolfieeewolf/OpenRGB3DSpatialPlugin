@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ScreenMirrorMonitorPanel.h"
+#include "DisplayPlaneCaptureUi.h"
 #include "ScreenMirror.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
@@ -107,6 +108,9 @@ ScreenMirrorMonitorPanel::ScreenMirrorMonitorPanel(QWidget* parent)
 {
     ui->setupUi(this);
     PluginUiApplyItalicSecondaryLabel(ui->radialCornerInfo);
+    ui->captureCaption->setText(DisplayPlaneCaptureUi::Caption());
+    ui->captureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
+    ui->captureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
 }
 
 ScreenMirrorMonitorPanel::~ScreenMirrorMonitorPanel()
