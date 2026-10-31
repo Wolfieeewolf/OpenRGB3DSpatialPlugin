@@ -287,14 +287,26 @@ namespace Geometry3D
         }
         else
         {
-            /* Map the full facing hemisphere into the screen. Scale 1.0 → UV hits
-               the bezel only at ~90° from the plane normal (coplanar). The old √2
-               scale crushed anything past ~45° onto the edge texel — ceiling / side
-               LEDs all sampled the same letterbox/UI strip, so the top of the room
-               went dark whenever the video had black bars. */
-            static constexpr float kScreenEdgeAtHorizon = 1.0f;
-            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAtHorizon * nx / len, 0.0f, 1.0f);
-            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAtHorizon * ny / len, 0.0f, 1.0f);
+            /* Direction → screen UV. Edge angle is a compromise:
+               - Old √2 (~45°) crushed ceiling/side LEDs onto one letterbox texel.
+               - Full hemisphere (1.0 / ~90°) fixed the ceiling but pulled mid-frame
+                 onto the walls — felt like being sucked into the display.
+               ~58° keeps steep ceiling fill while walls still read as edge bloom
+               (push out from the screen), not a tunnel into centre content. */
+            static constexpr float kEdgeAngleSin =
+                0.8480480961562259f; /* sin(58°) */
+            static constexpr float kScreenEdgeScale = 1.0f / kEdgeAngleSin;
+            float u = std::clamp(0.5f + 0.5f * kScreenEdgeScale * nx / len, 0.0f, 1.0f);
+            float v = std::clamp(0.5f + 0.5f * kScreenEdgeScale * ny / len, 0.0f, 1.0f);
+            /* Mild bezel bias: exponent < 1 nudges UV toward 0/1 so room LEDs
+               prefer near-edge pixels (outward glow) over picture centre. */
+            auto bezel_bias_01 = [](float t) -> float {
+                const float d = (t - 0.5f) * 2.0f;
+                const float shaped = std::copysign(std::pow(std::fabs(d), 0.82f), d);
+                return std::clamp(0.5f + 0.5f * shaped, 0.0f, 1.0f);
+            };
+            result.u = bezel_bias_01(u);
+            result.v = bezel_bias_01(v);
         }
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;
