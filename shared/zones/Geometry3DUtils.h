@@ -231,6 +231,7 @@ namespace Geometry3D
             const float denom = px * px + py * py + tz * tz;
             if(denom < 1e-8f)
             {
+                /* Exact forward pole — no lateral dir to pick a rim point. */
                 result.u = 0.5f;
                 result.v = 0.5f;
             }

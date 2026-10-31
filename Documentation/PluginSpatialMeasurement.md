@@ -112,7 +112,7 @@ Effect offset sliders are **percent of half room size in grid units** (`effect_o
 
 Viewport and spatial lighting convert plane size with `MMToGridUnits(plane->GetWidthMM(), grid_scale_mm)` at use time.
 
-Screen Mirror Reach/wave radiate from each plane’s **`transform.position`** (plane centre). Distance converts to mm only at the Screen Mirror API boundary (`GridUnitsToMM` in `SpatialMapToScreen` / falloff helpers). Internal ray tests use grid units.
+Screen Mirror Reach/wave radiate from each plane’s **`transform.position`** (plane centre). `SpatialMapToScreen` uses plane size via `MMToGridUnits` then a convex sphere UV in plane-local space; falloff distance uses `GridUnitsToMM`. Internal ray tests use grid units.
 
 ### 3.5 Effects and render frame
 

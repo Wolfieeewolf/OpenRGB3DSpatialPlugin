@@ -464,8 +464,8 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
         }
 
         /* Spatial v=1 is screen top (flipped on sample). Per-side crop: clamp into
-           the active content rect only (nearest content edge). Do not rematerialise
-           a centre UV — spherical map + bezel bias already chose the sample. */
+           the active content rect (nearest content edge). Convex SpatialMapToScreen
+           already chose the sample UV. */
         const float top_c = std::clamp(s.black_bar_top_percent, 0.0f, 49.0f) / 100.0f;
         const float bottom_c = std::clamp(s.black_bar_bottom_percent, 0.0f, 49.0f) / 100.0f;
         const float left_c = std::clamp(s.black_bar_left_percent, 0.0f, 49.0f) / 100.0f;
