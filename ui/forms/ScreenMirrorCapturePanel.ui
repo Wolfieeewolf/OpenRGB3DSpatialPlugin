@@ -92,7 +92,7 @@
       <string>Audience bias (experiment)</string>
      </property>
      <property name="toolTip">
-      <string>Optional. Glow still comes from each display; bias pulls energy toward User layout points (seats). 0 = off. Add User ref points in the scene — one per watcher.</string>
+      <string>Optional. Shapes output toward User layout points (seats) without turning LEDs off — Reach still fills the grid; bias cones brightness. 0 = off. Add User ref points — one per watcher.</string>
      </property>
      <layout class="QVBoxLayout" name="audienceLayout">
       <property name="spacing">
@@ -126,7 +126,7 @@
            <enum>Qt::Horizontal</enum>
           </property>
           <property name="toolTip">
-           <string>0 = classic ambilight from the display. Higher values favour LEDs toward User seats (multi-seat = strongest nearby lobe wins).</string>
+           <string>0 = even Reach fill. Higher values cone brightness toward User seats (off-cone stays lit, dimmer). Multi-seat = strongest lobe. Use Reach / softness / wave for coverage and motion.</string>
           </property>
          </widget>
         </item>

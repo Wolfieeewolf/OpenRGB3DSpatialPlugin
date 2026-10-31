@@ -104,7 +104,7 @@ Library category **Ambilight**. No Effect Library content folder.
 
 **Screen UV (`SpatialMapToScreen`):** direction from the plane centre → UV only (bezel ≈ **58°** from the normal — not 45° letterbox crush). No bezel “bloom” in the mapper; outward travel is **wave / time-to-edge**.
 
-**Audience bias (experiment, `feat/screen-mirror-audience-bias`):** optional 0–100% pull toward layout points typed **User**. Multi-seat = strongest lobe wins. Off by default; Reach stays on the display.
+**Audience bias (experiment, `feat/screen-mirror-audience-bias`):** optional 0–100% brightness cone toward layout points typed **User**. Does **not** cull LEDs — Reach still fills the grid; bias boosts toward seats and keeps an off-cone floor. Multi-seat = strongest lobe. Off by default.
 
 ## Movie Sync engine
 
