@@ -50,16 +50,26 @@ inline bool PathHasDotDot(const filesystem::path& p)
     return false;
 }
 
+/* Kept local (PluginSettingsPaths.cpp includes this header — no circular include). */
 inline bool PathStaysUnderRoot(const filesystem::path& root, const filesystem::path& candidate)
 {
-    std::error_code ec;
-    const filesystem::path root_abs = filesystem::weakly_canonical(root, ec);
-    if(ec || root_abs.empty())
+    if(root.empty() || candidate.empty() || PathHasDotDot(candidate))
     {
         return false;
     }
-    const filesystem::path cand_abs = filesystem::weakly_canonical(candidate, ec);
-    if(ec || cand_abs.empty())
+    std::error_code ec;
+    auto resolve = [&](const filesystem::path& path) {
+        filesystem::path abs = filesystem::weakly_canonical(path, ec);
+        if(ec || abs.empty())
+        {
+            ec.clear();
+            abs = filesystem::absolute(path, ec);
+        }
+        return (ec || abs.empty()) ? filesystem::path{} : abs;
+    };
+    const filesystem::path root_abs = resolve(root);
+    const filesystem::path cand_abs = resolve(candidate);
+    if(root_abs.empty() || cand_abs.empty())
     {
         return false;
     }

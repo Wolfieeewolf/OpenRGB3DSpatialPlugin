@@ -1329,6 +1329,7 @@ bool ActionEditorDialog::promptMapControllers()
         }
     }
     onRebuildTimelineModel();
+    markPreviewDirtyIfPlaying();
     status_label_->setText(dropped > 0
                                 ? QStringLiteral("Mapped. %1 extra row(s) did not fit and were dropped.").arg(dropped)
                                 : QStringLiteral("Controller rows mapped to this scene"));
@@ -1349,6 +1350,7 @@ void ActionEditorDialog::onPickControllers()
     }
     pack_.devices = std::move(devices);
     onRebuildTimelineModel();
+    markPreviewDirtyIfPlaying();
     status_label_->setText(QStringLiteral("%1 controller(s) on this pack").arg((int)pack_.devices.size()));
 }
 
@@ -1780,6 +1782,26 @@ void ActionEditorDialog::onSave()
     {
         return;
     }
+    auto* rm_guard = tab_ ? tab_->resource_manager : nullptr;
+    const filesystem::path plugin_root = PluginSettingsPaths::PluginRoot(rm_guard);
+    if(plugin_root.empty()
+       || PluginSettingsPaths::PathHasDotDot(save_dir_)
+       || !PluginSettingsPaths::PathStaysUnderRoot(plugin_root, save_dir_))
+    {
+        QMessageBox::warning(this, QStringLiteral("Action Editor"),
+                             QStringLiteral("Save path is outside the plugin data folder."));
+        return;
+    }
+    if(!PluginSettingsPaths::IsSafePathLeaf(pack_.id))
+    {
+        pack_.id = sanitizeId(QString::fromStdString(pack_.name)).toStdString();
+        if(!PluginSettingsPaths::IsSafePathLeaf(pack_.id))
+        {
+            QMessageBox::warning(this, QStringLiteral("Action Editor"),
+                                 QStringLiteral("Pack id is not a safe file name."));
+            return;
+        }
+    }
     std::error_code ec;
     filesystem::create_directories(save_dir_, ec);
     if(pack_path_.empty())
@@ -1799,6 +1821,13 @@ void ActionEditorDialog::onSave()
             }
         }
         pack_path_ = std::move(candidate);
+    }
+    if(PluginSettingsPaths::PathHasDotDot(pack_path_)
+       || !PluginSettingsPaths::PathStaysUnderRoot(plugin_root, pack_path_))
+    {
+        QMessageBox::warning(this, QStringLiteral("Action Editor"),
+                             QStringLiteral("Save path is outside the plugin data folder."));
+        return;
     }
     std::string err;
     if(!Action::SaveToFile(pack_path_, pack_, &err))

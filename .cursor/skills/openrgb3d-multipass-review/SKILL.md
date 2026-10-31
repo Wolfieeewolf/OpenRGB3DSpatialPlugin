@@ -132,6 +132,7 @@ Upstream spirit: [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Sk
 | **Movie Sync HTTP** | Stay loopback-bound; no bind-all interfaces; cap request size; do not fetch arbitrary user URLs (SSRF); validate paths/ids from requests before play |
 | **Injection** | No shelling user-controlled paths; no concatenating untrusted strings into commands/SQL; Lua/VLC helpers treat filenames as data |
 | **Settings / JSON mass-assignment** | `LoadSettings` / pack JSON — only known keys; ignore/drop unknown privilege-like fields; clamp ranges |
+| **JSON / text size ceilings** | Every loader of untrusted or user/AppData JSON or text (action packs, trigger bindings, movie-sync catalog, FolderVolume/ShaderField specs, `.fs` bodies, settings blobs) must enforce a hard byte ceiling and **fail closed** when over — reuse shared constants when they exist (e.g. `Action::kMaxPackJsonBytes`, shader/spec 512 KiB). Unbounded `readAll` / `ifstream` on those paths is a fail |
 | **RGBController / device safety** | Guard pointers/indices (CONTRIBUTING); never write past zone/LED bounds from pack or network input |
 | **SHM / game bridge** | Treat SHM frames as untrusted layout; validate sizes/magic/seq before use; no trusting mod-supplied paths blindly |
 | **Authn/session (where present)** | Triggers/Manual fire stay local UX; do not invent remote admin without auth; token/session revoke if any remote control is added later |
@@ -145,7 +146,7 @@ Use these as the quality brief for **create and fix** — same weight on a new L
 
 **Keep:** honest role, wired knobs, matches callers/docs, continuous `u_time` / `time_ms` for ambient motion, once dies clean, fat kernels / hot heads where the look needs them, direct boring maintainable code, reuse of canonical helpers (`ClipSpanProgress`, `ClipSweepProgress`, `GpuAnimMsOr`, field Prepare paths), net-better diffs only, best-in-limits solutions that respect shared architecture, human-readable UI copy, live connects that actually drive behaviour, fail-closed I/O and network edges.
 
-**Kill:** wrong job for the name, misleading aliases, thin LED misses, orange wash, progress-wrap flash, linger, docs drift, unused knobs, silent fail, over-polishing a utility into a showcase, thin wrappers, bolted-on special cases, unjustified 1k-line growth, feature logic leaking into shared paths, narrating comments, dead/debug code, legacy/compat shims, abnormal defensive try/catch on trusted paths, `any` casts to silence types, deep nesting that wants early returns, `printf`/`QDebug`/`std::cout` in plugin paths, “good enough” when a stronger in-limits path exists, parallel stacks that fight a documented singular design, “findings only” when the fix was obvious and unblocked, net-worse or taste-only rewrites, **dead/`connect` with no slot, missing clears, orphan actions, garbage UI strings, layout that fights the control**, secrets in tree, path escape outside plugin data roots, bind-all HTTP, SSRF via user URLs, unbounded SHM trust.
+**Kill:** wrong job for the name, misleading aliases, thin LED misses, orange wash, progress-wrap flash, linger, docs drift, unused knobs, silent fail, over-polishing a utility into a showcase, thin wrappers, bolted-on special cases, unjustified 1k-line growth, feature logic leaking into shared paths, narrating comments, dead/debug code, legacy/compat shims, abnormal defensive try/catch on trusted paths, `any` casts to silence types, deep nesting that wants early returns, `printf`/`QDebug`/`std::cout` in plugin paths, “good enough” when a stronger in-limits path exists, parallel stacks that fight a documented singular design, “findings only” when the fix was obvious and unblocked, net-worse or taste-only rewrites, **dead/`connect` with no slot, missing clears, orphan actions, garbage UI strings, layout that fights the control**, secrets in tree, path escape outside plugin data roots, bind-all HTTP, SSRF via user URLs, unbounded SHM trust, unbounded JSON/text `readAll` without a size ceiling.
 
 ## Draft → refine (seed loop)
 
@@ -163,7 +164,7 @@ Same loop for bugs: fix → multipass the fix → refine → commit. Do not trea
 Borrow these standards from thermo-nuclear review; apply them to plugin engines, applier, Movie Sync/Triggers runtimes, and Action UI — not as an excuse to rewrite a fine `.fx` utility.
 
 1. **Be ambitious about structural simplification (code judo).** Prefer reframes that delete branches, dual paths, or whole helper layers while preserving behaviour. If CPU/GPU dual or “silent fallback” still exists for a true-GPU tool, that is a design smell.
-2. **Do not let a change push a file from under ~1k lines to over ~1k without a strong reason.** Prefer extract helpers / split mode bodies (e.g. particle modes) over sprawl.
+2. **File size without explosion.** Do not push a file from under ~1k lines to over ~1k without a strong reason — extract helpers / split mode bodies when needed. Also: **clean, browsable file/folder/code — no explosion.** Same-class multi-`.cpp` is fine (Tab_* style); cap about **+1 file per concern** (UI vs tick, platform capture vs analysis). Slightly over ~1k beats a folder of tiny shards. **Apply splits only where the pass confirms a natural seam** (a file you would open by name). Never Gpu/Sample/Spectrum micro-files “because 1k”. Prefer merging weak fragments back when a pass finds them. (Do not confuse with **pass 2b** security.)
 3. **No spaghetti growth.** Suspicious of new ad-hoc conditionals in applier/player/tick paths. Prefer a dedicated mode/helper over one more `if` in a busy function.
 4. **Bias toward cleaning the design, not just accepting working code.** Behaviour-correct but messier is a fail on pass 7.
 5. **Prefer direct, boring, maintainable code over hacky or magical code.** Fail-closed GPU > fake CPU success; explicit contracts > hidden globals (except documented clocks like `SetGpuAnimMs`).
@@ -174,7 +175,8 @@ Borrow these standards from thermo-nuclear review; apply them to plugin engines,
 
 - Complicated dual path where one true path would delete a category of bugs
 - Refactors that move complexity without reducing concepts
-- File crossing ~1000 lines when modes could split
+- File crossing ~1000 lines when modes could split **into a named seam** (not into crumbs)
+- Aggressive same-class shards that force hopping three files for one edit
 - Special-case branches bolted onto applier / tick / preview
 - Feature-specific Movie Sync logic leaking into shared Action apply
 - Thin wrappers / identity abstractions
@@ -188,12 +190,16 @@ Borrow these standards from thermo-nuclear review; apply them to plugin engines,
 - Extract particle/ribbon mode bodies or Prepare helpers
 - Move tool-specific look into toolbox `.fs` / `.fx`; keep engines generic
 - Collapse duplicate seam fixes into one place (`GpuAnimMs`, `ClearActionPreview`)
+- Merge over-split same-class `.cpp` fragments when the seam is not load-bearing
 
 ### Structure review questions
 
 - Is there a code-judo move that makes this dramatically simpler?
 - Is this logic in the right file/layer (engine vs toolbox vs pack vs UI)?
 - Did we enlarge a busy file past a healthy size?
+- Did the pass confirm a **natural seam**, or are we splitting for the line count?
+- After the change, is the tree still **clean and browsable** (no file/folder explosion)?
+- Would a split create a file you open by name, or just chase the line budget?
 - Are we duplicating a canonical helper?
 - Does this make once/loop seams harder or easier to reason about?
 

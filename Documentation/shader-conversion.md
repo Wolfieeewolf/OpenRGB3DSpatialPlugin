@@ -10,7 +10,7 @@ Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cube
 |------|-------------|--------|
 | **1D** | `evalStripKernelSigned(kid, s01, phase, repeats, time)` | Kernel — `effects/patterns/*.kernel` |
 | **2D** | `spatialMain(out, frag_coord)` + `u_time` / `u_resolution` / `u_params[0..3]` | Shader Field — `effects/shader-field/*.fs` |
-| **3D** | `volumeMain(out, p01)` soft field | Volume — `effects/volume/<id>.fs` (or audio/media) via FolderVolume |
+| **3D** | `volumeMain(out, p01)` soft field | Volume — AppData `effects/volume/<id>.fs` (or audio/media) via `engines/folder-volume` |
 
 Also: **Media** / **Audio** (Volume host + texture or FFT), **Reactive** / **Ambilight** (player codecs), **Games** (programmed packs). Details in [effects-engines.md](effects-engines.md).
 
@@ -22,7 +22,7 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 **Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time`; `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`. Plugin strips `#` / `key: value` headers via `LoadShaderBodyFromPath` before compile.
 
-**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Drop the file in `effects/volume/` for **Volume** (or `effects/audio/` / `effects/media/`) with a FolderVolume `class:` header.
+**2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Install under AppData `effects/volume/` for **Volume** (or `effects/audio/` / `effects/media/`) with a FolderVolume `class:` header — not under the plugin `engines/` tree.
 
 **Strip → 1D:** drop a `effects/patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.
 

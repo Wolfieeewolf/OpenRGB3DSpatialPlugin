@@ -8,6 +8,7 @@ if "%OUT%"=="" set "OUT=%CD%"
 
 if exist "%OUT%\_intermediate_release" rmdir /s /q "%OUT%\_intermediate_release"
 if exist "%OUT%\_intermediate_debug" rmdir /s /q "%OUT%\_intermediate_debug"
+if exist "%OUT%\_deps" rmdir /s /q "%OUT%\_deps"
 if exist "%OUT%\release\*.obj" del /f /q "%OUT%\release\*.obj" 2>nul
 if exist "%OUT%\release\*.exp" del /f /q "%OUT%\release\*.exp" 2>nul
 if exist "%OUT%\release\*.lib" del /f /q "%OUT%\release\*.lib" 2>nul

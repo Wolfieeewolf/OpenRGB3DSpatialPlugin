@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "TriggerBinding.h"
+#include "Action.h"
 
 #include <chrono>
 #include <fstream>
@@ -128,10 +129,24 @@ bool LoadFromFile(const filesystem::path& path, Document* out, std::string* erro
         if(error) { *error = "failed to open bindings file"; }
         return false;
     }
+    in.seekg(0, std::ios::end);
+    const std::streamoff len = in.tellg();
+    if(len < 0 || (std::size_t)len > Action::kMaxPackJsonBytes)
+    {
+        if(error) { *error = "bindings file too large or unreadable"; }
+        return false;
+    }
+    in.seekg(0, std::ios::beg);
+    std::string text((std::size_t)len, '\0');
+    if(len > 0 && !in.read(&text[0], len))
+    {
+        if(error) { *error = "failed to read bindings file"; }
+        return false;
+    }
     nlohmann::json j;
     try
     {
-        in >> j;
+        j = nlohmann::json::parse(text);
     }
     catch(const std::exception& ex)
     {

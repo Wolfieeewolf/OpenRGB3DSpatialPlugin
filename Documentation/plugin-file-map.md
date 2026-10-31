@@ -4,9 +4,11 @@
 
 Status: **phases 1–10 applied** — phase 1–9 on main; phase 10 dissolves root effect/zone/controller/scene/utils into `shared/`. Only plugin entry stays at repo root. Incomplete multipasses parked for Claude ~2026-11-23 — [multipass-coverage.md](multipass-coverage.md).
 
+**Regroup hygiene (2026-10-31):** re-checked folders against multipass “natural seam / no file explosion.” Engine buckets stay. Crumb Tab shards merged; dead `SpatialRoomDefaults` removed; `EffectCustomHost` header-only. Do **not** collapse Minecraft one-effect folders, `Effect*Row` widgets, or ScreenMirror Settings/Render — those are named seams.
+
 Flag **rogue** = unclear owner / wrong tree / merge fodder.  
 Flag **hub** = many engines call it; move last or leave in `shared/`.  
-Flag **split** = over ~1k lines; split before or during regroup.
+Flag **split** = over ~1k lines *and* a confirmed natural seam — not crumbs for the line count.
 
 ## Engine buckets
 
@@ -26,7 +28,7 @@ Flag **split** = over ~1k lines; split before or during regroup.
 | `engines/actions` | Action pack player / applier / script (calls field engines) |
 | `shared` | GL pool, room lighting/samplers, effect base, zones, controllers, types |
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
-| `n/a` | Packaging, assets, build |
+| `n/a` | Distro packaging (`debian/` `fedora/` `flatpak/`), assets, build helpers — not `release/` / `.wiki-seed/` |
 
 ## Tree (phases 1–10 landed)
 
@@ -79,7 +81,7 @@ ui/                 ← DONE phase 9 (affinity folders)
 | `engines/actions/ActionDetail.h` | Internal detail | keep | |
 | `engines/actions/ActionPlayer.h` | Player API | keep | |
 | `engines/actions/ActionSerialize.cpp` | Pack JSON | keep | |
-| `engines/actions/ActionScript.{h,cpp}` | Script tools | **split later** | ~1.2k cpp |
+| `engines/actions/ActionScript.{h,cpp}` | Script tools | keep | ~1.3k — no natural second seam (2026-10-31) |
 | `engines/actions/ActionLibrary.{h,cpp}` | Builtin library ids | keep | |
 | `engines/actions/ActionClipEval.h` `ActionClipEvalAxis.cpp` | Axis / LED eval | keep | |
 | `engines/actions/ActionApplier*` | Apply pack → LEDs | keep | |
@@ -108,7 +110,9 @@ ui/                 ← DONE phase 9 (affinity folders)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `engines/folder-volume/FolderVolumeEffect.*` | `.fs` host + UI | pending Claude ratchet / **split** | ~2.6k |
+| `engines/folder-volume/FolderVolumeEffect.*` | `.fs` host + GPU sample | keep | seam landed 2026-10-31 (`_UI` + Spec) |
+| `engines/folder-volume/FolderVolumeEffect_UI.cpp` | SetupCustomUI + media | keep | same class |
+| `engines/folder-volume/FolderVolumeSpec.cpp` | ReadSpec + Register | keep | free helpers + register |
 
 ### `engines/shader-field` (phase 3)
 
@@ -134,7 +138,8 @@ ui/                 ← DONE phase 9 (affinity folders)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `engines/audio/AudioInputManager.*` | Capture + FFT | **split** later | ~1.4k |
+| `engines/audio/AudioInputManager.*` | FFT / bands / PCM | keep | seam landed 2026-10-31 (`_Wasapi`) |
+| `engines/audio/AudioInputManager_Wasapi.cpp` | WASAPI capturer + devices | keep | same class |
 | `engines/audio/AudioReactiveCommon.h` | Shared audio effect helpers | maybe `.cpp` later | header-only hub |
 | `engines/audio/AudioReactiveUi.h` | Audio UI helpers | audio + ui | |
 
@@ -142,7 +147,8 @@ ui/                 ← DONE phase 9 (affinity folders)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `engines/reactive/Reactive.*` | Effect body | **split** UI vs tick | ~1.5k |
+| `engines/reactive/Reactive.*` | Tick / waves / settings | keep | seam landed 2026-10-31 (`_UI`) |
+| `engines/reactive/Reactive_UI.cpp` | SetupCustomUI + UI sync | keep | same class |
 | `engines/reactive/ReactiveInputManager.*` | Session / devices | keep | |
 | `engines/reactive/ReactiveInputTypes.h` | Types | keep | |
 | `engines/reactive/ReactiveKeyMap.*` | Key map | keep | |
@@ -242,9 +248,9 @@ ui/                 ← DONE phase 9 (affinity folders)
 
 | Path | Notes |
 |------|-------|
-| `scripts/` `resources/` `images/` | Assets |
-| `debian/` `fedora/` `flatpak/` `release/` | Packaging |
-| `.wiki-seed/` `.qtcreator/` | Dev only |
+| `scripts/` `resources/` `images/` | Build helpers / assets (tracked) |
+| `debian/` `fedora/` `flatpak/` | Distro packaging (tracked) |
+| `release/` `.wiki-seed/` `.qtcreator/` | **Not** packaging — local/build/wiki seed only (gitignored; wiped in multipass cleanup) |
 
 ---
 
@@ -257,9 +263,9 @@ ui/                 ← DONE phase 9 (affinity folders)
 5. **Folder-volume** — **DONE** on main (`engines/folder-volume`).
 6. **Audio** — **DONE** on main (`engines/audio`).
 7. **Actions core** — **DONE** on `chore/engines-phase7-actions` (`Effects3D/Actions` → `engines/actions`).
-8. **shared polish** — **DONE** on `chore/engines-phase8-shared` (`shared/` hubs; effect base / zones / controllers remain at root).
+8. **shared polish** — **DONE** on `chore/engines-phase8-shared` (`shared/` hubs; effect base / zones / controllers still at root until phase 10).
 9. **ui** — **DONE** on `chore/engines-phase9-ui` (affinity folders under `ui/`; bare includes via INCLUDEPATH).
-10. **shared core dissolve** — **DONE** on `chore/engines-phase10-shared-core` (root effect/zone/controller/scene/utils → `shared/`; plugin entry stays root).
+10. **shared core dissolve** — **DONE** on `chore/engines-phase10-shared-core` (root effect/zone/controller/scene/utils → `shared/effects|zones|controllers|scene|utils`; plugin entry stays root).
 
 Each phase: update `.pro`/CMake, fix includes, build, smoke one look per engine.
 

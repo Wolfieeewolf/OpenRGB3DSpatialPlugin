@@ -663,7 +663,26 @@ bool LoadFromFile(const filesystem::path& path, Pack* out, std::string* error)
         }
         return false;
     }
-    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.seekg(0, std::ios::end);
+    const std::streamoff len = in.tellg();
+    if(len < 0 || (std::size_t)len > kMaxPackJsonBytes)
+    {
+        if(error)
+        {
+            *error = "pack file too large or unreadable";
+        }
+        return false;
+    }
+    in.seekg(0, std::ios::beg);
+    std::string text((std::size_t)len, '\0');
+    if(len > 0 && !in.read(&text[0], len))
+    {
+        if(error)
+        {
+            *error = "failed to read pack file: " + path.string();
+        }
+        return false;
+    }
     nlohmann::json j;
     try
     {
@@ -678,17 +697,7 @@ bool LoadFromFile(const filesystem::path& path, Pack* out, std::string* error)
         }
         return false;
     }
-    if(!FromJson(j, out, error))
-    {
-        return false;
-    }
-    // v4 → v5: fill play_bounds defaults and rewrite so the next open is already current.
-    const int ver = j["version"].get<int>();
-    if(ver >= kMinLoadFormatVersion && ver < kFormatVersion)
-    {
-        SaveToFile(path, *out, nullptr);
-    }
-    return true;
+    return FromJson(j, out, error);
 }
 
 bool SaveToFile(const filesystem::path& path, const Pack& pack, std::string* error)

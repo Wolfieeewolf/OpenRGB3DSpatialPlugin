@@ -34,16 +34,6 @@ inline float SceneToMm(qreal scene, float mm_per_unit)
     return GridUnitsToMM(static_cast<float>(scene), mm_per_unit);
 }
 
-inline float SumSizes(const QVector<float>& sizes)
-{
-    float total = 0.0f;
-    for(float size : sizes)
-    {
-        total += size;
-    }
-    return total;
-}
-
 inline qreal SumSceneSizes(const QVector<float>& sizes_mm, float mm_per_unit)
 {
     qreal total = 0.0;

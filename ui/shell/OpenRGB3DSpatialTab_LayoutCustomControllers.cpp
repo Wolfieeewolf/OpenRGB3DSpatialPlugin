@@ -289,8 +289,22 @@ void OpenRGB3DSpatialTab::importCustomControllerClicked()
         const filesystem::path src_path(src_info.absoluteFilePath().toStdString());
 #endif
         const filesystem::path relative = ControllerImportRelativePath(src_path);
+        if(relative.empty()
+           || PluginSettingsPaths::PathHasDotDot(relative)
+           || relative.is_absolute())
+        {
+            failed++;
+            failed_names.append(src_info.fileName());
+            continue;
+        }
         const std::string relative_key = relative.generic_string();
         const filesystem::path dest_path = controllers_dir / relative;
+        if(!PluginSettingsPaths::PathStaysUnderRoot(controllers_dir, dest_path))
+        {
+            failed++;
+            failed_names.append(QString::fromStdString(relative_key));
+            continue;
+        }
 
         if(filesystem::exists(dest_path))
         {
@@ -653,10 +667,14 @@ void OpenRGB3DSpatialTab::deleteCustomControllerClicked()
 
     if(list_row < (int)virtual_controller_json_files.size())
     {
-        const filesystem::path json_path =
-            PluginSettingsPaths::ControllersDir(resource_manager) / virtual_controller_json_files[list_row];
-        std::error_code remove_ec;
-        filesystem::remove(json_path, remove_ec);
+        const filesystem::path controllers_dir = PluginSettingsPaths::ControllersDir(resource_manager);
+        const filesystem::path json_path = controllers_dir / virtual_controller_json_files[list_row];
+        if(!PluginSettingsPaths::PathHasDotDot(json_path)
+           && PluginSettingsPaths::PathStaysUnderRoot(controllers_dir, json_path))
+        {
+            std::error_code remove_ec;
+            filesystem::remove(json_path, remove_ec);
+        }
     }
 
     virtual_controllers.erase(virtual_controllers.begin() + list_row);
@@ -745,9 +763,14 @@ void OpenRGB3DSpatialTab::RemoveVirtualControllerFromLibrary(int index)
 
     if(index < (int)virtual_controller_json_files.size())
     {
-        std::error_code remove_ec;
-        filesystem::remove(PluginSettingsPaths::ControllersDir(resource_manager) / virtual_controller_json_files[index],
-                           remove_ec);
+        const filesystem::path controllers_dir = PluginSettingsPaths::ControllersDir(resource_manager);
+        const filesystem::path target = controllers_dir / virtual_controller_json_files[index];
+        if(!PluginSettingsPaths::PathHasDotDot(target)
+           && PluginSettingsPaths::PathStaysUnderRoot(controllers_dir, target))
+        {
+            std::error_code remove_ec;
+            filesystem::remove(target, remove_ec);
+        }
     }
 
     virtual_controllers.erase(virtual_controllers.begin() + index);
@@ -772,11 +795,19 @@ bool OpenRGB3DSpatialTab::LoadControllerFromJsonFile(const filesystem::path& jso
 
     /* Keep presets-style nesting (controllers/brand/device/*.json) on later save/delete. */
     const filesystem::path controllers_dir = PluginSettingsPaths::ControllersDir(resource_manager);
+    if(!PluginSettingsPaths::PathStaysUnderRoot(controllers_dir, json_path))
+    {
+        return false;
+    }
     std::error_code rel_ec;
     filesystem::path relative = filesystem::relative(json_path, controllers_dir, rel_ec);
-    if(rel_ec || relative.empty() || *relative.begin() == "..")
+    if(rel_ec || relative.empty() || PluginSettingsPaths::PathHasDotDot(relative))
     {
         relative = json_path.filename();
+    }
+    if(PluginSettingsPaths::PathHasDotDot(relative) || relative.is_absolute())
+    {
+        return false;
     }
     const std::string relative_key = relative.generic_string();
 
@@ -866,7 +897,19 @@ bool OpenRGB3DSpatialTab::SaveCustomController(unsigned int index)
     const std::string relative_key = VirtualController3D::PresetLibraryRelativePath(
         ctrl->GetCategory(), ctrl->GetBrand(), ctrl->GetName());
     const filesystem::path relative(relative_key);
+    if(relative.empty() || relative.is_absolute() || PluginSettingsPaths::PathHasDotDot(relative))
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Refusing unsafe controller relative path: %s",
+                  relative_key.c_str());
+        return false;
+    }
     const filesystem::path filepath = controllers_dir / relative;
+    if(!PluginSettingsPaths::PathStaysUnderRoot(controllers_dir, filepath))
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Controller save escaped controllers dir: %s",
+                  relative_key.c_str());
+        return false;
+    }
 
     std::error_code ec;
     filesystem::create_directories(filepath.parent_path(), ec);
@@ -876,8 +919,12 @@ bool OpenRGB3DSpatialTab::SaveCustomController(unsigned int index)
        && virtual_controller_json_files[index] != relative_key)
     {
         const filesystem::path old_path = controllers_dir / virtual_controller_json_files[index];
-        std::error_code remove_ec;
-        filesystem::remove(old_path, remove_ec);
+        if(!PluginSettingsPaths::PathHasDotDot(old_path)
+           && PluginSettingsPaths::PathStaysUnderRoot(controllers_dir, old_path))
+        {
+            std::error_code remove_ec;
+            filesystem::remove(old_path, remove_ec);
+        }
     }
 
     virtual_controller_json_files[index] = relative_key;

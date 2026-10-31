@@ -83,10 +83,24 @@ bool LoadCatalog(const filesystem::path& catalog_path, Catalog* out, std::string
         if(error) *error = "cannot open catalog";
         return false;
     }
+    in.seekg(0, std::ios::end);
+    const std::streamoff len = in.tellg();
+    if(len < 0 || (std::size_t)len > Action::kMaxPackJsonBytes)
+    {
+        if(error) *error = "catalog file too large or unreadable";
+        return false;
+    }
+    in.seekg(0, std::ios::beg);
+    std::string text((std::size_t)len, '\0');
+    if(len > 0 && !in.read(&text[0], len))
+    {
+        if(error) *error = "cannot read catalog";
+        return false;
+    }
     nlohmann::json j;
     try
     {
-        in >> j;
+        j = nlohmann::json::parse(text);
     }
     catch(...)
     {

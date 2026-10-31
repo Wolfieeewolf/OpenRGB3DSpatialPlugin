@@ -1,19 +1,44 @@
 #!/usr/bin/env bash
-# Build a slim static Assimp into dependencies/assimp-install.
-# Formats: OBJ, STL, 3MF, glTF/GLB.
+# Build a slim static Assimp (OBJ / STL / 3MF / glTF).
+# Default dirs: dependencies/assimp-build + dependencies/assimp-install.
+# Override with ASSIMP_BUILD_DIR / ASSIMP_INSTALL_DIR (qmake uses OUT_PWD/_deps).
+# Usage: scripts/build-assimp.sh [--clean]
+# Idempotent: skips when lib/libassimp.a already exists (unless --clean).
+
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ASSIMP_SRC="$ROOT/dependencies/assimp"
-BUILD_DIR="$ROOT/dependencies/assimp-build"
-INSTALL_DIR="$ROOT/dependencies/assimp-install"
+BUILD_DIR="${ASSIMP_BUILD_DIR:-$ROOT/dependencies/assimp-build}"
+INSTALL_DIR="${ASSIMP_INSTALL_DIR:-$ROOT/dependencies/assimp-install}"
+STABLE_LIB="$INSTALL_DIR/lib/libassimp.a"
+CLEAN=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --clean|-Clean|-clean) CLEAN=1 ;;
+  esac
+done
 
 if [ ! -f "$ASSIMP_SRC/CMakeLists.txt" ]; then
-  echo "Assimp sources missing at $ASSIMP_SRC (git submodule update --init dependencies/assimp)" >&2
+  echo "Assimp sources missing at $ASSIMP_SRC — run: git submodule update --init dependencies/assimp" >&2
   exit 1
 fi
 
-rm -rf "$BUILD_DIR" "$INSTALL_DIR"
+if ! command -v cmake >/dev/null 2>&1; then
+  echo "cmake not found. Install cmake (apt/dnf/pacman or: brew install cmake)." >&2
+  exit 1
+fi
+
+if [ "$CLEAN" -eq 1 ]; then
+  rm -rf "$BUILD_DIR" "$INSTALL_DIR"
+fi
+
+if [ -f "$STABLE_LIB" ] && [ "$CLEAN" -eq 0 ]; then
+  echo "Assimp already installed: $STABLE_LIB"
+  exit 0
+fi
+
 mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
 
 GENERATOR_ARGS=()
@@ -42,5 +67,15 @@ cmake -S "$ASSIMP_SRC" -B "$BUILD_DIR" "${GENERATOR_ARGS[@]}" \
 
 cmake --build "$BUILD_DIR" --config Release --parallel
 cmake --install "$BUILD_DIR" --config Release
+
+if [ ! -f "$STABLE_LIB" ] && [ -f "$INSTALL_DIR/lib64/libassimp.a" ]; then
+  mkdir -p "$INSTALL_DIR/lib"
+  cp -f "$INSTALL_DIR/lib64/libassimp.a" "$STABLE_LIB"
+fi
+
+if [ ! -f "$STABLE_LIB" ]; then
+  echo "Assimp install finished but $STABLE_LIB is missing" >&2
+  exit 1
+fi
 
 echo "Slim Assimp installed to $INSTALL_DIR"

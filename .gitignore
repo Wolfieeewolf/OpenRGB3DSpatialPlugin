@@ -16,7 +16,9 @@ debug/
 release/
 dist/
 
-# Assimp local build / portable CMake (scripts/build-assimp.ps1)
+# Assimp local build / portable CMake (manual scripts/build-assimp.*; qmake uses OUT_PWD/_deps)
+_deps/
+**/_deps/
 dependencies/cmake/
 dependencies/cmake-*/
 dependencies/assimp-build/
@@ -24,6 +26,7 @@ dependencies/assimp-build-*/
 dependencies/assimp-install/
 dependencies/assimp-install-*/
 dependencies/cmake-win64.zip
+cmake-win64.zip
 
 # WiX MSI intermediates (scripts/ci/build-msi.ps1)
 *.wxs
@@ -76,8 +79,11 @@ desktop.ini
 
 # IDE files
 .vscode/
+.vs/
 .idea/
 .qtcreator/
+CMakeCache.txt
+CMakeFiles/
 .cursor/
 .cursorignore
 **/.qtc_clangd/

@@ -4,6 +4,7 @@
 #include "RGBController.h"
 #include "filesystem.h"
 #include <nlohmann/json.hpp>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -11,9 +12,11 @@ namespace Action
 {
 
 constexpr int kFormatVersion = 5;
-/** Oldest pack version FromJson/LoadFromFile still accept (upgraded in memory / on disk). */
+/** Oldest pack version FromJson/LoadFromFile still accept (defaults filled in memory). */
 constexpr int kMinLoadFormatVersion = 4;
 constexpr int kMaxDurationMs = 60000;
+/** Fail-closed ceiling for pack JSON on disk / HTTP-adjacent loads. */
+constexpr std::size_t kMaxPackJsonBytes = 2u * 1024u * 1024u;
 constexpr const char* kFormatId = "openrgb3d.action";
 constexpr const char* kFileSuffix = ".action.json";
 
