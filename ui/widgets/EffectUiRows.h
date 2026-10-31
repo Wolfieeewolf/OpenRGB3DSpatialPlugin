@@ -8,7 +8,6 @@
 #include "EffectLabeledComboRow.h"
 #include "EffectLabeledSpinRow.h"
 #include "EffectCollapsibleSection.h"
-#include "EffectSectionHeading.h"
 #include "EffectSliderRow.h"
 
 #include <QVBoxLayout>
@@ -57,17 +56,6 @@ inline QVBoxLayout* AppendCollapsibleSectionBody(QVBoxLayout* layout,
 {
     EffectCollapsibleSection* section = AppendCollapsibleSection(layout, title, tooltip, start_expanded);
     return section ? section->bodyLayout() : nullptr;
-}
-
-inline void AppendSectionHeading(QVBoxLayout* layout, const QString& title)
-{
-    if(!layout || title.isEmpty())
-    {
-        return;
-    }
-    auto* heading = new EffectSectionHeading();
-    heading->setTitle(title);
-    layout->addWidget(heading);
 }
 
 inline EffectCheckRow* AppendCheckRow(QVBoxLayout* layout,

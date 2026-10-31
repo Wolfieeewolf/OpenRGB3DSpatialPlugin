@@ -87,6 +87,11 @@ QString LoadShaderBodyFromPath(const QString& path)
     {
         return QString();
     }
+    constexpr qint64 kMaxShaderBytes = 512 * 1024;
+    if(file.size() < 0 || file.size() > kMaxShaderBytes)
+    {
+        return QString();
+    }
     QString body;
     QTextStream stream(&file);
     bool header = true;

@@ -55,6 +55,19 @@ If you expect plug-and-play with zero reading, this will probably frustrate you�
 - Room viewport needs **OpenGL 4.1 Core**. Qt5 hosts are not supported.
 - Install the matching release artifact into OpenRGBâ€™s `plugins` folder (or rebuild with `scripts/install-linux-user.sh` for distro OpenRGB). Flatpak OpenRGB needs the Flatpak extension â€” do not load a host `.so`.
 
+### Building from source
+
+Baseline toolchain matches upstream OpenRGB ([`OpenRGB/Documentation/Compiling.md`](OpenRGB/Documentation/Compiling.md)): Git, Qt, and a C++ compiler (MSVC on Windows).
+
+**Extras for this plugin:**
+
+1. Clone with submodules: `git clone --recurse-submodules …` (or `git submodule update --init`).
+2. **CMake** (needed once so the first Build can compile Assimp for mesh import — OpenRGB itself does not require it):
+   - **Windows:** Qt Maintenance Tool → *Build Tools* → **CMake**, **or** Visual Studio Installer → **C++ CMake tools for Windows** (either is enough). Ninja is optional. If you use **VS 2026**, prefer a CMake that lists the `Visual Studio 18 2026` generator (VS’s own CMake tools, or CMake 4.x) — Qt’s older *Build Tools* CMake may only know VS 2022.
+   - **Linux:** install `cmake` from your distro (`apt` / `dnf` / …).
+   - **macOS:** `brew install cmake`.
+3. Open `OpenRGB3DSpatialPlugin.pro` in Qt Creator (or qmake) and Build. Assimp is built automatically into the build tree (`_deps/`) on first link; Clean removes it. You do not need to run `scripts/build-assimp.*` by hand.
+
 More detail: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## What exists (high level)

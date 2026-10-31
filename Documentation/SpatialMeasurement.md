@@ -184,13 +184,13 @@ Sky is optional (`kFlagSkyEnabled`). Open-air rays use upward-biased sky/weather
 
 | Concern | Primary files |
 |---------|----------------|
-| Plugin mm/grid (do not duplicate) | [`PluginSpatialMeasurement.md`](PluginSpatialMeasurement.md), `GridSpaceUtils.cpp` |
-| Space helpers | `SpatialSamplers/SpatialBasisUtils.h`, `RoomSampleMapping.*` |
-| MC scale publish | `MinecraftGame.cpp` `ComputeRoomToWorldScale`, `RoomSampleConfigPublisher.cpp` |
+| Plugin mm/grid (do not duplicate) | [`PluginSpatialMeasurement.md`](PluginSpatialMeasurement.md), `shared/zones/GridSpaceUtils.cpp` |
+| Space helpers | `shared/SpatialSamplers/SpatialBasisUtils.h`, `shared/SpatialSamplers/RoomSampleMapping.*` |
+| MC scale publish | `engines/game/Minecraft/MinecraftGame.cpp` (`ComputeRoomToWorldScale`), `engines/game/Game/RoomSampleConfigPublisher.cpp` |
 | Protocol / flags | `engines/game/Game/RoomSampleFrameProtocol.h` |
 | Sparse frame write (mod) | `integrations/minecraft/.../RoomSampleFrameShmWriter.java`, `OpenRGBSenderMod.java` |
 | Sparse frame read (plugin) | `engines/game/Game/RoomSampleFrameShmReader.cpp` |
-| MC world / ray map | `RoomSampleWorldMapper.java` |
-| SHM sample → LED | `SpatialSamplers/RoomSampleMapping.cpp` |
+| MC world / ray map | `RoomSampleWorldMapper.java` (under `integrations/minecraft/`) |
+| SHM sample → LED | `shared/SpatialSamplers/RoomSampleMapping.cpp` |
 
 **Rule for changes:** plugin distances stay in the plugin doc; this file only adds the **single** `room_to_world_scale` step, PlayerLocal/GameWorld transforms, and the cubemap SHM contract.

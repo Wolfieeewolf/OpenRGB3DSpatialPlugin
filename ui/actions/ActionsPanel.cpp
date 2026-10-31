@@ -166,7 +166,18 @@ filesystem::path ActionsPanel::selectedEffectsSaveDir() const
     {
         return root;
     }
-    return root / QStringToPath(filter);
+    const filesystem::path cat = QStringToPath(filter);
+    if(cat.empty() || cat.is_absolute() || PluginSettingsPaths::PathHasDotDot(cat)
+       || !PluginSettingsPaths::IsSafePathLeaf(cat.generic_string()))
+    {
+        return {};
+    }
+    const filesystem::path dest = root / cat;
+    if(!PluginSettingsPaths::PathStaysUnderRoot(root, dest))
+    {
+        return {};
+    }
+    return dest;
 }
 
 void ActionsPanel::rebuildCategoryCombo()
@@ -412,7 +423,19 @@ void ActionsPanel::onImport()
             continue;
         }
 
-        const filesystem::path dest = dir / QStringToPath(src_info.fileName());
+        const filesystem::path leaf = QStringToPath(src_info.fileName());
+        if(leaf.empty() || leaf.is_absolute() || PluginSettingsPaths::PathHasDotDot(leaf)
+           || !PluginSettingsPaths::IsSafePathLeaf(leaf.generic_string()))
+        {
+            ++failed;
+            continue;
+        }
+        const filesystem::path dest = dir / leaf;
+        if(!PluginSettingsPaths::PathStaysUnderRoot(dir, dest))
+        {
+            ++failed;
+            continue;
+        }
         const QString dest_q = PathToQString(dest);
         if(src_info.canonicalFilePath().compare(QFileInfo(dest_q).canonicalFilePath(), Qt::CaseInsensitive) == 0)
         {
@@ -479,6 +502,12 @@ void ActionsPanel::onNew()
     }
     stopPreview();
     const filesystem::path save_dir = selectedEffectsSaveDir();
+    if(save_dir.empty())
+    {
+        QMessageBox::warning(this, QStringLiteral("Actions"),
+                             QStringLiteral("Cannot create a pack outside the triggers effects folder."));
+        return;
+    }
     std::error_code ec;
     filesystem::create_directories(save_dir, ec);
     editor->NewPack(save_dir);

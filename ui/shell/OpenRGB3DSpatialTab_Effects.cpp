@@ -41,6 +41,8 @@
 #include <system_error>
 #include <set>
 #include <unordered_set>
+#include <QComboBox>
+#include <QVariant>
 
 namespace
 {
@@ -1447,6 +1449,12 @@ void OpenRGB3DSpatialTab::SaveStackPresets()
     {
         const filesystem::path file_path =
             PluginSettingsPaths::StackPresetFile(resource_manager, stack_presets[i]->name);
+        if(file_path.empty())
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Refusing unsafe stack preset name: %s",
+                      stack_presets[i]->name.c_str());
+            continue;
+        }
         const std::string filename = file_path.string();
 
         std::ofstream file(filename);
@@ -1518,7 +1526,13 @@ void OpenRGB3DSpatialTab::saveStackPresetClicked()
         return;
     }
 
-    std::string preset_name = name.toStdString();
+    std::string preset_name = name.trimmed().toStdString();
+    if(!PluginSettingsPaths::IsSafePathLeaf(preset_name))
+    {
+        QMessageBox::warning(this, "Invalid Name",
+                             "Preset name cannot contain path separators or '..'.");
+        return;
+    }
 
     for(unsigned int i = 0; i < stack_presets.size(); i++)
     {
@@ -1612,7 +1626,7 @@ void OpenRGB3DSpatialTab::deleteStackPresetClicked()
     {
         const filesystem::path file_path =
             PluginSettingsPaths::StackPresetFile(resource_manager, preset->name);
-        if(filesystem::exists(file_path))
+        if(!file_path.empty() && filesystem::exists(file_path))
         {
             std::error_code remove_ec;
             filesystem::remove(file_path, remove_ec);
@@ -1628,3 +1642,94 @@ void OpenRGB3DSpatialTab::deleteStackPresetClicked()
                             QString("Stack preset \"%1\" deleted successfully!").arg(preset_name));
 }
 
+
+namespace
+{
+constexpr int kEffectProfileVersion = 9;
+constexpr int kMinSupportedEffectProfileVersion = 9;
+}
+
+nlohmann::json OpenRGB3DSpatialTab::BuildEffectProfileJson() const
+{
+    nlohmann::json profile_json;
+    profile_json["version"] = kEffectProfileVersion;
+
+    nlohmann::json stack_json = nlohmann::json::array();
+    for(size_t i = 0; i < effect_stack.size(); i++)
+    {
+        if(effect_stack[i])
+        {
+            stack_json.push_back(effect_stack[i]->ToJson());
+        }
+    }
+    profile_json["stack"] = stack_json;
+    profile_json["selected_stack_index"] = effectStackList() ? effectStackList()->currentRow() : -1;
+
+    if(effectOriginCombo())
+    {
+        profile_json["origin_item_data"] = effectOriginCombo()->currentData().toInt();
+    }
+
+    return profile_json;
+}
+
+bool OpenRGB3DSpatialTab::ApplyEffectProfileJson(const nlohmann::json& profile_json)
+{
+    try
+    {
+        if(!profile_json.is_object())
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile root must be a JSON object");
+            return false;
+        }
+        if(!profile_json.contains("version") || !profile_json["version"].is_number_integer())
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile missing version");
+            return false;
+        }
+        const int version = profile_json["version"].get<int>();
+        if(version < kMinSupportedEffectProfileVersion || version > kEffectProfileVersion)
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile unsupported version %d (need %d)",
+                      version, kEffectProfileVersion);
+            return false;
+        }
+        if(!profile_json.contains("stack") || !profile_json["stack"].is_array())
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile missing stack array");
+            return false;
+        }
+
+        RebuildEffectStackFromJson(profile_json["stack"]);
+
+        int desired_index = -1;
+        if(profile_json.contains("selected_stack_index"))
+        {
+            desired_index = profile_json["selected_stack_index"].get<int>();
+        }
+        if(desired_index < 0 || desired_index >= (int)effect_stack.size())
+        {
+            desired_index = effect_stack.empty() ? -1 : 0;
+        }
+
+        ApplyLoadedStackSelection(desired_index);
+
+        if(effectOriginCombo() && profile_json.contains("origin_item_data") &&
+           profile_json["origin_item_data"].is_number_integer())
+        {
+            int ref_data = profile_json["origin_item_data"].get<int>();
+            int idx = effectOriginCombo()->findData(QVariant(ref_data));
+            if(idx >= 0)
+            {
+                effectOriginCombo()->setCurrentIndex(idx);
+            }
+        }
+
+        return true;
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to apply effect profile: %s", e.what());
+        return false;
+    }
+}

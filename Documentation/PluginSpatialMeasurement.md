@@ -24,9 +24,9 @@ grid_units = mm / grid_scale_mm
 mm       = grid_units * grid_scale_mm
 ```
 
-Functions: `MMToGridUnits`, `GridUnitsToMM`, `SafeGridScaleMm` in `GridSpaceUtils.cpp`.
+Functions: `MMToGridUnits`, `GridUnitsToMM`, `SafeGridScaleMm` in `shared/zones/GridSpaceUtils.cpp`.
 
-Constants: `DEFAULT_GRID_SCALE_MM` (10), `DEFAULT_ROOM_SIZE_MM` (1000) in `GridSpaceUtils.h`.
+Constants: `DEFAULT_GRID_SCALE_MM` (10), `DEFAULT_ROOM_SIZE_MM` (1000) in `shared/zones/GridSpaceUtils.h`.
 
 Rules:
 
@@ -237,16 +237,16 @@ Effects should use `GridContext3D` bounds and `grid_scale_mm`. Avoid hard-coded 
 
 | Concern | Primary files |
 |---------|----------------|
-| mm ↔ grid conversion | `GridSpaceUtils.h`, `GridSpaceUtils.cpp` |
+| mm ↔ grid conversion | `shared/zones/GridSpaceUtils.h`, `shared/zones/GridSpaceUtils.cpp` |
 | Room bounds | `ComputeGridBounds`, `ComputeRoomAlignedBounds` |
-| LED layout + spacing | `ControllerLayout3D.cpp`, `VirtualController3D.cpp` |
+| LED layout + spacing | `shared/controllers/ControllerLayout3D.cpp`, `shared/controllers/VirtualController3D.cpp` |
 | World positions | `ControllerLayout3D::UpdateWorldPositions` |
-| Render grid context | `ui/OpenRGB3DSpatialTab_EffectsRender.cpp` |
-| Effect origin | `SpatialEffect3D::GetReferencePointGrid`, `GetEffectOriginGrid` |
-| Viewport room box | `ui/LEDViewport3D.cpp` (`SetRoomDimensions` mm → draw via grid scale) |
-| Display planes | `DisplayPlane3D.h`, `Geometry3DUtils.h` (`SpatialMapToScreen`) |
+| Render grid context | `ui/shell/OpenRGB3DSpatialTab_EffectsRender.cpp` |
+| Effect origin | `shared/effects/SpatialEffect3D` (`GetReferencePointGrid`, `GetEffectOriginGrid`) |
+| Viewport room box | `ui/viewport/LEDViewport3D.cpp` (`SetRoomDimensions` mm → draw via grid scale) |
+| Display planes | `shared/scene/DisplayPlane3D.h`, `shared/zones/Geometry3DUtils.h` (`SpatialMapToScreen`) |
 | Spatial lighting mm params | `shared/SpatialLighting/RoomSpatialLightingUi.h`, `shared/SpatialLighting/SpatialLightingEngine.cpp` |
-| Layout persistence | `ui/OpenRGB3DSpatialTab_Layout.cpp` (`grid.scale_mm`, `room.width/depth/height`) |
+| Layout persistence | `ui/shell/OpenRGB3DSpatialTab_Layout.cpp` (`grid.scale_mm`, `room.width/depth/height`) |
 
 **Change rule:** new spatial distance logic goes through `GridSpaceUtils` or uses `GridContext3D.grid_scale_mm`. No new standalone converters.
 

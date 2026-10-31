@@ -328,28 +328,4 @@ inline void PluginUiAddSectionBlock(QVBoxLayout* main_layout,
     }
 }
 
-inline void PluginUiAddEffectTransportButtons(QHBoxLayout* row,
-                                              QPushButton** out_start = nullptr,
-                                              QPushButton** out_stop = nullptr)
-{
-    if(!row)
-    {
-        return;
-    }
-    QPushButton* start = new QPushButton(QStringLiteral("Start Effect"));
-    QPushButton* stop  = new QPushButton(QStringLiteral("Stop Effect"));
-    stop->setEnabled(false);
-    row->addWidget(start);
-    row->addWidget(stop);
-    row->addStretch();
-    if(out_start)
-    {
-        *out_start = start;
-    }
-    if(out_stop)
-    {
-        *out_stop = stop;
-    }
-}
-
 #endif

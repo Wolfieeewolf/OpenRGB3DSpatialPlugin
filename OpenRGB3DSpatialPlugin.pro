@@ -196,6 +196,9 @@ HEADERS += \
     engines/actions/ActionPlayer.h \
     engines/actions/ActionApplier.h \
     engines/actions/ActionApplierDetail.h \
+    engines/actions/ActionClipEval.h \
+    engines/actions/ActionDetail.h \
+    engines/actions/ActionScript.h \
     engines/volume-field/ActionVolumeField.h \
     engines/particle-field/ActionParticleField.h \
     engines/ribbon-field/ActionRibbonField.h \
@@ -210,7 +213,6 @@ HEADERS += \
     engines/triggers/TriggerSourceRegistry.h \
     engines/triggers/TriggerRuntime.h \
     shared/SpatialRoom/SpatialRoomTypes.h \
-    shared/SpatialRoom/SpatialRoomDefaults.h \
     shared/SpatialRoom/SpatialRoomFrame.h \
     shared/SpatialLighting/BlockerGridOccluder.h \
     shared/SpatialLighting/OccluderSpatialIndex.h \
@@ -234,6 +236,9 @@ HEADERS += \
     ui/actions/ActionGradientBar.h \
     ui/actions/ActionCurveBar.h \
     ui/actions/ActionToolBar.h \
+    ui/actions/ActionCatalog.h \
+    ui/actions/ActionUserCurves.h \
+    ui/actions/ActionUserGradients.h \
     ui/actions/TriggersPanel.h \
     ui/effects/EffectStackPanel.h \
     ui/shell/ZonesPanel.h \
@@ -404,7 +409,6 @@ SOURCES += \
     engines/triggers/MacTriggerSource.cpp \
     engines/triggers/TriggerSourceRegistry.cpp \
     engines/triggers/TriggerRuntime.cpp \
-    shared/SpatialRoom/SpatialRoomDefaults.cpp \
     shared/SpatialRoom/SpatialRoomFrame.cpp \
     shared/SpatialLighting/BlockerGridOccluder.cpp \
     shared/SpatialLighting/OccluderSpatialIndex.cpp \
@@ -418,7 +422,6 @@ SOURCES += \
     ui/viewport/SceneTransformPanel.cpp \
     ui/viewport/SceneObjectSpacingPanel.cpp \
     ui/viewport/SceneObjectEditHostPanel.cpp \
-    ui/shell/OpenRGB3DSpatialTab_SetupSceneObjectEdit.cpp \
     ui/viewport/PositionAxisDragController.cpp \
     ui/shell/ObjectCreatorTabPanel.cpp \
     ui/controllers/ControllerListPanel.cpp \
@@ -451,12 +454,10 @@ SOURCES += \
     ui/shell/OpenRGB3DSpatialTab_SetupSceneProps.cpp \
     ui/shell/OpenRGB3DSpatialTab_Layout.cpp \
     ui/shell/OpenRGB3DSpatialTab_LayoutCustomControllers.cpp \
-    ui/shell/OpenRGB3DSpatialTab_Settings.cpp \
     ui/shell/OpenRGB3DSpatialTab_Scene.cpp \
     ui/controllers/ZoneControllerPickerDialog.cpp \
     ui/shell/OpenRGB3DSpatialTab_Effects.cpp \
     ui/shell/OpenRGB3DSpatialTab_EffectsRender.cpp \
-    ui/shell/OpenRGB3DSpatialTab_EffectsProfiles.cpp \
     ui/viewport/LEDViewport3D.cpp \
     ui/viewport/LEDViewport3D_Input.cpp \
     ui/viewport/LEDViewport3D_Camera.cpp \
@@ -502,11 +503,12 @@ SOURCES += \
     ui/widgets/EffectRoomOutputPanel.cpp \
     ui/widgets/RoomOutputDeviceCard.cpp \
     ui/widgets/EffectStackBlendRow.cpp \
-    ui/widgets/EffectCustomHost.cpp \
     ui/widgets/EffectTransportRow.cpp \
     ui/widgets/MediaTextureAmbienceBlock.cpp \
     ui/widgets/AudioEqBandColumn.cpp \
     engines/folder-volume/FolderVolumeEffect.cpp \
+    engines/folder-volume/FolderVolumeEffect_UI.cpp \
+    engines/folder-volume/FolderVolumeSpec.cpp \
     shared/PlayerEngines.cpp \
     shared/effects/EffectListManager3D.cpp \
     engines/movie-sync/MovieSync.cpp \
@@ -523,6 +525,7 @@ SOURCES += \
     shared/Shaders/SpatialStripFieldEngine.cpp \
     shared/Shaders/SpatialStripFieldAssist.cpp \
     engines/reactive/Reactive.cpp \
+    engines/reactive/Reactive_UI.cpp \
     engines/reactive/ReactiveKeyMap.cpp \
     engines/reactive/ReactiveInputManager.cpp \
     engines/screen-mirror/ScreenMirror.cpp \
@@ -531,7 +534,8 @@ SOURCES += \
     engines/screen-mirror/ScreenMirrorMonitorPanel.cpp \
     shared/SpatialPatternKernels/SpatialPatternKernels.cpp \
     shared/SpatialPatternKernels/SpatialPatternPalettes.cpp \
-    engines/audio/AudioInputManager.cpp
+    engines/audio/AudioInputManager.cpp \
+    engines/audio/AudioInputManager_Wasapi.cpp
 
 win32:CONFIG += QTPLUGIN
 win32:LIBS += \
@@ -539,40 +543,55 @@ win32:LIBS += \
     -lgdi32 -luser32 -ld3d11 -ldxgi -ld3dcompiler \
     -lws2_32 -lopengl32 -lWtsapi32
 
-# Assimp (scene-prop mesh import). Default: dependencies/assimp-install from scripts/build-assimp.*.
-# Override with ASSIMP_DIR (prefix containing include/ and lib/).
+# Assimp (scene-prop mesh import). Default: build into $$OUT_PWD/_deps on first link
+# via scripts/build-assimp.* (PRE_TARGETDEPS). Override ASSIMP_DIR to use a system prefix
+# (skips auto-build). Scripts stabilize Windows link name as assimp.lib.
 isEmpty(ASSIMP_DIR) {
-    ASSIMP_DIR = $$PWD/dependencies/assimp-install
+    ASSIMP_DIR = $$OUT_PWD/_deps/assimp-install
+    ASSIMP_AUTO_BUILD = 1
 }
+ASSIMP_BUILD_DIR = $$OUT_PWD/_deps/assimp-build
+ASSIMP_LIBDIR = $$ASSIMP_DIR/lib
 INCLUDEPATH += $$ASSIMP_DIR/include
+DEFINES += ASSIMP_STATIC
+
 win32 {
-    DEFINES += ASSIMP_STATIC
-    ASSIMP_LIBDIR = $$ASSIMP_DIR/lib
-    exists($$ASSIMP_LIBDIR/assimp-vc143-mt.lib) {
-        LIBS += -L$$ASSIMP_LIBDIR -lassimp-vc143-mt
-    } else:exists($$ASSIMP_LIBDIR/assimp-vc142-mt.lib) {
-        LIBS += -L$$ASSIMP_LIBDIR -lassimp-vc142-mt
-    } else:exists($$ASSIMP_LIBDIR/assimp.lib) {
-        LIBS += -L$$ASSIMP_LIBDIR -lassimp
-    } else {
-        warning("Assimp not found under $$ASSIMP_DIR — run scripts/build-assimp.ps1")
-    }
-    exists($$ASSIMP_LIBDIR/zlibstatic.lib) {
-        LIBS += -L$$ASSIMP_LIBDIR -lzlibstatic
+    LIBS += -L$$ASSIMP_LIBDIR -lassimp
+    equals(ASSIMP_AUTO_BUILD, 1) {
+        LIBS += -lzlibstatic
+    } else:exists($$ASSIMP_LIBDIR/zlibstatic.lib) {
+        LIBS += -lzlibstatic
     }
 }
 unix:!macx {
-    DEFINES += ASSIMP_STATIC
-    # Fedora/CMake often installs to lib64; prefer lib then lib64.
-    ASSIMP_LIBDIR = $$ASSIMP_DIR/lib
-    !exists($$ASSIMP_LIBDIR/libassimp.a):exists($$ASSIMP_DIR/lib64/libassimp.a) {
-        ASSIMP_LIBDIR = $$ASSIMP_DIR/lib64
-    }
     LIBS += -L$$ASSIMP_LIBDIR -lassimp -lz
 }
 macx {
-    DEFINES += ASSIMP_STATIC
-    LIBS += -L$$ASSIMP_DIR/lib -lassimp -lz
+    LIBS += -L$$ASSIMP_LIBDIR -lassimp -lz
+}
+
+equals(ASSIMP_AUTO_BUILD, 1) {
+    !exists($$PWD/dependencies/assimp/CMakeLists.txt) {
+        error("Assimp submodule missing — run: git submodule update --init dependencies/assimp")
+    }
+    win32 {
+        ASSIMP_LIB_FILE = $$ASSIMP_LIBDIR/assimp.lib
+        ensure_assimp.target = $$ASSIMP_LIB_FILE
+        ensure_assimp.commands = powershell -NoProfile -ExecutionPolicy Bypass -File $$shell_quote($$shell_path($$PWD/scripts/build-assimp.ps1)) -BuildDir $$shell_quote($$shell_path($$ASSIMP_BUILD_DIR)) -InstallDir $$shell_quote($$shell_path($$ASSIMP_DIR))
+        ensure_assimp.depends = $$PWD/dependencies/assimp/CMakeLists.txt
+        QMAKE_EXTRA_TARGETS += ensure_assimp
+        PRE_TARGETDEPS += $$ASSIMP_LIB_FILE
+    } else {
+        ASSIMP_LIB_FILE = $$ASSIMP_LIBDIR/libassimp.a
+        ensure_assimp.target = $$ASSIMP_LIB_FILE
+        ensure_assimp.commands = \
+            ASSIMP_BUILD_DIR=$$shell_quote($$ASSIMP_BUILD_DIR) \
+            ASSIMP_INSTALL_DIR=$$shell_quote($$ASSIMP_DIR) \
+            $$shell_quote($$PWD/scripts/build-assimp.sh)
+        ensure_assimp.depends = $$PWD/dependencies/assimp/CMakeLists.txt
+        QMAKE_EXTRA_TARGETS += ensure_assimp
+        PRE_TARGETDEPS += $$ASSIMP_LIB_FILE
+    }
 }
 
 win32:CONFIG(debug, debug|release): DESTDIR = debug

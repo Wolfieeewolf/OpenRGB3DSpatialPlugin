@@ -75,17 +75,6 @@ inline float StripCoord01(float lx, float ly, float lz, UnfoldMode mode, float d
     return std::clamp(s, 0.0f, 1.0f);
 }
 
-inline float ShellIntensityGaussianY(float ly, float surface_y, float sigma, float amp)
-{
-    float d = std::fabs(ly - surface_y);
-    float sig = std::max(sigma, 0.02f);
-    float d_cut = 3.0f * sig * std::max(1.0f, amp);
-    if(d > d_cut)
-        return 0.0f;
-    float g = std::exp(-(d * d) / (sig * sig));
-    return std::min(1.0f, g);
-}
-
 }
 
 #endif

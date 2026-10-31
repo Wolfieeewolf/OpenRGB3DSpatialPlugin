@@ -1,5 +1,6 @@
 #!/usr/bin/env pwsh
-# Publish .wiki-seed/ to the GitHub wiki repo.
+# Publish local .wiki-seed/ to the GitHub wiki repo.
+# .wiki-seed/ is gitignored local seed only (not tracked packaging) — recreate/populate before publishing.
 # One-time prerequisite: open
 #   https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki
 # and create the first page (any text). That creates the .wiki.git remote.
@@ -14,7 +15,11 @@ $Wiki = Join-Path (Split-Path $Root -Parent) 'OpenRGB3DSpatialPlugin.wiki'
 $Remote = 'https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin.wiki.git'
 
 if (-not (Test-Path $Seed)) {
-    throw "Missing seed folder: $Seed"
+    throw @"
+Missing seed folder: $Seed
+Recreate a local .wiki-seed/ with the wiki markdown pages, then re-run.
+(That folder is gitignored and is not kept in the tree by default.)
+"@
 }
 
 if (Test-Path $Wiki) {

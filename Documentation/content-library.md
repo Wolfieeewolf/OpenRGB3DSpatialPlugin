@@ -1,6 +1,6 @@
 # Content folders map
 
-The plugin is the **engine**. Plugin data root and the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) use the **same folder names** — copy-paste install. **No looks ship in the DLL**; download everything from the presets repo.
+The plugin is the **engine** (C++ under `engines/` / `shared/`). Plugin data root and the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) use the **same folder names** (`effects/volume/`, …) — copy-paste install into AppData. **No looks ship in the DLL**; those paths are not source-tree folders.
 
 ```text
 %AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin/
@@ -48,6 +48,22 @@ Each feature owns its tree.
     vlc/
   meshes/
 ```
+
+## Dump-to-presets audit (2026-10-31)
+
+Whole-plugin scan (**excluding `OpenRGB/`**): **nothing to move.** The C++ tree already has zero stock `.fs` / `.fx` / `.kernel` / action packs / controller JSONs / `effects|controllers|action-editor|triggers|movie-sync|meshes` folders.
+
+| Candidate | Verdict |
+|-----------|---------|
+| Volume/Audio/Media/Shader `.fs`, patterns, toolbox, triggers, movie-sync looks | Already in [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) only |
+| `resources/` font + plugin icon | **keep** — host UI chrome, not looks |
+| Embedded GLSL in Action/volume/particle/ribbon engines | **keep** — engine runtime, not AppData content |
+| ActionBuiltinGpu (`plasma`/`fire`/`snow`/`colorwash`) | **keep** — fail-closed builtins when toolbox missing; toolbox looks stay in presets |
+| Minecraft `REGISTER_EFFECT_3D` packs | **keep** — programmed Game engines (not `.fs` content); optional later DLL extract ≠ presets dump |
+| `integrations/minecraft` Fabric mod | **keep** with plugin |
+| Authoring docs (`shader-conversion`, recipe map) | **keep** in plugin; presets has its own `docs/` catalog/format |
+
+**Rule:** new looks → presets repo → copy into AppData. Never add stock content under this plugin checkout.
 
 ## Related
 

@@ -408,6 +408,12 @@ void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol:
     {
         return;
     }
+    std::size_t expect_bytes = 0;
+    if(!RoomSampleFrameProtocol::TryComputeRgbaBytes(hdr.size_x, hdr.size_y, hdr.size_z, expect_bytes)
+       || rgba.size() != expect_bytes)
+    {
+        return;
+    }
 
     std::lock_guard<std::mutex> guard(stats_mutex);
     telemetry.room_sample.has_frame = true;

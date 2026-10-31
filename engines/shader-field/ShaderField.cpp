@@ -41,6 +41,11 @@ ShaderFieldSpec ReadShaderFieldSpec(const QString& path)
     {
         return spec;
     }
+    constexpr qint64 kMaxSpecBytes = 512 * 1024;
+    if(file.size() < 0 || file.size() > kMaxSpecBytes)
+    {
+        return spec;
+    }
     QTextStream stream(&file);
     while(!stream.atEnd())
     {
@@ -528,7 +533,6 @@ nlohmann::json ShaderField::SaveSettings() const
     j["projection_mode"] = projection_mode;
     j["shader_contrast"] = contrast;
     j["shader_hue_shift"] = hue_shift;
-    j["shader_path"] = spec_.path.toStdString();
     return j;
 }
 

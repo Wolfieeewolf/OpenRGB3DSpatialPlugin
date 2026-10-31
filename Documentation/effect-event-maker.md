@@ -276,10 +276,10 @@ LED frames over time -> OpenRGB + 3D viewport (layout-aware)
 - `engines/actions/Action.*`  -  types, playback map, track color
 - `engines/actions/ActionSerialize.cpp`  -  load/save JSON (`openrgb3d.action`, `.action.json`)
 - `engines/actions/ActionLibrary.*`  -  scan `triggers/effects/` (no bundled seed content)
-- `ui/ActionCatalog.h`  -  Action Editor Tools (`action-editor/toolbox/`)
-- `ui/ActionsPanel.*`  -  Object Creator -> Actions
-- `ui/TriggersPanel.*`  -  Object Creator -> Triggers
+- `ui/actions/ActionCatalog.h`  -  Action Editor Tools (`action-editor/toolbox/`)
+- `ui/actions/ActionsPanel.*`  -  Object Creator -> Actions
+- `ui/actions/TriggersPanel.*`  -  Object Creator -> Triggers
 - `engines/triggers/*`  -  `triggers.json`, sources, TriggerRuntime
-- `ui/ActionEditorDialog.*`  -  Action Editor
+- `ui/actions/ActionEditorDialog.*`  -  Action Editor
 - `engines/movie-sync/*`  -  Movie Sync player + catalog
-- `PluginSettingsPaths`  -  feature folders under plugin data root
+- `ui/shell/PluginSettingsPaths.h`  -  feature folders under plugin data root (AppData `effects/volume|audio|media/`, …)

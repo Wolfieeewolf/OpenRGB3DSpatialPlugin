@@ -198,7 +198,7 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 
 ### Main spatial tab (Designer)
 
-The **3D Spatial** plugin tab shell is built from `ui/forms/OpenRGB3DSpatialTab.ui` plus embedded panel widgets. Widgets are accessed via `ui->â€¦` and panel getters (`OpenRGB3DSpatialTab::zonesList()`, etc.)â€”not duplicated pointer members on `OpenRGB3DSpatialTab`. Tab implementation is split under `ui/OpenRGB3DSpatialTab_{Setup,Layout,Scene,Effects,Settings,Audio}.cpp`; shared controller cards in `ui/ControllerCards.cpp`.
+The **3D Spatial** plugin tab shell is built from `ui/forms/OpenRGB3DSpatialTab.ui` plus embedded panel widgets. Widgets are accessed via `ui->…` and panel getters (`OpenRGB3DSpatialTab::zonesList()`, etc.)—not duplicated pointer members on `OpenRGB3DSpatialTab`. Tab implementation lives under `ui/shell/OpenRGB3DSpatialTab_*.cpp` by concern (Setup / Layout / Scene / Effects / Audio / …)—prefer named seams over crumb files; shared controller cards in `ui/ControllerCards.cpp`.
 
 ### Reuse shared UI (all effects)
 

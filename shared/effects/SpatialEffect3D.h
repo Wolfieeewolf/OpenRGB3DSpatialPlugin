@@ -122,18 +122,6 @@ struct EffectGridAxisHalfExtents
     float hd;
 };
 
-inline EffectGridAxisHalfExtents MakeEffectGridAxisHalfExtents(const GridContext3D& grid, float normalized_scale)
-{
-    float s = std::max(0.05f, normalized_scale);
-    float hw = grid.width * 0.5f * s;
-    float hh = grid.height * 0.5f * s;
-    float hd = grid.depth * 0.5f * s;
-    if(hw < 1e-6f) hw = 1.0f;
-    if(hh < 1e-6f) hh = 1.0f;
-    if(hd < 1e-6f) hd = 1.0f;
-    return {hw, hh, hd};
-}
-
 /** Origin-local GPU UV domain: each axis reaches the farther active-grid face. */
 inline EffectGridAxisHalfExtents MakeEffectGridOriginLocalHalfExtents(const GridContext3D& grid,
                                                                       const Vector3D& origin,

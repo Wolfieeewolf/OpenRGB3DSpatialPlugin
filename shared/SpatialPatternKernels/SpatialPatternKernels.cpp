@@ -54,8 +54,20 @@ void LoadKernels()
     std::sort(files.begin(), files.end(), [](const QFileInfo& a, const QFileInfo& b) {
         return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0;
     });
+    const filesystem::path patterns_root =
+        PluginSettingsPaths::PatternsDir(OpenRGB3DSpatialPlugin::APIPointer);
     for(const QFileInfo& fi : files)
     {
+#ifdef _WIN32
+        const filesystem::path file_path(fi.absoluteFilePath().toStdWString());
+#else
+        const filesystem::path file_path(fi.absoluteFilePath().toStdString());
+#endif
+        if(PluginSettingsPaths::PathHasDotDot(file_path)
+           || !PluginSettingsPaths::PathStaysUnderRoot(patterns_root, file_path))
+        {
+            continue;
+        }
         QFile file(fi.absoluteFilePath());
         if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
         {

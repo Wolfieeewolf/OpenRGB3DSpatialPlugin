@@ -103,7 +103,16 @@ void ScriptListener::onReadyRead()
         const QByteArray t = line.trimmed();
         if(t.toLower().startsWith("content-length:"))
         {
-            content_length = t.mid(15).trimmed().toInt();
+            bool ok = false;
+            content_length = t.mid(15).trimmed().toInt(&ok);
+            if(!ok)
+            {
+                socket->setProperty("buf", QByteArray());
+                socket->write(httpResponse(400, "Bad Request",
+                                           "{\"ok\":false,\"error\":\"invalid content-length\"}"));
+                socket->disconnectFromHost();
+                return;
+            }
         }
     }
     if(content_length < 0 || content_length > kMaxBodyBytes)

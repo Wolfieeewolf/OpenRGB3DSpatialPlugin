@@ -47,8 +47,8 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 
 ## Volume engine
 
-**Runs:** soft 3D fields via `SpatialVolumeFieldEngine` / FolderVolume on shared **`SpatialOffscreenGlPool`** (**4.1 Core**; shares with the room viewport — no second context). LED coloring and room-grid overlay both use **true** `volumeMain` at each sample UV (`evaluateAtPoints` / batched bake); fail closed if GL is unavailable.  
-**Library category:** Volume (`effects/volume/`).
+**Runs:** soft 3D fields via `engines/volume-field` (`SpatialVolumeFieldEngine`) hosted by `engines/folder-volume` (FolderVolume) on shared **`SpatialOffscreenGlPool`** (**4.1 Core**; shares with the room viewport — no second context). LED coloring and room-grid overlay both use **true** `volumeMain` at each sample UV (`evaluateAtPoints` / batched bake); fail closed if GL is unavailable.  
+**Library category / AppData content:** Volume (`effects/volume/*.fs` — presets repo / plugin data root, not the C++ tree).
 
 ### Required header (FolderVolume)
 
@@ -80,13 +80,13 @@ Author body: versionless GLSL with `spatialMain(out, frag_coord)`; uniforms `u_t
 
 ## Media engine
 
-**Runs:** Volume engine + media texture (`u_media`) + browse/GIF host.  
-**Library category:** Media (`effects/media/`). Images/GIF/textures only — not audio, not Movie Sync.
+**Runs:** Volume host (`engines/folder-volume`) + media texture (`u_media`) + browse/GIF host.  
+**Library category / AppData content:** Media (`effects/media/*.fs`). Images/GIF/textures only — not audio, not Movie Sync.
 
 ## Audio engine
 
-**Runs:** One FFT/bands/onset service (`AudioInputManager`) feeding Volume fields via FolderVolume (`drive: audio`, `finish: audio`).  
-**Library category:** Audio (`effects/audio/`).
+**Runs:** One FFT/bands/onset service (`engines/audio/AudioInputManager`) feeding Volume fields via `engines/folder-volume` (`drive: audio`, `finish: audio`).  
+**Library category / AppData content:** Audio (`effects/audio/*.fs`).
 
 ## Reactive engine
 

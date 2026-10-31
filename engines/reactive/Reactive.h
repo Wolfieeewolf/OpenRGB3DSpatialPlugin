@@ -130,6 +130,7 @@ private:
                    uint64_t source_key,
                    float zone_diag);
     void TickWaves(float time, const GridContext3D& grid, std::uint64_t frame_key);
+    void SyncCustomUiFromModel();
 
     bool listen_keyboard_ = true;
     bool listen_mouse_ = true;
