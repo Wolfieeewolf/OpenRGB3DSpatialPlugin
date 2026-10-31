@@ -458,7 +458,7 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             else msettings.black_bar_pillarbox_percent = 0.0f;
 
             if(mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
-            else msettings.edge_softness = 0.0f;
+            else msettings.edge_softness = 70.0f;
             if(mon.contains("propagation_speed_mm_per_ms"))
             {
                 msettings.propagation_speed_mm_per_ms = mon["propagation_speed_mm_per_ms"].get<float>();
@@ -487,7 +487,9 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             {
                 msettings.capture_zones.clear();
                 const nlohmann::json& zones_arr = mon["capture_zones"];
-                for(size_t zi = 0; zi < zones_arr.size(); zi++)
+                for(size_t zi = 0; zi < zones_arr.size() &&
+                                   msettings.capture_zones.size() < kMaxCaptureZonesPerMonitor;
+                     zi++)
                 {
                     const nlohmann::json& zone_json = zones_arr[zi];
                     CaptureZone zone;
@@ -497,6 +499,10 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                     zone.v_max = zone_json.value("v_max", 1.0f);
                     zone.enabled = zone_json.value("enabled", true);
                     zone.name = zone_json.value("name", "Zone");
+                    if(zone.name.size() > kMaxCaptureZoneNameChars)
+                    {
+                        zone.name.resize(kMaxCaptureZoneNameChars);
+                    }
                     
                     zone.u_min = std::clamp(zone.u_min, 0.0f, 1.0f);
                     zone.u_max = std::clamp(zone.u_max, 0.0f, 1.0f);
@@ -719,8 +725,9 @@ void ScreenMirror::OnParameterChanged()
         }
     }
 
+    // Do not rebuild ref-point combos here — that wiped/restored on every slider tick and
+    // made layout-point selection feel dead. Refresh only when the scene ref list changes.
     RefreshMonitorStatus();
-    RefreshReferencePointDropdowns();
 
     emit ParametersChanged();
     in_parameter_change_ = false;
@@ -771,7 +778,8 @@ void ScreenMirror::RefreshReferencePointDropdowns()
 
         settings.ref_point_combo->addItem("Follow layer Spatial Anchor", QVariant(-1));
         settings.ref_point_combo->setItemData(0,
-            "Falloff origin follows this layer's Spatial Anchor (mapped-lights center by default, like other effects). Screen UVs stay on the display plane.",
+            QStringLiteral("Reach / wave origin follows this layer's Spatial Anchor. "
+                           "Does not move screen UV sampling (still the display plane)."),
             Qt::ToolTipRole);
 
         for(size_t i = 0; i < reference_points->size(); i++)
@@ -785,7 +793,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
             settings.ref_point_combo->addItem(display, QVariant(ref_point->GetId()));
             const int row = settings.ref_point_combo->count() - 1;
             settings.ref_point_combo->setItemData(row,
-                QStringLiteral("Measure reach/falloff from layout point \"%1\" instead of the layer Spatial Anchor. Screen UVs stay on the display plane.").arg(name),
+                QStringLiteral("Measure Reach / wave delay from \"%1\". Screen colors still sample the display plane.").arg(name),
                 Qt::ToolTipRole);
         }
 

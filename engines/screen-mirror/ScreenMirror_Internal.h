@@ -20,6 +20,9 @@ constexpr float kWhiteRolloffStoredMax = static_cast<float>(kWhiteRolloffSliderM
 constexpr int kScreenMapRollTicksPerDegree = 2;
 constexpr int kScreenMapRollSliderMax = 180 * kScreenMapRollTicksPerDegree;
 
+constexpr std::size_t kMaxCaptureZonesPerMonitor = 64u;
+constexpr std::size_t kMaxCaptureZoneNameChars = 128u;
+
 inline QString FormatRadialMapUi(int ui_0_100)
 {
     const int v = (int)std::lround(RadialMapUiToInternal(ui_0_100));

@@ -98,6 +98,8 @@ Library category **Reactive**. No Effect Library content folder.
 **Player codec** registered at Load via `RegisterScreenMirrorEngine()`.  
 Library category **Ambilight**. No Effect Library content folder.
 
+**GPU vs CPU:** DXGI capture + quality downscale are GPU (D3D11); LED mapping (plane UV, zones, reach/falloff, wave, grade) stays CPU — same pattern as Action Media frame sampling, not FolderVolume `volumeMain`. Default capture quality is **1080p** so DXGI GPU-scales before CPU readback; **Native** is opt-in for full-res.
+
 ## Movie Sync engine
 
 **Player codec** registered at Load via `RegisterMovieSyncEngine()`.  

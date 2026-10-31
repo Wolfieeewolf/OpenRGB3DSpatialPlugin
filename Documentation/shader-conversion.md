@@ -32,4 +32,16 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 Volume/Audio/Media LED and room-grid paths, strip/Shader Field engines where they still bake fields, and the room viewport use **OpenGL 4.1 Core** with `#version 410 core` wrappers. Author `.fs` bodies must not include `#version` or legacy GLSL (`texture2D`, `attribute`, `varying`, `gl_FragColor`). Do not use GLSL reserved words as identifiers (`layout`, `packed`, `flat`, `shared`, ...) — rename them (e.g. `place`, `pack_val`, `y_fall`).
 
-GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist` — runs on shared **`SpatialOffscreenGlPool`** (no second context; fail closed if GL is unavailable — no parallel CPU formula for the same look). **Screen Mirror** stays on CPU: DXGI/GDI capture, `SpatialMapToScreen`, nearest-texel sample, optional LED EMA, then color grade. Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.
+GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist` — runs on shared **`SpatialOffscreenGlPool`** (no second context; fail closed if GL is unavailable — no parallel CPU formula for the same look).
+
+**Screen Mirror / Ambilight split (intentional — do not fake a volumeMain dual):**
+
+| Stage | Where | Notes |
+|-------|--------|--------|
+| Desktop duplication | **GPU** (DXGI D3D11) | Prefer SDR BGRA; HDR formats refuse → GDI |
+| Capture downscale | **GPU** (D3D11 blit) when quality &lt; native | Cap (default 1080p) before CPU readback |
+| Full-res Native / GDI / Linux·mac grab | **CPU** | BitBlt or `QScreen::grabWindow` + box scale |
+| Plane UV, zones, falloff, wave delay, EMA, grade | **CPU** | Per-LED; OpenRGB write path is CPU colours |
+| Viewport plane preview | **GPU** (GL upload of same CPU frame) | Display only |
+
+Procedural Volume/FolderVolume use true-GPU point eval because the heavy work is GLSL. Ambilight’s heavy work is already the capture; LED sample is a few loads — keeping mapping on CPU is the correct ceiling until a dedicated surface sampler exists (not volumeMain). Falloff/wave origin is Spatial Anchor (or a layout point); screen UVs always come from the plane. Span/falloff/time-to-edge use the live grid AABB × `grid_scale_mm`. CPU also keeps **analysis** (FFT / bands / onset in `AudioInputManager`) and Minecraft.

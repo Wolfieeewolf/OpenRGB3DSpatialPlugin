@@ -144,20 +144,25 @@ namespace
         {
             return 0.0f;
         }
+        const float curve_clamped = std::clamp(curve, 0.25f, 4.0f);
         if(inverted)
         {
-            float range = std::max(max_mm * coverage, 10.0f);
-            if(dist_mm <= range * (1.0f - softness / 100.0f))
-            {
-                return 1.0f;
-            }
+            // Bright at Spatial Anchor / reference, dark past Reach. Softness grows a flat
+            // core (100% ≈ old hard ball). Curve shapes the fade — so Falloff curve is live
+            // in the default (inverted) mode, and moving the reference is visible.
+            const float range = std::max(max_mm * coverage, 10.0f);
             if(dist_mm >= range)
             {
                 return 0.0f;
             }
-            float feather = range * (softness / 100.0f);
-            float core = range - feather;
-            float t = std::clamp((dist_mm - core) / std::max(feather, 1e-4f), 0.0f, 1.0f);
+            float nd = std::clamp(dist_mm / range, 0.0f, 1.0f);
+            nd = powf(nd, curve_clamped);
+            const float plateau = std::clamp(softness / 100.0f, 0.0f, 0.95f);
+            if(nd <= plateau)
+            {
+                return 1.0f;
+            }
+            float t = std::clamp((nd - plateau) / std::max(1.0f - plateau, 1e-4f), 0.0f, 1.0f);
             t = t * t * (3.0f - 2.0f * t);
             return 1.0f - t;
         }
@@ -166,7 +171,7 @@ namespace
             return 1.0f;
         }
         float nd = std::clamp(dist_mm / std::max(max_mm, 1.0f), 0.0f, 1.0f);
-        nd = powf(nd, std::clamp(curve, 0.25f, 4.0f));
+        nd = powf(nd, curve_clamped);
         float boundary = std::max(0.0f, 1.0f - coverage);
         if(boundary <= 0.0005f)
         {
@@ -341,6 +346,9 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
 
 void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& grid)
 {
+    // Shared per-frame hook name — Screen Mirror prepares CPU sample state here
+    // (capture frames are already GPU-scaled on DXGI when quality is capped).
+    // PrefersTrueGpuVolumeSamples stays false: LED mapping is not volumeMain.
     RefreshFrameCacheForRenderSequence(grid);
     smooth_ms_ = 0.0f;
     sample_tick_.clear();

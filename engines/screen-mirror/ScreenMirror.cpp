@@ -16,7 +16,11 @@
 #include "ui_ScreenMirrorEffectShell.h"
 
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QGroupBox>
+#include <QComboBox>
+#include <QStackedWidget>
+#include <QLabel>
 #include <QFont>
 #include <QString>
 #include <QSignalBlocker>
@@ -36,14 +40,16 @@ void RegisterScreenMirrorEngine()
 
 ScreenMirror::ScreenMirror(QWidget* parent)
     : SpatialEffect3D(parent)
-    , capture_quality(kScreenMirrorQualityNative)
+    , capture_quality(5)
     , capture_quality_combo(nullptr)
-    , capture_backend_mode(1)
+    , capture_backend_mode(0)
     , capture_backend_combo(nullptr)
     , monitor_status_label(nullptr)
     , monitor_help_label(nullptr)
     , monitors_container(nullptr)
     , monitors_layout(nullptr)
+    , monitor_select_combo(nullptr)
+    , monitor_stack(nullptr)
     , in_parameter_change_(false)
     , reference_points(nullptr)
     , frame_cache_refresh_ms_(0)
@@ -92,6 +98,8 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     monitor_help_label = nullptr;
     monitors_container = nullptr;
     monitors_layout = nullptr;
+    monitor_select_combo = nullptr;
+    monitor_stack = nullptr;
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
@@ -240,15 +248,28 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->addItem("1440p (2560×1440)", QVariant(6));
     capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
     capture_quality_combo->setToolTip(
-        "Native copies each monitor at its current resolution (never upscales). "
-        "Lower entries cap GPU scale before CPU readback.");
+        "Windows DXGI: capped sizes GPU-scale on D3D11, then CPU-read for LED mapping "
+        "(default 1080p). Native = full display copy to CPU (heavier). "
+        "Never upscales. Linux/macOS scale on CPU after QScreen grab. "
+        "LED colors always sample on CPU (plane UV, zones, falloff, wave) — that is intentional.");
     SelectCaptureQualityCombo(capture_quality);
+    {
+        int w = 1920;
+        int h = 1080;
+        ScreenMirrorQualityToSize(capture_quality, w, h);
+        ScreenCaptureManager::Instance().SetDownscaleResolution(w, h);
+    }
 
     capture_backend_combo = capture_ui.captureBackendCombo;
-    capture_backend_combo->addItem("Auto (GDI if DXGI stalls)", QVariant(0));
+    capture_backend_combo->addItem("Auto (DXGI, GDI on stall)", QVariant(0));
     capture_backend_combo->addItem("DXGI only", QVariant(1));
     capture_backend_combo->addItem("GDI only", QVariant(2));
     capture_backend_combo->setCurrentIndex(std::clamp(capture_backend_mode, 0, 2));
+    capture_backend_combo->setToolTip(
+        "Windows: Auto stays on DXGI and reuses the last frame when the desktop is idle; "
+        "GDI only after a real stall/access loss, then a dwell before DXGI retry. "
+        "DXGI requests SDR BGRA (HDR duplication is refused). "
+        "No effect on Linux/macOS (QScreen grab).");
 
     QVBoxLayout* capture_host_layout = new QVBoxLayout(shell_ui.capturePanelHost);
     capture_host_layout->setContentsMargins(0, 0, 0, 0);
@@ -377,9 +398,86 @@ bool ScreenMirror::ShouldShowScreenPreview(const std::string& plane_name) const
     return false;
 }
 
+void ScreenMirror::EnsureMonitorPicker()
+{
+    if(!monitors_layout || monitor_stack)
+    {
+        return;
+    }
+
+    auto* picker_row = new QWidget();
+    auto* picker_layout = new QHBoxLayout(picker_row);
+    picker_layout->setContentsMargins(0, 0, 0, 4);
+    picker_layout->setSpacing(8);
+    auto* picker_label = new QLabel(QStringLiteral("Display:"));
+    monitor_select_combo = new QComboBox();
+    monitor_select_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    monitor_select_combo->setToolTip(
+        QStringLiteral("Choose which display plane's settings to edit. Only that display's controls are shown."));
+    picker_layout->addWidget(picker_label);
+    picker_layout->addWidget(monitor_select_combo, 1);
+
+    monitor_stack = new QStackedWidget();
+    monitors_layout->addWidget(picker_row);
+    monitors_layout->addWidget(monitor_stack);
+
+    connect(monitor_select_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if(!monitor_stack || !monitor_select_combo || index < 0)
+        {
+            return;
+        }
+        const QString plane_key = monitor_select_combo->itemData(index).toString();
+        ShowMonitorSettingsPage(plane_key.toStdString());
+    });
+}
+
+void ScreenMirror::ShowMonitorSettingsPage(const std::string& plane_name)
+{
+    if(!monitor_stack || plane_name.empty())
+    {
+        return;
+    }
+    std::map<std::string, MonitorSettings>::iterator it = monitor_settings.find(plane_name);
+    if(it == monitor_settings.end() || !it->second.group_box)
+    {
+        return;
+    }
+    const int page = monitor_stack->indexOf(it->second.group_box);
+    if(page >= 0)
+    {
+        monitor_stack->setCurrentIndex(page);
+    }
+}
+
+void ScreenMirror::SyncMonitorPickerLabels()
+{
+    if(!monitor_select_combo)
+    {
+        return;
+    }
+    QSignalBlocker block(monitor_select_combo);
+    for(int i = 0; i < monitor_select_combo->count(); ++i)
+    {
+        const std::string plane_name = monitor_select_combo->itemData(i).toString().toStdString();
+        DisplayPlane3D* plane = FindDisplayPlaneByName(plane_name);
+        QString label = QString::fromStdString(plane_name);
+        if(plane && plane->GetCaptureSourceId().empty())
+        {
+            label += QStringLiteral(" (No Capture Source)");
+        }
+        monitor_select_combo->setItemText(i, label);
+    }
+}
+
 void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings)
 {
     if(!plane || !monitors_layout)
+    {
+        return;
+    }
+
+    EnsureMonitorPicker();
+    if(!monitor_stack || !monitor_select_combo)
     {
         return;
     }
@@ -391,13 +489,14 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
         display_name += QStringLiteral(" (No Capture Source)");
     }
 
-    settings.group_box = new QGroupBox(display_name);
+    settings.group_box = new QGroupBox(QStringLiteral("Enabled"));
     settings.group_box->setCheckable(true);
     settings.group_box->setChecked(settings.enabled &&
                                    (has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview));
     settings.group_box->setEnabled(true);
+    settings.group_box->setFlat(true);
     settings.group_box->setToolTip(has_capture_source
-                                      ? QStringLiteral("Enable or disable this monitor's influence.")
+                                      ? QStringLiteral("Enable or disable this display's influence on LEDs.")
                                       : QStringLiteral("Pick the Windows display this plane should capture."));
     connect(settings.group_box, &QGroupBox::toggled, this, &ScreenMirror::OnParameterChanged);
 
@@ -405,10 +504,19 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     panel->initialize(this, settings, plane, has_capture_source);
 
     auto* outer = new QVBoxLayout(settings.group_box);
-    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setContentsMargins(8, 8, 8, 8);
+    outer->setSpacing(6);
     outer->addWidget(panel);
 
-    monitors_layout->addWidget(settings.group_box);
+    monitor_stack->addWidget(settings.group_box);
+    monitor_select_combo->addItem(display_name, QString::fromStdString(plane->GetName()));
+    if(monitor_select_combo->count() == 1)
+    {
+        monitor_select_combo->setCurrentIndex(0);
+        monitor_stack->setCurrentIndex(0);
+    }
+
+    RefreshReferencePointDropdowns();
 }
 
 void ScreenMirror::RefreshMonitorStatus()
@@ -452,18 +560,13 @@ void ScreenMirror::RefreshMonitorStatus()
         }
         else if(settings.group_box)
         {
-            QString display_name = QString::fromStdString(plane_name);
-            if(!has_capture_source)
-            {
-                display_name += " (No Capture Source)";
-            }
-            settings.group_box->setTitle(display_name);
+            settings.group_box->setTitle(QStringLiteral("Enabled"));
             settings.group_box->setEnabled(true);
-            
+
             if(has_capture_source)
             {
                 settings.group_box->setToolTip(
-                    QStringLiteral("Enable or disable this monitor's influence."));
+                    QStringLiteral("Enable or disable this display's influence on LEDs."));
             }
             else
             {
@@ -520,6 +623,8 @@ void ScreenMirror::RefreshMonitorStatus()
             
         }
     }
+
+    SyncMonitorPickerLabels();
 
     QString status_text;
     if(total_count == 0)

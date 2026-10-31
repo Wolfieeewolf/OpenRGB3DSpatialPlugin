@@ -59,7 +59,7 @@
         <item>
          <widget class="QComboBox" name="captureQualityCombo">
           <property name="toolTip">
-           <string>Native matches each monitor. Caps GPU-scale on any Direct3D 11 GPU before CPU readback. Never upscales past the display.</string>
+           <string>Windows DXGI: capped sizes GPU-scale on D3D11 then CPU-read for LEDs (default 1080p). Native = full-res CPU readback. Never upscales. LED mapping stays CPU.</string>
           </property>
          </widget>
         </item>
@@ -77,7 +77,7 @@
         <item>
          <widget class="QComboBox" name="captureBackendCombo">
           <property name="toolTip">
-           <string>Windows: Auto uses GDI when DXGI stalls (static pages). Lock DXGI or GDI to reduce API-mix flicker. DXGI-only skips BitBlt (idle desktop may barely update). No effect on Linux/macOS.</string>
+           <string>Windows only. Auto prefers DXGI (SDR BGRA; HDR formats refuse and fall back). Holds the last DXGI frame on idle/empty updates — switches to GDI only after a sustained stall or access loss, then dwells before retrying DXGI (no flip-flop). DXGI-only / GDI-only lock one API. Linux/macOS always use QScreen::grabWindow (needs Screen Recording on macOS; Wayland may need a portal).</string>
           </property>
          </widget>
         </item>

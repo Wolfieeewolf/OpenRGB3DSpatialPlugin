@@ -16,6 +16,7 @@
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
+class QStackedWidget;
 struct CapturedFrame;
 
 class ScreenMirrorMonitorPanel;
@@ -172,7 +173,7 @@ public:
             , led_output_gain_b(1.0f)
             , black_bar_letterbox_percent(0.0f)
             , black_bar_pillarbox_percent(0.0f)
-            , edge_softness(0.0f)
+            , edge_softness(70.0f)
             , propagation_speed_mm_per_ms(0.0f)
             , wave_decay_ms(0.0f)
             , wave_time_to_edge_sec(0.0f)
@@ -262,6 +263,9 @@ private slots:
 private:
     void RefreshFrameCacheForRenderSequence(const GridContext3D& grid);
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
+    void EnsureMonitorPicker();
+    void SyncMonitorPickerLabels();
+    void ShowMonitorSettingsPage(const std::string& plane_name);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
     void SelectCaptureQualityCombo(int quality);
 
@@ -274,6 +278,8 @@ private:
     QLabel*             monitor_help_label;
     QGroupBox*          monitors_container;
     QVBoxLayout*        monitors_layout;
+    QComboBox*          monitor_select_combo;
+    QStackedWidget*     monitor_stack;
     std::map<std::string, MonitorSettings> monitor_settings;
 
     bool                        in_parameter_change_;

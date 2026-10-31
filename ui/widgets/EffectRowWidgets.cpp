@@ -344,6 +344,7 @@ EffectCollapsibleSection::EffectCollapsibleSection(const QString& title,
     connect(ui->toggleButton, &QToolButton::toggled, this, [this](bool expanded) {
         ui->bodyWidget->setVisible(expanded);
         refreshToggleText();
+        emit expandedChanged(expanded);
     });
 }
 

@@ -115,7 +115,7 @@ ScreenCaptureManager::ScreenCaptureManager()
     , target_width(480)
     , target_height(270)
     , target_fps(30)
-    , windows_capture_backend_mode(1)
+    , windows_capture_backend_mode(0)
     , render_tick_snapshot_active(false)
 {
 }
@@ -399,7 +399,12 @@ void ScreenCaptureManager::SetCaptureSessionActive(bool active)
 #ifdef _WIN32
 
 static constexpr UINT k_dxgi_acquire_timeout_ms = 100;
-static constexpr int k_gdi_poll_after_dxgi_timeout_ms = 200;
+// Auto mode: stay on one API at a time. Empty DXGI timeouts reuse the last frame
+// (static desktop). Only a sustained no-frame stall drops to GDI, then dwell before
+// DXGI retry — avoids DXGI↔GDI flip-flop flicker.
+static constexpr int k_auto_stall_to_gdi_ms = 1500;
+static constexpr int k_auto_gdi_dwell_ms = 5000;
+static constexpr int k_auto_dxgi_retry_ms = 5000;
 
 bool ScreenCaptureManager::InitializePlatform()
 {
@@ -571,7 +576,8 @@ struct GpuFrameBlit
             "  VS_OUT o;\n"
             "  float2 uv = float2((vid << 1) & 2, vid & 2);\n"
             "  o.pos = float4(uv * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n"
-            "  o.uv = float2(uv.x, 1.0f - uv.y);\n"
+            // Keep D3D UV top-left = (0,0) so staging matches GDI / QImage (row 0 = top).
+            "  o.uv = uv;\n"
             "  return o;\n"
             "}\n"
             "float4 ps_main(VS_OUT i) : SV_Target {\n"
@@ -885,7 +891,6 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     IDXGIOutput1* output1 = nullptr;
     IDXGIOutputDuplication* duplication = nullptr;
     UINT out_width = 0, out_height = 0;
-    bool wide_gamut = false;
 
     const int target_x0 = screen_x;
     const int target_y0 = screen_y;
@@ -991,20 +996,15 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
         return false;
     }
 
+    // Prefer SDR BGRA only — HDR FP16/R10 + GPU tonemap washed colours and fought Auto.
+    // Fall back to DuplicateOutput if the OS cannot give BGRA via DuplicateOutput1.
     IDXGIOutput6* output6 = nullptr;
     if(SUCCEEDED(output1->QueryInterface(__uuidof(IDXGIOutput6), (void**)&output6)) && output6)
     {
-        DXGI_OUTPUT_DESC1 desc1 = {};
-        if(SUCCEEDED(output6->GetDesc1(&desc1)))
-        {
-            wide_gamut = (desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
-        }
         const DXGI_FORMAT prefer_formats[] = {
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            DXGI_FORMAT_R10G10B10A2_UNORM,
             DXGI_FORMAT_B8G8R8A8_UNORM,
         };
-        hr = output6->DuplicateOutput1(device, 0, 3, prefer_formats, &duplication);
+        hr = output6->DuplicateOutput1(device, 0, 1, prefer_formats, &duplication);
         output6->Release();
         output6 = nullptr;
     }
@@ -1031,9 +1031,19 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     out_width = dup_desc.ModeDesc.Width;
     out_height = dup_desc.ModeDesc.Height;
     const DXGI_FORMAT dup_fmt = dup_desc.ModeDesc.Format;
+    // Fail closed on HDR / wide formats: Auto falls back to GDI (SDR). GPU tonemap
+    // of FP16/R10 previously washed colours and interacted badly with Auto.
+    if(dup_fmt == DXGI_FORMAT_R16G16B16A16_FLOAT || dup_fmt == DXGI_FORMAT_R10G10B10A2_UNORM)
+    {
+        LOG_WARNING("[ScreenCapture] DXGI offered HDR format 0x%x — refusing (prefer SDR BGRA / GDI)",
+                    (unsigned)dup_fmt);
+        duplication->Release();
+        context->Release();
+        device->Release();
+        return false;
+    }
     if(dup_fmt != DXGI_FORMAT_B8G8R8A8_UNORM && dup_fmt != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB &&
-       dup_fmt != DXGI_FORMAT_R8G8B8A8_UNORM && dup_fmt != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
-       dup_fmt != DXGI_FORMAT_R16G16B16A16_FLOAT && dup_fmt != DXGI_FORMAT_R10G10B10A2_UNORM)
+       dup_fmt != DXGI_FORMAT_R8G8B8A8_UNORM && dup_fmt != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)
     {
         duplication->Release();
         context->Release();
@@ -1041,8 +1051,7 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
         return false;
     }
 
-    const bool needs_hdr_tonemap =
-        (dup_fmt == DXGI_FORMAT_R16G16B16A16_FLOAT || dup_fmt == DXGI_FORMAT_R10G10B10A2_UNORM);
+    const bool needs_hdr_tonemap = false;
 
     D3D11_TEXTURE2D_DESC copy_desc = {};
     copy_desc.Width = out_width;
@@ -1089,7 +1098,7 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     out.format = dup_fmt;
     out.width = out_width;
     out.height = out_height;
-    out.wide_gamut_hdr = wide_gamut;
+    out.wide_gamut_hdr = false;
     out.use_gpu_hdr_tonemap = needs_hdr_tonemap;
     out.gpu_blit_failed = false;
     return true;
@@ -1155,11 +1164,12 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         use_dxgi = TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state);
     }
     bool logged_dxgi_unavailable = false;
+    // After dropping to GDI (access lost or sustained stall), stay there until this time.
+    std::chrono::steady_clock::time_point gdi_exclusive_until = std::chrono::steady_clock::time_point::min();
 
     uint64_t frame_counter = 0;
     std::chrono::steady_clock::time_point thread_start_tp = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point last_dxgi_retry = thread_start_tp;
-    std::chrono::steady_clock::time_point last_gdi_force = thread_start_tp;
     std::chrono::steady_clock::time_point last_frame_produced = thread_start_tp;
     std::chrono::steady_clock::time_point last_stuck_warn = thread_start_tp;
 
@@ -1174,41 +1184,156 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         }
         last_frame_produced = std::chrono::steady_clock::now();
     };
+
+    auto republish_dxgi_staging = [&]() -> bool {
+        if(dxgi_state.staging_ready < 0 || !dxgi_state.staging_texture[dxgi_state.staging_ready] || !dxgi_state.context)
+        {
+            return false;
+        }
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if(FAILED(dxgi_state.context->Map(dxgi_state.staging_texture[dxgi_state.staging_ready],
+                                          0, D3D11_MAP_READ, 0, &mapped)))
+        {
+            return false;
+        }
+        // DXGI staging is top-down (same as GDI negative-biHeight / QImage). Do not flip_y.
+        std::shared_ptr<CapturedFrame> frame = MakeCapturedFrameFromBgra(
+            (const uint8_t*)mapped.pData,
+            (int)dxgi_state.staging_w,
+            (int)dxgi_state.staging_h,
+            (int)mapped.RowPitch,
+            false,
+            frame_counter++);
+        dxgi_state.context->Unmap(dxgi_state.staging_texture[dxgi_state.staging_ready], 0);
+        store_latest(frame);
+        return true;
+    };
+
+    auto drop_to_gdi = [&](const char* reason) {
+        if(use_dxgi)
+        {
+            LOG_WARNING("[ScreenCapture] '%s' switching to GDI (%s)", source_id.c_str(), reason);
+            dxgi_state.Release();
+            use_dxgi = false;
+        }
+        gdi_exclusive_until = std::chrono::steady_clock::now() +
+            std::chrono::milliseconds(k_auto_gdi_dwell_ms);
+    };
+
+    auto capture_gdi_frame = [&]() -> bool {
+        HDC screen_dc = GetDC(nullptr);
+        if(!screen_dc)
+        {
+            return false;
+        }
+        bool ok = false;
+        HDC mem_dc = CreateCompatibleDC(screen_dc);
+        if(mem_dc)
+        {
+            int out_w = target_width.load();
+            int out_h = target_height.load();
+            ClampWorkingCaptureSize(dw, dh, out_w, out_h);
+            HBITMAP bmp = CreateCompatibleBitmap(screen_dc, out_w, out_h);
+            if(bmp)
+            {
+                HGDIOBJ old_obj = SelectObject(mem_dc, bmp);
+                SetStretchBltMode(mem_dc, HALFTONE);
+                SetBrushOrgEx(mem_dc, 0, 0, nullptr);
+                if(StretchBlt(mem_dc, 0, 0, out_w, out_h, screen_dc, dx, dy, dw, dh, SRCCOPY))
+                {
+                    BITMAPINFO bmi = {};
+                    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+                    bmi.bmiHeader.biWidth = out_w;
+                    bmi.bmiHeader.biHeight = -out_h;
+                    bmi.bmiHeader.biPlanes = 1;
+                    bmi.bmiHeader.biBitCount = 32;
+                    bmi.bmiHeader.biCompression = BI_RGB;
+
+                    std::vector<uint8_t> buffer((size_t)out_w * (size_t)out_h * 4);
+                    if(GetDIBits(mem_dc, bmp, 0, (UINT)out_h, buffer.data(), &bmi, DIB_RGB_COLORS) > 0)
+                    {
+                        store_latest(MakeCapturedFrameFromBgra(buffer.data(),
+                                                                out_w,
+                                                                out_h,
+                                                                out_w * 4,
+                                                                false,
+                                                                frame_counter++));
+                        ok = true;
+                    }
+                }
+                SelectObject(mem_dc, old_obj);
+                DeleteObject(bmp);
+            }
+            DeleteDC(mem_dc);
+        }
+        ReleaseDC(nullptr, screen_dc);
+        return ok;
+    };
+
     while(active_flag->load())
     {
         const int backend_mode = windows_capture_backend_mode.load();
         const bool allow_gdi = (backend_mode != 1);
+        const bool allow_dxgi = (backend_mode != 2);
         if(backend_mode == 2 && use_dxgi)
         {
             dxgi_state.Release();
             use_dxgi = false;
         }
+        if(backend_mode == 1 && !use_dxgi && allow_dxgi)
+        {
+            // DXGI-only: keep trying without GDI.
+            gdi_exclusive_until = std::chrono::steady_clock::time_point::min();
+        }
 
         const int loop_fps = target_fps.load();
         const int target_frame_time_ms = 1000 / (loop_fps > 0 ? loop_fps : 1);
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
+
+        // Sustained stall: exclusive GDI for dwell (Auto only) — never mix with DXGI mid-frame.
         {
-            int idle_ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_start - last_frame_produced).count();
-            int since_warn_ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_start - last_stuck_warn).count();
-            if(idle_ms >= 2000 && since_warn_ms >= 5000)
+            const int idle_ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
+                frame_start - last_frame_produced).count();
+            const int since_warn_ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
+                frame_start - last_stuck_warn).count();
+            if(idle_ms >= k_auto_stall_to_gdi_ms && use_dxgi && allow_gdi && backend_mode == 0)
             {
-                if(allow_gdi)
+                drop_to_gdi("sustained stall");
+                last_stuck_warn = frame_start;
+            }
+            else if(idle_ms >= 2000 && since_warn_ms >= 5000)
+            {
+                if(backend_mode == 1)
                 {
-                    LOG_WARNING("[ScreenCapture] '%s' has not produced a frame for %d ms (frames=%llu, use_dxgi=%d). Forcing GDI capture.",
-                                source_id.c_str(), idle_ms, (unsigned long long)frame_counter, (int)use_dxgi);
-                    last_gdi_force = frame_start - std::chrono::milliseconds(target_frame_time_ms);
+                    LOG_WARNING("[ScreenCapture] '%s' has not produced a frame for %d ms (frames=%llu, DXGI-only).",
+                                source_id.c_str(), idle_ms, (unsigned long long)frame_counter);
                 }
                 else
                 {
-                    LOG_WARNING("[ScreenCapture] '%s' has not produced a frame for %d ms (frames=%llu, DXGI-only; no GDI fallback).",
-                                source_id.c_str(), idle_ms, (unsigned long long)frame_counter);
+                    LOG_WARNING("[ScreenCapture] '%s' has not produced a frame for %d ms (frames=%llu, use_dxgi=%d).",
+                                source_id.c_str(), idle_ms, (unsigned long long)frame_counter, (int)use_dxgi);
                 }
                 last_stuck_warn = frame_start;
             }
         }
 
-        bool dxgi_timed_out = false;
-        bool frame_from_gdi = false;
+        // Auto/GDI-only: after dwell, retry DXGI once (not every GDI frame).
+        if(allow_dxgi && !use_dxgi && backend_mode != 2 && frame_start >= gdi_exclusive_until)
+        {
+            const int since_retry_ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
+                frame_start - last_dxgi_retry).count();
+            if(since_retry_ms >= k_auto_dxgi_retry_ms || last_dxgi_retry == thread_start_tp)
+            {
+                last_dxgi_retry = frame_start;
+                if(TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state))
+                {
+                    use_dxgi = true;
+                    logged_dxgi_unavailable = false;
+                    LOG_WARNING("[ScreenCapture] '%s' DXGI restored after GDI dwell", source_id.c_str());
+                }
+            }
+        }
+
         if(use_dxgi && dxgi_state.IsValid())
         {
             DXGI_OUTDUPL_FRAME_INFO frame_info;
@@ -1216,259 +1341,190 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             HRESULT hr = dxgi_state.duplication->AcquireNextFrame(k_dxgi_acquire_timeout_ms, &frame_info, &resource);
             if(hr == DXGI_ERROR_WAIT_TIMEOUT)
             {
-                dxgi_timed_out = true;
+                // Desktop unchanged — keep last frame; mark healthy so Auto does not
+                // treat a static desktop as a stall and flip to GDI.
+                if(dxgi_state.staging_ready >= 0)
+                    last_frame_produced = frame_start;
+                else
+                    republish_dxgi_staging();
             }
             else if(hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED || hr == DXGI_ERROR_DEVICE_REMOVED)
             {
-                if(windows_capture_backend_mode.load() == 1)
+                if(resource) { resource->Release(); resource = nullptr; }
+                if(allow_gdi)
                 {
-                    LOG_WARNING("[ScreenCapture] DXGI access lost for '%s' (hr=0x%08lx); releasing duplication (DXGI-only, will retry)",
-                                source_id.c_str(), (unsigned long)hr);
+                    drop_to_gdi("DXGI access lost");
                 }
                 else
                 {
-                    LOG_WARNING("[ScreenCapture] DXGI access lost for '%s' (hr=0x%08lx), falling back to GDI",
+                    LOG_WARNING("[ScreenCapture] DXGI access lost for '%s' (hr=0x%08lx); DXGI-only will retry",
                                 source_id.c_str(), (unsigned long)hr);
+                    dxgi_state.Release();
+                    use_dxgi = false;
+                    last_dxgi_retry = frame_start;
                 }
-                if(resource) { resource->Release(); resource = nullptr; }
-                dxgi_state.Release();
-                use_dxgi = false;
             }
             else if(SUCCEEDED(hr) && resource)
             {
-                if(frame_info.LastPresentTime.QuadPart == 0 && frame_info.AccumulatedFrames == 0 &&
-                   frame_counter > 0)
+                const bool dxgi_empty_update =
+                    (frame_info.LastPresentTime.QuadPart == 0 && frame_info.AccumulatedFrames == 0 &&
+                     frame_counter > 0);
+                if(dxgi_empty_update)
                 {
                     resource->Release();
                     dxgi_state.desktop_frame_acquired = true;
                     SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
-                    continue;
-                }
-
-                dxgi_state.desktop_frame_acquired = true;
-                ID3D11Texture2D* tex = nullptr;
-                hr = resource->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex);
-                resource->Release();
-                if(SUCCEEDED(hr) && tex)
-                {
-                    D3D11_TEXTURE2D_DESC acquired_desc = {};
-                    tex->GetDesc(&acquired_desc);
-                    const int target_w = target_width.load();
-                    const int target_h = target_height.load();
-                    int out_w = target_w;
-                    int out_h = target_h;
-                    ClampWorkingCaptureSize((int)dxgi_state.width, (int)dxgi_state.height, out_w, out_h);
-
-                    bool gpu_ok = false;
-                    const bool size_ok = (acquired_desc.Width == dxgi_state.width &&
-                                          acquired_desc.Height == dxgi_state.height);
-                    const bool need_tonemap = dxgi_state.use_gpu_hdr_tonemap;
-                    const bool native_bgra =
-                        (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
-                         dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
-                    const bool copy_1to1 = size_ok && !need_tonemap && native_bgra &&
-                        out_w == (int)dxgi_state.width && out_h == (int)dxgi_state.height;
-
-                    if(copy_1to1)
-                    {
-                        if(dxgi_state.EnsureStaging((UINT)out_w, (UINT)out_h, DXGI_FORMAT_B8G8R8A8_UNORM))
-                        {
-                            dxgi_state.context->CopyResource(
-                                dxgi_state.staging_texture[dxgi_state.staging_write], tex);
-                            gpu_ok = true;
-                        }
-                    }
-                    else if(size_ok && !dxgi_state.gpu_blit_failed)
-                    {
-                        dxgi_state.context->CopyResource(dxgi_state.gpu_copy, tex);
-                        const bool is_r10 = (dxgi_state.format == DXGI_FORMAT_R10G10B10A2_UNORM);
-                        float hdr_scale = 1.0f;
-                        if(need_tonemap)
-                        {
-                            if(dxgi_state.wide_gamut_hdr)
-                                hdr_scale = is_r10 ? 6.0f : 1.0f;
-                            else
-                                hdr_scale = is_r10 ? 1.5f : 1.0f;
-                        }
-                        if(dxgi_state.gpu_blit.Init(dxgi_state.device, (UINT)out_w, (UINT)out_h, dxgi_state.format) &&
-                           dxgi_state.EnsureStaging((UINT)out_w, (UINT)out_h, DXGI_FORMAT_B8G8R8A8_UNORM) &&
-                           dxgi_state.gpu_blit.Blit(dxgi_state.context,
-                                                    dxgi_state.gpu_copy_srv,
-                                                    dxgi_state.width,
-                                                    dxgi_state.height,
-                                                    need_tonemap,
-                                                    hdr_scale) &&
-                           dxgi_state.gpu_blit.CopyToStaging(
-                               dxgi_state.context,
-                               dxgi_state.staging_texture[dxgi_state.staging_write]))
-                        {
-                            gpu_ok = true;
-                        }
-                        else
-                        {
-                            dxgi_state.gpu_blit_failed = true;
-                            LOG_WARNING("[ScreenCapture] GPU blit failed for '%s'; DXGI will not scale this output",
-                                        source_id.c_str());
-                        }
-                    }
-                    tex->Release();
-                    tex = nullptr;
-
-                    if(dxgi_state.desktop_frame_acquired)
-                        SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
-
-                    if(gpu_ok)
-                    {
-                        const int ready = dxgi_state.staging_ready;
-                        dxgi_state.staging_ready = dxgi_state.staging_write;
-                        dxgi_state.staging_write = 1 - dxgi_state.staging_write;
-                        if(ready >= 0 && dxgi_state.staging_texture[ready])
-                        {
-                            D3D11_MAPPED_SUBRESOURCE mapped = {};
-                            hr = dxgi_state.context->Map(dxgi_state.staging_texture[ready], 0, D3D11_MAP_READ, 0, &mapped);
-                            if(SUCCEEDED(hr))
-                            {
-                                const UINT expected_row_bytes = dxgi_state.staging_w * 4u;
-                                if(mapped.RowPitch >= expected_row_bytes)
-                                {
-                                    std::shared_ptr<CapturedFrame> frame = MakeCapturedFrameFromBgra(
-                                        (const uint8_t*)mapped.pData,
-                                        (int)dxgi_state.staging_w,
-                                        (int)dxgi_state.staging_h,
-                                        (int)mapped.RowPitch,
-                                        true,
-                                        frame_counter++);
-                                    dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
-                                    store_latest(frame);
-                                }
-                                else
-                                {
-                                    dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
-                                    use_dxgi = false;
-                                }
-                            }
-                        }
-                        continue;
-                    }
+                    // Empty present = no pixels changed. Hold last frame; never GDI mid-DXGI.
+                    if(dxgi_state.staging_ready >= 0)
+                        last_frame_produced = frame_start;
+                    else
+                        republish_dxgi_staging();
                 }
                 else
                 {
-                    if(dxgi_state.desktop_frame_acquired)
-                        SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
+                    dxgi_state.desktop_frame_acquired = true;
+                    ID3D11Texture2D* tex = nullptr;
+                    hr = resource->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex);
+                    resource->Release();
+                    if(SUCCEEDED(hr) && tex)
+                    {
+                        D3D11_TEXTURE2D_DESC acquired_desc = {};
+                        tex->GetDesc(&acquired_desc);
+                        int out_w = target_width.load();
+                        int out_h = target_height.load();
+                        ClampWorkingCaptureSize((int)dxgi_state.width, (int)dxgi_state.height, out_w, out_h);
+
+                        bool gpu_ok = false;
+                        const bool size_ok = (acquired_desc.Width == dxgi_state.width &&
+                                              acquired_desc.Height == dxgi_state.height);
+                        const bool need_tonemap = dxgi_state.use_gpu_hdr_tonemap;
+                        const bool native_bgra =
+                            (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+                             dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+                        const bool copy_1to1 = size_ok && !need_tonemap && native_bgra &&
+                            out_w == (int)dxgi_state.width && out_h == (int)dxgi_state.height;
+
+                        if(copy_1to1)
+                        {
+                            if(dxgi_state.EnsureStaging((UINT)out_w, (UINT)out_h, DXGI_FORMAT_B8G8R8A8_UNORM))
+                            {
+                                dxgi_state.context->CopyResource(
+                                    dxgi_state.staging_texture[dxgi_state.staging_write], tex);
+                                gpu_ok = true;
+                            }
+                        }
+                        else if(size_ok && !dxgi_state.gpu_blit_failed)
+                        {
+                            dxgi_state.context->CopyResource(dxgi_state.gpu_copy, tex);
+                            const bool is_r10 = (dxgi_state.format == DXGI_FORMAT_R10G10B10A2_UNORM);
+                            float hdr_scale = 1.0f;
+                            if(need_tonemap)
+                            {
+                                if(dxgi_state.wide_gamut_hdr)
+                                    hdr_scale = is_r10 ? 6.0f : 1.0f;
+                                else
+                                    hdr_scale = is_r10 ? 1.5f : 1.0f;
+                            }
+                            if(dxgi_state.gpu_blit.Init(dxgi_state.device, (UINT)out_w, (UINT)out_h, dxgi_state.format) &&
+                               dxgi_state.EnsureStaging((UINT)out_w, (UINT)out_h, DXGI_FORMAT_B8G8R8A8_UNORM) &&
+                               dxgi_state.gpu_blit.Blit(dxgi_state.context,
+                                                        dxgi_state.gpu_copy_srv,
+                                                        dxgi_state.width,
+                                                        dxgi_state.height,
+                                                        need_tonemap,
+                                                        hdr_scale) &&
+                               dxgi_state.gpu_blit.CopyToStaging(
+                                   dxgi_state.context,
+                                   dxgi_state.staging_texture[dxgi_state.staging_write]))
+                            {
+                                gpu_ok = true;
+                            }
+                            else
+                            {
+                                dxgi_state.gpu_blit_failed = true;
+                                LOG_WARNING("[ScreenCapture] GPU blit failed for '%s'; DXGI will not scale this output",
+                                            source_id.c_str());
+                            }
+                        }
+                        tex->Release();
+                        tex = nullptr;
+
+                        if(dxgi_state.desktop_frame_acquired)
+                            SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
+
+                        if(gpu_ok)
+                        {
+                            const int ready = dxgi_state.staging_ready;
+                            dxgi_state.staging_ready = dxgi_state.staging_write;
+                            dxgi_state.staging_write = 1 - dxgi_state.staging_write;
+                            if(ready >= 0 && dxgi_state.staging_texture[ready])
+                            {
+                                D3D11_MAPPED_SUBRESOURCE mapped = {};
+                                hr = dxgi_state.context->Map(dxgi_state.staging_texture[ready], 0, D3D11_MAP_READ, 0, &mapped);
+                                if(SUCCEEDED(hr))
+                                {
+                                    const UINT expected_row_bytes = dxgi_state.staging_w * 4u;
+                                    if(mapped.RowPitch >= expected_row_bytes)
+                                    {
+                                        std::shared_ptr<CapturedFrame> frame = MakeCapturedFrameFromBgra(
+                                            (const uint8_t*)mapped.pData,
+                                            (int)dxgi_state.staging_w,
+                                            (int)dxgi_state.staging_h,
+                                            (int)mapped.RowPitch,
+                                            false,
+                                            frame_counter++);
+                                        dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
+                                        store_latest(frame);
+                                    }
+                                    else
+                                    {
+                                        dxgi_state.context->Unmap(dxgi_state.staging_texture[ready], 0);
+                                        if(allow_gdi)
+                                            drop_to_gdi("staging pitch mismatch");
+                                        else
+                                        {
+                                            dxgi_state.Release();
+                                            use_dxgi = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if(dxgi_state.desktop_frame_acquired)
+                            SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
+                    }
                 }
             }
             else
             {
-                LOG_WARNING("[ScreenCapture] DXGI AcquireNextFrame returned unexpected hr=0x%08lx for '%s' (resource=%p), recreating duplication",
-                            (unsigned long)hr, source_id.c_str(), (void*)resource);
+                LOG_WARNING("[ScreenCapture] DXGI AcquireNextFrame unexpected hr=0x%08lx for '%s'",
+                            (unsigned long)hr, source_id.c_str());
                 if(resource) { resource->Release(); resource = nullptr; }
                 if(dxgi_state.desktop_frame_acquired)
                     SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
-                dxgi_state.Release();
-                use_dxgi = false;
+                if(allow_gdi)
+                    drop_to_gdi("AcquireNextFrame failed");
+                else
+                {
+                    dxgi_state.Release();
+                    use_dxgi = false;
+                    last_dxgi_retry = frame_start;
+                }
             }
         }
-        std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
-            const int ms_since_last_gdi = (int)std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - last_gdi_force).count();
-            const bool should_force_gdi =
-                allow_gdi && dxgi_timed_out && ms_since_last_gdi >= k_gdi_poll_after_dxgi_timeout_ms;
-            if(dxgi_timed_out && !should_force_gdi)
+        else if(allow_gdi)
+        {
+            if(!use_dxgi && !logged_dxgi_unavailable && backend_mode == 0)
             {
-                if(dxgi_state.staging_ready >= 0 && dxgi_state.staging_texture[dxgi_state.staging_ready])
-                {
-                    D3D11_MAPPED_SUBRESOURCE mapped = {};
-                    if(SUCCEEDED(dxgi_state.context->Map(dxgi_state.staging_texture[dxgi_state.staging_ready],
-                                                          0, D3D11_MAP_READ, 0, &mapped)))
-                    {
-                        std::shared_ptr<CapturedFrame> frame = MakeCapturedFrameFromBgra(
-                            (const uint8_t*)mapped.pData,
-                            (int)dxgi_state.staging_w,
-                            (int)dxgi_state.staging_h,
-                            (int)mapped.RowPitch,
-                            true,
-                            frame_counter++);
-                        dxgi_state.context->Unmap(dxgi_state.staging_texture[dxgi_state.staging_ready], 0);
-                        store_latest(frame);
-                    }
-                    dxgi_state.staging_ready = -1;
-                }
-                continue;
+                LOG_WARNING("[ScreenCapture] DXGI unavailable for '%s' (screen %d), using GDI",
+                            source_id.c_str(), screen_index);
+                logged_dxgi_unavailable = true;
             }
-            if(should_force_gdi)
-            {
-                last_gdi_force = now_tp;
-            }
-            if(allow_gdi && (!use_dxgi || should_force_gdi))
-            {
-                if(!use_dxgi && !logged_dxgi_unavailable && backend_mode == 0)
-                {
-                    LOG_WARNING("[ScreenCapture] DXGI unavailable for '%s' (screen %d), falling back to GDI", source_id.c_str(), screen_index);
-                    logged_dxgi_unavailable = true;
-                }
-                HDC screen_dc = GetDC(nullptr);
-                if(screen_dc)
-                {
-                    HDC mem_dc = CreateCompatibleDC(screen_dc);
-                    if(mem_dc)
-                    {
-                        int out_w = target_width.load();
-                        int out_h = target_height.load();
-                        ClampWorkingCaptureSize(dw, dh, out_w, out_h);
-                        HBITMAP bmp = CreateCompatibleBitmap(screen_dc, out_w, out_h);
-                        if(bmp)
-                        {
-                            HGDIOBJ old_obj = SelectObject(mem_dc, bmp);
-                            SetStretchBltMode(mem_dc, HALFTONE);
-                            SetBrushOrgEx(mem_dc, 0, 0, nullptr);
-                            if(StretchBlt(mem_dc, 0, 0, out_w, out_h, screen_dc, dx, dy, dw, dh, SRCCOPY))
-                            {
-                                BITMAPINFO bmi = {};
-                                bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                                bmi.bmiHeader.biWidth = out_w;
-                                bmi.bmiHeader.biHeight = -out_h;
-                                bmi.bmiHeader.biPlanes = 1;
-                                bmi.bmiHeader.biBitCount = 32;
-                                bmi.bmiHeader.biCompression = BI_RGB;
-
-                                std::vector<uint8_t> buffer((size_t)out_w * (size_t)out_h * 4);
-                                if(GetDIBits(mem_dc, bmp, 0, (UINT)out_h, buffer.data(), &bmi, DIB_RGB_COLORS) > 0)
-                                {
-                                    store_latest(MakeCapturedFrameFromBgra(buffer.data(),
-                                                                            out_w,
-                                                                            out_h,
-                                                                            out_w * 4,
-                                                                            false,
-                                                                            frame_counter++));
-                                    frame_from_gdi = true;
-                                }
-                            }
-                            SelectObject(mem_dc, old_obj);
-                            DeleteObject(bmp);
-                        }
-                        DeleteDC(mem_dc);
-                    }
-                    ReleaseDC(nullptr, screen_dc);
-                }
-            }
-
-            if(!frame_from_gdi)
-            {
-                if(!use_dxgi && backend_mode != 2)
-                {
-                    std::chrono::steady_clock::time_point retry_tp = std::chrono::steady_clock::now();
-                    if(std::chrono::duration_cast<std::chrono::seconds>(retry_tp - last_dxgi_retry).count() >= 3)
-                    {
-                        last_dxgi_retry = retry_tp;
-                        if(TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state))
-                        {
-                            use_dxgi = true;
-                            logged_dxgi_unavailable = false;
-                        }
-                    }
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(target_frame_time_ms > 0 ? target_frame_time_ms : 2));
-                continue;
-            }
+            capture_gdi_frame();
+        }
 
         std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
         int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_end - frame_start).count();
@@ -1549,14 +1605,32 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
 }
 
-static QImage GrabScreenLinux(QScreen* screen)
+static QImage GrabScreenQt(QScreen* screen)
 {
     if(!screen)
     {
         return QImage();
     }
-    QRect geometry = screen->geometry();
-    return screen->grabWindow(0, geometry.x(), geometry.y(), geometry.width(), geometry.height()).toImage();
+    // grabWindow(0) captures this QScreen. Do not pass virtual-desktop geometry.x/y —
+    // that double-offsets on multi-monitor X11/Wayland/macOS and crops the wrong region.
+    QPixmap pm = screen->grabWindow(0);
+    if(pm.isNull())
+    {
+        return QImage();
+    }
+    QImage image = pm.toImage();
+    if(image.isNull())
+    {
+        return QImage();
+    }
+    // Zone / quality math uses logical geometry; Retina/HiDPI grabs are often device pixels.
+    const QSize logical = screen->geometry().size();
+    if(logical.width() > 0 && logical.height() > 0 &&
+       (image.width() != logical.width() || image.height() != logical.height()))
+    {
+        image = image.scaled(logical, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    }
+    return image;
 }
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
@@ -1579,14 +1653,25 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         LOG_WARNING("[ScreenCapture] Invalid source_id format: '%s'", source_id.c_str());
         return;
     }
-    int screen_index = std::stoi(source_id.substr(underscore_pos + 1));
+    int screen_index = -1;
+    try
+    {
+        screen_index = std::stoi(source_id.substr(underscore_pos + 1));
+    }
+    catch(...)
+    {
+        LOG_WARNING("[ScreenCapture] Invalid source index in source_id '%s'", source_id.c_str());
+        return;
+    }
 
     uint64_t frame_counter = 0;
-    const int target_frame_time_ms = 1000 / target_fps.load();
     bool logged_screen_unavailable = false;
+    bool logged_grab_failed = false;
 
     while(active_flag->load())
     {
+        const int loop_fps = target_fps.load();
+        const int target_frame_time_ms = 1000 / (loop_fps > 0 ? loop_fps : 1);
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
 
         QList<QScreen*> screens = QGuiApplication::screens();
@@ -1611,18 +1696,32 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             logged_screen_unavailable = false;
         }
 
-        QImage image = GrabScreenLinux(screen);
+        QImage image = GrabScreenQt(screen);
+        if(image.isNull())
+        {
+            if(!logged_grab_failed)
+            {
+                LOG_WARNING("[ScreenCapture] QScreen::grabWindow failed for screen %d "
+                            "(Wayland may require portal permission; macOS needs Screen Recording)",
+                            screen_index);
+                logged_grab_failed = true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+        logged_grab_failed = false;
+
+        int target_w = target_width.load();
+        int target_h = target_height.load();
+        ClampWorkingCaptureSize(image.width(), image.height(), target_w, target_h);
+        if(image.width() != target_w || image.height() != target_h)
+        {
+            image = BoxScaleRgbaImage(image, target_w, target_h);
+        }
         if(image.isNull())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
-        }
-
-        int target_w = target_width.load();
-        int target_h = target_height.load();
-        if(image.width() != target_w || image.height() != target_h)
-        {
-            image = BoxScaleRgbaImage(image, target_w, target_h);
         }
         if(image.format() != QImage::Format_RGBA8888)
         {

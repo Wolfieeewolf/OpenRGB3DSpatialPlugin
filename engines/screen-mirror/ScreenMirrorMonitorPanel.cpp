@@ -182,15 +182,16 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    300,
                    (int)(settings.scale * 100.0f),
-                   QStringLiteral("Global reach: 0-100% = fill room, 101-300% = beyond room (extreme)."),
+                   QStringLiteral("How far Reach extends from the Spatial Anchor / reference "
+                                  "(0–100% of room corner distance; 101–300% = beyond)."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
     settings.scale_invert_check = ui->scaleInvertCheck;
     ui->scaleInvertCheck->setEnabled(has_capture_source);
     ui->scaleInvertCheck->setChecked(settings.scale_inverted);
     ui->scaleInvertCheck->setToolTip(
-        QStringLiteral("On (default): brightness falls off with distance from the Spatial Anchor / reference. "
-                       "Off: far LEDs stay brighter (outer shell)."));
+        QStringLiteral("On (default): bright near the Spatial Anchor / reference, darker with distance "
+                       "(Reach sets how far). Off: outer-shell mode (far LEDs stay brighter)."));
     QObject::connect(ui->scaleInvertCheck, &QCheckBox::toggled, effect, &ScreenMirror::OnParameterChanged);
 
     wire_pct_ticks(ui->falloffCurveRow,
@@ -199,7 +200,8 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    50,
                    200,
                    (int)(settings.falloff_curve_exponent * 100.0f),
-                   QStringLiteral("Falloff curve: 50% = softer (gradual), 100% = linear, 200% = sharper (sudden edge)."),
+                   QStringLiteral("Shapes distance falloff from the reference: 50% = gradual, 100% = linear, "
+                                  "200% = sharper edge. Applies in default (inverted) Reach mode."),
                    [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
     settings.ref_point_combo = ui->refPointCombo;
@@ -212,9 +214,9 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
         Qt::ToolTipRole);
     ui->refPointCombo->setEnabled(has_capture_source);
     ui->refPointCombo->setToolTip(
-        QStringLiteral("Falloff/wave origin for this display. Follow layer Spatial Anchor uses the same "
-                       "choices as other effects. Pick a layout point to measure from a saved marker. "
-                       "Screen UVs always come from the display plane."));
+        QStringLiteral("Center of Reach / wave delay for this display — not where screen colors are sampled. "
+                       "Screen UVs always come from the display plane. Softness 0 shows a clear gradient "
+                       "from this point; raise Softness for a flatter ambilight fill."));
     QObject::connect(ui->refPointCombo, qOverload<int>(&QComboBox::currentIndexChanged), effect,
                      &ScreenMirror::OnParameterChanged);
 
@@ -224,7 +226,8 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    100,
                    (int)settings.edge_softness,
-                   QStringLiteral("Edge feathering (0 = hard, 100 = very soft)."),
+                   QStringLiteral("Flat bright core around the reference before fading (0 = pure gradient, "
+                                  "100 ≈ room-wide fill with a soft rim)."),
                    [](int v) { return QString::number(v); });
 
     wire_pct_ticks(ui->brightnessRow,
@@ -306,6 +309,11 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
             settings.screen_map_roll_label->setText(QString::number(deg, 'f', 1) + QChar(0x00B0));
         }
     });
+    if(settings.screen_map_roll_label && settings.screen_map_roll_slider)
+    {
+        const float deg = (float)settings.screen_map_roll_slider->value() / (float)kScreenMapRollTicksPerDegree;
+        settings.screen_map_roll_label->setText(QString::number(deg, 'f', 1) + QChar(0x00B0));
+    }
 
     const auto wire_radial_pct = [&](EffectSliderRow* row,
                                      QSlider*& slider,

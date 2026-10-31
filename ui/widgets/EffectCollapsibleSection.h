@@ -28,6 +28,9 @@ public:
     void setExpanded(bool expanded);
     bool isExpanded() const;
 
+signals:
+    void expandedChanged(bool expanded);
+
 protected:
     void showEvent(QShowEvent* event) override;
 

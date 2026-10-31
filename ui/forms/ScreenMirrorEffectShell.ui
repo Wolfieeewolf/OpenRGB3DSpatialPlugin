@@ -21,7 +21,10 @@
    <item>
     <widget class="QGroupBox" name="monitorsGroup">
      <property name="title">
-      <string>Per-Monitor Balance</string>
+      <string>Displays</string>
+     </property>
+     <property name="toolTip">
+      <string>Pick a display in the dropdown to edit only that plane's settings.</string>
      </property>
      <layout class="QVBoxLayout" name="monitorsLayout">
       <property name="spacing">
