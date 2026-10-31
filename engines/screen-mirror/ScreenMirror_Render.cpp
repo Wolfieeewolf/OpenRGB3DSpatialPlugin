@@ -185,7 +185,7 @@ namespace
         return t;
     }
 
-    /* Soft spike: favour LEDs toward User seats without moving Reach origin.
+    /* Audience bias: favour LEDs toward User seats without moving Reach origin.
        Multi-seat = strongest lobe wins. aligned = facing the seat from the display;
        prox = near the seat in the room. */
     float AudienceLobeGain(const Vector3D& led,
@@ -215,8 +215,11 @@ namespace
             const float dy = led.y - w.y;
             const float dz = led.z - w.z;
             const float dist_mm = GridUnitsToMM(std::sqrt(dx * dx + dy * dy + dz * dz), tick_scale_mm);
-            const float prox = 1.0f - std::clamp(dist_mm / std::max(max_distance_mm, 1.0f), 0.0f, 1.0f);
-            best = std::max(best, aligned * (0.35f + 0.65f * prox));
+            /* Tighter seat falloff so bias reads around the watcher, not room-wide. */
+            const float seat_mm = std::max(max_distance_mm * 0.45f, 400.0f);
+            const float prox = 1.0f - std::clamp(dist_mm / seat_mm, 0.0f, 1.0f);
+            const float lobe = aligned * aligned * (0.15f + 0.85f * prox);
+            best = std::max(best, lobe);
         }
         return best;
     }
@@ -554,8 +557,8 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
             const float bias = std::clamp(audience_bias_pct_ / 100.0f, 0.0f, 1.0f);
             const float lobe = AudienceLobeGain(led, sm.falloff_origin, audience_tick_,
                                                  sm.max_distance_mm, tick_scale_mm_);
-            /* Keep a floor so off-seat LEDs do not go black at partial bias. */
-            weight *= (1.0f - bias) + bias * (0.20f + 0.80f * lobe);
+            /* Full bias: off-seat nearly dark; partial bias mixes classic Reach with pull. */
+            weight *= (1.0f - bias) + bias * lobe;
         }
 
         const float fb = s.front_back_balance;

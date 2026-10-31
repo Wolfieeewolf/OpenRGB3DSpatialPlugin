@@ -287,9 +287,14 @@ namespace Geometry3D
         }
         else
         {
-            static constexpr float kScreenEdgeAt45Deg = 1.414213562373095f;
-            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * nx / len, 0.0f, 1.0f);
-            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAt45Deg * ny / len, 0.0f, 1.0f);
+            /* Map the full facing hemisphere into the screen. Scale 1.0 → UV hits
+               the bezel only at ~90° from the plane normal (coplanar). The old √2
+               scale crushed anything past ~45° onto the edge texel — ceiling / side
+               LEDs all sampled the same letterbox/UI strip, so the top of the room
+               went dark whenever the video had black bars. */
+            static constexpr float kScreenEdgeAtHorizon = 1.0f;
+            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeAtHorizon * nx / len, 0.0f, 1.0f);
+            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeAtHorizon * ny / len, 0.0f, 1.0f);
         }
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;
