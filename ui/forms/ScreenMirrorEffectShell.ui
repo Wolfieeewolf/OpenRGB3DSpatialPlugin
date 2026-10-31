@@ -19,6 +19,68 @@
     <widget class="QWidget" name="capturePanelHost" native="true"/>
    </item>
    <item>
+    <widget class="QGroupBox" name="audienceGroup">
+     <property name="title">
+      <string>Audience bias (experiment)</string>
+     </property>
+     <property name="toolTip">
+      <string>Optional. Glow still comes from each display; bias pulls energy toward User layout points (seats). 0 = off. Add User ref points in the scene — one per watcher.</string>
+     </property>
+     <layout class="QVBoxLayout" name="audienceLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="audienceHintLabel">
+        <property name="text">
+         <string>Uses layout points typed User. Reach origin stays the display.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="audienceBiasRow">
+        <item>
+         <widget class="QLabel" name="audienceBiasCaption">
+          <property name="text">
+           <string>Bias:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="audienceBiasSlider">
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="toolTip">
+           <string>0 = classic ambilight from the display. Higher values favour LEDs toward User seats (multi-seat = strongest nearby lobe wins).</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="audienceBiasLabel">
+          <property name="minimumSize">
+           <size>
+            <width>40</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>0%</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="monitorsGroup">
      <property name="title">
       <string>Displays</string>

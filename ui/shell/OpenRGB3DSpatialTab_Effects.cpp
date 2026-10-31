@@ -667,6 +667,7 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
                         viewport, &LEDViewport3D::SetShowScreenPreview, Qt::UniqueConnection);
                 connect(screen_mirror, &ScreenMirror::CalibrationPatternChanged,
                         viewport, &LEDViewport3D::SetShowCalibrationPattern, Qt::UniqueConnection);
+                screen_mirror->SetAudienceReferencePoints(&reference_points);
 
                 QPointer<ScreenMirror> sm_ptr(screen_mirror);
                 viewport->SetPerPlanePreviewQuery(
@@ -919,6 +920,7 @@ void OpenRGB3DSpatialTab::configureScreenMirrorEffectUi(SpatialEffect3D* effect)
         return;
     }
 
+    screen_mirror->SetAudienceReferencePoints(&reference_points);
     connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror,
             &ScreenMirror::RefreshMonitorStatus, Qt::UniqueConnection);
     QTimer::singleShot(200, screen_mirror, &ScreenMirror::RefreshMonitorStatus);

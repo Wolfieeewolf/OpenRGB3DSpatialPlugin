@@ -10,6 +10,7 @@
 #include "PluginUiUtils.h"
 #include "ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror_Internal.h"
+#include "VirtualReferencePoint3D.h"
 #include "EffectListManager3D.h"
 #include "PlayerEngines.h"
 #include "ui_ScreenMirrorCapturePanel.h"
@@ -44,6 +45,11 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , capture_quality_combo(nullptr)
     , capture_backend_mode(0)
     , capture_backend_combo(nullptr)
+    , audience_bias_pct_(0.0f)
+    , audience_bias_slider_(nullptr)
+    , audience_bias_label_(nullptr)
+    , audience_hint_label_(nullptr)
+    , audience_reference_points_(nullptr)
     , monitor_status_label(nullptr)
     , monitor_help_label(nullptr)
     , monitors_container(nullptr)
@@ -56,6 +62,11 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , tick_scale_mm_(10.0f)
     , smooth_ms_(0.0f)
 {
+}
+
+void ScreenMirror::SetAudienceReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
+{
+    audience_reference_points_ = ref_points;
 }
 
 ScreenMirror::~ScreenMirror() = default;
@@ -273,6 +284,21 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     QVBoxLayout* capture_host_layout = new QVBoxLayout(shell_ui.capturePanelHost);
     capture_host_layout->setContentsMargins(0, 0, 0, 0);
     capture_host_layout->addWidget(capture_panel);
+
+    audience_hint_label_ = shell_ui.audienceHintLabel;
+    PluginUiApplyItalicSecondaryLabel(audience_hint_label_);
+    audience_bias_slider_ = shell_ui.audienceBiasSlider;
+    audience_bias_label_ = shell_ui.audienceBiasLabel;
+    audience_bias_slider_->setValue((int)std::lround(audience_bias_pct_));
+    audience_bias_label_->setText(QString::number((int)std::lround(audience_bias_pct_)) + QStringLiteral("%"));
+    connect(audience_bias_slider_, &QSlider::valueChanged, this, [this](int v) {
+        audience_bias_pct_ = (float)std::clamp(v, 0, 100);
+        if(audience_bias_label_)
+        {
+            audience_bias_label_->setText(QString::number(v) + QStringLiteral("%"));
+        }
+        OnParameterChanged();
+    });
 
     ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
     connect(capture_backend_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {

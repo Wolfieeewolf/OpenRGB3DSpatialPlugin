@@ -15,6 +15,7 @@ nlohmann::json ScreenMirror::SaveSettings() const
     nlohmann::json settings;
     settings["capture_quality"] = ScreenMirrorClampQuality(capture_quality);
     settings["capture_backend_mode"] = std::clamp(capture_backend_mode, 0, 2);
+    settings["audience_bias_pct"] = std::clamp(audience_bias_pct_, 0.0f, 100.0f);
     nlohmann::json monitors = nlohmann::json::object();
     for(std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.begin();
         it != monitor_settings.end();
@@ -356,6 +357,21 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
         capture_quality = ScreenMirrorClampQuality(settings["capture_quality"].get<int>());
         SelectCaptureQualityCombo(capture_quality);
     }
+    if(settings.contains("audience_bias_pct"))
+    {
+        audience_bias_pct_ = std::clamp(settings["audience_bias_pct"].get<float>(), 0.0f, 100.0f);
+    }
+    if(audience_bias_slider_)
+    {
+        QSignalBlocker blocker(audience_bias_slider_);
+        audience_bias_slider_->setValue((int)std::lround(audience_bias_pct_));
+    }
+    if(audience_bias_label_)
+    {
+        audience_bias_label_->setText(
+            QString::number((int)std::lround(audience_bias_pct_)) + QStringLiteral("%"));
+    }
+
     if(settings.contains("capture_backend_mode"))
     {
         capture_backend_mode = std::clamp(settings["capture_backend_mode"].get<int>(), 0, 2);
@@ -606,6 +622,11 @@ void ScreenMirror::OnParameterChanged()
         return;
     }
     in_parameter_change_ = true;
+
+    if(audience_bias_slider_)
+    {
+        audience_bias_pct_ = (float)std::clamp(audience_bias_slider_->value(), 0, 100);
+    }
 
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
