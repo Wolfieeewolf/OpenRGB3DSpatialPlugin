@@ -140,10 +140,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.softness_slider = nullptr;
         s.softness_label = nullptr;
         s.propagation_speed_slider = nullptr;
-        s.propagation_speed_label = nullptr;
         s.wave_decay_slider = nullptr;
-        s.wave_decay_label = nullptr;
-        s.wave_time_to_edge_slider = nullptr;
         s.wave_time_to_edge_spin = nullptr;
         s.falloff_curve_slider = nullptr;
         s.falloff_curve_label = nullptr;
@@ -564,28 +561,27 @@ void ScreenMirror::RefreshMonitorStatus()
                 settings.capture_refresh_button->setEnabled(true);
             }
             
-            if(settings.scale_slider) settings.scale_slider->setEnabled(has_capture_source);
-            if(settings.white_rolloff_slider) settings.white_rolloff_slider->setEnabled(has_capture_source);
-            if(settings.vibrance_slider) settings.vibrance_slider->setEnabled(has_capture_source);
-            if(settings.led_output_gain_r_slider) settings.led_output_gain_r_slider->setEnabled(has_capture_source);
-            if(settings.led_output_gain_g_slider) settings.led_output_gain_g_slider->setEnabled(has_capture_source);
-            if(settings.led_output_gain_b_slider) settings.led_output_gain_b_slider->setEnabled(has_capture_source);
+            SetEffectSliderEnabled(settings.scale_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.white_rolloff_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.vibrance_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.led_output_gain_r_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.led_output_gain_g_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.led_output_gain_b_slider, has_capture_source);
             if(settings.scale_invert_check) settings.scale_invert_check->setEnabled(has_capture_source);
-            if(settings.smoothing_time_slider) settings.smoothing_time_slider->setEnabled(has_capture_source);
-            if(settings.brightness_slider) settings.brightness_slider->setEnabled(has_capture_source);
-            if(settings.brightness_threshold_slider) settings.brightness_threshold_slider->setEnabled(has_capture_source);
-            if(settings.black_bar_top_slider) settings.black_bar_top_slider->setEnabled(has_capture_source);
-            if(settings.black_bar_bottom_slider) settings.black_bar_bottom_slider->setEnabled(has_capture_source);
-            if(settings.black_bar_left_slider) settings.black_bar_left_slider->setEnabled(has_capture_source);
-            if(settings.black_bar_right_slider) settings.black_bar_right_slider->setEnabled(has_capture_source);
+            SetEffectSliderEnabled(settings.smoothing_time_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.brightness_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.brightness_threshold_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.black_bar_top_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.black_bar_bottom_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.black_bar_left_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.black_bar_right_slider, has_capture_source);
             if(settings.black_bar_link_vertical_check) settings.black_bar_link_vertical_check->setEnabled(has_capture_source);
             if(settings.black_bar_link_horizontal_check) settings.black_bar_link_horizontal_check->setEnabled(has_capture_source);
-            if(settings.softness_slider) settings.softness_slider->setEnabled(has_capture_source);
-            if(settings.propagation_speed_slider) settings.propagation_speed_slider->setEnabled(has_capture_source);
-            if(settings.wave_decay_slider) settings.wave_decay_slider->setEnabled(has_capture_source);
-            if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_slider->setEnabled(has_capture_source);
-            if(settings.wave_time_to_edge_spin) settings.wave_time_to_edge_spin->setEnabled(has_capture_source);
-            if(settings.falloff_curve_slider) settings.falloff_curve_slider->setEnabled(has_capture_source);
+            SetEffectSliderEnabled(settings.softness_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.propagation_speed_slider, has_capture_source);
+            SetEffectSliderEnabled(settings.wave_decay_slider, has_capture_source);
+            SetEffectDoubleSpinEnabled(settings.wave_time_to_edge_spin, has_capture_source);
+            SetEffectSliderEnabled(settings.falloff_curve_slider, has_capture_source);
             if(settings.calibration_pattern_check) settings.calibration_pattern_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);
             if(settings.capture_zones_widget)

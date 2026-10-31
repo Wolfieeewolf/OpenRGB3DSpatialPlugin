@@ -412,10 +412,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
 
     settings.capture_zones_widget = zones_widget;
     settings.propagation_speed_slider = zones_widget->getPropagationSpeedSlider();
-    settings.propagation_speed_label = zones_widget->getPropagationSpeedLabel();
-    settings.wave_decay_slider       = zones_widget->getWaveDecaySlider();
-    settings.wave_decay_label          = zones_widget->getWaveDecayLabel();
-    settings.wave_time_to_edge_slider = zones_widget->getWaveTimeToEdgeSlider();
+    settings.wave_decay_slider        = zones_widget->getWaveDecaySlider();
     settings.wave_time_to_edge_spin   = zones_widget->getWaveTimeToEdgeSpin();
     settings.capture_area_preview      = zones_widget->getPreviewWidget();
     settings.add_zone_button           = zones_widget->getAddZoneButton();

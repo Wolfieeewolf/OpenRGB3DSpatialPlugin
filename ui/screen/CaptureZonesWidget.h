@@ -12,7 +12,6 @@ class EffectDoubleSliderRow;
 class EffectSliderRow;
 class QDoubleSpinBox;
 class QGroupBox;
-class QLabel;
 class QPushButton;
 class QSlider;
 
@@ -64,10 +63,7 @@ public:
     void syncZoneButtonStates();
 
     QSlider* getPropagationSpeedSlider() const;
-    QLabel* getPropagationSpeedLabel() const;
     QSlider* getWaveDecaySlider() const;
-    QLabel* getWaveDecayLabel() const;
-    QSlider* getWaveTimeToEdgeSlider() const;
     QDoubleSpinBox* getWaveTimeToEdgeSpin() const;
 
     QGroupBox* getWaveGroup() const;

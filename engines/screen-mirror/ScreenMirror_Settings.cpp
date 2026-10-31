@@ -4,7 +4,7 @@
 #include "ScreenCaptureDownscale.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
-#include "EffectSliderRow.h"
+#include "EffectSliderPromote.h"
 #include "ScreenMirror_Internal.h"
 
 #include <QDoubleSpinBox>
@@ -12,24 +12,6 @@
 #include <QSlider>
 #include <algorithm>
 #include <cmath>
-
-namespace
-{
-void SyncEffectSlider(QSlider* slider, int value)
-{
-    if(!slider)
-    {
-        return;
-    }
-    if(EffectSliderRow* row = qobject_cast<EffectSliderRow*>(slider->parentWidget()))
-    {
-        row->syncSliderValue(value);
-        return;
-    }
-    QSignalBlocker blocker(slider);
-    slider->setValue(value);
-}
-} // namespace
 
 nlohmann::json ScreenMirror::SaveSettings() const
 {
@@ -95,31 +77,31 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
         QSignalBlocker blocker(msettings.group_box);
         msettings.group_box->setChecked(msettings.enabled);
     }
-    SyncEffectSlider(msettings.scale_slider, (int)std::lround(msettings.scale * 100.0f));
+    SyncEffectSliderValue(msettings.scale_slider, (int)std::lround(msettings.scale * 100.0f));
     if(msettings.scale_invert_check)
     {
         QSignalBlocker blocker(msettings.scale_invert_check);
         msettings.scale_invert_check->setChecked(msettings.scale_inverted);
     }
-    SyncEffectSlider(msettings.smoothing_time_slider, (int)std::lround(msettings.smoothing_time_ms));
-    SyncEffectSlider(msettings.brightness_slider, (int)std::lround(msettings.brightness_multiplier * 100.0f));
-    SyncEffectSlider(msettings.brightness_threshold_slider, (int)msettings.brightness_threshold);
-    SyncEffectSlider(msettings.white_rolloff_slider, (int)std::lround(msettings.white_rolloff * 100.0f));
-    SyncEffectSlider(msettings.vibrance_slider, (int)std::lround(msettings.vibrance * 100.0f));
-    SyncEffectSlider(msettings.led_output_gain_r_slider,
-                     (int)std::lround(std::clamp(msettings.led_output_gain_r, 0.5f, 2.0f) * 100.0f));
-    SyncEffectSlider(msettings.led_output_gain_g_slider,
-                     (int)std::lround(std::clamp(msettings.led_output_gain_g, 0.5f, 2.0f) * 100.0f));
-    SyncEffectSlider(msettings.led_output_gain_b_slider,
-                     (int)std::lround(std::clamp(msettings.led_output_gain_b, 0.5f, 2.0f) * 100.0f));
-    SyncEffectSlider(msettings.black_bar_top_slider,
-                     (int)std::lround(std::clamp(msettings.black_bar_top_percent, 0.0f, 49.0f)));
-    SyncEffectSlider(msettings.black_bar_bottom_slider,
-                     (int)std::lround(std::clamp(msettings.black_bar_bottom_percent, 0.0f, 49.0f)));
-    SyncEffectSlider(msettings.black_bar_left_slider,
-                     (int)std::lround(std::clamp(msettings.black_bar_left_percent, 0.0f, 49.0f)));
-    SyncEffectSlider(msettings.black_bar_right_slider,
-                     (int)std::lround(std::clamp(msettings.black_bar_right_percent, 0.0f, 49.0f)));
+    SyncEffectSliderValue(msettings.smoothing_time_slider, (int)std::lround(msettings.smoothing_time_ms));
+    SyncEffectSliderValue(msettings.brightness_slider, (int)std::lround(msettings.brightness_multiplier * 100.0f));
+    SyncEffectSliderValue(msettings.brightness_threshold_slider, (int)msettings.brightness_threshold);
+    SyncEffectSliderValue(msettings.white_rolloff_slider, (int)std::lround(msettings.white_rolloff * 100.0f));
+    SyncEffectSliderValue(msettings.vibrance_slider, (int)std::lround(msettings.vibrance * 100.0f));
+    SyncEffectSliderValue(msettings.led_output_gain_r_slider,
+                          (int)std::lround(std::clamp(msettings.led_output_gain_r, 0.5f, 2.0f) * 100.0f));
+    SyncEffectSliderValue(msettings.led_output_gain_g_slider,
+                          (int)std::lround(std::clamp(msettings.led_output_gain_g, 0.5f, 2.0f) * 100.0f));
+    SyncEffectSliderValue(msettings.led_output_gain_b_slider,
+                          (int)std::lround(std::clamp(msettings.led_output_gain_b, 0.5f, 2.0f) * 100.0f));
+    SyncEffectSliderValue(msettings.black_bar_top_slider,
+                          (int)std::lround(std::clamp(msettings.black_bar_top_percent, 0.0f, 49.0f)));
+    SyncEffectSliderValue(msettings.black_bar_bottom_slider,
+                          (int)std::lround(std::clamp(msettings.black_bar_bottom_percent, 0.0f, 49.0f)));
+    SyncEffectSliderValue(msettings.black_bar_left_slider,
+                          (int)std::lround(std::clamp(msettings.black_bar_left_percent, 0.0f, 49.0f)));
+    SyncEffectSliderValue(msettings.black_bar_right_slider,
+                          (int)std::lround(std::clamp(msettings.black_bar_right_percent, 0.0f, 49.0f)));
     if(msettings.black_bar_link_vertical_check)
     {
         QSignalBlocker blocker(msettings.black_bar_link_vertical_check);
@@ -130,31 +112,16 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
         QSignalBlocker blocker(msettings.black_bar_link_horizontal_check);
         msettings.black_bar_link_horizontal_check->setChecked(msettings.black_bar_link_horizontal);
     }
-    SyncEffectSlider(msettings.softness_slider, (int)std::lround(msettings.edge_softness));
-    if(msettings.propagation_speed_slider)
+    SyncEffectSliderValue(msettings.softness_slider, (int)std::lround(msettings.edge_softness));
+    SyncEffectSliderValue(msettings.propagation_speed_slider,
+                          (int)std::lround(msettings.propagation_speed_mm_per_ms));
+    SyncEffectSliderValue(msettings.wave_decay_slider, (int)std::lround(msettings.wave_decay_ms));
+    SyncEffectDoubleSpinValue(msettings.wave_time_to_edge_spin, (double)msettings.wave_time_to_edge_sec);
+    if(msettings.capture_zones_widget)
     {
-        QSignalBlocker blocker(msettings.propagation_speed_slider);
-        msettings.propagation_speed_slider->setValue((int)std::lround(msettings.propagation_speed_mm_per_ms));
+        msettings.capture_zones_widget->syncWaveIntensityVisibility();
     }
-    if(msettings.propagation_speed_label)
-    {
-        msettings.propagation_speed_label->setText(QString::number((int)std::lround(msettings.propagation_speed_mm_per_ms)) + "%");
-    }
-    if(msettings.wave_decay_slider)
-    {
-        QSignalBlocker blocker(msettings.wave_decay_slider);
-        msettings.wave_decay_slider->setValue((int)std::lround(msettings.wave_decay_ms));
-    }
-    if(msettings.wave_decay_label)
-    {
-        msettings.wave_decay_label->setText(QString::number((int)msettings.wave_decay_ms) + "ms");
-    }
-    if(msettings.wave_time_to_edge_spin)
-    {
-        QSignalBlocker blocker(msettings.wave_time_to_edge_spin);
-        msettings.wave_time_to_edge_spin->setValue((double)msettings.wave_time_to_edge_sec);
-    }
-    SyncEffectSlider(msettings.falloff_curve_slider, (int)(msettings.falloff_curve_exponent * 100.0f));
+    SyncEffectSliderValue(msettings.falloff_curve_slider, (int)(msettings.falloff_curve_exponent * 100.0f));
     if(msettings.calibration_pattern_check)
     {
         QSignalBlocker blocker(msettings.calibration_pattern_check);
@@ -270,24 +237,10 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             {
                 msettings.led_output_gain_b = 1.0f;
             }
-            if(mon.contains("black_bar_top_percent") || mon.contains("black_bar_bottom_percent") ||
-               mon.contains("black_bar_left_percent") || mon.contains("black_bar_right_percent"))
-            {
-                msettings.black_bar_top_percent = mon.value("black_bar_top_percent", 0.0f);
-                msettings.black_bar_bottom_percent = mon.value("black_bar_bottom_percent", 0.0f);
-                msettings.black_bar_left_percent = mon.value("black_bar_left_percent", 0.0f);
-                msettings.black_bar_right_percent = mon.value("black_bar_right_percent", 0.0f);
-            }
-            else
-            {
-                /* Migrate legacy paired letterbox / pillarbox. */
-                const float letter = mon.value("black_bar_letterbox_percent", 0.0f);
-                const float pillar = mon.value("black_bar_pillarbox_percent", 0.0f);
-                msettings.black_bar_top_percent = letter;
-                msettings.black_bar_bottom_percent = letter;
-                msettings.black_bar_left_percent = pillar;
-                msettings.black_bar_right_percent = pillar;
-            }
+            msettings.black_bar_top_percent = mon.value("black_bar_top_percent", 0.0f);
+            msettings.black_bar_bottom_percent = mon.value("black_bar_bottom_percent", 0.0f);
+            msettings.black_bar_left_percent = mon.value("black_bar_left_percent", 0.0f);
+            msettings.black_bar_right_percent = mon.value("black_bar_right_percent", 0.0f);
             msettings.black_bar_link_vertical = mon.value("black_bar_link_vertical", true);
             msettings.black_bar_link_horizontal = mon.value("black_bar_link_horizontal", true);
 

@@ -195,6 +195,11 @@ namespace Geometry3D
         return fade;
     }
 
+    /** Screen Mirror UV: outside / convex sphere map (Newell dual).
+        Inside map used (nx,ny)/len → mid-frame for axial LEDs (concave cave / tunnel
+        suck). This uses the other pole (pz − 1) so the room sees a convex bulge —
+        axial/far LEDs go to the rim, lateral LEDs keep side colour. No bezel-bias /
+        radial-push hacks. Reach still owns 360° brightness. */
     inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position,
                                               const DisplayPlane3D& plane,
                                               float grid_scale_mm = DEFAULT_GRID_SCALE_MM)
@@ -217,15 +222,24 @@ namespace Geometry3D
         }
         else
         {
-            /* Direction → screen UV only (no bezel “bloom” — wave handles that).
-               Old √2 (~45°) crushed steep ceiling/side angles onto one edge texel.
-               ~58° keeps those angles distinct without the full-hemisphere mid-frame
-               pull. Outward motion stays on wave / time-to-edge settings. */
-            static constexpr float kEdgeAngleSin =
-                0.8480480961562259f; /* sin(58°) */
-            static constexpr float kScreenEdgeScale = 1.0f / kEdgeAngleSin;
-            result.u = std::clamp(0.5f + 0.5f * kScreenEdgeScale * nx / len, 0.0f, 1.0f);
-            result.v = std::clamp(0.5f + 0.5f * kScreenEdgeScale * ny / len, 0.0f, 1.0f);
+            const float px = nx / len;
+            const float py = ny / len;
+            const float pz = nz / len;
+            /* Dual of classic Newell (rz+1) front-pole map: (rz−1) sends the
+               forward pole to the rim (convex / outside). */
+            const float tz = pz - 1.0f;
+            const float denom = px * px + py * py + tz * tz;
+            if(denom < 1e-8f)
+            {
+                result.u = 0.5f;
+                result.v = 0.5f;
+            }
+            else
+            {
+                const float m = 2.0f * std::sqrt(denom);
+                result.u = std::clamp(0.5f + px / m, 0.0f, 1.0f);
+                result.v = std::clamp(0.5f + py / m, 0.0f, 1.0f);
+            }
         }
         result.is_valid = std::isfinite(result.u) && std::isfinite(result.v);
         return result;

@@ -350,4 +350,55 @@ inline void SyncEffectSliderValue(QSlider* slider, int value)
     slider->setValue(value);
 }
 
+/** Enable/disable a thin-slider row (spin + slider), not only the QSlider child. */
+inline void SetEffectSliderEnabled(QSlider* slider, bool enabled)
+{
+    if(!slider)
+    {
+        return;
+    }
+    if(EffectSliderRow* row = qobject_cast<EffectSliderRow*>(slider->parentWidget()))
+    {
+        row->setEnabled(enabled);
+        return;
+    }
+    if(EffectDoubleSliderRow* row = qobject_cast<EffectDoubleSliderRow*>(slider->parentWidget()))
+    {
+        row->setEnabled(enabled);
+        return;
+    }
+    slider->setEnabled(enabled);
+}
+
+/** Sync a double spin that may live inside an EffectDoubleSliderRow (keeps thin slider in lockstep). */
+inline void SyncEffectDoubleSpinValue(QDoubleSpinBox* spin, double value)
+{
+    if(!spin)
+    {
+        return;
+    }
+    if(EffectDoubleSliderRow* row = qobject_cast<EffectDoubleSliderRow*>(spin->parentWidget()))
+    {
+        row->syncSpinValue(value);
+        return;
+    }
+    QSignalBlocker blocker(spin);
+    spin->setValue(value);
+}
+
+/** Enable/disable a double spin-over-slider row, not only the spin child. */
+inline void SetEffectDoubleSpinEnabled(QDoubleSpinBox* spin, bool enabled)
+{
+    if(!spin)
+    {
+        return;
+    }
+    if(EffectDoubleSliderRow* row = qobject_cast<EffectDoubleSliderRow*>(spin->parentWidget()))
+    {
+        row->setEnabled(enabled);
+        return;
+    }
+    spin->setEnabled(enabled);
+}
+
 #endif

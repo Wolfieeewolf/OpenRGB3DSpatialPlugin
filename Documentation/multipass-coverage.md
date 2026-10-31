@@ -50,14 +50,14 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 | engines/audio | keep | 2026-10-31 | Prior split hold; no new fail this pass. |
 | engines/reactive | keep | 2026-10-31 | Prior split hold; no new fail this pass. |
 | engines/shader-field | fixed | 2026-10-31 | Shader body/spec size caps; dropped dead `shader_path` save key. Path id fail-closed holds. |
-| engines/screen-mirror | fixed | 2026-10-31 | Auto hysteresis; SDR DXGI; Y-flip; 1080p GPU scale→CPU LED. **Follow-up:** dropped Reach-origin option (always plane centre); hid Spatial Anchor + Room output for Ambilight; `needs_3d_origin=false`; UniqueConnection on layout refresh; zone add capped; skip origin stomp when `!needs_3d_origin`. |
+| engines/screen-mirror | fixed | 2026-11-01 | Prior 10-31 hold + **re-pass** after audience-bias removal / UI spin-over-slider: SyncMonitorSettingsToUI uses `SyncEffectSliderValue` / `SyncEffectDoubleSpinValue` (wave rows no longer desync spin↔slider); `SetEffectSliderEnabled` / `SetEffectDoubleSpinEnabled` for capture-source disable; dropped letterbox/pillarbox legacy keys; dead wave label/slider pointers removed. Bias leftovers: none. |
 | engines/volume\|particle\|ribbon-field | keep | 2026-10-31 | Shared-seq setParams + GpuAnimMs hold; leave named buckets. |
 | engines/game | fixed | 2026-10-31 | SHM apply rejects rgba size ≠ grid; Minecraft one-effect stubs ignored (security-only). |
 | engines/movie-sync | fixed | 2026-10-31 | Catalog size cap; Content-Length parse fail-closed. LocalHost + path escape hold. |
 | engines/triggers | fixed | 2026-10-31 | Bindings JSON size cap; ClearActionPreview idle path OK. |
 | shared/* | fixed | 2026-10-31 | Patterns kernel load fail-closed under `PatternsDir`; prior dead-defaults hold. |
 | ui/shell Tab_* | fixed | 2026-10-31 | PluginSettingsPaths + stack/controller path fail-closed; prior crumb merges hold. |
-| ui/widgets | keep | 2026-10-31 | `EffectCustomHost` / Effect*Row — no crumb merge this pass. |
+| ui/widgets | fixed | 2026-11-01 | `EffectDoubleSliderRow` + promote helpers; `SetEffect*Enabled` / `SyncEffectDoubleSpinValue`; row `setEnabled` → `QWidget::setEnabled`. EQ exempt. Cards/Custom Controller plain spins: intentional keep. |
 | ui/viewport, controllers, actions, … | fixed | 2026-10-31 | Preview dirty + action save/import under-root; LEDViewport named shards left alone. |
 | Object Creator / scene prop parity | fixed | 2026-10-31 | Scene prop Object Creator copy + Delete; Scene object **Edit scene prop…**; shared DisplayPlaneCaptureUi copy (no Windows-only strings). |
 | Documentation/ | fixed | 2026-10-31 | Tracker + file-map + recipe-map + CONTRIBUTING tab note. |
@@ -73,7 +73,7 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 | Effect Motion / Geometry / Output | fixed | Runtime `PromoteSliderLabelToEffectRow`; load sync via `SyncEffectSliderValue` |
 | StratumBand / StripKernel / Grid overlay | fixed | `PromoteSliderLabelInGrid` |
 | SceneTransform | fixed | `EffectDoubleSliderRow::adoptExistingSpinAndSlider` (unlink; `PositionAxisDragController` / rotation wire keep sync) |
-| CaptureZones wave | fixed | Wave rows → `EffectSliderRow` / `EffectDoubleSliderRow` (time to edge in seconds) |
+| CaptureZones wave | fixed | Wave rows → `EffectSliderRow` / `EffectDoubleSliderRow` (time to edge in seconds); load sync refreshes intensity visibility; dead label getters removed |
 | Lists (stack, zones, triggers, Object Creator) | fixed | `PluginUiWireListDestructiveDelete` (button + Del/Backspace + `QMenu`) |
 | ActionGradientBar | fixed | Context menu + Del/Backspace; right-click no longer instant-deletes |
 | LEDViewport3D selection | fixed | Context menu: Delete controller / Frame + W/E/R/Y/Q hints; Del/Backspace + F |

@@ -119,10 +119,7 @@ public:
         QSlider* softness_slider;
         QLabel* softness_label;
         QSlider* propagation_speed_slider;
-        QLabel* propagation_speed_label;
         QSlider* wave_decay_slider;
-        QLabel* wave_decay_label;
-        QSlider* wave_time_to_edge_slider;
         QDoubleSpinBox* wave_time_to_edge_spin;
         QSlider* falloff_curve_slider;
         QLabel* falloff_curve_label;
@@ -193,10 +190,7 @@ public:
             , softness_slider(nullptr)
             , softness_label(nullptr)
             , propagation_speed_slider(nullptr)
-            , propagation_speed_label(nullptr)
             , wave_decay_slider(nullptr)
-            , wave_decay_label(nullptr)
-            , wave_time_to_edge_slider(nullptr)
             , wave_time_to_edge_spin(nullptr)
             , falloff_curve_slider(nullptr)
             , falloff_curve_label(nullptr)

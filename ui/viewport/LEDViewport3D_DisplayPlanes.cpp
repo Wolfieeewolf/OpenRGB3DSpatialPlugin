@@ -61,6 +61,9 @@ void PushTexturedQuad(std::vector<float>& out, const Vector3D corners[4])
 
 void AppendCalibrationQuads(std::vector<float>& out, const Vector3D world_corners[4])
 {
+    /* corners: 0=BL, 1=BR, 2=TR, 3=TL (local +Y = screen top).
+       Match ScreenMirrorFillCalibrationPatternBuffer + SampleNearestRgba
+       (spatial v=1 → buffer top): TL=R, TR=G, BR=B, BL=Y. */
     Vector3D center;
     center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
     center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
@@ -80,10 +83,10 @@ void AppendCalibrationQuads(std::vector<float>& out, const Vector3D world_corner
     mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
     mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
 
-    PushQuadPC(out, world_corners[0], mid_bottom, center, mid_left, 1.0f, 0.0f, 0.0f);
-    PushQuadPC(out, mid_bottom, world_corners[1], mid_right, center, 0.0f, 1.0f, 0.0f);
-    PushQuadPC(out, center, mid_right, world_corners[2], mid_top, 0.0f, 0.0f, 1.0f);
-    PushQuadPC(out, mid_left, center, mid_top, world_corners[3], 1.0f, 1.0f, 0.0f);
+    PushQuadPC(out, world_corners[0], mid_bottom, center, mid_left, 1.0f, 1.0f, 0.0f); /* BL yellow */
+    PushQuadPC(out, mid_bottom, world_corners[1], mid_right, center, 0.0f, 0.0f, 1.0f); /* BR blue */
+    PushQuadPC(out, center, mid_right, world_corners[2], mid_top, 0.0f, 1.0f, 0.0f);    /* TR green */
+    PushQuadPC(out, mid_left, center, mid_top, world_corners[3], 1.0f, 0.0f, 0.0f);    /* TL red */
 }
 
 int RoomGridOverlayCellCountAlong(float min_v, float max_v)

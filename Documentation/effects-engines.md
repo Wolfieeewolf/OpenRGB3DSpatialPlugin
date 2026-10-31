@@ -102,7 +102,7 @@ Library category **Ambilight**. No Effect Library content folder.
 
 **Reach / wave origin:** always each **display plane’s centre**. Screen Mirror does not use the layer Spatial Anchor (that control is for Volume / Movie Sync / etc.).
 
-**Screen UV (`SpatialMapToScreen`):** direction from the plane centre → UV only (bezel ≈ **58°** from the normal — not 45° letterbox crush). No bezel “bloom” in the mapper; outward travel is **wave / time-to-edge**.
+**Screen UV (`SpatialMapToScreen`):** **outside / convex** sphere map (Newell dual with `pz − 1`) from the plane centre — light reads as an extension of the screen pushing **out** into the room (not a concave cave into mid-frame). Trade-off: clips that dive *into* a tunnel will feel wrong; ambilight is meant to send light out from the glass, not recreate into-the-screen perspective. Reach / falloff owns 360° brightness; wave / time-to-edge still adds travel delay.
 
 ## Movie Sync engine
 

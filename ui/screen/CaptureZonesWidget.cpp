@@ -811,21 +811,9 @@ QSlider* CaptureZonesWidget::getPropagationSpeedSlider() const
 {
     return propagation_row_ ? propagation_row_->slider() : nullptr;
 }
-QLabel* CaptureZonesWidget::getPropagationSpeedLabel() const
-{
-    return propagation_row_ ? propagation_row_->valueLabel() : nullptr;
-}
 QSlider* CaptureZonesWidget::getWaveDecaySlider() const
 {
     return wave_decay_row_ ? wave_decay_row_->slider() : nullptr;
-}
-QLabel* CaptureZonesWidget::getWaveDecayLabel() const
-{
-    return wave_decay_row_ ? wave_decay_row_->valueLabel() : nullptr;
-}
-QSlider* CaptureZonesWidget::getWaveTimeToEdgeSlider() const
-{
-    return wave_time_row_ ? wave_time_row_->slider() : nullptr;
 }
 QDoubleSpinBox* CaptureZonesWidget::getWaveTimeToEdgeSpin() const
 {

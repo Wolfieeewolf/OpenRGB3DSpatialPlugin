@@ -211,10 +211,7 @@ void EffectSliderRow::bindValueChanged(QObject* owner,
 
 void EffectSliderRow::setEnabled(bool enabled)
 {
-    ui->valueSlider->setEnabled(enabled);
-    ui->valueSpin->setEnabled(enabled);
-    ui->valueLabel->setEnabled(enabled);
-    ui->captionLabel->setEnabled(enabled);
+    QWidget::setEnabled(enabled);
 }
 
 #include "EffectDoubleSliderRow.h"
@@ -574,18 +571,7 @@ void EffectDoubleSliderRow::bindValueChanged(QObject* owner,
 
 void EffectDoubleSliderRow::setEnabled(bool enabled)
 {
-    if(ui)
-    {
-        ui->captionLabel->setEnabled(enabled);
-    }
-    if(slider_)
-    {
-        slider_->setEnabled(enabled);
-    }
-    if(spin_)
-    {
-        spin_->setEnabled(enabled);
-    }
+    QWidget::setEnabled(enabled);
 }
 
 #include "EffectLabeledComboRow.h"
@@ -776,8 +762,6 @@ QLabel* EffectInfoLabel::label() const
 }
 #include "EffectSectionHeading.h"
 #include "ui_EffectSectionHeading.h"
-
-#include <QLabel>
 
 #include <QFont>
 #include <QLabel>
