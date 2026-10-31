@@ -8,15 +8,17 @@
 
 #include <QDoubleSpinBox>
 #include <QGridLayout>
+#include <QLabel>
 #include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QVBoxLayout>
 #include <cmath>
 
 namespace
 {
 
-void ConfigureTransformAxisGrid(QGridLayout* layout, int spin_min_width)
+void ConfigureTransformAxisGrid(QGridLayout* layout)
 {
     if(!layout)
     {
@@ -28,22 +30,41 @@ void ConfigureTransformAxisGrid(QGridLayout* layout, int spin_min_width)
     layout->setVerticalSpacing(6);
     layout->setColumnStretch(0, 0);
     layout->setColumnStretch(1, 1);
-    layout->setColumnStretch(2, 0);
-    layout->setColumnMinimumWidth(2, spin_min_width);
 }
 
-void ConfigureTransformAxisRow(QSlider* slider, QDoubleSpinBox* spin, int spin_min_width)
+/** Spin over thin slider (EffectSliderRow visual standard; keeps QDoubleSpinBox). */
+void RestackSpinOverSlider(QGridLayout* grid,
+                           int row,
+                           QLabel* caption,
+                           QSlider* slider,
+                           QDoubleSpinBox* spin,
+                           int spin_min_width)
 {
-    if(slider)
+    if(!grid || !slider || !spin)
     {
-        slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        slider->setMinimumWidth(48);
+        return;
     }
-    if(spin)
+    grid->removeWidget(caption);
+    grid->removeWidget(slider);
+    grid->removeWidget(spin);
+
+    auto* stack = new QWidget(grid->parentWidget());
+    auto* vbox = new QVBoxLayout(stack);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    vbox->setSpacing(0);
+    spin->setMinimumWidth(spin_min_width);
+    spin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    slider->setMinimumWidth(48);
+    slider->setFixedHeight(14);
+    vbox->addWidget(spin);
+    vbox->addWidget(slider);
+
+    if(caption)
     {
-        spin->setMinimumWidth(spin_min_width);
-        spin->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        grid->addWidget(caption, row, 0);
     }
+    grid->addWidget(stack, row, 1);
 }
 
 } // namespace
@@ -91,20 +112,18 @@ SceneTransformPanel::SceneTransformPanel(QWidget* parent)
     ui->rotationGroup->setToolTip(
         "Orientation of the selected controller, reference point, or display plane in the room. Not the camera view.");
 
-    // Position spins carry a " mm" suffix; rotation carries " °". Reserve enough width
-    // so the slider column cannot collide with the spin boxes on narrow Setup panels.
     constexpr int kPosSpinMinWidth = 110;
     constexpr int kRotSpinMinWidth = 90;
 
-    ConfigureTransformAxisGrid(ui->positionLayout, kPosSpinMinWidth);
-    ConfigureTransformAxisGrid(ui->rotationLayout, kRotSpinMinWidth);
+    ConfigureTransformAxisGrid(ui->positionLayout);
+    ConfigureTransformAxisGrid(ui->rotationLayout);
 
-    ConfigureTransformAxisRow(ui->posXSlider, ui->posXSpin, kPosSpinMinWidth);
-    ConfigureTransformAxisRow(ui->posYSlider, ui->posYSpin, kPosSpinMinWidth);
-    ConfigureTransformAxisRow(ui->posZSlider, ui->posZSpin, kPosSpinMinWidth);
-    ConfigureTransformAxisRow(ui->rotXSlider, ui->rotXSpin, kRotSpinMinWidth);
-    ConfigureTransformAxisRow(ui->rotYSlider, ui->rotYSpin, kRotSpinMinWidth);
-    ConfigureTransformAxisRow(ui->rotZSlider, ui->rotZSpin, kRotSpinMinWidth);
+    RestackSpinOverSlider(ui->positionLayout, 0, ui->posXCaption, ui->posXSlider, ui->posXSpin, kPosSpinMinWidth);
+    RestackSpinOverSlider(ui->positionLayout, 1, ui->posYCaption, ui->posYSlider, ui->posYSpin, kPosSpinMinWidth);
+    RestackSpinOverSlider(ui->positionLayout, 2, ui->posZCaption, ui->posZSlider, ui->posZSpin, kPosSpinMinWidth);
+    RestackSpinOverSlider(ui->rotationLayout, 0, ui->rotXCaption, ui->rotXSlider, ui->rotXSpin, kRotSpinMinWidth);
+    RestackSpinOverSlider(ui->rotationLayout, 1, ui->rotYCaption, ui->rotYSlider, ui->rotYSpin, kRotSpinMinWidth);
+    RestackSpinOverSlider(ui->rotationLayout, 2, ui->rotZCaption, ui->rotZSlider, ui->rotZSpin, kRotSpinMinWidth);
 }
 
 SceneTransformPanel::~SceneTransformPanel()

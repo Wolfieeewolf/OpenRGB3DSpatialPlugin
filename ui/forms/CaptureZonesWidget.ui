@@ -185,16 +185,52 @@
      <property name="title">
       <string>Capture Zones</string>
      </property>
+     <property name="toolTip">
+      <string>Only LEDs whose screen direction lands in an enabled zone stay lit (and sample that UV). Separate zones do not fill the gaps between them — left+right strips leave the middle dark.</string>
+     </property>
      <layout class="QVBoxLayout" name="zonesLayout">
       <item>
-       <widget class="QPushButton" name="addZoneButton">
-        <property name="text">
-         <string>Add Capture Zone</string>
-        </property>
-        <property name="toolTip">
-         <string>Add a new capture zone that can be positioned anywhere on the screen.</string>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="zoneButtonsRow">
+        <item>
+         <widget class="QPushButton" name="addZoneButton">
+          <property name="text">
+           <string>+</string>
+          </property>
+          <property name="toolTip">
+           <string>Add another rectangular zone. Each zone is tested on its own — they are not merged into one big box.</string>
+          </property>
+          <property name="maximumWidth">
+           <number>36</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeZoneButton">
+          <property name="text">
+           <string>−</string>
+          </property>
+          <property name="toolTip">
+           <string>Remove the selected zone (Delete / Backspace also work). At least one zone must remain.</string>
+          </property>
+          <property name="maximumWidth">
+           <number>36</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="zoneButtonsSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
       </item>
       <item>
        <widget class="QLabel" name="captureAreaCaption">

@@ -7,18 +7,14 @@
 #include <algorithm>
 #include <vector>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
+/* 3D-friendly Screen Mirror calibration frame.
+   Four saturated quadrant colors (R/G/B/Y) with a soft center→corner
+   luminance falloff so brightness / threshold / Reach read clearly on
+   room LEDs. No white rings, spokes, or grid — those wash out ambilight. */
 inline void ScreenMirrorFillCalibrationPatternBuffer(std::vector<uint8_t>& rgba)
 {
     constexpr int w = 512;
     constexpr int h = 512;
-    const float cx = (w - 1) * 0.5f;
-    const float cy = (h - 1) * 0.5f;
-    const int minor_step = std::max(8, w / 32);
-    const int major_step = std::max(minor_step * 2, w / 8);
 
     rgba.resize((size_t)w * h * 4);
     for(int y = 0; y < h; y++)
@@ -29,7 +25,10 @@ inline void ScreenMirrorFillCalibrationPatternBuffer(std::vector<uint8_t>& rgba)
             const float v = (y + 0.5f) / (float)h;
             const bool top = v < 0.5f;
             const bool left = u < 0.5f;
-            float br = 96.0f, bg = 96.0f, bb = 96.0f;
+
+            float br = 96.0f;
+            float bg = 96.0f;
+            float bb = 96.0f;
             if(top && left)
             {
                 br = 230.0f;
@@ -55,54 +54,43 @@ inline void ScreenMirrorFillCalibrationPatternBuffer(std::vector<uint8_t>& rgba)
                 bb = 45.0f;
             }
 
-            const int cx64 = (x * 48) / w;
-            const int cy64 = (y * 48) / h;
-            const float chk = (((cx64 ^ cy64) & 1) != 0) ? 1.0f : 0.78f;
-            br *= chk;
-            bg *= chk;
-            bb *= chk;
-
-            const float dx = (float)x - cx;
-            const float dy = (float)y - cy;
-            const float dist = sqrtf(dx * dx + dy * dy);
-            const float max_ring_r = (float)std::min(w, h) * 0.48f;
-            for(int ring_i = 1; ring_i <= 7; ring_i++)
+            /* Soft radial luminance: bright near screen centre, darker toward
+               corners — gives threshold / brightness something to bite without
+               painting LEDs white. */
+            const float ru = (u - 0.5f) * 2.0f;
+            const float rv = (v - 0.5f) * 2.0f;
+            const float radial = sqrtf(ru * ru + rv * rv);
+            float lum = 1.0f;
+            if(radial > 0.18f)
             {
-                const float ring_r = (ring_i / 8.0f) * max_ring_r;
-                if(fabsf(dist - ring_r) < 1.35f)
-                {
-                    br = bg = bb = 245.0f;
-                    break;
-                }
+                const float t = std::clamp((radial - 0.18f) / 1.05f, 0.0f, 1.0f);
+                lum = 1.0f - 0.62f * (t * t * (3.0f - 2.0f * t));
+            }
+            br *= lum;
+            bg *= lum;
+            bb *= lum;
+
+            /* Thin dark cross at midlines — orientation without white wash. */
+            const float du = fabsf(u - 0.5f);
+            const float dv = fabsf(v - 0.5f);
+            const float cross_px_u = du * (float)w;
+            const float cross_px_v = dv * (float)h;
+            if(cross_px_u < 1.6f || cross_px_v < 1.6f)
+            {
+                br *= 0.18f;
+                bg *= 0.18f;
+                bb *= 0.18f;
             }
 
-            const int spoke_count = 16;
-            const float ang = atan2f(dy, dx);
-            const float spoke_phase = ang * ((float)spoke_count / (2.0f * (float)M_PI));
-            const float sp = spoke_phase - floorf(spoke_phase);
-            if(dist > (float)std::min(w, h) * 0.04f && sp < 0.018f)
+            /* Soft dark bezel so letterbox / edge mapping stays readable. */
+            const float edge = std::min(std::min(u, 1.0f - u), std::min(v, 1.0f - v));
+            if(edge < 0.02f)
             {
-                br = std::min(255.0f, br + 90.0f);
-                bg = std::min(255.0f, bg + 90.0f);
-                bb = std::min(255.0f, bb + 90.0f);
-            }
-
-            const bool minor_line = (x % minor_step) < 1 || (y % minor_step) < 1;
-            const bool major_line = (x % major_step) < 3 || (y % major_step) < 3;
-            if(minor_line && !major_line)
-            {
-                br *= 0.35f;
-                bg *= 0.35f;
-                bb *= 0.35f;
-            }
-            if(major_line)
-            {
-                br = bg = bb = 252.0f;
-            }
-
-            if(dist < 4.0f)
-            {
-                br = bg = bb = 255.0f;
+                const float e = std::clamp(edge / 0.02f, 0.0f, 1.0f);
+                const float edge_mul = 0.22f + 0.78f * e;
+                br *= edge_mul;
+                bg *= edge_mul;
+                bb *= edge_mul;
             }
 
             const size_t idx = ((size_t)y * (size_t)w + (size_t)x) * 4u;

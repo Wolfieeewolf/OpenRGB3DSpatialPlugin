@@ -92,7 +92,7 @@
       <string>Audience bias (experiment)</string>
      </property>
      <property name="toolTip">
-      <string>Optional. Shapes output toward User layout points (seats) without turning LEDs off — Reach still fills the grid; bias cones brightness. 0 = off. Add User ref points — one per watcher.</string>
+      <string>Optional. Cones brightness toward User/Chair layout points without turning LEDs off — Reach still fills the grid. 0 = off. Add a User or Chair ref at each seat.</string>
      </property>
      <layout class="QVBoxLayout" name="audienceLayout">
       <property name="spacing">
@@ -104,7 +104,7 @@
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>Uses layout points typed User. Reach origin stays the display.</string>
+         <string>Uses layout points typed User or Chair. Reach origin stays the display. Bias does nothing until at least one seat ref exists.</string>
         </property>
        </widget>
       </item>
@@ -126,7 +126,7 @@
            <enum>Qt::Horizontal</enum>
           </property>
           <property name="toolTip">
-           <string>0 = even Reach fill. Higher values cone brightness toward User seats (off-cone stays lit, dimmer). Multi-seat = strongest lobe. Use Reach / softness / wave for coverage and motion.</string>
+           <string>0 = even Reach fill. Higher values brighten toward User/Chair seats and dim off-cone (still lit). Multi-seat = strongest lobe.</string>
           </property>
          </widget>
         </item>

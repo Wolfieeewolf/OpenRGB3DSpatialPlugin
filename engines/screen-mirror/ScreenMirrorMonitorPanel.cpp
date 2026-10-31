@@ -19,7 +19,9 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSlider>
+#include <QSpinBox>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -35,6 +37,11 @@ void BindSliderRow(EffectSliderRow* row, QSlider*& slider_out, QLabel*& label_ou
     }
     slider_out = row->slider();
     label_out  = row->valueLabel();
+    /* Spin shows the value; keep optional format label hidden unless a caller shows it. */
+    if(row->valueLabel())
+    {
+        row->valueLabel()->hide();
+    }
 }
 
 void MoveFormRowTo(QFormLayout* src, QWidget* field, QFormLayout* dest)
@@ -74,19 +81,18 @@ void ScreenMirrorMonitorPanel::PopulateLedTrimHost(ScreenMirror* effect,
                            QStringLiteral(
                                "Per-channel multiplier for this display (50-200%). 100% = neutral. "
                                "Lower green slightly if oranges read yellow on the strip."));
+        channel->setSuffix(QStringLiteral("%"));
         channel->setEnabled(has_capture);
         BindSliderRow(channel, slider, label);
         h->addWidget(channel, 1);
-        QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-        QObject::connect(slider, &QSlider::valueChanged, effect, [label](int v) {
-            if(label)
-            {
-                label->setText(QString::number(v) + QStringLiteral("%"));
-            }
-        });
-        if(label)
+        if(QSpinBox* spin = channel->spinBox())
         {
-            label->setText(QString::number(slider->value()) + QStringLiteral("%"));
+            QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), effect,
+                             &ScreenMirror::OnParameterChanged);
+        }
+        else if(slider)
+        {
+            QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
         }
     };
 
@@ -154,24 +160,26 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                                     int max,
                                     int value,
                                     const QString& tooltip,
-                                    auto label_fn) {
+                                    const QString& spin_suffix) {
         if(!row)
         {
             return;
         }
         row->configure(min, max, value, tooltip);
+        if(!spin_suffix.isEmpty())
+        {
+            row->setSuffix(spin_suffix);
+        }
         row->setEnabled(has_capture_source);
         BindSliderRow(row, slider, label);
-        QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
-        QObject::connect(slider, &QSlider::valueChanged, effect, [label, label_fn](int v) {
-            if(label)
-            {
-                label->setText(label_fn(v));
-            }
-        });
-        if(label)
+        if(QSpinBox* spin = row->spinBox())
         {
-            label->setText(label_fn(slider->value()));
+            QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), effect,
+                             &ScreenMirror::OnParameterChanged);
+        }
+        else if(slider)
+        {
+            QObject::connect(slider, &QSlider::valueChanged, effect, &ScreenMirror::OnParameterChanged);
         }
     };
 
@@ -179,11 +187,12 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    settings.scale_slider,
                    settings.scale_label,
                    0,
-                   300,
-                   (int)(settings.scale * 100.0f),
+                   100,
+                   (int)std::lround(std::clamp(settings.scale, 0.0f, 1.0f) * 100.0f),
                    QStringLiteral("How far Reach extends from this display plane's centre "
-                                  "(0–100% of room corner distance; 101–300% = beyond)."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
+                                  "(0–100% of room corner distance). Use Softness / Falloff curve "
+                                  "for the edge shape — overshoot past 100% is not needed."),
+                   QStringLiteral("%"));
 
     settings.scale_invert_check = ui->scaleInvertCheck;
     ui->scaleInvertCheck->setEnabled(has_capture_source);
@@ -201,7 +210,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    (int)(settings.falloff_curve_exponent * 100.0f),
                    QStringLiteral("Shapes distance falloff from this display's centre: 50% = gradual, "
                                   "100% = linear, 200% = sharper edge."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
+                   QStringLiteral("%"));
 
     wire_pct_ticks(ui->softnessRow,
                    settings.softness_slider,
@@ -211,17 +220,17 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    (int)settings.edge_softness,
                    QStringLiteral("Flat bright core around this display plane's centre before fading "
                                   "(0 = pure gradient, 100 ≈ room-wide fill with a soft rim)."),
-                   [](int v) { return QString::number(v); });
+                   QString());
 
     wire_pct_ticks(ui->brightnessRow,
                    settings.brightness_slider,
                    settings.brightness_label,
                    0,
-                   200,
-                   (int)(settings.brightness_multiplier * 100.0f),
+                   100,
+                   (int)std::lround(std::clamp(settings.brightness_multiplier, 0.0f, 1.0f) * 100.0f),
                    QStringLiteral(
-                       "Overall output level (0-200%). 100% = neutral. Use White rolloff to reduce wash and keep colors vibrant."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
+                       "Overall output level (0–100%). 100% = full. For more punch, raise Vibrance instead of overdriving brightness."),
+                   QStringLiteral("%"));
 
     wire_pct_ticks(ui->brightnessThresholdRow,
                    settings.brightness_threshold_slider,
@@ -232,7 +241,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    QStringLiteral(
                        "Floor for dim pixels (0-255). Uses peak RGB and luma so saturated reds/greens/blues are not crushed. "
                        "0 = off, higher = only brighter content passes at full strength."),
-                   [](int v) { return QString::number(v); });
+                   QString());
 
     wire_pct_ticks(ui->whiteRolloffRow,
                    settings.white_rolloff_slider,
@@ -242,7 +251,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    (int)std::lround(settings.white_rolloff * 100.0f),
                    QStringLiteral(
                        "0-125%: strip gray/white (~70-80% sweet spot). 100% = max fog removal. 101-125% = Plus Ultra extra chroma."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
+                   QStringLiteral("%"));
 
     wire_pct_ticks(ui->vibranceRow,
                    settings.vibrance_slider,
@@ -251,27 +260,99 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    200,
                    (int)std::lround(settings.vibrance * 100.0f),
                    QStringLiteral("Saturation (0-200%). 100% = no change, below 100% = more muted, above 100% = more vivid RGB/CYM."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
+                   QStringLiteral("%"));
 
     ScreenMirrorMonitorPanel::PopulateLedTrimHost(effect, settings, ui->ledTrimHost, has_capture_source);
 
-    wire_pct_ticks(ui->letterboxRow,
-                   settings.black_bar_letterbox_slider,
-                   settings.black_bar_letterbox_label,
-                   0,
-                   50,
-                   (int)std::lround(settings.black_bar_letterbox_percent),
-                   QStringLiteral("Crop top and bottom (letterbox). 0 = no crop."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
+    auto wire_black_bar = [&](EffectSliderRow* row,
+                              QSlider*& slider,
+                              QLabel*& label,
+                              float value,
+                              const QString& tip) {
+        wire_pct_ticks(row,
+                       slider,
+                       label,
+                       0,
+                       49,
+                       (int)std::lround(std::clamp(value, 0.0f, 49.0f)),
+                       tip,
+                       QStringLiteral("%"));
+    };
+    wire_black_bar(ui->blackBarTopRow,
+                   settings.black_bar_top_slider,
+                   settings.black_bar_top_label,
+                   settings.black_bar_top_percent,
+                   QStringLiteral("Crop from the top edge (0–49%)."));
+    wire_black_bar(ui->blackBarBottomRow,
+                   settings.black_bar_bottom_slider,
+                   settings.black_bar_bottom_label,
+                   settings.black_bar_bottom_percent,
+                   QStringLiteral("Crop from the bottom edge (0–49%)."));
+    wire_black_bar(ui->blackBarLeftRow,
+                   settings.black_bar_left_slider,
+                   settings.black_bar_left_label,
+                   settings.black_bar_left_percent,
+                   QStringLiteral("Crop from the left edge (0–49%)."));
+    wire_black_bar(ui->blackBarRightRow,
+                   settings.black_bar_right_slider,
+                   settings.black_bar_right_label,
+                   settings.black_bar_right_percent,
+                   QStringLiteral("Crop from the right edge (0–49%)."));
 
-    wire_pct_ticks(ui->pillarboxRow,
-                   settings.black_bar_pillarbox_slider,
-                   settings.black_bar_pillarbox_label,
-                   0,
-                   50,
-                   (int)std::lround(settings.black_bar_pillarbox_percent),
-                   QStringLiteral("Crop left and right (pillarbox). 0 = no crop."),
-                   [](int v) { return QString::number(v) + QStringLiteral("%"); });
+    settings.black_bar_link_vertical_check = ui->blackBarLinkVerticalCheck;
+    ui->blackBarLinkVerticalCheck->setChecked(settings.black_bar_link_vertical);
+    settings.black_bar_link_horizontal_check = ui->blackBarLinkHorizontalCheck;
+    ui->blackBarLinkHorizontalCheck->setChecked(settings.black_bar_link_horizontal);
+
+    auto sync_linked_pair = [effect](QSpinBox* a, QSpinBox* b, QCheckBox* link) {
+        if(!a || !b || !link)
+        {
+            return;
+        }
+        /* Disconnect the generic OnParameterChanged from wire_pct_ticks — this
+           handler owns change notification for linked pairs. */
+        QObject::disconnect(a, QOverload<int>::of(&QSpinBox::valueChanged), effect,
+                            &ScreenMirror::OnParameterChanged);
+        QObject::disconnect(b, QOverload<int>::of(&QSpinBox::valueChanged), effect,
+                            &ScreenMirror::OnParameterChanged);
+        QObject::connect(a, QOverload<int>::of(&QSpinBox::valueChanged), effect,
+                         [effect, a, b, link](int v) {
+                             if(link->isChecked() && b->value() != v)
+                             {
+                                 QSignalBlocker block(b);
+                                 b->setValue(v);
+                             }
+                             (void)a;
+                             effect->OnParameterChanged();
+                         });
+        QObject::connect(b, QOverload<int>::of(&QSpinBox::valueChanged), effect,
+                         [effect, a, b, link](int v) {
+                             if(link->isChecked() && a->value() != v)
+                             {
+                                 QSignalBlocker block(a);
+                                 a->setValue(v);
+                             }
+                             (void)b;
+                             effect->OnParameterChanged();
+                         });
+        QObject::connect(link, &QCheckBox::toggled, effect, [effect, a, b](bool on) {
+            if(on)
+            {
+                const int v = std::max(a->value(), b->value());
+                QSignalBlocker ba(a);
+                QSignalBlocker bb(b);
+                a->setValue(v);
+                b->setValue(v);
+            }
+            effect->OnParameterChanged();
+        });
+    };
+    sync_linked_pair(ui->blackBarTopRow ? ui->blackBarTopRow->spinBox() : nullptr,
+                     ui->blackBarBottomRow ? ui->blackBarBottomRow->spinBox() : nullptr,
+                     settings.black_bar_link_vertical_check);
+    sync_linked_pair(ui->blackBarLeftRow ? ui->blackBarLeftRow->spinBox() : nullptr,
+                     ui->blackBarRightRow ? ui->blackBarRightRow->spinBox() : nullptr,
+                     settings.black_bar_link_horizontal_check);
 
     wire_pct_ticks(ui->smoothingRow,
                    settings.smoothing_time_slider,
@@ -280,13 +361,15 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    500,
                    (int)settings.smoothing_time_ms,
                    QStringLiteral("Temporal smoothing to reduce flicker (0-500ms)."),
-                   [](int v) { return QString::number(v) + QStringLiteral("ms"); });
+                   QStringLiteral(" ms"));
 
     settings.calibration_pattern_check = ui->calibrationPatternCheck;
     ui->calibrationPatternCheck->setEnabled(true);
     ui->calibrationPatternCheck->setChecked(settings.show_calibration_pattern);
     ui->calibrationPatternCheck->setToolTip(
-        QStringLiteral("LEDs use a grid, rings, spokes, and quadrant colors (same as the zone preview)."));
+        QStringLiteral(
+            "Drive LEDs from a 3D-friendly R/G/B/Y test image (same as the zone preview). "
+            "Brightness, threshold, Reach / falloff, vibrance, and related sliders all apply."));
     QObject::connect(ui->calibrationPatternCheck, &QCheckBox::toggled, effect, [effect](bool) {
         effect->OnParameterChanged();
         effect->OnCalibrationPatternChanged();
@@ -308,8 +391,10 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
         plane,
         &settings.show_calibration_pattern,
         &settings.show_screen_preview,
-        &settings.black_bar_letterbox_percent,
-        &settings.black_bar_pillarbox_percent,
+        &settings.black_bar_top_percent,
+        &settings.black_bar_bottom_percent,
+        &settings.black_bar_left_percent,
+        &settings.black_bar_right_percent,
         settings.propagation_speed_mm_per_ms,
         settings.wave_decay_ms,
         settings.wave_time_to_edge_sec,
@@ -327,6 +412,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     settings.wave_time_to_edge_label  = zones_widget->getWaveTimeToEdgeLabel();
     settings.capture_area_preview      = zones_widget->getPreviewWidget();
     settings.add_zone_button           = zones_widget->getAddZoneButton();
+    settings.remove_zone_button        = zones_widget->getRemoveZoneButton();
 
     auto* root = qobject_cast<QVBoxLayout*>(layout());
     if(!root)

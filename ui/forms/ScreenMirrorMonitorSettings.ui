@@ -187,6 +187,9 @@
      <property name="title">
       <string>Black Bars (Crop)</string>
      </property>
+     <property name="toolTip">
+      <string>Crop each edge independently so LEDs skip letterbox / pillarbox / HUD bars. Link opposite sides to keep top↔bottom or left↔right matched.</string>
+     </property>
      <layout class="QFormLayout" name="blackBarsForm">
       <property name="leftMargin">
        <number>8</number>
@@ -201,24 +204,70 @@
        <number>8</number>
       </property>
       <item row="0" column="0">
-       <widget class="QLabel" name="letterboxCaption">
+       <widget class="QLabel" name="blackBarTopCaption">
         <property name="text">
-         <string>Letterbox (top/bottom):</string>
+         <string>Top:</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="EffectSliderRow" name="letterboxRow" native="true"/>
+       <widget class="EffectSliderRow" name="blackBarTopRow" native="true"/>
       </item>
       <item row="1" column="0">
-       <widget class="QLabel" name="pillarboxCaption">
+       <widget class="QLabel" name="blackBarBottomCaption">
         <property name="text">
-         <string>Pillarbox (left/right):</string>
+         <string>Bottom:</string>
         </property>
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="EffectSliderRow" name="pillarboxRow" native="true"/>
+       <widget class="EffectSliderRow" name="blackBarBottomRow" native="true"/>
+      </item>
+      <item row="2" column="0" colspan="2">
+       <widget class="QCheckBox" name="blackBarLinkVerticalCheck">
+        <property name="text">
+         <string>Link top &amp; bottom</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="toolTip">
+         <string>When on, changing Top also sets Bottom (and the other way around).</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="blackBarLeftCaption">
+        <property name="text">
+         <string>Left:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="EffectSliderRow" name="blackBarLeftRow" native="true"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="blackBarRightCaption">
+        <property name="text">
+         <string>Right:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="EffectSliderRow" name="blackBarRightRow" native="true"/>
+      </item>
+      <item row="5" column="0" colspan="2">
+       <widget class="QCheckBox" name="blackBarLinkHorizontalCheck">
+        <property name="text">
+         <string>Link left &amp; right</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="toolTip">
+         <string>When on, changing Left also sets Right (and the other way around).</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

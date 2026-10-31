@@ -7,6 +7,8 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QKeyEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -34,7 +36,14 @@ ActionGradientBar::ActionGradientBar(QWidget* parent)
 {
     setMouseTracking(true);
     setAcceptDrops(true);
-    setToolTip(QStringLiteral("Drop a colour to recolour the stop under the cursor. Ctrl+drop adds a stop."));
+    setFocusPolicy(Qt::StrongFocus);
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        showStopContextMenu(pos);
+    });
+    setToolTip(QStringLiteral(
+        "Drop a colour to recolour the stop under the cursor. Ctrl+drop adds a stop.\n"
+        "Remove stop: right-click → Delete stop, or Delete / Backspace when a stop is selected."));
     setMinimumHeight(bar_h_ + marker_h_ + 8);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     stops_ = {
@@ -185,6 +194,88 @@ void ActionGradientBar::dropEvent(QDropEvent* event)
     event->acceptProposedAction();
 }
 
+int ActionGradientBar::selectedStopIndex() const
+{
+    if(selected_stop_index_ >= 0 && selected_stop_index_ < (int)stops_.size())
+    {
+        return selected_stop_index_;
+    }
+    return -1;
+}
+
+void ActionGradientBar::removeStopAt(int index)
+{
+    if(index < 0 || index >= (int)stops_.size() || stops_.size() <= 1)
+    {
+        return;
+    }
+    stops_.erase(stops_.begin() + index);
+    if(selected_stop_index_ == index)
+    {
+        selected_stop_index_ = -1;
+    }
+    else if(selected_stop_index_ > index)
+    {
+        --selected_stop_index_;
+    }
+    if(drag_index_ == index)
+    {
+        drag_index_ = -1;
+    }
+    else if(drag_index_ > index)
+    {
+        --drag_index_;
+    }
+    emit stopsChanged();
+    update();
+}
+
+void ActionGradientBar::showStopContextMenu(const QPoint& local_pos)
+{
+    const int hit = hitTestStop(local_pos);
+    if(hit >= 0)
+    {
+        selected_stop_index_ = hit;
+        update();
+    }
+
+    QMenu menu(this);
+    QAction* delete_act = menu.addAction(QStringLiteral("Delete stop"));
+    delete_act->setEnabled(stops_.size() > 1 && selectedStopIndex() >= 0);
+    QAction* color_act = menu.addAction(QStringLiteral("Edit stop color…"));
+    color_act->setEnabled(selectedStopIndex() >= 0);
+
+    QAction* chosen = menu.exec(mapToGlobal(local_pos));
+    if(chosen == delete_act)
+    {
+        removeStopAt(selectedStopIndex());
+    }
+    else if(chosen == color_act)
+    {
+        editStopColor(selectedStopIndex());
+    }
+}
+
+void ActionGradientBar::keyPressEvent(QKeyEvent* event)
+{
+    if(!event)
+    {
+        QWidget::keyPressEvent(event);
+        return;
+    }
+    if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
+    {
+        const int idx = selectedStopIndex();
+        if(idx >= 0 && stops_.size() > 1)
+        {
+            removeStopAt(idx);
+            event->accept();
+            return;
+        }
+    }
+    QWidget::keyPressEvent(event);
+}
+
 void ActionGradientBar::editStopColor(int index)
 {
     if(index < 0 || index >= (int)stops_.size())
@@ -238,7 +329,7 @@ void ActionGradientBar::paintEvent(QPaintEvent*)
         path.closeSubpath();
         p.setPen(QColor(30, 30, 34));
         p.setBrush(QColor(160, 160, 168));
-        if(i == drag_index_)
+        if(i == drag_index_ || i == selected_stop_index_)
         {
             p.setBrush(QColor(220, 200, 90));
         }
@@ -253,22 +344,17 @@ void ActionGradientBar::mousePressEvent(QMouseEvent* event)
     const QPoint pt = event->position().toPoint();
     if(event->button() == Qt::RightButton)
     {
-        const int hit = hitTestStop(pt);
-        if(hit >= 0 && stops_.size() > 1)
-        {
-            stops_.erase(stops_.begin() + hit);
-            emit stopsChanged();
-            update();
-        }
         return;
     }
     if(event->button() != Qt::LeftButton)
     {
         return;
     }
+    setFocus(Qt::MouseFocusReason);
     drag_index_ = hitTestStop(pt);
     if(drag_index_ >= 0)
     {
+        selected_stop_index_ = drag_index_;
         update();
         return;
     }
@@ -283,6 +369,7 @@ void ActionGradientBar::mousePressEvent(QMouseEvent* event)
         stops_.push_back(stop);
         sortStops();
         drag_index_ = hitTestStop(pt);
+        selected_stop_index_ = drag_index_;
         emit stopsChanged();
         update();
     }

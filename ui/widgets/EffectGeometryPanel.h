@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+class EffectSliderRow;
 class QGroupBox;
 class QLabel;
 class QPushButton;
@@ -67,6 +68,18 @@ public:
 
 private:
     Ui::EffectGeometryPanel* ui = nullptr;
+    EffectSliderRow* scale_x_row_ = nullptr;
+    EffectSliderRow* scale_y_row_ = nullptr;
+    EffectSliderRow* scale_z_row_ = nullptr;
+    EffectSliderRow* asr_yaw_row_ = nullptr;
+    EffectSliderRow* asr_pitch_row_ = nullptr;
+    EffectSliderRow* asr_roll_row_ = nullptr;
+    EffectSliderRow* offset_x_row_ = nullptr;
+    EffectSliderRow* offset_y_row_ = nullptr;
+    EffectSliderRow* offset_z_row_ = nullptr;
+    EffectSliderRow* rot_yaw_row_ = nullptr;
+    EffectSliderRow* rot_pitch_row_ = nullptr;
+    EffectSliderRow* rot_roll_row_ = nullptr;
 };
 
 #endif

@@ -8,6 +8,7 @@
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
+#include "ui/widgets/EffectSliderPromote.h"
 #include <QSignalBlocker>
 #include <algorithm>
 #include <cmath>
@@ -472,48 +473,12 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("axis_scale_rotation_roll"))
         effect_axis_scale_rotation_roll = std::clamp(settings["axis_scale_rotation_roll"].get<float>(), -180.0f, 180.0f);
 
-    if(rotation_yaw_slider)
-    {
-        QSignalBlocker blocker(rotation_yaw_slider);
-        rotation_yaw_slider->setValue((int)effect_rotation_yaw);
-    }
-    if(rotation_yaw_label)
-    {
-        rotation_yaw_label->setText(QString::number((int)effect_rotation_yaw) + QStringLiteral("°"));
-    }
-    if(rotation_pitch_slider)
-    {
-        QSignalBlocker blocker(rotation_pitch_slider);
-        rotation_pitch_slider->setValue((int)effect_rotation_pitch);
-    }
-    if(rotation_pitch_label)
-    {
-        rotation_pitch_label->setText(QString::number((int)effect_rotation_pitch) + QStringLiteral("°"));
-    }
-    if(rotation_roll_slider)
-    {
-        QSignalBlocker blocker(rotation_roll_slider);
-        rotation_roll_slider->setValue((int)effect_rotation_roll);
-    }
-    if(rotation_roll_label)
-    {
-        rotation_roll_label->setText(QString::number((int)effect_rotation_roll) + QStringLiteral("°"));
-    }
-    if(axis_scale_rot_yaw_slider)
-    {
-        QSignalBlocker blocker(axis_scale_rot_yaw_slider);
-        axis_scale_rot_yaw_slider->setValue((int)effect_axis_scale_rotation_yaw);
-    }
-    if(axis_scale_rot_pitch_slider)
-    {
-        QSignalBlocker blocker(axis_scale_rot_pitch_slider);
-        axis_scale_rot_pitch_slider->setValue((int)effect_axis_scale_rotation_pitch);
-    }
-    if(axis_scale_rot_roll_slider)
-    {
-        QSignalBlocker blocker(axis_scale_rot_roll_slider);
-        axis_scale_rot_roll_slider->setValue((int)effect_axis_scale_rotation_roll);
-    }
+    SyncEffectSliderValue(rotation_yaw_slider, (int)effect_rotation_yaw);
+    SyncEffectSliderValue(rotation_pitch_slider, (int)effect_rotation_pitch);
+    SyncEffectSliderValue(rotation_roll_slider, (int)effect_rotation_roll);
+    SyncEffectSliderValue(axis_scale_rot_yaw_slider, (int)effect_axis_scale_rotation_yaw);
+    SyncEffectSliderValue(axis_scale_rot_pitch_slider, (int)effect_axis_scale_rotation_pitch);
+    SyncEffectSliderValue(axis_scale_rot_roll_slider, (int)effect_axis_scale_rotation_roll);
     if(settings.contains("size"))
         effect_size = std::clamp(settings["size"].get<unsigned int>(), 0u, 200u);
     if(settings.contains("scale_value"))
@@ -642,81 +607,19 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_offset_z = std::clamp(settings["offset_z"].get<int>(), -100, 100);
     if(path_axis_combo)
         path_axis_combo->setCurrentIndex(effect_path_axis);
-    if(thickness_slider)
-        thickness_slider->setValue((int)effect_band_thickness);
-    if(thickness_label)
-        thickness_label->setText(QString::number(effect_band_thickness) + QStringLiteral("%"));
-    if(edge_fade_slider)
-        edge_fade_slider->setValue((int)effect_edge_fade);
-    if(edge_fade_label)
-        edge_fade_label->setText(QString::number(effect_edge_fade) + QStringLiteral("%"));
-    if(count_slider)
-        count_slider->setValue((int)effect_instance_count);
-    if(count_label)
-        count_label->setText(QString::number(effect_instance_count));
+    SyncEffectSliderValue(thickness_slider, (int)effect_band_thickness);
+    SyncEffectSliderValue(edge_fade_slider, (int)effect_edge_fade);
+    SyncEffectSliderValue(count_slider, (int)effect_instance_count);
     if(plane_combo)
         plane_combo->setCurrentIndex(effect_plane);
-    if(offset_x_slider)
-    {
-        QSignalBlocker blocker(offset_x_slider);
-        offset_x_slider->setValue(effect_offset_x);
-    }
-    if(offset_y_slider)
-    {
-        QSignalBlocker blocker(offset_y_slider);
-        offset_y_slider->setValue(effect_offset_y);
-    }
-    if(offset_z_slider)
-    {
-        QSignalBlocker blocker(offset_z_slider);
-        offset_z_slider->setValue(effect_offset_z);
-    }
-    if(offset_x_label)
-        offset_x_label->setText(QString::number(effect_offset_x) + "%");
-    if(offset_y_label)
-        offset_y_label->setText(QString::number(effect_offset_y) + "%");
-    if(offset_z_label)
-        offset_z_label->setText(QString::number(effect_offset_z) + "%");
+    SyncEffectSliderValue(offset_x_slider, effect_offset_x);
+    SyncEffectSliderValue(offset_y_slider, effect_offset_y);
+    SyncEffectSliderValue(offset_z_slider, effect_offset_z);
 
-    if(speed_slider)
-    {
-        QSignalBlocker blocker(speed_slider);
-        speed_slider->setValue(effect_speed);
-    }
-    if(speed_label)
-    {
-        speed_label->setText(QString::number(effect_speed));
-    }
-
-    if(brightness_slider)
-    {
-        QSignalBlocker blocker(brightness_slider);
-        brightness_slider->setValue(effect_brightness);
-    }
-    if(brightness_label)
-    {
-        brightness_label->setText(QString::number(effect_brightness));
-    }
-
-    if(frequency_slider)
-    {
-        QSignalBlocker blocker(frequency_slider);
-        frequency_slider->setValue(effect_frequency);
-    }
-    if(frequency_label)
-    {
-        frequency_label->setText(QString::number(effect_frequency));
-    }
-
-    if(detail_slider)
-    {
-        QSignalBlocker blocker(detail_slider);
-        detail_slider->setValue(effect_detail);
-    }
-    if(detail_label)
-    {
-        detail_label->setText(QString::number(effect_detail));
-    }
+    SyncEffectSliderValue(speed_slider, (int)effect_speed);
+    SyncEffectSliderValue(brightness_slider, (int)effect_brightness);
+    SyncEffectSliderValue(frequency_slider, (int)effect_frequency);
+    SyncEffectSliderValue(detail_slider, (int)effect_detail);
 
     if(rainbow_mode_check)
     {
@@ -724,74 +627,24 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         rainbow_mode_check->setChecked(rainbow_mode);
     }
 
-    if(intensity_slider)
-    {
-        QSignalBlocker blocker(intensity_slider);
-        intensity_slider->setValue(effect_intensity);
-    }
-
-    if(sharpness_slider)
-    {
-        QSignalBlocker blocker(sharpness_slider);
-        sharpness_slider->setValue(effect_sharpness);
-    }
-    if(smoothing_slider)
-    {
-        QSignalBlocker blocker(smoothing_slider);
-        smoothing_slider->setValue((int)effect_smoothing);
-    }
-    if(smoothing_label)
-    {
-        smoothing_label->setText(QString::number(effect_smoothing));
-    }
-    if(sampling_resolution_slider)
-    {
-        QSignalBlocker blocker(sampling_resolution_slider);
-        sampling_resolution_slider->setValue((int)effect_sampling_resolution);
-    }
-    if(sampling_resolution_label)
-    {
-        sampling_resolution_label->setText(QString::number(effect_sampling_resolution));
-    }
+    SyncEffectSliderValue(intensity_slider, (int)effect_intensity);
+    SyncEffectSliderValue(sharpness_slider, (int)effect_sharpness);
+    SyncEffectSliderValue(smoothing_slider, (int)effect_smoothing);
+    SyncEffectSliderValue(sampling_resolution_slider, (int)effect_sampling_resolution);
     if(edge_profile_combo)
     {
         QSignalBlocker blocker(edge_profile_combo);
         edge_profile_combo->setCurrentIndex(std::clamp(effect_edge_profile, 0, 4));
     }
-    if(edge_thickness_slider)
-    {
-        QSignalBlocker blocker(edge_thickness_slider);
-        edge_thickness_slider->setValue((int)effect_edge_thickness);
-    }
+    SyncEffectSliderValue(edge_thickness_slider, (int)effect_edge_thickness);
     if(edge_thickness_label)
         edge_thickness_label->setText(QString::number(effect_edge_thickness) + "%");
-    if(glow_level_slider)
-    {
-        QSignalBlocker blocker(glow_level_slider);
-        glow_level_slider->setValue((int)effect_glow_level);
-    }
+    SyncEffectSliderValue(glow_level_slider, (int)effect_glow_level);
     if(glow_level_label)
         glow_level_label->setText(QString::number(effect_glow_level) + "%");
 
-    if(size_slider)
-    {
-        QSignalBlocker blocker(size_slider);
-        size_slider->setValue(effect_size);
-    }
-    if(size_label)
-    {
-        size_label->setText(QString::number(effect_size));
-    }
-
-    if(scale_slider)
-    {
-        QSignalBlocker blocker(scale_slider);
-        scale_slider->setValue(effect_scale);
-    }
-    if(scale_label)
-    {
-        scale_label->setText(QString::number(effect_scale));
-    }
+    SyncEffectSliderValue(size_slider, (int)effect_size);
+    SyncEffectSliderValue(scale_slider, (int)effect_scale);
 
     if(scale_invert_check)
     {
@@ -799,43 +652,10 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         scale_invert_check->setChecked(scale_inverted);
     }
 
-    if(fps_slider)
-    {
-        QSignalBlocker blocker(fps_slider);
-        fps_slider->setValue(effect_fps);
-    }
-    if(fps_label)
-    {
-        fps_label->setText(QString::number(effect_fps));
-    }
-
-    if(scale_x_slider)
-    {
-        QSignalBlocker blocker(scale_x_slider);
-        scale_x_slider->setValue((int)effect_scale_x);
-    }
-    if(scale_x_label)
-    {
-        scale_x_label->setText(QString::number(effect_scale_x) + "%");
-    }
-    if(scale_y_slider)
-    {
-        QSignalBlocker blocker(scale_y_slider);
-        scale_y_slider->setValue((int)effect_scale_y);
-    }
-    if(scale_y_label)
-    {
-        scale_y_label->setText(QString::number(effect_scale_y) + "%");
-    }
-    if(scale_z_slider)
-    {
-        QSignalBlocker blocker(scale_z_slider);
-        scale_z_slider->setValue((int)effect_scale_z);
-    }
-    if(scale_z_label)
-    {
-        scale_z_label->setText(QString::number(effect_scale_z) + "%");
-    }
+    SyncEffectSliderValue(fps_slider, (int)effect_fps);
+    SyncEffectSliderValue(scale_x_slider, (int)effect_scale_x);
+    SyncEffectSliderValue(scale_y_slider, (int)effect_scale_y);
+    SyncEffectSliderValue(scale_z_slider, (int)effect_scale_z);
 
     if(GetEffectInfo().supports_height_bands)
     {

@@ -43,7 +43,7 @@ public:
 
     void RefreshMonitorStatus();
 
-    /** Layout ref list for audience bias only (User-typed points). Does not move Reach. */
+    /** Layout ref list for audience bias only (User/Chair seats). Does not move Reach. */
     void SetAudienceReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
 
     using CaptureZone = ::CaptureZone;
@@ -71,8 +71,12 @@ public:
         float led_output_gain_r;
         float led_output_gain_g;
         float led_output_gain_b;
-        float black_bar_letterbox_percent;
-        float black_bar_pillarbox_percent;
+        float black_bar_top_percent;
+        float black_bar_bottom_percent;
+        float black_bar_left_percent;
+        float black_bar_right_percent;
+        bool black_bar_link_vertical;
+        bool black_bar_link_horizontal;
 
         float edge_softness;
         float propagation_speed_mm_per_ms;
@@ -105,10 +109,16 @@ public:
         QLabel* led_output_gain_g_label;
         QSlider* led_output_gain_b_slider;
         QLabel* led_output_gain_b_label;
-        QSlider* black_bar_letterbox_slider;
-        QLabel* black_bar_letterbox_label;
-        QSlider* black_bar_pillarbox_slider;
-        QLabel* black_bar_pillarbox_label;
+        QSlider* black_bar_top_slider;
+        QLabel* black_bar_top_label;
+        QSlider* black_bar_bottom_slider;
+        QLabel* black_bar_bottom_label;
+        QSlider* black_bar_left_slider;
+        QLabel* black_bar_left_label;
+        QSlider* black_bar_right_slider;
+        QLabel* black_bar_right_label;
+        QCheckBox* black_bar_link_vertical_check;
+        QCheckBox* black_bar_link_horizontal_check;
         QSlider* softness_slider;
         QLabel* softness_label;
         QSlider* propagation_speed_slider;
@@ -125,6 +135,7 @@ public:
         QCheckBox* screen_preview_check;
         QWidget* capture_area_preview;
         QPushButton* add_zone_button;
+        QPushButton* remove_zone_button;
         CaptureZonesWidget* capture_zones_widget;
 
         MonitorSettings()
@@ -139,8 +150,12 @@ public:
             , led_output_gain_r(1.0f)
             , led_output_gain_g(1.0f)
             , led_output_gain_b(1.0f)
-            , black_bar_letterbox_percent(0.0f)
-            , black_bar_pillarbox_percent(0.0f)
+            , black_bar_top_percent(0.0f)
+            , black_bar_bottom_percent(0.0f)
+            , black_bar_left_percent(0.0f)
+            , black_bar_right_percent(0.0f)
+            , black_bar_link_vertical(true)
+            , black_bar_link_horizontal(true)
             , edge_softness(70.0f)
             , propagation_speed_mm_per_ms(0.0f)
             , wave_decay_ms(0.0f)
@@ -168,10 +183,16 @@ public:
             , led_output_gain_g_label(nullptr)
             , led_output_gain_b_slider(nullptr)
             , led_output_gain_b_label(nullptr)
-            , black_bar_letterbox_slider(nullptr)
-            , black_bar_letterbox_label(nullptr)
-            , black_bar_pillarbox_slider(nullptr)
-            , black_bar_pillarbox_label(nullptr)
+            , black_bar_top_slider(nullptr)
+            , black_bar_top_label(nullptr)
+            , black_bar_bottom_slider(nullptr)
+            , black_bar_bottom_label(nullptr)
+            , black_bar_left_slider(nullptr)
+            , black_bar_left_label(nullptr)
+            , black_bar_right_slider(nullptr)
+            , black_bar_right_label(nullptr)
+            , black_bar_link_vertical_check(nullptr)
+            , black_bar_link_horizontal_check(nullptr)
             , softness_slider(nullptr)
             , softness_label(nullptr)
             , propagation_speed_slider(nullptr)
@@ -188,6 +209,7 @@ public:
             , screen_preview_check(nullptr)
             , capture_area_preview(nullptr)
             , add_zone_button(nullptr)
+            , remove_zone_button(nullptr)
             , capture_zones_widget(nullptr)
         {
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
@@ -273,10 +295,6 @@ private:
         DisplayPlane3D* plane;
         MonitorSettings* settings;
         Vector3D falloff_origin;
-        float zone_u0;
-        float zone_u1;
-        float zone_v0;
-        float zone_v1;
         bool calibration;
         float wave_speed;
         float max_distance_mm;

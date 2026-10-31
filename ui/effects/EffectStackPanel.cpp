@@ -63,6 +63,24 @@ void EffectStackPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->loadPresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::loadStackPresetClicked);
     connect(ui->deletePresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::deleteStackPresetClicked);
 
+    const QString layer_delete_tip = QStringLiteral(
+        "Remove the selected layer from the stack.\n"
+        "Also: Delete / Backspace when the layer list is focused, or right-click → Remove layer.");
+    ui->removeLayerButton->setToolTip(layer_delete_tip);
+    PluginUiWireListDestructiveDelete(ui->stackList,
+                                      ui->removeLayerButton,
+                                      QStringLiteral("Remove layer"),
+                                      QStringLiteral("Remove selected effect layer"));
+
+    const QString preset_delete_tip = QStringLiteral(
+        "Delete the selected stack preset file.\n"
+        "Also: Delete / Backspace when the preset list is focused, or right-click → Delete preset.");
+    ui->deletePresetButton->setToolTip(preset_delete_tip);
+    PluginUiWireListDestructiveDelete(ui->presetsList,
+                                      ui->deletePresetButton,
+                                      QStringLiteral("Delete preset"),
+                                      QStringLiteral("Delete selected stack preset"));
+
     tab->UpdateStackEffectZoneCombo();
 }
 

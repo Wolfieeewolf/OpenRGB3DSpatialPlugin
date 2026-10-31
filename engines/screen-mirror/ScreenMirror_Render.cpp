@@ -42,10 +42,9 @@ namespace
                   float vibrance,
                   float gain_r,
                   float gain_g,
-                  float gain_b,
-                  bool apply_threshold)
+                  float gain_b)
     {
-        if(apply_threshold && threshold > 0.0f)
+        if(threshold > 0.0f)
         {
             float thr = std::min(255.0f, threshold);
             float luminance = 0.299f * r + 0.587f * g + 0.114f * b;
@@ -185,7 +184,7 @@ namespace
         return t;
     }
 
-    /* Audience lobe 0..1 toward User seats (Reach origin stays the display).
+    /* Audience lobe 0..1 toward User/Chair seats (Reach origin stays the display).
        Multi-seat = strongest lobe. Soft cone — angle knobs can come later. */
     float AudienceLobeGain(const Vector3D& led,
                            const Vector3D& origin,
@@ -242,14 +241,11 @@ namespace
         }
     }
 
-    void ZoneUnion(const ScreenMirror::MonitorSettings& mon,
-                   float& u0, float& u1, float& v0, float& v1)
+    /* True if screen UV lands in any enabled zone (OR of rectangles).
+       Do not use a bounding-box union — left+right strips would fill the middle. */
+    bool UvInEnabledCaptureZones(float u, float v, const ScreenMirror::MonitorSettings& mon)
     {
-        u0 = 1.0f;
-        u1 = 0.0f;
-        v0 = 1.0f;
-        v1 = 0.0f;
-        bool any = false;
+        bool any_enabled = false;
         for(size_t i = 0; i < mon.capture_zones.size(); ++i)
         {
             const CaptureZone& z = mon.capture_zones[i];
@@ -257,19 +253,13 @@ namespace
             {
                 continue;
             }
-            any = true;
-            u0 = std::min(u0, z.u_min);
-            u1 = std::max(u1, z.u_max);
-            v0 = std::min(v0, z.v_min);
-            v1 = std::max(v1, z.v_max);
+            any_enabled = true;
+            if(u >= z.u_min && u <= z.u_max && v >= z.v_min && v <= z.v_max)
+            {
+                return true;
+            }
         }
-        if(!any)
-        {
-            u0 = 0.0f;
-            u1 = 1.0f;
-            v0 = 0.0f;
-            v1 = 1.0f;
-        }
+        return !any_enabled;
     }
 
     std::shared_ptr<CapturedFrame> ClosestFrameAtOrBefore(
@@ -397,7 +387,13 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
         for(size_t i = 0; i < audience_reference_points_->size(); ++i)
         {
             VirtualReferencePoint3D* rp = (*audience_reference_points_)[i].get();
-            if(!rp || rp->GetType() != REF_POINT_USER)
+            if(!rp)
+            {
+                continue;
+            }
+            /* Seats only — User or Chair. Other layout types are ignored. */
+            const ReferencePointType t = rp->GetType();
+            if(t != REF_POINT_USER && t != REF_POINT_CHAIR)
             {
                 continue;
             }
@@ -446,7 +442,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
         sm.cal_w = 0;
         sm.cal_h = 0;
         sm.wave_speed = 0.0f;
-        ZoneUnion(mon_settings, sm.zone_u0, sm.zone_u1, sm.zone_v0, sm.zone_v1);
 
         // Ambilight Reach / wave always radiate from this display plane's centre.
         sm.falloff_origin = plane->GetTransform().position;
@@ -460,6 +455,11 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
         sm.max_distance_mm = RoomCornerMaxDistanceMm(span_mm_x, span_mm_y, span_mm_z, fux, fuy, fuz);
 
         const std::string capture_id = plane->GetCaptureSourceId();
+        /* Reach / falloff / wave timing use the same knobs for calibration and
+           live capture so users can tune against the pattern. */
+        sm.wave_speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
+                                                 mon_settings.propagation_speed_mm_per_ms,
+                                                 sm.max_distance_mm);
         if(sm.calibration)
         {
             sm.cal_rgba = GetCalibrationPatternBuffer(sm.cal_w, sm.cal_h);
@@ -476,9 +476,6 @@ void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& g
             {
                 sm.latest = cache_it->second;
             }
-            sm.wave_speed = ResolveWaveSpeedMmPerMs(mon_settings.wave_time_to_edge_sec,
-                                                     mon_settings.propagation_speed_mm_per_ms,
-                                                     sm.max_distance_mm);
         }
 
         smooth_ms_ = std::max(smooth_ms_, mon_settings.smoothing_time_ms);
@@ -519,15 +516,18 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
         }
         float u = proj.u;
         float v = proj.v;
-        if(u < sm.zone_u0 || u > sm.zone_u1 || v < sm.zone_v0 || v > sm.zone_v1)
+        if(!UvInEnabledCaptureZones(u, v, s))
         {
             continue;
         }
 
-        const float lp = std::clamp(s.black_bar_letterbox_percent, 0.0f, 49.0f) / 100.0f;
-        const float pp = std::clamp(s.black_bar_pillarbox_percent, 0.0f, 49.0f) / 100.0f;
-        u = std::clamp(u, pp, 1.0f - pp);
-        v = std::clamp(v, lp, 1.0f - lp);
+        /* Spatial v=1 is screen top (flipped on sample). Per-side crop. */
+        const float top_c = std::clamp(s.black_bar_top_percent, 0.0f, 49.0f) / 100.0f;
+        const float bottom_c = std::clamp(s.black_bar_bottom_percent, 0.0f, 49.0f) / 100.0f;
+        const float left_c = std::clamp(s.black_bar_left_percent, 0.0f, 49.0f) / 100.0f;
+        const float right_c = std::clamp(s.black_bar_right_percent, 0.0f, 49.0f) / 100.0f;
+        u = std::clamp(u, left_c, 1.0f - right_c);
+        v = std::clamp(v, bottom_c, 1.0f - top_c);
 
         Vector3D d{
             led.x - sm.falloff_origin.x,
@@ -542,17 +542,19 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
             continue;
         }
 
+        /* Must multiply RGB — not weight. Weight is normalized away for a single
+           display, which made the bias slider appear dead. */
+        float audience_gain = 1.0f;
         if(audience_bias_pct_ > 0.5f && !audience_tick_.empty())
         {
             const float bias = std::clamp(audience_bias_pct_ / 100.0f, 0.0f, 1.0f);
             const float lobe = AudienceLobeGain(led, sm.falloff_origin, audience_tick_,
                                                  sm.max_distance_mm, tick_scale_mm_);
-            /* Cone the output toward seats, but never cull: Reach already decided
-               this LED is lit — keep a floor off-cone and boost on-cone. */
-            static constexpr float kAudienceFloor = 0.55f;
-            static constexpr float kAudiencePeak = 1.50f;
+            /* Cone brightness toward seats; never hard-cull (Reach still fills). */
+            static constexpr float kAudienceFloor = 0.30f;
+            static constexpr float kAudiencePeak = 1.90f;
             const float shaped = kAudienceFloor + (kAudiencePeak - kAudienceFloor) * lobe;
-            weight *= (1.0f - bias) + bias * shaped;
+            audience_gain = (1.0f - bias) + bias * shaped;
         }
 
         const uint8_t* rgba = nullptr;
@@ -606,11 +608,10 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
                  s.vibrance,
                  s.led_output_gain_r,
                  s.led_output_gain_g,
-                 s.led_output_gain_b,
-                 !sm.calibration);
-        acc_r += weight * r;
-        acc_g += weight * g;
-        acc_b += weight * b;
+                 s.led_output_gain_b);
+        acc_r += weight * r * audience_gain;
+        acc_g += weight * g * audience_gain;
+        acc_b += weight * b * audience_gain;
         acc_w += weight;
     }
 

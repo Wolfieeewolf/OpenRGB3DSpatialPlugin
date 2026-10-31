@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QSlider>
+#include <QSpinBox>
 
 #include <algorithm>
 
@@ -14,6 +15,8 @@ EffectSliderRow::EffectSliderRow(QWidget* parent)
     , ui(new Ui::EffectSliderRow)
 {
     ui->setupUi(this);
+    ui->captionLabel->setVisible(false);
+    wireSpinSliderLink();
 }
 
 EffectSliderRow::~EffectSliderRow()
@@ -21,9 +24,25 @@ EffectSliderRow::~EffectSliderRow()
     delete ui;
 }
 
+void EffectSliderRow::wireSpinSliderLink()
+{
+    if(spin_slider_linked_ || !ui)
+    {
+        return;
+    }
+    spin_slider_linked_ = true;
+    /* Slider = coarse jumps; spin = fine steps / typed values (Action Editor pattern).
+       Do not block slider on spin edits: setValue is a no-op when unchanged, and
+       existing callers connect QSlider::valueChanged for applies. */
+    QObject::connect(ui->valueSlider, &QSlider::valueChanged, ui->valueSpin, &QSpinBox::setValue);
+    QObject::connect(ui->valueSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+                     ui->valueSlider, &QSlider::setValue);
+}
+
 void EffectSliderRow::setCaptionText(const QString& text)
 {
     ui->captionLabel->setText(text);
+    ui->captionLabel->setVisible(!text.isEmpty());
 }
 
 void EffectSliderRow::setValueLabelMinimumWidth(int width)
@@ -31,9 +50,29 @@ void EffectSliderRow::setValueLabelMinimumWidth(int width)
     ui->valueLabel->setMinimumWidth(width);
 }
 
+void EffectSliderRow::setSuffix(const QString& suffix)
+{
+    ui->valueSpin->setSuffix(suffix);
+}
+
+void EffectSliderRow::setPrefix(const QString& prefix)
+{
+    ui->valueSpin->setPrefix(prefix);
+}
+
+void EffectSliderRow::setShowFormattedLabel(bool show)
+{
+    ui->valueLabel->setVisible(show);
+}
+
 QSlider* EffectSliderRow::slider() const
 {
     return ui->valueSlider;
+}
+
+QSpinBox* EffectSliderRow::spinBox() const
+{
+    return ui->valueSpin;
 }
 
 QLabel* EffectSliderRow::valueLabel() const
@@ -43,11 +82,27 @@ QLabel* EffectSliderRow::valueLabel() const
 
 void EffectSliderRow::configure(int min, int max, int value, const QString& slider_tooltip)
 {
-    ui->valueSlider->setRange(min, max);
-    ui->valueSlider->setValue(std::clamp(value, min, max));
+    wireSpinSliderLink();
+    const int lo = std::min(min, max);
+    const int hi = std::max(min, max);
+    const int v = std::clamp(value, lo, hi);
+    {
+        QSignalBlocker bs(ui->valueSlider);
+        QSignalBlocker bn(ui->valueSpin);
+        ui->valueSlider->setRange(lo, hi);
+        ui->valueSpin->setRange(lo, hi);
+        ui->valueSlider->setValue(v);
+        ui->valueSpin->setValue(v);
+    }
+    /* Coarse page steps on the thin slider; spin keeps single-step = 1. */
+    const int span = std::max(1, hi - lo);
+    ui->valueSlider->setSingleStep(std::max(1, span / 100));
+    ui->valueSlider->setPageStep(std::max(ui->valueSlider->singleStep() * 5, span / 20));
+    ui->valueSlider->setFixedHeight(14);
     if(!slider_tooltip.isEmpty())
     {
         ui->valueSlider->setToolTip(slider_tooltip);
+        ui->valueSpin->setToolTip(slider_tooltip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
     }
 }
 
@@ -56,17 +111,28 @@ QString EffectSliderRow::captionText() const
     return ui->captionLabel->text();
 }
 
+void EffectSliderRow::applyFormattedLabel(int value, const std::function<QString(int)>& format_value)
+{
+    if(!format_value)
+    {
+        return;
+    }
+    ui->valueLabel->setVisible(true);
+    ui->valueLabel->setText(format_value(value));
+}
+
 void EffectSliderRow::syncSliderValue(int value, const std::function<QString(int)>& format_value)
 {
-    const int min = ui->valueSlider->minimum();
-    const int max = ui->valueSlider->maximum();
+    const int min = ui->valueSpin->minimum();
+    const int max = ui->valueSpin->maximum();
     const int v = std::clamp(value, min, max);
-    QSignalBlocker blocker(ui->valueSlider);
-    ui->valueSlider->setValue(v);
-    if(format_value)
     {
-        ui->valueLabel->setText(format_value(v));
+        QSignalBlocker bs(ui->valueSlider);
+        QSignalBlocker bn(ui->valueSpin);
+        ui->valueSlider->setValue(v);
+        ui->valueSpin->setValue(v);
     }
+    applyFormattedLabel(v, format_value);
 }
 
 void EffectSliderRow::bindValueChanged(QObject* owner,
@@ -79,31 +145,29 @@ void EffectSliderRow::bindValueChanged(QObject* owner,
         return;
     }
 
-    if(format_value)
-    {
-        ui->valueLabel->setText(format_value(ui->valueSlider->value()));
-    }
+    applyFormattedLabel(ui->valueSpin->value(), format_value);
 
-    QObject::connect(ui->valueSlider, &QSlider::valueChanged, owner, [this, apply_value, format_value, changed](int v) {
-        if(apply_value)
-        {
-            apply_value(v);
-        }
-        if(format_value)
-        {
-            ui->valueLabel->setText(format_value(v));
-        }
-        if(changed)
-        {
-            changed();
-        }
-    });
+    /* Emit once from the spin (slider writes into spin). */
+    QObject::connect(ui->valueSpin, QOverload<int>::of(&QSpinBox::valueChanged), owner,
+                     [this, apply_value, format_value, changed](int v) {
+                         if(apply_value)
+                         {
+                             apply_value(v);
+                         }
+                         applyFormattedLabel(v, format_value);
+                         if(changed)
+                         {
+                             changed();
+                         }
+                     });
 }
 
 void EffectSliderRow::setEnabled(bool enabled)
 {
     ui->valueSlider->setEnabled(enabled);
+    ui->valueSpin->setEnabled(enabled);
     ui->valueLabel->setEnabled(enabled);
+    ui->captionLabel->setEnabled(enabled);
 }
 #include "EffectLabeledComboRow.h"
 #include "ui_EffectLabeledComboRow.h"

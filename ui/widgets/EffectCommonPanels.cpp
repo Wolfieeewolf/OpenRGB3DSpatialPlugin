@@ -96,6 +96,7 @@ EffectSurfacesPanel::~EffectSurfacesPanel()
 }
 #include "EffectMotionPanel.h"
 
+#include "EffectSliderPromote.h"
 #include "ui_EffectMotionPanel.h"
 
 #include <QCheckBox>
@@ -118,30 +119,33 @@ EffectMotionPanel::EffectMotionPanel(unsigned int speed,
     ui->setupUi(this);
 
     ui->speedSlider->setValue((int)speed);
-    ui->speedLabel->setText(QString::number(speed));
     ui->brightnessSlider->setValue((int)brightness);
-    ui->brightnessLabel->setText(QString::number(brightness));
     ui->frequencySlider->setValue((int)frequency);
-    ui->frequencyLabel->setText(QString::number(frequency));
     ui->detailSlider->setValue((int)detail);
-    ui->detailLabel->setText(QString::number(detail));
     ui->sizeSlider->setValue((int)size);
-    ui->sizeLabel->setText(QString::number(size));
     ui->scaleSlider->setValue((int)scale);
-    ui->scaleLabel->setText(QString::number(scale));
     ui->scaleInvertCheck->setChecked(scale_inverted);
     ui->fpsSlider->setValue((int)fps);
-    ui->fpsLabel->setText(QString::number(fps));
     ui->pathAxisCombo->addItem(QStringLiteral("X (left/right)"));
     ui->pathAxisCombo->addItem(QStringLiteral("Y (up/down)"));
     ui->pathAxisCombo->addItem(QStringLiteral("Z (depth)"));
     ui->pathAxisCombo->setCurrentIndex(1);
     ui->thicknessSlider->setValue(15);
-    ui->thicknessLabel->setText(QStringLiteral("15%"));
     ui->edgeFadeSlider->setValue(0);
-    ui->edgeFadeLabel->setText(QStringLiteral("0%"));
     ui->countSlider->setValue(12);
-    ui->countLabel->setText(QStringLiteral("12"));
+
+    speed_row_ = PromoteSliderLabelToEffectRow(ui->speedRow, ui->speedSlider, ui->speedLabel);
+    brightness_row_ = PromoteSliderLabelToEffectRow(ui->brightnessRow, ui->brightnessSlider, ui->brightnessLabel);
+    frequency_row_ = PromoteSliderLabelToEffectRow(ui->frequencyRow, ui->frequencySlider, ui->frequencyLabel);
+    detail_row_ = PromoteSliderLabelToEffectRow(ui->detailRow, ui->detailSlider, ui->detailLabel);
+    size_row_ = PromoteSliderLabelToEffectRow(ui->sizeRow, ui->sizeSlider, ui->sizeLabel);
+    scale_row_ = PromoteSliderLabelToEffectRow(ui->scaleRow, ui->scaleSlider, ui->scaleLabel);
+    fps_row_ = PromoteSliderLabelToEffectRow(ui->fpsRow, ui->fpsSlider, ui->fpsLabel);
+    thickness_row_ = PromoteSliderLabelToEffectRow(ui->thicknessRow, ui->thicknessSlider, ui->thicknessLabel,
+                                                    QStringLiteral("%"));
+    edge_fade_row_ = PromoteSliderLabelToEffectRow(ui->edgeFadeRow, ui->edgeFadeSlider, ui->edgeFadeLabel,
+                                                     QStringLiteral("%"));
+    count_row_ = PromoteSliderLabelToEffectRow(ui->countRow, ui->countSlider, ui->countLabel);
 }
 
 EffectMotionPanel::~EffectMotionPanel()
@@ -149,30 +153,31 @@ EffectMotionPanel::~EffectMotionPanel()
     delete ui;
 }
 
-QSlider* EffectMotionPanel::speedSlider() const { return ui->speedSlider; }
-QLabel* EffectMotionPanel::speedLabel() const { return ui->speedLabel; }
-QSlider* EffectMotionPanel::brightnessSlider() const { return ui->brightnessSlider; }
-QLabel* EffectMotionPanel::brightnessLabel() const { return ui->brightnessLabel; }
-QSlider* EffectMotionPanel::frequencySlider() const { return ui->frequencySlider; }
-QLabel* EffectMotionPanel::frequencyLabel() const { return ui->frequencyLabel; }
-QSlider* EffectMotionPanel::detailSlider() const { return ui->detailSlider; }
-QLabel* EffectMotionPanel::detailLabel() const { return ui->detailLabel; }
-QSlider* EffectMotionPanel::sizeSlider() const { return ui->sizeSlider; }
-QLabel* EffectMotionPanel::sizeLabel() const { return ui->sizeLabel; }
-QSlider* EffectMotionPanel::scaleSlider() const { return ui->scaleSlider; }
-QLabel* EffectMotionPanel::scaleLabel() const { return ui->scaleLabel; }
+QSlider* EffectMotionPanel::speedSlider() const { return speed_row_ ? speed_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::speedLabel() const { return speed_row_ ? speed_row_->valueLabel() : nullptr; }
+QSlider* EffectMotionPanel::brightnessSlider() const { return brightness_row_ ? brightness_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::brightnessLabel() const { return brightness_row_ ? brightness_row_->valueLabel() : nullptr; }
+QSlider* EffectMotionPanel::frequencySlider() const { return frequency_row_ ? frequency_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::frequencyLabel() const { return frequency_row_ ? frequency_row_->valueLabel() : nullptr; }
+QSlider* EffectMotionPanel::detailSlider() const { return detail_row_ ? detail_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::detailLabel() const { return detail_row_ ? detail_row_->valueLabel() : nullptr; }
+QSlider* EffectMotionPanel::sizeSlider() const { return size_row_ ? size_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::sizeLabel() const { return size_row_ ? size_row_->valueLabel() : nullptr; }
+QSlider* EffectMotionPanel::scaleSlider() const { return scale_row_ ? scale_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::scaleLabel() const { return scale_row_ ? scale_row_->valueLabel() : nullptr; }
 QCheckBox* EffectMotionPanel::scaleInvertCheck() const { return ui->scaleInvertCheck; }
-QSlider* EffectMotionPanel::fpsSlider() const { return ui->fpsSlider; }
-QLabel* EffectMotionPanel::fpsLabel() const { return ui->fpsLabel; }
+QSlider* EffectMotionPanel::fpsSlider() const { return fps_row_ ? fps_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::fpsLabel() const { return fps_row_ ? fps_row_->valueLabel() : nullptr; }
 QComboBox* EffectMotionPanel::pathAxisCombo() const { return ui->pathAxisCombo; }
-QSlider* EffectMotionPanel::thicknessSlider() const { return ui->thicknessSlider; }
-QLabel* EffectMotionPanel::thicknessLabel() const { return ui->thicknessLabel; }
-QSlider* EffectMotionPanel::edgeFadeSlider() const { return ui->edgeFadeSlider; }
-QLabel* EffectMotionPanel::edgeFadeLabel() const { return ui->edgeFadeLabel; }
-QSlider* EffectMotionPanel::countSlider() const { return ui->countSlider; }
-QLabel* EffectMotionPanel::countLabel() const { return ui->countLabel; }
+QSlider* EffectMotionPanel::thicknessSlider() const { return thickness_row_ ? thickness_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::thicknessLabel() const { return thickness_row_ ? thickness_row_->valueLabel() : nullptr; }
+QSlider* EffectMotionPanel::edgeFadeSlider() const { return edge_fade_row_ ? edge_fade_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::edgeFadeLabel() const { return edge_fade_row_ ? edge_fade_row_->valueLabel() : nullptr; }
+QSlider* EffectMotionPanel::countSlider() const { return count_row_ ? count_row_->slider() : nullptr; }
+QLabel* EffectMotionPanel::countLabel() const { return count_row_ ? count_row_->valueLabel() : nullptr; }
 #include "EffectOutputPanel.h"
 
+#include "EffectSliderPromote.h"
 #include "ui_EffectOutputPanel.h"
 
 #include <QLabel>
@@ -189,13 +194,15 @@ EffectOutputPanel::EffectOutputPanel(unsigned int intensity,
     ui->setupUi(this);
 
     ui->intensitySlider->setValue((int)intensity);
-    ui->intensityLabel->setText(QString::number(intensity));
     ui->sharpnessSlider->setValue((int)sharpness);
-    ui->sharpnessLabel->setText(QString::number(sharpness));
     ui->smoothingSlider->setValue((int)smoothing);
-    ui->smoothingLabel->setText(QString::number(smoothing));
     ui->samplingResolutionSlider->setValue((int)sampling_resolution);
-    ui->samplingResolutionLabel->setText(QString::number((int)sampling_resolution));
+
+    intensity_row_ = PromoteSliderLabelToEffectRow(ui->intensityRow, ui->intensitySlider, ui->intensityLabel);
+    sharpness_row_ = PromoteSliderLabelToEffectRow(ui->sharpnessRow, ui->sharpnessSlider, ui->sharpnessLabel);
+    smoothing_row_ = PromoteSliderLabelToEffectRow(ui->smoothingRow, ui->smoothingSlider, ui->smoothingLabel);
+    sampling_row_ = PromoteSliderLabelToEffectRow(ui->samplingRow, ui->samplingResolutionSlider,
+                                                    ui->samplingResolutionLabel);
 }
 
 EffectOutputPanel::~EffectOutputPanel()
@@ -203,16 +210,23 @@ EffectOutputPanel::~EffectOutputPanel()
     delete ui;
 }
 
-QSlider* EffectOutputPanel::intensitySlider() const { return ui->intensitySlider; }
-QLabel* EffectOutputPanel::intensityLabel() const { return ui->intensityLabel; }
-QSlider* EffectOutputPanel::sharpnessSlider() const { return ui->sharpnessSlider; }
-QLabel* EffectOutputPanel::sharpnessLabel() const { return ui->sharpnessLabel; }
-QSlider* EffectOutputPanel::smoothingSlider() const { return ui->smoothingSlider; }
-QLabel* EffectOutputPanel::smoothingLabel() const { return ui->smoothingLabel; }
-QSlider* EffectOutputPanel::samplingResolutionSlider() const { return ui->samplingResolutionSlider; }
-QLabel* EffectOutputPanel::samplingResolutionLabel() const { return ui->samplingResolutionLabel; }
+QSlider* EffectOutputPanel::intensitySlider() const { return intensity_row_ ? intensity_row_->slider() : nullptr; }
+QLabel* EffectOutputPanel::intensityLabel() const { return intensity_row_ ? intensity_row_->valueLabel() : nullptr; }
+QSlider* EffectOutputPanel::sharpnessSlider() const { return sharpness_row_ ? sharpness_row_->slider() : nullptr; }
+QLabel* EffectOutputPanel::sharpnessLabel() const { return sharpness_row_ ? sharpness_row_->valueLabel() : nullptr; }
+QSlider* EffectOutputPanel::smoothingSlider() const { return smoothing_row_ ? smoothing_row_->slider() : nullptr; }
+QLabel* EffectOutputPanel::smoothingLabel() const { return smoothing_row_ ? smoothing_row_->valueLabel() : nullptr; }
+QSlider* EffectOutputPanel::samplingResolutionSlider() const
+{
+    return sampling_row_ ? sampling_row_->slider() : nullptr;
+}
+QLabel* EffectOutputPanel::samplingResolutionLabel() const
+{
+    return sampling_row_ ? sampling_row_->valueLabel() : nullptr;
+}
 #include "EffectGeometryPanel.h"
 
+#include "EffectSliderPromote.h"
 #include "ui_EffectGeometryPanel.h"
 
 #include <QGroupBox>
@@ -239,32 +253,38 @@ EffectGeometryPanel::EffectGeometryPanel(unsigned int scale_x,
     ui->setupUi(this);
 
     ui->scaleXSlider->setValue((int)scale_x);
-    ui->scaleXLabel->setText(QString::number(scale_x) + QStringLiteral("%"));
     ui->scaleYSlider->setValue((int)scale_y);
-    ui->scaleYLabel->setText(QString::number(scale_y) + QStringLiteral("%"));
     ui->scaleZSlider->setValue((int)scale_z);
-    ui->scaleZLabel->setText(QString::number(scale_z) + QStringLiteral("%"));
-
     ui->axisScaleRotYawSlider->setValue((int)axis_scale_rot_yaw);
-    ui->axisScaleRotYawLabel->setText(QString::number((int)axis_scale_rot_yaw) + QChar(0x00B0));
     ui->axisScaleRotPitchSlider->setValue((int)axis_scale_rot_pitch);
-    ui->axisScaleRotPitchLabel->setText(QString::number((int)axis_scale_rot_pitch) + QChar(0x00B0));
     ui->axisScaleRotRollSlider->setValue((int)axis_scale_rot_roll);
-    ui->axisScaleRotRollLabel->setText(QString::number((int)axis_scale_rot_roll) + QChar(0x00B0));
-
     ui->offsetXSlider->setValue(offset_x);
-    ui->offsetXLabel->setText(QString::number(offset_x) + QStringLiteral("%"));
     ui->offsetYSlider->setValue(offset_y);
-    ui->offsetYLabel->setText(QString::number(offset_y) + QStringLiteral("%"));
     ui->offsetZSlider->setValue(offset_z);
-    ui->offsetZLabel->setText(QString::number(offset_z) + QStringLiteral("%"));
-
     ui->rotationYawSlider->setValue((int)rotation_yaw);
-    ui->rotationYawLabel->setText(QString::number((int)rotation_yaw) + QChar(0x00B0));
     ui->rotationPitchSlider->setValue((int)rotation_pitch);
-    ui->rotationPitchLabel->setText(QString::number((int)rotation_pitch) + QChar(0x00B0));
     ui->rotationRollSlider->setValue((int)rotation_roll);
-    ui->rotationRollLabel->setText(QString::number((int)rotation_roll) + QChar(0x00B0));
+
+    const QString pct = QStringLiteral("%");
+    const QString deg = QString(QChar(0x00B0));
+
+    scale_x_row_ = PromoteSliderLabelToEffectRow(ui->scaleXRow, ui->scaleXSlider, ui->scaleXLabel, pct);
+    scale_y_row_ = PromoteSliderLabelToEffectRow(ui->scaleYRow, ui->scaleYSlider, ui->scaleYLabel, pct);
+    scale_z_row_ = PromoteSliderLabelToEffectRow(ui->scaleZRow, ui->scaleZSlider, ui->scaleZLabel, pct);
+    asr_yaw_row_ = PromoteSliderLabelToEffectRow(ui->asrYawRow, ui->axisScaleRotYawSlider,
+                                                   ui->axisScaleRotYawLabel, deg);
+    asr_pitch_row_ = PromoteSliderLabelToEffectRow(ui->asrPitchRow, ui->axisScaleRotPitchSlider,
+                                                     ui->axisScaleRotPitchLabel, deg);
+    asr_roll_row_ = PromoteSliderLabelToEffectRow(ui->asrRollRow, ui->axisScaleRotRollSlider,
+                                                    ui->axisScaleRotRollLabel, deg);
+    offset_x_row_ = PromoteSliderLabelToEffectRow(ui->offsetXRow, ui->offsetXSlider, ui->offsetXLabel, pct);
+    offset_y_row_ = PromoteSliderLabelToEffectRow(ui->offsetYRow, ui->offsetYSlider, ui->offsetYLabel, pct);
+    offset_z_row_ = PromoteSliderLabelToEffectRow(ui->offsetZRow, ui->offsetZSlider, ui->offsetZLabel, pct);
+    rot_yaw_row_ = PromoteSliderLabelToEffectRow(ui->rotYawRow, ui->rotationYawSlider, ui->rotationYawLabel, deg);
+    rot_pitch_row_ = PromoteSliderLabelToEffectRow(ui->rotPitchRow, ui->rotationPitchSlider,
+                                                     ui->rotationPitchLabel, deg);
+    rot_roll_row_ = PromoteSliderLabelToEffectRow(ui->rotRollRow, ui->rotationRollSlider,
+                                                    ui->rotationRollLabel, deg);
 }
 
 EffectGeometryPanel::~EffectGeometryPanel()
@@ -272,37 +292,67 @@ EffectGeometryPanel::~EffectGeometryPanel()
     delete ui;
 }
 
-QSlider* EffectGeometryPanel::scaleXSlider() const { return ui->scaleXSlider; }
-QLabel* EffectGeometryPanel::scaleXLabel() const { return ui->scaleXLabel; }
-QSlider* EffectGeometryPanel::scaleYSlider() const { return ui->scaleYSlider; }
-QLabel* EffectGeometryPanel::scaleYLabel() const { return ui->scaleYLabel; }
-QSlider* EffectGeometryPanel::scaleZSlider() const { return ui->scaleZSlider; }
-QLabel* EffectGeometryPanel::scaleZLabel() const { return ui->scaleZLabel; }
+QSlider* EffectGeometryPanel::scaleXSlider() const { return scale_x_row_ ? scale_x_row_->slider() : nullptr; }
+QLabel* EffectGeometryPanel::scaleXLabel() const { return scale_x_row_ ? scale_x_row_->valueLabel() : nullptr; }
+QSlider* EffectGeometryPanel::scaleYSlider() const { return scale_y_row_ ? scale_y_row_->slider() : nullptr; }
+QLabel* EffectGeometryPanel::scaleYLabel() const { return scale_y_row_ ? scale_y_row_->valueLabel() : nullptr; }
+QSlider* EffectGeometryPanel::scaleZSlider() const { return scale_z_row_ ? scale_z_row_->slider() : nullptr; }
+QLabel* EffectGeometryPanel::scaleZLabel() const { return scale_z_row_ ? scale_z_row_->valueLabel() : nullptr; }
 QPushButton* EffectGeometryPanel::axisScaleResetButton() const { return ui->axisScaleResetButton; }
 
-QSlider* EffectGeometryPanel::axisScaleRotYawSlider() const { return ui->axisScaleRotYawSlider; }
-QLabel* EffectGeometryPanel::axisScaleRotYawLabel() const { return ui->axisScaleRotYawLabel; }
-QSlider* EffectGeometryPanel::axisScaleRotPitchSlider() const { return ui->axisScaleRotPitchSlider; }
-QLabel* EffectGeometryPanel::axisScaleRotPitchLabel() const { return ui->axisScaleRotPitchLabel; }
-QSlider* EffectGeometryPanel::axisScaleRotRollSlider() const { return ui->axisScaleRotRollSlider; }
-QLabel* EffectGeometryPanel::axisScaleRotRollLabel() const { return ui->axisScaleRotRollLabel; }
+QSlider* EffectGeometryPanel::axisScaleRotYawSlider() const
+{
+    return asr_yaw_row_ ? asr_yaw_row_->slider() : nullptr;
+}
+QLabel* EffectGeometryPanel::axisScaleRotYawLabel() const
+{
+    return asr_yaw_row_ ? asr_yaw_row_->valueLabel() : nullptr;
+}
+QSlider* EffectGeometryPanel::axisScaleRotPitchSlider() const
+{
+    return asr_pitch_row_ ? asr_pitch_row_->slider() : nullptr;
+}
+QLabel* EffectGeometryPanel::axisScaleRotPitchLabel() const
+{
+    return asr_pitch_row_ ? asr_pitch_row_->valueLabel() : nullptr;
+}
+QSlider* EffectGeometryPanel::axisScaleRotRollSlider() const
+{
+    return asr_roll_row_ ? asr_roll_row_->slider() : nullptr;
+}
+QLabel* EffectGeometryPanel::axisScaleRotRollLabel() const
+{
+    return asr_roll_row_ ? asr_roll_row_->valueLabel() : nullptr;
+}
 QPushButton* EffectGeometryPanel::axisScaleRotResetButton() const { return ui->axisScaleRotResetButton; }
 
 QGroupBox* EffectGeometryPanel::positionOffsetGroup() const { return ui->positionOffsetGroup; }
-QSlider* EffectGeometryPanel::offsetXSlider() const { return ui->offsetXSlider; }
-QLabel* EffectGeometryPanel::offsetXLabel() const { return ui->offsetXLabel; }
-QSlider* EffectGeometryPanel::offsetYSlider() const { return ui->offsetYSlider; }
-QLabel* EffectGeometryPanel::offsetYLabel() const { return ui->offsetYLabel; }
-QSlider* EffectGeometryPanel::offsetZSlider() const { return ui->offsetZSlider; }
-QLabel* EffectGeometryPanel::offsetZLabel() const { return ui->offsetZLabel; }
+QSlider* EffectGeometryPanel::offsetXSlider() const { return offset_x_row_ ? offset_x_row_->slider() : nullptr; }
+QLabel* EffectGeometryPanel::offsetXLabel() const { return offset_x_row_ ? offset_x_row_->valueLabel() : nullptr; }
+QSlider* EffectGeometryPanel::offsetYSlider() const { return offset_y_row_ ? offset_y_row_->slider() : nullptr; }
+QLabel* EffectGeometryPanel::offsetYLabel() const { return offset_y_row_ ? offset_y_row_->valueLabel() : nullptr; }
+QSlider* EffectGeometryPanel::offsetZSlider() const { return offset_z_row_ ? offset_z_row_->slider() : nullptr; }
+QLabel* EffectGeometryPanel::offsetZLabel() const { return offset_z_row_ ? offset_z_row_->valueLabel() : nullptr; }
 QPushButton* EffectGeometryPanel::offsetCenterResetButton() const { return ui->offsetCenterResetButton; }
 
-QSlider* EffectGeometryPanel::rotationYawSlider() const { return ui->rotationYawSlider; }
-QLabel* EffectGeometryPanel::rotationYawLabel() const { return ui->rotationYawLabel; }
-QSlider* EffectGeometryPanel::rotationPitchSlider() const { return ui->rotationPitchSlider; }
-QLabel* EffectGeometryPanel::rotationPitchLabel() const { return ui->rotationPitchLabel; }
-QSlider* EffectGeometryPanel::rotationRollSlider() const { return ui->rotationRollSlider; }
-QLabel* EffectGeometryPanel::rotationRollLabel() const { return ui->rotationRollLabel; }
+QSlider* EffectGeometryPanel::rotationYawSlider() const { return rot_yaw_row_ ? rot_yaw_row_->slider() : nullptr; }
+QLabel* EffectGeometryPanel::rotationYawLabel() const { return rot_yaw_row_ ? rot_yaw_row_->valueLabel() : nullptr; }
+QSlider* EffectGeometryPanel::rotationPitchSlider() const
+{
+    return rot_pitch_row_ ? rot_pitch_row_->slider() : nullptr;
+}
+QLabel* EffectGeometryPanel::rotationPitchLabel() const
+{
+    return rot_pitch_row_ ? rot_pitch_row_->valueLabel() : nullptr;
+}
+QSlider* EffectGeometryPanel::rotationRollSlider() const
+{
+    return rot_roll_row_ ? rot_roll_row_->slider() : nullptr;
+}
+QLabel* EffectGeometryPanel::rotationRollLabel() const
+{
+    return rot_roll_row_ ? rot_roll_row_->valueLabel() : nullptr;
+}
 QPushButton* EffectGeometryPanel::rotationResetButton() const { return ui->rotationResetButton; }
 #include "EffectColorPanel.h"
 

@@ -4,6 +4,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
 #include "ControllerLayout3D.h"
+#include "EffectSliderPromote.h"
 #include "ui_GridSettingsPanel.h"
 
 #include <QFont>
@@ -99,6 +100,16 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         "through to the far wall. Smaller N = denser preview dots; does not change room or LED layout size. "
         "Very large rooms may thin points for performance but still span the full room.");
 
+    overlay_bright_row_ = PromoteSliderLabelInGrid(ui->settingsLayout, ui->overlayBrightSlider,
+                                                     ui->overlayBrightLabel, QStringLiteral("%"));
+    overlay_point_row_ = PromoteSliderLabelInGrid(ui->settingsLayout, ui->overlayPointSlider,
+                                                    ui->overlayPointLabel);
+    overlay_step_row_ = PromoteSliderLabelInGrid(ui->settingsLayout, ui->overlayStepSlider,
+                                                   ui->overlayStepLabel);
+    overlay_bright_slider_ = overlay_bright_row_ ? overlay_bright_row_->slider() : nullptr;
+    overlay_point_slider_ = overlay_point_row_ ? overlay_point_row_->slider() : nullptr;
+    overlay_step_slider_ = overlay_step_row_ ? overlay_step_row_->slider() : nullptr;
+
     int overlay_bright_pct = 100;
     int overlay_point_size = 3;
     int overlay_step       = 4;
@@ -144,12 +155,9 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     }
 
     // Sync even when RoomGrid is absent — .ui placeholders (e.g. "35%") are not the code defaults.
-    ui->overlayBrightSlider->setValue(overlay_bright_pct);
-    ui->overlayPointSlider->setValue(overlay_point_size);
-    ui->overlayStepSlider->setValue(overlay_step);
-    ui->overlayBrightLabel->setText(QString::number(overlay_bright_pct) + "%");
-    ui->overlayPointLabel->setText(QString::number(overlay_point_size));
-    ui->overlayStepLabel->setText(QString::number(overlay_step));
+    SyncEffectSliderValue(overlay_bright_slider_, overlay_bright_pct);
+    SyncEffectSliderValue(overlay_point_slider_, overlay_point_size);
+    SyncEffectSliderValue(overlay_step_slider_, overlay_step);
     if(tab->viewport)
     {
         tab->viewport->SetRoomGridBrightness((float)overlay_bright_pct / 100.0f);
@@ -161,9 +169,18 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->frameSelectionButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::frameSelectionInView);
     connect(ui->resetCameraButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::resetViewportCamera);
     connect(ui->roomGridOverlayCheckbox, &QCheckBox::toggled, this, &GridSettingsPanel::onRoomGridOverlayToggled);
-    connect(ui->overlayBrightSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayBrightChanged);
-    connect(ui->overlayPointSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayPointChanged);
-    connect(ui->overlayStepSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayStepChanged);
+    if(overlay_bright_slider_)
+    {
+        connect(overlay_bright_slider_, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayBrightChanged);
+    }
+    if(overlay_point_slider_)
+    {
+        connect(overlay_point_slider_, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayPointChanged);
+    }
+    if(overlay_step_slider_)
+    {
+        connect(overlay_step_slider_, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayStepChanged);
+    }
 
     connect(ui->gridSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gridSnapToggled);
     connect(ui->rotateSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::rotateSnapToggled);
@@ -222,7 +239,6 @@ void GridSettingsPanel::onOverlayBrightChanged(int v)
         return;
     }
     v = std::max(0, std::min(100, v));
-    ui->overlayBrightLabel->setText(QString::number(v) + "%");
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomGridBrightness((float)v / 100.0f);
@@ -237,7 +253,6 @@ void GridSettingsPanel::onOverlayPointChanged(int v)
         return;
     }
     v = std::max(1, std::min(12, v));
-    ui->overlayPointLabel->setText(QString::number(v));
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomGridPointSize((float)v);
@@ -252,7 +267,6 @@ void GridSettingsPanel::onOverlayStepChanged(int v)
         return;
     }
     v = std::max(1, std::min(24, v));
-    ui->overlayStepLabel->setText(QString::number(v));
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomGridStep(v);

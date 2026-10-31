@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+class EffectSliderRow;
 class QLabel;
 class QSlider;
 
@@ -16,10 +17,10 @@ class EffectOutputPanel : public QWidget
 {
 public:
     EffectOutputPanel(unsigned int intensity,
-                        unsigned int sharpness,
-                        unsigned int smoothing,
-                        unsigned int sampling_resolution,
-                        QWidget* parent = nullptr);
+                      unsigned int sharpness,
+                      unsigned int smoothing,
+                      unsigned int sampling_resolution,
+                      QWidget* parent = nullptr);
     ~EffectOutputPanel() override;
 
     QSlider* intensitySlider() const;
@@ -33,6 +34,10 @@ public:
 
 private:
     Ui::EffectOutputPanel* ui = nullptr;
+    EffectSliderRow* intensity_row_ = nullptr;
+    EffectSliderRow* sharpness_row_ = nullptr;
+    EffectSliderRow* smoothing_row_ = nullptr;
+    EffectSliderRow* sampling_row_ = nullptr;
 };
 
 #endif

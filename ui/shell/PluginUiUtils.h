@@ -5,10 +5,14 @@
 
 #include "EffectCollapsibleSection.h"
 
+#include <QAction>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
+#include <QMenu>
 #include <QPushButton>
+#include <QShortcut>
 #include <QScrollArea>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -303,6 +307,54 @@ inline QFrame* PluginUiWrapInSettingsPanel(QWidget* inner, int inner_margin = 9)
     panel_layout->setSpacing(0);
     panel_layout->addWidget(inner);
     return panel;
+}
+
+/** Delete/Backspace when the list is focused + right-click QMenu mirroring delete_button. */
+inline void PluginUiWireListDestructiveDelete(QListWidget* list,
+                                              QPushButton* delete_button,
+                                              const QString& context_menu_label,
+                                              const QString& accessible_name = QString())
+{
+    if(!list || !delete_button)
+    {
+        return;
+    }
+
+    if(!accessible_name.isEmpty())
+    {
+        delete_button->setAccessibleName(accessible_name);
+    }
+
+    list->setFocusPolicy(Qt::StrongFocus);
+    list->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    const auto invoke_delete = [delete_button]() {
+        if(delete_button->isEnabled())
+        {
+            delete_button->click();
+        }
+    };
+
+    QObject::connect(list, &QWidget::customContextMenuRequested, list,
+                     [list, delete_button, context_menu_label, invoke_delete](const QPoint& pos) {
+                         QMenu menu(list);
+                         QAction* act = menu.addAction(context_menu_label);
+                         act->setEnabled(delete_button->isEnabled());
+                         QAction* chosen = menu.exec(list->mapToGlobal(pos));
+                         if(chosen == act)
+                         {
+                             invoke_delete();
+                         }
+                     });
+
+    const auto add_delete_key = [list, invoke_delete](Qt::Key key) {
+        QShortcut* shortcut = new QShortcut(QKeySequence(key), list);
+        shortcut->setContext(Qt::WidgetWithChildrenShortcut);
+        shortcut->setAutoRepeat(false);
+        QObject::connect(shortcut, &QShortcut::activated, list, invoke_delete);
+    };
+    add_delete_key(Qt::Key_Delete);
+    add_delete_key(Qt::Key_Backspace);
 }
 
 inline void PluginUiAddSectionBlock(QVBoxLayout* main_layout,

@@ -5,9 +5,11 @@
 
 #include <QWidget>
 
+class EffectSliderRow;
 class QCheckBox;
 class QDoubleSpinBox;
 class QLabel;
+class QSlider;
 
 namespace Ui {
 class GridSettingsPanel;
@@ -48,6 +50,12 @@ private slots:
 private:
     Ui::GridSettingsPanel* ui;
     OpenRGB3DSpatialTab*   host_tab_ = nullptr;
+    EffectSliderRow* overlay_bright_row_ = nullptr;
+    EffectSliderRow* overlay_point_row_ = nullptr;
+    EffectSliderRow* overlay_step_row_ = nullptr;
+    QSlider* overlay_bright_slider_ = nullptr;
+    QSlider* overlay_point_slider_ = nullptr;
+    QSlider* overlay_step_slider_ = nullptr;
 };
 
 #endif

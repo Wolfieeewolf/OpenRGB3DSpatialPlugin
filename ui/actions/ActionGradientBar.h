@@ -22,6 +22,7 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -40,9 +41,13 @@ private:
     QRect barRect() const;
     void sortStops();
     void editStopColor(int index);
+    void removeStopAt(int index);
+    void showStopContextMenu(const QPoint& local_pos);
+    int selectedStopIndex() const;
 
     std::vector<Action::GradientStop> stops_;
     int drag_index_ = -1;
+    int selected_stop_index_ = -1;
     int bar_h_ = 18;
     int marker_h_ = 12;
 };

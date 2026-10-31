@@ -34,6 +34,14 @@ void ZonesPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->createZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::createZoneClicked);
     connect(ui->editZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::editZoneClicked);
     connect(ui->deleteZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::deleteZoneClicked);
+
+    ui->deleteZoneButton->setToolTip(QStringLiteral(
+        "Delete the selected zone.\n"
+        "Also: Delete / Backspace when the zone list is focused, or right-click → Delete zone."));
+    PluginUiWireListDestructiveDelete(ui->zonesList,
+                                      ui->deleteZoneButton,
+                                      QStringLiteral("Delete zone"),
+                                      QStringLiteral("Delete selected zone"));
 }
 
 QListWidget* ZonesPanel::zonesList() const { return ui->zonesList; }

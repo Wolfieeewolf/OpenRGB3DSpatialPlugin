@@ -24,11 +24,16 @@ AudioEqBandColumn::~AudioEqBandColumn()
 void AudioEqBandColumn::setCaptionText(const QString& text)
 {
     ui->captionLabel->setText(text);
+    ui->gainSlider->setAccessibleName(QStringLiteral("EQ band %1 gain").arg(text));
 }
 
 void AudioEqBandColumn::setCaptionToolTip(const QString& text)
 {
     ui->captionLabel->setToolTip(text);
+    if(ui->gainSlider->toolTip().isEmpty())
+    {
+        ui->gainSlider->setToolTip(text);
+    }
 }
 
 void AudioEqBandColumn::applyCaptionStyle()

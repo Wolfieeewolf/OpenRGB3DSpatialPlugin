@@ -3,6 +3,7 @@
 #include "StripKernelColormapPanel.h"
 #include "StripPatternSurface.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
+#include "EffectSliderPromote.h"
 #include "ui_StripKernelColormapPanel.h"
 
 #include <QComboBox>
@@ -34,6 +35,11 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent)
     , ui(new Ui::StripKernelColormapPanel)
 {
     ui->setupUi(this);
+
+    repeats_row_ = PromoteSliderLabelInGrid(ui->secondaryGrid, ui->repeatsSlider, ui->repeatsLabel);
+    dir_row_ = PromoteSliderLabelInGrid(ui->secondaryGrid, ui->dirSlider, ui->dirLabel,
+                                         QString(QChar(0x00B0)));
+
     populateCombos();
 
     connect(ui->sourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -42,8 +48,15 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent)
             &StripKernelColormapPanel::onKernelChanged);
     connect(ui->unfoldCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &StripKernelColormapPanel::onUnfoldChanged);
-    connect(ui->repeatsSlider, &QSlider::valueChanged, this, &StripKernelColormapPanel::onRepeatsChanged);
-    connect(ui->dirSlider, &QSlider::valueChanged, this, &StripKernelColormapPanel::onDirChanged);
+    if(repeats_row_)
+    {
+        connect(repeats_row_->slider(), &QSlider::valueChanged, this,
+                &StripKernelColormapPanel::onRepeatsChanged);
+    }
+    if(dir_row_)
+    {
+        connect(dir_row_->slider(), &QSlider::valueChanged, this, &StripKernelColormapPanel::onDirChanged);
+    }
 
     refreshSecondaryEnabled();
 }
@@ -73,9 +86,6 @@ void StripKernelColormapPanel::populateCombos()
     {
         ui->unfoldCombo->addItem(UnfoldLabel(i));
     }
-
-    ui->repeatsLabel->setText(QString::number(ui->repeatsSlider->value()));
-    ui->dirLabel->setText(QString::number(ui->dirSlider->value()) + QChar(0x00B0));
 }
 
 bool StripKernelColormapPanel::useStripColormap() const
@@ -90,7 +100,8 @@ int StripKernelColormapPanel::kernelId() const
 
 float StripKernelColormapPanel::kernelRepeats() const
 {
-    return (float)std::max(1, ui->repeatsSlider->value());
+    const QSlider* sl = repeats_row_ ? repeats_row_->slider() : nullptr;
+    return (float)std::max(1, sl ? sl->value() : 1);
 }
 
 int StripKernelColormapPanel::unfoldMode() const
@@ -100,7 +111,8 @@ int StripKernelColormapPanel::unfoldMode() const
 
 float StripKernelColormapPanel::directionDeg() const
 {
-    return (float)ui->dirSlider->value();
+    const QSlider* sl = dir_row_ ? dir_row_->slider() : nullptr;
+    return (float)(sl ? sl->value() : 0);
 }
 
 void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg)
@@ -124,17 +136,10 @@ void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float 
         ui->unfoldCombo->setCurrentIndex(
             std::clamp(unfold, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
     }
-    {
-        QSignalBlocker b(ui->repeatsSlider);
-        ui->repeatsSlider->setValue((int)std::max(1.0f, std::min(40.0f, rep)));
-        ui->repeatsLabel->setText(QString::number(ui->repeatsSlider->value()));
-    }
-    {
-        QSignalBlocker b(ui->dirSlider);
-        const int d = (int)std::fmod(dir_deg + 360.0f, 360.0f);
-        ui->dirSlider->setValue(d);
-        ui->dirLabel->setText(QString::number(d) + QChar(0x00B0));
-    }
+    SyncEffectSliderValue(repeats_row_ ? repeats_row_->slider() : nullptr,
+                          (int)std::max(1.0f, std::min(40.0f, rep)));
+    const int d = (int)std::fmod(dir_deg + 360.0f, 360.0f);
+    SyncEffectSliderValue(dir_row_ ? dir_row_->slider() : nullptr, d);
     refreshSecondaryEnabled();
 }
 
@@ -155,13 +160,16 @@ void StripKernelColormapPanel::refreshSecondaryEnabled()
     ui->kernelCombo->setVisible(on);
     ui->kernelCombo->setEnabled(on);
     ui->repeatsCaption->setVisible(on);
-    ui->repeatsSlider->setVisible(on);
-    ui->repeatsSlider->setEnabled(on);
-    ui->repeatsLabel->setVisible(on);
-    ui->repeatsLabel->setEnabled(on);
+    if(repeats_row_)
+    {
+        repeats_row_->setVisible(on);
+        repeats_row_->setEnabled(on);
+    }
     ui->unfoldCombo->setEnabled(true);
-    ui->dirSlider->setEnabled(!disable_angle);
-    ui->dirLabel->setEnabled(!disable_angle);
+    if(dir_row_)
+    {
+        dir_row_->setEnabled(!disable_angle);
+    }
 }
 
 void StripKernelColormapPanel::onSourceChanged(int)
@@ -177,14 +185,5 @@ void StripKernelColormapPanel::onUnfoldChanged(int)
     emit colormapChanged();
 }
 
-void StripKernelColormapPanel::onRepeatsChanged(int v)
-{
-    ui->repeatsLabel->setText(QString::number(v));
-    emit colormapChanged();
-}
-
-void StripKernelColormapPanel::onDirChanged(int v)
-{
-    ui->dirLabel->setText(QString::number(v) + QChar(0x00B0));
-    emit colormapChanged();
-}
+void StripKernelColormapPanel::onRepeatsChanged(int) { emit colormapChanged(); }
+void StripKernelColormapPanel::onDirChanged(int) { emit colormapChanged(); }

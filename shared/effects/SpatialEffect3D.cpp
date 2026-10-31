@@ -19,6 +19,7 @@
 #include "PluginUiUtils.h"
 #include "PluginLog.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
+#include "ui/widgets/EffectSliderPromote.h"
 #include "StripPatternSurface.h"
 #include <QColorDialog>
 #include <QComboBox>
@@ -216,16 +217,13 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     path_axis_combo->setCurrentIndex(std::clamp(effect_path_axis, 0, 2));
     thickness_slider = motion_pattern_group->thicknessSlider();
     thickness_label = motion_pattern_group->thicknessLabel();
-    thickness_slider->setValue((int)effect_band_thickness);
-    thickness_label->setText(QString::number(effect_band_thickness) + QStringLiteral("%"));
     edge_fade_slider = motion_pattern_group->edgeFadeSlider();
     edge_fade_label = motion_pattern_group->edgeFadeLabel();
-    edge_fade_slider->setValue((int)effect_edge_fade);
-    edge_fade_label->setText(QString::number(effect_edge_fade) + QStringLiteral("%"));
     count_slider = motion_pattern_group->countSlider();
     count_label = motion_pattern_group->countLabel();
-    count_slider->setValue((int)effect_instance_count);
-    count_label->setText(QString::number(effect_instance_count));
+    SyncEffectSliderValue(thickness_slider, (int)effect_band_thickness);
+    SyncEffectSliderValue(edge_fade_slider, (int)effect_edge_fade);
+    SyncEffectSliderValue(count_slider, (int)effect_instance_count);
 
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Motion and pattern"),
                    QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."),

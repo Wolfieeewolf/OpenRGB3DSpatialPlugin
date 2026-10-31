@@ -5,6 +5,8 @@
 
 #include <QWidget>
 
+class EffectSliderRow;
+
 namespace Ui {
 class StripKernelColormapPanel;
 }
@@ -41,6 +43,8 @@ private:
     void refreshSecondaryEnabled();
 
     Ui::StripKernelColormapPanel* ui = nullptr;
+    EffectSliderRow* repeats_row_ = nullptr;
+    EffectSliderRow* dir_row_ = nullptr;
 };
 
 #endif

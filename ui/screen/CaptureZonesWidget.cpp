@@ -3,6 +3,7 @@
 #include "CaptureZonesWidget.h"
 #include "ui_CaptureZonesWidget.h"
 #include "DisplayPlane3D.h"
+#include "EffectSliderPromote.h"
 #include "QtCompat.h"
 #include "ScreenCaptureManager.h"
 #include "ScreenMirrorCalibrationPattern.h"
@@ -10,7 +11,9 @@
 
 #include <QVBoxLayout>
 #include <QGroupBox>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QMenu>
 #include <QPainter>
 #include <QMouseEvent>
 #include <QPushButton>
@@ -48,23 +51,29 @@ public:
     std::function<void()> valueChangedCallback;
     bool* show_calibration_pattern_ptr = nullptr;
     bool* show_screen_preview_ptr = nullptr;
-    float* black_bar_letterbox_percent_ptr = nullptr;
-    float* black_bar_pillarbox_percent_ptr = nullptr;
+    float* black_bar_top_percent_ptr = nullptr;
+    float* black_bar_bottom_percent_ptr = nullptr;
+    float* black_bar_left_percent_ptr = nullptr;
+    float* black_bar_right_percent_ptr = nullptr;
 
     CaptureAreaPreviewWidget(std::vector<CaptureZone>* zones,
                              DisplayPlane3D* plane,
                              bool* calibration_pattern,
                              bool* screen_preview,
-                             float* black_bar_letterbox_percent,
-                             float* black_bar_pillarbox_percent,
+                             float* black_bar_top_percent,
+                             float* black_bar_bottom_percent,
+                             float* black_bar_left_percent,
+                             float* black_bar_right_percent,
                              QWidget* parent = nullptr)
         : QWidget(parent)
         , display_plane(plane)
         , capture_zones(zones)
         , show_calibration_pattern_ptr(calibration_pattern)
         , show_screen_preview_ptr(screen_preview)
-        , black_bar_letterbox_percent_ptr(black_bar_letterbox_percent)
-        , black_bar_pillarbox_percent_ptr(black_bar_pillarbox_percent)
+        , black_bar_top_percent_ptr(black_bar_top_percent)
+        , black_bar_bottom_percent_ptr(black_bar_bottom_percent)
+        , black_bar_left_percent_ptr(black_bar_left_percent)
+        , black_bar_right_percent_ptr(black_bar_right_percent)
         , selected_zone_index(-1)
         , dragging(false)
         , drag_handle(None)
@@ -73,8 +82,16 @@ public:
         setMinimumHeight(200);
         setMaximumHeight(300);
         setToolTip(QStringLiteral(
-            "Click and drag corner handles to resize zones. Click and drag zone to move it. Right-click to delete."));
+            "Click a zone to select it. Drag corners to resize, drag the zone to move.\n"
+            "Add: + button, Insert / +, or right-click → Add zone.\n"
+            "Remove: − button, Delete / Backspace, or right-click → Remove zone "
+            "(at least one zone must remain)."));
         setMouseTracking(true);
+        setFocusPolicy(Qt::StrongFocus);
+        setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+            ShowZoneContextMenu(pos);
+        });
 
         refresh_timer = new QTimer(this);
         connect(refresh_timer, &QTimer::timeout, this, [this]() {
@@ -126,6 +143,74 @@ public:
         selected_zone_index = (int)capture_zones->size() - 1;
         if(valueChangedCallback) valueChangedCallback();
         update();
+    }
+
+    bool CanRemoveZone() const
+    {
+        return capture_zones && capture_zones->size() > 1;
+    }
+
+    void RemoveSelectedZone()
+    {
+        if(!CanRemoveZone()) return;
+        int idx = selected_zone_index;
+        if(idx < 0 || idx >= (int)capture_zones->size())
+        {
+            idx = (int)capture_zones->size() - 1;
+        }
+        capture_zones->erase(capture_zones->begin() + idx);
+        if(selected_zone_index >= (int)capture_zones->size())
+        {
+            selected_zone_index = (int)capture_zones->size() - 1;
+        }
+        if(valueChangedCallback) valueChangedCallback();
+        update();
+    }
+
+    int SelectedZoneIndex() const { return selected_zone_index; }
+
+    void ShowZoneContextMenu(const QPoint& local_pos)
+    {
+        if(!capture_zones)
+        {
+            return;
+        }
+        /* Select zone under cursor when opening the menu. */
+        int hit = -1;
+        for(size_t i = 0; i < capture_zones->size(); i++)
+        {
+            const CaptureZone& zone = (*capture_zones)[i];
+            if(!zone.enabled) continue;
+            const int zone_left = preview_rect.left() + (int)(preview_rect.width() * zone.u_min);
+            const int zone_right = preview_rect.left() + (int)(preview_rect.width() * zone.u_max);
+            const int zone_top = preview_rect.top() + (int)(preview_rect.height() * (1.0f - zone.v_max));
+            const int zone_bottom = preview_rect.top() + (int)(preview_rect.height() * (1.0f - zone.v_min));
+            if(QRect(zone_left, zone_top, zone_right - zone_left, zone_bottom - zone_top).contains(local_pos))
+            {
+                hit = (int)i;
+                break;
+            }
+        }
+        if(hit >= 0)
+        {
+            selected_zone_index = hit;
+            update();
+        }
+
+        QMenu menu(this);
+        QAction* add_act = menu.addAction(QStringLiteral("Add zone"));
+        add_act->setEnabled(capture_zones->size() < kMaxCaptureZonesPerMonitor);
+        QAction* remove_act = menu.addAction(QStringLiteral("Remove zone"));
+        remove_act->setEnabled(CanRemoveZone() && selected_zone_index >= 0);
+        QAction* chosen = menu.exec(mapToGlobal(local_pos));
+        if(chosen == add_act)
+        {
+            AddZone();
+        }
+        else if(chosen == remove_act)
+        {
+            RemoveSelectedZone();
+        }
     }
 
 protected:
@@ -209,17 +294,22 @@ protected:
                         if(!image.isNull())
                         {
                             painter.drawImage(rect, image);
-                            if(black_bar_letterbox_percent_ptr && black_bar_pillarbox_percent_ptr)
+                            if(black_bar_top_percent_ptr && black_bar_bottom_percent_ptr &&
+                               black_bar_left_percent_ptr && black_bar_right_percent_ptr)
                             {
-                                float lp = std::clamp(*black_bar_letterbox_percent_ptr, 0.0f, 49.0f) / 100.0f;
-                                float pp = std::clamp(*black_bar_pillarbox_percent_ptr, 0.0f, 49.0f) / 100.0f;
-                                float u_min = pp, u_max = 1.0f - pp;
-                                float v_min = lp, v_max = 1.0f - lp;
-                                int left   = rect.left() + (int)(rect.width() * u_min);
-                                int right  = rect.left() + (int)(rect.width() * u_max);
-                                int top    = rect.top() + (int)(rect.height() * v_min);
-                                int bottom = rect.top() + (int)(rect.height() * v_max);
-                                QRect bounds_rect(left, top, right - left, bottom - top);
+                                const float top_f =
+                                    std::clamp(*black_bar_top_percent_ptr, 0.0f, 49.0f) / 100.0f;
+                                const float bottom_f =
+                                    std::clamp(*black_bar_bottom_percent_ptr, 0.0f, 49.0f) / 100.0f;
+                                const float left_f =
+                                    std::clamp(*black_bar_left_percent_ptr, 0.0f, 49.0f) / 100.0f;
+                                const float right_f =
+                                    std::clamp(*black_bar_right_percent_ptr, 0.0f, 49.0f) / 100.0f;
+                                const int left = rect.left() + (int)(rect.width() * left_f);
+                                const int right = rect.left() + (int)(rect.width() * (1.0f - right_f));
+                                const int top = rect.top() + (int)(rect.height() * top_f);
+                                const int bottom = rect.top() + (int)(rect.height() * (1.0f - bottom_f));
+                                QRect bounds_rect(left, top, std::max(0, right - left), std::max(0, bottom - top));
                                 painter.setPen(QPen(QColor(255, 255, 0), 2, Qt::DashLine));
                                 painter.setBrush(Qt::NoBrush);
                                 painter.drawRect(bounds_rect);
@@ -281,32 +371,7 @@ protected:
         const int handle_size = 10;
         const int handle_half = handle_size / 2;
 
-        if(event->button() == Qt::RightButton)
-        {
-            for(size_t i = 0; i < capture_zones->size(); i++)
-            {
-                const CaptureZone& zone = (*capture_zones)[i];
-                if(!zone.enabled) continue;
-                int zone_left = preview_rect.left() + (int)(preview_rect.width() * zone.u_min);
-                int zone_right = preview_rect.left() + (int)(preview_rect.width() * zone.u_max);
-                int zone_top = preview_rect.top() + (int)(preview_rect.height() * (1.0f - zone.v_max));
-                int zone_bottom = preview_rect.top() + (int)(preview_rect.height() * (1.0f - zone.v_min));
-                QRect zone_rect(zone_left, zone_top, zone_right - zone_left, zone_bottom - zone_top);
-                if(zone_rect.contains(pos))
-                {
-                    if(capture_zones->size() > 1)
-                    {
-                        capture_zones->erase(capture_zones->begin() + i);
-                        if(selected_zone_index >= (int)capture_zones->size())
-                            selected_zone_index = (int)capture_zones->size() - 1;
-                        if(valueChangedCallback) valueChangedCallback();
-                        update();
-                    }
-                    return;
-                }
-            }
-            return;
-        }
+        setFocus(Qt::MouseFocusReason);
 
         if(event->button() != Qt::LeftButton) return;
 
@@ -520,6 +585,43 @@ protected:
         update();
     }
 
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if(!event)
+        {
+            QWidget::keyPressEvent(event);
+            return;
+        }
+        if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
+        {
+            if(CanRemoveZone())
+            {
+                RemoveSelectedZone();
+                event->accept();
+                return;
+            }
+        }
+        if(event->key() == Qt::Key_Insert || event->key() == Qt::Key_Plus ||
+           event->key() == Qt::Key_Equal)
+        {
+            AddZone();
+            event->accept();
+            return;
+        }
+        if(event->key() == Qt::Key_Menu ||
+           (event->key() == Qt::Key_F10 && event->modifiers() & Qt::ShiftModifier))
+        {
+            const QPoint anchor = (selected_zone_index >= 0 && capture_zones &&
+                                   selected_zone_index < (int)capture_zones->size())
+                                      ? QPoint(preview_rect.center())
+                                      : rect().center();
+            ShowZoneContextMenu(anchor);
+            event->accept();
+            return;
+        }
+        QWidget::keyPressEvent(event);
+    }
+
 private:
     enum CornerHandle { None, TopLeft, TopRight, BottomRight, BottomLeft, MoveZone };
 
@@ -561,8 +663,10 @@ CaptureZonesWidget::CaptureZonesWidget(
     DisplayPlane3D* plane,
     bool* show_calibration_pattern,
     bool* show_screen_preview,
-    float* black_bar_letterbox_percent,
-    float* black_bar_pillarbox_percent,
+    float* black_bar_top_percent,
+    float* black_bar_bottom_percent,
+    float* black_bar_left_percent,
+    float* black_bar_right_percent,
     float propagation_speed,
     float wave_decay_ms,
     float wave_time_to_edge_sec,
@@ -573,28 +677,53 @@ CaptureZonesWidget::CaptureZonesWidget(
     ui->setupUi(this);
 
     ui->propagationSpeedSlider->setValue((int)std::lround(propagation_speed));
-    ui->propagationSpeedLabel->setText(QString::number((int)std::lround(propagation_speed)) + "%");
     ui->waveDecaySlider->setValue((int)wave_decay_ms);
-    ui->waveDecayLabel->setText(QString::number((int)wave_decay_ms) + "ms");
     ui->waveTimeToEdgeSlider->setValue((int)(wave_time_to_edge_sec * 10.0f));
-    ui->waveTimeToEdgeLabel->setText(wave_time_to_edge_sec <= 0.0f ? "Off"
-                                                                   : QString::number(wave_time_to_edge_sec, 'f', 1) + "s");
+
+    propagation_row_ = PromoteSliderLabelToEffectRow(ui->propagationLayout, ui->propagationSpeedSlider,
+                                                       ui->propagationSpeedLabel, QStringLiteral("%"));
+    wave_decay_row_ = PromoteSliderLabelToEffectRow(ui->waveDecayLayout, ui->waveDecaySlider,
+                                                      ui->waveDecayLabel, QStringLiteral("ms"));
+    wave_time_row_ = PromoteSliderLabelToEffectRow(ui->waveTimeLayout, ui->waveTimeToEdgeSlider,
+                                                     ui->waveTimeToEdgeLabel);
+    if(wave_time_row_)
+    {
+        wave_time_row_->setShowFormattedLabel(true);
+        const int tenths = wave_time_row_->slider()->value();
+        wave_time_row_->valueLabel()->setText(tenths == 0 ? QStringLiteral("Off")
+                                                          : QString::number(tenths / 10.0, 'f', 1) + QStringLiteral("s"));
+    }
     syncWaveIntensityVisibility();
 
     auto* preview_layout = new QVBoxLayout(ui->previewHost);
     preview_layout->setContentsMargins(0, 0, 0, 0);
     preview_widget = new CaptureAreaPreviewWidget(
-        zones, plane, show_calibration_pattern, show_screen_preview, black_bar_letterbox_percent,
-        black_bar_pillarbox_percent, ui->previewHost);
-    preview_widget->SetValueChangedCallback([this]() { onInternalChange(); });
+        zones, plane, show_calibration_pattern, show_screen_preview,
+        black_bar_top_percent, black_bar_bottom_percent,
+        black_bar_left_percent, black_bar_right_percent, ui->previewHost);
+    preview_widget->SetValueChangedCallback([this]() {
+        onInternalChange();
+        syncZoneButtonStates();
+    });
     preview_layout->addWidget(preview_widget);
 
+    ui->addZoneButton->setAccessibleName(QStringLiteral("Add capture zone"));
+    ui->removeZoneButton->setAccessibleName(QStringLiteral("Remove selected capture zone"));
     connect(ui->addZoneButton, &QPushButton::clicked, this, [this]() {
         if(preview_widget)
         {
             preview_widget->AddZone();
         }
+        syncZoneButtonStates();
     });
+    connect(ui->removeZoneButton, &QPushButton::clicked, this, [this]() {
+        if(preview_widget)
+        {
+            preview_widget->RemoveSelectedZone();
+        }
+        syncZoneButtonStates();
+    });
+    syncZoneButtonStates();
 
     wireSliderConnections();
 }
@@ -606,19 +735,31 @@ CaptureZonesWidget::~CaptureZonesWidget()
 
 void CaptureZonesWidget::wireSliderConnections()
 {
-    connect(ui->propagationSpeedSlider, &QSlider::valueChanged, this, [this](int v) {
-        ui->propagationSpeedLabel->setText(QString::number(v) + "%");
-        onInternalChange();
-    });
-    connect(ui->waveDecaySlider, &QSlider::valueChanged, this, [this](int v) {
-        ui->waveDecayLabel->setText(QString::number(v) + "ms");
-        onInternalChange();
-    });
-    connect(ui->waveTimeToEdgeSlider, &QSlider::valueChanged, this, [this](int v) {
-        ui->waveTimeToEdgeLabel->setText(v == 0 ? "Off" : QString::number(v / 10.0, 'f', 1) + "s");
-        syncWaveIntensityVisibility();
-        onInternalChange();
-    });
+    if(propagation_row_)
+    {
+        connect(propagation_row_->slider(), &QSlider::valueChanged, this, [this](int) {
+            onInternalChange();
+        });
+    }
+    if(wave_decay_row_)
+    {
+        connect(wave_decay_row_->slider(), &QSlider::valueChanged, this, [this](int) {
+            onInternalChange();
+        });
+    }
+    if(wave_time_row_)
+    {
+        connect(wave_time_row_->slider(), &QSlider::valueChanged, this, [this](int v) {
+            if(wave_time_row_->valueLabel())
+            {
+                wave_time_row_->valueLabel()->setText(
+                    v == 0 ? QStringLiteral("Off")
+                           : QString::number(v / 10.0, 'f', 1) + QStringLiteral("s"));
+            }
+            syncWaveIntensityVisibility();
+            onInternalChange();
+        });
+    }
 }
 
 void CaptureZonesWidget::SetDisplayPlane(DisplayPlane3D* plane)
@@ -631,6 +772,7 @@ void CaptureZonesWidget::SetCaptureZones(std::vector<CaptureZone>* zones)
 {
     if(preview_widget)
         preview_widget->capture_zones = zones;
+    syncZoneButtonStates();
 }
 
 void CaptureZonesWidget::onInternalChange()
@@ -638,14 +780,51 @@ void CaptureZonesWidget::onInternalChange()
     emit valueChanged();
 }
 
+void CaptureZonesWidget::syncZoneButtonStates()
+{
+    if(!ui)
+    {
+        return;
+    }
+    const bool can_remove = preview_widget && preview_widget->CanRemoveZone();
+    if(ui->removeZoneButton)
+    {
+        ui->removeZoneButton->setEnabled(can_remove);
+    }
+    if(ui->addZoneButton && preview_widget && preview_widget->capture_zones)
+    {
+        ui->addZoneButton->setEnabled(
+            preview_widget->capture_zones->size() < kMaxCaptureZonesPerMonitor);
+    }
+}
+
 QPushButton* CaptureZonesWidget::getAddZoneButton() const { return ui->addZoneButton; }
+QPushButton* CaptureZonesWidget::getRemoveZoneButton() const { return ui->removeZoneButton; }
 QWidget* CaptureZonesWidget::getPreviewWidget() const { return preview_widget; }
-QSlider* CaptureZonesWidget::getPropagationSpeedSlider() const { return ui->propagationSpeedSlider; }
-QLabel* CaptureZonesWidget::getPropagationSpeedLabel() const { return ui->propagationSpeedLabel; }
-QSlider* CaptureZonesWidget::getWaveDecaySlider() const { return ui->waveDecaySlider; }
-QLabel* CaptureZonesWidget::getWaveDecayLabel() const { return ui->waveDecayLabel; }
-QSlider* CaptureZonesWidget::getWaveTimeToEdgeSlider() const { return ui->waveTimeToEdgeSlider; }
-QLabel* CaptureZonesWidget::getWaveTimeToEdgeLabel() const { return ui->waveTimeToEdgeLabel; }
+QSlider* CaptureZonesWidget::getPropagationSpeedSlider() const
+{
+    return propagation_row_ ? propagation_row_->slider() : nullptr;
+}
+QLabel* CaptureZonesWidget::getPropagationSpeedLabel() const
+{
+    return propagation_row_ ? propagation_row_->valueLabel() : nullptr;
+}
+QSlider* CaptureZonesWidget::getWaveDecaySlider() const
+{
+    return wave_decay_row_ ? wave_decay_row_->slider() : nullptr;
+}
+QLabel* CaptureZonesWidget::getWaveDecayLabel() const
+{
+    return wave_decay_row_ ? wave_decay_row_->valueLabel() : nullptr;
+}
+QSlider* CaptureZonesWidget::getWaveTimeToEdgeSlider() const
+{
+    return wave_time_row_ ? wave_time_row_->slider() : nullptr;
+}
+QLabel* CaptureZonesWidget::getWaveTimeToEdgeLabel() const
+{
+    return wave_time_row_ ? wave_time_row_->valueLabel() : nullptr;
+}
 
 QGroupBox* CaptureZonesWidget::getWaveGroup() const { return ui->waveGroup; }
 QGroupBox* CaptureZonesWidget::getZonesGroup() const { return ui->zonesGroup; }
@@ -656,7 +835,8 @@ void CaptureZonesWidget::syncWaveIntensityVisibility()
     {
         return;
     }
-    const bool tte_on = ui->waveTimeToEdgeSlider && ui->waveTimeToEdgeSlider->value() > 0;
+    QSlider* tte = getWaveTimeToEdgeSlider();
+    const bool tte_on = tte && tte->value() > 0;
     if(ui->propagationCaption)
     {
         ui->propagationCaption->setVisible(!tte_on);

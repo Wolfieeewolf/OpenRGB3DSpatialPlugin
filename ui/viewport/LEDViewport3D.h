@@ -247,6 +247,10 @@ private:
     void applyGizmoFreeroamMode();
     void toggleGridSnapFromKeyboard();
     void tryDeleteSelectedFromKeyboard();
+    void showSelectionContextMenu(const QPoint& global_pos);
+    bool hasViewportSelectionForContextMenu() const;
+    bool viewportCanFrameSelection() const;
+    bool hasDeletableControllerSelection() const;
     GridExtents GetRoomExtents() const;
     void DrawGrid();
     void DrawRoomFloor();

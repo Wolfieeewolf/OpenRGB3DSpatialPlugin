@@ -5,8 +5,8 @@
 
 #include <QWidget>
 
+class EffectSliderRow;
 class QComboBox;
-
 class QCheckBox;
 class QLabel;
 class QSlider;
@@ -54,6 +54,16 @@ public:
 
 private:
     Ui::EffectMotionPanel* ui = nullptr;
+    EffectSliderRow* speed_row_ = nullptr;
+    EffectSliderRow* brightness_row_ = nullptr;
+    EffectSliderRow* frequency_row_ = nullptr;
+    EffectSliderRow* detail_row_ = nullptr;
+    EffectSliderRow* size_row_ = nullptr;
+    EffectSliderRow* scale_row_ = nullptr;
+    EffectSliderRow* fps_row_ = nullptr;
+    EffectSliderRow* thickness_row_ = nullptr;
+    EffectSliderRow* edge_fade_row_ = nullptr;
+    EffectSliderRow* count_row_ = nullptr;
 };
 
 #endif

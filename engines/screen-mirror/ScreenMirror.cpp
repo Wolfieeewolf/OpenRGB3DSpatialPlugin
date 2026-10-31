@@ -8,6 +8,7 @@
 #include "DisplayPlaneCaptureCombo.h"
 #include "DisplayPlaneCaptureUi.h"
 #include "PluginUiUtils.h"
+#include "EffectSliderPromote.h"
 #include "ScreenMirrorMonitorPanel.h"
 #include "ScreenMirror_Internal.h"
 #include "VirtualReferencePoint3D.h"
@@ -25,6 +26,7 @@
 #include <QFont>
 #include <QString>
 #include <QSignalBlocker>
+#include <QSlider>
 #include <algorithm>
 
 void RegisterScreenMirrorEngine()
@@ -136,10 +138,16 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.led_output_gain_g_label = nullptr;
         s.led_output_gain_b_slider = nullptr;
         s.led_output_gain_b_label = nullptr;
-        s.black_bar_letterbox_slider = nullptr;
-        s.black_bar_letterbox_label = nullptr;
-        s.black_bar_pillarbox_slider = nullptr;
-        s.black_bar_pillarbox_label = nullptr;
+        s.black_bar_top_slider = nullptr;
+        s.black_bar_top_label = nullptr;
+        s.black_bar_bottom_slider = nullptr;
+        s.black_bar_bottom_label = nullptr;
+        s.black_bar_left_slider = nullptr;
+        s.black_bar_left_label = nullptr;
+        s.black_bar_right_slider = nullptr;
+        s.black_bar_right_label = nullptr;
+        s.black_bar_link_vertical_check = nullptr;
+        s.black_bar_link_horizontal_check = nullptr;
         s.softness_slider = nullptr;
         s.softness_label = nullptr;
         s.propagation_speed_slider = nullptr;
@@ -154,6 +162,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.screen_preview_check = nullptr;
         s.capture_area_preview = nullptr;
         s.add_zone_button = nullptr;
+        s.remove_zone_button = nullptr;
         s.capture_zones_widget = nullptr;
     }
 
@@ -240,10 +249,10 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->addItem("1440p (2560×1440)", QVariant(6));
     capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
     capture_quality_combo->setToolTip(
-        "Windows DXGI: capped sizes GPU-scale on D3D11, then CPU-read for LED mapping "
-        "(default 1080p). Native = full display copy to CPU (heavier). "
-        "Never upscales. Linux/macOS scale on CPU after QScreen grab. "
-        "LED colors always sample on CPU (plane UV, zones, falloff, wave) — that is intentional.");
+        "Working capture size (never upscales past the display). DXGI GPU-scales then "
+        "CPU-reads; GDI StretchBlts. LEDs sample one pixel per LED, so Low vs 1080p often "
+        "looks the same on the strip — check the plane Screen Preview texture size / CPU "
+        "use. Native = full display copy (heavier).");
     SelectCaptureQualityCombo(capture_quality);
     {
         int w = 1920;
@@ -258,10 +267,10 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_backend_combo->addItem("GDI only", QVariant(2));
     capture_backend_combo->setCurrentIndex(std::clamp(capture_backend_mode, 0, 2));
     capture_backend_combo->setToolTip(
-        "Windows: Auto stays on DXGI and reuses the last frame when the desktop is idle; "
-        "GDI only after a real stall/access loss, then a dwell before DXGI retry. "
-        "DXGI requests SDR BGRA (HDR duplication is refused). "
-        "No effect on Linux/macOS (QScreen grab).");
+        "Same pixels either way — not a look filter. DXGI is lighter and holds the last "
+        "frame on a static desktop; Auto falls back to GDI after a stall/access loss. "
+        "GDI-only is the compatibility path (also used when DXGI refuses HDR). "
+        "No effect on Linux/macOS.");
 
     QVBoxLayout* capture_host_layout = new QVBoxLayout(shell_ui.capturePanelHost);
     capture_host_layout->setContentsMargins(0, 0, 0, 0);
@@ -269,16 +278,16 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
 
     audience_hint_label_ = capture_ui.audienceHintLabel;
     PluginUiApplyItalicSecondaryLabel(audience_hint_label_);
-    audience_bias_slider_ = capture_ui.audienceBiasSlider;
-    audience_bias_label_ = capture_ui.audienceBiasLabel;
-    audience_bias_slider_->setValue((int)std::lround(audience_bias_pct_));
-    audience_bias_label_->setText(QString::number((int)std::lround(audience_bias_pct_)) + QStringLiteral("%"));
+    capture_ui.audienceBiasSlider->setValue((int)std::lround(audience_bias_pct_));
+    if(EffectSliderRow* audience_row =
+            PromoteSliderLabelToEffectRow(capture_ui.audienceBiasRow, capture_ui.audienceBiasSlider,
+                                          capture_ui.audienceBiasLabel, QStringLiteral("%")))
+    {
+        audience_bias_slider_ = audience_row->slider();
+        audience_bias_label_ = audience_row->valueLabel();
+    }
     connect(audience_bias_slider_, &QSlider::valueChanged, this, [this](int v) {
         audience_bias_pct_ = (float)std::clamp(v, 0, 100);
-        if(audience_bias_label_)
-        {
-            audience_bias_label_->setText(QString::number(v) + QStringLiteral("%"));
-        }
         OnParameterChanged();
     });
 
@@ -589,8 +598,12 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.smoothing_time_slider) settings.smoothing_time_slider->setEnabled(has_capture_source);
             if(settings.brightness_slider) settings.brightness_slider->setEnabled(has_capture_source);
             if(settings.brightness_threshold_slider) settings.brightness_threshold_slider->setEnabled(has_capture_source);
-            if(settings.black_bar_letterbox_slider) settings.black_bar_letterbox_slider->setEnabled(has_capture_source);
-            if(settings.black_bar_pillarbox_slider) settings.black_bar_pillarbox_slider->setEnabled(has_capture_source);
+            if(settings.black_bar_top_slider) settings.black_bar_top_slider->setEnabled(has_capture_source);
+            if(settings.black_bar_bottom_slider) settings.black_bar_bottom_slider->setEnabled(has_capture_source);
+            if(settings.black_bar_left_slider) settings.black_bar_left_slider->setEnabled(has_capture_source);
+            if(settings.black_bar_right_slider) settings.black_bar_right_slider->setEnabled(has_capture_source);
+            if(settings.black_bar_link_vertical_check) settings.black_bar_link_vertical_check->setEnabled(has_capture_source);
+            if(settings.black_bar_link_horizontal_check) settings.black_bar_link_horizontal_check->setEnabled(has_capture_source);
             if(settings.softness_slider) settings.softness_slider->setEnabled(has_capture_source);
             if(settings.propagation_speed_slider) settings.propagation_speed_slider->setEnabled(has_capture_source);
             if(settings.wave_decay_slider) settings.wave_decay_slider->setEnabled(has_capture_source);
@@ -606,6 +619,10 @@ void ScreenMirror::RefreshMonitorStatus()
             }
             if(settings.add_zone_button)
                 settings.add_zone_button->setEnabled(has_capture_source);
+            if(settings.remove_zone_button)
+                settings.remove_zone_button->setEnabled(has_capture_source);
+            if(settings.capture_zones_widget)
+                settings.capture_zones_widget->syncZoneButtonStates();
             
         }
     }
@@ -624,6 +641,41 @@ void ScreenMirror::RefreshMonitorStatus()
     else
     {
         status_text = QString("Display Planes: %1 total, %2 active").arg(total_count).arg(active_count);
+        /* Show live frame size so Capture Quality changes are verifiable
+           (LED strips rarely show Low vs 1080p by eye). */
+        int req_w = 1920;
+        int req_h = 1080;
+        ScreenMirrorQualityToSize(ScreenMirrorClampQuality(capture_quality), req_w, req_h);
+        int live_w = 0;
+        int live_h = 0;
+        ScreenCaptureManager& cap = ScreenCaptureManager::Instance();
+        for(unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
+        {
+            DisplayPlane3D* plane = planes[plane_index];
+            if(!plane) continue;
+            const std::string sid = plane->GetCaptureSourceId();
+            if(sid.empty()) continue;
+            std::shared_ptr<CapturedFrame> fr = cap.GetLatestFrame(sid);
+            if(fr && fr->valid && fr->width > 0 && fr->height > 0)
+            {
+                live_w = fr->width;
+                live_h = fr->height;
+                break;
+            }
+        }
+        if(live_w > 0 && live_h > 0)
+        {
+            status_text += QStringLiteral(" · capture %1×%2").arg(live_w).arg(live_h);
+            if(capture_quality != kScreenMirrorQualityNative &&
+               (live_w != req_w || live_h != req_h))
+            {
+                status_text += QStringLiteral(" (cap %1×%2)").arg(req_w).arg(req_h);
+            }
+        }
+        else
+        {
+            status_text += QStringLiteral(" · cap %1×%2").arg(req_w).arg(req_h);
+        }
     }
     monitor_status_label->setText(status_text);
 

@@ -108,6 +108,11 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
+    setToolTip(QStringLiteral(
+        "Left: select / gizmo · Middle-drag: pan · Right-drag: orbit · Wheel: zoom\n"
+        "W move · E rotate · R scale · Y skew · T freeroam · Q toggle grid snap\n"
+        "Delete / Backspace: remove controller from view · F: frame selection · Home: reset camera\n"
+        "Right-click (no drag) on a selection: context menu"));
 
     gizmo_mode_feedback_timer_.setSingleShot(true);
     connect(&gizmo_mode_feedback_timer_, &QTimer::timeout, this, [this]()

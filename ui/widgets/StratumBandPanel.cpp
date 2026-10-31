@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "StratumBandPanel.h"
+#include "EffectSliderPromote.h"
 #include "ui_StratumBandPanel.h"
 
 #include <QComboBox>
@@ -27,7 +28,7 @@ void PopulateMotionKindCombo(QComboBox* combo)
     combo->addItem(QStringLiteral("Phase drift CCW"), 5);
     combo->addItem(QStringLiteral("Roll (around origin)"), 6);
 }
-}
+} // namespace
 
 StratumBandPanel::StratumBandPanel(QWidget* parent)
     : QWidget(parent)
@@ -61,26 +62,14 @@ StratumBandPanel::StratumBandPanel(QWidget* parent)
     {
         connect(speed_sl_[i], &QSlider::valueChanged, this, [this, i](int v) {
             tuning_.speed[(size_t)i] = std::clamp(v, 0, 200);
-            if(speed_lbl_[i])
-            {
-                speed_lbl_[i]->setText(QString::number(tuning_.speed[(size_t)i]));
-            }
             emit bandParametersChanged();
         });
         connect(tight_sl_[i], &QSlider::valueChanged, this, [this, i](int v) {
             tuning_.tight[(size_t)i] = std::clamp(v, 25, 300);
-            if(tight_lbl_[i])
-            {
-                tight_lbl_[i]->setText(QString::number(tuning_.tight[(size_t)i]));
-            }
             emit bandParametersChanged();
         });
         connect(phase_sl_[i], &QSlider::valueChanged, this, [this, i](int v) {
             tuning_.phase_deg[(size_t)i] = std::clamp(v, -180, 180);
-            if(phase_lbl_[i])
-            {
-                phase_lbl_[i]->setText(QString::number(tuning_.phase_deg[(size_t)i]));
-            }
             emit bandParametersChanged();
         });
         connect(motion_kind_combo_[i], qOverload<int>(&QComboBox::currentIndexChanged), this, [this, i]() {
@@ -93,10 +82,6 @@ StratumBandPanel::StratumBandPanel(QWidget* parent)
         });
         connect(motion_rate_sl_[i], &QSlider::valueChanged, this, [this, i](int v) {
             tuning_.motion_rate[(size_t)i] = std::clamp(v, 0, 200);
-            if(motion_rate_lbl_[i])
-            {
-                motion_rate_lbl_[i]->setText(QString::number(tuning_.motion_rate[(size_t)i]));
-            }
             emit bandParametersChanged();
         });
     }
@@ -115,35 +100,37 @@ void StratumBandPanel::bindWidgetsFromUi()
     group_ = ui->bandTuningGroup;
     motion_group_ = ui->motionGroup;
 
-    speed_sl_[0] = ui->speedSliderFloor;
-    speed_sl_[1] = ui->speedSliderMid;
-    speed_sl_[2] = ui->speedSliderCeiling;
-    tight_sl_[0] = ui->tightSliderFloor;
-    tight_sl_[1] = ui->tightSliderMid;
-    tight_sl_[2] = ui->tightSliderCeiling;
-    phase_sl_[0] = ui->phaseSliderFloor;
-    phase_sl_[1] = ui->phaseSliderMid;
-    phase_sl_[2] = ui->phaseSliderCeiling;
+    QSlider* speed_src[3] = {ui->speedSliderFloor, ui->speedSliderMid, ui->speedSliderCeiling};
+    QLabel* speed_lbl_src[3] = {ui->speedLabelFloor, ui->speedLabelMid, ui->speedLabelCeiling};
+    QSlider* tight_src[3] = {ui->tightSliderFloor, ui->tightSliderMid, ui->tightSliderCeiling};
+    QLabel* tight_lbl_src[3] = {ui->tightLabelFloor, ui->tightLabelMid, ui->tightLabelCeiling};
+    QSlider* phase_src[3] = {ui->phaseSliderFloor, ui->phaseSliderMid, ui->phaseSliderCeiling};
+    QLabel* phase_lbl_src[3] = {ui->phaseLabelFloor, ui->phaseLabelMid, ui->phaseLabelCeiling};
+    QSlider* rate_src[3] = {ui->motionRateSliderFloor, ui->motionRateSliderMid, ui->motionRateSliderCeiling};
+    QLabel* rate_lbl_src[3] = {ui->motionRateLabelFloor, ui->motionRateLabelMid, ui->motionRateLabelCeiling};
 
-    speed_lbl_[0] = ui->speedLabelFloor;
-    speed_lbl_[1] = ui->speedLabelMid;
-    speed_lbl_[2] = ui->speedLabelCeiling;
-    tight_lbl_[0] = ui->tightLabelFloor;
-    tight_lbl_[1] = ui->tightLabelMid;
-    tight_lbl_[2] = ui->tightLabelCeiling;
-    phase_lbl_[0] = ui->phaseLabelFloor;
-    phase_lbl_[1] = ui->phaseLabelMid;
-    phase_lbl_[2] = ui->phaseLabelCeiling;
+    for(int i = 0; i < 3; i++)
+    {
+        EffectSliderRow* speed_row = PromoteSliderLabelInGrid(ui->bandGrid, speed_src[i], speed_lbl_src[i]);
+        EffectSliderRow* tight_row = PromoteSliderLabelInGrid(ui->bandGrid, tight_src[i], tight_lbl_src[i],
+                                                               QStringLiteral("%"));
+        EffectSliderRow* phase_row = PromoteSliderLabelInGrid(ui->bandGrid, phase_src[i], phase_lbl_src[i],
+                                                               QString(QChar(0x00B0)));
+        EffectSliderRow* rate_row = PromoteSliderLabelInGrid(ui->motionGrid, rate_src[i], rate_lbl_src[i],
+                                                              QStringLiteral("%"));
+        speed_sl_[i] = speed_row ? speed_row->slider() : nullptr;
+        tight_sl_[i] = tight_row ? tight_row->slider() : nullptr;
+        phase_sl_[i] = phase_row ? phase_row->slider() : nullptr;
+        motion_rate_sl_[i] = rate_row ? rate_row->slider() : nullptr;
+        speed_lbl_[i] = speed_row ? speed_row->valueLabel() : nullptr;
+        tight_lbl_[i] = tight_row ? tight_row->valueLabel() : nullptr;
+        phase_lbl_[i] = phase_row ? phase_row->valueLabel() : nullptr;
+        motion_rate_lbl_[i] = rate_row ? rate_row->valueLabel() : nullptr;
+    }
 
     motion_kind_combo_[0] = ui->motionKindFloor;
     motion_kind_combo_[1] = ui->motionKindMid;
     motion_kind_combo_[2] = ui->motionKindCeiling;
-    motion_rate_sl_[0] = ui->motionRateSliderFloor;
-    motion_rate_sl_[1] = ui->motionRateSliderMid;
-    motion_rate_sl_[2] = ui->motionRateSliderCeiling;
-    motion_rate_lbl_[0] = ui->motionRateLabelFloor;
-    motion_rate_lbl_[1] = ui->motionRateLabelMid;
-    motion_rate_lbl_[2] = ui->motionRateLabelCeiling;
 }
 
 void StratumBandPanel::populateMotionCombos()
@@ -208,33 +195,9 @@ void StratumBandPanel::syncWidgetsFromModel()
     updateBandGroupVisibility();
     for(int i = 0; i < 3; i++)
     {
-        if(speed_sl_[i])
-        {
-            QSignalBlocker b(speed_sl_[i]);
-            speed_sl_[i]->setValue(tuning_.speed[(size_t)i]);
-        }
-        if(speed_lbl_[i])
-        {
-            speed_lbl_[i]->setText(QString::number(tuning_.speed[(size_t)i]));
-        }
-        if(tight_sl_[i])
-        {
-            QSignalBlocker b(tight_sl_[i]);
-            tight_sl_[i]->setValue(tuning_.tight[(size_t)i]);
-        }
-        if(tight_lbl_[i])
-        {
-            tight_lbl_[i]->setText(QString::number(tuning_.tight[(size_t)i]));
-        }
-        if(phase_sl_[i])
-        {
-            QSignalBlocker b(phase_sl_[i]);
-            phase_sl_[i]->setValue(tuning_.phase_deg[(size_t)i]);
-        }
-        if(phase_lbl_[i])
-        {
-            phase_lbl_[i]->setText(QString::number(tuning_.phase_deg[(size_t)i]));
-        }
+        SyncEffectSliderValue(speed_sl_[i], tuning_.speed[(size_t)i]);
+        SyncEffectSliderValue(tight_sl_[i], tuning_.tight[(size_t)i]);
+        SyncEffectSliderValue(phase_sl_[i], tuning_.phase_deg[(size_t)i]);
         if(motion_kind_combo_[i])
         {
             const int mk = std::clamp(tuning_.motion_kind[(size_t)i], 0, 6);
@@ -248,14 +211,6 @@ void StratumBandPanel::syncWidgetsFromModel()
                 }
             }
         }
-        if(motion_rate_sl_[i])
-        {
-            QSignalBlocker br(motion_rate_sl_[i]);
-            motion_rate_sl_[i]->setValue(tuning_.motion_rate[(size_t)i]);
-        }
-        if(motion_rate_lbl_[i])
-        {
-            motion_rate_lbl_[i]->setText(QString::number(tuning_.motion_rate[(size_t)i]));
-        }
+        SyncEffectSliderValue(motion_rate_sl_[i], tuning_.motion_rate[(size_t)i]);
     }
 }

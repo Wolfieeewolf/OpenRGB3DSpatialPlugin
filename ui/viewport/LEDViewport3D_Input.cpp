@@ -7,6 +7,7 @@
 #include <QEvent>
 #include <QShortcut>
 #include <QMessageBox>
+#include <QMenu>
 
 #include <cmath>
 #include <cfloat>
@@ -436,6 +437,12 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     else if(event->button() == Qt::RightButton)
     {
         dragging_rotate = false;
+        const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
+        const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
+        if(distance < kViewportClickSlopGlPx && hasViewportSelectionForContextMenu())
+        {
+            showSelectionContextMenu(event->globalPosition().toPoint());
+        }
     }
     update();
 }
@@ -507,10 +514,84 @@ void LEDViewport3D::toggleGridSnapFromKeyboard()
     update();
 }
 
-void LEDViewport3D::tryDeleteSelectedFromKeyboard()
+bool LEDViewport3D::hasDeletableControllerSelection() const
 {
     if(selected_controller_idx < 0 || !controller_transforms ||
        selected_controller_idx >= (int)controller_transforms->size())
+    {
+        return false;
+    }
+    ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+    return ctrl && !ctrl->hidden_by_virtual;
+}
+
+bool LEDViewport3D::viewportCanFrameSelection() const
+{
+    if(display_planes && selected_display_plane_idx >= 0 &&
+       selected_display_plane_idx < (int)display_planes->size() &&
+       (*display_planes)[selected_display_plane_idx].get())
+    {
+        return true;
+    }
+    if(reference_points && selected_ref_point_idx >= 0 &&
+       selected_ref_point_idx < (int)reference_points->size() &&
+       (*reference_points)[selected_ref_point_idx].get())
+    {
+        return true;
+    }
+    if(hasDeletableControllerSelection())
+    {
+        return true;
+    }
+    if(scene_props_ && selected_scene_prop_idx_ >= 0 &&
+       selected_scene_prop_idx_ < (int)scene_props_->size() &&
+       (*scene_props_)[(size_t)selected_scene_prop_idx_].get())
+    {
+        return true;
+    }
+    return room_viewport_selected_;
+}
+
+bool LEDViewport3D::hasViewportSelectionForContextMenu() const
+{
+    return viewportCanFrameSelection();
+}
+
+void LEDViewport3D::showSelectionContextMenu(const QPoint& global_pos)
+{
+    QMenu menu(this);
+    QAction* delete_act = menu.addAction(QStringLiteral("Delete controller"));
+    delete_act->setEnabled(hasDeletableControllerSelection());
+
+    QAction* frame_act = menu.addAction(QStringLiteral("Frame selection"));
+    frame_act->setEnabled(viewportCanFrameSelection());
+
+    menu.addSeparator();
+    QAction* hint_move = menu.addAction(QStringLiteral("Gizmo: Move (W)"));
+    hint_move->setEnabled(false);
+    QAction* hint_rotate = menu.addAction(QStringLiteral("Gizmo: Rotate (E)"));
+    hint_rotate->setEnabled(false);
+    QAction* hint_scale = menu.addAction(QStringLiteral("Gizmo: Scale (R)"));
+    hint_scale->setEnabled(false);
+    QAction* hint_skew = menu.addAction(QStringLiteral("Gizmo: Skew (Y)"));
+    hint_skew->setEnabled(false);
+    QAction* hint_snap = menu.addAction(QStringLiteral("Toggle grid snap (Q)"));
+    hint_snap->setEnabled(false);
+
+    QAction* chosen = menu.exec(global_pos);
+    if(chosen == delete_act)
+    {
+        tryDeleteSelectedFromKeyboard();
+    }
+    else if(chosen == frame_act)
+    {
+        focusSelectionFromKeyboard();
+    }
+}
+
+void LEDViewport3D::tryDeleteSelectedFromKeyboard()
+{
+    if(!hasDeletableControllerSelection())
     {
         return;
     }
@@ -518,7 +599,7 @@ void LEDViewport3D::tryDeleteSelectedFromKeyboard()
     ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
     QString controller_name = QStringLiteral("Unknown");
 
-    if(ctrl && ctrl->controller)
+    if(ctrl->controller)
     {
         controller_name = ControllerDisplay::FormatRgbControllerTitle(ctrl->controller);
     }
