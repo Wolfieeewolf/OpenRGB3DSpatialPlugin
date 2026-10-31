@@ -285,10 +285,10 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_host_layout->setContentsMargins(0, 0, 0, 0);
     capture_host_layout->addWidget(capture_panel);
 
-    audience_hint_label_ = shell_ui.audienceHintLabel;
+    audience_hint_label_ = capture_ui.audienceHintLabel;
     PluginUiApplyItalicSecondaryLabel(audience_hint_label_);
-    audience_bias_slider_ = shell_ui.audienceBiasSlider;
-    audience_bias_label_ = shell_ui.audienceBiasLabel;
+    audience_bias_slider_ = capture_ui.audienceBiasSlider;
+    audience_bias_label_ = capture_ui.audienceBiasLabel;
     audience_bias_slider_->setValue((int)std::lround(audience_bias_pct_));
     audience_bias_label_->setText(QString::number((int)std::lround(audience_bias_pct_)) + QStringLiteral("%"));
     connect(audience_bias_slider_, &QSlider::valueChanged, this, [this](int v) {
