@@ -1,0 +1,237 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "MovieSyncCatalog.h"
+
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <system_error>
+
+namespace MovieSync
+{
+
+filesystem::path CatalogFilePath(const filesystem::path& movie_effects_dir)
+{
+    if(movie_effects_dir.filename() == "effects")
+    {
+        return movie_effects_dir.parent_path() / "catalog.json";
+    }
+    return movie_effects_dir / "catalog.json";
+}
+
+namespace
+{
+
+bool ActionRelSafe(const std::string& action_rel)
+{
+    if(action_rel.empty())
+    {
+        return false;
+    }
+    const filesystem::path rel(action_rel);
+    if(rel.is_absolute())
+    {
+        return false;
+    }
+    for(const filesystem::path& part : rel)
+    {
+        if(part == "..")
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool PathStaysUnderRoot(const filesystem::path& root, const filesystem::path& candidate)
+{
+    std::error_code ec;
+    const filesystem::path root_abs = filesystem::weakly_canonical(root, ec);
+    if(ec)
+    {
+        return false;
+    }
+    const filesystem::path cand_abs = filesystem::weakly_canonical(candidate, ec);
+    if(ec)
+    {
+        return false;
+    }
+    auto root_it = root_abs.begin();
+    auto cand_it = cand_abs.begin();
+    for(; root_it != root_abs.end(); ++root_it, ++cand_it)
+    {
+        if(cand_it == cand_abs.end() || *cand_it != *root_it)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+bool LoadCatalog(const filesystem::path& catalog_path, Catalog* out, std::string* error)
+{
+    if(!out)
+    {
+        if(error) *error = "null catalog";
+        return false;
+    }
+    out->effects.clear();
+    std::ifstream in(catalog_path.string(), std::ios::binary);
+    if(!in)
+    {
+        if(error) *error = "cannot open catalog";
+        return false;
+    }
+    in.seekg(0, std::ios::end);
+    const std::streamoff len = in.tellg();
+    if(len < 0 || (std::size_t)len > Action::kMaxPackJsonBytes)
+    {
+        if(error) *error = "catalog file too large or unreadable";
+        return false;
+    }
+    in.seekg(0, std::ios::beg);
+    std::string text((std::size_t)len, '\0');
+    if(len > 0 && !in.read(&text[0], len))
+    {
+        if(error) *error = "cannot read catalog";
+        return false;
+    }
+    nlohmann::json j;
+    try
+    {
+        j = nlohmann::json::parse(text);
+    }
+    catch(...)
+    {
+        if(error) *error = "invalid catalog json";
+        return false;
+    }
+    out->version = j.value("version", 1);
+    if(!j.contains("effects") || !j["effects"].is_array())
+    {
+        return true;
+    }
+    for(const auto& ej : j["effects"])
+    {
+        if(!ej.is_object())
+        {
+            continue;
+        }
+        CatalogEffect e;
+        e.id = ej.value("id", "");
+        e.name = ej.value("name", e.id);
+        e.category = ej.value("category", "");
+        e.action_rel = ej.value("action", "");
+        e.photosensitive = ej.value("photosensitive", false);
+        if(!e.id.empty() && ActionRelSafe(e.action_rel))
+        {
+            out->effects.push_back(std::move(e));
+        }
+    }
+    return true;
+}
+
+void ScanCategoryFolders(const filesystem::path& movie_effects_dir, Catalog* out)
+{
+    if(!out)
+    {
+        return;
+    }
+    std::error_code ec;
+    if(!filesystem::is_directory(movie_effects_dir, ec))
+    {
+        return;
+    }
+    for(const auto& cat_entry : filesystem::directory_iterator(movie_effects_dir, ec))
+    {
+        if(ec || !cat_entry.is_directory())
+        {
+            continue;
+        }
+        const std::string category = cat_entry.path().filename().string();
+        if(category.empty() || category[0] == '.' || category[0] == '_')
+        {
+            continue;
+        }
+        std::error_code ec2;
+        for(const auto& file_entry : filesystem::directory_iterator(cat_entry.path(), ec2))
+        {
+            if(ec2 || !file_entry.is_regular_file())
+            {
+                continue;
+            }
+            const filesystem::path path = file_entry.path();
+            if(!Action::IsActionFileName(path.filename().string()))
+            {
+                continue;
+            }
+            Action::Pack pack;
+            std::string err;
+            if(!Action::LoadFromFile(path, &pack, &err) || pack.id.empty())
+            {
+                continue;
+            }
+            bool exists = false;
+            for(const CatalogEffect& e : out->effects)
+            {
+                if(e.id == pack.id)
+                {
+                    exists = true;
+                    break;
+                }
+            }
+            if(exists)
+            {
+                continue;
+            }
+            CatalogEffect e;
+            e.id = pack.id;
+            e.name = pack.name.empty() ? pack.id : pack.name;
+            e.category = category;
+            e.action_rel = category + "/" + path.filename().string();
+            e.photosensitive = false;
+            out->effects.push_back(std::move(e));
+        }
+    }
+}
+
+const CatalogEffect* FindEffect(const Catalog& catalog, const std::string& effect_id)
+{
+    for(const CatalogEffect& e : catalog.effects)
+    {
+        if(e.id == effect_id)
+        {
+            return &e;
+        }
+    }
+    return nullptr;
+}
+
+bool LoadActionForEffect(const Catalog& catalog,
+                       const filesystem::path& movie_effects_dir,
+                       const std::string& effect_id,
+                       Action::Pack* out,
+                       std::string* error)
+{
+    const CatalogEffect* e = FindEffect(catalog, effect_id);
+    if(!e)
+    {
+        if(error) *error = "unknown effect_id: " + effect_id;
+        return false;
+    }
+    if(!ActionRelSafe(e->action_rel))
+    {
+        if(error) *error = "unsafe action path for effect_id: " + effect_id;
+        return false;
+    }
+    const filesystem::path path = movie_effects_dir / e->action_rel;
+    if(!PathStaysUnderRoot(movie_effects_dir, path))
+    {
+        if(error) *error = "action path escapes movie-sync effects dir";
+        return false;
+    }
+    return Action::LoadFromFile(path, out, error);
+}
+
+} // namespace MovieSync

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ZonesPanel</class>
+ <widget class="QGroupBox" name="ZonesPanel">
+  <property name="title">
+   <string>Zones</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QListWidget" name="zonesList">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>200</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="helpLabel" native="true">
+     <property name="text">
+      <string>Zones are groups of controllers for targeting effects.
+
+Create zones like 'Desk', 'Front Wall', 'Ceiling', etc., then select them when configuring effects.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow">
+     <item>
+      <widget class="QPushButton" name="createZoneButton">
+       <property name="text">
+        <string>Create Zone</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="editZoneButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Edit</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="deleteZoneButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Delete</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

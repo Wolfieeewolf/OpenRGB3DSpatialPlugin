@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: GPL-2.0-only
+#pragma once
+
+#include <QString>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <memory>
+
+#include "PluginLog.h"
+#include "SpatialOffscreenGlPool.h"
+
+/**
+ * Shared per-effect owner for an offscreen field engine (volume or strip):
+ * lazy engine creation, permanent GL-fail latch, once-per-frame prepare latch.
+ * Effects call prepare exactly once per frame from PrepareGpuFields, then only
+ * sample through the derived class. Derived classes add the size setter and
+ * the sample accessors specific to their engine.
+ */
+template<typename EngineT>
+class SpatialFieldAssistBase
+{
+public:
+    void setFragmentBody(const QString& glsl_body)
+    {
+        const bool same = body_set_ && body_ == glsl_body;
+        if(same && !unavailable_)
+        {
+            return;
+        }
+        body_ = glsl_body;
+        body_set_ = true;
+        // Allow a fresh prepare after the body changes (or after a prior compile latch).
+        unavailable_ = false;
+        logged_unavailable_ = false;
+        last_sequence_ = 0;
+        last_time_sec_ = -1e9f;
+        if(engine_)
+        {
+            engine_->setFragmentBody(body_);
+        }
+    }
+
+    QString lastError() const
+    {
+        return engine_ ? engine_->lastError() : QString();
+    }
+
+    /** Rebuild the field atlas for this render_sequence. Idempotent for the same sequence. */
+    bool prepare(std::uint64_t render_sequence, float time_sec, const float* params, int param_count)
+    {
+        return finishPrepare(render_sequence, time_sec, params, param_count, true);
+    }
+
+    bool isAvailable() const
+    {
+        return !unavailable_ && engine_ && engine_->isAvailable();
+    }
+
+protected:
+    ~SpatialFieldAssistBase() = default;
+
+    /** Push the derived size (resolution / width) onto a newly created engine. */
+    virtual void applyEngineSize(EngineT& engine) = 0;
+
+    /** True when the engine must re-render even if sequence/time are unchanged (e.g. media). */
+    virtual bool engineNeedsRefresh() const { return false; }
+
+    /**
+     * atlas=true  → ensureReady (strip colormap / engines that still bake a field).
+     * atlas=false → ensureProgramReady (Volume/Action true point-eval). Volume engines only.
+     */
+    bool finishPrepare(std::uint64_t render_sequence,
+                       float time_sec,
+                       const float* params,
+                       int param_count,
+                       bool atlas)
+    {
+        if(unavailable_)
+        {
+            return false;
+        }
+        if(!body_set_ || body_.trimmed().isEmpty())
+        {
+            return false;
+        }
+        if(!SpatialOffscreenGlPool::hostContextReady())
+        {
+            return false;
+        }
+        if(!engine_)
+        {
+            engine_ = std::make_unique<EngineT>();
+            engine_->setFragmentBody(body_);
+            applyEngineSize(*engine_);
+        }
+
+        typename EngineT::Params p;
+        p.time_sec = time_sec;
+        p.count = std::clamp(param_count, 0, EngineT::kMaxParams);
+        for(int i = 0; i < p.count; ++i)
+        {
+            p.values[i] = params[i];
+        }
+        // Always push params: one render_sequence is shared across tracks in ApplyPackFrame,
+        // and point-eval uploads uniforms from params_ at evaluate time.
+        engine_->setParams(p);
+
+        const bool same_frame =
+            (render_sequence != 0 && render_sequence == last_sequence_ && engine_->isAvailable());
+        const bool same_preview_tick =
+            (render_sequence == 0 && engine_->isAvailable() && std::fabs(time_sec - last_time_sec_) < 1e-4f);
+        last_sequence_ = render_sequence;
+        last_time_sec_ = time_sec;
+        // Point-eval can skip ensureProgramReady when only uniforms changed; atlas must rebuild.
+        if(!atlas && (same_frame || same_preview_tick) && !engineNeedsRefresh())
+        {
+            return true;
+        }
+
+        const bool ok = atlas ? engine_->ensureReady() : engine_->ensureProgramReady();
+        if(!ok)
+        {
+            const QString err = engine_->lastError();
+            if(err.contains(QStringLiteral("Host GL")) || err.contains(QStringLiteral("makeCurrent")))
+            {
+                return false;
+            }
+            if(!logged_unavailable_)
+            {
+                logged_unavailable_ = true;
+                const QByteArray err_bytes = err.isEmpty()
+                    ? QByteArray(atlas ? "ensureReady failed" : "ensureProgramReady failed")
+                    : err.toUtf8();
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Field assist unavailable: %s",
+                            err_bytes.constData());
+            }
+            unavailable_ = true;
+            return false;
+        }
+        return true;
+    }
+
+    std::unique_ptr<EngineT> engine_;
+
+private:
+    std::uint64_t last_sequence_ = 0;
+    float last_time_sec_ = -1e9f;
+    bool unavailable_ = false;
+    bool logged_unavailable_ = false;
+    QString body_;
+    bool body_set_ = false;
+};

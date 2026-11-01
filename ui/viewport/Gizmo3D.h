@@ -1,0 +1,207 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#ifndef GIZMO3D_H
+#define GIZMO3D_H
+
+#include <QPoint>
+
+#include <vector>
+
+#include "LEDPosition3D.h"
+#include "ControllerLayout3D.h"
+#include "VirtualReferencePoint3D.h"
+#include "DisplayPlane3D.h"
+#include "SceneProp3D.h"
+#include "EffectVolume3D.h"
+
+enum GizmoMode
+{
+    GIZMO_MODE_MOVE     = 0,
+    GIZMO_MODE_ROTATE   = 1,
+    GIZMO_MODE_SCALE    = 2,
+    GIZMO_MODE_SKEW     = 3,
+    GIZMO_MODE_FREEROAM = 4
+};
+
+enum GizmoAxis
+{
+    GIZMO_AXIS_NONE     = -1,
+    GIZMO_AXIS_X        = 0,
+    GIZMO_AXIS_Y        = 1,
+    GIZMO_AXIS_Z        = 2,
+    GIZMO_AXIS_CENTER   = 3
+};
+
+struct Ray3D
+{
+    float origin[3];
+    float direction[3];
+};
+
+struct Box3D
+{
+    float min[3];
+    float max[3];
+};
+
+class QMouseEvent;
+
+/** Line batches + triangles for mesh draw helpers (local gizmo space).
+ *  Vertices are interleaved PosColor: xyz rgb (6 floats per vertex). */
+struct GizmoDrawMesh
+{
+    struct LineBatch
+    {
+        float                   width = 1.0f;
+        std::vector<float>      interleaved;
+    };
+
+    std::vector<LineBatch>  line_batches;
+    std::vector<float>      triangle_interleaved;
+
+    void clear();
+    LineBatch& lineBatchForWidth(float width);
+};
+
+class Gizmo3D
+{
+public:
+    Gizmo3D();
+    ~Gizmo3D();
+
+    void SetMode(GizmoMode mode);
+    void CycleMode();
+    void SetPosition(float x, float y, float z);
+    void SetTarget(ControllerTransform* target);
+    void SetTarget(VirtualReferencePoint3D* target);
+    void SetTarget(DisplayPlane3D* target);
+    void SetTarget(SceneProp3D* target);
+    void SetTarget(EffectVolume3D* target);
+    /** Drop in-progress drag/hover so a retarget cannot keep writing the old gesture. */
+    void CancelDrag();
+    void SetViewportSize(int width, int height);
+    void SetGridSnap(bool enabled, float grid_size = 1.0f);
+    /** Sticky 15° rotate snap (checkbox). Shift still snaps when this is off. */
+    void SetRotateSnapEnabled(bool enabled);
+    bool IsRotateSnapEnabled() const { return rotate_snap_enabled; }
+    /**
+     * World-space half-extent of the selected object (longest axis).
+     * When > 0, SetScreenScale sizes rings just outside that extent (with soft
+     * screen clamps). Pass 0 for screen-constant sizing (ref points, etc.).
+     */
+    void SetObjectRadius(float world_half_extent);
+    /** Pass eye→gizmo distance and vertical FOV (degrees); uses SetObjectRadius. */
+    void SetScreenScale(float eye_distance, float fovy_degrees);
+
+    bool HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
+                          const float* modelview, const float* projection, const int* viewport);
+    bool HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
+                         const float* modelview, const float* projection, const int* viewport);
+    bool HandleMouseRelease(QMouseEvent* event);
+
+    void buildDrawMesh(GizmoDrawMesh& mesh) const;
+
+    bool IsActive() const { return active; }
+    bool IsDragging() const { return dragging; }
+    GizmoAxis GetSelectedAxis() const { return selected_axis; }
+    GizmoAxis GetHoverAxis() const { return hover_axis; }
+    GizmoMode GetMode() const { return mode; }
+    float GetRotateAccumDegrees() const { return rot_drag_accum_degrees; }
+    bool IsRotateSnapActive() const { return rotate_snap_active; }
+    void GetPosition(float& x, float& y, float& z) const { x = gizmo_x; y = gizmo_y; z = gizmo_z; }
+
+private:
+    /** Keep drag readout / arc in (-360, 360] so multi-turn spins do not explode mesh/HUD. */
+    void accumulateRotateDegrees(float delta_deg);
+    Ray3D GenerateRay(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
+    bool RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance);
+    bool RaySphereIntersect(const Ray3D& ray, float sphere_x, float sphere_y, float sphere_z, float radius, float& distance);
+
+    GizmoAxis PickGizmoAxis(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
+    bool PickGizmoCenter(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
+
+    void UpdateTransform(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
+    void captureDragStartPosition();
+    void setTargetWorldPosition(float x, float y, float z);
+    void ApplyTranslation(float delta_x, float delta_y, float delta_z);
+    void ApplyRotation(float delta_x, float delta_y, float delta_z);
+    void ApplyScaleAlongAxis(float along);
+    void ApplyUniformScale(float along);
+    void ApplySkewAlongAxis(float along);
+    void ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport);
+    void ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
+    bool hasAnyTarget() const;
+
+    void appendMoveGizmoMesh(GizmoDrawMesh& mesh) const;
+    void appendRotateGizmoMesh(GizmoDrawMesh& mesh) const;
+    void appendScaleGizmoMesh(GizmoDrawMesh& mesh) const;
+    void appendSkewGizmoMesh(GizmoDrawMesh& mesh) const;
+    void appendFreeroamGizmoMesh(GizmoDrawMesh& mesh) const;
+
+    float SnapToGrid(float value);
+    float Dot3(const float a[3], const float b[3]);
+    float ClosestAxisParamToRay(const float axis_origin[3], const float axis_dir_unit[3], const Ray3D& ray);
+
+private:
+    bool                    active;
+    bool                    dragging;
+    GizmoMode              mode;
+    GizmoAxis              selected_axis;
+    GizmoAxis              hover_axis;
+
+    ControllerTransform*        target_transform;
+    VirtualReferencePoint3D*    target_ref_point;
+    DisplayPlane3D*             target_display_plane;
+    SceneProp3D*                target_scene_prop;
+    EffectVolume3D*             target_effect_volume;
+
+    float                  gizmo_x;
+    float                  gizmo_y;
+    float                  gizmo_z;
+
+    QPoint                 last_mouse_pos;
+    QPoint                 last_gl_mouse_pos;
+    QPoint                 drag_start_pos;
+
+    int                    viewport_width;
+    int                    viewport_height;
+
+    float                  gizmo_size;
+    float                  object_radius_;
+    float                  axis_thickness;
+    float                  axis_hit_thickness_;
+    float                  center_sphere_radius;
+    float                  center_hit_radius_;
+    float                  rotate_ring_hit_thickness_;
+
+    float                  color_x_axis[3];
+    float                  color_y_axis[3];
+    float                  color_z_axis[3];
+    float                  color_center[3];
+    float                  color_highlight[3];
+
+    bool                   grid_snap_enabled;
+    bool                   rotate_snap_enabled;
+    float                  grid_size;
+
+    float                  drag_axis_t0;
+    float                  drag_axis_t_begin;
+    float                  drag_start_position[3];
+    float                  drag_start_scale[3];
+    float                  drag_axis_dir[3];
+    float                  drag_plane_normal[3];
+    float                  drag_start_world[3];
+    float                  drag_grab_offset[3];
+    bool                   center_press_pending;
+    float                  rot_plane_normal[3];
+    float                  rot_u[3];
+    float                  rot_v[3];
+    float                  rot_angle0;
+    float                  rot_drag_start_angle;
+    float                  rot_drag_accum_degrees;
+    float                  rot_snap_remainder_degrees;
+    bool                   rotate_snap_active;
+    float                  rotate_snap_step_degrees;
+};
+
+#endif

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="addon">
+  <id>org.openrgb.OpenRGB.Plugin.Spatial</id>
+  <extends>org.openrgb.OpenRGB</extends>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-only</project_license>
+  <developer_name>Wolfieeewolf</developer_name>
+  <name>OpenRGB 3D Spatial Plugin</name>
+  <summary>3D layout and spatial effects for OpenRGB</summary>
+  <description>
+    <p>
+      Organize RGB devices in a 3D room and run spatial effects, including
+      screen-mirror ambilight onto display planes.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin</url>
+  <url type="bugtracker">https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues</url>
+  <content_rating type="oars-1.1"/>
+</component>

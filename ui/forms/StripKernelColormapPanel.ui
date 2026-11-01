@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>StripKernelColormapPanel</class>
+ <widget class="QWidget" name="StripKernelColormapPanel">
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QComboBox" name="sourceCombo">
+     <property name="toolTip">
+      <string>Surface Look paints the lit parts of the effect. Effect Colors uses rainbow/stops. Pattern uses a kernel with its own colors and animation.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="secondaryPanel">
+     <layout class="QGridLayout" name="secondaryGrid">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="kernelCaption">
+        <property name="text">
+         <string>Pattern:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="2">
+       <widget class="QComboBox" name="kernelCombo"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="unfoldCaption">
+        <property name="text">
+         <string>Map onto:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QComboBox" name="unfoldCombo"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="repeatsCaption">
+        <property name="text">
+         <string>Density:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSlider" name="repeatsSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>40</number>
+        </property>
+        <property name="value">
+         <number>1</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="repeatsLabel">
+        <property name="minimumSize">
+         <size>
+          <width>24</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>1</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="dirCaption">
+        <property name="text">
+         <string>Angle:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QSlider" name="dirSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="maximum">
+         <number>359</number>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="dirLabel">
+        <property name="minimumSize">
+         <size>
+          <width>36</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>0°</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

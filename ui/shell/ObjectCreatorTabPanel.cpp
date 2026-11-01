@@ -1,0 +1,390 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "ObjectCreatorTabPanel.h"
+
+#include "ActionsPanel.h"
+#include "DisplayPlaneCaptureUi.h"
+#include "EffectSliderPromote.h"
+#include "EffectInfoLabel.h"
+#include "TriggersPanel.h"
+#include "OpenRGB3DSpatialTab.h"
+#include "PluginUiUtils.h"
+#include "ZonesPanel.h"
+#include "ui_ObjectCreatorTabPanel.h"
+
+#include <QComboBox>
+#include <QFont>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QListWidget>
+#include <QPushButton>
+#include <QString>
+#include <QVBoxLayout>
+#include <Qt>
+
+ObjectCreatorTabPanel::ObjectCreatorTabPanel(QWidget* parent)
+    : QWidget(parent)
+    , ui(new Ui::ObjectCreatorTabPanel)
+{
+    ui->setupUi(this);
+    buildScenePropsPage();
+    ui->contentStack->setCurrentWidget(ui->emptyPage);
+    applyVisualStyles();
+}
+
+ObjectCreatorTabPanel::~ObjectCreatorTabPanel()
+{
+    delete ui;
+}
+
+void ObjectCreatorTabPanel::applyVisualStyles()
+{
+    QFont bold = ui->objectTypeLabel->font();
+    bold.setBold(true);
+    ui->objectTypeLabel->setFont(bold);
+
+    ui->customListLabel->setFont(bold);
+    ui->refListLabel->setFont(bold);
+    ui->displayListLabel->setFont(bold);
+
+    ui->emptyHelpLabel->setText(QStringLiteral(
+        "Choose Custom Controller, Reference Point, Display Plane, Zone, Actions, Triggers, or Scene Prop above."));
+    PluginUiApplyMutedSecondaryLabel(ui->emptyHelpLabel->label());
+    QFont empty_font = ui->emptyHelpLabel->label()->font();
+    empty_font.setItalic(true);
+    ui->emptyHelpLabel->label()->setFont(empty_font);
+
+    PluginUiApplyMutedSecondaryLabel(ui->customSubtitleLabel->label());
+    PluginUiApplyItalicSecondaryLabel(ui->customControllersEmptyLabel->label());
+    ui->customControllersEmptyLabel->label()->setAlignment(Qt::AlignHCenter);
+
+    PluginUiApplyMutedSecondaryLabel(ui->refSubtitleLabel->label());
+    PluginUiApplyItalicSecondaryLabel(ui->refPointsEmptyLabel->label());
+    ui->refPointsEmptyLabel->label()->setAlignment(Qt::AlignHCenter);
+
+    PluginUiApplyMutedSecondaryLabel(ui->displaySubtitleLabel->label());
+    PluginUiApplyItalicSecondaryLabel(ui->displayPlanesEmptyLabel->label());
+    ui->displayPlanesEmptyLabel->label()->setAlignment(Qt::AlignHCenter);
+    PluginUiApplyMutedSecondaryLabel(ui->refHelpLabel->label());
+
+    if(scene_props_empty_label_)
+    {
+        PluginUiApplyItalicSecondaryLabel(scene_props_empty_label_->label());
+        scene_props_empty_label_->setAlignment(Qt::AlignHCenter);
+    }
+}
+
+void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
+{
+    if(!tab || bound_)
+    {
+        return;
+    }
+
+    host_tab_ = tab;
+    bound_ = true;
+
+    ui->importCustomControllerButton->setToolTip(
+        tr("Copy portable preset .json files into the controllers folder (see OpenRGB3DSpatialPresets on GitHub). "
+           "Use controller_name = OpenRGB device name and controller_location \"1:1\"."));
+    ui->exportCustomControllerButton->setToolTip(
+        tr("Export selected layout as a portable preset JSON (OpenRGB device names, location \"1:1\", "
+           "category/brand/model) into the presets-style controllers/<category>/<brand>/ path"));
+    ui->editCustomControllerButton->setToolTip(
+        tr("Edit layout and preset filing fields (category, brand, model)"));
+    ui->deleteCustomControllerButton->setToolTip(
+        tr("Remove selected custom controller from library (remove from 3D scene first if in use).\n"
+           "Also: Delete / Backspace when the list is focused, or right-click → Delete controller."));
+    ui->editReferencePointButton->setToolTip(QStringLiteral("Edit selected reference point"));
+    ui->removeRefPointButton->setToolTip(
+        tr("Delete selected reference point.\n"
+           "Also: Delete / Backspace when the list is focused, or right-click → Delete reference point."));
+    ui->editDisplayPlaneButton->setToolTip(QStringLiteral("Edit selected display plane name and size"));
+    ui->removeDisplayPlaneButton->setToolTip(
+        tr("Delete selected display plane.\n"
+           "Also: Delete / Backspace when the list is focused, or right-click → Delete display plane."));
+    ui->displayCaptureCaption->setText(DisplayPlaneCaptureUi::Caption());
+    ui->displayCaptureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
+    ui->displayCaptureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
+    ui->displaySubtitleLabel->setText(DisplayPlaneCaptureUi::ObjectCreatorSubtitle());
+    ApplyRightAlignedCaption(ui->displayCaptureCaption, 120);
+
+    connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::customControllerSelectionChanged);
+    connect(ui->createCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::createCustomControllerClicked);
+    connect(ui->importCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::importCustomControllerClicked);
+    connect(ui->exportCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::exportCustomControllerClicked);
+    connect(ui->editCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::editCustomControllerClicked);
+    connect(ui->deleteCustomControllerButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::deleteCustomControllerClicked);
+
+    connect(ui->referencePointsList, &QListWidget::currentRowChanged, this,
+            &ObjectCreatorTabPanel::onReferencePointListRowChanged);
+    connect(ui->referencePointsList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::referencePointsListSelectionChanged);
+    connect(ui->createReferencePointButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::addRefPointClicked);
+    connect(ui->editReferencePointButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::editReferencePointClicked);
+    connect(ui->removeRefPointButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::removeRefPointClicked);
+
+    connect(ui->displayPlanesList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::displayPlaneSelected);
+    connect(ui->displayPlanesList, &QListWidget::currentRowChanged, tab,
+            &OpenRGB3DSpatialTab::displayPlanesListSelectionChanged);
+    connect(ui->createDisplayPlaneButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::addDisplayPlaneClicked);
+    connect(ui->editDisplayPlaneButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::editDisplayPlaneClicked);
+    connect(ui->removeDisplayPlaneButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::removeDisplayPlaneClicked);
+
+    if(create_scene_prop_button_)
+    {
+        connect(create_scene_prop_button_, &QPushButton::clicked, tab,
+                &OpenRGB3DSpatialTab::addScenePropClicked);
+        connect(edit_scene_prop_button_, &QPushButton::clicked, tab,
+                &OpenRGB3DSpatialTab::editScenePropClicked);
+        connect(remove_scene_prop_button_, &QPushButton::clicked, tab,
+                &OpenRGB3DSpatialTab::removeScenePropClicked);
+        connect(scene_props_list_, &QListWidget::currentRowChanged, tab,
+                &OpenRGB3DSpatialTab::scenePropsListSelectionChanged);
+    }
+    connect(ui->displayCaptureCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
+            &OpenRGB3DSpatialTab::displayPlaneCaptureComboChanged);
+    connect(ui->displayCaptureRefreshButton, &QPushButton::clicked, tab,
+            &OpenRGB3DSpatialTab::refreshDisplayPlaneCaptureComboClicked);
+
+    if(ui->zonesPanel)
+    {
+        ui->zonesPanel->bindTab(tab);
+    }
+    if(ui->actionsPanel)
+    {
+        ui->actionsPanel->bindTab(tab);
+    }
+    if(ui->triggersPanel)
+    {
+        ui->triggersPanel->bindTab(tab);
+    }
+
+    PluginUiWireListDestructiveDelete(ui->customControllersList,
+                                      ui->deleteCustomControllerButton,
+                                      tr("Delete controller"),
+                                      tr("Delete selected custom controller"));
+    PluginUiWireListDestructiveDelete(ui->referencePointsList,
+                                      ui->removeRefPointButton,
+                                      tr("Delete reference point"),
+                                      tr("Delete selected reference point"));
+    PluginUiWireListDestructiveDelete(ui->displayPlanesList,
+                                      ui->removeDisplayPlaneButton,
+                                      tr("Delete display plane"),
+                                      tr("Delete selected display plane"));
+    if(scene_props_list_ && remove_scene_prop_button_)
+    {
+        remove_scene_prop_button_->setToolTip(
+            tr("Delete selected scene prop.\n"
+               "Also: Delete / Backspace when the list is focused, or right-click → Delete scene prop."));
+        PluginUiWireListDestructiveDelete(scene_props_list_,
+                                          remove_scene_prop_button_,
+                                          tr("Delete scene prop"),
+                                          tr("Delete selected scene prop"));
+    }
+
+    connect(ui->objectTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &ObjectCreatorTabPanel::onObjectTypeChanged);
+
+    ui->objectTypeCombo->setCurrentIndex(ObjectTypeSelect);
+}
+
+void ObjectCreatorTabPanel::onObjectTypeChanged(int index)
+{
+    if(!host_tab_)
+    {
+        return;
+    }
+
+    switch(index)
+    {
+        case ObjectTypeCustomController:
+            ui->contentStack->setCurrentWidget(ui->customPage);
+            break;
+        case ObjectTypeReferencePoint:
+            ui->contentStack->setCurrentWidget(ui->referencePage);
+            break;
+        case ObjectTypeDisplayPlane:
+            ui->contentStack->setCurrentWidget(ui->displayPage);
+            host_tab_->UpdateDisplayPlanesList();
+            host_tab_->RefreshDisplayPlaneDetails();
+            break;
+        case ObjectTypeSceneProp:
+            if(scene_props_page_)
+            {
+                ui->contentStack->setCurrentWidget(scene_props_page_);
+            }
+            host_tab_->UpdateScenePropsList();
+            break;
+        case ObjectTypeZone:
+            ui->contentStack->setCurrentWidget(ui->zonePage);
+            host_tab_->UpdateZonesList();
+            break;
+        case ObjectTypeActions:
+            ui->contentStack->setCurrentWidget(ui->actionsPage);
+            break;
+        case ObjectTypeTriggers:
+            ui->contentStack->setCurrentWidget(ui->triggersPage);
+            break;
+        case ObjectTypeSelect:
+        default:
+            ui->contentStack->setCurrentWidget(ui->emptyPage);
+            break;
+    }
+}
+
+void ObjectCreatorTabPanel::setObjectTypeIndex(int index)
+{
+    if(ui->objectTypeCombo->currentIndex() != index)
+    {
+        ui->objectTypeCombo->setCurrentIndex(index);
+    }
+    else
+    {
+        onObjectTypeChanged(index);
+    }
+}
+
+void ObjectCreatorTabPanel::showCustomControllerSection()
+{
+    setObjectTypeIndex(ObjectTypeCustomController);
+}
+
+void ObjectCreatorTabPanel::showReferencePointSection()
+{
+    setObjectTypeIndex(ObjectTypeReferencePoint);
+}
+
+void ObjectCreatorTabPanel::showDisplayPlaneSection()
+{
+    setObjectTypeIndex(ObjectTypeDisplayPlane);
+}
+
+void ObjectCreatorTabPanel::showScenePropSection()
+{
+    setObjectTypeIndex(ObjectTypeSceneProp);
+}
+
+void ObjectCreatorTabPanel::showZoneSection()
+{
+    setObjectTypeIndex(ObjectTypeZone);
+}
+
+void ObjectCreatorTabPanel::showActionsSection()
+{
+    setObjectTypeIndex(ObjectTypeActions);
+}
+
+void ObjectCreatorTabPanel::showTriggersSection()
+{
+    setObjectTypeIndex(ObjectTypeTriggers);
+}
+
+void ObjectCreatorTabPanel::onReferencePointListRowChanged(int list_row)
+{
+    if(!host_tab_)
+    {
+        return;
+    }
+    host_tab_->refPointSelected(host_tab_->ReferencePointIndexFromListRow(list_row));
+}
+
+void ObjectCreatorTabPanel::buildScenePropsPage()
+{
+    ui->objectTypeCombo->addItem(tr("Scene Prop"));
+
+    scene_props_page_ = new QWidget(ui->contentStack);
+    auto* layout = new QVBoxLayout(scene_props_page_);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(8);
+
+    auto* title = new QLabel(tr("Scene Props:"), scene_props_page_);
+    QFont bold = title->font();
+    bold.setBold(true);
+    title->setFont(bold);
+    layout->addWidget(title);
+
+    auto* subtitle = new EffectInfoLabel(scene_props_page_);
+    subtitle->setText(tr(
+        "Non-RGB meshes and shapes for the room (decor / blockers). "
+        "Create one here, then add it to the 3D view from Available Controllers. "
+        "Use Edit for mesh, colours, and faces; the Scene object panel positions it with the gizmo."));
+    PluginUiApplyMutedSecondaryLabel(subtitle->label());
+    layout->addWidget(subtitle);
+
+    scene_props_list_ = new QListWidget(scene_props_page_);
+    scene_props_list_->setMinimumHeight(120);
+    layout->addWidget(scene_props_list_, 1);
+
+    scene_props_empty_label_ = new EffectInfoLabel(scene_props_page_);
+    scene_props_empty_label_->setText(
+        tr("No scene props yet. Click Create New Scene Prop to create one."));
+    scene_props_empty_label_->label()->setWordWrap(true);
+    layout->addWidget(scene_props_empty_label_);
+
+    auto* help = new EffectInfoLabel(scene_props_page_);
+    help->setText(tr(
+        "Select a scene prop in the 3D view or list to position it with the Scene object tab and gizmo. "
+        "Edit opens mesh / colour / face settings."));
+    PluginUiApplyMutedSecondaryLabel(help->label());
+    layout->addWidget(help);
+
+    create_scene_prop_button_ = new QPushButton(tr("Create New Scene Prop"), scene_props_page_);
+    layout->addWidget(create_scene_prop_button_);
+
+    auto* row = new QWidget(scene_props_page_);
+    auto* row_layout = new QHBoxLayout(row);
+    row_layout->setContentsMargins(0, 0, 0, 0);
+    edit_scene_prop_button_ = new QPushButton(tr("Edit"), row);
+    remove_scene_prop_button_ = new QPushButton(tr("Delete"), row);
+    edit_scene_prop_button_->setEnabled(false);
+    remove_scene_prop_button_->setEnabled(false);
+    edit_scene_prop_button_->setToolTip(tr("Edit selected scene prop mesh, colours, and faces"));
+    remove_scene_prop_button_->setToolTip(tr("Delete selected scene prop"));
+    row_layout->addWidget(edit_scene_prop_button_);
+    row_layout->addWidget(remove_scene_prop_button_);
+    layout->addWidget(row);
+
+    layout->addStretch(1);
+    ui->contentStack->addWidget(scene_props_page_);
+}
+
+QLabel* ObjectCreatorTabPanel::statusLabel() const { return ui->statusLabel; }
+QListWidget* ObjectCreatorTabPanel::customControllersList() const { return ui->customControllersList; }
+QWidget* ObjectCreatorTabPanel::customControllersEmptyLabel() const { return ui->customControllersEmptyLabel; }
+QPushButton* ObjectCreatorTabPanel::exportCustomControllerButton() const { return ui->exportCustomControllerButton; }
+QPushButton* ObjectCreatorTabPanel::editCustomControllerButton() const { return ui->editCustomControllerButton; }
+QPushButton* ObjectCreatorTabPanel::deleteCustomControllerButton() const { return ui->deleteCustomControllerButton; }
+QListWidget* ObjectCreatorTabPanel::referencePointsList() const { return ui->referencePointsList; }
+QWidget* ObjectCreatorTabPanel::refPointsEmptyLabel() const { return ui->refPointsEmptyLabel; }
+QPushButton* ObjectCreatorTabPanel::createReferencePointButton() const { return ui->createReferencePointButton; }
+QPushButton* ObjectCreatorTabPanel::editReferencePointButton() const { return ui->editReferencePointButton; }
+QPushButton* ObjectCreatorTabPanel::removeRefPointButton() const { return ui->removeRefPointButton; }
+QListWidget* ObjectCreatorTabPanel::displayPlanesList() const { return ui->displayPlanesList; }
+QWidget* ObjectCreatorTabPanel::displayPlanesEmptyLabel() const { return ui->displayPlanesEmptyLabel; }
+QPushButton* ObjectCreatorTabPanel::createDisplayPlaneButton() const { return ui->createDisplayPlaneButton; }
+QPushButton* ObjectCreatorTabPanel::editDisplayPlaneButton() const { return ui->editDisplayPlaneButton; }
+QPushButton* ObjectCreatorTabPanel::removeDisplayPlaneButton() const { return ui->removeDisplayPlaneButton; }
+QComboBox* ObjectCreatorTabPanel::displayPlaneCaptureCombo() const { return ui->displayCaptureCombo; }
+QPushButton* ObjectCreatorTabPanel::displayPlaneCaptureRefreshButton() const { return ui->displayCaptureRefreshButton; }
+QListWidget* ObjectCreatorTabPanel::scenePropsList() const { return scene_props_list_; }
+QWidget* ObjectCreatorTabPanel::scenePropsEmptyLabel() const { return scene_props_empty_label_; }
+QPushButton* ObjectCreatorTabPanel::createScenePropButton() const { return create_scene_prop_button_; }
+QPushButton* ObjectCreatorTabPanel::editScenePropButton() const { return edit_scene_prop_button_; }
+QPushButton* ObjectCreatorTabPanel::removeScenePropButton() const { return remove_scene_prop_button_; }
+ZonesPanel* ObjectCreatorTabPanel::zonesPanel() const { return ui->zonesPanel; }
+ActionsPanel* ObjectCreatorTabPanel::actionsPanel() const { return ui->actionsPanel; }
+TriggersPanel* ObjectCreatorTabPanel::triggersPanel() const { return ui->triggersPanel; }

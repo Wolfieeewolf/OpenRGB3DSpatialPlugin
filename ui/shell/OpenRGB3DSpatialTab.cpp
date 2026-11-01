@@ -1,0 +1,2868 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "OpenRGB3DSpatialTab.h"
+#include "AudioInputPanel.h"
+#include "ControllerDisplayUtils.h"
+#include "EffectControlsHostPanel.h"
+#include "EffectGlobalSettingsPanel.h"
+#include "EffectLibraryPanel.h"
+#include "ActionsPanel.h"
+#include "Action.h"
+#include "ActionApplier.h"
+#include "ActionBuiltinGpu.h"
+#include "ActionScript.h"
+#include "ActionParticleField.h"
+#include "ActionRibbonField.h"
+#include "ActionVolumeField.h"
+#include "EffectStackPanel.h"
+#include "GridSettingsPanel.h"
+#include "ObjectCreatorTabPanel.h"
+#include "SceneTransformPanel.h"
+#include "ui/widgets/EffectRoomOutputPanel.h"
+#include "ZonesPanel.h"
+#include "PluginSettingsPaths.h"
+#include "SpatialControllerCardList.h"
+#include "ui_OpenRGB3DSpatialTab.h"
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QFrame>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QHideEvent>
+#include <QProgressBar>
+#include <QPushButton>
+#include <QShowEvent>
+#include <QScrollArea>
+#include <QPointer>
+#include <QToolButton>
+#include <QVBoxLayout>
+#include <QSlider>
+#include <QSpinBox>
+#include "LEDViewport3D.h"
+#include "PluginUiUtils.h"
+#include "ControllerLayout3D.h"
+#include "PluginLog.h"
+#include "CustomControllerDialog.h"
+#include "DisplayPlaneManager.h"
+#include "ScenePropManager.h"
+#include "ScreenMirror.h"
+#include "SpatialLighting/SpatialLightingSceneProvider.h"
+#include "GridSpaceUtils.h"
+#include "ZoneGrid3D.h"
+#include <QStackedWidget>
+#include <fstream>
+#include <algorithm>
+#include <exception>
+#include <map>
+#include <QList>
+#include <QSignalBlocker>
+#include <QColor>
+#include <QFont>
+#include <QSplitter>
+#include <QFrame>
+#include <QAbstractItemView>
+#include <QApplication>
+#include <QTimer>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+#include <QCoreApplication>
+#include <QVariant>
+#include <QInputDialog>
+#include <set>
+#include <cstring>
+#include <filesystem>
+#include <cmath>
+#include "AudioInputManager.h"
+#include "Zone3D.h"
+#include "TooltipProxy.h"
+
+namespace
+{
+void ResolveEffectLibraryItem(QListWidgetItem* item, QString& out_class, QString& out_ui)
+{
+    if(!item)
+    {
+        out_class.clear();
+        out_ui.clear();
+        return;
+    }
+    out_class = item->data(Qt::UserRole).toString();
+    out_ui = item->data(Qt::UserRole + 2).toString();
+    if(out_ui.isEmpty())
+    {
+        out_ui = item->text();
+    }
+}
+}
+
+OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(OpenRGBPluginAPIInterface* rm, QWidget *parent) :
+    QWidget(parent),
+    resource_manager(rm)
+{
+    qRegisterMetaType<SpatialControllerEntryKey>("SpatialControllerEntryKey");
+
+    zone_manager = std::make_unique<ZoneManager3D>();
+
+    ui = new Ui::OpenRGB3DSpatialTab();
+    ui->setupUi(this);
+
+    QStyle* const base_style = QApplication::style();
+    setStyle(new SpatialTooltipProxy(base_style));
+
+    bindUiPanels();
+    PluginSettingsPaths::EnsurePluginDataLayout(resource_manager);
+    LoadDefaultLedSpacingFromSettings();
+    LoadDevices();
+
+    QTimer::singleShot(0, this, [this]() { RunDeferredStartupTasks(); });
+
+    effect_timer = new QTimer(this);
+    effect_timer->setTimerType(Qt::CoarseTimer);
+    connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::effectTimerTimeout);
+}
+
+void OpenRGB3DSpatialTab::RunDeferredStartupTasks()
+{
+    if(deferred_startup_done_)
+    {
+        return;
+    }
+    deferred_startup_done_ = true;
+
+    LoadCustomControllers();
+    UpdateDisplayPlanesList();
+    RefreshDisplayPlaneDetails();
+    UpdateEffectZoneCombo();
+    UpdateEffectOriginCombo();
+}
+
+OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
+{
+    if(AudioInputManager* audio = AudioInputManager::instance())
+    {
+        audio->stop();
+        disconnect(audio, nullptr, this, nullptr);
+    }
+
+    if(effect_timer)
+    {
+        effect_timer->stop();
+    }
+    effect_running = false;
+    SyncScreenCaptureSession();
+    SyncReactiveInputSession();
+
+    SavePluginUiSettings();
+
+    DisplayPlaneManager::instance()->SetEditCallback({});
+
+    if(effect_timer)
+    {
+        effect_timer->stop();
+        delete effect_timer;
+    }
+
+    delete ui;
+    ui = nullptr;
+}
+
+void OpenRGB3DSpatialTab::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    if(viewport)
+    {
+        viewport->SetViewportPaintingEnabled(true);
+    }
+}
+
+void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
+{
+    QWidget::hideEvent(event);
+    if(ui && ui->objectCreatorTabPanel && ui->objectCreatorTabPanel->actionsPanel())
+    {
+        ui->objectCreatorTabPanel->actionsPanel()->stopPreview();
+    }
+    if(viewport)
+    {
+        viewport->SetViewportPaintingEnabled(false);
+    }
+}
+
+void OpenRGB3DSpatialTab::PrepareActionPreview()
+{
+    stopEffectClicked();
+    if(!resource_manager)
+    {
+        return;
+    }
+    Action::PrepareControllersForPreview(resource_manager->GetRGBControllers());
+}
+
+bool OpenRGB3DSpatialTab::GetActionRoomWorldBounds(Action::ApplySpatialContext* out) const
+{
+    if(!out)
+    {
+        return false;
+    }
+    ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                              manual_room_width,
+                                                              manual_room_height,
+                                                              manual_room_depth);
+    GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+    out->has_world_bounds = (world_bounds.max_x > world_bounds.min_x)
+        && (world_bounds.max_y > world_bounds.min_y)
+        && (world_bounds.max_z > world_bounds.min_z);
+    if(!out->has_world_bounds)
+    {
+        return false;
+    }
+    out->min_x = world_bounds.min_x;
+    out->max_x = world_bounds.max_x;
+    out->min_y = world_bounds.min_y;
+    out->max_y = world_bounds.max_y;
+    out->min_z = world_bounds.min_z;
+    out->max_z = world_bounds.max_z;
+    out->reference_points.clear();
+    out->reference_points.reserve(reference_points.size());
+    for(const auto& rp : reference_points)
+    {
+        if(!rp)
+        {
+            continue;
+        }
+        Action::NamedWorldPoint p;
+        p.name = rp->GetName();
+        const Vector3D pos = rp->GetPosition();
+        p.x = pos.x;
+        p.y = pos.y;
+        p.z = pos.z;
+        out->reference_points.push_back(std::move(p));
+    }
+    return true;
+}
+
+void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack, int local_ms, bool force_hw_update)
+{
+    ApplyActionPreviewFrame(pack, local_ms, force_hw_update, nullptr);
+}
+
+void OpenRGB3DSpatialTab::ClearActionPreview(bool force_hw_update, SpatialEffect3D* layer_effect)
+{
+    Action::Pack blank;
+    blank.duration_ms = 1;
+    blank.loop = Action::LoopMode::Once;
+    ApplyActionPreviewFrame(blank, 0, force_hw_update, layer_effect);
+}
+
+void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
+                                                     int local_ms,
+                                                     bool force_hw_update,
+                                                     SpatialEffect3D* layer_effect)
+{
+    if(!resource_manager)
+    {
+        return;
+    }
+    Action::SetActionScriptDirectory(PluginSettingsPaths::ActionToolboxDir(resource_manager));
+
+    Action::ApplySpatialContext spatial;
+    const Action::ApplySpatialContext* spatial_ptr = nullptr;
+    // Room box context for Action preview (RoomBox cues + origin_ref).
+    if(!layer_effect)
+    {
+        if(GetActionRoomWorldBounds(&spatial))
+        {
+            spatial_ptr = &spatial;
+        }
+    }
+    else
+    {
+        spatial.layer_zone_index = -1;
+        if(layer_effect == current_effect_ui && effectStackList())
+        {
+            const int row = effectStackList()->currentRow();
+            if(row >= 0 && row < (int)effect_stack.size() && effect_stack[(size_t)row])
+            {
+                spatial.layer_zone_index = effect_stack[(size_t)row]->zone_index;
+            }
+            else if(effectZoneCombo())
+            {
+                spatial.layer_zone_index = ResolveZoneTargetSelection(effectZoneCombo());
+            }
+        }
+        else
+        {
+            for(const std::unique_ptr<EffectInstance3D>& instance_ptr : effect_stack)
+            {
+                EffectInstance3D* instance = instance_ptr.get();
+                if(instance && instance->effect.get() == layer_effect)
+                {
+                    spatial.layer_zone_index = instance->zone_index;
+                    break;
+                }
+            }
+        }
+
+        ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                                  manual_room_width,
+                                                                  manual_room_height,
+                                                                  manual_room_depth);
+        GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+        GridContext3D room_grid(world_bounds.min_x, world_bounds.max_x,
+                                world_bounds.min_y, world_bounds.max_y,
+                                world_bounds.min_z, world_bounds.max_z,
+                                grid_scale_mm);
+
+        if(!mapped_lights_anchor_valid_)
+        {
+            RefreshMappedLightsAnchor();
+        }
+        if(mapped_lights_anchor_valid_)
+        {
+            room_grid.SetLedCentroid(mapped_lights_anchor_.x,
+                                     mapped_lights_anchor_.y,
+                                     mapped_lights_anchor_.z);
+        }
+
+        std::unique_ptr<GridContext3D> zone_room_grid;
+        std::unique_ptr<GridContext3D> zone_world_grid;
+        const GridContext3D* sample_grid = &room_grid;
+        if(layer_effect->UseZoneGrid() && spatial.layer_zone_index != -1)
+        {
+            if(TryMakeZoneGridContextPair(zone_manager.get(),
+                                          controller_transforms,
+                                          spatial.layer_zone_index,
+                                          nullptr,
+                                          true,
+                                          grid_scale_mm,
+                                          grid_scale_mm,
+                                          zone_room_grid,
+                                          zone_world_grid)
+               && zone_room_grid)
+            {
+                sample_grid = zone_room_grid.get();
+            }
+        }
+        else if(spatial.layer_zone_index != -1)
+        {
+            const ReferenceMode mode = layer_effect->GetReferenceMode();
+            if(mode == REF_MODE_LED_CENTROID)
+            {
+                if(mapped_lights_anchor_valid_)
+                {
+                    room_grid.SetLedCentroid(mapped_lights_anchor_.x,
+                                             mapped_lights_anchor_.y,
+                                             mapped_lights_anchor_.z);
+                }
+            }
+            else if(mode == REF_MODE_TARGET_ZONE_CENTER)
+            {
+                Vector3D center{};
+                if(TryComputeZoneAnchorCenter(zone_manager.get(),
+                                              controller_transforms,
+                                              spatial.layer_zone_index,
+                                              nullptr,
+                                              true,
+                                              true,
+                                              &center))
+                {
+                    room_grid.SetAnchorOverride(center.x, center.y, center.z);
+                }
+            }
+        }
+
+        const Vector3D origin = layer_effect->GetEffectOriginGrid(*sample_grid);
+        // Movie Sync CustomOnly has no Scale slider; fill occupancy from the Spatial Anchor (scale 1.0).
+        const EffectGridAxisHalfExtents he =
+            MakeEffectGpuAtlasHalfExtents(*sample_grid, origin, 1.0f);
+        spatial.has_world_bounds = true;
+        spatial.min_x = origin.x - he.hw;
+        spatial.max_x = origin.x + he.hw;
+        spatial.min_y = origin.y - he.hh;
+        spatial.max_y = origin.y + he.hh;
+        spatial.min_z = origin.z - he.hd;
+        spatial.max_z = origin.z + he.hd;
+        // Still publish scene refs so Action origin_ref resolves in Movie Sync preview.
+        spatial.reference_points.clear();
+        for(const auto& rp : reference_points)
+        {
+            if(!rp)
+            {
+                continue;
+            }
+            Action::NamedWorldPoint p;
+            p.name = rp->GetName();
+            const Vector3D pos = rp->GetPosition();
+            p.x = pos.x;
+            p.y = pos.y;
+            p.z = pos.z;
+            spatial.reference_points.push_back(std::move(p));
+        }
+        spatial_ptr = &spatial;
+    }
+
+    Action::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
+                               force_hw_update, zone_manager.get(), spatial_ptr);
+
+    // Room-grid overlay is a separate buffer from LED preview_color (filled by the effect
+    // stack only). While Action preview runs, sample active world/field clips into it.
+    if(viewport && viewport->GetShowRoomGridOverlay())
+    {
+        static std::uint64_t s_action_overlay_seq = 0;
+        const std::uint64_t overlay_seq = ++s_action_overlay_seq;
+        if((overlay_seq & 1ull) == 0ull)
+        {
+            float min_x = 0.0f, max_x = 0.0f, min_y = 0.0f, max_y = 0.0f, min_z = 0.0f, max_z = 0.0f;
+            std::vector<Action::NamedWorldPoint> overlay_refs;
+            bool have_bounds = false;
+            if(spatial_ptr && spatial_ptr->has_world_bounds)
+            {
+                min_x = spatial_ptr->min_x; max_x = spatial_ptr->max_x;
+                min_y = spatial_ptr->min_y; max_y = spatial_ptr->max_y;
+                min_z = spatial_ptr->min_z; max_z = spatial_ptr->max_z;
+                overlay_refs = spatial_ptr->reference_points;
+                have_bounds = true;
+            }
+            else
+            {
+                Action::ApplySpatialContext room;
+                if(GetActionRoomWorldBounds(&room))
+                {
+                    min_x = room.min_x; max_x = room.max_x;
+                    min_y = room.min_y; max_y = room.max_y;
+                    min_z = room.min_z; max_z = room.max_z;
+                    overlay_refs = std::move(room.reference_points);
+                    have_bounds = true;
+                }
+            }
+
+            if(have_bounds)
+            {
+                viewport->SetRoomGridOverlayBounds(min_x, max_x, min_y, max_y, min_z, max_z);
+                int nx = 0, ny = 0, nz = 0;
+                viewport->GetRoomGridOverlayDimensions(&nx, &ny, &nz);
+                const size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
+                if(count > 0 && count <= 500000u)
+                {
+                    if(room_grid_overlay_buffer.size() != count)
+                    {
+                        room_grid_overlay_buffer.assign(count, ToRGBColor(0, 0, 0));
+                    }
+                    else
+                    {
+                        std::fill(room_grid_overlay_buffer.begin(), room_grid_overlay_buffer.end(),
+                                  ToRGBColor(0, 0, 0));
+                    }
+
+                    std::vector<const Action::Clip*> world_clips;
+                    world_clips.reserve(pack.tracks.size());
+                    for(const Action::Track& track : pack.tracks)
+                    {
+                        const Action::Clip* top = Action::FindActiveClip(track, local_ms);
+                        if(!top)
+                        {
+                            continue;
+                        }
+                        if(Action::ClipUsesRoomBoxBounds(*top))
+                        {
+                            world_clips.push_back(top);
+                        }
+                    }
+
+                    if(!world_clips.empty())
+                    {
+                        // One field/particle/ribbon set at a time - prepare per clip, then stamp voxels.
+                        static std::uint64_t s_overlay_field_seq = 0;
+                        for(const Action::Clip* clip : world_clips)
+                        {
+                            const std::string cid = Action::script::FileId(*clip);
+                            Action::ClipOrigin01 origin = Action::ResolveClipOrigin01(
+                                *clip, min_x, max_x, min_y, max_y, min_z, max_z, overlay_refs);
+                            Action::SetActiveClipOrigin01(origin);
+                            Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+                            Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+                            Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+                            const bool field_fast = Action::script::UsesField(cid);
+                            const bool particle_fast = Action::script::UsesParticles(cid);
+                            const bool ribbon_fast = Action::script::UsesRibbons(cid);
+                            const bool builtin_fast = Action::builtin_gpu::Uses(cid)
+                                && Action::script::FieldShader(cid).empty();
+                            if(field_fast)
+                            {
+                                Action::volume_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            if(particle_fast)
+                            {
+                                Action::particle_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            if(ribbon_fast)
+                            {
+                                Action::ribbon_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            if(builtin_fast)
+                            {
+                                Action::builtin_gpu::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
+                            }
+                            const bool gpu_field_clip = field_fast || particle_fast || ribbon_fast || builtin_fast;
+                            const bool field_true = field_fast && Action::volume_field::IsAvailable();
+                            const bool particle_true = particle_fast && Action::particle_field::IsAvailable();
+                            const bool ribbon_true = ribbon_fast && Action::ribbon_field::IsAvailable();
+                            const bool builtin_true = builtin_fast && Action::builtin_gpu::IsAvailable();
+                            const int grid_n = nx * ny * nz;
+                            std::vector<float> grid_xyz;
+                            std::vector<float> grid_rgb;
+                            bool grid_ok = false;
+                            std::vector<float> overlay_room_xyz;
+                            if(grid_n > 0)
+                            {
+                                overlay_room_xyz.resize((size_t)grid_n * 3u);
+                                for(int ix = 0; ix < nx; ++ix)
+                                {
+                                    for(int iy = 0; iy < ny; ++iy)
+                                    {
+                                        for(int iz = 0; iz < nz; ++iz)
+                                        {
+                                            float sx = 0.0f, sy = 0.0f, sz = 0.0f;
+                                            viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sx, sy, sz);
+                                            const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
+                                                + (size_t)iy * (size_t)nz + (size_t)iz;
+                                            overlay_room_xyz[idx * 3u + 0u] = sx;
+                                            overlay_room_xyz[idx * 3u + 1u] = sy;
+                                            overlay_room_xyz[idx * 3u + 2u] = sz;
+                                        }
+                                    }
+                                }
+                            }
+                            if(gpu_field_clip && grid_n > 0
+                               && (field_true || particle_true || ribbon_true || builtin_true))
+                            {
+                                const float span_x = std::max(1e-5f, max_x - min_x);
+                                const float span_y = std::max(1e-5f, max_y - min_y);
+                                const float span_z = std::max(1e-5f, max_z - min_z);
+                                grid_xyz.resize((size_t)grid_n * 3u);
+                                grid_rgb.resize((size_t)grid_n * 3u, 0.0f);
+                                for(int i = 0; i < grid_n; ++i)
+                                {
+                                    grid_xyz[(size_t)i * 3u + 0u] =
+                                        (overlay_room_xyz[(size_t)i * 3u + 0u] - min_x) / span_x;
+                                    grid_xyz[(size_t)i * 3u + 1u] =
+                                        (overlay_room_xyz[(size_t)i * 3u + 1u] - min_y) / span_y;
+                                    grid_xyz[(size_t)i * 3u + 2u] =
+                                        (overlay_room_xyz[(size_t)i * 3u + 2u] - min_z) / span_z;
+                                }
+                                if(field_true)
+                                {
+                                    grid_ok = Action::volume_field::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
+                                else if(particle_true)
+                                {
+                                    grid_ok = Action::particle_field::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
+                                else if(ribbon_true)
+                                {
+                                    grid_ok = Action::ribbon_field::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
+                                else
+                                {
+                                    grid_ok = Action::builtin_gpu::EvaluateAtPoints(
+                                        grid_xyz.data(), grid_n, grid_rgb.data());
+                                }
+                            }
+                            for(int ix = 0; ix < nx; ++ix)
+                            {
+                                for(int iy = 0; iy < ny; ++iy)
+                                {
+                                    for(int iz = 0; iz < nz; ++iz)
+                                    {
+                                        const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
+                                            + (size_t)iy * (size_t)nz + (size_t)iz;
+                                        const float sx = overlay_room_xyz[idx * 3u + 0u];
+                                        const float sy = overlay_room_xyz[idx * 3u + 1u];
+                                        const float sz = overlay_room_xyz[idx * 3u + 2u];
+                                        RGBColor color = ToRGBColor(0, 0, 0);
+                                        if(gpu_field_clip)
+                                        {
+                                            // Fail closed when GL is down; skip empty texels so earlier clips stay.
+                                            if(!grid_ok)
+                                            {
+                                                continue;
+                                            }
+                                            const float r = grid_rgb[idx * 3u + 0u];
+                                            const float g = grid_rgb[idx * 3u + 1u];
+                                            const float b = grid_rgb[idx * 3u + 2u];
+                                            const float peak = std::max(r, std::max(g, b));
+                                            if(peak < 0.02f)
+                                            {
+                                                continue;
+                                            }
+                                            const float inten = std::clamp(clip->intensity, 0.0f, 1.0f);
+                                            color = ToRGBColor(
+                                                (int)std::lround(std::clamp(r * inten, 0.0f, 1.0f) * 255.0f),
+                                                (int)std::lround(std::clamp(g * inten, 0.0f, 1.0f) * 255.0f),
+                                                (int)std::lround(std::clamp(b * inten, 0.0f, 1.0f) * 255.0f));
+                                        }
+                                        else
+                                        {
+                                            float intensity = 0.0f;
+                                            const int seed = ix * 73856093 ^ iy * 19349663 ^ iz * 83492791;
+                                            if(!Action::EvaluateClipAtWorld(*clip, local_ms,
+                                                                            sx, sy, sz,
+                                                                            min_x, max_x, min_y, max_y, min_z, max_z,
+                                                                            seed, &color, &intensity))
+                                            {
+                                                continue;
+                                            }
+                                        }
+                                        room_grid_overlay_buffer[idx] = color;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    viewport->SetRoomGridColorCallback(nullptr);
+                    viewport->SwapRoomGridColorBuffer(room_grid_overlay_buffer);
+                }
+            }
+        }
+    }
+
+    if(viewport)
+    {
+        viewport->UpdateColors();
+    }
+}
+
+void OpenRGB3DSpatialTab::InitLedViewport()
+{
+    if(!ui)
+    {
+        return;
+    }
+
+    viewport = ui->ledViewport;
+    if(!viewport)
+    {
+        return;
+    }
+
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
+    viewport->SetGridSnapEnabled(false);
+    viewport->SetRotateSnapEnabled(false);
+    viewport->SetReferencePoints(&reference_points);
+    viewport->SetDisplayPlanes(&display_planes);
+    viewport->SetSceneProps(&scene_props_);
+    viewport->SetGridScaleMM(grid_scale_mm);
+    viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, true);
+    viewport->SetScreenPreviewTickCallback({});
+    viewport->ResetCameraToDefault();
+
+    connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::viewportControllerSelected);
+    connect(viewport, &LEDViewport3D::ControllerPositionChanged, this, &OpenRGB3DSpatialTab::controllerPositionChanged);
+    connect(viewport, &LEDViewport3D::ControllerRotationChanged, this, &OpenRGB3DSpatialTab::controllerRotationChanged);
+    connect(viewport, &LEDViewport3D::ControllerDeleteRequested, this, &OpenRGB3DSpatialTab::removeControllerFromViewport);
+    connect(viewport, &LEDViewport3D::ReferencePointSelected, this, [this](int index) {
+        refPointSelected(index, false);
+    });
+    connect(viewport, &LEDViewport3D::DisplayPlaneSelected, this, &OpenRGB3DSpatialTab::viewportDisplayPlaneSelected);
+    connect(viewport, &LEDViewport3D::ScenePropSelected, this, &OpenRGB3DSpatialTab::viewportScenePropSelected);
+    connect(viewport, &LEDViewport3D::RoomViewportSelected, this, [this](bool) {
+        UpdateSelectionInfo();
+    });
+    connect(viewport, &LEDViewport3D::ReferencePointPositionChanged, this, &OpenRGB3DSpatialTab::refPointPositionChanged);
+    connect(viewport, &LEDViewport3D::DisplayPlanePositionChanged, this, &OpenRGB3DSpatialTab::displayPlanePositionSignal);
+    connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::displayPlaneRotationSignal);
+    connect(viewport, &LEDViewport3D::ScenePropPositionChanged, this, &OpenRGB3DSpatialTab::scenePropPositionSignal);
+    connect(viewport, &LEDViewport3D::ScenePropRotationChanged, this, &OpenRGB3DSpatialTab::scenePropRotationSignal);
+    connect(viewport, &LEDViewport3D::EffectVolumeChanged, this, &OpenRGB3DSpatialTab::viewportEffectVolumeChanged);
+
+    viewport->installViewportKeyboardShortcuts(this);
+}
+
+void OpenRGB3DSpatialTab::bindUiPanels()
+{
+    if(!ui)
+    {
+        return;
+    }
+
+    const int kSidePanelMinWidth = 200;
+    const int kLeftPanelStartWidth = 280;
+    const int kRightPanelStartWidth = 320;
+
+    ui->leftModeTabs->setMinimumWidth(kSidePanelMinWidth);
+    ui->rightStacked->setMinimumWidth(kSidePanelMinWidth);
+    ui->mainSplitter->setStretchFactor(0, 0);
+    ui->mainSplitter->setStretchFactor(1, 1);
+    ui->mainSplitter->setStretchFactor(2, 0);
+    ui->mainSplitter->setCollapsible(0, false);
+    ui->mainSplitter->setCollapsible(1, false);
+    ui->mainSplitter->setCollapsible(2, false);
+
+    ui->effectLibraryPanel->bindTab(this);
+    ui->effectStackPanel->bindTab(this);
+    connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, &OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi);
+    DisplayPlaneManager::instance()->SetEditCallback([this]() {
+        SetLayoutDirty();
+        UpdateCurrentDisplayPlaneListItemLabel();
+        NotifyDisplayPlaneChanged();
+        SyncDisplayPlaneCaptureCombos();
+    });
+
+    ui->availableControllersPanel->bindTab(this, ControllerListPanel::Mode::Available);
+    ui->controllersInScenePanel->bindTab(this, ControllerListPanel::Mode::InScene);
+    // Equal stretch so Available Controllers is not squeezed under Controllers in Scene.
+    ui->setupContentLayout->setStretch(0, 1);
+    ui->setupContentLayout->setStretch(1, 1);
+    ui->middlePanelLayout->setStretch(0, 0);
+    ui->middlePanelLayout->setStretch(1, 1);
+
+    const nlohmann::json startup_settings = GetPluginSettings();
+    try
+    {
+        if(startup_settings.contains("Ui") &&
+           startup_settings["Ui"].contains("ShowUndetectedAvailableControllers") &&
+           ui->availableControllersPanel)
+        {
+            ui->availableControllersPanel->setShowUndetectedControllers(
+                startup_settings["Ui"]["ShowUndetectedAvailableControllers"].get<bool>());
+        }
+    }
+    catch(const std::exception&)
+    {
+    }
+
+    UpdateDeviceList();
+
+    InitLedViewport();
+
+    if(viewport)
+    {
+        viewport->SetViewportPaintingEnabled(isVisible());
+    }
+
+    BindSettingsPanels();
+
+    ui->effectGlobalSettingsPanel->bindTab(this);
+    SetupStackRoomOutputPanel();
+    ui->audioInputPanel->bindTab(this);
+
+    LoadStackPresets();
+    UpdateEffectStackList();
+    UpdateStartStopAllButtons();
+
+    ui->effectControlsHostPanel->updateGeometry();
+
+    connect(ui->leftModeTabs, QOverload<int>::of(&QTabWidget::currentChanged), this,
+            [this](int index) {
+                if(ui->rightStacked)
+                {
+                    ui->rightStacked->setCurrentIndex(index);
+                }
+                SavePluginUiSettings();
+            });
+    try
+    {
+        if(startup_settings.contains("Ui") && startup_settings["Ui"].contains("LeftModeTab") && ui->leftModeTabs)
+        {
+            const int count = ui->leftModeTabs->count();
+            if(count > 0)
+            {
+                int idx = startup_settings["Ui"]["LeftModeTab"].get<int>();
+                idx       = std::max(0, std::min(count - 1, idx));
+                const QSignalBlocker block(ui->leftModeTabs);
+                ui->leftModeTabs->setCurrentIndex(idx);
+                if(ui->rightStacked)
+                {
+                    ui->rightStacked->setCurrentIndex(idx);
+                }
+            }
+        }
+        else if(ui->rightStacked && ui->leftModeTabs)
+        {
+            ui->rightStacked->setCurrentIndex(ui->leftModeTabs->currentIndex());
+        }
+    }
+    catch(const std::exception& e)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore left/right tab sync: %s", e.what());
+        if(ui->rightStacked && ui->leftModeTabs)
+        {
+            ui->rightStacked->setCurrentIndex(ui->leftModeTabs->currentIndex());
+        }
+    }
+
+    QList<int> splitter_sizes;
+    splitter_sizes << kLeftPanelStartWidth << 400 << kRightPanelStartWidth;
+    ui->mainSplitter->setSizes(splitter_sizes);
+}
+
+void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
+{
+    if(!effectCategoryCombo())
+    {
+        return;
+    }
+
+    bool restore_signals = effectCategoryCombo()->blockSignals(true);
+    effectCategoryCombo()->clear();
+    effectCategoryCombo()->addItem(tr("Select Category"), QVariant());
+
+    std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
+    for(std::map<std::string, std::vector<EffectRegistration3D>>::const_iterator cit = categorized.begin();
+        cit != categorized.end();
+        ++cit)
+    {
+        effectCategoryCombo()->addItem(QString::fromStdString(cit->first), QString::fromStdString(cit->first));
+    }
+    effectCategoryCombo()->blockSignals(restore_signals);
+    effectCategoryCombo()->setCurrentIndex(0);
+    UpdateEffectLibraryGameFilterVisibility();
+    PopulateEffectLibrary();
+}
+
+void OpenRGB3DSpatialTab::UpdateEffectLibraryGameFilterVisibility()
+{
+    bool show_game_filter = false;
+    if(effectCategoryCombo())
+    {
+        const QVariant category_data = effectCategoryCombo()->currentData();
+        show_game_filter = category_data.isValid()
+                           && category_data.toString().compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0;
+    }
+
+    if(ui && ui->effectLibraryPanel)
+    {
+        if(QLabel* label = ui->effectLibraryPanel->gameLabel())
+        {
+            label->setVisible(show_game_filter);
+        }
+        if(QComboBox* combo = ui->effectLibraryPanel->gameCombo())
+        {
+            combo->setVisible(show_game_filter);
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::PopulateEffectLibraryGames()
+{
+    QComboBox* game_combo = effectLibraryGameCombo();
+    if(!game_combo)
+    {
+        return;
+    }
+
+    const QString preserve_game_id = game_combo->currentData().toString();
+    const bool restore_signals = game_combo->blockSignals(true);
+    game_combo->clear();
+    game_combo->addItem(tr("Select game"), QVariant());
+
+    const std::vector<std::pair<std::string, std::string>> games =
+        EffectListManager3D::get()->GetRegisteredGames();
+    for(const std::pair<std::string, std::string>& game : games)
+    {
+        game_combo->addItem(QString::fromStdString(game.second), QString::fromStdString(game.first));
+    }
+
+    int select_index = preserve_game_id.isEmpty() ? -1 : game_combo->findData(preserve_game_id);
+    if(select_index < 0)
+    {
+        select_index = games.empty() ? 0 : 1;
+    }
+    game_combo->setCurrentIndex(select_index);
+    game_combo->blockSignals(restore_signals);
+}
+
+bool OpenRGB3DSpatialTab::PrepareStackForPlayback()
+{
+    bool has_enabled_effect = false;
+
+    for(size_t i = 0; i < effect_stack.size(); i++)
+    {
+        EffectInstance3D* instance = effect_stack[i].get();
+        if(!instance)
+        {
+            continue;
+        }
+        if(!instance->enabled)
+        {
+            continue;
+        }
+        if(instance->effect_class_name.empty())
+        {
+            continue;
+        }
+
+        if(!instance->effect)
+        {
+            SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(instance->effect_class_name);
+            if(!effect)
+            {
+                LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", instance->effect_class_name.c_str());
+                continue;
+            }
+            instance->effect.reset(effect);
+            if(instance->saved_settings && !instance->saved_settings->empty())
+            {
+                effect->LoadSettings(*instance->saved_settings);
+            }
+        }
+
+        if(instance->effect)
+        {
+            instance->effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
+            has_enabled_effect = true;
+        }
+    }
+
+    return has_enabled_effect;
+}
+
+void OpenRGB3DSpatialTab::SetControllersToCustomMode(bool& has_valid_controller)
+{
+    has_valid_controller = false;
+
+    for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+    {
+        ControllerTransform* transform = controller_transforms[ctrl_idx].get();
+        if(!transform)
+        {
+            continue;
+        }
+
+        if(transform->virtual_controller)
+        {
+            VirtualController3D* virtual_ctrl = transform->virtual_controller;
+            const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+            std::set<RGBControllerInterface*> controllers_to_set;
+            for(unsigned int i = 0; i < mappings.size(); i++)
+            {
+                if(mappings[i].controller)
+                {
+                    controllers_to_set.insert(mappings[i].controller);
+                }
+            }
+
+            for(std::set<RGBControllerInterface*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
+            {
+                (*it)->SetCustomMode();
+                has_valid_controller = true;
+            }
+            continue;
+        }
+
+        RGBControllerInterface* controller = transform->controller;
+        if(!controller)
+        {
+            continue;
+        }
+
+        controller->SetCustomMode();
+        has_valid_controller = true;
+    }
+}
+
+void OpenRGB3DSpatialTab::PopulateEffectLibrary()
+{
+    if(!effectLibraryList())
+    {
+        return;
+    }
+
+    UpdateEffectLibraryGameFilterVisibility();
+
+    bool restore_signals = effectLibraryList()->blockSignals(true);
+    effectLibraryList()->clear();
+
+    QVariant category_data;
+    if(effectCategoryCombo())
+    {
+        category_data = effectCategoryCombo()->currentData();
+    }
+
+    if(!category_data.isValid())
+    {
+        effectLibraryList()->blockSignals(restore_signals);
+        effectLibrarySelectionChanged(-1);
+        return;
+    }
+
+    QString selected_category = category_data.toString();
+    QString search = effectLibrarySearch() ? effectLibrarySearch()->text().trimmed() : QString();
+
+    std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
+    std::map<std::string, std::vector<EffectRegistration3D>>::iterator cat_it =
+        categorized.find(selected_category.toStdString());
+    if(cat_it == categorized.end())
+    {
+        effectLibraryList()->blockSignals(restore_signals);
+        effectLibrarySelectionChanged(-1);
+        return;
+    }
+
+    const std::vector<EffectRegistration3D>& effects = cat_it->second;
+
+    struct LibRow
+    {
+        QString text;
+        QString class_name;
+        QString category;
+    };
+    std::vector<LibRow> rows;
+    const bool game_category = (selected_category.compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0);
+    const bool audio_category = (selected_category.compare(QStringLiteral("Audio"), Qt::CaseInsensitive) == 0);
+
+    QString selected_game_id;
+    if(game_category)
+    {
+        QComboBox* game_combo = effectLibraryGameCombo();
+        if(game_combo)
+        {
+            if(!search.isEmpty())
+            {
+                for(int i = 1; i < game_combo->count(); ++i)
+                {
+                    if(game_combo->itemText(i).contains(search, Qt::CaseInsensitive))
+                    {
+                        /* Block signals — setCurrentIndex would re-enter
+                           effectLibraryGameChanged → PopulateEffectLibrary and
+                           duplicate library cards. */
+                        QSignalBlocker block(*game_combo);
+                        game_combo->setCurrentIndex(i);
+                        break;
+                    }
+                }
+            }
+            selected_game_id = game_combo->currentData().toString();
+        }
+    }
+
+    for(const EffectRegistration3D& reg : effects)
+    {
+        if(game_category)
+        {
+            if(selected_game_id.isEmpty() || QString::fromStdString(reg.game_id) != selected_game_id)
+            {
+                continue;
+            }
+            if(!search.isEmpty())
+            {
+                const QString ui_name = QString::fromStdString(reg.ui_name);
+                const QString game_label = QString::fromStdString(reg.game_label);
+                if(!ui_name.contains(search, Qt::CaseInsensitive)
+                   && !game_label.contains(search, Qt::CaseInsensitive))
+                {
+                    continue;
+                }
+            }
+        }
+        else if(!search.isEmpty() && !QString::fromStdString(reg.ui_name).contains(search, Qt::CaseInsensitive))
+        {
+            continue;
+        }
+
+        rows.push_back({QString::fromStdString(reg.ui_name), QString::fromStdString(reg.class_name), selected_category});
+    }
+
+    std::sort(rows.begin(), rows.end(), [](const LibRow& a, const LibRow& b) {
+        return QString::localeAwareCompare(a.text, b.text) < 0;
+    });
+
+    for(const LibRow& r : rows)
+    {
+        QListWidgetItem* item = new QListWidgetItem();
+        if(audio_category)
+        {
+            item->setToolTip(tr(
+                "Adds this audio-reactive effect as its own stack layer. "
+                "Use Audio Input below to start capture; set Low/High Hz in the effect settings."));
+        }
+        else if(game_category)
+        {
+            item->setToolTip(tr("Adds this game effect as its own stack layer. Configure it in the panel on the right."));
+        }
+        else
+        {
+            item->setToolTip(QStringLiteral("Category: %1").arg(r.category));
+        }
+        item->setData(Qt::UserRole, r.class_name);
+        item->setData(Qt::UserRole + 1, r.category);
+        item->setData(Qt::UserRole + 2, r.text);
+
+        QFrame* card = new QFrame();
+        PluginUiApplyControllerCardChrome(card, false);
+        auto* row = new QHBoxLayout(card);
+        row->setContentsMargins(8, 6, 8, 6);
+        row->setSpacing(8);
+        auto* title = new QLabel(r.text, card);
+        title->setWordWrap(true);
+        auto* add_btn = new QToolButton(card);
+        add_btn->setText(QStringLiteral("+"));
+        add_btn->setToolTip(tr("Add to stack"));
+        add_btn->setAutoRaise(false);
+        const QString class_name = r.class_name;
+        const QString ui_name = r.text;
+        connect(add_btn, &QToolButton::clicked, this,
+                [this, class_name, ui_name]()
+                {
+                    const bool unlock = effectLibraryUnlockVolumeOnAddCheck()
+                        && effectLibraryUnlockVolumeOnAddCheck()->isChecked();
+                    AddEffectInstanceToStack(class_name, ui_name, -1, BlendMode::NO_BLEND, nullptr, true, unlock);
+                });
+        row->addWidget(title, 1);
+        row->addWidget(add_btn, 0);
+        item->setSizeHint(card->sizeHint().expandedTo(QSize(0, 40)));
+        effectLibraryList()->addItem(item);
+        effectLibraryList()->setItemWidget(item, card);
+    }
+
+    effectLibraryList()->blockSignals(restore_signals);
+    effectLibraryList()->setCurrentRow(-1);
+    effectLibrarySelectionChanged(-1);
+}
+
+void OpenRGB3DSpatialTab::effectLibrarySearchChanged(const QString&)
+{
+    PopulateEffectLibrary();
+}
+
+void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
+                                                   const QString& ui_name,
+                                                   int zone_index,
+                                                   BlendMode blend_mode,
+                                                   const nlohmann::json* preset_settings,
+                                                   bool enabled,
+                                                   bool volume_tools_unlocked)
+{
+    if(class_name.isEmpty())
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot add effect - effect class name is empty");
+        return;
+    }
+
+    std::unique_ptr<EffectInstance3D> instance = std::make_unique<EffectInstance3D>();
+    instance->id            = next_effect_instance_id++;
+    instance->name          = ui_name.toStdString();
+    instance->zone_index    = zone_index;
+    instance->blend_mode    = blend_mode;
+    instance->enabled       = enabled;
+    instance->volume_tools_unlocked = volume_tools_unlocked;
+    instance->effect_class_name = class_name.toStdString();
+
+    if(preset_settings && !preset_settings->is_null())
+    {
+        instance->saved_settings = std::make_unique<nlohmann::json>(*preset_settings);
+    }
+
+    effect_stack.push_back(std::move(instance));
+    const int new_index = (int)effect_stack.size() - 1;
+
+    bool restore_stack_list_signals = false;
+    if(effectStackList())
+    {
+        restore_stack_list_signals = effectStackList()->blockSignals(true);
+    }
+    UpdateEffectStackList();
+    EffectInstance3D* new_instance = effect_stack[new_index].get();
+
+    if(new_instance)
+    {
+        LoadStackEffectControls(new_instance);
+        if(effectZoneCombo())
+        {
+            QSignalBlocker zb(effectZoneCombo());
+            int zone_combo_index = effectZoneCombo()->findData(new_instance->zone_index);
+            if(zone_combo_index >= 0)
+            {
+                effectZoneCombo()->setCurrentIndex(zone_combo_index);
+            }
+        }
+        if(effectCombo() && new_index < effectCombo()->count())
+        {
+            QSignalBlocker cb(effectCombo());
+            effectCombo()->setCurrentIndex(new_index);
+        }
+        UpdateEffectCombo();
+        UpdateAudioPanelVisibility();
+    }
+    if(effectStackList())
+    {
+        effectStackList()->setCurrentRow(new_index);
+        effectStackList()->blockSignals(restore_stack_list_signals);
+    }
+    effectStackSelectionChanged(new_index);
+    SetLayoutDirty();
+}
+
+void OpenRGB3DSpatialTab::effectLibraryCategoryChanged(int)
+{
+    UpdateEffectLibraryGameFilterVisibility();
+    if(effectCategoryCombo())
+    {
+        const QVariant category_data = effectCategoryCombo()->currentData();
+        if(category_data.isValid()
+           && category_data.toString().compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0)
+        {
+            PopulateEffectLibraryGames();
+        }
+    }
+    PopulateEffectLibrary();
+}
+
+void OpenRGB3DSpatialTab::effectLibraryGameChanged(int)
+{
+    PopulateEffectLibrary();
+}
+
+void OpenRGB3DSpatialTab::effectLibrarySelectionChanged(int row)
+{
+    /* Browsing the library must not rebuild the stack effect panel — that
+       fights in-progress volume/gizmo edits. Only gate the Add affordance. */
+    if(effectLibraryAddButton())
+    {
+        effectLibraryAddButton()->setEnabled(row >= 0);
+    }
+
+    UpdateEffectStackRowSelectorVisibility();
+}
+
+void OpenRGB3DSpatialTab::effectLibraryAddClicked()
+{
+    if(!effectLibraryList())
+    {
+        return;
+    }
+
+    int current_row = effectLibraryList()->currentRow();
+    if(current_row < 0)
+    {
+        return;
+    }
+    QListWidgetItem* item = effectLibraryList()->item(current_row);
+    if(!item)
+    {
+        return;
+    }
+
+    QString class_name;
+    QString ui_name;
+    ResolveEffectLibraryItem(item, class_name, ui_name);
+    if(class_name.isEmpty())
+    {
+        return;
+    }
+    const bool unlock = effectLibraryUnlockVolumeOnAddCheck()
+        && effectLibraryUnlockVolumeOnAddCheck()->isChecked();
+    AddEffectInstanceToStack(class_name, ui_name, -1, BlendMode::NO_BLEND, nullptr, true, unlock);
+}
+
+void OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked(QListWidgetItem* item)
+{
+    if(!item)
+    {
+        return;
+    }
+    QString class_name;
+    QString ui_name;
+    ResolveEffectLibraryItem(item, class_name, ui_name);
+    if(class_name.isEmpty())
+    {
+        return;
+    }
+    const bool unlock = effectLibraryUnlockVolumeOnAddCheck()
+        && effectLibraryUnlockVolumeOnAddCheck()->isChecked();
+    AddEffectInstanceToStack(class_name, ui_name, -1, BlendMode::NO_BLEND, nullptr, true, unlock);
+}
+
+void OpenRGB3DSpatialTab::SyncEffectLibraryUnlockVolumePreference()
+{
+    if(!effectLibraryUnlockVolumeOnAddCheck())
+    {
+        return;
+    }
+    bool prefer_unlock = false;
+    try
+    {
+        const nlohmann::json settings = GetPluginSettings();
+        if(settings.contains("effect_library_unlock_volume_on_add")
+           && settings["effect_library_unlock_volume_on_add"].is_boolean())
+        {
+            prefer_unlock = settings["effect_library_unlock_volume_on_add"].get<bool>();
+        }
+    }
+    catch(...)
+    {
+    }
+    QSignalBlocker blocker(effectLibraryUnlockVolumeOnAddCheck());
+    effectLibraryUnlockVolumeOnAddCheck()->setChecked(prefer_unlock);
+}
+
+void OpenRGB3DSpatialTab::effectLibraryUnlockVolumeOnAddToggled(bool checked)
+{
+    try
+    {
+        nlohmann::json settings = GetPluginSettings();
+        settings["effect_library_unlock_volume_on_add"] = checked;
+        SetPluginSettings(settings);
+    }
+    catch(const std::exception& e)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to persist unlock-volume-on-add: %s", e.what());
+    }
+}
+
+void OpenRGB3DSpatialTab::UpdateEffectStackRowSelectorVisibility()
+{
+    if(!effectCombo() || !effectConfigGroup())
+    {
+        return;
+    }
+    const bool show_effect_row = effectConfigGroup()->isVisible();
+    if(effectStackRowLabel())
+    {
+        effectStackRowLabel()->setVisible(show_effect_row);
+    }
+    effectCombo()->setVisible(show_effect_row);
+}
+
+void OpenRGB3DSpatialTab::ClearCustomEffectUI()
+{
+    if(!effectControlsLayout())
+    {
+        return;
+    }
+
+    if(effect_timer && effect_timer->isActive())
+    {
+        effect_timer->stop();
+    }
+    effect_running = false;
+    SyncScreenCaptureSession();
+    SyncReactiveInputSession();
+
+    if(current_effect_ui)
+    {
+        disconnect(current_effect_ui, nullptr, this, nullptr);
+    }
+
+    if(start_effect_button)
+    {
+        disconnect(start_effect_button, nullptr, this, nullptr);
+    }
+    if(stop_effect_button)
+    {
+        disconnect(stop_effect_button, nullptr, this, nullptr);
+    }
+
+    current_effect_ui = nullptr;
+    start_effect_button = nullptr;
+    stop_effect_button = nullptr;
+
+    QLayoutItem* item;
+    while((item = effectControlsLayout()->takeAt(0)) != nullptr)
+    {
+        if(QWidget* w = item->widget())
+        {
+            w->hide();
+            w->setParent(nullptr);
+            w->deleteLater();
+        }
+        delete item;
+    }
+
+    if(effectControlsWidget())
+    {
+        effectControlsWidget()->setVisible(false);
+    }
+}
+
+void OpenRGB3DSpatialTab::gridSnapToggled(bool enabled)
+{
+    if(viewport)
+    {
+        viewport->SetGridSnapEnabled(enabled);
+    }
+    SetLayoutDirty();
+}
+
+void OpenRGB3DSpatialTab::rotateSnapToggled(bool enabled)
+{
+    if(viewport)
+    {
+        viewport->SetRotateSnapEnabled(enabled);
+    }
+    SetLayoutDirty();
+}
+
+void OpenRGB3DSpatialTab::roomGuideLabelsToggled(bool enabled)
+{
+    if(viewport)
+    {
+        viewport->SetShowRoomGuideLabels(enabled);
+    }
+    SavePluginUiSettings();
+}
+
+void OpenRGB3DSpatialTab::frameSelectionInView()
+{
+    if(viewport)
+    {
+        viewport->FocusSelectionInView();
+    }
+}
+
+void OpenRGB3DSpatialTab::resetViewportCamera()
+{
+    if(viewport)
+    {
+        viewport->ResetCameraToDefault();
+    }
+}
+
+void OpenRGB3DSpatialTab::UpdateSelectionInfo()
+{
+    if(!viewport || !selectionInfoLabel()) return;
+
+    const std::vector<int>& selected = viewport->GetSelectedControllers();
+
+    QFont info_font = selectionInfoLabel()->font();
+    info_font.setBold(true);
+
+    if(viewport->IsRoomViewportSelected())
+    {
+        selectionInfoLabel()->setText(QStringLiteral("Selected: Room (viewport spin)"));
+        info_font.setItalic(false);
+    }
+    else if(selected.empty())
+    {
+        selectionInfoLabel()->setText(QStringLiteral("No selection"));
+        info_font.setItalic(true);
+    }
+    else if(selected.size() == 1)
+    {
+        selectionInfoLabel()->setText(QString("Selected: 1 controller"));
+        info_font.setItalic(false);
+    }
+    else
+    {
+        selectionInfoLabel()->setText(QString("Selected: %1 controllers").arg(selected.size()));
+        info_font.setItalic(false);
+    }
+
+    selectionInfoLabel()->setFont(info_font);
+}
+
+void OpenRGB3DSpatialTab::effectChanged(int index)
+{
+    if(!effectCombo() || !effectStackList())
+    {
+        return;
+    }
+
+    if(effect_stack.empty())
+    {
+        ClearCustomEffectUI();
+        return;
+    }
+
+    if(index < 0 || index >= (int)effect_stack.size())
+    {
+        return;
+    }
+
+    QString class_name = effectCombo()->itemData(index, kEffectRoleClassName).toString();
+    
+    if(class_name == QLatin1String("ScreenMirror"))
+    {
+        /* Ambilight Reach is always each display plane's centre — no Spatial Anchor. */
+        if(originLabel()) originLabel()->setVisible(false);
+        if(effectOriginCombo()) effectOriginCombo()->setVisible(false);
+        if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
+        {
+            global_panel->setRoomOutputSectionVisible(false);
+        }
+    }
+    else
+    {
+        if(originLabel()) originLabel()->setVisible(true);
+        if(effectOriginCombo()) effectOriginCombo()->setVisible(true);
+        SyncStackRoomOutputPanel();
+    }
+
+    if(effectStackList()->currentRow() != index)
+    {
+        effectStackList()->setCurrentRow(index);
+    }
+}
+
+void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
+{
+    if(!effectOriginCombo()) return;
+
+    QVariant desired_selection = effectOriginCombo()->currentData();
+    bool restore_signals = effectOriginCombo()->blockSignals(true);
+    effectOriginCombo()->clear();
+
+    effectOriginCombo()->addItem(tr("Room box center (recommended)"), QVariant(-1));
+    effectOriginCombo()->addItem(tr("Mapped lights center"), QVariant(-4));
+    effectOriginCombo()->addItem(tr("Target zone center"), QVariant(-2));
+    effectOriginCombo()->addItem(tr("No anchor (world 0,0,0)"), QVariant(-3));
+
+    for(size_t i = 0; i < reference_points.size(); i++)
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[i].get();
+        if(!ref_point) continue;
+
+        QString name = QString::fromStdString(ref_point->GetName());
+        QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
+        QString display = QString("%1 (%2)").arg(name, type);
+        effectOriginCombo()->addItem(display, QVariant((int)i));
+    }
+
+    int restore_index = effectOriginCombo()->findData(desired_selection);
+    if(restore_index < 0)
+    {
+        restore_index = effectOriginCombo()->findData(QVariant(-1));
+    }
+    if(restore_index < 0)
+    {
+        restore_index = 0;
+    }
+    effectOriginCombo()->setCurrentIndex(restore_index);
+    effectOriginCombo()->blockSignals(restore_signals);
+}
+
+void OpenRGB3DSpatialTab::UpdateEffectCombo()
+{
+    if(!effectCombo())
+    {
+        return;
+    }
+
+    QSignalBlocker blocker(effectCombo());
+    effectCombo()->clear();
+
+    if(effect_stack.empty())
+    {
+        effectCombo()->addItem("No Active Effects");
+        effectCombo()->setEnabled(false);
+        return;
+    }
+
+    effectCombo()->setEnabled(true);
+
+    for(size_t i = 0; i < effect_stack.size(); i++)
+    {
+        EffectInstance3D* instance = effect_stack[i].get();
+        if(!instance)
+        {
+            continue;
+        }
+
+        QString label = QStringLiteral("#%1 \u2022 %2")
+                            .arg(i + 1)
+                            .arg(QString::fromStdString(instance->GetDisplayName()));
+        effectCombo()->addItem(label);
+        int row = effectCombo()->count() - 1;
+        effectCombo()->setItemData(row, QString::fromStdString(instance->effect_class_name),
+                                  kEffectRoleClassName);
+        effectCombo()->setItemData(row, instance->id, kEffectRoleInstanceId);
+    }
+
+    int desired_index = effectStackList() ? effectStackList()->currentRow() : 0;
+    if(desired_index < 0)
+    {
+        desired_index = 0;
+    }
+    if(desired_index >= effectCombo()->count())
+    {
+        desired_index = effectCombo()->count() - 1;
+    }
+
+    effectCombo()->setCurrentIndex(desired_index);
+}
+
+void OpenRGB3DSpatialTab::effectZoneChanged(int index)
+{
+    if(!effectZoneCombo())
+    {
+        return;
+    }
+
+    if(!effectStackList())
+    {
+        return;
+    }
+
+    int current_row = effectStackList()->currentRow();
+    if(current_row < 0 || current_row >= (int)effect_stack.size())
+    {
+        return;
+    }
+    if(index < 0 || index >= effectZoneCombo()->count())
+    {
+        return;
+    }
+
+    EffectInstance3D* instance = effect_stack[current_row].get();
+    instance->zone_index = effectZoneCombo()->itemData(index).toInt();
+    UpdateEffectStackList();
+    if(effectStackList())
+    {
+        effectStackList()->setCurrentRow(current_row);
+    }
+    if(stackEffectZoneCombo())
+    {
+        int zone_combo_index = stackEffectZoneCombo()->findData(instance->zone_index);
+        stackEffectZoneCombo()->blockSignals(true);
+        if(zone_combo_index >= 0)
+        {
+            stackEffectZoneCombo()->setCurrentIndex(zone_combo_index);
+        }
+        stackEffectZoneCombo()->blockSignals(false);
+    }
+    SetLayoutDirty();
+}
+
+void OpenRGB3DSpatialTab::effectOriginChanged(int index)
+{
+    if(!effectOriginCombo())
+    {
+        return;
+    }
+    if(index < 0 || index >= effectOriginCombo()->count())
+    {
+        return;
+    }
+    int ref_point_idx = effectOriginCombo()->itemData(index).toInt();
+
+    Vector3D origin = {0.0f, 0.0f, 0.0f};
+
+    if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
+        if(ref_point)
+        {
+            origin = ref_point->GetPosition();
+        }
+    }
+
+    if(current_effect_ui)
+    {
+        if(ref_point_idx == -2)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_TARGET_ZONE_CENTER);
+        }
+        else if(ref_point_idx == -3)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_WORLD_ORIGIN);
+        }
+        else if(ref_point_idx == -4)
+        {
+            RefreshMappedLightsAnchor();
+            current_effect_ui->SetReferenceMode(REF_MODE_LED_CENTROID);
+        }
+        else if(ref_point_idx >= 0)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_CUSTOM_POINT);
+            current_effect_ui->SetCustomReferencePoint(origin);
+        }
+        else
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_ROOM_CENTER);
+        }
+
+        if(effectStackList())
+        {
+            const int current_row = effectStackList()->currentRow();
+            if(current_row >= 0 && current_row < (int)effect_stack.size())
+            {
+                EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
+                if(instance && instance->effect)
+                {
+                    instance->effect->SetReferenceMode(current_effect_ui->GetReferenceMode());
+                    if(ref_point_idx >= 0)
+                    {
+                        instance->effect->SetCustomReferencePoint(origin);
+                    }
+                    instance->saved_settings = std::make_unique<nlohmann::json>(current_effect_ui->SaveSettings());
+                }
+            }
+        }
+    }
+
+    if(viewport) viewport->UpdateColors();
+    SetLayoutDirty();
+}
+
+void OpenRGB3DSpatialTab::effectBoundsChanged(int index)
+{
+    if(!effectBoundsCombo())
+    {
+        return;
+    }
+    if(index < 0 || index >= effectBoundsCombo()->count())
+    {
+        return;
+    }
+    int mode = effectBoundsCombo()->itemData(index).toInt();
+
+    if(current_effect_ui)
+    {
+        current_effect_ui->SetEffectBoundsMode(mode);
+    }
+
+    if(effectStackList())
+    {
+        int current_row = effectStackList()->currentRow();
+        if(current_row >= 0 && current_row < (int)effect_stack.size())
+        {
+            EffectInstance3D* instance = effect_stack[current_row].get();
+            if(instance)
+            {
+                SpatialEffect3D* settings_source = nullptr;
+                if(instance->effect)
+                {
+                    instance->effect->SetEffectBoundsMode(mode);
+                    settings_source = instance->effect.get();
+                }
+                else if(current_effect_ui)
+                {
+                    settings_source = current_effect_ui;
+                }
+
+                if(settings_source)
+                {
+                    nlohmann::json current_settings = settings_source->SaveSettings();
+                    instance->saved_settings = std::make_unique<nlohmann::json>(current_settings);
+                    SetLayoutDirty();
+                }
+            }
+        }
+    }
+
+    if(viewport) viewport->UpdateColors();
+}
+
+void OpenRGB3DSpatialTab::effectVolumeShapeChanged(int index)
+{
+    if(!effectVolumeShapeCombo())
+    {
+        return;
+    }
+    if(index < 0 || index >= effectVolumeShapeCombo()->count())
+    {
+        return;
+    }
+    const int shape = effectVolumeShapeCombo()->itemData(index).toInt();
+
+    int current_row = effectStackList() ? effectStackList()->currentRow() : -1;
+    if(current_row >= 0 && current_row < (int)effect_stack.size())
+    {
+        EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
+        if(instance && !instance->volume_tools_unlocked)
+        {
+            return;
+        }
+    }
+
+    if(current_effect_ui)
+    {
+        current_effect_ui->SetVolumeShape(shape);
+    }
+
+    if(current_row >= 0 && current_row < (int)effect_stack.size())
+    {
+        EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
+        if(instance)
+        {
+            SpatialEffect3D* settings_source = nullptr;
+            if(instance->effect)
+            {
+                instance->effect->SetVolumeShape(shape);
+                settings_source = instance->effect.get();
+            }
+            else if(current_effect_ui)
+            {
+                settings_source = current_effect_ui;
+            }
+
+            if(settings_source)
+            {
+                instance->saved_settings = std::make_unique<nlohmann::json>(settings_source->SaveSettings());
+                SetLayoutDirty();
+            }
+
+            if(viewport && instance->effect)
+            {
+                ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                                          manual_room_width,
+                                                                          manual_room_height,
+                                                                          manual_room_depth);
+                GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+                GridContext3D grid(bounds.min_x, bounds.max_x,
+                                   bounds.min_y, bounds.max_y,
+                                   bounds.min_z, bounds.max_z,
+                                   grid_scale_mm);
+                if(mapped_lights_anchor_valid_)
+                {
+                    grid.SetLedCentroid(mapped_lights_anchor_.x,
+                                        mapped_lights_anchor_.y,
+                                        mapped_lights_anchor_.z);
+                }
+                if(EffectVolume3D* active_volume = viewport->ActiveEffectVolume())
+                {
+                    active_volume->shape = shape;
+                    viewport->SetEffectVolumeGrid(grid);
+                    active_volume->ApplyToEffect(*instance->effect, grid);
+                    EffectVolume3D synced = EffectVolume3D::FromEffect(*instance->effect, grid, current_row);
+                    *active_volume = synced;
+                    instance->saved_settings = std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+                    viewport->UpdateGizmoPosition();
+                }
+                else if(instance->volume_tools_unlocked)
+                {
+                    /* Same fresh-unlock fit as Vol toggle — shape change can select a
+                       volume after Start has stomped a corner Spatial Anchor. */
+                    const bool seed_fresh = !instance->effect->HasVolumeWorldOrigin();
+                    EffectVolume3D fresh_volume =
+                        EffectVolume3D::SeedUnlocked(*instance->effect, grid, current_row);
+                    if(seed_fresh)
+                    {
+                        instance->saved_settings =
+                            std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+                    }
+                    viewport->SelectEffectVolume(fresh_volume, grid);
+                }
+                viewport->update();
+            }
+        }
+    }
+
+    if(viewport) viewport->UpdateColors();
+}
+
+nlohmann::json OpenRGB3DSpatialTab::GetPluginSettings() const
+{
+    if(!resource_manager) return nlohmann::json::object();
+    return resource_manager->GetSettings("3DSpatialPlugin");
+}
+
+void OpenRGB3DSpatialTab::OnProfileAboutToLoad()
+{
+    if(effect_running)
+    {
+        stopEffectClicked();
+    }
+}
+
+void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& profile_data)
+{
+    try
+    {
+        if(profile_data.is_null() || (profile_data.is_object() && profile_data.empty()))
+        {
+            LOG_INFO("[OpenRGB3DSpatialPlugin] OpenRGB profile had no spatial plugin data");
+            return;
+        }
+        if(!profile_data.is_object())
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Ignoring non-object OpenRGB profile payload");
+            return;
+        }
+
+        constexpr int kSupportedProfileVersion = 1;
+        if(!profile_data.contains("profile_version") || !profile_data["profile_version"].is_number_integer())
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] OpenRGB profile missing profile_version");
+            return;
+        }
+        const int version = profile_data["profile_version"].get<int>();
+        if(version != kSupportedProfileVersion)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Unsupported OpenRGB profile_version %d (need %d)",
+                        version, kSupportedProfileVersion);
+            return;
+        }
+
+        if(!profile_data.contains("layout") || !profile_data["layout"].is_object()
+        || !profile_data.contains("effects") || !profile_data["effects"].is_object())
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] OpenRGB profile missing required layout/effects objects");
+            return;
+        }
+
+        if(effect_running)
+        {
+            stopEffectClicked();
+        }
+
+        LoadCustomControllers();
+
+        cached_profile_layout_ = profile_data["layout"];
+        LoadLayoutFromJSON(profile_data["layout"]);
+
+        if(!ApplyEffectProfileJson(profile_data["effects"]))
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to apply effects from OpenRGB profile");
+            SetLayoutDirty();
+            return;
+        }
+
+        ClearLayoutDirty();
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] OnProfileLoad failed: %s", e.what());
+    }
+}
+
+nlohmann::json OpenRGB3DSpatialTab::OnProfileSave()
+{
+    try
+    {
+        nlohmann::json payload;
+        payload["profile_version"] = 1;
+        payload["layout"] = BuildLayoutJson();
+        payload["effects"] = BuildEffectProfileJson();
+        ClearLayoutDirty();
+        return payload;
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] OnProfileSave failed: %s", e.what());
+        return nlohmann::json::object();
+    }
+}
+
+void OpenRGB3DSpatialTab::SetPluginSettings(const nlohmann::json& settings)
+{
+    if(!resource_manager) return;
+    resource_manager->SetSettings("3DSpatialPlugin", settings);
+    resource_manager->SaveSettings();
+}
+
+void OpenRGB3DSpatialTab::PersistRoomGridOverlayToSettings()
+{
+    if(!viewport) return;
+    try
+    {
+        nlohmann::json settings = GetPluginSettings();
+        settings["RoomGrid"]["Show"] = viewport->GetShowRoomGridOverlay();
+        settings["RoomGrid"]["Brightness"] = viewport->GetRoomGridBrightness();
+        settings["RoomGrid"]["PointSize"] = viewport->GetRoomGridPointSize();
+        settings["RoomGrid"]["Step"] = viewport->GetRoomGridStep();
+        SetPluginSettings(settings);
+    }
+    catch(const std::exception& e)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to persist room grid overlay settings: %s", e.what());
+    }
+}
+
+void OpenRGB3DSpatialTab::RefreshEffectDisplay()
+{
+    /* Always re-eval the stack — volume gizmo / settings must update the lit
+       preview whether playback is running or frozen. UpdateColors alone only
+       repaints stale LED colors. */
+    RenderEffectStack();
+}
+
+void OpenRGB3DSpatialTab::SetupStackRoomOutputPanel()
+{
+    EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel();
+    if(!global_panel || stack_room_output_panel_)
+    {
+        return;
+    }
+
+    QWidget* host = global_panel->roomOutputHost();
+    if(!host)
+    {
+        return;
+    }
+
+    auto* layout = new QVBoxLayout(host);
+    layout->setContentsMargins(0, 0, 0, 0);
+    stack_room_output_panel_ = new EffectRoomOutputPanel(host);
+    layout->addWidget(stack_room_output_panel_);
+
+    global_panel->setRoomOutputSectionVisible(false);
+}
+
+QString OpenRGB3DSpatialTab::sceneLabelForTransformIndex(int transform_index) const
+{
+    const int list_row = TransformIndexToControllerListRow(transform_index);
+    if(list_row >= 0 && list_row < scene_controllers_.count())
+    {
+        return scene_controllers_.textAt(list_row);
+    }
+    if(transform_index >= 0 && transform_index < static_cast<int>(controller_transforms.size()))
+    {
+        return ControllerDisplay::FormatControllerTransformLabel(controller_transforms[transform_index].get(),
+                                                                 transform_index);
+    }
+    return QStringLiteral("Controller %1").arg(transform_index);
+}
+
+void OpenRGB3DSpatialTab::SyncStackRoomOutputPanel()
+{
+    EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel();
+    if(!global_panel || !stack_room_output_panel_)
+    {
+        return;
+    }
+
+    if(current_effect_ui)
+    {
+        current_effect_ui->DisconnectStackRoomOutputPanel();
+    }
+
+    if(!current_effect_ui || !current_effect_ui->GetEffectInfo().show_room_output_control)
+    {
+        global_panel->setRoomOutputSectionVisible(false);
+        return;
+    }
+
+    global_panel->setRoomOutputSectionVisible(true);
+
+    QPointer<SpatialEffect3D> captured_ui(current_effect_ui);
+    current_effect_ui->ConnectStackRoomOutputPanel(
+        stack_room_output_panel_,
+        [captured_ui]()
+        {
+            if(!captured_ui.isNull())
+            {
+                emit captured_ui->ParametersChanged();
+            }
+        },
+        [this](int transform_index) { return sceneLabelForTransformIndex(transform_index); });
+}
+
+void OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi()
+{
+    SpatialLightingSceneProvider::instance()->InvalidateFrameOccluders();
+    if(!controller_transforms.empty())
+    {
+        SpatialLightingSceneProvider::instance()->SetControllers(&controller_transforms);
+    }
+    SyncDisplayPlaneManager();
+    SyncScenePropManager();
+    if(current_effect_ui)
+    {
+        current_effect_ui->RefreshRoomOutputControllerLists();
+    }
+}
+
+double OpenRGB3DSpatialTab::EffectiveGridScaleMm() const
+{
+    const double scale = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
+    return static_cast<double>(SafeGridScaleMm(static_cast<float>(scale)));
+}
+
+void OpenRGB3DSpatialTab::ScenePositionAxisLimitsMm(int axis, double& min_mm, double& max_mm) const
+{
+    double width_mm  = manual_room_width;
+    double height_mm = manual_room_height;
+    double depth_mm  = manual_room_depth;
+    if(roomWidthSpin())
+    {
+        width_mm = roomWidthSpin()->value();
+    }
+    if(roomHeightSpin())
+    {
+        height_mm = roomHeightSpin()->value();
+    }
+    if(roomDepthSpin())
+    {
+        depth_mm = roomDepthSpin()->value();
+    }
+    if(width_mm < 100.0)
+    {
+        width_mm = 100.0;
+    }
+    if(height_mm < 100.0)
+    {
+        height_mm = 100.0;
+    }
+    if(depth_mm < 100.0)
+    {
+        depth_mm = 100.0;
+    }
+
+    if(axis == 0)
+    {
+        min_mm = 0.0;
+        max_mm = width_mm;
+    }
+    else if(axis == 1)
+    {
+        min_mm = 0.0;
+        max_mm = height_mm;
+    }
+    else
+    {
+        min_mm = 0.0;
+        max_mm = depth_mm;
+    }
+}
+
+void OpenRGB3DSpatialTab::SetScenePositionControlsMm(double x_mm, double y_mm, double z_mm)
+{
+    if(SceneTransformPanel* panel = sceneTransformPanelWidget())
+    {
+        panel->setPositionControlsMm(x_mm, y_mm, z_mm);
+    }
+}
+
+void OpenRGB3DSpatialTab::ApplyScenePositionAbsoluteMm(int axis, double value_mm)
+{
+    if(axis == 1 && value_mm < 0.0)
+    {
+        value_mm = 0.0;
+    }
+    ApplyPositionComponent(axis,
+                           MMToGridUnits(static_cast<float>(value_mm), static_cast<float>(EffectiveGridScaleMm())));
+}
+
+void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)
+{
+    if(!viewport) return;
+
+    const int scene_row = scene_controllers_.currentRow();
+    if(scene_row >= 0 && scene_row < scene_controllers_.count() && scene_controllers_.hasUserRole(scene_row))
+    {
+        const SpatialControllerEntryKey metadata = scene_controllers_.userRoleAt(scene_row);
+        if(metadata.first == -2)
+        {
+            const int ref_idx = metadata.second;
+            if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && !IsDeviceLinkedReferencePoint(ref_idx))
+            {
+                VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
+                Vector3D pos = ref_point->GetPosition();
+                if(axis == 0) pos.x = (float)value;
+                else if(axis == 1) pos.y = (float)value;
+                else pos.z = (float)value;
+                ref_point->SetPosition(pos);
+                viewport->SelectReferencePoint(ref_idx);
+                viewport->UpdateGizmoPosition();
+                viewport->update();
+                SetLayoutDirty();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+        if(metadata.first == -3)
+        {
+            const int plane_index = FindDisplayPlaneIndexById(metadata.second);
+            if(plane_index >= 0 && plane_index < (int)display_planes.size())
+            {
+                DisplayPlane3D* plane = display_planes[plane_index].get();
+                if(plane)
+                {
+                    Transform3D& t = plane->GetTransform();
+                    if(axis == 0) t.position.x = (float)value;
+                    else if(axis == 1) t.position.y = (float)value;
+                    else t.position.z = (float)value;
+                    current_display_plane_index = plane_index;
+                    SyncDisplayPlaneControls(plane);
+                    viewport->SelectDisplayPlane(plane_index);
+                    viewport->NotifyDisplayPlaneChanged();
+                    SetLayoutDirty();
+                    emit GridLayoutChanged();
+                }
+            }
+            return;
+        }
+        if(metadata.first == -4)
+        {
+            const int prop_index = FindScenePropIndexById(metadata.second);
+            if(prop_index >= 0 && prop_index < (int)scene_props_.size())
+            {
+                SceneProp3D* prop = scene_props_[(size_t)prop_index].get();
+                if(prop)
+                {
+                    Transform3D& t = prop->GetTransform();
+                    if(axis == 0) t.position.x = (float)value;
+                    else if(axis == 1) t.position.y = (float)value;
+                    else t.position.z = (float)value;
+                    current_scene_prop_index_ = prop_index;
+                    const int ref_index = prop->GetReferencePointIndex();
+                    if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+                    {
+                        reference_points[ref_index]->SetPosition(t.position);
+                    }
+                    SyncScenePropControls(prop);
+                    viewport->SelectSceneProp(prop_index);
+                    viewport->NotifyScenePropChanged();
+                    SetLayoutDirty();
+                    emit GridLayoutChanged();
+                }
+            }
+            return;
+        }
+    }
+
+    if(referencePointsList())
+    {
+        const int ref_idx = ReferencePointIndexFromListRow(referencePointsList()->currentRow());
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && !IsDeviceLinkedReferencePoint(ref_idx))
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
+            Vector3D pos = ref_point->GetPosition();
+            if(axis == 0) pos.x = (float)value;
+            else if(axis == 1) pos.y = (float)value;
+            else pos.z = (float)value;
+            ref_point->SetPosition(pos);
+            viewport->SelectReferencePoint(ref_idx);
+            viewport->UpdateGizmoPosition();
+            viewport->update();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+            return;
+        }
+    }
+
+    int transform_index = ControllerListRowToTransformIndex(scene_controllers_.currentRow());
+    if(transform_index >= 0 && transform_index < (int)controller_transforms.size())
+    {
+        ControllerTransform* transform = controller_transforms[transform_index].get();
+        if(transform)
+        {
+            if(axis == 0) transform->transform.position.x = (float)value;
+            else if(axis == 1) transform->transform.position.y = (float)value;
+            else transform->transform.position.z = (float)value;
+            ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            ControllerLayout3D::UpdateWorldPositions(transform);
+            SyncControllerLinkedReferencePoint(transform_index);
+        }
+        viewport->NotifyControllerTransformChanged();
+        if(effect_running) RenderEffectStack();
+        SetLayoutDirty();
+        emit GridLayoutChanged();
+        return;
+    }
+    if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+    {
+        DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+        if(plane)
+        {
+            Transform3D& t = plane->GetTransform();
+            if(axis == 0) t.position.x = (float)value;
+            else if(axis == 1) t.position.y = (float)value;
+            else t.position.z = (float)value;
+            SyncDisplayPlaneControls(plane);
+            viewport->SelectDisplayPlane(current_display_plane_index);
+            viewport->NotifyDisplayPlaneChanged();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+        }
+        return;
+    }
+    if(current_scene_prop_index_ >= 0 && current_scene_prop_index_ < (int)scene_props_.size())
+    {
+        SceneProp3D* prop = scene_props_[(size_t)current_scene_prop_index_].get();
+        if(prop)
+        {
+            Transform3D& t = prop->GetTransform();
+            if(axis == 0) t.position.x = (float)value;
+            else if(axis == 1) t.position.y = (float)value;
+            else t.position.z = (float)value;
+            const int ref_index = prop->GetReferencePointIndex();
+            if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+            {
+                reference_points[ref_index]->SetPosition(t.position);
+            }
+            SyncScenePropControls(prop);
+            viewport->SelectSceneProp(current_scene_prop_index_);
+            viewport->NotifyScenePropChanged();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::ApplyRotationComponent(int axis, double value)
+{
+    if(!viewport) return;
+
+    const int scene_row = scene_controllers_.currentRow();
+    if(scene_row >= 0 && scene_row < scene_controllers_.count() && scene_controllers_.hasUserRole(scene_row))
+    {
+        const SpatialControllerEntryKey metadata = scene_controllers_.userRoleAt(scene_row);
+        if(metadata.first == -2)
+        {
+            const int ref_idx = metadata.second;
+            if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && !IsDeviceLinkedReferencePoint(ref_idx))
+            {
+                VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
+                Rotation3D rot = ref_point->GetRotation();
+                if(axis == 0) rot.x = (float)value;
+                else if(axis == 1) rot.y = (float)value;
+                else rot.z = (float)value;
+                ref_point->SetRotation(rot);
+                viewport->SelectReferencePoint(ref_idx);
+                viewport->UpdateGizmoPosition();
+                viewport->update();
+                SetLayoutDirty();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+        if(metadata.first == -3)
+        {
+            const int plane_index = FindDisplayPlaneIndexById(metadata.second);
+            if(plane_index >= 0 && plane_index < (int)display_planes.size())
+            {
+                DisplayPlane3D* plane = display_planes[plane_index].get();
+                if(plane)
+                {
+                    Transform3D& t = plane->GetTransform();
+                    if(axis == 0) t.rotation.x = (float)value;
+                    else if(axis == 1) t.rotation.y = (float)value;
+                    else t.rotation.z = (float)value;
+                    current_display_plane_index = plane_index;
+                    SyncDisplayPlaneControls(plane);
+                    viewport->SelectDisplayPlane(plane_index);
+                    viewport->NotifyDisplayPlaneChanged();
+                    SetLayoutDirty();
+                    emit GridLayoutChanged();
+                }
+            }
+            return;
+        }
+        if(metadata.first == -4)
+        {
+            const int prop_index = FindScenePropIndexById(metadata.second);
+            if(prop_index >= 0 && prop_index < (int)scene_props_.size())
+            {
+                SceneProp3D* prop = scene_props_[(size_t)prop_index].get();
+                if(prop)
+                {
+                    Transform3D& t = prop->GetTransform();
+                    if(axis == 0) t.rotation.x = (float)value;
+                    else if(axis == 1) t.rotation.y = (float)value;
+                    else t.rotation.z = (float)value;
+                    current_scene_prop_index_ = prop_index;
+                    const int ref_index = prop->GetReferencePointIndex();
+                    if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+                    {
+                        reference_points[ref_index]->GetTransform().rotation = t.rotation;
+                    }
+                    SyncScenePropControls(prop);
+                    viewport->SelectSceneProp(prop_index);
+                    viewport->NotifyScenePropChanged();
+                    SetLayoutDirty();
+                    emit GridLayoutChanged();
+                }
+            }
+            return;
+        }
+    }
+
+    if(referencePointsList())
+    {
+        const int ref_idx = ReferencePointIndexFromListRow(referencePointsList()->currentRow());
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && !IsDeviceLinkedReferencePoint(ref_idx))
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
+            Rotation3D rot = ref_point->GetRotation();
+            if(axis == 0) rot.x = (float)value;
+            else if(axis == 1) rot.y = (float)value;
+            else rot.z = (float)value;
+            ref_point->SetRotation(rot);
+            viewport->SelectReferencePoint(ref_idx);
+            viewport->UpdateGizmoPosition();
+            viewport->update();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+            return;
+        }
+    }
+
+    int transform_index = ControllerListRowToTransformIndex(scene_controllers_.currentRow());
+    if(transform_index >= 0 && transform_index < (int)controller_transforms.size())
+    {
+        ControllerTransform* transform = controller_transforms[transform_index].get();
+        if(transform)
+        {
+            if(axis == 0) transform->transform.rotation.x = (float)value;
+            else if(axis == 1) transform->transform.rotation.y = (float)value;
+            else transform->transform.rotation.z = (float)value;
+            ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            ControllerLayout3D::UpdateWorldPositions(transform);
+            SyncControllerLinkedReferencePoint(transform_index);
+        }
+        viewport->NotifyControllerTransformChanged();
+        if(effect_running) RenderEffectStack();
+        SetLayoutDirty();
+        emit GridLayoutChanged();
+        return;
+    }
+    if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+    {
+        DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+        if(plane)
+        {
+            Transform3D& t = plane->GetTransform();
+            if(axis == 0) t.rotation.x = (float)value;
+            else if(axis == 1) t.rotation.y = (float)value;
+            else t.rotation.z = (float)value;
+            SyncDisplayPlaneControls(plane);
+            viewport->SelectDisplayPlane(current_display_plane_index);
+            viewport->NotifyDisplayPlaneChanged();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+        }
+        return;
+    }
+    if(current_scene_prop_index_ >= 0 && current_scene_prop_index_ < (int)scene_props_.size())
+    {
+        SceneProp3D* prop = scene_props_[(size_t)current_scene_prop_index_].get();
+        if(prop)
+        {
+            Transform3D& t = prop->GetTransform();
+            if(axis == 0) t.rotation.x = (float)value;
+            else if(axis == 1) t.rotation.y = (float)value;
+            else t.rotation.z = (float)value;
+            const int ref_index = prop->GetReferencePointIndex();
+            if(ref_index >= 0 && ref_index < (int)reference_points.size() && reference_points[ref_index])
+            {
+                reference_points[ref_index]->GetTransform().rotation = t.rotation;
+            }
+            SyncScenePropControls(prop);
+            viewport->SelectSceneProp(current_scene_prop_index_);
+            viewport->NotifyScenePropChanged();
+            SetLayoutDirty();
+            emit GridLayoutChanged();
+        }
+    }
+}
+
+QListWidget* OpenRGB3DSpatialTab::zonesList() const
+{
+    ZonesPanel* panel = ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->zonesPanel() : nullptr;
+    return panel ? panel->zonesList() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::editZoneButton() const
+{
+    ZonesPanel* panel = ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->zonesPanel() : nullptr;
+    return panel ? panel->editZoneButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::deleteZoneButton() const
+{
+    ZonesPanel* panel = ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->zonesPanel() : nullptr;
+    return panel ? panel->deleteZoneButton() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectCategoryCombo() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->categoryCombo() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectLibraryGameCombo() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->gameCombo() : nullptr;
+}
+
+QLineEdit* OpenRGB3DSpatialTab::effectLibrarySearch() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->searchEdit() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::effectLibraryList() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->libraryList() : nullptr;
+}
+
+QCheckBox* OpenRGB3DSpatialTab::effectLibraryUnlockVolumeOnAddCheck() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->unlockVolumeOnAddCheck() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::effectLibraryAddButton() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->addToStackButton() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::effectStackList() const
+{
+    return ui && ui->effectStackPanel ? ui->effectStackPanel->stackList() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::stackPresetsList() const
+{
+    return ui && ui->effectStackPanel ? ui->effectStackPanel->presetsList() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::startAllEffectsButton() const
+{
+    return ui && ui->effectStackPanel ? ui->effectStackPanel->startAllButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::stopAllEffectsButton() const
+{
+    return ui && ui->effectStackPanel ? ui->effectStackPanel->stopAllButton() : nullptr;
+}
+
+QGroupBox* OpenRGB3DSpatialTab::effectConfigGroup() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel : nullptr;
+}
+
+EffectGlobalSettingsPanel* OpenRGB3DSpatialTab::effectGlobalSettingsPanel() const
+{
+    return ui ? ui->effectGlobalSettingsPanel : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::effectStackRowLabel() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->effectRowLabel() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->effectCombo() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::effectZoneLabel() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->zoneLabel() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectZoneCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->zoneCombo() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::originLabel() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->originLabelWidget() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectOriginCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->originCombo() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::effectBoundsLabel() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->boundsLabel() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectBoundsCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->boundsCombo() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::effectVolumeShapeLabel() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->volumeShapeLabel() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::effectVolumeShapeCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->volumeShapeCombo() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::stackEffectTypeCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->stackEffectTypeCombo() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::stackEffectZoneCombo() const
+{
+    return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->stackEffectZoneCombo() : nullptr;
+}
+
+QCheckBox* OpenRGB3DSpatialTab::gridSnapCheckbox() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->gridSnapCheckbox() : nullptr;
+}
+
+QCheckBox* OpenRGB3DSpatialTab::rotateSnapCheckbox() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->rotateSnapCheckbox() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::gridScaleSpin() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->gridScaleSpin() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::selectionInfoLabel() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->selectionInfoLabel() : nullptr;
+}
+
+QCheckBox* OpenRGB3DSpatialTab::roomGridOverlayCheckbox() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->roomGridOverlayCheckbox() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::roomWidthSpin() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->roomWidthSpin() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::roomDepthSpin() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->roomDepthSpin() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::roomHeightSpin() const
+{
+    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->roomHeightSpin() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::posXSpin() const
+{
+    return sceneTransformPanelWidget() ? sceneTransformPanelWidget()->posXSpin() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::posYSpin() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->posYSpin() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::posZSpin() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->posZSpin() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::posXSlider() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->posXSlider() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::posYSlider() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->posYSlider() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::posZSlider() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->posZSlider() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::rotXSpin() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->rotXSpin() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::rotYSpin() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->rotYSpin() : nullptr;
+}
+
+QDoubleSpinBox* OpenRGB3DSpatialTab::rotZSpin() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->rotZSpin() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::rotXSlider() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->rotXSlider() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::rotYSlider() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->rotYSlider() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::rotZSlider() const
+{
+    return ui && sceneTransformPanelWidget() ? sceneTransformPanelWidget()->rotZSlider() : nullptr;
+}
+
+QWidget* OpenRGB3DSpatialTab::effectControlsWidget() const
+{
+    return ui && ui->effectControlsHostPanel ? ui->effectControlsHostPanel : nullptr;
+}
+
+QVBoxLayout* OpenRGB3DSpatialTab::effectControlsLayout() const
+{
+    return ui && ui->effectControlsHostPanel ? ui->effectControlsHostPanel->contentLayout() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::audioDeviceCombo() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->deviceCombo() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::audioGainSlider() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->gainSlider() : nullptr;
+}
+
+QSlider* OpenRGB3DSpatialTab::audioDecaySlider() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->decaySlider() : nullptr;
+}
+
+QProgressBar* OpenRGB3DSpatialTab::audioLevelBar() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->levelBar() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::audioStartButton() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->startButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::audioStopButton() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->stopButton() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::audioGainValueLabel() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->gainValueLabel() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::audioSpectrumLabel() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->spectrumLabel() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::audioEqCaption() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->eqCaption() : nullptr;
+}
+
+QScrollArea* OpenRGB3DSpatialTab::audioEqScroll() const
+{
+    return ui && ui->audioInputPanel ? ui->audioInputPanel->eqScroll() : nullptr;
+}
+
+QLabel* OpenRGB3DSpatialTab::objectCreatorStatusLabel() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->statusLabel() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::customControllersList() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->customControllersList() : nullptr;
+}
+
+QWidget* OpenRGB3DSpatialTab::customControllersEmptyLabel() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->customControllersEmptyLabel() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::exportCustomControllerButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->exportCustomControllerButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::editCustomControllerButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->editCustomControllerButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::deleteCustomControllerButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->deleteCustomControllerButton() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::referencePointsList() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->referencePointsList() : nullptr;
+}
+
+QWidget* OpenRGB3DSpatialTab::refPointsEmptyLabel() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->refPointsEmptyLabel() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::editReferencePointButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->editReferencePointButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::removeRefPointButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->removeRefPointButton() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::displayPlanesList() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->displayPlanesList() : nullptr;
+}
+
+QWidget* OpenRGB3DSpatialTab::displayPlanesEmptyLabel() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->displayPlanesEmptyLabel() : nullptr;
+}
+
+QListWidget* OpenRGB3DSpatialTab::scenePropsList() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->scenePropsList() : nullptr;
+}
+
+QWidget* OpenRGB3DSpatialTab::scenePropsEmptyLabel() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->scenePropsEmptyLabel() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::createScenePropButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->createScenePropButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::editScenePropButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->editScenePropButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::removeScenePropButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->removeScenePropButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::editDisplayPlaneButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->editDisplayPlaneButton() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::removeDisplayPlaneButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->removeDisplayPlaneButton() : nullptr;
+}
+
+QComboBox* OpenRGB3DSpatialTab::displayPlaneCaptureCombo() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->displayPlaneCaptureCombo() : nullptr;
+}
+
+QPushButton* OpenRGB3DSpatialTab::displayPlaneCaptureRefreshButton() const
+{
+    return ui && ui->objectCreatorTabPanel ? ui->objectCreatorTabPanel->displayPlaneCaptureRefreshButton() : nullptr;
+}
+
+SpatialControllerCardList* OpenRGB3DSpatialTab::availableControllerCards() const
+{
+    return ui && ui->availableControllersPanel ? ui->availableControllersPanel->cardList() : nullptr;
+}
+
+SpatialControllerCardList* OpenRGB3DSpatialTab::sceneControllerCards() const
+{
+    return ui && ui->controllersInScenePanel ? ui->controllersInScenePanel->cardList() : nullptr;
+}

@@ -1,0 +1,134 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "DisplayPlaneDialog.h"
+#include "DisplayPlaneManager.h"
+#include "OpenRGB3DSpatialTab.h"
+#include "PluginUiUtils.h"
+#include "EffectSliderPromote.h"
+#include "DisplayPlaneCaptureCombo.h"
+#include "DisplayPlaneCaptureUi.h"
+#include "ui_DisplayPlaneDialog.h"
+
+#include <QDesktopServices>
+#include <QGridLayout>
+#include <QLabel>
+#include <QUrl>
+
+DisplayPlaneDialog::DisplayPlaneDialog(OpenRGB3DSpatialTab* host_tab, QWidget* parent)
+    : QDialog(parent)
+    , ui(new Ui::DisplayPlaneDialog)
+    , host_tab_(host_tab)
+{
+    ui->setupUi(this);
+
+    PluginUiApplyMutedSecondaryLabel(ui->panelSizeHintLabel->label());
+    ui->captureCaption->setText(DisplayPlaneCaptureUi::Caption());
+    ui->captureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
+    ui->refreshCaptureButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
+
+    /* One size field per row: caption | spin-over-slider (was a cramped 4-column row). */
+    if(QGridLayout* grid = ui->sizeGrid)
+    {
+        grid->removeWidget(ui->widthCaption);
+        grid->removeWidget(ui->widthSpin);
+        grid->removeWidget(ui->heightCaption);
+        grid->removeWidget(ui->heightSpin);
+        grid->removeWidget(ui->captureCaption);
+        grid->removeWidget(ui->captureCombo);
+        grid->removeWidget(ui->refreshCaptureButton);
+
+        grid->addWidget(ui->widthCaption, 0, 0);
+        grid->addWidget(MakeDoubleSpinOverThinSliderStack(ui->widthSpin, this), 0, 1, 1, 2);
+        grid->addWidget(ui->heightCaption, 1, 0);
+        grid->addWidget(MakeDoubleSpinOverThinSliderStack(ui->heightSpin, this), 1, 1, 1, 2);
+        grid->addWidget(ui->captureCaption, 2, 0);
+        grid->addWidget(ui->captureCombo, 2, 1);
+        grid->addWidget(ui->refreshCaptureButton, 2, 2);
+        AlignGridCaptionColumn(grid, 0, 120);
+    }
+    AlignCaptionLabels({ui->nameCaption, ui->widthCaption, ui->heightCaption, ui->captureCaption}, 120);
+
+    connect(ui->refreshCaptureButton, &QPushButton::clicked, this, &DisplayPlaneDialog::onRefreshCaptureClicked);
+    connect(ui->openSpecsButton, &QPushButton::clicked, this, &DisplayPlaneDialog::onOpenSpecsClicked);
+}
+
+DisplayPlaneDialog::~DisplayPlaneDialog()
+{
+    delete ui;
+}
+
+void DisplayPlaneDialog::setCreateMode()
+{
+    setWindowTitle(tr("Create Display Plane"));
+}
+
+void DisplayPlaneDialog::setEditMode()
+{
+    setWindowTitle(tr("Edit Display Plane"));
+}
+
+void DisplayPlaneDialog::setCreateDefaults(const QString& suggested_name, float width_mm, float height_mm)
+{
+    ui->nameEdit->setText(suggested_name);
+    ui->widthSpin->setValue(width_mm);
+    ui->heightSpin->setValue(height_mm);
+    populateCaptureCombo("", true);
+}
+
+void DisplayPlaneDialog::loadFrom(const DisplayPlane3D& plane)
+{
+    ui->nameEdit->setText(QString::fromStdString(plane.GetName()));
+    ui->widthSpin->setValue(plane.GetWidthMM());
+    ui->heightSpin->setValue(plane.GetHeightMM());
+    populateCaptureCombo(plane.GetCaptureSourceId(), false);
+}
+
+QString DisplayPlaneDialog::name() const
+{
+    return ui->nameEdit->text().trimmed();
+}
+
+float DisplayPlaneDialog::widthMm() const
+{
+    return static_cast<float>(ui->widthSpin->value());
+}
+
+float DisplayPlaneDialog::heightMm() const
+{
+    return static_cast<float>(ui->heightSpin->value());
+}
+
+std::string DisplayPlaneDialog::captureSourceId() const
+{
+    return CaptureComboSourceId(ui->captureCombo);
+}
+
+std::string DisplayPlaneDialog::captureSourceLabel() const
+{
+    return CaptureComboSourceLabel(ui->captureCombo);
+}
+
+void DisplayPlaneDialog::populateCaptureCombo(const std::string& prefer_source_id, bool suggest_if_empty)
+{
+    if(!host_tab_)
+    {
+        return;
+    }
+    host_tab_->FillDisplayPlaneCaptureCombo(ui->captureCombo, prefer_source_id, suggest_if_empty);
+}
+
+void DisplayPlaneDialog::onRefreshCaptureClicked()
+{
+    std::string current;
+    const int index = ui->captureCombo->currentIndex();
+    if(index >= 0)
+    {
+        current = ui->captureCombo->itemData(index).toString().toStdString();
+    }
+    populateCaptureCombo(current);
+}
+
+void DisplayPlaneDialog::onOpenSpecsClicked()
+{
+    QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.displayspecifications.com/")));
+}
