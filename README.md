@@ -1,14 +1,14 @@
 # OpenRGB 3D Spatial LED Control
 
-Plugin for [OpenRGB](https://openrgb.org/) built around one idea: **drive lighting from a 3D layout**â€”where devices and surfaces sit in spaceâ€”not only from zone order on a single strip. You place hardware in a **3D room**, run **spatial effects** across that model, and can add **screen capture** (ambilight-style onto geometry), **display planes**, and **game-linked** lighting.
+Plugin for [OpenRGB](https://openrgb.org/) built around one idea: **drive lighting from a 3D layout**—where devices and surfaces sit in space—not only from zone order on a single strip. You place hardware in a **3D room**, run **spatial effects** across that model, and can add **screen capture** (ambilight-style onto geometry), **display planes**, and **game-linked** lighting.
 
-This started as a **for-me** plugin and is still **alpha**: uneven, half-built in places, and not polished. Shared in case someone else wants to try it, break it, or extend itâ€”not as a finished product.
+This started as a **for-me** plugin and is still **alpha**, but the core path is solid enough to use daily: room layout, effect stack, Screen Mirror, and the presets content pack. Shared so others can try it, break it, or extend it—not as a finished product for everyone.
 
 ## Engine + content
 
 This repo is the **raw engine**: spatial layout, Effect Library loaders, Ambilight, Reactive, Minecraft codecs, Action Editor / Triggers / Movie Sync **players**. It ships **no looks**.
 
-All drop-in content (`.fs`, `.kernel`, Action Tools `.fx`, trigger/Movie Sync actions, catalogs, VLC helper, controller layouts) comes from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — copy-paste into AppData.
+All drop-in content (`.fs`, `.kernel`, Action Tools `.fx`, trigger/Movie Sync actions, catalogs, VLC helper, controller layouts) comes from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — copy into AppData.
 
 | Engine (in the DLL) | Content folder (presets pack) |
 |---------------------|-------------------------------|
@@ -44,16 +44,16 @@ Map: [Documentation/content-library.md](Documentation/content-library.md).
 ## Who it is for
 
 - You already use OpenRGB and are OK reading a short **README** and poking at options.
-- You want **3D-aware** effects and layout (not only â€œstrip modesâ€ on a single device).
-- You can tolerate **sharp edges**: features still in motion, UI that fights you, and setup that assumes you will experiment.
+- You want **3D-aware** effects and layout (not only “strip modes” on a single device).
+- You can tolerate **sharp edges**: features still in motion, and setup that assumes you will experiment.
 
-If you expect plug-and-play with zero reading, this will probably frustrate youâ€”OpenRGB itself is already a lot for many users.
+If you expect plug-and-play with zero reading, this will probably frustrate you—OpenRGB itself is already a lot for many users.
 
 ## Requirements
 
-- **OpenRGB 1.0** (Plugin API **5**), **Qt 6** matching the host (pipeline builds use **6.8.3**). Check **Information â†’ Software Info**.
+- **OpenRGB 1.0** (Plugin API **5**), **Qt 6** matching the host (pipeline builds use **6.8.3**). Check **Information → Software Info**.
 - Room viewport needs **OpenGL 4.1 Core**. Qt5 hosts are not supported.
-- Install the matching release artifact into OpenRGBâ€™s `plugins` folder (or rebuild with `scripts/install-linux-user.sh` for distro OpenRGB). Flatpak OpenRGB needs the Flatpak extension â€” do not load a host `.so`.
+- Install the matching release artifact into OpenRGB’s `plugins` folder (or rebuild with `scripts/install-linux-user.sh` for distro OpenRGB). Flatpak OpenRGB needs the Flatpak extension — do not load a host `.so`.
 
 ### Building from source
 
@@ -72,15 +72,14 @@ More detail: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## What exists (high level)
 
-None of this is â€œdone for everyoneâ€â€”only a map of areas that have code:
+A map of areas that have real code today:
 
-- **3D viewport** â€” place/rotate devices, grid snap, room turntable, gizmo. OpenGL 4.1 Core (MeshBatch / GLSL 410). Expect DPR quirks and ongoing viewport churn.
-- **Reference points, display planes, capture zones** â€” for Screen Mirror / ambilight-style mapping onto geometry.
-- **Effect stack** â€” pick an **engine** in the library, then a look that engine plays (Volume / Audio / Media / Shader Field files; Reactive / Ambilight / Game codecs). Quality varies a lot by look.
+- **3D viewport** — place/rotate devices, grid snap, room turntable, gizmo. OpenGL 4.1 Core (MeshBatch / GLSL 410). Expect some DPR quirks.
+- **Reference points, display planes, capture zones** — for Screen Mirror / ambilight-style mapping onto geometry.
+- **Effect stack** — pick an **engine** in the library, then a look that engine plays (Volume / Audio / Media / Shader Field files; Reactive / Ambilight / Game codecs).
 - **Actions + Triggers** — Action Editor timelines; Manual / OS / game-style Triggers. Design notes: [Documentation/effect-event-maker.md](Documentation/effect-event-maker.md).
-
-- **OpenRGB profiles** â€” layout + effects round-trip through the host profile payload (current schema only; no legacy dual loaders).
-- **Minecraft bridge** â€” Room Ambilight over **sparse cubemap SHM** (mod â‰¥ 0.9.46) plus UDP vitals/damage. Fabric mod under [integrations/minecraft/](integrations/minecraft/). **Alpha:** works well enough on **vanilla**; not meaningfully tested against big modpacks.
+- **OpenRGB profiles** — layout + effects round-trip through the host profile payload (current schema only).
+- **Minecraft bridge** — Room Ambilight over **sparse cubemap SHM** (mod ≥ 0.9.46) plus UDP vitals/damage. Fabric mod under [integrations/minecraft/](integrations/minecraft/). Works well enough on **vanilla**; not a modpack matrix.
 
 ## Documentation
 
@@ -92,38 +91,37 @@ Contracts that ship with the code live under **[Documentation/](Documentation/)*
 | --- | --- |
 | [effects-engines.md](Documentation/effects-engines.md) | Engines as players; library categories; FolderVolume / codecs |
 | [shader-conversion.md](Documentation/shader-conversion.md) | Porting 1D / 2D / 3D shaders into those engines |
-| [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | Layout math, mm â†” grid, RoomGrid, spacing, viewport / effects contracts |
-| [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry bridge (RoomGrid â†’ game world, sparse cubemap SHM) |
+| [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | Layout math, mm ↔ grid, RoomGrid, spacing, viewport / effects contracts |
+| [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry bridge (RoomGrid → game world, sparse cubemap SHM) |
 | [effect-event-maker.md](Documentation/effect-event-maker.md) | Actions + Triggers design |
 | [content-library.md](Documentation/content-library.md) | AppData folder map (content lives in the presets repo) |
 
 Looks, layouts, tools: **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)**.
 
-Upstream OpenRGB docs stay in the `OpenRGB/` submodule (`OpenRGB/Documentation/â€¦`). Day-to-day contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md).
+Upstream OpenRGB docs stay in the `OpenRGB/` submodule (`OpenRGB/Documentation/…`). Day-to-day contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## What to expect (honest status)
 
-The whole plugin is **experimental**. Pieces land at different levels of polish:
+Still **alpha**, with uneven polish by area:
 
-- **Spatial layout / viewport** â€” Backbone of the project. Furthest along, still evolving, and still easy to confuse (pivots, wipe directions, gizmo feel, DPI).
-- **File-loaded looks** â€” Volume / Audio / Media / Shader Field content on disk; missing files means missing rows in that engineâ€™s list. Still alpha UX.
-- **Actions / Triggers** — Real path, not a mock — but authoring UX is still early.
+- **Spatial layout / viewport** — Backbone. Furthest along; pivots, wipe directions, and DPI can still confuse.
+- **File-loaded looks** — Volume / Audio / Media / Shader Field content on disk; missing files means missing rows. UX is early but usable.
+- **Actions / Triggers** — Real path, not a mock — authoring UX is still early.
+- **Screen Mirror / ambilight** — Daily-driver capable for plane + Reach setups. UV mapping is an **outside / convex** sphere from the plane (light out from the glass). Clips that dive *into* a tunnel will feel wrong by design. Capture stays on the CPU; room fields use a GPU volume atlas.
+- **Reactive** — Keyboard / mouse / gamepad pulses from layout positions (privacy: no key logging). Mapping depends on OpenRGB LED names.
+- **Gaming** — Minecraft path above is **vanilla-shaped alpha**. Other games are “bring your own telemetry story.”
 
-- **Screen mirror / ambilight** â€” **Works** for some setups, still **experimental**. Capture stays on the CPU; room fields use a GPU volume atlas.
-- **Reactive** â€” Keyboard / mouse / gamepad pulses from layout positions (privacy: no key logging). Mapping depends on OpenRGB LED names.
-- **Gaming** â€” Minecraft path above is **vanilla-shaped alpha**, not a supported-mod matrix. Other games are â€œbring your own telemetry story.â€
-
-Until you have tried a feature on **your** PC, treat it as **unproven** for youâ€”not â€œdoneâ€ for everyone.
+Until you have tried a feature on **your** PC, treat it as **unproven** for you—not “done” for everyone.
 
 ## Contributing / issues
 
-Source of truth and PRs: **GitHub** (see [CONTRIBUTING.md](CONTRIBUTING.md)). The GitLab copy is a mirror/backup. Bug reports need versions and steps; â€œit doesnâ€™t workâ€ without that may get closed.
+Source of truth and PRs: **GitHub** (see [CONTRIBUTING.md](CONTRIBUTING.md)). The GitLab copy is a mirror/backup. Bug reports need versions and steps; “it doesn’t work” without that may get closed.
 
 Controller JSON and all effect/content files: **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)**.
 
 ## License
 
-GPL-2.0-only â€” see [LICENSE](LICENSE).
+GPL-2.0-only — see [LICENSE](LICENSE).
 
 ## Support
 

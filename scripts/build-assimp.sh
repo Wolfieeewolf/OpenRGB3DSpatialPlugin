@@ -41,6 +41,22 @@ fi
 
 mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
 
+# qmake Makefiles (esp. rpm %make_build with V=1) often export
+#   CC='@echo compiling $< && gcc'
+# Make expands $< to this rule's first prerequisite (Assimp CMakeLists.txt),
+# so nested cmake tries to run that whole string as the compiler.
+_clean_make_wrapped_compiler() {
+  local name="$1"
+  local val="${!name-}"
+  case "$val" in
+    ''|*@echo*|*"&&"*|*$'\n'*|*$'\r'*)
+      unset -v "$name" || true
+      ;;
+  esac
+}
+_clean_make_wrapped_compiler CC
+_clean_make_wrapped_compiler CXX
+
 GENERATOR_ARGS=()
 if command -v ninja >/dev/null 2>&1; then
   GENERATOR_ARGS=(-G Ninja)

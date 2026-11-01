@@ -586,7 +586,10 @@ equals(ASSIMP_AUTO_BUILD, 1) {
     } else {
         ASSIMP_LIB_FILE = $$ASSIMP_LIBDIR/libassimp.a
         ensure_assimp.target = $$ASSIMP_LIB_FILE
+        # Force plain compilers: make may export CC='@echo compiling $< && gcc'
+        # with $< = Assimp CMakeLists.txt (breaks nested cmake under rpm %make_build).
         ensure_assimp.commands = \
+            CC=gcc CXX=g++ \
             ASSIMP_BUILD_DIR=$$shell_quote($$ASSIMP_BUILD_DIR) \
             ASSIMP_INSTALL_DIR=$$shell_quote($$ASSIMP_DIR) \
             $$shell_quote($$PWD/scripts/build-assimp.sh)
