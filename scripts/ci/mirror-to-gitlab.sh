@@ -7,7 +7,7 @@ if [ -z "${GITLAB_MIRROR_TOKEN:-}" ]; then
   exit 0
 fi
 
-GITLAB_REPO="${GITLAB_MIRROR_REPO:-wolfieeewolf1/OpenRGB3DSpatialPlugin}"
+GITLAB_REPO="${GITLAB_MIRROR_REPO:-Wolfieeewolf/OpenRGB3DSpatialPlugin}"
 TARGET_BRANCH="${GITLAB_MIRROR_BRANCH:-main}"
 REMOTE_URL="https://oauth2:${GITLAB_MIRROR_TOKEN}@gitlab.com/${GITLAB_REPO}.git"
 

@@ -2,21 +2,21 @@
 # Target host: OpenRGB pipeline (Plugin API 5). Qt5 jobs are omitted on purpose.
 #
 # Org runner jobs need OpenRGBDevelopers linux/macos/shared-windows tags.
-# Personal GitLab (wolfieeewolf1) still has SaaS fallbacks at the bottom.
+# Personal GitLab (Wolfieeewolf) still has SaaS fallbacks at the bottom.
 
 .downstream_rules:
   rules:
-    - if: $CI_PROJECT_PATH !~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PROJECT_PATH !~ /^(OpenRGBDevelopers|Wolfieeewolf)\/OpenRGB3DSpatialPlugin$/ && $CI_PIPELINE_SOURCE == "push"
       when: manual
       allow_failure: true
 
 .upstream_rules:
   rules:
-    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && $RUN_CI == "true" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG || $CI_PIPELINE_SOURCE == "web")'
+    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|Wolfieeewolf)\/OpenRGB3DSpatialPlugin$/ && $RUN_CI == "true" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG || $CI_PIPELINE_SOURCE == "web")'
       when: on_success
-    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && ($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")'
+    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|Wolfieeewolf)\/OpenRGB3DSpatialPlugin$/ && ($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")'
       when: on_success
-    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|wolfieeewolf1)\/OpenRGB3DSpatialPlugin$/ && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG)'
+    - if: '$CI_PROJECT_PATH =~ /^(OpenRGBDevelopers|Wolfieeewolf)\/OpenRGB3DSpatialPlugin$/ && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG)'
       when: manual
       allow_failure: true
     - !reference [.downstream_rules, rules]

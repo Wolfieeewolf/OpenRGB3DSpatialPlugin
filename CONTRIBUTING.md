@@ -8,7 +8,7 @@ Day-to-day work is on **GitHub** (free Actions builds and releases). GitLab is a
 | ---- | -------- |
 | **Source of truth** | [github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin) |
 | **CI / releases / artifacts** | GitHub Actions (`.github/workflows/release.yml`) on `v*` tags |
-| **GitLab mirror** | [gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin](https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin) â€” updated from GitHub when `GITLAB_MIRROR_TOKEN` is set |
+| **GitLab mirror** | [gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin) — updated from GitHub when `GITLAB_MIRROR_TOKEN` is set |
 
 **Fork on GitHub**, branch from `main`, open a **pull request** on GitHub. Do not push new work to GitLab `main`; that copy is overwritten by the mirror.
 
@@ -40,7 +40,7 @@ To refresh the GitHub wiki from the local seed: `.\scripts\publish-wiki.ps1` (af
 | -------- | ------- |
 | `RUN_CI` | Set to `true` (pipeline variable) to auto-run Linux/Windows **build** jobs. Otherwise those jobs stay **manual** so shared-runner minutes are not spent on every push. Or use **Build â†’ Pipelines â†’ Run pipeline** (web) when you want a build. Primary packaged releases stay on GitHub Actions. |
 
-Until the project namespace is finalized on `OpenRGBDevelopers`, the maintainer fork `wolfieeewolf1/OpenRGB3DSpatialPlugin` is also treated as upstream for automatic CI (see `.gitlab-ci.yml` rules).
+Until the project namespace is finalized on `OpenRGBDevelopers`, the maintainer fork `Wolfieeewolf/OpenRGB3DSpatialPlugin` is also treated as upstream for automatic CI (see `.gitlab-ci.yml` rules).
 
 ## Issues and pull requests
 

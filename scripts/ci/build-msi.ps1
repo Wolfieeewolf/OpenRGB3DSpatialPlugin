@@ -73,7 +73,7 @@ $Wxs = @"
         <MajorUpgrade Schedule='afterInstallInitialize' AllowDowngrades='yes'/>
         <Icon Id='OpenRGBIcon' SourceFile='$IconFile'/>
         <Property Id='ARPPRODUCTICON' Value='OpenRGBIcon'/>
-        <Property Id='ARPURLINFOABOUT' Value='https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin'/>
+        <Property Id='ARPURLINFOABOUT' Value='https://gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin'/>
         <Property Id='WIXUI_INSTALLDIR' Value='INSTALLDIR'/>
         <UIRef Id='WixUI_InstallDir'/>
         <UIRef Id='WixUI_ErrorProgressText'/>

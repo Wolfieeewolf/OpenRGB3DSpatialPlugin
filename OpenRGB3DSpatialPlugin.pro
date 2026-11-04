@@ -57,7 +57,7 @@ GIT_BRANCH      = $$system(git --git-dir $$_PRO_FILE_PWD_/.git --work-tree $$_PR
 
 PROJECT_DESC = "Organize and control RGB devices in a 3D grid with spatial effects"
 PROJECT_NAME = "OpenRGB 3D Spatial LED Control"
-PROJECT_URL  = "https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin"
+PROJECT_URL  = "https://gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin"
 
 DEFINES += \
     VERSION_STRING=\\"\"\"$$VERSION_STR\\"\"\" \
