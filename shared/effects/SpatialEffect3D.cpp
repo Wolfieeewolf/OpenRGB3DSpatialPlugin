@@ -1303,10 +1303,9 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     const float detail_norm = std::clamp(0.35f + GetNormalizedDetail() * 1.2f, 0.25f, 2.5f);
     float phase_eff = 0.0f;
     float time_eff = 0.0f;
-    float kernel_rep_eff = 1.0f;
+    [[maybe_unused]] float kernel_rep_eff = 1.0f;
     StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, time_sec,
                             phase_eff, time_eff, kernel_rep_eff);
-    (void)kernel_rep_eff;
 
     float lx = 0.0f, ly = 0.0f, lz = 0.0f;
     StripColormapLocalAxes(grid, normalized_scale, origin, rot, lx, ly, lz);

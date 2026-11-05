@@ -186,7 +186,6 @@ void MovieSyncEffect::SetupCustomUI(QWidget* parent)
     }
     bindTab();
 
-    // CustomOnly layout: parent is the settings body (already has a layout). No common menus.
     QWidget* panel = new QWidget();
     panel->setObjectName(QStringLiteral("MovieSyncEffectSettings"));
     QVBoxLayout* layout = new QVBoxLayout(panel);

@@ -33,6 +33,10 @@ void EffectLibraryPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     PluginUiApplyMutedSecondaryLabel(ui->categoryLabel);
     PluginUiApplyMutedSecondaryLabel(ui->gameLabel);
+    if(ui->unlockVolumeHint)
+    {
+        PluginUiApplyMutedSecondaryLabel(ui->unlockVolumeHint);
+    }
 
     connect(ui->categoryCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
             &OpenRGB3DSpatialTab::effectLibraryCategoryChanged);

@@ -297,7 +297,6 @@ void SpatialStripFieldEngine::readbackStrip(int w)
 
 float SpatialStripFieldEngine::sample01(float s01) const
 {
-    // Lock-free: ensureReady must not run concurrently (same render thread).
     if(strip_w_ < 2 || strip_r_.empty())
     {
         return 0.0f;

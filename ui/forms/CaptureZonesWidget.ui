@@ -36,7 +36,7 @@
       <item row="0" column="0">
        <widget class="QLabel" name="waveTimeCaption">
         <property name="text">
-         <string>Time to edge:</string>
+         <string>Travel time:</string>
         </property>
        </widget>
       </item>
@@ -64,7 +64,7 @@
             <enum>Qt::Horizontal</enum>
            </property>
            <property name="toolTip">
-            <string>Seconds for the wave to reach the farthest LED from the falloff origin. This replaces Wave Intensity — they are not combined. 0 = Off (instant mirror, or use Wave Intensity). 0.1s and up delay far LEDs by that travel time.</string>
+            <string>Primary wave speed: seconds for the wave to reach the farthest LED from the falloff origin. 0 = Off (instant mirror). When set above 0, Alt. speed is cleared and hidden — the two are never combined.</string>
            </property>
           </widget>
          </item>
@@ -132,7 +132,7 @@
       <item row="2" column="0">
        <widget class="QLabel" name="propagationCaption">
         <property name="text">
-         <string>Wave Intensity:</string>
+         <string>Alt. speed:</string>
         </property>
        </widget>
       </item>
@@ -160,7 +160,7 @@
             <enum>Qt::Horizontal</enum>
            </property>
            <property name="toolTip">
-            <string>Layout-agnostic delay curve used only when Time to edge is Off. 0-4%: instant mirror. 5-100% enables delayed sampling (higher % = slower wave). Ignored while Time to edge is on.</string>
+            <string>Shown only while Travel time is Off. 0–4%: instant mirror. 5–100%: delayed sampling (higher % = slower). Cleared automatically when Travel time is on — use Travel time for new setups.</string>
            </property>
           </widget>
          </item>

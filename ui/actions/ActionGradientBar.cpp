@@ -258,11 +258,6 @@ void ActionGradientBar::showStopContextMenu(const QPoint& local_pos)
 
 void ActionGradientBar::keyPressEvent(QKeyEvent* event)
 {
-    if(!event)
-    {
-        QWidget::keyPressEvent(event);
-        return;
-    }
     if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
         const int idx = selectedStopIndex();

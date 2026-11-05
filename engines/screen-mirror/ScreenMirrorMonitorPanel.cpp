@@ -196,9 +196,10 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    100,
                    (int)std::lround(std::clamp(settings.scale, 0.0f, 1.0f) * 100.0f),
-                   QStringLiteral("How far Reach extends from this display plane's centre "
-                                  "(0–100% of room corner distance). Use Softness / Falloff curve "
-                                  "for the edge shape — overshoot past 100% is not needed."),
+                   QStringLiteral("Ambilight fill radius as % of room corner distance from this "
+                                  "display plane's centre (not Room light reach mm). Start near 55%; "
+                                  "raise only if far walls stay dark. Edge Softness / Falloff curve "
+                                  "shape the fade — overshoot past 100% is not needed."),
                    QStringLiteral("%"));
 
     settings.scale_invert_check = ui->scaleInvertCheck;
@@ -225,8 +226,9 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    0,
                    100,
                    (int)settings.edge_softness,
-                   QStringLiteral("Flat bright core around this display plane's centre before fading "
-                                  "(0 = pure gradient, 100 ≈ room-wide fill with a soft rim)."),
+                   QStringLiteral("Flat bright core inside Ambilight reach before fading "
+                                  "(0 = pure gradient, high values fill most of the reach and look like "
+                                  "a room wash — keep low unless you want that)."),
                    QString());
 
     wire_pct_ticks(ui->brightnessRow,
@@ -323,23 +325,21 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
         QObject::disconnect(b, QOverload<int>::of(&QSpinBox::valueChanged), effect,
                             &ScreenMirror::OnParameterChanged);
         QObject::connect(a, QOverload<int>::of(&QSpinBox::valueChanged), effect,
-                         [effect, a, b, link](int v) {
+                         [effect, b, link](int v) {
                              if(link->isChecked() && b->value() != v)
                              {
                                  QSignalBlocker block(b);
                                  b->setValue(v);
                              }
-                             (void)a;
                              effect->OnParameterChanged();
                          });
         QObject::connect(b, QOverload<int>::of(&QSpinBox::valueChanged), effect,
-                         [effect, a, b, link](int v) {
+                         [effect, a, link](int v) {
                              if(link->isChecked() && a->value() != v)
                              {
                                  QSignalBlocker block(a);
                                  a->setValue(v);
                              }
-                             (void)b;
                              effect->OnParameterChanged();
                          });
         QObject::connect(link, &QCheckBox::toggled, effect, [effect, a, b](bool on) {
@@ -376,8 +376,11 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     ui->calibrationPatternCheck->setToolTip(
         QStringLiteral(
             "Drive LEDs from a 3D-friendly R/G/B/Y test image (same as the zone preview). "
-            "Brightness, threshold, Reach / falloff, vibrance, and related sliders all apply."));
-    QObject::connect(ui->calibrationPatternCheck, &QCheckBox::toggled, effect, [effect](bool) {
+            "Brightness, threshold, Ambilight reach / falloff, vibrance, and related sliders all apply."));
+    SyncCalibrationChrome(ui->calibrationPatternCheck);
+    QObject::connect(ui->calibrationPatternCheck, &QCheckBox::toggled, effect,
+                     [effect, check = ui->calibrationPatternCheck](bool) {
+        SyncCalibrationChrome(check);
         effect->OnParameterChanged();
         effect->OnCalibrationPatternChanged();
     });
@@ -432,7 +435,6 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
     MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->whiteRolloffRow, extras_form);
     MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->vibranceRow, extras_form);
     MoveFormRowTo(qobject_cast<QFormLayout*>(ui->brightnessGroup->layout()), ui->ledTrimHost, extras_form);
-    MoveFormRowTo(qobject_cast<QFormLayout*>(ui->previewGroup->layout()), ui->calibrationPatternCheck, extras_form);
 
     EffectCollapsibleSection* advanced = EffectUiRows::AppendCollapsibleSection(
         root,

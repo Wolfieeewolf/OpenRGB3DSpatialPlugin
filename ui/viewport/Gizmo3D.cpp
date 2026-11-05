@@ -14,30 +14,20 @@
 #endif
 
 #define GIZMO_SIZE                  1.5f
-/**
- * Absolute world-space ceiling — uncapped arms + hit spheres locked the UI last time.
- * Visual size may grow with the object; hit radii below stay separately capped.
- */
 #define GIZMO_SIZE_HARD_MAX         40.0f
 #define GIZMO_SIZE_HARD_MIN         0.35f
 #define AXIS_THICKNESS              0.1f
-#define AXIS_HIT_THICKNESS          0.25f
+#define AXIS_HIT_THICKNESS          0.32f
 #define CENTER_SPHERE_RADIUS        0.30f
 #define CENTER_SPHERE_HIT_RADIUS    0.40f
 #define ROTATE_RING_HIT_THICKNESS   0.35f
 #define GIZMO_DRAG_SLOP_GL_PX       3.0f
 #define GIZMO_DEPTH_HARD_MAX        5000.0f
-/** Fraction of view height at the gizmo used as axis arm length (screen-constant fallback). */
 #define GIZMO_ARM_VIEW_FRACTION     0.072f
-/**
- * Object-relative growth: rings track object size, soft-clamped to a screen band so
- * room-filling volumes stay usable (not diameter rings / viewport-swallowing hits).
- */
 #define GIZMO_OBJECT_RADIUS_FACTOR  0.85f
 #define GIZMO_OBJECT_SCREEN_MIN_FRAC 0.06f
 #define GIZMO_OBJECT_SCREEN_MAX_FRAC 0.40f
 #define GIZMO_OBJECT_MAX_SCREEN_MUL  5.5f
-/** Hit targets — fixed ceiling independent of visual arm length (crash firewall). */
 #define GIZMO_HIT_CENTER_MAX        1.6f
 #define GIZMO_HIT_AXIS_MAX          1.35f
 #define GIZMO_HIT_RING_MAX          1.6f
@@ -63,6 +53,7 @@ Gizmo3D::Gizmo3D()
 
     viewport_width = 800;
     viewport_height = 600;
+    device_pixel_ratio_ = 1.0f;
 
     gizmo_size = GIZMO_SIZE;
     object_radius_ = 0.0f;
@@ -248,10 +239,12 @@ void Gizmo3D::CancelDrag()
     rotate_snap_active = false;
 }
 
-void Gizmo3D::SetViewportSize(int width, int height)
+void Gizmo3D::SetViewportSize(int fb_width, int fb_height, qreal device_pixel_ratio)
 {
-    viewport_width = width;
-    viewport_height = height;
+    viewport_width = std::max(1, fb_width);
+    viewport_height = std::max(1, fb_height);
+    const float dpr = (float)device_pixel_ratio;
+    device_pixel_ratio_ = (std::isfinite(dpr) && dpr > 0.01f) ? dpr : 1.0f;
 }
 
 void Gizmo3D::SetGridSnap(bool enabled, float size)
@@ -336,9 +329,9 @@ void Gizmo3D::SetScreenScale(float eye_distance, float fovy_degrees)
     /* Hit targets stay capped independently of visual arm length. */
     center_sphere_radius = std::min(gizmo_size * 0.10f, GIZMO_VIS_CENTER_MAX);
     axis_thickness = std::min(gizmo_size * 0.05f, GIZMO_VIS_AXIS_THICK_MAX);
-    axis_hit_thickness_ = std::min(gizmo_size * 0.12f, GIZMO_HIT_AXIS_MAX);
-    center_hit_radius_ = std::min(gizmo_size * 0.14f, GIZMO_HIT_CENTER_MAX);
-    rotate_ring_hit_thickness_ = std::min(gizmo_size * 0.14f, GIZMO_HIT_RING_MAX);
+    axis_hit_thickness_ = std::min(gizmo_size * 0.16f, GIZMO_HIT_AXIS_MAX);
+    center_hit_radius_ = std::min(gizmo_size * 0.16f, GIZMO_HIT_CENTER_MAX);
+    rotate_ring_hit_thickness_ = std::min(gizmo_size * 0.16f, GIZMO_HIT_RING_MAX);
 }
 
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
@@ -356,7 +349,6 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
     if(selected_axis == GIZMO_AXIS_CENTER)
     {
         // All modes cycle only on release after a stationary center click.
-        // This prevents a slightly imprecise press/drag from changing modes.
         center_press_pending = true;
         dragging = false;
 
@@ -460,12 +452,11 @@ bool Gizmo3D::HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
     if(center_press_pending && !dragging)
     {
         QPoint cur((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
-        const float scale_x = (float)viewport[2] / (float)std::max(1, viewport_width);
-        const float scale_y = (float)viewport[3] / (float)std::max(1, viewport_height);
-        const float dx = (float)(cur.x() - drag_start_pos.x()) * scale_x;
-        const float dy = (float)(cur.y() - drag_start_pos.y()) * scale_y;
+        const float dx = (float)(gl_win_x - last_gl_mouse_pos.x());
+        const float dy = (float)(gl_win_y - last_gl_mouse_pos.y());
         const float dist_gl = sqrtf(dx * dx + dy * dy);
-        if(dist_gl >= GIZMO_DRAG_SLOP_GL_PX)
+        const float slop_gl = GIZMO_DRAG_SLOP_GL_PX * device_pixel_ratio_;
+        if(dist_gl >= slop_gl)
         {
             if(mode == GIZMO_MODE_SCALE && target_effect_volume)
             {
@@ -512,10 +503,8 @@ bool Gizmo3D::HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
     return false;
 }
 
-bool Gizmo3D::HandleMouseRelease(QMouseEvent* event)
+bool Gizmo3D::HandleMouseRelease(QMouseEvent*)
 {
-    (void)event;
-
     if(!active)
         return false;
 
@@ -847,8 +836,9 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
                     }
                     else
                     {
-                        float delta_x = (float)(mouse_x - last_gl_mouse_pos.x());
-                        float delta_y = (float)(mouse_y - last_gl_mouse_pos.y());
+                        const float inv_dpr = 1.0f / device_pixel_ratio_;
+                        float delta_x = (float)(mouse_x - last_gl_mouse_pos.x()) * inv_dpr;
+                        float delta_y = (float)(mouse_y - last_gl_mouse_pos.y()) * inv_dpr;
                         float sensitivity = 0.05f;
                         float rx = 0.0f, ry = 0.0f, rz = 0.0f;
                         if(selected_axis == GIZMO_AXIS_X) rx = delta_y * sensitivity * 10.0f;
@@ -1210,11 +1200,8 @@ void Gizmo3D::ApplySkewAlongAxis(float along)
     target_effect_volume->shear_yz = syz;
 }
 
-void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport)
+void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* /*projection*/, const int* /*viewport*/)
 {
-    (void)projection;
-    (void)viewport;
-
     float right_x = modelview[0];
     float right_y = modelview[4];
     float right_z = modelview[8];
@@ -1268,15 +1255,13 @@ void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* m
 
 void Gizmo3D::ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
 {
-    (void)projection;
-    (void)viewport;
-
     Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
     float n_dot_d = drag_plane_normal[0]*ray.direction[0] + drag_plane_normal[1]*ray.direction[1] + drag_plane_normal[2]*ray.direction[2];
     if(fabsf(n_dot_d) < 1e-6f)
     {
-        float dx = (float)(mouse_x - last_gl_mouse_pos.x());
-        float dy = (float)(mouse_y - last_gl_mouse_pos.y());
+        const float inv_dpr = 1.0f / device_pixel_ratio_;
+        float dx = (float)(mouse_x - last_gl_mouse_pos.x()) * inv_dpr;
+        float dy = (float)(mouse_y - last_gl_mouse_pos.y()) * inv_dpr;
         ApplyFreeroamMovement(dx, dy, modelview, projection, viewport);
         return;
     }
@@ -1286,8 +1271,9 @@ void Gizmo3D::ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* m
     float t = (drag_plane_normal[0]*w0x + drag_plane_normal[1]*w0y + drag_plane_normal[2]*w0z) / n_dot_d;
     if(t < 0.0f)
     {
-        float dx = (float)(mouse_x - last_gl_mouse_pos.x());
-        float dy = (float)(mouse_y - last_gl_mouse_pos.y());
+        const float inv_dpr = 1.0f / device_pixel_ratio_;
+        float dx = (float)(mouse_x - last_gl_mouse_pos.x()) * inv_dpr;
+        float dy = (float)(mouse_y - last_gl_mouse_pos.y()) * inv_dpr;
         ApplyFreeroamMovement(dx, dy, modelview, projection, viewport);
         return;
     }

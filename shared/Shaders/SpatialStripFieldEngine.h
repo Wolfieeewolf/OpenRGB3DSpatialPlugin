@@ -42,8 +42,7 @@ public:
     bool ensureReady();
     /** Strips always bake a 1D atlas; same as ensureReady (API parity with volume). */
     bool ensureProgramReady() { return ensureReady(); }
-    /** Linear sample of red channel as signed kernel (-1..1) encoded in R as (k+1)/2.
-     *  Lock-free — do not call concurrently with ensureReady. */
+    /** Linear sample of red channel as signed kernel (-1..1) encoded in R as (k+1)/2. */
     float sampleKernelSigned(float s01) const;
     float sample01(float s01) const;
 

@@ -309,11 +309,23 @@ inline QFrame* PluginUiWrapInSettingsPanel(QWidget* inner, int inner_margin = 9)
     return panel;
 }
 
-/** Delete/Backspace when the list is focused + right-click QMenu mirroring delete_button. */
+/** Shared three-ways suffix for list delete buttons wired below. */
+inline QString PluginUiDestructiveDeleteTooltip(const QString& action_summary,
+                                                const QString& context_menu_label)
+{
+    return action_summary
+        + QStringLiteral("\nAlso: Delete / Backspace when the list is focused, or right-click \u2192 ")
+        + context_menu_label
+        + QStringLiteral(".");
+}
+
+/** Delete/Backspace when the list is focused + right-click QMenu mirroring delete_button.
+ *  Optional button_tip_lead sets the button tooltip with the shared three-ways suffix. */
 inline void PluginUiWireListDestructiveDelete(QListWidget* list,
                                               QPushButton* delete_button,
                                               const QString& context_menu_label,
-                                              const QString& accessible_name = QString())
+                                              const QString& accessible_name = QString(),
+                                              const QString& button_tip_lead = QString())
 {
     if(!list || !delete_button)
     {
@@ -323,6 +335,10 @@ inline void PluginUiWireListDestructiveDelete(QListWidget* list,
     if(!accessible_name.isEmpty())
     {
         delete_button->setAccessibleName(accessible_name);
+    }
+    if(!button_tip_lead.isEmpty())
+    {
+        delete_button->setToolTip(PluginUiDestructiveDeleteTooltip(button_tip_lead, context_menu_label));
     }
 
     list->setFocusPolicy(Qt::StrongFocus);

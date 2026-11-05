@@ -46,15 +46,12 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     const auto on_changed = [this]() { emit ParametersChanged(); };
 
-    // Target layout for sliders/combos; redirected into a collapsible when audio is active.
     QVBoxLayout* step_target = layout;
 
     if(spec_.uses_audio)
     {
-        // 1. Listen / frequency band section (shared with global: audio)
         AudioReactiveUi::AppendStandardFrequencyBandSection(layout, audio_settings, this, on_changed);
 
-        // Beat wave section for pulse effects
         if(spec_.audio_preset == "beat" || spec_.audio_preset == "low_punch")
         {
             AudioReactiveUi::AudioBeatUiOptions beat_opts;
@@ -64,7 +61,6 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
             AudioReactiveUi::AppendStandardBeatWaveSection(layout, audio_settings, this, on_changed, beat_opts);
         }
 
-        // 2. Effect-specific controls inside a collapsible "Effect" section
         if(!spec_.sliders.empty() || !spec_.combos.empty() || !spec_.patterns.empty())
         {
             QVBoxLayout* effect_body = EffectUiRows::AppendCollapsibleSectionBody(
@@ -169,7 +165,6 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
     }
     if(spec_.uses_audio)
     {
-        // 3. Feel / response section
         AudioReactiveUi::AudioResponseUiOptions response_opts;
         if(spec_.audio_preset == "level")
         {
@@ -206,7 +201,6 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
         }
         AudioReactiveUi::AppendStandardResponseSection(layout, audio_settings, this, on_changed, response_opts);
 
-        // 4. Color section
         AudioReactiveUi::AppendAudioSectionBody(layout, QStringLiteral("Color"));
         AudioReactiveUi::AppendAudioPulseColorModeRow(layout, audio_settings, this, on_changed);
     }
@@ -800,7 +794,7 @@ void FolderVolumeEffect::OnGifFrameTimerTimeout()
         previous_display_frame = display_frame;
         last_gif_step_ms = QDateTime::currentMSecsSinceEpoch();
     }
-    (void)movie->jumpToFrame(next);
+    [[maybe_unused]] const bool jumped = movie->jumpToFrame(next);
     PublishDisplayFrame(movie->currentImage());
 }
 
@@ -884,7 +878,7 @@ void FolderVolumeEffect::LoadMediaFile(const QString& path)
         media_is_gif = true;
         movie->start();
         movie->setPaused(true);
-        (void)movie->jumpToFrame(0);
+        [[maybe_unused]] const bool jumped = movie->jumpToFrame(0);
         PublishDisplayFrame(movie->currentImage());
         {
             QMutexLocker lock(&display_mutex);

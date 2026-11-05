@@ -50,7 +50,7 @@ OpenRGBPluginInfo OpenRGB3DSpatialPlugin::GetPluginInfo()
     info.Description    = "Organize and control RGB devices in a 3D grid with spatial effects";
     info.Version        = VERSION_STRING;
     info.Commit         = GIT_COMMIT_ID;
-    info.URL            = "https://github.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin";
+    info.URL            = "https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin";
 
     info.Label          = "Spatial";
     info.Location       = OPENRGB_PLUGIN_LOCATION_TOP;

@@ -111,7 +111,7 @@ void EffectSliderRow::configure(int min, int max, int value, const QString& slid
     if(!slider_tooltip.isEmpty())
     {
         ui->valueSlider->setToolTip(slider_tooltip);
-        ui->valueSpin->setToolTip(slider_tooltip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+        ui->valueSpin->setToolTip(EffectSpinOverSliderTip(slider_tooltip));
     }
 }
 
@@ -316,7 +316,7 @@ void EffectDoubleSliderRow::applySliderChrome(const QString& slider_tooltip)
         slider_->setToolTip(slider_tooltip);
         if(spin_)
         {
-            spin_->setToolTip(slider_tooltip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+            spin_->setToolTip(EffectSpinOverSliderTip(slider_tooltip));
         }
     }
 }
@@ -830,7 +830,6 @@ EffectCollapsibleSection::EffectCollapsibleSection(const QString& title,
 void EffectCollapsibleSection::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
-    // Re-apply after parenting into OpenRGB so we pick up the host palette (Setup-tab charcoal).
     applyHeaderChrome();
 }
 

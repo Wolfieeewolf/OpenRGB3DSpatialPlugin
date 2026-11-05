@@ -860,7 +860,6 @@ void SpatialVolumeFieldEngine::readbackAtlas(int n)
         }
         else
         {
-            // First frame (or size change): sync so sampling has a valid atlas immediately.
             if(readback_staging_.size() < bytes)
             {
                 readback_staging_.resize(bytes);
@@ -887,7 +886,6 @@ void SpatialVolumeFieldEngine::readbackAtlas(int n)
 
 QVector3D SpatialVolumeFieldEngine::sample01(float x, float y, float z) const
 {
-    // Lock-free: ensureReady must not run concurrently (same render thread).
     if(atlas_res_ < 2 || atlas_rgb_.empty())
     {
         return QVector3D(0.0f, 0.0f, 0.0f);

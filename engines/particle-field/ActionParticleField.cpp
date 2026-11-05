@@ -504,8 +504,6 @@ bool PrepareForClip(const Clip& clip, int local_ms, std::uint64_t render_sequenc
     const float progress = ClipSpanProgress(clip, local_ms);
     const int anim_ms = GpuAnimMsOr(local_ms);
     const float time_key = progress * 1000.0f + (float)anim_ms * 0.001f;
-    // seq==0 preview only: skip when mode+clock unchanged. Never skip on a shared
-    // pack-frame sequence — multi-track packs need a fresh setParams per clip.
     if(render_sequence == 0 && g_ready && g_gpu_mode == mode
        && std::fabs(time_key - g_last_time) < 1e-3f)
     {

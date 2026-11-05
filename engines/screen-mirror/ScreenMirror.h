@@ -134,7 +134,7 @@ public:
 
         MonitorSettings()
             : enabled(false)
-            , scale(1.0f)
+            , scale(0.55f)
             , scale_inverted(true)
             , smoothing_time_ms(0.0f)
             , brightness_multiplier(1.0f)
@@ -150,7 +150,7 @@ public:
             , black_bar_right_percent(0.0f)
             , black_bar_link_vertical(true)
             , black_bar_link_horizontal(true)
-            , edge_softness(70.0f)
+            , edge_softness(25.0f)
             , propagation_speed_mm_per_ms(0.0f)
             , wave_decay_ms(0.0f)
             , wave_time_to_edge_sec(0.0f)

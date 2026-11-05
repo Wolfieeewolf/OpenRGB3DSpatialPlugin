@@ -511,7 +511,6 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                     [&s](bool v) { s.health_strip_invert = v; });
     }
 
-    // Label suffix that honestly describes which controls are driving the strip.
     const QString strip_ref = has_health_controls
         ? QStringLiteral(" (uses strip/index settings above)")
         : QStringLiteral(" (uses strip axis above)");

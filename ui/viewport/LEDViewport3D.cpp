@@ -918,7 +918,7 @@ void LEDViewport3D::resizeGL(int w, int h)
     const int fb_h = viewportFramebufferHeight(h);
 
     glViewport(0, 0, fb_w, fb_h);
-    gizmo.SetViewportSize(fb_w, fb_h);
+    gizmo.SetViewportSize(fb_w, fb_h, devicePixelRatioF());
 }
 
 bool LEDViewport3D::event(QEvent* event)

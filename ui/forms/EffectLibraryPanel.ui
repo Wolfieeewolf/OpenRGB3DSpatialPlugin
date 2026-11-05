@@ -75,13 +75,26 @@
    <item>
     <widget class="QCheckBox" name="unlockVolumeOnAddCheck">
      <property name="text">
-      <string>Unlock volume on add</string>
+      <string>Add with volume gizmo unlocked</string>
      </property>
      <property name="toolTip">
-      <string>When checked, new stack layers start with volume tools unlocked (gizmo place/rotate/scale/skew and volume shape). Off by default for the standard fill-grid feel; you can unlock any layer later on its stack card.</string>
+      <string>New stack layers start with volume tools unlocked (gizmo place/rotate/scale/skew). Off by default for fill-grid; same as the Volume checkbox on each stack card.</string>
      </property>
      <property name="checked">
       <bool>false</bool>
+     </property>
+     <property name="accessibleName">
+      <string>Add with volume gizmo unlocked</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="unlockVolumeHint">
+     <property name="text">
+      <string>Need to place a look in the room? Use Volume on the stack card (or check above before adding).</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </item>

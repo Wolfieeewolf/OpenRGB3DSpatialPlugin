@@ -135,7 +135,6 @@ void ActionTimelineWidget::enqueueGpuThumb(GpuThumbRequest req) const
         return;
     }
     gpu_thumb_queued_keys_.insert(req.key);
-    // Newest clip first — add/remove should light the clip you just touched ASAP.
     gpu_thumb_queue_.prepend(std::move(req));
     if(gpu_thumb_pump_scheduled_)
     {

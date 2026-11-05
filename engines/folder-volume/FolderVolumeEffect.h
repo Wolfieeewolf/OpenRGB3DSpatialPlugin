@@ -182,7 +182,6 @@ private:
     std::unordered_map<std::uint32_t, QVector3D> true_sample_map_;
     std::uint64_t true_sample_seq_ = 0;
 
-    // Audio reactive state (populated when spec_.uses_audio)
     AudioReactiveSettings3D audio_settings;
     float audio_smoothed = 0.0f;
     float audio_last_intensity_time = std::numeric_limits<float>::lowest();
@@ -192,7 +191,6 @@ private:
     float audio_band_hi = 0.0f;
     float audio_time_boost = 0.0f;
 
-    // Audio media state — spectrum bands (audio_media == "bands")
     static constexpr int kFvAudioSpectrogramCols = 64;
     static constexpr int kFvAudioSpectrogramRows = 72;
     float audio_band_count_cached = 0.0f;
@@ -202,13 +200,11 @@ private:
     int   audio_spec_band_start = 0;
     int   audio_spec_band_end   = 0;
     std::vector<float> audio_smoothed_bands;
-    // Audio media state — spectrogram (audio_media == "spectrogram")
     int   audio_spectrogram_write_index = 0;
     std::vector<std::vector<float>> audio_spectrogram_history;
     std::vector<float> audio_column_smoothed;
     float audio_last_spectrogram_push = std::numeric_limits<float>::lowest();
 
-    // Pulse state (audio_preset == "beat" || "low_punch")
     struct AudioPulseEntry { float birth_time = 0.0f; float strength = 0.0f; uint32_t color_slot = 0u; };
     AudioPulseTriggerState audio_pulse_trigger;
     std::vector<AudioPulseEntry> audio_pulses;
@@ -216,7 +212,6 @@ private:
     int  audio_packed_pulse_count = 0;
     uint32_t audio_packed_color_slots[5] = {};
     float audio_last_pulse_tick_time = std::numeric_limits<float>::lowest();
-    // Pulse geometry cached from grid (updated each PrepareGpuFields)
     float audio_radius_basis_cached = 1.0f;
     float audio_pulse_half_w_cached = 0.05f;
     float audio_max_travel_cached   = 1.0f;
@@ -226,7 +221,6 @@ private:
     float audio_pulse_hd_cached     = 1.0f;
     float audio_pulse_decay_cached  = 2.0f;
 
-    // Note state (audio_preset == "high_sparkle")
     float audio_note_hues[4] = {};
     float audio_note_amps[4] = {};
     int   audio_note_count = 0;

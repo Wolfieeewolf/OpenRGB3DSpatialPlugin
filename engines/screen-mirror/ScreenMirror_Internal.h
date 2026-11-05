@@ -8,6 +8,11 @@
 #include "DisplayPlaneManager.h"
 #include "ScreenMirrorWaveMath.h"
 
+#include <QCheckBox>
+#include <QGroupBox>
+#include <QString>
+#include <QWidget>
+
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -76,6 +81,28 @@ inline DisplayPlane3D* FindDisplayPlaneByName(const std::string& name)
         }
     }
     return nullptr;
+}
+
+inline void SyncCalibrationChrome(QCheckBox* check)
+{
+    if(!check)
+    {
+        return;
+    }
+    const bool on = check->isChecked();
+    check->setText(on
+        ? QStringLiteral("Calibrating (test pattern on LEDs)")
+        : QStringLiteral("Show calibration pattern"));
+    for(QWidget* w = check->parentWidget(); w; w = w->parentWidget())
+    {
+        if(auto* box = qobject_cast<QGroupBox*>(w))
+        {
+            box->setTitle(on
+                ? QStringLiteral("Preview & Calibration — ACTIVE")
+                : QStringLiteral("Preview & Calibration"));
+            break;
+        }
+    }
 }
 
 #endif

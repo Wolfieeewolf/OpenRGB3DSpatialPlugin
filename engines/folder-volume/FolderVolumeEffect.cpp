@@ -652,7 +652,6 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
                 }), audio_pulses.end());
         }
 
-        // Compute grid-derived geometry (match gizmo / SampleVolumeLocalUv01 extents)
         Vector3D origin = GetEffectOriginGrid(grid);
         float vh_x = 1.0f, vh_y = 1.0f, vh_z = 1.0f;
         GetVolumeHalfExtents(grid, vh_x, vh_y, vh_z);
@@ -1040,7 +1039,6 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         if(intensity <= 0.001f)
             return 0x00000000;
 
-        // Note sparkle: shader outputs (intensity, note_hue01, gradient)
         if(spec_.audio_preset == "high_sparkle")
         {
             const float note_hue01  = std::clamp(samp.y(), 0.0f, 1.0f);
@@ -1071,7 +1069,6 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
             return BrightenAudioEffectColor(color, intensity);
         }
 
-        // Pulse: shader outputs (energy, gradient, pulse_idx01)
         float gradient_pos = samp.y();
         uint32_t beat_slot = (uint32_t)std::floor(time * 2.5f);
         if((spec_.audio_preset == "beat" || spec_.audio_preset == "low_punch")

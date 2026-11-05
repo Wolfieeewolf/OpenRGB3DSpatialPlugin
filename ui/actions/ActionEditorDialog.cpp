@@ -211,7 +211,7 @@ void ActionEditorDialog::buildUi()
         }
         if(!tip.isEmpty() && spin)
         {
-            spin->setToolTip(tip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+            spin->setToolTip(EffectSpinOverSliderTip(tip));
         }
         return std::pair<QWidget*, QSlider*>{row, row->slider()};
     };
@@ -227,7 +227,7 @@ void ActionEditorDialog::buildUi()
         }
         if(!tip.isEmpty() && spin)
         {
-            spin->setToolTip(tip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps."));
+            spin->setToolTip(EffectSpinOverSliderTip(tip));
         }
         return std::pair<QWidget*, QSlider*>{row, row->slider()};
     };
@@ -449,7 +449,7 @@ void ActionEditorDialog::buildUi()
     bright_sec->bodyLayout()->addWidget(max_intensity_row_);
     props_inner_layout->addWidget(bright_sec);
 
-    direction_section_ = new EffectCollapsibleSection(QStringLiteral("Direction"));
+    direction_section_ = new EffectCollapsibleSection(QStringLiteral("Wipe & travel"));
     static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(true);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setSpacing(6);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setContentsMargins(2, 4, 2, 2);
@@ -478,16 +478,21 @@ void ActionEditorDialog::buildUi()
     add_dir(QStringLiteral("+Z"), Action::Direction::PosZ, QStringLiteral("Explicit room +Z (toward Back wall)"));
     add_dir(QStringLiteral("-Z"), Action::Direction::NegZ, QStringLiteral("Explicit room -Z (toward Front wall)"));
     direction_combo_->setToolTip(
-        QStringLiteral("Travel / spin axis. With Space=Device this follows the controller orientation from the viewport."));
+        QStringLiteral(
+            "Which way the wipe / slide / spin marches.\n"
+            "Left/Right/Up/Down/Forward/Back follow the Axes-in frame below.\n"
+            "Example: Axes in = Room + Wipe toward = Right → fills from the Left wall toward the Right.\n"
+            "Axes in = Device → the same labels follow that controller's layout in the viewport."));
     axis_space_combo_ = new QComboBox();
-    axis_space_combo_->addItem(QStringLiteral("Device (layout)"), (int)Action::AxisSpace::Device);
-    axis_space_combo_->addItem(QStringLiteral("Room"), (int)Action::AxisSpace::Room);
-    axis_space_combo_->addItem(QStringLiteral("Sequence (order)"), (int)Action::AxisSpace::Sequence);
+    axis_space_combo_->addItem(QStringLiteral("Device (this light)"), (int)Action::AxisSpace::Device);
+    axis_space_combo_->addItem(QStringLiteral("Room (world XYZ)"), (int)Action::AxisSpace::Room);
+    axis_space_combo_->addItem(QStringLiteral("Sequence (track order)"), (int)Action::AxisSpace::Sequence);
     axis_space_combo_->setToolTip(
-        QStringLiteral("Travel frame for direction / wipes.\n"
-                       "Device: per-controller local axes.\n"
-                       "Room: world XYZ.\n"
-                       "Sequence: march along timeline controller order."));
+        QStringLiteral(
+            "Coordinate frame for Direction (wipes, slides, spins).\n"
+            "Device: Left/Right follow this controller's orientation in the 3D viewport.\n"
+            "Room: Left/Right = room walls (world −X / +X), independent of device rotation.\n"
+            "Sequence: march along the Action track's controller order (not XYZ)."));
     play_bounds_combo_ = new QComboBox();
     play_bounds_combo_->addItem(QStringLiteral("This track's lights"), (int)Action::PlayBounds::TrackLights);
     play_bounds_combo_->addItem(QStringLiteral("Whole room"), (int)Action::PlayBounds::RoomBox);
@@ -516,17 +521,18 @@ void ActionEditorDialog::buildUi()
     dir_form->setSpacing(6);
     dir_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     dir_form->addRow(QStringLiteral("Play on"), play_bounds_combo_);
-    dir_form->addRow(QStringLiteral("Travel"), axis_space_combo_);
+    dir_form->addRow(QStringLiteral("Axes in"), axis_space_combo_);
     dir_form->addRow(QStringLiteral("Axis"), axis_mode_combo_);
-    dir_form->addRow(QStringLiteral("Direction"), direction_combo_);
+    dir_form->addRow(QStringLiteral("Wipe toward"), direction_combo_);
     flip_direction_button_ = new QPushButton(QStringLiteral("Flip direction"));
-    flip_direction_button_->setToolTip(QStringLiteral("Swap to the opposite direction (Left<->Right, Forward<->Back, ...)"));
+    flip_direction_button_->setToolTip(
+        QStringLiteral("Swap to the opposite wipe direction (Left\u2194Right, Forward\u2194Back, \u2026)"));
     reverse_check_ = new QCheckBox(QStringLiteral("Reverse time"));
     reverse_check_->setToolTip(QStringLiteral("Play this clip's progress backwards (dissolve/fade/wipe reverse)"));
     flip_h_check_ = new QCheckBox(QStringLiteral("Flip H"));
-    flip_h_check_->setToolTip(QStringLiteral("Mirror left<->right (media UV / wipe axis)"));
+    flip_h_check_->setToolTip(QStringLiteral("Mirror left\u2194right (media UV / wipe axis)"));
     flip_v_check_ = new QCheckBox(QStringLiteral("Flip V"));
-    flip_v_check_->setToolTip(QStringLiteral("Mirror top<->bottom (media UV / height)"));
+    flip_v_check_->setToolTip(QStringLiteral("Mirror top\u2194bottom (media UV / height)"));
     rotate_combo_ = new QComboBox();
     rotate_combo_->addItem(QStringLiteral("0 deg"), 0);
     rotate_combo_->addItem(QStringLiteral("90 deg CW"), 1);
@@ -1951,7 +1957,6 @@ void ActionEditorDialog::startPreview(const Action::Pack& play_pack, int start_m
     {
         timeline_->setPlayheadMs(player_.LocalMs());
     }
-    // First frame now — avoid a timer tick of leftover LED state after Prepare.
     Action::SetGpuAnimMs(player_.ElapsedMs());
     tab_->ApplyActionPreviewFrame(preview_pack_, player_.LocalMs());
     Action::SetGpuAnimMs(-1);

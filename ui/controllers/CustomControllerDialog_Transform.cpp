@@ -7,9 +7,11 @@
 #include "custom-controller-grid/CustomControllerLayoutGrid.h"
 #include "custom-controller-grid/CustomControllerGridLayoutMath.h"
 
+#include <QCoreApplication>
 #include <QMessageBox>
 #include <QSpinBox>
 #include <QString>
+#include <QWidget>
 
 #include <cstdint>
 #include <functional>
@@ -188,11 +190,25 @@ void CustomControllerDialog::WarnIfMappingCollisions() const
     }
 }
 
+namespace
+{
+bool InformRotateGridEmpty(QWidget* parent, const std::vector<GridLEDMapping>& mappings)
+{
+    if(!mappings.empty())
+    {
+        return false;
+    }
+    QMessageBox::information(parent,
+                             QCoreApplication::translate("CustomControllerDialog", "Grid empty"),
+                             QCoreApplication::translate("CustomControllerDialog", "No LEDs to rotate."));
+    return true;
+}
+} // namespace
+
 void CustomControllerDialog::rotateGrid90()
 {
-    if(led_mappings.empty())
+    if(InformRotateGridEmpty(this, led_mappings))
     {
-        QMessageBox::information(this, tr("Grid empty"), tr("No LEDs to rotate."));
         return;
     }
 
@@ -259,9 +275,8 @@ void CustomControllerDialog::rotateGrid90()
 
 void CustomControllerDialog::rotateGrid180()
 {
-    if(led_mappings.empty())
+    if(InformRotateGridEmpty(this, led_mappings))
     {
-        QMessageBox::information(this, tr("Grid empty"), tr("No LEDs to rotate."));
         return;
     }
 
@@ -297,9 +312,8 @@ void CustomControllerDialog::rotateGrid180()
 
 void CustomControllerDialog::rotateGrid270()
 {
-    if(led_mappings.empty())
+    if(InformRotateGridEmpty(this, led_mappings))
     {
-        QMessageBox::information(this, tr("Grid empty"), tr("No LEDs to rotate."));
         return;
     }
 

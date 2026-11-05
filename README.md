@@ -74,7 +74,7 @@ More detail: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 A map of areas that have real code today:
 
-- **3D viewport** — place/rotate devices, grid snap, room turntable, gizmo. OpenGL 4.1 Core (MeshBatch / GLSL 410). Expect some DPR quirks.
+- **3D viewport** — place/rotate devices, grid snap, room turntable, gizmo. OpenGL 4.1 Core (MeshBatch / GLSL 410). Pick/gizmo/camera use DPR-aware mapping (logical feel, framebuffer pick).
 - **Reference points, display planes, capture zones** — for Screen Mirror / ambilight-style mapping onto geometry.
 - **Effect stack** — pick an **engine** in the library, then a look that engine plays (Volume / Audio / Media / Shader Field files; Reactive / Ambilight / Game codecs).
 - **Actions + Triggers** — Action Editor timelines; Manual / OS / game-style Triggers. Design notes: [Documentation/effect-event-maker.md](Documentation/effect-event-maker.md).

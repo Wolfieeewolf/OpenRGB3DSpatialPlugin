@@ -117,6 +117,11 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
                           (int)std::lround(msettings.propagation_speed_mm_per_ms));
     SyncEffectSliderValue(msettings.wave_decay_slider, (int)std::lround(msettings.wave_decay_ms));
     SyncEffectDoubleSpinValue(msettings.wave_time_to_edge_spin, (double)msettings.wave_time_to_edge_sec);
+    if(msettings.wave_time_to_edge_sec > 0.0f)
+    {
+        msettings.propagation_speed_mm_per_ms = 0.0f;
+        SyncEffectSliderValue(msettings.propagation_speed_slider, 0);
+    }
     if(msettings.capture_zones_widget)
     {
         msettings.capture_zones_widget->syncWaveIntensityVisibility();
@@ -126,6 +131,7 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         QSignalBlocker blocker(msettings.calibration_pattern_check);
         msettings.calibration_pattern_check->setChecked(msettings.show_calibration_pattern);
+        SyncCalibrationChrome(msettings.calibration_pattern_check);
     }
     if(msettings.screen_preview_check)
     {
@@ -140,7 +146,7 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
 
 void ScreenMirror::LoadSettings(const nlohmann::json& settings)
 {
-    static const float default_scale = 1.0f;
+    static const float default_scale = 0.55f;
     static const bool default_scale_inverted = true;
     static const float default_smoothing_time_ms = 0.0f;
     static const float default_brightness_multiplier = 1.0f;
@@ -245,7 +251,7 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             msettings.black_bar_link_horizontal = mon.value("black_bar_link_horizontal", true);
 
             if(mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
-            else msettings.edge_softness = 70.0f;
+            else msettings.edge_softness = 25.0f;
             if(mon.contains("propagation_speed_mm_per_ms"))
             {
                 msettings.propagation_speed_mm_per_ms = mon["propagation_speed_mm_per_ms"].get<float>();

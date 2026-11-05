@@ -23,7 +23,7 @@ RoomSpatialLightSettingsPanel::~RoomSpatialLightSettingsPanel()
 void RoomSpatialLightSettingsPanel::configureStaticLabels()
 {
     ui->glowSizeRow->setCaptionText(QStringLiteral("Glow size:"));
-    ui->lightReachRow->setCaptionText(QStringLiteral("Light reach:"));
+    ui->lightReachRow->setCaptionText(QStringLiteral("Room light reach:"));
     ui->roomFillRow->setCaptionText(QStringLiteral("Room fill:"));
 }
 
@@ -64,7 +64,12 @@ void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
         },
         [](int v) { return QString::number(v) + QStringLiteral(" mm"); });
 
-    ui->lightReachRow->configure(50, 5000, static_cast<int>(params.light_reach_mm));
+    ui->lightReachRow->configure(
+        50,
+        5000,
+        static_cast<int>(params.light_reach_mm),
+        QStringLiteral("Emitter / room spatial light distance in millimetres. "
+                       "Different from Screen Mirror Ambilight reach (% of room)."));
     ui->lightReachRow->bindValueChanged(
         owner,
         [&params, tuneChanged](int v) {

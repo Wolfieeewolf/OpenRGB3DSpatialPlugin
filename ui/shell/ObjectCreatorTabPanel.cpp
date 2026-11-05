@@ -92,17 +92,8 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
            "category/brand/model) into the presets-style controllers/<category>/<brand>/ path"));
     ui->editCustomControllerButton->setToolTip(
         tr("Edit layout and preset filing fields (category, brand, model)"));
-    ui->deleteCustomControllerButton->setToolTip(
-        tr("Remove selected custom controller from library (remove from 3D scene first if in use).\n"
-           "Also: Delete / Backspace when the list is focused, or right-click → Delete controller."));
     ui->editReferencePointButton->setToolTip(QStringLiteral("Edit selected reference point"));
-    ui->removeRefPointButton->setToolTip(
-        tr("Delete selected reference point.\n"
-           "Also: Delete / Backspace when the list is focused, or right-click → Delete reference point."));
     ui->editDisplayPlaneButton->setToolTip(QStringLiteral("Edit selected display plane name and size"));
-    ui->removeDisplayPlaneButton->setToolTip(
-        tr("Delete selected display plane.\n"
-           "Also: Delete / Backspace when the list is focused, or right-click → Delete display plane."));
     ui->displayCaptureCaption->setText(DisplayPlaneCaptureUi::Caption());
     ui->displayCaptureCombo->setToolTip(DisplayPlaneCaptureUi::ComboToolTip());
     ui->displayCaptureRefreshButton->setToolTip(DisplayPlaneCaptureUi::RefreshToolTip());
@@ -173,27 +164,32 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
         ui->triggersPanel->bindTab(tab);
     }
 
-    PluginUiWireListDestructiveDelete(ui->customControllersList,
-                                      ui->deleteCustomControllerButton,
-                                      tr("Delete controller"),
-                                      tr("Delete selected custom controller"));
-    PluginUiWireListDestructiveDelete(ui->referencePointsList,
-                                      ui->removeRefPointButton,
-                                      tr("Delete reference point"),
-                                      tr("Delete selected reference point"));
-    PluginUiWireListDestructiveDelete(ui->displayPlanesList,
-                                      ui->removeDisplayPlaneButton,
-                                      tr("Delete display plane"),
-                                      tr("Delete selected display plane"));
+    PluginUiWireListDestructiveDelete(
+        ui->customControllersList,
+        ui->deleteCustomControllerButton,
+        tr("Delete controller"),
+        tr("Delete selected custom controller"),
+        tr("Remove selected custom controller from library (remove from 3D scene first if in use)."));
+    PluginUiWireListDestructiveDelete(
+        ui->referencePointsList,
+        ui->removeRefPointButton,
+        tr("Delete reference point"),
+        tr("Delete selected reference point"),
+        tr("Delete selected reference point."));
+    PluginUiWireListDestructiveDelete(
+        ui->displayPlanesList,
+        ui->removeDisplayPlaneButton,
+        tr("Delete display plane"),
+        tr("Delete selected display plane"),
+        tr("Delete selected display plane."));
     if(scene_props_list_ && remove_scene_prop_button_)
     {
-        remove_scene_prop_button_->setToolTip(
-            tr("Delete selected scene prop.\n"
-               "Also: Delete / Backspace when the list is focused, or right-click → Delete scene prop."));
-        PluginUiWireListDestructiveDelete(scene_props_list_,
-                                          remove_scene_prop_button_,
-                                          tr("Delete scene prop"),
-                                          tr("Delete selected scene prop"));
+        PluginUiWireListDestructiveDelete(
+            scene_props_list_,
+            remove_scene_prop_button_,
+            tr("Delete scene prop"),
+            tr("Delete selected scene prop"),
+            tr("Delete selected scene prop."));
     }
 
     connect(ui->objectTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,

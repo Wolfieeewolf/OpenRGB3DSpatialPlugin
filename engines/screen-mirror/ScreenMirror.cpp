@@ -28,6 +28,16 @@
 #include <QSlider>
 #include <algorithm>
 
+namespace
+{
+QString MonitorEnableToolTip(bool has_capture_source)
+{
+    return has_capture_source
+        ? QStringLiteral("Enable or disable this display's influence on LEDs.")
+        : QStringLiteral("Pick the Windows display this plane should capture.");
+}
+} // namespace
+
 void RegisterScreenMirrorEngine()
 {
     EffectListManager3D::get()->RegisterEffect(
@@ -481,9 +491,7 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
                                    (has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview));
     settings.group_box->setEnabled(true);
     settings.group_box->setFlat(true);
-    settings.group_box->setToolTip(has_capture_source
-                                      ? QStringLiteral("Enable or disable this display's influence on LEDs.")
-                                      : QStringLiteral("Pick the Windows display this plane should capture."));
+    settings.group_box->setToolTip(MonitorEnableToolTip(has_capture_source));
     connect(settings.group_box, &QGroupBox::toggled, this, &ScreenMirror::OnParameterChanged);
 
     auto* panel = new ScreenMirrorMonitorPanel(settings.group_box);
@@ -542,16 +550,7 @@ void ScreenMirror::RefreshMonitorStatus()
             settings.group_box->setTitle(QStringLiteral("Enabled"));
             settings.group_box->setEnabled(true);
 
-            if(has_capture_source)
-            {
-                settings.group_box->setToolTip(
-                    QStringLiteral("Enable or disable this display's influence on LEDs."));
-            }
-            else
-            {
-                settings.group_box->setToolTip(
-                    QStringLiteral("Pick the Windows display this plane should capture."));
-            }
+            settings.group_box->setToolTip(MonitorEnableToolTip(has_capture_source));
             if(settings.capture_combo)
             {
                 FillDisplayPlaneCaptureCombo(settings.capture_combo, plane->GetCaptureSourceId());

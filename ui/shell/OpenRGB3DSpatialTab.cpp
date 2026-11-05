@@ -33,6 +33,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QHideEvent>
+#include <QMenu>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QShowEvent>
@@ -66,7 +67,9 @@
 #include <QFrame>
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QDesktopServices>
 #include <QTimer>
+#include <QUrl>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -90,6 +93,28 @@
 
 namespace
 {
+constexpr const char* kContentPackCategories[] = {"Volume", "Audio", "Media", "Shader Field"};
+
+void EnsureContentPackCategories(std::map<std::string, std::vector<EffectRegistration3D>>& categorized)
+{
+    for(const char* name : kContentPackCategories)
+    {
+        categorized.emplace(name, std::vector<EffectRegistration3D>{});
+    }
+}
+
+bool IsContentPackCategory(const QString& category)
+{
+    for(const char* name : kContentPackCategories)
+    {
+        if(category.compare(QString::fromUtf8(name), Qt::CaseInsensitive) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void ResolveEffectLibraryItem(QListWidgetItem* item, QString& out_class, QString& out_ui)
 {
     if(!item)
@@ -824,6 +849,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
     effectCategoryCombo()->addItem(tr("Select Category"), QVariant());
 
     std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
+    EnsureContentPackCategories(categorized);
     for(std::map<std::string, std::vector<EffectRegistration3D>>::const_iterator cit = categorized.begin();
         cit != categorized.end();
         ++cit)
@@ -1006,6 +1032,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     QString search = effectLibrarySearch() ? effectLibrarySearch()->text().trimmed() : QString();
 
     std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
+    EnsureContentPackCategories(categorized);
     std::map<std::string, std::vector<EffectRegistration3D>>::iterator cat_it =
         categorized.find(selected_category.toStdString());
     if(cat_it == categorized.end())
@@ -1016,6 +1043,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     }
 
     const std::vector<EffectRegistration3D>& effects = cat_it->second;
+    const bool content_pack_category = IsContentPackCategory(selected_category);
 
     struct LibRow
     {
@@ -1114,6 +1142,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         auto* add_btn = new QToolButton(card);
         add_btn->setText(QStringLiteral("+"));
         add_btn->setToolTip(tr("Add to stack"));
+        add_btn->setAccessibleName(tr("Add %1 to stack").arg(r.text));
         add_btn->setAutoRaise(false);
         const QString class_name = r.class_name;
         const QString ui_name = r.text;
@@ -1127,6 +1156,74 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         row->addWidget(title, 1);
         row->addWidget(add_btn, 0);
         item->setSizeHint(card->sizeHint().expandedTo(QSize(0, 40)));
+        effectLibraryList()->addItem(item);
+        effectLibraryList()->setItemWidget(item, card);
+    }
+
+    if(rows.empty() && content_pack_category)
+    {
+        QListWidgetItem* item = new QListWidgetItem();
+        item->setFlags(Qt::ItemIsEnabled);
+        item->setData(Qt::UserRole, QString());
+        item->setToolTip(tr(
+            "Install OpenRGB3DSpatialPresets into AppData effects/, then restart OpenRGB."));
+
+        QFrame* card = new QFrame();
+        PluginUiApplyControllerCardChrome(card, false);
+        auto* col = new QVBoxLayout(card);
+        col->setContentsMargins(8, 8, 8, 8);
+        col->setSpacing(6);
+        auto* title = new QLabel(
+            search.isEmpty()
+                ? tr("No %1 looks installed yet.").arg(selected_category)
+                : tr("No %1 looks match this search.").arg(selected_category),
+            card);
+        title->setWordWrap(true);
+        auto* body = new QLabel(
+            tr("Copy the presets pack into AppData effects/, then restart OpenRGB."),
+            card);
+        body->setWordWrap(true);
+        PluginUiApplyMutedSecondaryLabel(body);
+
+        auto* btn_row = new QHBoxLayout();
+        btn_row->setContentsMargins(0, 0, 0, 0);
+        btn_row->setSpacing(8);
+        auto* open_presets = new QPushButton(tr("Open presets repo"), card);
+        open_presets->setToolTip(tr("Open OpenRGB3DSpatialPresets on GitHub."));
+        open_presets->setAccessibleName(tr("Open OpenRGB3DSpatialPresets repository"));
+        auto* open_folder = new QPushButton(tr("Open effects folder"), card);
+        open_folder->setToolTip(tr("Open the plugin AppData effects folder."));
+        open_folder->setAccessibleName(tr("Open plugin effects folder in file manager"));
+        connect(open_presets, &QPushButton::clicked, this, []() {
+            QDesktopServices::openUrl(QUrl(QStringLiteral(
+                "https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets")));
+        });
+        connect(open_folder, &QPushButton::clicked, this, [this]() {
+            const filesystem::path effects = PluginSettingsPaths::EffectsDir(resource_manager);
+            if(effects.empty())
+            {
+                return;
+            }
+            PluginSettingsPaths::EnsurePluginDataLayout(resource_manager);
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(effects.string())));
+        });
+        btn_row->addWidget(open_presets, 0);
+        btn_row->addWidget(open_folder, 0);
+        btn_row->addStretch(1);
+
+        card->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(card, &QWidget::customContextMenuRequested, this,
+                [card, open_presets, open_folder](const QPoint& pos) {
+                    QMenu menu(card);
+                    menu.addAction(tr("Open presets repo"), open_presets, &QPushButton::click);
+                    menu.addAction(tr("Open effects folder"), open_folder, &QPushButton::click);
+                    menu.exec(card->mapToGlobal(pos));
+                });
+
+        col->addWidget(title);
+        col->addWidget(body);
+        col->addLayout(btn_row);
+        item->setSizeHint(card->sizeHint().expandedTo(QSize(0, 96)));
         effectLibraryList()->addItem(item);
         effectLibraryList()->setItemWidget(item, card);
     }
@@ -1235,7 +1332,15 @@ void OpenRGB3DSpatialTab::effectLibrarySelectionChanged(int row)
        fights in-progress volume/gizmo edits. Only gate the Add affordance. */
     if(effectLibraryAddButton())
     {
-        effectLibraryAddButton()->setEnabled(row >= 0);
+        bool can_add = false;
+        if(row >= 0 && effectLibraryList())
+        {
+            if(QListWidgetItem* item = effectLibraryList()->item(row))
+            {
+                can_add = !item->data(Qt::UserRole).toString().isEmpty();
+            }
+        }
+        effectLibraryAddButton()->setEnabled(can_add);
     }
 
     UpdateEffectStackRowSelectorVisibility();

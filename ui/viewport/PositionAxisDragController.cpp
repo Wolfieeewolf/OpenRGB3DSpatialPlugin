@@ -196,11 +196,6 @@ void PositionAxisDragController::onDragDelta(int delta_px, Qt::KeyboardModifiers
 
 void PositionAxisDragController::onWheel(QWheelEvent* event)
 {
-    if(!event)
-    {
-        return;
-    }
-
     const QPoint angle = event->angleDelta();
     int steps          = 0;
     if(std::abs(angle.y()) >= std::abs(angle.x()))

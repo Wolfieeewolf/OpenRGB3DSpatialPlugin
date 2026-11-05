@@ -122,13 +122,12 @@ void TriggersPanel::bindTab(OpenRGB3DSpatialTab* tab)
         onEdit();
     });
 
-    ui->deleteButton->setToolTip(tr(
-        "Delete the selected trigger binding.\n"
-        "Also: Delete / Backspace when the list is focused, or right-click → Delete trigger."));
-    PluginUiWireListDestructiveDelete(ui->bindingsList,
-                                      ui->deleteButton,
-                                      tr("Delete trigger"),
-                                      tr("Delete selected trigger binding"));
+    PluginUiWireListDestructiveDelete(
+        ui->bindingsList,
+        ui->deleteButton,
+        tr("Delete trigger"),
+        tr("Delete selected trigger binding"),
+        tr("Delete the selected trigger binding."));
 }
 
 filesystem::path TriggersPanel::bindingsPath() const

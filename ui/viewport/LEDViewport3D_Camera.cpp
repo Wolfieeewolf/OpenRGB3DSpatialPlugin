@@ -90,6 +90,15 @@ void LEDViewport3D::loadScenePickMatrices(float modelview[16], float projection[
     std::memcpy(viewport, pick_viewport_, sizeof(int) * 4);
 }
 
+void LEDViewport3D::loadPickViewport(int viewport[4])
+{
+    if(!pick_matrices_valid_)
+    {
+        computePickMatricesFallback();
+    }
+    std::memcpy(viewport, pick_viewport_, sizeof(int) * 4);
+}
+
 void LEDViewport3D::DefaultCamera(float& distance, float& yaw, float& pitch,
                                   float& target_x, float& target_y, float& target_z)
 {

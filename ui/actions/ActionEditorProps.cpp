@@ -620,7 +620,6 @@ void ActionEditorDialog::updatePropVisibility()
     }
     if(play_bounds_combo_)
     {
-        // Always available when a clip is selected — marquee/world canvas choice.
         play_bounds_combo_->setVisible(ok);
         play_bounds_combo_->setEnabled(ok);
     }

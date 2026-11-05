@@ -335,9 +335,6 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
 
 void ScreenMirror::PrepareGpuFields(std::uint64_t, float, const GridContext3D& grid)
 {
-    // Shared per-frame hook name — Screen Mirror prepares CPU sample state here
-    // (capture frames are already GPU-scaled on DXGI when quality is capped).
-    // PrefersTrueGpuVolumeSamples stays false: LED mapping is not volumeMain.
     RefreshFrameCacheForRenderSequence(grid);
     smooth_ms_ = 0.0f;
     sample_tick_.clear();

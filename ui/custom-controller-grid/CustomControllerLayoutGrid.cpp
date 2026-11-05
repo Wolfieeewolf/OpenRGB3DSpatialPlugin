@@ -855,12 +855,6 @@ void CustomControllerLayoutGrid::mouseReleaseEvent(QMouseEvent* event)
 }
 void CustomControllerLayoutGrid::keyPressEvent(QKeyEvent* event)
 {
-    if(!event)
-    {
-        QGraphicsView::keyPressEvent(event);
-        return;
-    }
-
     if(event->key() == Qt::Key_Escape && (cell_drag_active_ || left_button_pressed_))
     {
         EndPointerGesture();

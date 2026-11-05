@@ -350,7 +350,6 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 }
                 else if(out_type == "room_sample_shm_notify")
                 {
-                    // Deferred: TryApplyLatest locks stats_mutex again.
                     apply_room_sample_shm = true;
                 }
                 g_telemetry_data_revision.fetch_add(1, std::memory_order_relaxed);

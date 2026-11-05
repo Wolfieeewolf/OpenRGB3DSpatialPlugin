@@ -284,6 +284,7 @@ private:
     void loadPickMatrices(float modelview[16], float projection[16], int viewport[4]);
     /** Same modelview used to draw controllers/planes/gizmo (view * turntable). */
     void loadScenePickMatrices(float modelview[16], float projection[16], int viewport[4]);
+    void loadPickViewport(int viewport[4]);
     void paintGlScene();
     void prepareForQtPainterInPaintGl();
     void initViewportShaderPrograms();

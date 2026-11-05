@@ -30,7 +30,7 @@
      <item>
       <widget class="QComboBox" name="captureCombo">
        <property name="toolTip">
-        <string>Which display this plane captures (Monitor 1, Monitor 2, …). Same list in Object Creator, Scene object edit, and Screen Mirror.</string>
+        <string/>
        </property>
       </widget>
      </item>
@@ -40,7 +40,7 @@
         <string>Refresh</string>
        </property>
        <property name="toolTip">
-        <string>Refresh the list of displays the OS currently reports.</string>
+        <string/>
        </property>
       </widget>
      </item>
@@ -49,7 +49,7 @@
    <item>
     <widget class="QGroupBox" name="reachGroup">
      <property name="title">
-      <string>Reach &amp; Falloff</string>
+      <string>Ambilight Reach &amp; Falloff</string>
      </property>
      <layout class="QFormLayout" name="reachForm">
       <property name="leftMargin">
@@ -67,7 +67,7 @@
       <item row="0" column="0">
        <widget class="QLabel" name="scaleCaption">
         <property name="text">
-         <string>Global Reach:</string>
+         <string>Ambilight reach:</string>
         </property>
        </widget>
       </item>
@@ -77,7 +77,7 @@
       <item row="1" column="0" colspan="2">
        <widget class="QCheckBox" name="scaleInvertCheck">
         <property name="text">
-         <string>Invert Scale Falloff</string>
+         <string>Invert ambilight reach falloff</string>
         </property>
        </widget>
       </item>
@@ -94,7 +94,7 @@
       <item row="3" column="0">
        <widget class="QLabel" name="softnessCaption">
         <property name="text">
-         <string>Softness:</string>
+         <string>Edge Softness:</string>
         </property>
        </widget>
       </item>

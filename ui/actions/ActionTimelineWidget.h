@@ -134,12 +134,7 @@ signals:
     void clipCreated(int track_index, int clip_index);
 
 private slots:
-    /**
-     * Drain GPU thumb queue on the UI thread.
-     * Ceiling: SpatialOffscreenGlPool is a single shared offscreen context (extra
-     * contexts destabilize Windows drivers — see pool header). Thumbs therefore
-     * cannot run on a background GL thread; we cache + defer on this pool instead.
-     */
+    /** Drain GPU thumb queue on the UI thread (shared offscreen GL pool). */
     void pumpGpuThumbQueue();
 
 protected:

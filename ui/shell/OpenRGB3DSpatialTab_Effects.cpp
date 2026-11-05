@@ -18,11 +18,13 @@
 #include "ControllerLayout3D.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QAbstractItemView>
+#include <QAction>
 #include <QCheckBox>
 #include <QFont>
 #include <QFrame>
 #include <QLabel>
 #include <QHBoxLayout>
+#include <QMenu>
 #include <QSize>
 #include <QMessageBox>
 #include <QInputDialog>
@@ -553,16 +555,38 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         PluginUiApplyMutedSecondaryLabel(state);
         auto* title = new QLabel(display_name, card);
         title->setWordWrap(true);
-        auto* volume_unlock = new QCheckBox(tr("Vol"), card);
+        auto* volume_unlock = new QCheckBox(tr("Volume"), card);
         volume_unlock->setChecked(instance->volume_tools_unlocked);
+        volume_unlock->setAccessibleName(tr("Unlock volume gizmo for this layer"));
         volume_unlock->setToolTip(
-            tr("Unlock volume tools for this layer (gizmo place/rotate/scale/skew and volume shape). "
-               "Locked keeps the standard fill-grid feel."));
+            tr("Unlock volume tools (gizmo place/rotate/scale/skew and volume shape).\n"
+               "Locked fills the grid; unlocked places the look in the room.\n"
+               "Also: Tab + Space, or right-click the card."));
         const int stack_index = (int)i;
         connect(volume_unlock, &QCheckBox::toggled, this,
                 [this, stack_index](bool unlocked)
                 {
                     stackLayerVolumeToolsUnlockedToggled(stack_index, unlocked);
+                });
+        card->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(card, &QWidget::customContextMenuRequested, this,
+                [this, card, volume_unlock](const QPoint& pos)
+                {
+                    QMenu menu(card);
+                    QAction* unlock_act = menu.addAction(volume_unlock->isChecked()
+                        ? tr("Lock volume gizmo")
+                        : tr("Unlock volume gizmo"));
+                    connect(unlock_act, &QAction::triggered, volume_unlock, &QCheckBox::toggle);
+                    menu.addSeparator();
+                    QAction* lib_pref = menu.addAction(tr("Effect Library: add with volume unlocked…"));
+                    connect(lib_pref, &QAction::triggered, this, [this]() {
+                        if(QCheckBox* pref = effectLibraryUnlockVolumeOnAddCheck())
+                        {
+                            pref->setChecked(true);
+                            pref->setFocus(Qt::OtherFocusReason);
+                        }
+                    });
+                    menu.exec(card->mapToGlobal(pos));
                 });
         row->addWidget(state, 0);
         row->addWidget(title, 1);

@@ -3,6 +3,7 @@
 #ifndef EFFECTSLIDERROW_H
 #define EFFECTSLIDERROW_H
 
+#include <QString>
 #include <QWidget>
 #include <functional>
 
@@ -13,6 +14,12 @@ class QSpinBox;
 
 namespace Ui {
 class EffectSliderRow;
+}
+
+/** Append spin-over-slider hint to a base tip (Action Editor / EffectSliderRow). */
+inline QString EffectSpinOverSliderTip(const QString& base_tip)
+{
+    return base_tip + QStringLiteral("\nSpin for fine tuning; slider for larger jumps.");
 }
 
 /** Standard numeric control: spin box (fine) over a thin slider (coarse).

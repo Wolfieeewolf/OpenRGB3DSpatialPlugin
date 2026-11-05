@@ -38,7 +38,7 @@
 namespace
 {
 constexpr float kRoomTurntableSpinSensitivity = 0.25f;
-constexpr float kViewportClickSlopGlPx = 3.0f;
+constexpr float kViewportClickSlopQtPx = 3.0f;
 
 void MapQtMouseToGlWindow(const QWidget* widget, const QMouseEvent* event, const GLint vp[4], int& out_win_x, int& out_win_y)
 {
@@ -53,22 +53,6 @@ void MapQtMouseToGlWindow(const QWidget* widget, const QMouseEvent* event, const
     out_win_y = vp[1] + vp_h - y_from_top;
 }
 
-float ViewportQtToGlScaleX(const QWidget* widget, const GLint vp[4])
-{
-    return (float)vp[2] / (float)std::max(1, widget->width());
-}
-
-float ViewportQtToGlScaleY(const QWidget* widget, const GLint vp[4])
-{
-    return (float)vp[3] / (float)std::max(1, widget->height());
-}
-
-float ViewportQtDragDistanceGl(const QWidget* widget, const GLint vp[4], const QPoint& delta)
-{
-    const float gx = (float)delta.x() * ViewportQtToGlScaleX(widget, vp);
-    const float gy = (float)delta.y() * ViewportQtToGlScaleY(widget, vp);
-    return sqrtf(gx * gx + gy * gy);
-}
 } // namespace
 
 
@@ -219,8 +203,15 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
             return;
         }
+        const bool had_object_selection = has_controller_selected || has_ref_point_selected
+            || has_display_plane_selected || has_scene_prop_selected || effect_volume_active_;
         if(pickRoomVolume(ray))
         {
+            if(had_object_selection)
+            {
+                dragging_grab = true;
+                return;
+            }
             selectRoomViewport();
             dragging_room_turntable = true;
             return;
@@ -254,8 +245,8 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     // Camera view for pan axes; scene (V*T) for gizmo hover/drag.
     loadPickMatrices(modelview, projection, viewport);
 
-    const float delta_x_gl = (float)delta.x() * ViewportQtToGlScaleX(this, reinterpret_cast<const GLint*>(viewport));
-    const float delta_y_gl = (float)delta.y() * ViewportQtToGlScaleY(this, reinterpret_cast<const GLint*>(viewport));
+    const float delta_x = (float)delta.x();
+    const float delta_y = (float)delta.y();
 
     int gl_win_x = 0;
     int gl_win_y = 0;
@@ -310,8 +301,8 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
     if(dragging_room_turntable && left_held)
     {
-        room_turntable_yaw_deg += delta_x_gl * kRoomTurntableSpinSensitivity;
-        room_turntable_pitch_deg += delta_y_gl * kRoomTurntableSpinSensitivity;
+        room_turntable_yaw_deg += delta_x * kRoomTurntableSpinSensitivity;
+        room_turntable_pitch_deg += delta_y * kRoomTurntableSpinSensitivity;
         clampRoomTurntablePitch();
         pick_matrices_valid_ = false;
         update();
@@ -328,11 +319,11 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         float forward_x = cosf(yaw_rad);
         float forward_z = sinf(yaw_rad);
 
-        camera_target_x -= right_x * delta_x_gl * grab_sensitivity;
-        camera_target_z -= right_z * delta_x_gl * grab_sensitivity;
+        camera_target_x -= right_x * delta_x * grab_sensitivity;
+        camera_target_z -= right_z * delta_x * grab_sensitivity;
 
-        camera_target_x += forward_x * delta_y_gl * grab_sensitivity;
-        camera_target_z += forward_z * delta_y_gl * grab_sensitivity;
+        camera_target_x += forward_x * delta_y * grab_sensitivity;
+        camera_target_z += forward_z * delta_y * grab_sensitivity;
 
         pick_matrices_valid_ = false;
         update();
@@ -340,8 +331,8 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     else if(dragging_rotate && (event->buttons() & Qt::RightButton))
     {
         float orbit_sensitivity = 0.3f;
-        camera_yaw += delta_x_gl * orbit_sensitivity;
-        camera_pitch += delta_y_gl * orbit_sensitivity;
+        camera_yaw += delta_x * orbit_sensitivity;
+        camera_pitch += delta_y * orbit_sensitivity;
 
         if(camera_pitch > 89.0f) camera_pitch = 89.0f;
         if(camera_pitch < -89.0f) camera_pitch = -89.0f;
@@ -362,12 +353,12 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         const float up_y = modelview[5];
         const float up_z = modelview[9];
 
-        camera_target_x -= right_x * delta_x_gl * pan_sensitivity;
-        camera_target_y -= right_y * delta_x_gl * pan_sensitivity;
-        camera_target_z -= right_z * delta_x_gl * pan_sensitivity;
-        camera_target_x += up_x * delta_y_gl * pan_sensitivity;
-        camera_target_y += up_y * delta_y_gl * pan_sensitivity;
-        camera_target_z += up_z * delta_y_gl * pan_sensitivity;
+        camera_target_x -= right_x * delta_x * pan_sensitivity;
+        camera_target_y -= right_y * delta_x * pan_sensitivity;
+        camera_target_z -= right_z * delta_x * pan_sensitivity;
+        camera_target_x += up_x * delta_y * pan_sensitivity;
+        camera_target_y += up_y * delta_y * pan_sensitivity;
+        camera_target_z += up_z * delta_y * pan_sensitivity;
 
         pick_matrices_valid_ = false;
         update();
@@ -382,12 +373,8 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
 void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
 {
-    float modelview[16];
-    float projection[16];
     int viewport[4];
-    loadScenePickMatrices(modelview, projection, viewport);
-    (void)modelview;
-    (void)projection;
+    loadPickViewport(viewport);
     int gl_win_x = 0;
     int gl_win_y = 0;
     MapQtMouseToGlWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
@@ -395,9 +382,9 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     if(dragging_grab && event->button() == Qt::LeftButton)
     {
         const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
-        const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
+        const float distance = sqrtf((float)(delta.x() * delta.x() + delta.y() * delta.y()));
 
-        if(distance < kViewportClickSlopGlPx)
+        if(distance < kViewportClickSlopQtPx)
         {
             applyViewportClickPick(gl_win_x, gl_win_y);
         }
@@ -418,8 +405,8 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     if(dragging_room_turntable && event->button() == Qt::LeftButton)
     {
         const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
-        const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
-        if(distance < kViewportClickSlopGlPx)
+        const float distance = sqrtf((float)(delta.x() * delta.x() + delta.y() * delta.y()));
+        if(distance < kViewportClickSlopQtPx)
         {
             // Click (not drag): full pick so controllers inside the spun room still win.
             applyViewportClickPick(gl_win_x, gl_win_y);
@@ -438,8 +425,8 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     {
         dragging_rotate = false;
         const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
-        const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
-        if(distance < kViewportClickSlopGlPx && hasViewportSelectionForContextMenu())
+        const float distance = sqrtf((float)(delta.x() * delta.x() + delta.y() * delta.y()));
+        if(distance < kViewportClickSlopQtPx && hasViewportSelectionForContextMenu())
         {
             showSelectionContextMenu(event->globalPosition().toPoint());
         }
@@ -575,6 +562,8 @@ void LEDViewport3D::showSelectionContextMenu(const QPoint& global_pos)
     hint_scale->setEnabled(false);
     QAction* hint_skew = menu.addAction(QStringLiteral("Gizmo: Skew (Y)"));
     hint_skew->setEnabled(false);
+    QAction* hint_freeroam = menu.addAction(QStringLiteral("Gizmo: Freeroam (T)"));
+    hint_freeroam->setEnabled(false);
     QAction* hint_snap = menu.addAction(QStringLiteral("Toggle grid snap (Q)"));
     hint_snap->setEnabled(false);
 
@@ -938,7 +927,9 @@ int LEDViewport3D::PickDisplayPlane(const Ray3D& ray)
         float u = (dot11 * dot20 - dot01 * dot21) / denom_uv;
         float v = (dot00 * dot21 - dot01 * dot20) / denom_uv;
 
-        if(u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f)
+        constexpr float kPlanePickPad = 0.04f;
+        if(u >= -kPlanePickPad && u <= 1.0f + kPlanePickPad
+           && v >= -kPlanePickPad && v <= 1.0f + kPlanePickPad)
         {
             if(t < closest_distance)
             {

@@ -27,7 +27,7 @@
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>Each display plane picks a screen capture source (Monitor 1, Monitor 2, …). Assign it here or on the plane in Object Creator / Scene object edit — same setting.</string>
+         <string/>
         </property>
        </widget>
       </item>

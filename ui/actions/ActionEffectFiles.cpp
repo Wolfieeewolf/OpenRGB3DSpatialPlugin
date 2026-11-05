@@ -130,7 +130,6 @@ void ReadJsonFiles(const filesystem::path& dir, const QString& section, QList<En
 
 QList<Entry> LoadEntries(const filesystem::path& dir)
 {
-    // Property-panel / context menus call this repeatedly — cache for the session path.
     static filesystem::path s_cached_dir;
     static QList<Entry> s_cached;
     if(!dir.empty() && dir == s_cached_dir && !s_cached.isEmpty())

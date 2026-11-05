@@ -398,10 +398,8 @@ bool ActionTimelineWidget::expandClipAcrossRows(int src_track, int src_clip, int
     if(dest_track >= 0 && dest_track < (int)pack_->tracks.size())
     {
         dest_clip = (int)pack_->tracks[(size_t)dest_track].clips.size() - 1;
-        // If we retargeted in place without moving, keep the same clip index.
         if(dest_track == src_track && pack_->tracks[(size_t)dest_track].clips.size() > (size_t)src_clip)
         {
-            // Prefer the clip we just wrote when still present at src_clip.
             if(src_clip >= 0 && src_clip < (int)pack_->tracks[(size_t)dest_track].clips.size())
             {
                 dest_clip = src_clip;

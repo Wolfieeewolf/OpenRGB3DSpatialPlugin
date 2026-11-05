@@ -37,6 +37,21 @@
 namespace
 {
 
+QString GradientPresetTabTip()
+{
+    return QStringLiteral(
+        "Drag onto the timeline. Double-click to replace that preset with the selected gradient. "
+        "Right-click to delete or reset.");
+}
+
+QString GradientPresetButtonTip(const QString& label)
+{
+    return label
+        + QStringLiteral(
+            " \u2014 drag onto the timeline. Double-click to replace with the selected gradient. "
+            "Right-click to delete.");
+}
+
 class DragToolButton : public QToolButton
 {
 public:
@@ -475,7 +490,7 @@ void AddGradientButton(QWidget* page, QLayout* row, QWidget* owner,
     btn->setText(label);
     btn->setIcon(QIcon(preview));
     btn->setIconSize(QSize(36, 14));
-    btn->setToolTip(label + QStringLiteral(" \u2014 drag onto the timeline. Double-click to replace with the selected gradient. Right-click to delete."));
+    btn->setToolTip(GradientPresetButtonTip(label));
     btn->setMimeFactory([id]() {
         return ActionCatalog::MakeGradientPresetMime(id);
     });
@@ -594,39 +609,43 @@ void ActionToolBar::buildUi()
 
     struct Page
     {
-        const char* title;
-        const char* tip;
+        QString title;
+        QString tip;
         QWidget* widget;
     };
 
     const Page defs[] = {
-        {"Tools", "Drag onto a timeline row, or click to add at the playhead.",
+        {QStringLiteral("Tools"),
+         QStringLiteral("Drag onto a timeline row, or click to add at the playhead."),
          BuildEffectsPage(this, effect_files_dir_, [this](const QString& id) { emit effectClicked(id); })},
-        {"Colors", "Drag onto the timeline. Double-click a swatch to change that quick pick.",
+        {QStringLiteral("Colors"),
+         QStringLiteral("Drag onto the timeline. Double-click a swatch to change that quick pick."),
          BuildColorsPage(this, user_colors_path_, [this](unsigned int rgb) { emit colorClicked(rgb); })},
-        {"Gradients", "Drag onto the timeline. Double-click to replace that preset with the selected gradient. Right-click to delete or reset.",
+        {QStringLiteral("Gradients"),
+         GradientPresetTabTip(),
          BuildGradientsPage(this,
                             [this](const QString& id) { emit gradientPresetClicked(id); },
                             [this](const QString& id) { emit gradientPresetOverwriteRequested(id); },
                             [this](const QString& id) { emit gradientPresetDeleteRequested(id); },
                             [this](const QString& id) { emit gradientPresetResetRequested(id); },
                             user_gradients_path_)},
-        {"Curves", "Drag onto a clip once the timeline has one.",
+        {QStringLiteral("Curves"),
+         QStringLiteral("Drag onto a clip once the timeline has one."),
          BuildCurvesPage(this, user_curves_path_, [this](const QString& id) { emit curvePresetClicked(id); })},
     };
 
     for(const Page& page : defs)
     {
-        if(QString::fromUtf8(page.title) == QStringLiteral("Gradients"))
+        if(page.title == QStringLiteral("Gradients"))
         {
             gradients_page_index_ = tabs_->count();
         }
-        if(QString::fromUtf8(page.title) == QStringLiteral("Curves"))
+        if(page.title == QStringLiteral("Curves"))
         {
             curves_page_index_ = tabs_->count();
         }
-        const int index = tabs_->addTab(page.widget, QString::fromUtf8(page.title));
-        tabs_->setTabToolTip(index, QString::fromUtf8(page.tip));
+        const int index = tabs_->addTab(page.widget, page.title);
+        tabs_->setTabToolTip(index, page.tip);
     }
     setCurvesEnabled(false);
 }
@@ -648,8 +667,7 @@ void ActionToolBar::reloadUserGradients()
         user_gradients_path_);
     tabs_->removeTab(gradients_page_index_);
     tabs_->insertTab(gradients_page_index_, replacement, QStringLiteral("Gradients"));
-    tabs_->setTabToolTip(gradients_page_index_,
-                         QStringLiteral("Drag onto the timeline. Double-click to replace that preset with the selected gradient. Right-click to delete or reset."));
+    tabs_->setTabToolTip(gradients_page_index_, GradientPresetTabTip());
     old->deleteLater();
     if(was_current)
     {

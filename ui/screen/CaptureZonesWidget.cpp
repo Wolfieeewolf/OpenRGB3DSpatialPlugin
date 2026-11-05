@@ -20,6 +20,7 @@
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSlider>
 #include <QTimer>
 #include <algorithm>
@@ -217,9 +218,8 @@ public:
     }
 
 protected:
-    void paintEvent(QPaintEvent* event) override
+    void paintEvent(QPaintEvent*) override
     {
-        (void)event;
         if(!capture_zones || !display_plane) return;
 
         QPainter painter(this);
@@ -578,9 +578,8 @@ protected:
         update();
     }
 
-    void mouseReleaseEvent(QMouseEvent* event) override
+    void mouseReleaseEvent(QMouseEvent*) override
     {
-        (void)event;
         if(dragging && selected_zone_index >= 0 && selected_zone_index < (int)capture_zones->size())
             drag_start_zone = (*capture_zones)[selected_zone_index];
         dragging = false;
@@ -590,11 +589,6 @@ protected:
 
     void keyPressEvent(QKeyEvent* event) override
     {
-        if(!event)
-        {
-            QWidget::keyPressEvent(event);
-            return;
-        }
         if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
         {
             if(CanRemoveZone())
@@ -831,6 +825,12 @@ void CaptureZonesWidget::syncWaveIntensityVisibility()
     }
     QDoubleSpinBox* tte = getWaveTimeToEdgeSpin();
     const bool tte_on = tte && tte->value() > 0.0;
+    if(tte_on && propagation_row_ && propagation_row_->slider()
+       && propagation_row_->slider()->value() != 0)
+    {
+        const QSignalBlocker block(propagation_row_->slider());
+        propagation_row_->slider()->setValue(0);
+    }
     if(ui->propagationCaption)
     {
         ui->propagationCaption->setVisible(!tte_on);

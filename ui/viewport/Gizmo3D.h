@@ -79,7 +79,8 @@ public:
     void SetTarget(EffectVolume3D* target);
     /** Drop in-progress drag/hover so a retarget cannot keep writing the old gesture. */
     void CancelDrag();
-    void SetViewportSize(int width, int height);
+    /** Framebuffer size plus widget devicePixelRatio (HiDPI pick/drag feel). */
+    void SetViewportSize(int fb_width, int fb_height, qreal device_pixel_ratio = 1.0);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
     /** Sticky 15° rotate snap (checkbox). Shift still snaps when this is off. */
     void SetRotateSnapEnabled(bool enabled);
@@ -128,7 +129,7 @@ private:
     void ApplyScaleAlongAxis(float along);
     void ApplyUniformScale(float along);
     void ApplySkewAlongAxis(float along);
-    void ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport);
+    void ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* /*projection*/, const int* /*viewport*/);
     void ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
     bool hasAnyTarget() const;
 
@@ -165,6 +166,7 @@ private:
 
     int                    viewport_width;
     int                    viewport_height;
+    float                  device_pixel_ratio_;
 
     float                  gizmo_size;
     float                  object_radius_;
