@@ -131,9 +131,17 @@ jobs:
       - name: Build
         run: bash scripts/ci/build-linux.sh 6 release
 
+      - name: Checkout presets content pack
+        uses: actions/checkout@v5
+        with:
+          repository: Wolfieeewolf/OpenRGB3DSpatialPresets
+          path: OpenRGB3DSpatialPresets
+          fetch-depth: 1
+
       - name: Package
         env:
           QT_AQT_VERSION: '6.8.3'
+          PRESETS_ROOT: ${{ github.workspace }}/OpenRGB3DSpatialPresets
         run: bash scripts/ci/package-linux.sh 6 ${{ matrix.arch }}
 
       - name: Upload artifacts
@@ -169,9 +177,17 @@ jobs:
           bash scripts/build-assimp.sh
           bash scripts/ci/build-macos.sh 6 release
 
+      - name: Checkout presets content pack
+        uses: actions/checkout@v5
+        with:
+          repository: Wolfieeewolf/OpenRGB3DSpatialPresets
+          path: OpenRGB3DSpatialPresets
+          fetch-depth: 1
+
       - name: Package
         env:
           DIST_VARIANT: macOS_${{ matrix.arch }}
+          PRESETS_ROOT: ${{ github.workspace }}/OpenRGB3DSpatialPresets
         run: bash scripts/ci/package-macos.sh 6 ${{ matrix.arch }}
 
       - name: Upload artifacts
@@ -297,13 +313,13 @@ jobs:
 
           | You have… | Download |
           | --- | --- |
-          | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` (DLL + optional content pack: Typical / Custom / Complete) or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` (DLL only) |
-          | **Linux** AppImage / Debian pipeline (Qt 6.8.x) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` |
-          | **CachyOS / Arch / Fedora** system OpenRGB | rebuild with \`scripts/install-linux-user.sh\` (pipeline \`.so\` is for AppImage; may not match distro Qt) |
+          | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` (DLL + content: Typical / Custom / Complete) or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` (DLL only) |
+          | **Linux** AppImage / Debian pipeline (Qt 6.8.x) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` — run \`./install.sh\` / \`openrgb3d-install-content\` (Typical / Complete / Custom menu) |
+          | **CachyOS / Arch / Fedora** system OpenRGB | rebuild with \`scripts/install-linux-user.sh\` (pipeline \`.so\` is for AppImage; may not match distro Qt); content script still works against \`~/.config/OpenRGB\` |
           | **Linux Flatpak** OpenRGB (KDE Flatpak runtime) | Flatpak extension via \`scripts/build-flatpak-plugin.sh\` / \`flatpak/\` — do not Install Plugin a host \`.so\` |
-          | **Linux** ARM64 | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` |
-          | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` |
-          | **macOS** Intel | \`OpenRGB3DSpatialPlugin_macOS_intel.zip\` |
+          | **Linux** ARM64 | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` (+ content install script) |
+          | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` — run \`./install.sh\` (Typical / Complete / Custom) |
+          | **macOS** Intel | \`OpenRGB3DSpatialPlugin_macOS_intel.zip\` (same \`./install.sh\` menu) |
           | **Minecraft** (Fabric) Room Ambilight + vitals | \`openrgb-minecraft-sender-*.jar\` |
 
           Match **OpenRGB → Information → Qt Version**. Restart OpenRGB after installing.

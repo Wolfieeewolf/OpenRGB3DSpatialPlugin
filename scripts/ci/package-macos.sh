@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Package macOS plugin dylib as a zip under dist/.
+# When PRESETS_ROOT (or sibling/checkout OpenRGB3DSpatialPresets) is available,
+# embeds the content pack + install-openrgb3d-content.sh (Typical/Custom/Complete).
 # Usage: package-macos.sh [6] [arm64|x86_64]
 # Env: DIST_VARIANT (optional override)
 set -euo pipefail
@@ -40,20 +42,66 @@ else
   VARIANT="macOS_${ARCH}"
 fi
 
+resolve_presets_root() {
+  if [ -n "${PRESETS_ROOT:-}" ] && [ -d "$PRESETS_ROOT" ]; then
+    echo "$PRESETS_ROOT"
+    return
+  fi
+  if [ -d "$ROOT/OpenRGB3DSpatialPresets" ]; then
+    echo "$ROOT/OpenRGB3DSpatialPresets"
+    return
+  fi
+  local sibling
+  sibling="$(cd "$ROOT/.." && pwd)/OpenRGB3DSpatialPresets"
+  if [ -d "$sibling" ]; then
+    echo "$sibling"
+    return
+  fi
+  return 1
+}
+
 STAGE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"' EXIT
+CONTENT_STAGE=""
+cleanup() { rm -rf "$STAGE" ${CONTENT_STAGE:+"$CONTENT_STAGE"}; }
+trap cleanup EXIT
 cp "$DYLIB" "$STAGE/$DYLIB"
 
-cat >"$STAGE/INSTALL.txt" <<EOF
+HAS_CONTENT=0
+if PRESETS="$(resolve_presets_root)"; then
+  echo "Content pack: $PRESETS"
+  CONTENT_STAGE="$(mktemp -d)"
+  chmod +x "$ROOT/scripts/ci/stage-content-pack.sh"
+  bash "$ROOT/scripts/ci/stage-content-pack.sh" "$PRESETS" "$CONTENT_STAGE"
+  cp -a "$CONTENT_STAGE" "$STAGE/content"
+  install -m 0755 "$ROOT/scripts/install-openrgb3d-content.sh" "$STAGE/install-openrgb3d-content.sh"
+  install -m 0755 "$ROOT/scripts/install-openrgb3d.sh" "$STAGE/install.sh"
+  HAS_CONTENT=1
+else
+  echo "warning: presets pack not found — packaging dylib only (set PRESETS_ROOT)" >&2
+fi
+
+{
+  cat <<EOF
 OpenRGB 3D Spatial Plugin — macOS install
 =========================================
-Copy ${DYLIB} into the plugins folder next to OpenRGB
-(OpenRGB.app/Contents/MacOS/plugins/ or the path shown in
-OpenRGB Settings → Plugins).
+Recommended (plugin + content with install options):
 
-Requires a Qt6 build of OpenRGB.
-Restart OpenRGB after installing the plugin.
+  ./install.sh
+
+Menu matches the Windows MSI:
+  1) Typical  — looks + tools (no controllers)
+  2) Complete — + every controller layout
+  3) Custom   — toggle each pack / controller brand on or off
+
+Non-interactive:
+  ./install.sh typical|complete|custom
+
+Manual: copy ${DYLIB} into OpenRGB.app/Contents/MacOS/plugins/ (or the path
+in OpenRGB Settings → Plugins). Content uses ~/.config/OpenRGB/… (same as Linux).
+
+Requires a Qt6 build of OpenRGB. Restart OpenRGB after installing.
 EOF
+} >"$STAGE/INSTALL.txt"
 
 mkdir -p dist
 ZIP_PATH="dist/OpenRGB3DSpatialPlugin_${VARIANT}.zip"

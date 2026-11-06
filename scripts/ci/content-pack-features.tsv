@@ -1,0 +1,20 @@
+# Shared content-pack feature list (Windows MSI + Linux/macOS installers).
+# Columns: id	level	title	path
+# level 1 = Typical; level 100 = Complete/Custom only (controller layouts).
+# path is relative to the OpenRGB3DSpatialPresets repo root / plugin data root.
+id	level	title	path
+effects-volume	1	Volume	effects/volume
+effects-audio	1	Audio	effects/audio
+effects-media	1	Media	effects/media
+effects-shader-field	1	Shader Field	effects/shader-field
+effects-patterns	1	Patterns	effects/patterns
+action-toolbox	1	Action Editor tools	action-editor/toolbox
+triggers	1	Trigger actions	triggers
+movie-sync	1	Movie Sync helpers	movie-sync
+controllers-cpu-coolers	100	CPU coolers	controllers/cpu-coolers
+controllers-fans	100	Fans	controllers/fans
+controllers-graphics-cards	100	Graphics cards	controllers/graphics-cards
+controllers-keyboards	100	Keyboards	controllers/keyboards
+controllers-mice	100	Mice	controllers/mice
+controllers-motherboards	100	Motherboards	controllers/motherboards
+controllers-speakers	100	Speakers	controllers/speakers
