@@ -185,12 +185,20 @@ jobs:
 
       - name: Build Assimp
         run: |
+          set -euo pipefail
           chmod +x scripts/build-assimp.sh
           cmake --version
           # Match qmake OUT_PWD/_deps when configuring in the repo root.
           export ASSIMP_BUILD_DIR="${GITHUB_WORKSPACE}/_deps/assimp-build"
           export ASSIMP_INSTALL_DIR="${GITHUB_WORKSPACE}/_deps/assimp-install"
-          bash scripts/build-assimp.sh
+          export CC=clang CXX=clang++
+          if ! bash scripts/build-assimp.sh; then
+            echo "::error::Assimp build failed — last CMake output:"
+            ls -la "${ASSIMP_BUILD_DIR}" || true
+            tail -n 80 "${ASSIMP_BUILD_DIR}/CMakeFiles/CMakeError.log" 2>/dev/null || true
+            tail -n 80 "${ASSIMP_BUILD_DIR}/CMakeFiles/CMakeOutput.log" 2>/dev/null || true
+            exit 1
+          fi
           test -f "${ASSIMP_INSTALL_DIR}/lib/libassimp.a"
 
       - name: Build plugin

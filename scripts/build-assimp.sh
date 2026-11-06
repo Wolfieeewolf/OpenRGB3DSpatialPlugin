@@ -62,6 +62,22 @@ if command -v ninja >/dev/null 2>&1; then
   GENERATOR_ARGS=(-G Ninja)
 fi
 
+# CMake 4.x (common on macos-15 runners) rejects older cmake_minimum_required
+# unless POLICY_VERSION_MINIMUM is set. Apple builds need a deployment target.
+EXTRA_CMAKE_ARGS=()
+if cmake --help 2>/dev/null | grep -q CMAKE_POLICY_VERSION_MINIMUM \
+  || [[ "$(cmake --version | head -1)" =~ 'version 4\.' ]]; then
+  EXTRA_CMAKE_ARGS+=(-DCMAKE_POLICY_VERSION_MINIMUM=3.5)
+fi
+case "$(uname -s)" in
+  Darwin)
+    EXTRA_CMAKE_ARGS+=(-DCMAKE_OSX_DEPLOYMENT_TARGET=10.15)
+    export CC="${CC:-clang}"
+    export CXX="${CXX:-clang++}"
+    ;;
+esac
+
+echo "Configuring Assimp (cmake $(cmake --version | head -1))"
 cmake -S "$ASSIMP_SRC" -B "$BUILD_DIR" "${GENERATOR_ARGS[@]}" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
@@ -79,7 +95,8 @@ cmake -S "$ASSIMP_SRC" -B "$BUILD_DIR" "${GENERATOR_ARGS[@]}" \
   -DASSIMP_BUILD_3MF_IMPORTER=ON \
   -DASSIMP_BUILD_GLTF_IMPORTER=ON \
   -DASSIMP_WARNINGS_AS_ERRORS=OFF \
-  -DASSIMP_INJECT_DEBUG_POSTFIX=OFF
+  -DASSIMP_INJECT_DEBUG_POSTFIX=OFF \
+  "${EXTRA_CMAKE_ARGS[@]}"
 
 cmake --build "$BUILD_DIR" --config Release --parallel
 cmake --install "$BUILD_DIR" --config Release
