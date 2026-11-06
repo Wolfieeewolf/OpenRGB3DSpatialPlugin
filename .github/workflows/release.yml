@@ -184,6 +184,7 @@ jobs:
           aqtversion: '>=3.2.0'
 
       - name: Build Assimp
+        id: assimp
         run: |
           set -euo pipefail
           chmod +x scripts/build-assimp.sh
@@ -192,14 +193,29 @@ jobs:
           export ASSIMP_BUILD_DIR="${GITHUB_WORKSPACE}/_deps/assimp-build"
           export ASSIMP_INSTALL_DIR="${GITHUB_WORKSPACE}/_deps/assimp-install"
           export CC=clang CXX=clang++
-          if ! bash scripts/build-assimp.sh; then
-            echo "::error::Assimp build failed — last CMake output:"
-            ls -la "${ASSIMP_BUILD_DIR}" || true
-            tail -n 80 "${ASSIMP_BUILD_DIR}/CMakeFiles/CMakeError.log" 2>/dev/null || true
-            tail -n 80 "${ASSIMP_BUILD_DIR}/CMakeFiles/CMakeOutput.log" 2>/dev/null || true
-            exit 1
+          set +e
+          bash scripts/build-assimp.sh 2>&1 | tee assimp-build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::group::assimp-build.log (tail)"
+            tail -n 120 assimp-build.log || true
+            echo "::endgroup::"
+            echo "::error::Assimp build failed (exit $rc). See assimp-build.log artifact / group above."
+            exit "$rc"
           fi
           test -f "${ASSIMP_INSTALL_DIR}/lib/libassimp.a"
+
+      - name: Upload Assimp failure log
+        if: failure() && steps.assimp.outcome == 'failure'
+        uses: actions/upload-artifact@v6
+        with:
+          name: assimp-log-macOS-${{ matrix.arch }}
+          path: |
+            assimp-build.log
+            _deps/assimp-build/CMakeFiles/CMakeError.log
+            _deps/assimp-build/CMakeFiles/CMakeOutput.log
+          if-no-files-found: ignore
 
       - name: Build plugin
         run: |

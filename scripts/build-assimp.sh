@@ -71,7 +71,12 @@ if cmake --help 2>/dev/null | grep -q CMAKE_POLICY_VERSION_MINIMUM \
 fi
 case "$(uname -s)" in
   Darwin)
-    EXTRA_CMAKE_ARGS+=(-DCMAKE_OSX_DEPLOYMENT_TARGET=10.15)
+    EXTRA_CMAKE_ARGS+=(
+      -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+      # Assimp enables -Wunsafe-buffer-usage on Clang; Apple Clang 17+ is noisy/fatal in CI.
+      -DCMAKE_CXX_FLAGS=-Wno-unsafe-buffer-usage
+      -DCMAKE_C_FLAGS=-Wno-unsafe-buffer-usage
+    )
     export CC="${CC:-clang}"
     export CXX="${CXX:-clang++}"
     ;;
