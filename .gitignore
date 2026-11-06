@@ -29,6 +29,7 @@ dependencies/cmake-win64.zip
 cmake-win64.zip
 
 # WiX MSI intermediates (scripts/ci/build-msi.ps1)
+_msi_stage/
 *.wxs
 *.wixobj
 *.wixpdb

@@ -1,6 +1,8 @@
 # Content folders map
 
-The plugin is the **engine** (C++ under `engines/` / `shared/`). Plugin data root and the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) use the **same folder names** (`effects/volume/`, …) — copy-paste install into AppData. **No looks ship in the DLL**; those paths are not source-tree folders.
+The plugin is the **engine** (C++ under `engines/` / `shared/`). Plugin data root and the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) use the **same folder names** (`effects/volume/`, …). **No looks ship in the DLL**; those paths are not source-tree folders.
+
+**Windows MSI** (`scripts/ci/build-msi.ps1`) embeds a frozen snapshot of the presets repo and installs selected trees into AppData. Typical = looks/tools only; Complete = + all controllers; Custom = pick packs and controller categories. The presets git repo stays the authoring source of truth — rebuild the MSI when you want a new content cut (roughly monthly is enough). Dev machines can still copy-paste from a presets checkout.
 
 ```text
 %AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin/

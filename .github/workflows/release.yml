@@ -65,8 +65,17 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/package-windows.ps1
 
+      - name: Checkout presets content pack
+        uses: actions/checkout@v5
+        with:
+          repository: Wolfieeewolf/OpenRGB3DSpatialPresets
+          path: OpenRGB3DSpatialPresets
+          fetch-depth: 1
+
       - name: Build MSI installer
         shell: pwsh
+        env:
+          PRESETS_ROOT: ${{ github.workspace }}/OpenRGB3DSpatialPresets
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/build-msi.ps1
 
@@ -288,7 +297,7 @@ jobs:
 
           | You have… | Download |
           | --- | --- |
-          | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` |
+          | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` (DLL + optional content pack: Typical / Custom / Complete) or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` (DLL only) |
           | **Linux** AppImage / Debian pipeline (Qt 6.8.x) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` |
           | **CachyOS / Arch / Fedora** system OpenRGB | rebuild with \`scripts/install-linux-user.sh\` (pipeline \`.so\` is for AppImage; may not match distro Qt) |
           | **Linux Flatpak** OpenRGB (KDE Flatpak runtime) | Flatpak extension via \`scripts/build-flatpak-plugin.sh\` / \`flatpak/\` — do not Install Plugin a host \`.so\` |

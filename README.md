@@ -53,7 +53,11 @@ If you expect plug-and-play with zero reading, this will probably frustrate you�
 
 - **OpenRGB 1.0** (Plugin API **5**), **Qt 6** matching the host (pipeline builds use **6.8.3**). Check **Information → Software Info**.
 - Room viewport needs **OpenGL 4.1 Core**. Qt5 hosts are not supported.
-- Install the matching release artifact into OpenRGB’s `plugins` folder (or rebuild with `scripts/install-linux-user.sh` for distro OpenRGB). Flatpak OpenRGB needs the Flatpak extension — do not load a host `.so`.
+- **Windows:** prefer the release **MSI** (`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip`). It installs the DLL into OpenRGB’s `plugins` folder and can install the [presets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) content pack into AppData in the same run:
+  - **Typical** — plugin + effect looks + Action tools + Triggers + Movie Sync (no controller layouts).
+  - **Complete** — Typical plus every controller layout.
+  - **Custom** — Advanced checkbox tree (pick effect families and only the controller brands you own).
+  Or drop the bare `.dll` / zip yourself and copy the presets repo by hand. Flatpak OpenRGB needs the Flatpak extension — do not load a host `.so`. Linux/macOS: matching release artifact, or rebuild with `scripts/install-linux-user.sh` for distro OpenRGB.
 
 ### Building from source
 
