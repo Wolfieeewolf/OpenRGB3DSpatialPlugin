@@ -33,8 +33,10 @@ else
 fi
 
 if [[ "$push_ok" -ne 1 ]]; then
-  echo "::warning::GitLab mirror push failed (exit 128 usually means bad/expired GITLAB_MIRROR_TOKEN or missing write_repository scope). GitHub remains canonical."
-  exit 1
+  echo "::warning::GitLab mirror push failed — bad/expired GITLAB_MIRROR_TOKEN or missing write_repository. GitHub remains canonical; this job stays green."
+  echo "Refresh: GitLab → Preferences → Access Tokens (scopes: write_repository, read_repository) → copy token"
+  echo "Then: GitHub repo → Settings → Secrets and variables → Actions → update GITLAB_MIRROR_TOKEN"
+  exit 0
 fi
 
 echo "GitLab mirror updated: https://gitlab.com/${GITLAB_REPO}"

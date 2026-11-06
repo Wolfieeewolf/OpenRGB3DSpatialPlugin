@@ -32,7 +32,13 @@ To refresh the GitHub wiki from the local seed: `.\scripts\publish-wiki.ps1` (af
 
 | Secret | Purpose |
 | ------ | ------- |
-| `GITLAB_MIRROR_TOKEN` | GitLab PAT with `write_repository` — Actions pushes `main` and tags to the GitLab mirror |
+| `GITLAB_MIRROR_TOKEN` | GitLab PAT — Actions pushes `main` and tags to the GitLab mirror |
+
+**Refresh when Actions says “HTTP Basic: Access denied” on the mirror job:**
+
+1. GitLab → [Preferences → Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens) → create a token with **`write_repository`** and **`read_repository`** (Project Access Token on the mirror project also works).
+2. GitHub → this repo → **Settings → Secrets and variables → Actions** → edit **`GITLAB_MIRROR_TOKEN`** → paste the new token.
+3. Re-run **Mirror to GitLab** (or push any commit/tag). A bad token no longer fails the workflow; it only warns until refreshed.
 
 ### GitLab CI (optional backup)
 
