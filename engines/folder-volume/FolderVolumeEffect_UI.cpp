@@ -247,7 +247,10 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "hue_time")
     {
-        return time_sec * GetColorCycleHz();
+        /* Frequency colour scroll — respect Speed stop and stratum speed_mul. */
+        if(GetSpeed() == 0)
+            return 0.0f;
+        return time_sec * GetColorCycleHz() * speed_mul;
     }
     if(name == "progress_tau")
     {
@@ -259,7 +262,10 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "freq_spin")
     {
-        return time_sec * GetColorCycleHz() * 6.2831853f * (progress / std::fmax(0.0001f, CalculateProgress(time_sec)));
+        if(GetSpeed() == 0)
+            return 0.0f;
+        return time_sec * GetColorCycleHz() * speed_mul * 6.2831853f
+            * (progress / std::fmax(0.0001f, CalculateProgress(time_sec)));
     }
     if(name.rfind("sign ", 0) == 0)
     {
@@ -558,7 +564,8 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "bubble_rise")
     {
-        return std::clamp(SliderRaw("rise_speed") / 100.0f, 0.1f, 4.0f) * GetMotionHz() * speed_mul;
+        /* Rise rate only — Bubbles drives time with motion_clock (Speed already in clock). */
+        return std::clamp(SliderRaw("rise_speed") / 100.0f, 0.1f, 4.0f);
     }
     if(name == "bubble_interval")
     {
