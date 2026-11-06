@@ -330,9 +330,13 @@ $controllerFeatures
 $WxsFile = Join-Path $StageRoot "$PnSansWs.wxs"
 $Wxs | Out-File -FilePath $WxsFile -Encoding UTF8
 
-$candleArgs = @('-arch', 'x64', $WxsFile)
+# candle with absolute .wxs paths writes .wixobj into the cwd — keep objs in the stage dir.
+$candleArgs = @('-arch', 'x64', '-out', (Join-Path $StageRoot '\'))
 foreach ($h in $harvests) {
     $candleArgs += "-d$($h.VarName)=$($h.StageDir)"
+}
+$candleArgs += $WxsFile
+foreach ($h in $harvests) {
     $candleArgs += $h.Wxs
 }
 
@@ -344,12 +348,9 @@ New-Item -ItemType Directory -Path (Join-Path $Root 'dist') -Force | Out-Null
 $MsiName = "${PnSansWs}_Windows_64.msi"
 $MsiPath = Join-Path $Root "dist\$MsiName"
 
-$allObjs = @($WxsFile -replace '\.wxs$', '.wixobj')
-foreach ($h in $harvests) {
-    $allObjs += ($h.Wxs -replace '\.wxs$', '.wixobj')
-}
-foreach ($obj in $allObjs) {
-    if (-not (Test-Path $obj)) { throw "candle did not produce: $obj" }
+$allObjs = @(Get-ChildItem -Path $StageRoot -Filter '*.wixobj' -File | ForEach-Object { $_.FullName })
+if ($allObjs.Count -lt 1) {
+    throw "candle produced no .wixobj under $StageRoot"
 }
 
 & light -sval -ext WixUIExtension -out $MsiPath @allObjs
