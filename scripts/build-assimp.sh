@@ -65,15 +65,18 @@ fi
 # CMake 4.x (common on macos-15 runners) rejects older cmake_minimum_required
 # unless POLICY_VERSION_MINIMUM is set. Apple builds need a deployment target.
 EXTRA_CMAKE_ARGS=()
+# Bundled contrib/zlib on Apple Clang 17 / macOS 15 SDK breaks (fdopen #define vs _stdio.h).
+# Use the system zlib on Darwin; keep vendored zlib elsewhere.
+ASSIMP_BUILD_ZLIB=ON
 if cmake --help 2>/dev/null | grep -q CMAKE_POLICY_VERSION_MINIMUM \
   || [[ "$(cmake --version | head -1)" =~ 'version 4\.' ]]; then
   EXTRA_CMAKE_ARGS+=(-DCMAKE_POLICY_VERSION_MINIMUM=3.5)
 fi
 case "$(uname -s)" in
   Darwin)
+    ASSIMP_BUILD_ZLIB=OFF
     EXTRA_CMAKE_ARGS+=(
       -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
-      # Assimp enables -Wunsafe-buffer-usage on Clang; Apple Clang 17+ is noisy/fatal in CI.
       -DCMAKE_CXX_FLAGS=-Wno-unsafe-buffer-usage
       -DCMAKE_C_FLAGS=-Wno-unsafe-buffer-usage
     )
@@ -82,7 +85,7 @@ case "$(uname -s)" in
     ;;
 esac
 
-echo "Configuring Assimp (cmake $(cmake --version | head -1))"
+echo "Configuring Assimp (cmake $(cmake --version | head -1); ASSIMP_BUILD_ZLIB=$ASSIMP_BUILD_ZLIB)"
 cmake -S "$ASSIMP_SRC" -B "$BUILD_DIR" "${GENERATOR_ARGS[@]}" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
@@ -92,7 +95,7 @@ cmake -S "$ASSIMP_SRC" -B "$BUILD_DIR" "${GENERATOR_ARGS[@]}" \
   -DASSIMP_BUILD_SAMPLES=OFF \
   -DASSIMP_INSTALL_PDB=OFF \
   -DBUILD_SHARED_LIBS=OFF \
-  -DASSIMP_BUILD_ZLIB=ON \
+  -DASSIMP_BUILD_ZLIB="$ASSIMP_BUILD_ZLIB" \
   -DASSIMP_NO_EXPORT=ON \
   -DASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT=OFF \
   -DASSIMP_BUILD_OBJ_IMPORTER=ON \
