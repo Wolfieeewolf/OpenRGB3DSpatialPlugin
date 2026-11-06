@@ -160,12 +160,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Qt mac desktop packages are universal (clang_64 = X86_64-ARM64).
           - arch: arm64
             runner: macos-15
-            qt_arch: clang_arm64
           - arch: intel
             runner: macos-15-intel
-            qt_arch: clang_64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -177,16 +176,28 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
-          arch: ${{ matrix.qt_arch }}
+          host: mac
+          target: desktop
+          arch: clang_64
           cache: true
           modules: ''
+          aqtversion: '>=3.2.0'
 
-      - name: Build
+      - name: Build Assimp
         run: |
-          chmod +x scripts/ci/*.sh scripts/build-assimp.sh
+          chmod +x scripts/build-assimp.sh
+          cmake --version
+          # Match qmake OUT_PWD/_deps when configuring in the repo root.
+          export ASSIMP_BUILD_DIR="${GITHUB_WORKSPACE}/_deps/assimp-build"
+          export ASSIMP_INSTALL_DIR="${GITHUB_WORKSPACE}/_deps/assimp-install"
+          bash scripts/build-assimp.sh
+          test -f "${ASSIMP_INSTALL_DIR}/lib/libassimp.a"
+
+      - name: Build plugin
+        run: |
+          chmod +x scripts/ci/*.sh
           which qmake
           qmake -v
-          bash scripts/build-assimp.sh
           bash scripts/ci/build-macos.sh 6 release
 
       - name: Checkout presets content pack

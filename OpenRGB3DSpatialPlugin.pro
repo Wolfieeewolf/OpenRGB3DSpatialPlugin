@@ -588,11 +588,20 @@ equals(ASSIMP_AUTO_BUILD, 1) {
         ensure_assimp.target = $$ASSIMP_LIB_FILE
         # Force plain compilers: make may export CC='@echo compiling $< && gcc'
         # with $< = Assimp CMakeLists.txt (breaks nested cmake under rpm %make_build).
-        ensure_assimp.commands = \
-            CC=gcc CXX=g++ \
-            ASSIMP_BUILD_DIR=$$shell_quote($$ASSIMP_BUILD_DIR) \
-            ASSIMP_INSTALL_DIR=$$shell_quote($$ASSIMP_DIR) \
-            $$shell_quote($$PWD/scripts/build-assimp.sh)
+        # macOS: use clang (gcc is a shim and breaks Assimp on some runners).
+        macx {
+            ensure_assimp.commands = \
+                CC=clang CXX=clang++ \
+                ASSIMP_BUILD_DIR=$$shell_quote($$ASSIMP_BUILD_DIR) \
+                ASSIMP_INSTALL_DIR=$$shell_quote($$ASSIMP_DIR) \
+                $$shell_quote($$PWD/scripts/build-assimp.sh)
+        } else {
+            ensure_assimp.commands = \
+                CC=gcc CXX=g++ \
+                ASSIMP_BUILD_DIR=$$shell_quote($$ASSIMP_BUILD_DIR) \
+                ASSIMP_INSTALL_DIR=$$shell_quote($$ASSIMP_DIR) \
+                $$shell_quote($$PWD/scripts/build-assimp.sh)
+        }
         ensure_assimp.depends = $$PWD/dependencies/assimp/CMakeLists.txt
         QMAKE_EXTRA_TARGETS += ensure_assimp
         PRE_TARGETDEPS += $$ASSIMP_LIB_FILE
