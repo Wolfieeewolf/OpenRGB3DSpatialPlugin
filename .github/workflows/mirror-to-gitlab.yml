@@ -2,6 +2,7 @@ name: Mirror to GitLab
 
 # GitHub is canonical. This job force-updates GitLab main/tags so the
 # OpenRGB-facing copy stays in sync and works as a backup.
+# Soft-fail: a bad/expired GITLAB_MIRROR_TOKEN must not block release CI.
 
 on:
   push:
@@ -13,9 +14,10 @@ jobs:
   mirror:
     if: github.repository == 'Wolfieeewolf/OpenRGB3DSpatialPlugin'
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Push to GitLab

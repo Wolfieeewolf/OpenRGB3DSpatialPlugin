@@ -17,14 +17,24 @@ git config user.name "OpenRGB3DSpatialPlugin CI"
 git remote remove gitlab-mirror 2>/dev/null || true
 git remote add gitlab-mirror "$REMOTE_URL"
 
+push_ok=0
 if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
   TAG_NAME="${GITHUB_REF#refs/tags/}"
   echo "Mirroring tag ${TAG_NAME} to GitLab (force so recut tags replace the old SHA)"
-  git push gitlab-mirror "refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}" --force
+  if git push gitlab-mirror "refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}" --force; then
+    push_ok=1
+  fi
 else
   echo "Mirroring HEAD to GitLab ${TARGET_BRANCH}"
-  git push gitlab-mirror "HEAD:${TARGET_BRANCH}" --force
+  if git push gitlab-mirror "HEAD:${TARGET_BRANCH}" --force; then
+    push_ok=1
+  fi
   git push gitlab-mirror --tags --force || true
+fi
+
+if [[ "$push_ok" -ne 1 ]]; then
+  echo "::warning::GitLab mirror push failed (exit 128 usually means bad/expired GITLAB_MIRROR_TOKEN or missing write_repository scope). GitHub remains canonical."
+  exit 1
 fi
 
 echo "GitLab mirror updated: https://gitlab.com/${GITLAB_REPO}"
