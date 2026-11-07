@@ -2,6 +2,7 @@
 
 #include "GlProgram.h"
 
+#include <QMatrix3x3>
 #include <QMatrix4x4>
 #include <QOpenGLContext>
 #include <QOpenGLShaderProgram>
@@ -117,6 +118,36 @@ void GlProgram::SetUniformMat4(const char* name, const float* column_major_16) c
     QMatrix4x4 mat;
     std::memcpy(mat.data(), column_major_16, sizeof(float) * 16);
     program_->setUniformValue(loc, mat);
+}
+
+void GlProgram::SetUniformMat3(const char* name, const float* column_major_9) const
+{
+    if(!program_ || !column_major_9)
+    {
+        return;
+    }
+    const int loc = program_->uniformLocation(name);
+    if(loc < 0)
+    {
+        return;
+    }
+    QMatrix3x3 mat;
+    std::memcpy(mat.data(), column_major_9, sizeof(float) * 9);
+    program_->setUniformValue(loc, mat);
+}
+
+void GlProgram::SetUniform3f(const char* name, float x, float y, float z) const
+{
+    if(!program_)
+    {
+        return;
+    }
+    const int loc = program_->uniformLocation(name);
+    if(loc < 0)
+    {
+        return;
+    }
+    program_->setUniformValue(loc, x, y, z);
 }
 
 void GlProgram::SetUniform1i(const char* name, int value) const

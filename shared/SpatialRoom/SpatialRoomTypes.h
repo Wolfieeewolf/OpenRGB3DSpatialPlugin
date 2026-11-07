@@ -54,12 +54,6 @@ struct SpatialRoomCapabilities
     }
 };
 
-/** Per-frame flags shared by the effect render pass (tab-owned). */
-struct SpatialRoomFrameContext
-{
-    bool room_grid_overlay_pass = false;
-};
-
 } // namespace SpatialRoom
 
 #endif

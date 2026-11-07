@@ -193,6 +193,8 @@ private slots:
     void zoneSelected(int index);
 
     void effectTimerTimeout();
+    /** Apply stack max FPS (or current UI effect) to effect_timer while playing. */
+    void SyncEffectPlaybackTimer();
     void RenderEffectStack();
     void gridSnapToggled(bool enabled);
     void rotateSnapToggled(bool enabled);
@@ -271,6 +273,12 @@ private:
     void UpdateProfileDirtyBanner();
     /** Bake Mapped lights hub from current controller layout (fixed ref like room box). */
     void RefreshMappedLightsAnchor();
+    /** Refresh hub if needed and copy it onto a grid (no-op when bake fails). */
+    void ApplyMappedLightsAnchorToGrid(GridContext3D& grid);
+    /** Drive an effect's reference mode from the stack Spatial Anchor combo. */
+    void ApplyStackOriginComboToEffect(SpatialEffect3D* effect);
+    /** Build the standard room grid with Mapped lights hub applied when valid. */
+    GridContext3D MakeRoomGridWithMappedLightsAnchor();
     bool SaveCustomController(unsigned int index);
     int  IndexOfVirtualController(const VirtualController3D* controller) const;
     void LoadCustomControllers();
@@ -362,6 +370,8 @@ private:
     void SetPluginSettings(const nlohmann::json& settings);
     void PersistRoomGridOverlayToSettings();
     void MergePluginUiIntoSettings(nlohmann::json& settings) const;
+    /** Bake/show GPU room-grid overlay from enabled stack layers (works while stopped). */
+    void RefreshRoomGridOverlayPreview();
     void RefreshEffectDisplay();
     void SyncSpatialLightingSceneForUi();
     void SetupStackRoomOutputPanel();
@@ -589,8 +599,6 @@ private slots:
     void scenePropRotationSignal(int index, float x, float y, float z);
 
 private:
-    std::vector<RGBColor> room_grid_overlay_buffer;
-
     bool layout_dirty = false;
     nlohmann::json cached_profile_layout_;
     QLabel* profile_unsaved_banner_ = nullptr;

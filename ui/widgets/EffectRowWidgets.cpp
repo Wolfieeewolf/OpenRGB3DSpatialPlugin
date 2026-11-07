@@ -19,6 +19,10 @@ EffectSliderRow::EffectSliderRow(QWidget* parent)
 {
     ui->setupUi(this);
     ui->captionLabel->setVisible(false);
+    setMinimumWidth(0);
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    ui->valueSpin->setMinimumWidth(0);
+    ui->valueSlider->setMinimumWidth(0);
     wireSpinSliderLink();
 }
 
@@ -796,9 +800,12 @@ void EffectSectionHeading::setTitle(const QString& title)
 #include "ui_EffectCollapsibleSection.h"
 
 #include <QFont>
+#include <QFontMetrics>
+#include <QResizeEvent>
 #include <QShowEvent>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <algorithm>
 
 EffectCollapsibleSection::EffectCollapsibleSection(const QString& title,
                                                    const QString& tooltip,
@@ -831,6 +838,13 @@ void EffectCollapsibleSection::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
     applyHeaderChrome();
+    refreshToggleText();
+}
+
+void EffectCollapsibleSection::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    refreshToggleText();
 }
 
 void EffectCollapsibleSection::applyHeaderChrome()
@@ -873,5 +887,10 @@ bool EffectCollapsibleSection::isExpanded() const
 void EffectCollapsibleSection::refreshToggleText()
 {
     const QChar marker = ui->toggleButton->isChecked() ? QChar(0x25BC) : QChar(0x25B6);
-    ui->toggleButton->setText(QStringLiteral("%1  %2").arg(marker).arg(title_));
+    const QString full = QStringLiteral("%1  %2").arg(marker).arg(title_);
+    ui->toggleButton->setToolTip(title_);
+    /* Elide so headers never clip mid-word against a narrow side panel. */
+    const int avail = std::max(32, ui->toggleButton->width() - 12);
+    const QFontMetrics fm(ui->toggleButton->font());
+    ui->toggleButton->setText(fm.elidedText(full, Qt::ElideRight, avail));
 }

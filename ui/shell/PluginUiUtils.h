@@ -5,6 +5,7 @@
 
 #include "EffectCollapsibleSection.h"
 
+#include <QAbstractScrollArea>
 #include <QAction>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -14,7 +15,9 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QToolButton>
+#include <QWidget>
 #include <QVBoxLayout>
 #include <QColor>
 #include <QFont>
@@ -32,6 +35,59 @@ inline QColor PluginUiPaletteColor(const QWidget* w, QPalette::ColorRole role)
         return QColor();
     }
     return w->palette().color(role);
+}
+
+/**
+ * Side-panel / tab scroll areas must NOT advertise their content height as sizeHint
+ * (AdjustToContents), or the splitter grows past the window and clips with no scrollbar.
+ * Content widget stays Minimum vertically so it can grow taller than the viewport.
+ */
+inline void PluginUiConfigureEmbeddedScrollArea(QScrollArea* scroll)
+{
+    if(!scroll)
+    {
+        return;
+    }
+    scroll->setWidgetResizable(true);
+    /* Vertical scroll only — horizontal overflow was clipping section borders/sliders. */
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    scroll->setMinimumSize(0, 0);
+    scroll->setMaximumHeight(QWIDGETSIZE_MAX);
+    /* Critical: AdjustToContents makes the splitter grow with content and clips the window. */
+    scroll->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+    if(QWidget* content = scroll->widget())
+    {
+        /* Ignored width: shrink with the viewport when the vertical scrollbar appears. */
+        content->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+        content->setMinimumWidth(0);
+        content->setMinimumHeight(0);
+        content->setMaximumHeight(QWIDGETSIZE_MAX);
+    }
+}
+
+/** Lists nested inside an outer scroll.
+ *  max_h <= 0 → no height cap (list may Expand and fill leftover column space). */
+inline void PluginUiConfigureListInOuterScroll(QListWidget* list, int min_h = 120, int max_h = 280)
+{
+    if(!list)
+    {
+        return;
+    }
+    list->setSizePolicy(QSizePolicy::Expanding,
+                        max_h > 0 ? QSizePolicy::Preferred : QSizePolicy::Expanding);
+    list->setMinimumHeight(min_h);
+    if(max_h > 0)
+    {
+        list->setMaximumHeight(max_h);
+    }
+    else
+    {
+        list->setMaximumHeight(QWIDGETSIZE_MAX);
+    }
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    list->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 }
 
 inline QColor PluginUiGridEmptyCellColor(const QWidget* w)
@@ -292,7 +348,7 @@ inline void PluginUiSetRgbSwatchButton(QPushButton* btn, int r, int g, int b)
     btn->setText(QString());
 }
 
-inline QFrame* PluginUiWrapInSettingsPanel(QWidget* inner, int inner_margin = 9)
+inline QFrame* PluginUiWrapInSettingsPanel(QWidget* inner, int inner_margin = 6)
 {
     if(!inner)
     {
@@ -302,6 +358,14 @@ inline QFrame* PluginUiWrapInSettingsPanel(QWidget* inner, int inner_margin = 9)
     panel->setFrameShape(QFrame::StyledPanel);
     panel->setFrameShadow(QFrame::Sunken);
     panel->setAutoFillBackground(true);
+    /* Shrink with the right detail scroll viewport — never force horizontal clip. */
+    panel->setMinimumWidth(0);
+    panel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+    if(inner)
+    {
+        inner->setMinimumWidth(0);
+        inner->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+    }
     QVBoxLayout* panel_layout = new QVBoxLayout(panel);
     panel_layout->setContentsMargins(inner_margin, inner_margin, inner_margin, inner_margin);
     panel_layout->setSpacing(0);
@@ -387,6 +451,8 @@ inline void PluginUiAddSectionBlock(QVBoxLayout* main_layout,
 
     auto* section = new EffectCollapsibleSection(title, tip);
     section->setExpanded(start_expanded);
+    section->setMinimumWidth(0);
+    section->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
     QFrame* framed = PluginUiWrapInSettingsPanel(body);
     section->bodyLayout()->addWidget(framed);
     main_layout->addWidget(section);

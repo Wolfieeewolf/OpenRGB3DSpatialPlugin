@@ -39,7 +39,7 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 3. No parallel CPU formula beside a GPU `volumeMain` / field program for the same look (fail closed if GL is unavailable).
 4. Prefer shared globals (`speed`, `brightness`, `size`, `scale`, ...) over one-off knobs when >=2 effects need the same control.
 5. Reject ports that need `iChannel`, `iMouse`, raymarch, webcam, or per-effect native hooks unless you are writing a programmed addon.
-6. **GPU standard:** viewport, preview, Volume/Audio/Media LED+overlay point eval, and remaining field engines (strip kernels, Shader Field atlas where used) run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, ...).
+6. **GPU standard:** viewport, preview, Volume/Audio/Media LED point-eval, room-grid overlay atlas sampling, and remaining field engines (strip kernels, Shader Field atlas where used) run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, ...).
 
 Porting helpers: [shader-conversion.md](shader-conversion.md).
 
@@ -47,7 +47,7 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 
 ## Volume engine
 
-**Runs:** soft 3D fields via `engines/volume-field` (`SpatialVolumeFieldEngine`) hosted by `engines/folder-volume` (FolderVolume) on shared **`SpatialOffscreenGlPool`** (**4.1 Core**; shares with the room viewport — no second context). LED coloring and room-grid overlay both use **true** `volumeMain` at each sample UV (`evaluateAtPoints` / batched bake); fail closed if GL is unavailable.  
+**Runs:** soft 3D fields via `engines/volume-field` (`SpatialVolumeFieldEngine`) hosted by `engines/folder-volume` (FolderVolume) on shared **`SpatialOffscreenGlPool`** (**4.1 Core**; shares with the room viewport — no second context). LEDs use **true** `volumeMain` via `evaluateAtPoints` (PBO bake) then FolderVolume finish (HSV/surface/rainbow/…). Room-grid overlay samples the dense atlas on the GPU and applies the same finish family in `VolumeAtlasPoint` (no voxel CPU readback / no CPU overlay path). Fail closed if GL is unavailable.  
 **Library category / AppData content:** Volume (`effects/volume/*.fs` — presets repo / plugin data root, not the C++ tree).
 
 ### Required header (FolderVolume)

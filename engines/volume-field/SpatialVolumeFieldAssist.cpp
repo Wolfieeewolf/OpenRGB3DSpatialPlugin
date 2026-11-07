@@ -57,6 +57,26 @@ bool SpatialVolumeFieldAssist::prepareProgram(std::uint64_t render_sequence,
     return finishPrepare(render_sequence, time_sec, params, param_count, /*atlas=*/false);
 }
 
+bool SpatialVolumeFieldAssist::ensureAtlasTextureReady()
+{
+    return engine_ && engine_->ensureAtlasTextureReady();
+}
+
+unsigned int SpatialVolumeFieldAssist::atlasTextureId() const
+{
+    return engine_ ? engine_->atlasTextureId() : 0;
+}
+
+int SpatialVolumeFieldAssist::atlasTextureResolution() const
+{
+    return engine_ ? engine_->atlasTextureResolution() : 0;
+}
+
+bool SpatialVolumeFieldAssist::exportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n)
+{
+    return engine_ && engine_->exportAtlasRgba8(out_rgba, out_n);
+}
+
 bool SpatialVolumeFieldAssist::evaluateAtPoints(const float* xyz01, int count, float* out_rgb)
 {
     if(!engine_ || !xyz01 || !out_rgb || count <= 0)

@@ -57,12 +57,23 @@ public:
      */
     bool ensureProgramReady();
 
-    /** Rebuild atlas if dirty. Returns false if GL unavailable or compile failed. */
+    /** Rebuild atlas if dirty (includes CPU readback for sample01). */
     bool ensureReady();
+
+    /** Dense atlas FBO only (no CPU readback) for GPU room-grid overlay. */
+    bool ensureAtlasTextureReady();
+    unsigned int atlasTextureId() const;
+    int atlasTextureResolution() const;
+    /**
+     * Bake atlas if needed, then copy RGBA8 pixels out of the pool FBO.
+     * out_rgba is width=n, height=n*n, tightly packed. Safe across Stop/idle re-bakes.
+     */
+    bool exportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n);
 
     /**
      * True effect: run volumeMain at each XYZ in [0,1]^3 (interleaved xyz, count points).
-     * Writes interleaved RGB float [0,1] into out_rgb (count*3). Sync readback.
+     * Writes interleaved RGB float [0,1] into out_rgb (count*3).
+     * Uses PBO double-buffer readback when available (avoids GPU→CPU pipeline stalls).
      */
     bool evaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 
@@ -81,14 +92,17 @@ private:
     bool compilePrograms(const QString& body);
     bool ensureFbo(int n);
     bool ensurePointFbo(int w, int h);
-    bool renderAtlas();
+    bool renderAtlas(bool readback_cpu);
     void readbackAtlas(int n);
     void destroyPbos();
     bool ensurePbos(int n);
+    void destroyPointPbos();
+    bool ensurePointPbos(int bytes);
     void destroyMediaTexture();
     bool uploadMediaTexture();
     void destroyPointsTexture();
     bool uploadPointsTexture(const float* xyz01, int count, int w, int h);
+    void unpackPointReadback(const unsigned char* rgba, int w, int h, int count, float* out_rgb);
 
     QString fragment_body_;
     Params params_{};
@@ -97,6 +111,8 @@ private:
     mutable std::mutex mutex_;
     std::vector<float> atlas_rgb_;
     int atlas_res_ = 0;
+    int atlas_gpu_n_ = 0;
+    float atlas_gpu_time_sec_ = -1e9f;
     bool body_dirty_ = true;
     bool params_dirty_ = true;
     bool size_dirty_ = true;
@@ -128,6 +144,16 @@ private:
     int pbo_bytes_ = 0;
     bool pbo_has_pending_ = false;
     int pbo_pending_n_ = 0;
+
+    /** Separate PBOs for evaluateAtPoints (atlas PBOs are sized to n³). */
+    unsigned int point_pbos_[2] = {0, 0};
+    int point_pbo_write_idx_ = 0;
+    int point_pbo_bytes_ = 0;
+    bool point_pbo_has_pending_ = false;
+    int point_pbo_pending_w_ = 0;
+    int point_pbo_pending_h_ = 0;
+    int point_pbo_pending_count_ = 0;
+
     std::vector<unsigned char> readback_staging_;
     std::vector<float> points_upload_;
 };

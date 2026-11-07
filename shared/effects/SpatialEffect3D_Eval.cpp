@@ -2,7 +2,6 @@
 
 #include "SpatialEffect3D.h"
 
-#include "SpatialRoom/SpatialRoomFrame.h"
 #include "Colors.h"
 #include "EffectStratumBlend.h"
 #include "SpatialKernelColormap.h"
@@ -464,12 +463,6 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
 
     if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
     {
-        if(SpatialRoom::IsRoomGridOverlayPass())
-        {
-            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
-            g_tls_eval_effect = prev_eval_effect;
-            return relay;
-        }
         const int shading_ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
         if(shading_ctrl >= 0 && isRoomReceiverController(shading_ctrl) && !isRoomEmitterController(shading_ctrl))
         {

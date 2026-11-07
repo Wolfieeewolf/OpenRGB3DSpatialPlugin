@@ -2,6 +2,7 @@
 
 #include "EffectControlsRoot.h"
 
+#include <QSizePolicy>
 #include <QVBoxLayout>
 
 EffectControlsRoot::EffectControlsRoot(QWidget* parent)
@@ -9,7 +10,9 @@ EffectControlsRoot::EffectControlsRoot(QWidget* parent)
     , main_layout_(new QVBoxLayout(this))
 {
     main_layout_->setContentsMargins(0, 0, 0, 0);
-    main_layout_->setSpacing(6);
+    main_layout_->setSpacing(2);
+    setMinimumWidth(0);
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
 }
 
 EffectControlsRoot::~EffectControlsRoot() = default;
@@ -102,6 +105,7 @@ EffectSurfacesPanel::~EffectSurfacesPanel()
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
+#include <QSizePolicy>
 #include <QSlider>
 
 EffectMotionPanel::EffectMotionPanel(unsigned int speed,
@@ -150,7 +154,9 @@ EffectMotionPanel::EffectMotionPanel(unsigned int speed,
     AlignCaptionLabels({ui->speedCaption, ui->brightnessCaption, ui->frequencyCaption, ui->detailCaption,
                         ui->sizeCaption, ui->scaleCaption, ui->fpsCaption, ui->thicknessCaption,
                         ui->edgeFadeCaption, ui->countCaption, ui->pathCaption},
-                       110);
+                       96);
+    setMinimumWidth(0);
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
 }
 
 EffectMotionPanel::~EffectMotionPanel()

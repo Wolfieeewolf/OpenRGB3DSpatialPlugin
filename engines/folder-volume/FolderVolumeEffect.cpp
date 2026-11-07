@@ -11,12 +11,16 @@
 #include "AudioReactiveCommon.h"
 #include "AudioReactiveUi.h"
 #include "AudioInputManager.h"
+#include "GpuRoomGridOverlay.h"
+#include "Geometry3DUtils.h"
 
 #include <QDateTime>
 #include <QImage>
 #include <QMutexLocker>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <vector>
 
 
 FolderVolumeEffect::FolderVolumeEffect(FolderVolumeSpec spec, QWidget* parent)
@@ -140,6 +144,117 @@ QVector3D FolderVolumeEffect::SampleField01(float n1, float n2, float n3)
         return it->second;
     }
     return volume_assist_.sampleTrue01(n1, n2, n3);
+}
+
+bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
+                                                        const GridContext3D& grid,
+                                                        float time_sec)
+{
+    /* Export RGBA under the pool GL session. Pool FBO tex ids die on the next
+       PrepareGpuFields — viewport-owned upload from atlas_rgba survives Stop/idle. */
+    std::vector<unsigned char> rgba;
+    int n = 0;
+    /* Do not gate on isAvailable() alone — export re-bakes the atlas if the
+       program was prepared but the dense FBO was never drawn (common when idle). */
+    if(!volume_assist_.exportAtlasRgba8(rgba, n))
+    {
+        return false;
+    }
+    if(n < 2 || rgba.size() < (size_t)n * (size_t)n * (size_t)n * 4u)
+    {
+        return false;
+    }
+
+    out = GpuRoomGridOverlayLayer{};
+    out.atlas_tex = 0;
+    out.atlas_rgba = std::move(rgba);
+    out.atlas_n = n;
+    out.brightness = (float)GetBrightness() / 100.0f;
+    out.sample_room = spec_.sample_room;
+    out.volume_tools = effect_volume_tools_unlocked;
+    out.volume_shape = effect_volume_tools_unlocked ? effect_volume_shape : (int)VOLUME_SHAPE_BOX;
+    out.shear_xy = effect_shear_xy;
+    out.shear_xz = effect_shear_xz;
+    out.shear_yz = effect_shear_yz;
+    out.hue_scroll_deg = time_sec * GetColorCycleHz() * 360.0f;
+
+    /* Match CalculateColorGrid finish → display RGB (not raw packed volumeMain fields). */
+    if(spec_.finish_rgb)
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishRgb;
+    }
+    else if(spec_.finish_hsv)
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishHsv;
+    }
+    else if(spec_.finish_surface)
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishSurface;
+    }
+    else if(spec_.finish_hex && spec_.finish_atlas)
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishHexAtlas;
+    }
+    else if(spec_.finish_hex)
+    {
+        out.finish_mode = GetRainbowMode() ? GpuRoomGridOverlayLayer::FinishHex
+                                           : GpuRoomGridOverlayLayer::FinishScalarPalette;
+    }
+    else if(GetRainbowMode())
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishScalarRainbow;
+    }
+    else
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishScalarPalette;
+    }
+
+    out.palette_count = 0;
+    const bool surface_rainbow = (out.finish_mode == GpuRoomGridOverlayLayer::FinishSurface)
+        && GetRainbowMode();
+    if(!surface_rainbow)
+    {
+        const std::vector<RGBColor>& cols = GetColors();
+        for(size_t i = 0; i < cols.size() && out.palette_count < GpuRoomGridOverlayLayer::kMaxPalette; ++i)
+        {
+            const RGBColor c = cols[i];
+            const int pi = out.palette_count++;
+            out.palette[pi][0] = (float)(c & 0xFF) / 255.0f;
+            out.palette[pi][1] = (float)((c >> 8) & 0xFF) / 255.0f;
+            out.palette[pi][2] = (float)((c >> 16) & 0xFF) / 255.0f;
+        }
+    }
+    if(out.palette_count == 0 && out.finish_mode == GpuRoomGridOverlayLayer::FinishScalarPalette)
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishScalarRainbow;
+    }
+
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    out.origin[0] = origin.x;
+    out.origin[1] = origin.y;
+    out.origin[2] = origin.z;
+    out.room_min[0] = grid.min_x;
+    out.room_min[1] = grid.min_y;
+    out.room_min[2] = grid.min_z;
+    out.room_max[0] = grid.max_x;
+    out.room_max[1] = grid.max_y;
+    out.room_max[2] = grid.max_z;
+
+    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
+    GetVolumeHalfExtents(grid, hx, hy, hz);
+    out.half_ext[0] = hx;
+    out.half_ext[1] = hy;
+    out.half_ext[2] = hz;
+
+    Rotation3D rot;
+    rot.x = effect_rotation_pitch;
+    rot.y = effect_rotation_yaw;
+    rot.z = effect_rotation_roll;
+    float m[9];
+    Geometry3D::ComputeRotationMatrix(rot, m);
+    /* Row-major R memcpy'd into QMatrix3x3.data() yields GLSL R^T * v (VolumeWorldDeltaToLocal). */
+    std::memcpy(out.rot_inv, m, sizeof(m));
+    return true;
 }
 
 void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,

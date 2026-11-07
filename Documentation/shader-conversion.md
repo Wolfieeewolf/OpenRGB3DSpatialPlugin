@@ -1,6 +1,6 @@
 # Shader conversion playbook (1D / 2D / 3D)
 
-Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cubes. This plugin’s edge is **Spatial Anchor + true `volumeMain` at LED/overlay sample UVs + strip kernels unfolded into the room** — not copying cube demos.
+Room-scale 3D LED effects are rare compared to WLED matrix (2D) and 8³ LED cubes. This plugin’s edge is **Spatial Anchor + true `volumeMain` at LED sample UVs + GPU atlas room-grid overlay + strip kernels unfolded into the room** — not copying cube demos.
 
 **Engine contracts (authoring rules):** [effects-engines.md](effects-engines.md) — read that first when adding or converting an effect.
 
@@ -30,7 +30,7 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 ## GPU vs CPU
 
-Volume/Audio/Media LED and room-grid paths, strip/Shader Field engines where they still bake fields, and the room viewport use **OpenGL 4.1 Core** with `#version 410 core` wrappers. Author `.fs` bodies must not include `#version` or legacy GLSL (`texture2D`, `attribute`, `varying`, `gl_FragColor`). Do not use GLSL reserved words as identifiers (`layout`, `packed`, `flat`, `shared`, ...) — rename them (e.g. `place`, `pack_val`, `y_fall`).
+Volume/Audio/Media LED point-eval, room-grid GPU atlas overlay, strip/Shader Field engines where they still bake fields, and the room viewport use **OpenGL 4.1 Core** with `#version 410 core` wrappers. Author `.fs` bodies must not include `#version` or legacy GLSL (`texture2D`, `attribute`, `varying`, `gl_FragColor`). Do not use GLSL reserved words as identifiers (`layout`, `packed`, `flat`, `shared`, ...) — rename them (e.g. `place`, `pack_val`, `y_fall`).
 
 GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist` — runs on shared **`SpatialOffscreenGlPool`** (no second context; fail closed if GL is unavailable — no parallel CPU formula for the same look).
 

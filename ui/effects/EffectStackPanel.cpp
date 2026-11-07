@@ -9,12 +9,43 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QPushButton>
+#include <QSizePolicy>
 
 EffectStackPanel::EffectStackPanel(QWidget* parent)
     : QGroupBox(parent)
     , ui(new Ui::EffectStackPanel)
 {
     ui->setupUi(this);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    /* Let the layer list grow with the Run column — no low maxHeight that leaves dead space. */
+    PluginUiConfigureListInOuterScroll(ui->stackList, 160, 0);
+    PluginUiConfigureListInOuterScroll(ui->presetsList, 160, 0);
+    if(ui->stackList)
+    {
+        ui->stackList->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        ui->stackList->setMaximumHeight(QWIDGETSIZE_MAX);
+    }
+    if(ui->presetsList)
+    {
+        ui->presetsList->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        ui->presetsList->setMaximumHeight(QWIDGETSIZE_MAX);
+    }
+    if(ui->activeStackLayout)
+    {
+        ui->activeStackLayout->setStretch(ui->activeStackLayout->indexOf(ui->stackList), 1);
+    }
+    if(ui->presetsLayout)
+    {
+        ui->presetsLayout->setStretch(ui->presetsLayout->indexOf(ui->presetsList), 1);
+    }
+    if(ui->activeBottomSpacer)
+    {
+        ui->activeBottomSpacer->changeSize(0, 0, QSizePolicy::Ignored, QSizePolicy::Minimum);
+    }
+    if(ui->presetsBottomSpacer)
+    {
+        ui->presetsBottomSpacer->changeSize(0, 0, QSizePolicy::Ignored, QSizePolicy::Minimum);
+    }
 }
 
 EffectStackPanel::~EffectStackPanel()

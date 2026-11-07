@@ -84,8 +84,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     setup_room_spin(ui->roomDepthSpin, tab->manual_room_depth, "Front to back, in mm");
 
     ui->roomGridOverlayCheckbox->setToolTip(
-        "Sample the effect stack at room grid points using the same shading as real LEDs "
-        "(relay, blockers, falloff). Lower brightness only dims the preview dots.");
+        "Show the room sample lattice in the 3D view. With no stack effect the dots are black; "
+        "with effects they use the same volume shading as the LEDs. Brightness dims shaded dots.");
 
     ui->roomGuideLabelsCheckbox->setToolTip(
         "Wall, floor, ceiling, and origin hints in the 3D view. Gizmo rotate text while dragging is always shown.");
@@ -172,6 +172,11 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         tab->viewport->SetRoomGridBrightness((float)overlay_bright_pct / 100.0f);
         tab->viewport->SetRoomGridPointSize((float)overlay_point_size);
         tab->viewport->SetRoomGridStep(overlay_step);
+        /* Bake guide lattice (or effect layers) even with an empty stack. */
+        if(tab->viewport->GetShowRoomGridOverlay())
+        {
+            tab->RefreshRoomGridOverlayPreview();
+        }
     }
 
     connect(ui->roomGuideLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::roomGuideLabelsToggled);
@@ -238,6 +243,8 @@ void GridSettingsPanel::onRoomGridOverlayToggled(bool checked)
     {
         host_tab_->viewport->SetShowRoomGridOverlay(checked);
     }
+    /* Always refresh: ON bakes guide/effect layers; OFF clears atlas layers. */
+    host_tab_->RefreshRoomGridOverlayPreview();
     host_tab_->PersistRoomGridOverlayToSettings();
 }
 

@@ -27,8 +27,10 @@ public:
     void Unbind() const;
 
     void SetUniformMat4(const char* name, const float* column_major_16) const;
+    void SetUniformMat3(const char* name, const float* column_major_9) const;
     void SetUniform1i(const char* name, int value) const;
     void SetUniform1f(const char* name, float value) const;
+    void SetUniform3f(const char* name, float x, float y, float z) const;
 
     unsigned int Id() const;
 

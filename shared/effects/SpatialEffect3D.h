@@ -400,6 +400,14 @@ public:
                                           float /*time*/,
                                           const GridContext3D& /*grid*/) {}
 
+    /** GPU room-grid overlay layer (atlas + world→p01 + finish). Default: unsupported. */
+    virtual bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& /*out*/,
+                                                const GridContext3D& /*grid*/,
+                                                float /*time_sec*/)
+    {
+        return false;
+    }
+
     /**
      * Match EvaluateColorGrid sample space for true-GPU bake collectors:
      * optional axis/rotation warp, then sampling quantization when enabled.
@@ -606,6 +614,11 @@ public:
     {
         effect_volume_world_origin_ = {x, y, z};
         effect_volume_world_origin_valid_ = true;
+    }
+    /** Drop baked gizmo origin so the next SeedUnlocked / FromEffect follows Spatial Anchor again. */
+    void ClearVolumeWorldOrigin()
+    {
+        effect_volume_world_origin_valid_ = false;
     }
     bool HasVolumeWorldOrigin() const
     {

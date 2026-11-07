@@ -156,6 +156,7 @@ HEADERS += \
     shared/effects/EffectListManager3D.h \
     shared/effects/EffectRegisterer3D.h \
     shared/effects/EffectInstance3D.h \
+    shared/GpuRoomGridOverlay.h \
     shared/effects/StackPreset3D.h \
     shared/controllers/VirtualController3D.h \
     shared/scene/VirtualReferencePoint3D.h \
@@ -213,7 +214,6 @@ HEADERS += \
     engines/triggers/TriggerSourceRegistry.h \
     engines/triggers/TriggerRuntime.h \
     shared/SpatialRoom/SpatialRoomTypes.h \
-    shared/SpatialRoom/SpatialRoomFrame.h \
     shared/SpatialLighting/BlockerGridOccluder.h \
     shared/SpatialLighting/OccluderSpatialIndex.h \
     shared/SpatialLighting/SpatialLightingEngine.h \
@@ -411,7 +411,6 @@ SOURCES += \
     engines/triggers/MacTriggerSource.cpp \
     engines/triggers/TriggerSourceRegistry.cpp \
     engines/triggers/TriggerRuntime.cpp \
-    shared/SpatialRoom/SpatialRoomFrame.cpp \
     shared/SpatialLighting/BlockerGridOccluder.cpp \
     shared/SpatialLighting/OccluderSpatialIndex.cpp \
     shared/SpatialLighting/SpatialLightingEngine.cpp \

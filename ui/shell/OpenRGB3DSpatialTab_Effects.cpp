@@ -37,6 +37,7 @@
 #include <QVBoxLayout>
 #include <QFile>
 #include <QTextStream>
+#include <QSizePolicy>
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -285,19 +286,10 @@ void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
 
     if(viewport && instance->effect)
     {
-        ManualRoomSettings room_settings = MakeManualRoomSettings(true,
-                                                                  manual_room_width,
-                                                                  manual_room_height,
-                                                                  manual_room_depth);
-        GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
-        GridContext3D grid(bounds.min_x, bounds.max_x,
-                           bounds.min_y, bounds.max_y,
-                           bounds.min_z, bounds.max_z,
-                           grid_scale_mm);
-        if(mapped_lights_anchor_valid_)
-        {
-            grid.SetLedCentroid(mapped_lights_anchor_.x, mapped_lights_anchor_.y, mapped_lights_anchor_.z);
-        }
+        /* Stack Spatial Anchor must land on the effect before SeedUnlocked, or the
+           volume bakes Room box center until the user toggles the combo. */
+        ApplyStackOriginComboToEffect(instance->effect.get());
+        GridContext3D grid = MakeRoomGridWithMappedLightsAnchor();
         instance->effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
         if(instance->volume_tools_unlocked)
         {
@@ -334,6 +326,10 @@ void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
         viewport->ClearEffectVolumeSelection();
     }
     setStackLayerVolumeToolsChromeVisible(instance->volume_tools_unlocked);
+    /* Overlay preview must not wait for Start — bake atlas while idle.
+       Also defer one tick: Host GL / volume pool may not be warm on first select. */
+    RefreshRoomGridOverlayPreview();
+    QTimer::singleShot(0, this, [this]() { RefreshRoomGridOverlayPreview(); });
 }
 
 void OpenRGB3DSpatialTab::stackLayerVolumeToolsUnlockedToggled(int stack_index, bool unlocked)
@@ -386,21 +382,7 @@ void OpenRGB3DSpatialTab::viewportEffectVolumeChanged(int stack_index)
     }
 
     /* Live room grid — selection-time snapshot drifts after room resize / anchor. */
-    ManualRoomSettings room_settings = MakeManualRoomSettings(true,
-                                                              manual_room_width,
-                                                              manual_room_height,
-                                                              manual_room_depth);
-    GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
-    GridContext3D grid(bounds.min_x, bounds.max_x,
-                       bounds.min_y, bounds.max_y,
-                       bounds.min_z, bounds.max_z,
-                       grid_scale_mm);
-    if(mapped_lights_anchor_valid_)
-    {
-        grid.SetLedCentroid(mapped_lights_anchor_.x,
-                            mapped_lights_anchor_.y,
-                            mapped_lights_anchor_.z);
-    }
+    GridContext3D grid = MakeRoomGridWithMappedLightsAnchor();
     viewport->SetEffectVolumeGrid(grid);
 
     volume->ApplyToEffect(*instance->effect, grid);
@@ -553,10 +535,15 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         row->setSpacing(8);
         auto* state = new QLabel(enabled_marker, card);
         PluginUiApplyMutedSecondaryLabel(state);
+        state->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
         auto* title = new QLabel(display_name, card);
         title->setWordWrap(true);
+        title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        title->setMinimumWidth(48);
+        title->setToolTip(display_name);
         auto* volume_unlock = new QCheckBox(tr("Volume"), card);
         volume_unlock->setChecked(instance->volume_tools_unlocked);
+        volume_unlock->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         volume_unlock->setAccessibleName(tr("Unlock volume gizmo for this layer"));
         volume_unlock->setToolTip(
             tr("Unlock volume tools (gizmo place/rotate/scale/skew and volume shape).\n"
@@ -576,7 +563,9 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
                     QAction* unlock_act = menu.addAction(volume_unlock->isChecked()
                         ? tr("Lock volume gizmo")
                         : tr("Unlock volume gizmo"));
-                    connect(unlock_act, &QAction::triggered, volume_unlock, &QCheckBox::toggle);
+                    connect(unlock_act, &QAction::triggered, this, [volume_unlock]() {
+                        volume_unlock->toggle();
+                    });
                     menu.addSeparator();
                     QAction* lib_pref = menu.addAction(tr("Effect Library: add with volume unlocked…"));
                     connect(lib_pref, &QAction::triggered, this, [this]() {
@@ -590,10 +579,14 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
                 });
         row->addWidget(state, 0);
         row->addWidget(title, 1);
-        row->addWidget(volume_unlock, 0);
-        item->setSizeHint(card->sizeHint().expandedTo(QSize(0, 40)));
+        row->addWidget(volume_unlock, 0, Qt::AlignRight | Qt::AlignVCenter);
         effectStackList()->addItem(item);
         effectStackList()->setItemWidget(item, card);
+        /* After parenting, size for the current panel width so the title wraps
+           under Volume instead of colliding with it. */
+        const int card_w = std::max(120, effectStackList()->viewport()->width() - 8);
+        const int hint_h = card->heightForWidth(card_w);
+        item->setSizeHint(QSize(card_w, std::max(40, hint_h > 0 ? hint_h : card->sizeHint().height())));
     }
 
     if(current_row >= 0 && current_row < (int)effect_stack.size())
@@ -840,6 +833,14 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         }
     }
 
+    /* Stack Spatial Anchor is the playback source of truth — push it onto both the
+       panel effect and the live stack instance before any gizmo seed / first render. */
+    ApplyStackOriginComboToEffect(ui_effect);
+    if(instance->effect)
+    {
+        ApplyStackOriginComboToEffect(instance->effect.get());
+    }
+
     QPushButton* ui_start = use_direct_transport ? direct_start : ui_effect->GetStartButton();
     QPushButton* ui_stop  = use_direct_transport ? direct_stop  : ui_effect->GetStopButton();
 
@@ -901,6 +902,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
                 }
                 SetLayoutDirty();
                 RefreshEffectDisplay();
+                /* FPS slider only applied at Start before — re-arm the timer while playing. */
+                SyncEffectPlaybackTimer();
 
                 stack_settings_updating = false;
             });
@@ -1127,39 +1130,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
             viewport->SetEffectRenderOwnsScreenPreviewUploads(true);
         }
 
-        if(effect_timer)
-        {
-            unsigned int target_fps = 30;
-            for(size_t i = 0; i < effect_stack.size(); i++)
-            {
-                if(effect_stack[i])
-                {
-                    unsigned int fps = effect_stack[i]->GetEffectiveTargetFPS();
-                    if(fps > target_fps)
-                    {
-                        target_fps = fps;
-                    }
-                }
-            }
-            if(target_fps < 1) target_fps = 30;
-            bool stack_has_screen_mirror = false;
-            for(size_t si = 0; si < effect_stack.size(); si++)
-            {
-                const std::unique_ptr<EffectInstance3D>& inst = effect_stack[si];
-                if(inst && inst->enabled && inst->effect_class_name == "ScreenMirror")
-                {
-                    stack_has_screen_mirror = true;
-                    break;
-                }
-            }
-            if(stack_has_screen_mirror && target_fps < 240u)
-            {
-                target_fps = 240u;
-            }
-            int interval_ms = (int)(1000 / target_fps);
-            if(interval_ms < 1) interval_ms = 1;
-            effect_timer->start(interval_ms);
-        }
+        SyncEffectPlaybackTimer();
 
         if(start_effect_button) start_effect_button->setEnabled(false);
         if(stop_effect_button) stop_effect_button->setEnabled(true);
@@ -1191,18 +1162,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
         viewport->SetEffectRenderOwnsScreenPreviewUploads(true);
     }
 
-    if(effect_timer)
-    {
-        unsigned int target_fps = current_effect_ui->GetTargetFPS();
-        if(target_fps < 1) target_fps = 30;
-        if(dynamic_cast<ScreenMirror*>(current_effect_ui) && target_fps < 240u)
-        {
-            target_fps = 240u;
-        }
-        int interval_ms = (int)(1000 / target_fps);
-        if(interval_ms < 1) interval_ms = 1;
-        effect_timer->start(interval_ms);
-    }
+    SyncEffectPlaybackTimer();
 
     if(start_effect_button) start_effect_button->setEnabled(false);
     if(stop_effect_button) stop_effect_button->setEnabled(true);
@@ -1227,10 +1187,16 @@ void OpenRGB3DSpatialTab::stopEffectClicked()
     if(start_effect_button) start_effect_button->setEnabled(true);
     if(stop_effect_button) stop_effect_button->setEnabled(false);
     UpdateStartStopAllButtons();
-    // Action Preview calls this while idle - skip a full stack redraw when nothing ran.
+    /* Black LEDs, then re-bake overlay into viewport-owned atlas copies.
+       Do not skip the overlay bake — Stop used to leave dead pool FBO tex ids. */
     if(was_running)
     {
         RenderEffectStack();
+    }
+    RefreshRoomGridOverlayPreview();
+    if(viewport)
+    {
+        viewport->update();
     }
 }
 
@@ -1252,6 +1218,65 @@ void OpenRGB3DSpatialTab::UpdateStartStopAllButtons()
         stopAllEffectsButton()->setEnabled(effect_running);
 }
 
+void OpenRGB3DSpatialTab::SyncEffectPlaybackTimer()
+{
+    if(!effect_timer || !effect_running)
+    {
+        return;
+    }
+
+    unsigned int target_fps = 30;
+    if(!effect_stack.empty())
+    {
+        unsigned int best = 0;
+        for(size_t i = 0; i < effect_stack.size(); i++)
+        {
+            if(!effect_stack[i])
+            {
+                continue;
+            }
+            const unsigned int fps = effect_stack[i]->GetEffectiveTargetFPS();
+            if(fps > best)
+            {
+                best = fps;
+            }
+        }
+        target_fps = (best > 0) ? best : 30;
+        for(size_t si = 0; si < effect_stack.size(); si++)
+        {
+            const std::unique_ptr<EffectInstance3D>& inst = effect_stack[si];
+            if(inst && inst->enabled && inst->effect_class_name == "ScreenMirror")
+            {
+                if(target_fps < 240u)
+                {
+                    target_fps = 240u;
+                }
+                break;
+            }
+        }
+    }
+    else if(current_effect_ui)
+    {
+        target_fps = current_effect_ui->GetTargetFPS();
+        if(target_fps < 1)
+        {
+            target_fps = 30;
+        }
+        if(dynamic_cast<ScreenMirror*>(current_effect_ui) && target_fps < 240u)
+        {
+            target_fps = 240u;
+        }
+    }
+
+    target_fps = std::clamp(target_fps, 1u, 240u);
+    const int interval_ms = std::max(1, (int)(1000 / target_fps));
+    if(effect_timer->isActive() && effect_timer->interval() == interval_ms)
+    {
+        return;
+    }
+    effect_timer->start(interval_ms);
+}
+
 void OpenRGB3DSpatialTab::effectTimerTimeout()
 {
     if(!effect_running)
@@ -1260,9 +1285,17 @@ void OpenRGB3DSpatialTab::effectTimerTimeout()
     }
 
     qint64 ms = effect_elapsed.isValid() ? effect_elapsed.restart() : 33;
-    if(ms <= 0) { ms = 33; }
+    if(ms <= 0)
+    {
+        ms = 1;
+    }
+    /* Keep animation wall-clock accurate when a frame is late. Old 100 ms cap made
+       laggy playback also run in slow-motion (felt like ~10 FPS motion). */
     float dt = static_cast<float>(ms) / 1000.0f;
-    if(dt > 0.1f) dt = 0.1f;
+    if(dt > 0.25f)
+    {
+        dt = 0.25f;
+    }
     effect_time += dt;
 
     RenderEffectStack();
@@ -1687,6 +1720,24 @@ bool OpenRGB3DSpatialTab::ApplyEffectProfileJson(const nlohmann::json& profile_j
 
         RebuildEffectStackFromJson(profile_json["stack"]);
 
+        /* Restore Spatial Anchor before selecting/seeding layers so Mapped lights
+           is already on the combo when LoadStackEffectControls / SeedUnlocked run. */
+        if(effectOriginCombo() && profile_json.contains("origin_item_data") &&
+           profile_json["origin_item_data"].is_number_integer())
+        {
+            const int ref_data = profile_json["origin_item_data"].get<int>();
+            const int idx = effectOriginCombo()->findData(QVariant(ref_data));
+            if(idx >= 0)
+            {
+                QSignalBlocker b(effectOriginCombo());
+                effectOriginCombo()->setCurrentIndex(idx);
+            }
+            if(ref_data == -4)
+            {
+                RefreshMappedLightsAnchor();
+            }
+        }
+
         int desired_index = -1;
         if(profile_json.contains("selected_stack_index"))
         {
@@ -1698,17 +1749,6 @@ bool OpenRGB3DSpatialTab::ApplyEffectProfileJson(const nlohmann::json& profile_j
         }
 
         ApplyLoadedStackSelection(desired_index);
-
-        if(effectOriginCombo() && profile_json.contains("origin_item_data") &&
-           profile_json["origin_item_data"].is_number_integer())
-        {
-            int ref_data = profile_json["origin_item_data"].get<int>();
-            int idx = effectOriginCombo()->findData(QVariant(ref_data));
-            if(idx >= 0)
-            {
-                effectOriginCombo()->setCurrentIndex(idx);
-            }
-        }
 
         return true;
     }

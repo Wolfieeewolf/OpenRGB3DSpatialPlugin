@@ -2,11 +2,11 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
 #include <map>
 #include <memory>
 #include <cstring>
 
-#include "Colors.h"
 #include "LEDViewport3D.h"
 #include "viewport/ViewportMath.h"
 #include "viewport/MeshBatch.h"
@@ -156,7 +156,6 @@ void LEDViewport3D::SetRoomGridOverlayBounds(float min_x, float max_x, float min
     room_grid_overlay_last_ny = -1;
     room_grid_overlay_last_nz = -1;
     room_grid_overlay_last_step = -1;
-    room_grid_overlay_colors_dirty = true;
 }
 
 void LEDViewport3D::ClearRoomGridOverlayBounds()
@@ -166,7 +165,6 @@ void LEDViewport3D::ClearRoomGridOverlayBounds()
     room_grid_overlay_last_ny = -1;
     room_grid_overlay_last_nz = -1;
     room_grid_overlay_last_step = -1;
-    room_grid_overlay_colors_dirty = true;
 }
 
 void LEDViewport3D::SetRoomGridStep(int step)
@@ -181,8 +179,6 @@ void LEDViewport3D::SetRoomGridStep(int step)
     room_grid_overlay_last_ny = -1;
     room_grid_overlay_last_nz = -1;
     room_grid_overlay_last_step = -1;
-    room_grid_color_buffer.clear();
-    invalidateRoomGridOverlayColors();
     update();
 }
 
@@ -265,11 +261,6 @@ void LEDViewport3D::GetRoomGridOverlaySamplePosition(int ix, int iy, int iz, flo
     z = min_z + (float)cell_iz;
 }
 
-void LEDViewport3D::invalidateRoomGridOverlayColors()
-{
-    room_grid_overlay_colors_dirty = true;
-}
-
 void LEDViewport3D::SetRoomGridBrightness(float brightness)
 {
     const float b = std::max(0.0f, std::min(1.0f, brightness));
@@ -278,7 +269,6 @@ void LEDViewport3D::SetRoomGridBrightness(float brightness)
         return;
     }
     room_grid_brightness = b;
-    invalidateRoomGridOverlayColors();
     update();
 }
 
@@ -293,35 +283,113 @@ void LEDViewport3D::SetRoomGridPointSize(float size)
     update();
 }
 
-void LEDViewport3D::SetRoomGridColorBuffer(std::vector<RGBColor> buf)
+void LEDViewport3D::releaseOwnedOverlayAtlasTextures()
 {
-    room_grid_color_buffer = std::move(buf);
-    room_grid_overlay_colors_dirty = true;
+    if(owned_overlay_atlas_textures_.empty())
+    {
+        return;
+    }
+    makeCurrent();
+    for(unsigned int tex : owned_overlay_atlas_textures_)
+    {
+        if(tex != 0)
+        {
+            GLuint id = tex;
+            glDeleteTextures(1, &id);
+        }
+    }
+    owned_overlay_atlas_textures_.clear();
+}
+
+void LEDViewport3D::SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLayer> layers)
+{
+    if(layers.size() > (size_t)GpuRoomGridOverlayLayer::kMaxLayers)
+    {
+        layers.resize((size_t)GpuRoomGridOverlayLayer::kMaxLayers);
+    }
+
+    /* Upload CPU-exported atlas RGBA into viewport-owned textures. Never keep pool FBO
+       tex ids — Stop/idle PrepareGpuFields recreates those FBOs and the overlay goes black. */
+    releaseOwnedOverlayAtlasTextures();
+    makeCurrent();
+    std::vector<GpuRoomGridOverlayLayer> kept;
+    kept.reserve(layers.size());
+    for(GpuRoomGridOverlayLayer& layer : layers)
+    {
+        const int n = layer.atlas_n;
+        const int w = n;
+        const int h = n * n;
+        const size_t need = (n >= 2) ? ((size_t)w * (size_t)h * 4u) : 0u;
+        if(n < 2 || layer.atlas_rgba.size() < need)
+        {
+            layer.atlas_tex = 0;
+            layer.atlas_rgba.clear();
+            continue;
+        }
+        GLuint dst = 0;
+        glGenTextures(1, &dst);
+        if(dst == 0)
+        {
+            layer.atlas_tex = 0;
+            layer.atlas_rgba.clear();
+            continue;
+        }
+        glBindTexture(GL_TEXTURE_2D, dst);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     layer.atlas_rgba.data());
+        layer.atlas_tex = dst;
+        layer.atlas_rgba.clear();
+        layer.atlas_rgba.shrink_to_fit();
+        owned_overlay_atlas_textures_.push_back(dst);
+        kept.push_back(std::move(layer));
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    gpu_room_grid_overlay_layers_ = std::move(kept);
     update();
 }
 
-void LEDViewport3D::SwapRoomGridColorBuffer(std::vector<RGBColor>& buf)
+void LEDViewport3D::ClearGpuRoomGridOverlayLayers()
 {
-    room_grid_color_buffer.swap(buf);
-    room_grid_overlay_colors_dirty = true;
+    releaseOwnedOverlayAtlasTextures();
+    if(gpu_room_grid_overlay_layers_.empty())
+    {
+        return;
+    }
+    gpu_room_grid_overlay_layers_.clear();
     update();
 }
 
 void LEDViewport3D::DrawRoomGridOverlay()
 {
+    if(!viewport_shader_programs_ok_)
+    {
+        return;
+    }
+
+    const bool have_effect_layers = !gpu_room_grid_overlay_layers_.empty()
+                                    && gl_prog_volume_atlas_point_.IsValid();
+    const bool guide_only = !have_effect_layers;
+    if(guide_only && !gl_prog_unlit_point_.IsValid())
+    {
+        return;
+    }
+
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
 
     int nx = 0, ny = 0, nz = 0;
     GetRoomGridOverlayDimensions(&nx, &ny, &nz);
     const size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
-    if(count <= 0) return;
-
-    const bool use_buffer = (room_grid_color_buffer.size() == count);
-    const bool use_callback = (!use_buffer && room_grid_color_callback != nullptr);
-    const float default_r = 0.0f;
-    const float default_g = 0.0f;
-    const float default_b = 0.0f;
+    if(count <= 0)
+    {
+        return;
+    }
 
     const bool layout_changed = room_grid_overlay_positions.size() != (3u * count) ||
                                 room_grid_overlay_last_nx != nx || room_grid_overlay_last_ny != ny ||
@@ -332,7 +400,6 @@ void LEDViewport3D::DrawRoomGridOverlay()
         room_grid_overlay_last_ny = ny;
         room_grid_overlay_last_nz = nz;
         room_grid_overlay_last_step = room_grid_step;
-        room_grid_overlay_colors_dirty = true;
         room_grid_overlay_positions.resize(3u * count);
         float* pos = room_grid_overlay_positions.data();
         for(int ix = 0; ix < nx; ix++)
@@ -353,68 +420,125 @@ void LEDViewport3D::DrawRoomGridOverlay()
         }
     }
 
-    const bool need_color_refill = room_grid_overlay_colors_dirty || room_grid_overlay_colors.size() != (3u * count);
-    if(need_color_refill)
+    /* Guide lattice (no stack effect): black points — sample positions only.
+       Effect layers replace this with atlas shading. */
+    const float pr = have_effect_layers ? 1.0f : 0.0f;
+    const float pg = have_effect_layers ? 1.0f : 0.0f;
+    const float pb = have_effect_layers ? 1.0f : 0.0f;
+
+    if(layout_changed || !room_grid_overlay_batch_.IsValid() || guide_only)
     {
-        room_grid_overlay_colors_dirty = false;
-        room_grid_overlay_colors.resize(3u * count);
-        float* col = room_grid_overlay_colors.data();
-        for(int ix = 0; ix < nx; ix++)
+        room_grid_overlay_interleaved_.resize(6u * count);
+        for(size_t i = 0; i < count; ++i)
         {
-            for(int iy = 0; iy < ny; iy++)
+            room_grid_overlay_interleaved_[i * 6 + 0] = room_grid_overlay_positions[i * 3 + 0];
+            room_grid_overlay_interleaved_[i * 6 + 1] = room_grid_overlay_positions[i * 3 + 1];
+            room_grid_overlay_interleaved_[i * 6 + 2] = room_grid_overlay_positions[i * 3 + 2];
+            room_grid_overlay_interleaved_[i * 6 + 3] = pr;
+            room_grid_overlay_interleaved_[i * 6 + 4] = pg;
+            room_grid_overlay_interleaved_[i * 6 + 5] = pb;
+        }
+        room_grid_overlay_batch_.Upload(MeshBatch::Layout::PosColor,
+                                        room_grid_overlay_interleaved_.data(),
+                                        count);
+    }
+
+    if(guide_only)
+    {
+        const ViewportMat4 identity = ViewportMath::Identity();
+        drawUnlitPoints(room_grid_overlay_batch_, room_grid_point_size, 1.0f, identity);
+        return;
+    }
+
+    ViewportMat4 projection;
+    ViewportMat4 view;
+    std::memcpy(projection.m, pick_projection_, sizeof(float) * 16);
+    std::memcpy(view.m, pick_scene_modelview_, sizeof(float) * 16);
+    const ViewportMat4 identity = ViewportMath::Identity();
+    const ViewportMat4 mvp = ViewportMath::ModelViewProjection(projection, view, identity);
+
+    glEnable(GL_PROGRAM_POINT_SIZE);
+    gl_prog_volume_atlas_point_.Bind();
+    gl_prog_volume_atlas_point_.SetUniformMat4("u_mvp", mvp.m);
+    gl_prog_volume_atlas_point_.SetUniform1f("u_point_size", room_grid_point_size);
+    gl_prog_volume_atlas_point_.SetUniform1f("u_alpha", 1.0f);
+    gl_prog_volume_atlas_point_.SetUniform1f("u_grid_brightness", room_grid_brightness);
+    const int layer_count = (int)gpu_room_grid_overlay_layers_.size();
+    gl_prog_volume_atlas_point_.SetUniform1i("u_layer_count", layer_count);
+
+    for(int i = 0; i < GpuRoomGridOverlayLayer::kMaxLayers; ++i)
+    {
+        const char* atlas_name = (i == 0) ? "u_atlas0" : (i == 1) ? "u_atlas1" : (i == 2) ? "u_atlas2" : "u_atlas3";
+        glActiveTexture(GL_TEXTURE0 + i);
+        if(i < layer_count)
+        {
+            const GpuRoomGridOverlayLayer& layer = gpu_room_grid_overlay_layers_[(size_t)i];
+            glBindTexture(GL_TEXTURE_2D, layer.atlas_tex);
+            gl_prog_volume_atlas_point_.SetUniform1i(atlas_name, i);
+
+            auto set_i = [&](const char* base, int value) {
+                char name[64];
+                std::snprintf(name, sizeof(name), "%s[%d]", base, i);
+                gl_prog_volume_atlas_point_.SetUniform1i(name, value);
+            };
+            auto set_f = [&](const char* base, float value) {
+                char name[64];
+                std::snprintf(name, sizeof(name), "%s[%d]", base, i);
+                gl_prog_volume_atlas_point_.SetUniform1f(name, value);
+            };
+            auto set_3 = [&](const char* base, const float* v) {
+                char name[64];
+                std::snprintf(name, sizeof(name), "%s[%d]", base, i);
+                gl_prog_volume_atlas_point_.SetUniform3f(name, v[0], v[1], v[2]);
+            };
+            auto set_m3 = [&](const char* base, const float* m) {
+                char name[64];
+                std::snprintf(name, sizeof(name), "%s[%d]", base, i);
+                gl_prog_volume_atlas_point_.SetUniformMat3(name, m);
+            };
+
+            set_i("u_atlas_n", layer.atlas_n);
+            set_i("u_blend", layer.blend_mode);
+            set_i("u_sample_room", layer.sample_room ? 1 : 0);
+            set_i("u_volume_tools", layer.volume_tools ? 1 : 0);
+            set_i("u_volume_shape", layer.volume_shape);
+            set_i("u_finish", layer.finish_mode);
+            set_f("u_layer_brightness", layer.brightness);
+            set_f("u_hue_scroll", layer.hue_scroll_deg);
+            set_i("u_palette_count", layer.palette_count);
+            set_3("u_origin", layer.origin);
+            set_3("u_half_ext", layer.half_ext);
+            set_3("u_room_min", layer.room_min);
+            set_3("u_room_max", layer.room_max);
+            const float shear[3] = {layer.shear_xy, layer.shear_xz, layer.shear_yz};
+            set_3("u_shear", shear);
+            set_m3("u_rot", layer.rot_inv);
+            for(int pi = 0; pi < GpuRoomGridOverlayLayer::kMaxPalette; ++pi)
             {
-                for(int iz = 0; iz < nz; iz++)
-                {
-                    float x = 0.0f;
-                    float y = 0.0f;
-                    float z = 0.0f;
-                    GetRoomGridOverlaySamplePosition(ix, iy, iz, x, y, z);
-                    float r, g, b;
-                    if(use_buffer)
-                    {
-                        const size_t idx = (size_t)(ix * ny * nz + iy * nz + iz);
-                        RGBColor c = room_grid_color_buffer[idx];
-                        r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
-                        g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
-                        b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
-                    }
-                    else if(use_callback)
-                    {
-                        RGBColor c = room_grid_color_callback(x, y, z);
-                        r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
-                        g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
-                        b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
-                    }
-                    else
-                    {
-                        r = default_r;
-                        g = default_g;
-                        b = default_b;
-                    }
-                    *col++ = r;
-                    *col++ = g;
-                    *col++ = b;
-                }
+                char pname[64];
+                std::snprintf(pname, sizeof(pname), "u_palette[%d]", i * GpuRoomGridOverlayLayer::kMaxPalette + pi);
+                const float* pc = (pi < layer.palette_count) ? layer.palette[pi] : layer.palette[0];
+                float z[3] = {0.0f, 0.0f, 0.0f};
+                const float* use = (pi < layer.palette_count) ? pc : z;
+                gl_prog_volume_atlas_point_.SetUniform3f(pname, use[0], use[1], use[2]);
             }
+        }
+        else
+        {
+            glBindTexture(GL_TEXTURE_2D, 0);
+            gl_prog_volume_atlas_point_.SetUniform1i(atlas_name, i);
         }
     }
 
-    room_grid_overlay_interleaved_.resize(6u * count);
-    for(size_t i = 0; i < count; ++i)
+    room_grid_overlay_batch_.Draw(MeshBatch::Primitive::Points);
+    gl_prog_volume_atlas_point_.Unbind();
+    for(int i = 0; i < GpuRoomGridOverlayLayer::kMaxLayers; ++i)
     {
-        room_grid_overlay_interleaved_[i * 6 + 0] = room_grid_overlay_positions[i * 3 + 0];
-        room_grid_overlay_interleaved_[i * 6 + 1] = room_grid_overlay_positions[i * 3 + 1];
-        room_grid_overlay_interleaved_[i * 6 + 2] = room_grid_overlay_positions[i * 3 + 2];
-        room_grid_overlay_interleaved_[i * 6 + 3] = room_grid_overlay_colors[i * 3 + 0];
-        room_grid_overlay_interleaved_[i * 6 + 4] = room_grid_overlay_colors[i * 3 + 1];
-        room_grid_overlay_interleaved_[i * 6 + 5] = room_grid_overlay_colors[i * 3 + 2];
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
-
-    room_grid_overlay_batch_.Upload(MeshBatch::Layout::PosColor,
-                                    room_grid_overlay_interleaved_.data(),
-                                    count);
-    const ViewportMat4 identity = ViewportMath::Identity();
-    drawUnlitPoints(room_grid_overlay_batch_, room_grid_point_size, 1.0f, identity);
+    glActiveTexture(GL_TEXTURE0);
+    glDisable(GL_PROGRAM_POINT_SIZE);
 }
 
 void LEDViewport3D::DrawDisplayPlanes()

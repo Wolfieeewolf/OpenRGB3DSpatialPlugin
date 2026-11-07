@@ -836,6 +836,82 @@ void OpenRGB3DSpatialTab::RefreshMappedLightsAnchor()
     mapped_lights_anchor_valid_ = false;
 }
 
+void OpenRGB3DSpatialTab::ApplyMappedLightsAnchorToGrid(GridContext3D& grid)
+{
+    if(!mapped_lights_anchor_valid_)
+    {
+        RefreshMappedLightsAnchor();
+    }
+    if(mapped_lights_anchor_valid_)
+    {
+        grid.SetLedCentroid(mapped_lights_anchor_.x,
+                            mapped_lights_anchor_.y,
+                            mapped_lights_anchor_.z);
+    }
+}
+
+void OpenRGB3DSpatialTab::ApplyStackOriginComboToEffect(SpatialEffect3D* effect)
+{
+    if(!effect || !effectOriginCombo())
+    {
+        return;
+    }
+    const int origin_index = effectOriginCombo()->currentIndex();
+    if(origin_index < 0)
+    {
+        return;
+    }
+    const int ref_point_idx = effectOriginCombo()->itemData(origin_index).toInt();
+
+    Vector3D origin = {0.0f, 0.0f, 0.0f};
+    if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
+        if(ref_point)
+        {
+            origin = ref_point->GetPosition();
+        }
+    }
+
+    if(ref_point_idx == -2)
+    {
+        effect->SetReferenceMode(REF_MODE_TARGET_ZONE_CENTER);
+    }
+    else if(ref_point_idx == -3)
+    {
+        effect->SetReferenceMode(REF_MODE_WORLD_ORIGIN);
+    }
+    else if(ref_point_idx == -4)
+    {
+        RefreshMappedLightsAnchor();
+        effect->SetReferenceMode(REF_MODE_LED_CENTROID);
+    }
+    else if(ref_point_idx >= 0)
+    {
+        effect->SetReferenceMode(REF_MODE_CUSTOM_POINT);
+        effect->SetCustomReferencePoint(origin);
+    }
+    else
+    {
+        effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
+    }
+}
+
+GridContext3D OpenRGB3DSpatialTab::MakeRoomGridWithMappedLightsAnchor()
+{
+    ManualRoomSettings room_settings = MakeManualRoomSettings(true,
+                                                              manual_room_width,
+                                                              manual_room_height,
+                                                              manual_room_depth);
+    GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+    GridContext3D grid(bounds.min_x, bounds.max_x,
+                       bounds.min_y, bounds.max_y,
+                       bounds.min_z, bounds.max_z,
+                       grid_scale_mm);
+    ApplyMappedLightsAnchorToGrid(grid);
+    return grid;
+}
+
 void OpenRGB3DSpatialTab::UpdateProfileDirtyBanner()
 {
     if(profile_unsaved_banner_)

@@ -6,7 +6,6 @@
 #include "SpatialLighting/OccluderSpatialIndex.h"
 #include "SpatialLighting/BlockerGridOccluder.h"
 #include "SpatialLightingSceneProvider.h"
-#include "SpatialRoom/SpatialRoomFrame.h"
 #include "ControllerLayout3D.h"
 #include "DisplayPlaneManager.h"
 #include "DisplayPlane3D.h"
@@ -376,11 +375,6 @@ float ComputeRoomAmbientShadeFactor(float room_x,
     }
 
     float effective_ao = ao_strength_norm;
-    if(SpatialRoom::IsRoomGridOverlayPass())
-    {
-        effective_ao = 0.0f;
-    }
-
     if(effective_ao > 0.01f)
     {
         const float openness = ComputeAmbientOcclusion(led, aabbs, quads, probe_span, index, grids, merged_field);

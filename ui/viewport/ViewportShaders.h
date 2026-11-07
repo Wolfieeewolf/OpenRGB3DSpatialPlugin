@@ -16,10 +16,13 @@ const char* UnlitPointVertex();
 const char* UnlitPointFragment();
 const char* TexturedUnlitVertex();
 const char* TexturedUnlitFragment();
+const char* VolumeAtlasPointVertex();
+const char* VolumeAtlasPointFragment();
 
 bool CompileUnlitColor(GlProgram& out, QString* error_log = nullptr);
 bool CompileUnlitPoint(GlProgram& out, QString* error_log = nullptr);
 bool CompileTexturedUnlit(GlProgram& out, QString* error_log = nullptr);
+bool CompileVolumeAtlasPoint(GlProgram& out, QString* error_log = nullptr);
 }
 
 #endif

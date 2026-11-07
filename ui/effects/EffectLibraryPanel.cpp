@@ -10,12 +10,15 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QSizePolicy>
 
 EffectLibraryPanel::EffectLibraryPanel(QWidget* parent)
     : QGroupBox(parent)
     , ui(new Ui::EffectLibraryPanel)
 {
     ui->setupUi(this);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+    PluginUiConfigureListInOuterScroll(ui->libraryList, 140, 420);
 }
 
 EffectLibraryPanel::~EffectLibraryPanel()

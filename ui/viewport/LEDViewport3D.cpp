@@ -82,7 +82,6 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , room_grid_overlay_min_x(0), room_grid_overlay_max_x(0)
     , room_grid_overlay_min_y(0), room_grid_overlay_max_y(0)
     , room_grid_overlay_min_z(0), room_grid_overlay_max_z(0)
-    , room_grid_overlay_colors_dirty(true)
     , screen_preview_refresh_timer(nullptr)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
@@ -408,13 +407,14 @@ void LEDViewport3D::SetViewportPaintingEnabled(bool enabled)
     if(viewport_paint_enabled_ == enabled)
     {
         return;
-}
+    }
     viewport_paint_enabled_ = enabled;
     SyncScreenPreviewTimer();
     if(enabled)
-{
-    update();
-}
+    {
+        update();
+        emit ViewportPaintingResumed();
+    }
 }
 
 void LEDViewport3D::UpdateColors()
@@ -773,6 +773,8 @@ void LEDViewport3D::initializeGL()
         this,
         context());
     SpatialOffscreenGlPool::notifyHostContextReady();
+    /* Idle overlay bake before initializeGL soft-fails (Host GL not ready). Retry once share is up. */
+    emit HostGlContextReady();
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
@@ -805,7 +807,9 @@ void LEDViewport3D::initViewportShaderPrograms()
     const bool ok_color = compile_one("unlit_color", &ViewportShaders::CompileUnlitColor, gl_prog_unlit_color_);
     const bool ok_point = compile_one("unlit_point", &ViewportShaders::CompileUnlitPoint, gl_prog_unlit_point_);
     const bool ok_tex = compile_one("textured_unlit", &ViewportShaders::CompileTexturedUnlit, gl_prog_textured_unlit_);
-    viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex;
+    const bool ok_atlas = compile_one("volume_atlas_point", &ViewportShaders::CompileVolumeAtlasPoint,
+                                      gl_prog_volume_atlas_point_);
+    viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex && ok_atlas;
     if(viewport_shader_programs_ok_)
     {
         LOG_INFO("[3DSpatial] Viewport GLSL 410 programs ready");
@@ -814,6 +818,8 @@ void LEDViewport3D::initViewportShaderPrograms()
 
 void LEDViewport3D::destroyViewportGlResources()
 {
+    releaseOwnedOverlayAtlasTextures();
+    gpu_room_grid_overlay_layers_.clear();
     floor_fill_batch_.Destroy();
     floor_grid_batch_.Destroy();
     floor_border_batch_.Destroy();
@@ -839,11 +845,15 @@ void LEDViewport3D::destroyViewportGlResources()
     gl_prog_unlit_color_.Destroy();
     gl_prog_unlit_point_.Destroy();
     gl_prog_textured_unlit_.Destroy();
+    gl_prog_volume_atlas_point_.Destroy();
     viewport_shader_programs_ok_ = false;
 }
 
 void LEDViewport3D::abandonViewportGlHandles()
 {
+    /* Context is going away — drop IDs without glDelete. */
+    owned_overlay_atlas_textures_.clear();
+    gpu_room_grid_overlay_layers_.clear();
     floor_fill_batch_.Abandon();
     floor_grid_batch_.Abandon();
     floor_border_batch_.Abandon();
@@ -872,6 +882,7 @@ void LEDViewport3D::abandonViewportGlHandles()
     gl_prog_unlit_color_.Destroy();
     gl_prog_unlit_point_.Destroy();
     gl_prog_textured_unlit_.Destroy();
+    gl_prog_volume_atlas_point_.Destroy();
     viewport_shader_programs_ok_ = false;
 }
 
@@ -884,8 +895,13 @@ void LEDViewport3D::hideEvent(QHideEvent* event)
 void LEDViewport3D::showEvent(QShowEvent* event)
 {
     QOpenGLWidget::showEvent(event);
+    const bool was_frozen = !viewport_paint_enabled_;
     viewport_paint_enabled_ = true;
     update();
+    if(was_frozen)
+    {
+        emit ViewportPaintingResumed();
+    }
 }
 
 void LEDViewport3D::update()

@@ -130,6 +130,9 @@ public:
                                   int count,
                                   float time,
                                   const GridContext3D& grid) override;
+    bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,
+                                        const GridContext3D& grid,
+                                        float time_sec) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool UsesSpatialSamplingQuantization() const override;
 

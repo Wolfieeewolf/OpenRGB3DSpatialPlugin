@@ -56,10 +56,16 @@
        </item>
        <item>
         <widget class="QListWidget" name="stackList">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
          <property name="minimumSize">
           <size>
            <width>0</width>
-           <height>180</height>
+           <height>160</height>
           </size>
          </property>
          <property name="selectionMode">
@@ -108,10 +114,13 @@
          <item>
           <widget class="QPushButton" name="removeLayerButton">
            <property name="text">
-            <string>Remove layer</string>
+            <string>Remove</string>
            </property>
            <property name="toolTip">
-            <string>Remove the selected layer from the stack.</string>
+            <string>Remove the selected layer from the stack (Delete / Backspace).</string>
+           </property>
+           <property name="accessibleName">
+            <string>Remove layer</string>
            </property>
           </widget>
          </item>

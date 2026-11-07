@@ -38,6 +38,7 @@
 #include <QPushButton>
 #include <QShowEvent>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QPointer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -154,7 +155,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(OpenRGBPluginAPIInterface* rm, QWidget 
     QTimer::singleShot(0, this, [this]() { RunDeferredStartupTasks(); });
 
     effect_timer = new QTimer(this);
-    effect_timer->setTimerType(Qt::CoarseTimer);
+    /* PreciseTimer so FPS 30–120 actually ticks; CoarseTimer coalesces (~15 ms) and feels stuck. */
+    effect_timer->setTimerType(Qt::PreciseTimer);
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::effectTimerTimeout);
 }
 
@@ -209,6 +211,8 @@ void OpenRGB3DSpatialTab::showEvent(QShowEvent* event)
     if(viewport)
     {
         viewport->SetViewportPaintingEnabled(true);
+        /* Unfreeze: rebuild overlay if layers were kept frozen while the tab was hidden. */
+        RefreshRoomGridOverlayPreview();
     }
 }
 
@@ -221,6 +225,7 @@ void OpenRGB3DSpatialTab::hideEvent(QHideEvent* event)
     }
     if(viewport)
     {
+        /* Freeze paints only — keep GPU overlay layers for when we come back. */
         viewport->SetViewportPaintingEnabled(false);
     }
 }
@@ -350,16 +355,7 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                                 world_bounds.min_z, world_bounds.max_z,
                                 grid_scale_mm);
 
-        if(!mapped_lights_anchor_valid_)
-        {
-            RefreshMappedLightsAnchor();
-        }
-        if(mapped_lights_anchor_valid_)
-        {
-            room_grid.SetLedCentroid(mapped_lights_anchor_.x,
-                                     mapped_lights_anchor_.y,
-                                     mapped_lights_anchor_.z);
-        }
+        ApplyMappedLightsAnchorToGrid(room_grid);
 
         std::unique_ptr<GridContext3D> zone_room_grid;
         std::unique_ptr<GridContext3D> zone_world_grid;
@@ -378,6 +374,10 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
                && zone_room_grid)
             {
                 sample_grid = zone_room_grid.get();
+                if(layer_effect->GetReferenceMode() == REF_MODE_LED_CENTROID)
+                {
+                    ApplyMappedLightsAnchorToGrid(*zone_room_grid);
+                }
             }
         }
         else if(spatial.layer_zone_index != -1)
@@ -385,12 +385,7 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
             const ReferenceMode mode = layer_effect->GetReferenceMode();
             if(mode == REF_MODE_LED_CENTROID)
             {
-                if(mapped_lights_anchor_valid_)
-                {
-                    room_grid.SetLedCentroid(mapped_lights_anchor_.x,
-                                             mapped_lights_anchor_.y,
-                                             mapped_lights_anchor_.z);
-                }
+                ApplyMappedLightsAnchorToGrid(room_grid);
             }
             else if(mode == REF_MODE_TARGET_ZONE_CENTER)
             {
@@ -441,231 +436,10 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
     Action::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
                                force_hw_update, zone_manager.get(), spatial_ptr);
 
-    // Room-grid overlay is a separate buffer from LED preview_color (filled by the effect
-    // stack only). While Action preview runs, sample active world/field clips into it.
     if(viewport && viewport->GetShowRoomGridOverlay())
     {
-        static std::uint64_t s_action_overlay_seq = 0;
-        const std::uint64_t overlay_seq = ++s_action_overlay_seq;
-        if((overlay_seq & 1ull) == 0ull)
-        {
-            float min_x = 0.0f, max_x = 0.0f, min_y = 0.0f, max_y = 0.0f, min_z = 0.0f, max_z = 0.0f;
-            std::vector<Action::NamedWorldPoint> overlay_refs;
-            bool have_bounds = false;
-            if(spatial_ptr && spatial_ptr->has_world_bounds)
-            {
-                min_x = spatial_ptr->min_x; max_x = spatial_ptr->max_x;
-                min_y = spatial_ptr->min_y; max_y = spatial_ptr->max_y;
-                min_z = spatial_ptr->min_z; max_z = spatial_ptr->max_z;
-                overlay_refs = spatial_ptr->reference_points;
-                have_bounds = true;
-            }
-            else
-            {
-                Action::ApplySpatialContext room;
-                if(GetActionRoomWorldBounds(&room))
-                {
-                    min_x = room.min_x; max_x = room.max_x;
-                    min_y = room.min_y; max_y = room.max_y;
-                    min_z = room.min_z; max_z = room.max_z;
-                    overlay_refs = std::move(room.reference_points);
-                    have_bounds = true;
-                }
-            }
-
-            if(have_bounds)
-            {
-                viewport->SetRoomGridOverlayBounds(min_x, max_x, min_y, max_y, min_z, max_z);
-                int nx = 0, ny = 0, nz = 0;
-                viewport->GetRoomGridOverlayDimensions(&nx, &ny, &nz);
-                const size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
-                if(count > 0 && count <= 500000u)
-                {
-                    if(room_grid_overlay_buffer.size() != count)
-                    {
-                        room_grid_overlay_buffer.assign(count, ToRGBColor(0, 0, 0));
-                    }
-                    else
-                    {
-                        std::fill(room_grid_overlay_buffer.begin(), room_grid_overlay_buffer.end(),
-                                  ToRGBColor(0, 0, 0));
-                    }
-
-                    std::vector<const Action::Clip*> world_clips;
-                    world_clips.reserve(pack.tracks.size());
-                    for(const Action::Track& track : pack.tracks)
-                    {
-                        const Action::Clip* top = Action::FindActiveClip(track, local_ms);
-                        if(!top)
-                        {
-                            continue;
-                        }
-                        if(Action::ClipUsesRoomBoxBounds(*top))
-                        {
-                            world_clips.push_back(top);
-                        }
-                    }
-
-                    if(!world_clips.empty())
-                    {
-                        // One field/particle/ribbon set at a time - prepare per clip, then stamp voxels.
-                        static std::uint64_t s_overlay_field_seq = 0;
-                        for(const Action::Clip* clip : world_clips)
-                        {
-                            const std::string cid = Action::script::FileId(*clip);
-                            Action::ClipOrigin01 origin = Action::ResolveClipOrigin01(
-                                *clip, min_x, max_x, min_y, max_y, min_z, max_z, overlay_refs);
-                            Action::SetActiveClipOrigin01(origin);
-                            Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-                            Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-                            Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-                            const bool field_fast = Action::script::UsesField(cid);
-                            const bool particle_fast = Action::script::UsesParticles(cid);
-                            const bool ribbon_fast = Action::script::UsesRibbons(cid);
-                            const bool builtin_fast = Action::builtin_gpu::Uses(cid)
-                                && Action::script::FieldShader(cid).empty();
-                            if(field_fast)
-                            {
-                                Action::volume_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
-                            }
-                            if(particle_fast)
-                            {
-                                Action::particle_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
-                            }
-                            if(ribbon_fast)
-                            {
-                                Action::ribbon_field::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
-                            }
-                            if(builtin_fast)
-                            {
-                                Action::builtin_gpu::PrepareForClip(*clip, local_ms, ++s_overlay_field_seq);
-                            }
-                            const bool gpu_field_clip = field_fast || particle_fast || ribbon_fast || builtin_fast;
-                            const bool field_true = field_fast && Action::volume_field::IsAvailable();
-                            const bool particle_true = particle_fast && Action::particle_field::IsAvailable();
-                            const bool ribbon_true = ribbon_fast && Action::ribbon_field::IsAvailable();
-                            const bool builtin_true = builtin_fast && Action::builtin_gpu::IsAvailable();
-                            const int grid_n = nx * ny * nz;
-                            std::vector<float> grid_xyz;
-                            std::vector<float> grid_rgb;
-                            bool grid_ok = false;
-                            std::vector<float> overlay_room_xyz;
-                            if(grid_n > 0)
-                            {
-                                overlay_room_xyz.resize((size_t)grid_n * 3u);
-                                for(int ix = 0; ix < nx; ++ix)
-                                {
-                                    for(int iy = 0; iy < ny; ++iy)
-                                    {
-                                        for(int iz = 0; iz < nz; ++iz)
-                                        {
-                                            float sx = 0.0f, sy = 0.0f, sz = 0.0f;
-                                            viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sx, sy, sz);
-                                            const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
-                                                + (size_t)iy * (size_t)nz + (size_t)iz;
-                                            overlay_room_xyz[idx * 3u + 0u] = sx;
-                                            overlay_room_xyz[idx * 3u + 1u] = sy;
-                                            overlay_room_xyz[idx * 3u + 2u] = sz;
-                                        }
-                                    }
-                                }
-                            }
-                            if(gpu_field_clip && grid_n > 0
-                               && (field_true || particle_true || ribbon_true || builtin_true))
-                            {
-                                const float span_x = std::max(1e-5f, max_x - min_x);
-                                const float span_y = std::max(1e-5f, max_y - min_y);
-                                const float span_z = std::max(1e-5f, max_z - min_z);
-                                grid_xyz.resize((size_t)grid_n * 3u);
-                                grid_rgb.resize((size_t)grid_n * 3u, 0.0f);
-                                for(int i = 0; i < grid_n; ++i)
-                                {
-                                    grid_xyz[(size_t)i * 3u + 0u] =
-                                        (overlay_room_xyz[(size_t)i * 3u + 0u] - min_x) / span_x;
-                                    grid_xyz[(size_t)i * 3u + 1u] =
-                                        (overlay_room_xyz[(size_t)i * 3u + 1u] - min_y) / span_y;
-                                    grid_xyz[(size_t)i * 3u + 2u] =
-                                        (overlay_room_xyz[(size_t)i * 3u + 2u] - min_z) / span_z;
-                                }
-                                if(field_true)
-                                {
-                                    grid_ok = Action::volume_field::EvaluateAtPoints(
-                                        grid_xyz.data(), grid_n, grid_rgb.data());
-                                }
-                                else if(particle_true)
-                                {
-                                    grid_ok = Action::particle_field::EvaluateAtPoints(
-                                        grid_xyz.data(), grid_n, grid_rgb.data());
-                                }
-                                else if(ribbon_true)
-                                {
-                                    grid_ok = Action::ribbon_field::EvaluateAtPoints(
-                                        grid_xyz.data(), grid_n, grid_rgb.data());
-                                }
-                                else
-                                {
-                                    grid_ok = Action::builtin_gpu::EvaluateAtPoints(
-                                        grid_xyz.data(), grid_n, grid_rgb.data());
-                                }
-                            }
-                            for(int ix = 0; ix < nx; ++ix)
-                            {
-                                for(int iy = 0; iy < ny; ++iy)
-                                {
-                                    for(int iz = 0; iz < nz; ++iz)
-                                    {
-                                        const size_t idx = (size_t)ix * (size_t)ny * (size_t)nz
-                                            + (size_t)iy * (size_t)nz + (size_t)iz;
-                                        const float sx = overlay_room_xyz[idx * 3u + 0u];
-                                        const float sy = overlay_room_xyz[idx * 3u + 1u];
-                                        const float sz = overlay_room_xyz[idx * 3u + 2u];
-                                        RGBColor color = ToRGBColor(0, 0, 0);
-                                        if(gpu_field_clip)
-                                        {
-                                            // Fail closed when GL is down; skip empty texels so earlier clips stay.
-                                            if(!grid_ok)
-                                            {
-                                                continue;
-                                            }
-                                            const float r = grid_rgb[idx * 3u + 0u];
-                                            const float g = grid_rgb[idx * 3u + 1u];
-                                            const float b = grid_rgb[idx * 3u + 2u];
-                                            const float peak = std::max(r, std::max(g, b));
-                                            if(peak < 0.02f)
-                                            {
-                                                continue;
-                                            }
-                                            const float inten = std::clamp(clip->intensity, 0.0f, 1.0f);
-                                            color = ToRGBColor(
-                                                (int)std::lround(std::clamp(r * inten, 0.0f, 1.0f) * 255.0f),
-                                                (int)std::lround(std::clamp(g * inten, 0.0f, 1.0f) * 255.0f),
-                                                (int)std::lround(std::clamp(b * inten, 0.0f, 1.0f) * 255.0f));
-                                        }
-                                        else
-                                        {
-                                            float intensity = 0.0f;
-                                            const int seed = ix * 73856093 ^ iy * 19349663 ^ iz * 83492791;
-                                            if(!Action::EvaluateClipAtWorld(*clip, local_ms,
-                                                                            sx, sy, sz,
-                                                                            min_x, max_x, min_y, max_y, min_z, max_z,
-                                                                            seed, &color, &intensity))
-                                            {
-                                                continue;
-                                            }
-                                        }
-                                        room_grid_overlay_buffer[idx] = color;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    viewport->SetRoomGridColorCallback(nullptr);
-                    viewport->SwapRoomGridColorBuffer(room_grid_overlay_buffer);
-                }
-            }
-        }
+        viewport->ClearGpuRoomGridOverlayLayers();
     }
-
     if(viewport)
     {
         viewport->UpdateColors();
@@ -715,6 +489,11 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     connect(viewport, &LEDViewport3D::ScenePropPositionChanged, this, &OpenRGB3DSpatialTab::scenePropPositionSignal);
     connect(viewport, &LEDViewport3D::ScenePropRotationChanged, this, &OpenRGB3DSpatialTab::scenePropRotationSignal);
     connect(viewport, &LEDViewport3D::EffectVolumeChanged, this, &OpenRGB3DSpatialTab::viewportEffectVolumeChanged);
+    /* Queued: initializeGL/unfreeze must finish before we touch the shared volume pool. */
+    connect(viewport, &LEDViewport3D::HostGlContextReady, this, &OpenRGB3DSpatialTab::RefreshRoomGridOverlayPreview,
+            Qt::QueuedConnection);
+    connect(viewport, &LEDViewport3D::ViewportPaintingResumed, this, &OpenRGB3DSpatialTab::RefreshRoomGridOverlayPreview,
+            Qt::QueuedConnection);
 
     viewport->installViewportKeyboardShortcuts(this);
 }
@@ -726,18 +505,105 @@ void OpenRGB3DSpatialTab::bindUiPanels()
         return;
     }
 
-    const int kSidePanelMinWidth = 200;
-    const int kLeftPanelStartWidth = 280;
-    const int kRightPanelStartWidth = 320;
+    /* Wide enough for "Motion and pattern" / "Remove layer" without clipping. */
+    const int kLeftPanelMinWidth = 300;
+    const int kRightPanelMinWidth = 360;
+    const int kLeftPanelStartWidth = 320;
+    const int kRightPanelStartWidth = 380;
 
-    ui->leftModeTabs->setMinimumWidth(kSidePanelMinWidth);
-    ui->rightStacked->setMinimumWidth(kSidePanelMinWidth);
+    ui->leftModeTabs->setMinimumWidth(kLeftPanelMinWidth);
+    ui->leftModeTabs->setMinimumHeight(0);
+    ui->leftModeTabs->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    ui->rightStacked->setMinimumWidth(kRightPanelMinWidth);
+    ui->rightStacked->setMinimumHeight(0);
+    ui->rightStacked->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     ui->mainSplitter->setStretchFactor(0, 0);
     ui->mainSplitter->setStretchFactor(1, 1);
     ui->mainSplitter->setStretchFactor(2, 0);
     ui->mainSplitter->setCollapsible(0, false);
     ui->mainSplitter->setCollapsible(1, false);
     ui->mainSplitter->setCollapsible(2, false);
+    /* First layout pass — don't leave sides at the old 200px .ui minimum. */
+    QTimer::singleShot(0, this, [this, kLeftPanelStartWidth, kRightPanelStartWidth]() {
+        if(!ui || !ui->mainSplitter)
+        {
+            return;
+        }
+        const int total = ui->mainSplitter->width();
+        if(total < 600)
+        {
+            return;
+        }
+        const int left = kLeftPanelStartWidth;
+        const int right = kRightPanelStartWidth;
+        const int center = std::max(200, total - left - right);
+        ui->mainSplitter->setSizes({left, center, right});
+    });
+
+    /* Side columns must scroll inside the window — never grow the splitter past it. */
+    PluginUiConfigureEmbeddedScrollArea(ui->runScroll);
+    PluginUiConfigureEmbeddedScrollArea(ui->setupScroll);
+    PluginUiConfigureEmbeddedScrollArea(ui->effectsDetailScroll);
+    PluginUiConfigureEmbeddedScrollArea(ui->gridSettingsTabScroll);
+    PluginUiConfigureEmbeddedScrollArea(ui->sceneObjectEditTabScroll);
+    PluginUiConfigureEmbeddedScrollArea(ui->objectCreatorTabScroll);
+    /* Run column: library + layers share height; no dead spacer eating the layers list. */
+    if(ui->runContentLayout)
+    {
+        ui->runContentLayout->setStretch(ui->runContentLayout->indexOf(ui->effectLibraryPanel), 2);
+        ui->runContentLayout->setStretch(ui->runContentLayout->indexOf(ui->effectStackPanel), 3);
+        if(ui->runContentSpacer)
+        {
+            ui->runContentLayout->setStretch(ui->runContentLayout->indexOf(ui->runContentSpacer), 0);
+        }
+    }
+    /* Right detail: shrink-to-viewport so section borders/sliders aren't clipped
+       when the vertical scrollbar steals width. */
+    if(ui->detailContentLayout)
+    {
+        ui->detailContentLayout->setContentsMargins(4, 4, 4, 4);
+    }
+    if(ui->effectsDetailScroll)
+    {
+        ui->effectsDetailScroll->setFrameShape(QFrame::NoFrame);
+        ui->effectsDetailScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        ui->effectsDetailScroll->setWidgetResizable(true);
+        if(QWidget* content = ui->effectsDetailScroll->widget())
+        {
+            content->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+            content->setMinimumWidth(0);
+            content->setMaximumWidth(QWIDGETSIZE_MAX);
+        }
+        if(QWidget* vp = ui->effectsDetailScroll->viewport())
+        {
+            vp->setAutoFillBackground(true);
+            vp->setMinimumWidth(0);
+        }
+    }
+    if(ui->effectControlsHostPanel)
+    {
+        ui->effectControlsHostPanel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+        ui->effectControlsHostPanel->setMinimumWidth(0);
+    }
+    if(ui->effectGlobalSettingsPanel)
+    {
+        ui->effectGlobalSettingsPanel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+        ui->effectGlobalSettingsPanel->setMinimumWidth(0);
+    }
+    if(ui->settingsTabs)
+    {
+        ui->settingsTabs->setMinimumHeight(0);
+        ui->settingsTabs->setMaximumHeight(QWIDGETSIZE_MAX);
+        ui->settingsTabs->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    }
+    if(ui->runContentSpacer)
+    {
+        ui->runContentSpacer->changeSize(0, 0, QSizePolicy::Ignored, QSizePolicy::Minimum);
+    }
+    if(ui->detailContentSpacer)
+    {
+        ui->detailContentSpacer->changeSize(0, 0, QSizePolicy::Ignored, QSizePolicy::Minimum);
+    }
 
     ui->effectLibraryPanel->bindTab(this);
     ui->effectStackPanel->bindTab(this);
@@ -951,6 +817,7 @@ bool OpenRGB3DSpatialTab::PrepareStackForPlayback()
 
         if(instance->effect)
         {
+            ApplyStackOriginComboToEffect(instance->effect.get());
             instance->effect->SetVolumeToolsUnlocked(instance->volume_tools_unlocked);
             has_enabled_effect = true;
         }
@@ -1754,64 +1621,60 @@ void OpenRGB3DSpatialTab::effectOriginChanged(int index)
     {
         return;
     }
-    int ref_point_idx = effectOriginCombo()->itemData(index).toInt();
-
-    Vector3D origin = {0.0f, 0.0f, 0.0f};
-
-    if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
-    {
-        VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
-        if(ref_point)
-        {
-            origin = ref_point->GetPosition();
-        }
-    }
 
     if(current_effect_ui)
     {
-        if(ref_point_idx == -2)
-        {
-            current_effect_ui->SetReferenceMode(REF_MODE_TARGET_ZONE_CENTER);
-        }
-        else if(ref_point_idx == -3)
-        {
-            current_effect_ui->SetReferenceMode(REF_MODE_WORLD_ORIGIN);
-        }
-        else if(ref_point_idx == -4)
-        {
-            RefreshMappedLightsAnchor();
-            current_effect_ui->SetReferenceMode(REF_MODE_LED_CENTROID);
-        }
-        else if(ref_point_idx >= 0)
-        {
-            current_effect_ui->SetReferenceMode(REF_MODE_CUSTOM_POINT);
-            current_effect_ui->SetCustomReferencePoint(origin);
-        }
-        else
-        {
-            current_effect_ui->SetReferenceMode(REF_MODE_ROOM_CENTER);
-        }
+        ApplyStackOriginComboToEffect(current_effect_ui);
+    }
 
-        if(effectStackList())
+    if(effectStackList())
+    {
+        const int current_row = effectStackList()->currentRow();
+        if(current_row >= 0 && current_row < (int)effect_stack.size())
         {
-            const int current_row = effectStackList()->currentRow();
-            if(current_row >= 0 && current_row < (int)effect_stack.size())
+            EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
+            if(instance && instance->effect)
             {
-                EffectInstance3D* instance = effect_stack[(size_t)current_row].get();
-                if(instance && instance->effect)
+                ApplyStackOriginComboToEffect(instance->effect.get());
+
+                /* Unlocked volumes bake an absolute origin on first open — clear and
+                   reseed so the gizmo follows the new Spatial Anchor. */
+                if(instance->volume_tools_unlocked && viewport)
                 {
-                    instance->effect->SetReferenceMode(current_effect_ui->GetReferenceMode());
-                    if(ref_point_idx >= 0)
+                    instance->effect->ClearVolumeWorldOrigin();
+                    GridContext3D grid = MakeRoomGridWithMappedLightsAnchor();
+                    EffectVolume3D volume =
+                        EffectVolume3D::SeedUnlocked(*instance->effect, grid, current_row);
+                    viewport->SelectEffectVolume(volume, grid);
+                    instance->saved_settings =
+                        std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
+                    if(current_effect_ui && current_effect_ui != instance->effect.get())
                     {
-                        instance->effect->SetCustomReferencePoint(origin);
+                        stack_settings_updating = true;
+                        current_effect_ui->LoadSettings(*instance->saved_settings);
+                        current_effect_ui->SetVolumeToolsUnlocked(true);
+                        stack_settings_updating = false;
                     }
-                    instance->saved_settings = std::make_unique<nlohmann::json>(current_effect_ui->SaveSettings());
+                }
+                else if(current_effect_ui)
+                {
+                    instance->saved_settings =
+                        std::make_unique<nlohmann::json>(current_effect_ui->SaveSettings());
+                }
+                else
+                {
+                    instance->saved_settings =
+                        std::make_unique<nlohmann::json>(instance->effect->SaveSettings());
                 }
             }
         }
     }
 
-    if(viewport) viewport->UpdateColors();
+    if(viewport)
+    {
+        viewport->UpdateColors();
+        RefreshEffectDisplay();
+    }
     SetLayoutDirty();
 }
 
@@ -1915,21 +1778,7 @@ void OpenRGB3DSpatialTab::effectVolumeShapeChanged(int index)
 
             if(viewport && instance->effect)
             {
-                ManualRoomSettings room_settings = MakeManualRoomSettings(true,
-                                                                          manual_room_width,
-                                                                          manual_room_height,
-                                                                          manual_room_depth);
-                GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
-                GridContext3D grid(bounds.min_x, bounds.max_x,
-                                   bounds.min_y, bounds.max_y,
-                                   bounds.min_z, bounds.max_z,
-                                   grid_scale_mm);
-                if(mapped_lights_anchor_valid_)
-                {
-                    grid.SetLedCentroid(mapped_lights_anchor_.x,
-                                        mapped_lights_anchor_.y,
-                                        mapped_lights_anchor_.z);
-                }
+                GridContext3D grid = MakeRoomGridWithMappedLightsAnchor();
                 if(EffectVolume3D* active_volume = viewport->ActiveEffectVolume())
                 {
                     active_volume->shape = shape;
@@ -2086,6 +1935,11 @@ void OpenRGB3DSpatialTab::RefreshEffectDisplay()
        preview whether playback is running or frozen. UpdateColors alone only
        repaints stale LED colors. */
     RenderEffectStack();
+    /* Idle: RenderEffectStack may soft-fail the atlas; force the dedicated overlay bake. */
+    if(!effect_running)
+    {
+        RefreshRoomGridOverlayPreview();
+    }
 }
 
 void OpenRGB3DSpatialTab::SetupStackRoomOutputPanel()

@@ -156,8 +156,98 @@ void SpatialVolumeFieldEngine::destroyPbos()
     pbo_pending_n_ = 0;
 }
 
+void SpatialVolumeFieldEngine::destroyPointPbos()
+{
+    if(point_pbos_[0] == 0 && point_pbos_[1] == 0)
+    {
+        point_pbo_has_pending_ = false;
+        point_pbo_bytes_ = 0;
+        point_pbo_pending_w_ = 0;
+        point_pbo_pending_h_ = 0;
+        point_pbo_pending_count_ = 0;
+        return;
+    }
+
+    QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
+    QOpenGLExtraFunctions* xf = ctx ? ctx->extraFunctions() : nullptr;
+    if(xf && ctx && ctx->isValid())
+    {
+        SpatialOffscreenGlPool::Session gl;
+        if(gl)
+        {
+            xf->glDeleteBuffers(2, point_pbos_);
+        }
+    }
+
+    point_pbos_[0] = point_pbos_[1] = 0;
+    point_pbo_has_pending_ = false;
+    point_pbo_bytes_ = 0;
+    point_pbo_write_idx_ = 0;
+    point_pbo_pending_w_ = 0;
+    point_pbo_pending_h_ = 0;
+    point_pbo_pending_count_ = 0;
+}
+
+bool SpatialVolumeFieldEngine::ensurePointPbos(int bytes)
+{
+    QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
+    QOpenGLExtraFunctions* xf = ctx ? ctx->extraFunctions() : nullptr;
+    if(!xf || bytes <= 0)
+    {
+        return false;
+    }
+    if(point_pbos_[0] != 0 && point_pbo_bytes_ == bytes)
+    {
+        return true;
+    }
+    destroyPointPbos();
+    xf->glGenBuffers(2, point_pbos_);
+    if(point_pbos_[0] == 0 || point_pbos_[1] == 0)
+    {
+        point_pbos_[0] = point_pbos_[1] = 0;
+        return false;
+    }
+    for(int i = 0; i < 2; ++i)
+    {
+        xf->glBindBuffer(GL_PIXEL_PACK_BUFFER, point_pbos_[i]);
+        xf->glBufferData(GL_PIXEL_PACK_BUFFER, bytes, nullptr, GL_STREAM_READ);
+    }
+    xf->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    point_pbo_bytes_ = bytes;
+    point_pbo_write_idx_ = 0;
+    point_pbo_has_pending_ = false;
+    point_pbo_pending_w_ = 0;
+    point_pbo_pending_h_ = 0;
+    point_pbo_pending_count_ = 0;
+    if(readback_staging_.size() < (size_t)bytes)
+    {
+        readback_staging_.resize((size_t)bytes);
+    }
+    return true;
+}
+
+void SpatialVolumeFieldEngine::unpackPointReadback(const unsigned char* rgba,
+                                                  int w,
+                                                  int h,
+                                                  int count,
+                                                  float* out_rgb)
+{
+    (void)h;
+    const float inv255 = 1.0f / 255.0f;
+    for(int i = 0; i < count; ++i)
+    {
+        const int ix = i % w;
+        const int iy = i / w;
+        const unsigned char* src = rgba + ((size_t)iy * (size_t)w + (size_t)ix) * 4u;
+        out_rgb[(size_t)i * 3u + 0u] = src[0] * inv255;
+        out_rgb[(size_t)i * 3u + 1u] = src[1] * inv255;
+        out_rgb[(size_t)i * 3u + 2u] = src[2] * inv255;
+    }
+}
+
 void SpatialVolumeFieldEngine::shutdownGl()
 {
+    destroyPointPbos();
     destroyPbos();
     SpatialOffscreenGlPool::Session gl;
     if(gl)
@@ -323,7 +413,7 @@ bool SpatialVolumeFieldEngine::ensureProgramReady()
         }
     }
 
-    params_dirty_ = false;
+    /* Leave params_dirty_ set so ensureAtlasTextureReady still redraws for overlay. */
     last_error_.clear();
     available_.store(true);
     return true;
@@ -336,7 +426,92 @@ bool SpatialVolumeFieldEngine::ensureReady()
     {
         return available_.load();
     }
-    return renderAtlas();
+    return renderAtlas(true);
+}
+
+bool SpatialVolumeFieldEngine::ensureAtlasTextureReady()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(!body_dirty_ && !params_dirty_ && !size_dirty_ && !media_dirty_
+       && atlas_gpu_n_ > 0 && fbo_ && fbo_->isValid()
+       && atlas_gpu_time_sec_ == params_.time_sec)
+    {
+        available_.store(true);
+        return true;
+    }
+    return renderAtlas(false);
+}
+
+bool SpatialVolumeFieldEngine::exportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(!body_dirty_ && !params_dirty_ && !size_dirty_ && !media_dirty_
+       && atlas_gpu_n_ > 0 && fbo_ && fbo_->isValid()
+       && atlas_gpu_time_sec_ == params_.time_sec)
+    {
+        available_.store(true);
+    }
+    else if(!renderAtlas(false))
+    {
+        out_n = 0;
+        out_rgba.clear();
+        return false;
+    }
+
+    if(!fbo_ || !fbo_->isValid() || atlas_gpu_n_ < 2)
+    {
+        out_n = 0;
+        out_rgba.clear();
+        return false;
+    }
+
+    SpatialOffscreenGlPool::Session gl;
+    if(!gl)
+    {
+        last_error_ = QStringLiteral("OpenGL makeCurrent failed.");
+        available_.store(false);
+        out_n = 0;
+        out_rgba.clear();
+        return false;
+    }
+
+    QOpenGLFunctions* glf = SpatialOffscreenGlPool::sharedContext()->functions();
+    if(!glf)
+    {
+        out_n = 0;
+        out_rgba.clear();
+        return false;
+    }
+
+    const int n = atlas_gpu_n_;
+    const int w = n;
+    const int h = n * n;
+    const size_t bytes = (size_t)w * (size_t)h * 4u;
+    out_rgba.resize(bytes);
+    out_n = n;
+
+    /* glReadPixels (not glGetTexImage) — available on QOpenGLFunctions / ES2. */
+    fbo_->bind();
+    glf->glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glf->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, out_rgba.data());
+    fbo_->release();
+    return true;
+}
+
+unsigned int SpatialVolumeFieldEngine::atlasTextureId() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(!fbo_ || !fbo_->isValid() || atlas_gpu_n_ <= 0)
+    {
+        return 0;
+    }
+    return fbo_->texture();
+}
+
+int SpatialVolumeFieldEngine::atlasTextureResolution() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return atlas_gpu_n_;
 }
 
 bool SpatialVolumeFieldEngine::initGl()
@@ -597,7 +772,7 @@ bool SpatialVolumeFieldEngine::uploadMediaTexture()
     return true;
 }
 
-bool SpatialVolumeFieldEngine::renderAtlas()
+bool SpatialVolumeFieldEngine::renderAtlas(bool readback_cpu)
 {
     if(fragment_body_.trimmed().isEmpty())
     {
@@ -680,14 +855,37 @@ bool SpatialVolumeFieldEngine::renderAtlas()
 
     glf->glBindTexture(GL_TEXTURE_2D, 0);
 
-    readbackAtlas(n);
+    {
+        const unsigned int tex = fbo_->texture();
+        glf->glBindTexture(GL_TEXTURE_2D, tex);
+        glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glf->glBindTexture(GL_TEXTURE_2D, 0);
+        atlas_gpu_n_ = n;
+        atlas_gpu_time_sec_ = params_.time_sec;
+        glf->glFlush();
+    }
+
+    if(readback_cpu)
+    {
+        readbackAtlas(n);
+    }
 
     fbo_->release();
     program_->release();
 
     params_dirty_ = false;
     last_error_.clear();
-    available_.store(atlas_res_ > 0 && !atlas_rgb_.empty());
+    if(readback_cpu)
+    {
+        available_.store(atlas_res_ > 0 && !atlas_rgb_.empty());
+    }
+    else
+    {
+        available_.store(atlas_gpu_n_ > 0);
+    }
     return available_.load();
 }
 
@@ -795,7 +993,43 @@ bool SpatialVolumeFieldEngine::evaluateAtPoints(const float* xyz01, int count, f
         readback_staging_.resize(bytes);
     }
     glf->glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glf->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, readback_staging_.data());
+
+    QOpenGLExtraFunctions* xf = SpatialOffscreenGlPool::sharedContext()->extraFunctions();
+    bool filled = false;
+    if(xf && ensurePointPbos((int)bytes))
+    {
+        xf->glBindBuffer(GL_PIXEL_PACK_BUFFER, point_pbos_[point_pbo_write_idx_]);
+        glf->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+        if(point_pbo_has_pending_
+           && point_pbo_pending_w_ == w
+           && point_pbo_pending_h_ == h
+           && point_pbo_pending_count_ == count)
+        {
+            const int read_idx = 1 - point_pbo_write_idx_;
+            xf->glBindBuffer(GL_PIXEL_PACK_BUFFER, point_pbos_[read_idx]);
+            void* ptr = xf->glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, (GLsizeiptr)bytes, GL_MAP_READ_BIT);
+            if(ptr)
+            {
+                unpackPointReadback(static_cast<const unsigned char*>(ptr), w, h, count, out_rgb);
+                xf->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                filled = true;
+            }
+        }
+
+        xf->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        point_pbo_write_idx_ = 1 - point_pbo_write_idx_;
+        point_pbo_has_pending_ = true;
+        point_pbo_pending_w_ = w;
+        point_pbo_pending_h_ = h;
+        point_pbo_pending_count_ = count;
+    }
+
+    if(!filled)
+    {
+        glf->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, readback_staging_.data());
+        unpackPointReadback(readback_staging_.data(), w, h, count, out_rgb);
+    }
 
     glf->glActiveTexture(GL_TEXTURE1);
     glf->glBindTexture(GL_TEXTURE_2D, 0);
@@ -803,17 +1037,6 @@ bool SpatialVolumeFieldEngine::evaluateAtPoints(const float* xyz01, int count, f
     glf->glBindTexture(GL_TEXTURE_2D, 0);
     point_fbo_->release();
     point_program_->release();
-
-    const float inv255 = 1.0f / 255.0f;
-    for(int i = 0; i < count; ++i)
-    {
-        const int ix = i % w;
-        const int iy = i / w;
-        const unsigned char* src = readback_staging_.data() + ((size_t)iy * (size_t)w + (size_t)ix) * 4u;
-        out_rgb[(size_t)i * 3u + 0u] = src[0] * inv255;
-        out_rgb[(size_t)i * 3u + 1u] = src[1] * inv255;
-        out_rgb[(size_t)i * 3u + 2u] = src[2] * inv255;
-    }
 
     params_dirty_ = false;
     last_error_.clear();

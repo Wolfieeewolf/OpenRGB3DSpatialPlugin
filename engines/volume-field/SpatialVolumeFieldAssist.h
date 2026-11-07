@@ -20,8 +20,13 @@ public:
     void setMediaTexture(const QImage& image, bool wrap);
     void clearMediaTexture();
 
-    /** Compile + uniforms only (no dense atlas). LED / overlay / Action point-eval path. */
+    /** Compile + uniforms only (no dense atlas). LED / Action point-eval path. */
     bool prepareProgram(std::uint64_t render_sequence, float time_sec, const float* params, int param_count);
+
+    bool ensureAtlasTextureReady();
+    unsigned int atlasTextureId() const;
+    int atlasTextureResolution() const;
+    bool exportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n);
 
     /** volumeMain at each point (interleaved xyz -> interleaved rgb). */
     bool evaluateAtPoints(const float* xyz01, int count, float* out_rgb);

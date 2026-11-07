@@ -27,6 +27,7 @@
 #include "viewport/ViewportMath.h"
 #include "viewport/GlProgram.h"
 #include "viewport/MeshBatch.h"
+#include "GpuRoomGridOverlay.h"
 
 class QFocusEvent;
 class QHideEvent;
@@ -52,6 +53,7 @@ public:
     void SelectReferencePoint(int index);
     void UpdateColors();
     void SetViewportPaintingEnabled(bool enabled);
+    bool IsViewportPaintingEnabled() const { return viewport_paint_enabled_; }
     bool FocusSelectionInView();
     void SetGridDimensions(int x, int y, int z);
     void SetGridSnapEnabled(bool enabled);
@@ -93,22 +95,12 @@ public:
     float GetRoomGridBrightness() const { return room_grid_brightness; }
     float GetRoomGridPointSize() const { return room_grid_point_size; }
     int GetRoomGridStep() const { return room_grid_step; }
-    void GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const;
-    void GetRoomGridOverlaySamplePosition(int ix, int iy, int iz, float& x, float& y, float& z) const;
     void SetRoomGridOverlayBounds(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
     void ClearRoomGridOverlayBounds();
-    void SetRoomGridColorBuffer(std::vector<RGBColor> buf);
-    /** Swap-adopt overlay colors (avoids a full copy; leaves `buf` with the previous buffer). */
-    void SwapRoomGridColorBuffer(std::vector<RGBColor>& buf);
-    void SetRoomGridColorCallback(std::function<RGBColor(float x, float y, float z)> cb)
-    {
-        if(!room_grid_color_callback && !cb)
-        {
-            return;
-        }
-        room_grid_color_callback = std::move(cb);
-        update();
-    }
+    void SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLayer> layers);
+    void ClearGpuRoomGridOverlayLayers();
+    /** Drop viewport-owned atlas copies (FBO tex IDs from the volume pool go stale after re-bake). */
+    void releaseOwnedOverlayAtlasTextures();
 
     void SetCamera(float distance, float yaw, float pitch,
                    float target_x, float target_y, float target_z)
@@ -192,6 +184,10 @@ signals:
     void RoomViewportSelected(bool selected);
     /** Emitted when the effect-volume gizmo finishes a drag (stack index). */
     void EffectVolumeChanged(int stack_index);
+    /** Offscreen volume pool can share this context — idle overlay bake may retry. */
+    void HostGlContextReady();
+    /** Tab/viewport unfreeze: re-bake overlay that was skipped while paints were gated. */
+    void ViewportPaintingResumed();
 
 protected:
     void initializeGL() override;
@@ -299,7 +295,8 @@ private:
     void DrawRoomBoundary();
     void DrawRoomGridOverlay();
     void getRoomGridOverlayExtents(float& min_x, float& max_x, float& min_y, float& max_y, float& min_z, float& max_z) const;
-    void invalidateRoomGridOverlayColors();
+    void GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const;
+    void GetRoomGridOverlaySamplePosition(int ix, int iy, int iz, float& x, float& y, float& z) const;
     void DrawDisplayPlanes();
     void DrawSceneProps();
     void DrawLightBlockerLayers();
@@ -357,11 +354,8 @@ private:
     float                                   room_grid_brightness;
     float                                   room_grid_point_size;
     int                                     room_grid_step;
-    std::vector<RGBColor>                   room_grid_color_buffer;
-    std::function<RGBColor(float, float, float)> room_grid_color_callback;
     std::vector<float>                      room_grid_overlay_positions;
     std::vector<float>                      room_grid_overlay_interleaved_;
-    std::vector<float>                      room_grid_overlay_colors;
     int                                     room_grid_overlay_last_nx;
     int                                     room_grid_overlay_last_ny;
     int                                     room_grid_overlay_last_nz;
@@ -370,7 +364,6 @@ private:
     float                                   room_grid_overlay_min_x, room_grid_overlay_max_x;
     float                                   room_grid_overlay_min_y, room_grid_overlay_max_y;
     float                                   room_grid_overlay_min_z, room_grid_overlay_max_z;
-    bool                                    room_grid_overlay_colors_dirty;
     struct DisplayPlaneTexUploadState
     {
         std::uint64_t frame_id = 0;
@@ -417,6 +410,10 @@ private:
 
     GlProgram gl_prog_unlit_color_;
     GlProgram gl_prog_unlit_point_;
+    GlProgram gl_prog_volume_atlas_point_;
+    std::vector<GpuRoomGridOverlayLayer> gpu_room_grid_overlay_layers_;
+    /** Stable copies of volume-atlas textures for the overlay (survive pool FBO recreate). */
+    std::vector<unsigned int>            owned_overlay_atlas_textures_;
     GlProgram gl_prog_textured_unlit_;
     bool      viewport_shader_programs_ok_ = false;
     MeshBatch floor_fill_batch_;

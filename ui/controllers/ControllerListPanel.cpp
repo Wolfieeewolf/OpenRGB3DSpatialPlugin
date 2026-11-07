@@ -48,9 +48,9 @@ void ControllerListPanel::bindTab(OpenRGB3DSpatialTab* tab, Mode mode)
         return;
     }
 
-    // Match Visual Map / OpenRGB: titled group boxes + expanding lists (not flat untitled panels).
+    // Titled group boxes; Minimum height so Setup's outer scroll can grow/scroll.
     setFlat(false);
-    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
     if(mode == Mode::Available)
     {
@@ -58,7 +58,8 @@ void ControllerListPanel::bindTab(OpenRGB3DSpatialTab* tab, Mode mode)
         ui->helpLabel->setText(QStringLiteral(
             "Each device has a + button to add it to the 3D scene. Set Device / Zone / LED on the card before adding. "
             "Only unassigned devices and remaining zones/LEDs are listed."));
-        ui->cardListHolder->setMinimumHeight(160);
+        ui->cardListHolder->setMinimumHeight(120);
+        ui->cardListHolder->setMaximumHeight(280);
         ui->bottomRowHost->setVisible(true);
         if(ui->showUndetectedCheckBox)
         {
@@ -70,7 +71,8 @@ void ControllerListPanel::bindTab(OpenRGB3DSpatialTab* tab, Mode mode)
         setTitle(QStringLiteral("Controllers in 3D Scene"));
         ui->helpLabel->setText(QStringLiteral(
             "Press − to remove from the scene. Edit opens position, rotation, and spacing for the selected object."));
-        ui->cardListHolder->setMinimumHeight(160);
+        ui->cardListHolder->setMinimumHeight(120);
+        ui->cardListHolder->setMaximumHeight(280);
         ui->bottomRowHost->setVisible(false);
         if(ui->showUndetectedCheckBox)
         {
@@ -91,7 +93,8 @@ void ControllerListPanel::bindTab(OpenRGB3DSpatialTab* tab, Mode mode)
                                                      : SpatialControllerCardWidget::Mode::InScene;
     card_list_ = new SpatialControllerCardList(card_mode, holder);
     card_list_->setMinimumHeight(ui->cardListHolder->minimumHeight());
-    card_list_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    card_list_->setMaximumHeight(ui->cardListHolder->maximumHeight());
+    card_list_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     holder_lay->addWidget(card_list_, 1);
 
     if(mode == Mode::Available)
