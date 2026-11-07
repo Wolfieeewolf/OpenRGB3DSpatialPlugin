@@ -26,7 +26,8 @@ Flag **split** = over ~1k lines *and* a confirmed natural seam — not crumbs fo
 | `engines/movie-sync` | Movie Sync effect / catalog / HTTP / cue runtime |
 | `engines/triggers` | Trigger sources + binding + runtime |
 | `engines/actions` | Action pack player / applier / script (calls field engines) |
-| `shared` | GL pool, room lighting/samplers, effect base, zones, controllers, types |
+| `engines/laser-vector` | ILDA (.ild) vector laser effect (projector beams / machine profile) |
+| `shared` | GL pool, room lighting/samplers, effect base, zones, controllers, types; `shared/laser` ILDA reader + frames |
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Distro packaging (`debian/` `fedora/` `flatpak/`), assets, build helpers — not `release/` / `.wiki-seed/` |
 
@@ -37,6 +38,7 @@ engines/
   movie-sync/       ← DONE  (was Effects3D/MovieSync/*)
   triggers/         ← DONE  (was Effects3D/Triggers/*)
   reactive/         ← DONE  (was Effects3D/Reactive/* + Input/Reactive*)
+  laser-vector/     ← ILDA vector laser effect (+ shared/laser reader)
   game/
     Game/           ← DONE  (was root Game/*); StripPatternSurface.h → shared/ (phase 8)
     Minecraft/      ← DONE  (was Effects3D/Games/Minecraft/*)
@@ -153,6 +155,15 @@ ui/                 ← DONE phase 9 (affinity folders)
 | `engines/reactive/ReactiveInputTypes.h` | Types | keep | |
 | `engines/reactive/ReactiveKeyMap.*` | Key map | keep | |
 | `Input/ControllerTilt*` | DualSense | parked | On `feat/dualsense-controller-torch` only |
+
+### `engines/laser-vector` + `shared/laser` (2026-11-08)
+
+| Path | Role | Merge | Notes |
+|------|------|-------|-------|
+| `engines/laser-vector/LaserVectorEffect.*` | ILDA play + projector sample + UI | keep | ~1.1k; multipass 2026-11-08 |
+| `shared/laser/IldaReader.*` | ILDA 0/1/2/3/4/5 load | keep | 64 MiB cap |
+| `shared/laser/LaserFrame.*` | Points / strokes / dwells | keep | |
+| `shared/laser/IldaStdPalette.inc` | Default indexed palette | keep | included by reader |
 
 ### `engines/game` (phase 1)
 

@@ -138,6 +138,8 @@ INCLUDEPATH += \
     engines/reactive \
     engines/screen-mirror \
     engines/shader-field \
+    engines/laser-vector \
+    shared/laser \
     engines/volume-field \
     engines/particle-field \
     engines/ribbon-field
@@ -330,6 +332,9 @@ HEADERS += \
     engines/movie-sync/MovieSyncCatalog.h \
     engines/movie-sync/MovieSyncListener.h \
     engines/movie-sync/MovieSyncRuntime.h \
+    engines/laser-vector/LaserVectorEffect.h \
+    shared/laser/LaserFrame.h \
+    shared/laser/IldaReader.h \
     shared/effects/EffectListManager3D.h \
     engines/shader-field/SpatialShaderEngine.h \
     engines/shader-field/SpatialShaderUniforms.h \
@@ -516,6 +521,9 @@ SOURCES += \
     engines/movie-sync/MovieSyncCatalog.cpp \
     engines/movie-sync/MovieSyncListener.cpp \
     engines/movie-sync/MovieSyncRuntime.cpp \
+    engines/laser-vector/LaserVectorEffect.cpp \
+    shared/laser/LaserFrame.cpp \
+    shared/laser/IldaReader.cpp \
     engines/shader-field/ShaderField.cpp \
     engines/shader-field/SpatialShaderEngine.cpp \
     engines/shader-field/SpatialShaderCatalog.cpp \
