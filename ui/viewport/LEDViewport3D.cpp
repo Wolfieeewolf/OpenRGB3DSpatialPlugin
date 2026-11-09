@@ -807,12 +807,18 @@ void LEDViewport3D::initViewportShaderPrograms()
     const bool ok_color = compile_one("unlit_color", &ViewportShaders::CompileUnlitColor, gl_prog_unlit_color_);
     const bool ok_point = compile_one("unlit_point", &ViewportShaders::CompileUnlitPoint, gl_prog_unlit_point_);
     const bool ok_tex = compile_one("textured_unlit", &ViewportShaders::CompileTexturedUnlit, gl_prog_textured_unlit_);
+    /* Atlas is optional for base scene (floor/controllers). A bad volume shader
+       must not blank the whole viewport down to guide labels only. */
     const bool ok_atlas = compile_one("volume_atlas_point", &ViewportShaders::CompileVolumeAtlasPoint,
                                       gl_prog_volume_atlas_point_);
-    viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex && ok_atlas;
-    if(viewport_shader_programs_ok_)
+    viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex;
+    if(viewport_shader_programs_ok_ && ok_atlas)
     {
-        LOG_INFO("[3DSpatial] Viewport GLSL 410 programs ready");
+        LOG_INFO("[3DSpatial] Viewport GLSL 410 programs ready (incl. volume atlas)");
+    }
+    else if(viewport_shader_programs_ok_)
+    {
+        LOG_WARNING("[3DSpatial] Viewport base shaders ready; volume atlas unavailable");
     }
 }
 

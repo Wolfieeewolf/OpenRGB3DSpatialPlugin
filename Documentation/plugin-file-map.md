@@ -26,7 +26,7 @@ Flag **split** = over ~1k lines *and* a confirmed natural seam — not crumbs fo
 | `engines/movie-sync` | Movie Sync effect / catalog / HTTP / cue runtime |
 | `engines/triggers` | Trigger sources + binding + runtime |
 | `engines/actions` | Action pack player / applier / script (calls field engines) |
-| `engines/laser-vector` | ILDA (.ild) vector laser effect (projector beams / machine profile) |
+| `engines/laser-vector` | ILDA / HEB / ShowEditor .shw timeline vector laser (projector beams) |
 | `shared` | GL pool, room lighting/samplers, effect base, zones, controllers, types; `shared/laser` ILDA reader + frames |
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
 | `n/a` | Distro packaging (`debian/` `fedora/` `flatpak/`), assets, build helpers — not `release/` / `.wiki-seed/` |
@@ -160,8 +160,13 @@ ui/                 ← DONE phase 9 (affinity folders)
 
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
-| `engines/laser-vector/LaserVectorEffect.*` | ILDA play + projector sample + UI | keep | ~1.1k; multipass 2026-11-08 |
+| `engines/laser-vector/LaserVectorEffect.*` | ILDA/HEB/.shw timeline + GPU pack/playback | keep | no CPU sample path |
+| `engines/laser-vector/LaserVectorEffect_UI.cpp` | Settings panel + context menu (three-ways) | keep | UI seam like FolderVolume/Reactive |
+| `engines/laser-vector/LaserVectorVolumeBody.h` | GLSL volumeMain (wedge/flat + multi-origin) | keep | u_media 3×N; Spur origins in u_params |
 | `shared/laser/IldaReader.*` | ILDA 0/1/2/3/4/5 load | keep | 64 MiB cap |
+| `shared/laser/HebReader.*` | ShowEditor .heb figure load | keep | reverse-engineered 9-byte points |
+| `shared/laser/ShowFolderReader.*` | .shw + Key.ord + .seq timeline (Spur/track-aware) | keep | see showeditor-pack-formats.md |
+| `Documentation/showeditor-pack-formats.md` | Pack format deep dive | keep | track=1+19*n |
 | `shared/laser/LaserFrame.*` | Points / strokes / dwells | keep | |
 | `shared/laser/IldaStdPalette.inc` | Default indexed palette | keep | included by reader |
 

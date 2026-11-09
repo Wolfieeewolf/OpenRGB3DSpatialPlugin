@@ -30,6 +30,8 @@ struct LaserSegment
      * parked corners read thicker than quick mid-path hops in the same frame.
      */
     float dwell = 1.0f;
+    /** ShowEditor Spur/track or ILDA scanner head (0 = default / single). */
+    int track = 0;
 };
 
 /** Lit dwell / sparkle point (zero-length stroke or intentional point output). */
@@ -39,6 +41,8 @@ struct LaserDot
     float r = 1.0f, g = 1.0f, b = 1.0f;
     /** How many consecutive lit samples parked here (ILDA “dwell”) — proxies brightness/fatness. */
     float dwell = 1.0f;
+    /** ShowEditor Spur/track or ILDA scanner head (0 = default / single). */
+    int track = 0;
 };
 
 struct LaserFrame

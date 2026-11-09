@@ -335,8 +335,9 @@ void LEDViewport3D::SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLa
             continue;
         }
         glBindTexture(GL_TEXTURE_2D, dst);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        const GLint filter = layer.atlas_nearest ? GL_NEAREST : GL_LINEAR;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -498,6 +499,7 @@ void LEDViewport3D::DrawRoomGridOverlay()
             };
 
             set_i("u_atlas_n", layer.atlas_n);
+            set_i("u_atlas_nearest", layer.atlas_nearest ? 1 : 0);
             set_i("u_blend", layer.blend_mode);
             set_i("u_sample_room", layer.sample_room ? 1 : 0);
             set_i("u_volume_tools", layer.volume_tools ? 1 : 0);
@@ -527,6 +529,9 @@ void LEDViewport3D::DrawRoomGridOverlay()
         {
             glBindTexture(GL_TEXTURE_2D, 0);
             gl_prog_volume_atlas_point_.SetUniform1i(atlas_name, i);
+            char nearest_name[64];
+            std::snprintf(nearest_name, sizeof(nearest_name), "u_atlas_nearest[%d]", i);
+            gl_prog_volume_atlas_point_.SetUniform1i(nearest_name, 0);
         }
     }
 

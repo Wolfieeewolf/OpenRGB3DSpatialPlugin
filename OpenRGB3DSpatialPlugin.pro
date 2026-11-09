@@ -333,8 +333,11 @@ HEADERS += \
     engines/movie-sync/MovieSyncListener.h \
     engines/movie-sync/MovieSyncRuntime.h \
     engines/laser-vector/LaserVectorEffect.h \
+    engines/laser-vector/LaserVectorVolumeBody.h \
     shared/laser/LaserFrame.h \
     shared/laser/IldaReader.h \
+    shared/laser/HebReader.h \
+    shared/laser/ShowFolderReader.h \
     shared/effects/EffectListManager3D.h \
     engines/shader-field/SpatialShaderEngine.h \
     engines/shader-field/SpatialShaderUniforms.h \
@@ -522,8 +525,11 @@ SOURCES += \
     engines/movie-sync/MovieSyncListener.cpp \
     engines/movie-sync/MovieSyncRuntime.cpp \
     engines/laser-vector/LaserVectorEffect.cpp \
+    engines/laser-vector/LaserVectorEffect_UI.cpp \
     shared/laser/LaserFrame.cpp \
     shared/laser/IldaReader.cpp \
+    shared/laser/HebReader.cpp \
+    shared/laser/ShowFolderReader.cpp \
     engines/shader-field/ShaderField.cpp \
     engines/shader-field/SpatialShaderEngine.cpp \
     engines/shader-field/SpatialShaderCatalog.cpp \

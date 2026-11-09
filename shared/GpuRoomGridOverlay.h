@@ -30,6 +30,11 @@ struct GpuRoomGridOverlayLayer
     /** RGBA8 packed atlas (width=n, height=n*n) from the volume pool — survives Stop/idle. */
     std::vector<unsigned char> atlas_rgba;
     int atlas_n = 0;
+    /**
+     * When true, overlay samples atlas voxels with NEAREST (no trilinear smear).
+     * Required for thin shafts (laser wedges) — LINEAR turns beams into grey fog.
+     */
+    bool atlas_nearest = false;
     int blend_mode = 0; /* BlendMode as int */
     float brightness = 1.0f;
     int finish_mode = FinishRgb;

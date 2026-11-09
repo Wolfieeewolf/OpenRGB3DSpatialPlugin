@@ -20,6 +20,8 @@
 
 namespace
 {
+constexpr size_t kMaxIldaBytes = 64u * 1024u * 1024u;
+
 #include "IldaStdPalette.inc"
 
 struct Rgb8
@@ -136,7 +138,7 @@ LaserShow IldaReader::LoadFile(const std::string& path)
     in.seekg(0, std::ios::end);
     const std::streamoff sz = in.tellg();
     in.seekg(0, std::ios::beg);
-    if(sz <= 0 || sz > 64 * 1024 * 1024)
+    if(sz <= 0 || static_cast<size_t>(sz) > kMaxIldaBytes)
     {
         show.error = "ILDA file empty or too large";
         return show;

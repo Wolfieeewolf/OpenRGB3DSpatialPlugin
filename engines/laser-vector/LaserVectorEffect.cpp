@@ -2,93 +2,36 @@
 
 #include "LaserVectorEffect.h"
 
+#include "HebReader.h"
+#include "ShowFolderReader.h"
+#include "LaserVectorVolumeBody.h"
 #include "EffectListManager3D.h"
-#include "EffectSliderPromote.h"
+#include "EffectDoubleSliderRow.h"
 #include "EffectSliderRow.h"
-#include "EffectUiRows.h"
 #include "Geometry3DUtils.h"
 #include "GpuRoomGridOverlay.h"
 #include "PlayerEngines.h"
 #include "SpatialEffectTypes.h"
 
-#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QHBoxLayout>
-#include <QKeySequence>
+#include <QImage>
 #include <QLabel>
-#include <QMenu>
 #include <QPushButton>
 #include <QSignalBlocker>
-#include <QVBoxLayout>
+#include <QVector3D>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 #include <vector>
 
 namespace
 {
 constexpr SpatialEffectType kLaserVectorEffectType = static_cast<SpatialEffectType>(40);
-
-float DistPointSegment2D(float px, float py,
-                         float x0, float y0, float x1, float y1)
-{
-    const float dx = x1 - x0;
-    const float dy = y1 - y0;
-    const float len2 = dx * dx + dy * dy;
-    float t = 0.0f;
-    if(len2 > 1.0e-12f)
-    {
-        t = ((px - x0) * dx + (py - y0) * dy) / len2;
-        t = std::clamp(t, 0.0f, 1.0f);
-    }
-    const float cx = x0 + t * dx;
-    const float cy = y0 + t * dy;
-    const float ex = px - cx;
-    const float ey = py - cy;
-    return std::sqrt(ex * ex + ey * ey);
-}
-
-float DistPointSegment3D(float px, float py, float pz,
-                         float x0, float y0, float z0,
-                         float x1, float y1, float z1)
-{
-    const float dx = x1 - x0;
-    const float dy = y1 - y0;
-    const float dz = z1 - z0;
-    const float len2 = dx * dx + dy * dy + dz * dz;
-    float t = 0.0f;
-    if(len2 > 1.0e-12f)
-    {
-        t = ((px - x0) * dx + (py - y0) * dy + (pz - z0) * dz) / len2;
-        t = std::clamp(t, 0.0f, 1.0f);
-    }
-    const float cx = x0 + t * dx;
-    const float cy = y0 + t * dy;
-    const float cz = z0 + t * dz;
-    const float ex = px - cx;
-    const float ey = py - cy;
-    const float ez = pz - cz;
-    return std::sqrt(ex * ex + ey * ey + ez * ez);
-}
-
-/** Distance to finite ray segment from origin O to far point F (t clamped to [0,1]). */
-float DistPointRay01(float px, float py, float pz,
-                     float ox, float oy, float oz,
-                     float fx, float fy, float fz)
-{
-    return DistPointSegment3D(px, py, pz, ox, oy, oz, fx, fy, fz);
-}
-
-void LaserToFarUv(float lx, float ly, float& fu, float& fv, float& fw)
-{
-    fu = std::clamp(0.5f + 0.5f * lx, 0.0f, 1.0f);
-    fv = std::clamp(0.5f + 0.5f * ly, 0.0f, 1.0f);
-    fw = 1.0f; // throw plane = far face of the effect volume
-}
 } // namespace
 
 void RegisterLaserVectorEngine()
@@ -108,6 +51,8 @@ LaserVectorEffect::LaserVectorEffect(QWidget* parent)
 {
     // Plugin-wide Speed 0 freezes motion; ILDA should play at configured FPS out of the box.
     SetSpeed(100);
+    volume_assist_.setFragmentBody(QString::fromUtf8(LaserVectorVolumeBody()));
+    volume_assist_.setResolution(SpatialVolumeFieldEngine::kMaxResolution);
 }
 
 EffectInfo3D LaserVectorEffect::GetEffectInfo() const
@@ -115,8 +60,8 @@ EffectInfo3D LaserVectorEffect::GetEffectInfo() const
     EffectInfo3D info = {};
     info.effect_name = "Laser Vector";
     info.effect_description =
-        "Play an ILDA (.ild) show as projector beams through the effect volume. "
-        "One .ild = one scanner (time-multiplexed); use Max beams to thin sparkles, or stack layers for more projectors.";
+        "Play ILDA (.ild), ShowEditor figures (.heb), or a locked show folder (.shw timeline) as projector beams. "
+        "Show folders use Key.ord + .seq + .heb; multi-Spur shows throw from separate room origins.";
     info.category = "Laser";
     info.effect_type = kLaserVectorEffectType;
     info.is_reversible = false;
@@ -143,297 +88,33 @@ EffectInfo3D LaserVectorEffect::GetEffectInfo() const
     return info;
 }
 
-void LaserVectorEffect::SetupCustomUI(QWidget* parent)
-{
-    if(!parent)
-    {
-        return;
-    }
-
-    settings_panel_ = EffectUiRows::NewEffectPanel("LaserVectorEffectSettings");
-    QVBoxLayout* layout = EffectUiRows::PanelLayout(settings_panel_);
-    if(!layout)
-    {
-        return;
-    }
-
-    EffectUiRows::AppendInfoLabel(
-        layout,
-        tr(".ild is geometry + colour in abstract RGB — not the projector model. "
-           "Pick Machine profile for RGB / RGY / mono / beam-style mapping (like Beyond colour balance). "
-           "Scanner head = multi-projector channel in the file; stack layers for more heads."));
-
-    QHBoxLayout* pick_row = new QHBoxLayout();
-    pick_row->setContentsMargins(0, 0, 0, 0);
-    browse_button_ = new QPushButton(tr("Open ILDA…"), settings_panel_);
-    browse_button_->setObjectName(QStringLiteral("browseIldaButton"));
-    browse_button_->setToolTip(
-        tr("Browse for an .ild file.\nMouse: click button.\nKeyboard: Tab here, Space/Enter, or Ctrl+O.\nMenu: right-click this panel → Open ILDA…"));
-    browse_button_->setAccessibleName(tr("Open ILDA file"));
-    browse_button_->setShortcut(QKeySequence(QStringLiteral("Ctrl+O")));
-    clear_button_ = new QPushButton(tr("Clear"), settings_panel_);
-    clear_button_->setObjectName(QStringLiteral("clearIldaButton"));
-    clear_button_->setToolTip(
-        tr("Unload the current .ild.\nMouse: click Clear.\nKeyboard: Tab to Clear, Space/Enter, or Ctrl+W.\nMenu: right-click this panel → Clear file."));
-    clear_button_->setAccessibleName(tr("Clear ILDA file"));
-    clear_button_->setShortcut(QKeySequence(QStringLiteral("Ctrl+W")));
-    clear_button_->setEnabled(!path_.isEmpty());
-    path_label_ = new QLabel(settings_panel_);
-    path_label_->setObjectName(QStringLiteral("ildaPathLabel"));
-    path_label_->setWordWrap(true);
-    path_label_->setMinimumWidth(120);
-    UpdatePathLabel();
-    pick_row->addWidget(browse_button_);
-    pick_row->addWidget(clear_button_);
-    pick_row->addWidget(path_label_, 1);
-    layout->addLayout(pick_row);
-
-    status_label_ = new QLabel(settings_panel_);
-    status_label_->setObjectName(QStringLiteral("ildaStatusLabel"));
-    status_label_->setWordWrap(true);
-    layout->addWidget(status_label_);
-
-    QHBoxLayout* machine_row = new QHBoxLayout();
-    machine_row->setContentsMargins(0, 0, 0, 0);
-    QLabel* machine_cap = new QLabel(tr("Machine profile"), settings_panel_);
-    machine_cap->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    machine_combo_ = new QComboBox(settings_panel_);
-    machine_combo_->setToolTip(
-        tr("Not stored in .ild — mirrors ShowEditor/Beyond projector colour setup.\n"
-           "RGB: full colour. RGY: no blue. RGBY: yellow diode bias. "
-           "Mono: single laser. Beam punch: atmospheric beam look."));
-    machine_combo_->setAccessibleName(tr("Laser machine colour profile"));
-    machine_combo_->addItem(tr("RGB (full colour)"), static_cast<int>(MachineProfile::Rgb));
-    machine_combo_->addItem(tr("RGY (no blue)"), static_cast<int>(MachineProfile::Rgy));
-    machine_combo_->addItem(tr("RGBY (yellow diode)"), static_cast<int>(MachineProfile::Rgby));
-    machine_combo_->addItem(tr("Mono green"), static_cast<int>(MachineProfile::MonoGreen));
-    machine_combo_->addItem(tr("Mono white"), static_cast<int>(MachineProfile::MonoWhite));
-    machine_combo_->addItem(tr("Beam punch"), static_cast<int>(MachineProfile::BeamPunch));
-    machine_combo_->setCurrentIndex(static_cast<int>(machine_profile_));
-    machine_row->addWidget(machine_cap);
-    machine_row->addWidget(machine_combo_, 1);
-    layout->addLayout(machine_row);
-
-    QHBoxLayout* scanner_row = new QHBoxLayout();
-    scanner_row->setContentsMargins(0, 0, 0, 0);
-    QLabel* scanner_cap = new QLabel(tr("Scanner / projector"), settings_panel_);
-    scanner_cap->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    scanner_combo_ = new QComboBox(settings_panel_);
-    scanner_combo_->setToolTip(
-        tr("ILDA header “scanner head” (byte 31): which scanner pair a frame is for.\n"
-           "Satellites / multi-head shows use different heads in one file. All = every frame."));
-    scanner_combo_->setAccessibleName(tr("Scanner or projector channel"));
-    scanner_combo_->addItem(tr("All scanners"), -1);
-    scanner_row->addWidget(scanner_cap);
-    scanner_row->addWidget(scanner_combo_, 1);
-    layout->addLayout(scanner_row);
-
-    projector_check_ = new QCheckBox(tr("Projector beams (from volume near face)"), settings_panel_);
-    projector_check_->setChecked(projector_beams_);
-    projector_check_->setToolTip(
-        tr("On: rays from the projector face through each lit figure point/stroke (laser look).\n"
-           "Off: flat figure inside the volume (old blob-style sampling)."));
-    layout->addWidget(projector_check_);
-
-    join_path_check_ = new QCheckBox(tr("Join lit path (ring/outline)"), settings_panel_);
-    join_path_check_->setChecked(join_lit_path_);
-    join_path_check_->setToolTip(
-        tr("Connect successive lit dwell points with strokes (what many editors draw as guide lines).\n"
-           "Needed for RING.ild-style shows that only light corners and blank while moving.\n"
-           "Mouse / checkbox; keyboard: Tab + Space."));
-    layout->addWidget(join_path_check_);
-
-    intensity_widen_check_ = new QCheckBox(tr("Intensity widens beam"), settings_panel_);
-    intensity_widen_check_->setChecked(intensity_widens_);
-    intensity_widen_check_->setToolTip(
-        tr(".ild has no beam-width field (ILDA Beam Brush was never adopted).\n"
-           "Brighter RGB ≈ fatter shaft in haze — use this to approximate thin/fat mixes."));
-    layout->addWidget(intensity_widen_check_);
-
-    dwell_widen_check_ = new QCheckBox(tr("Dwell widens beam"), settings_panel_);
-    dwell_widen_check_->setChecked(dwell_widens_);
-    dwell_widen_check_->setToolTip(
-        tr("Repeated lit points at one spot (dwell) look brighter/fatter on real projectors.\n"
-           "RING corners often have long dwells — those can read thicker than quick strokes."));
-    layout->addWidget(dwell_widen_check_);
-
-    crisp_beams_check_ = new QCheckBox(tr("Crisp beams (no soft wash)"), settings_panel_);
-    crisp_beams_check_->setChecked(crisp_beams_);
-    crisp_beams_check_->setToolTip(
-        tr("Keeps the full .ild colour range. Soft falloff greys edges and washes toward white.\n"
-           "On: hard shaft — file colour or black. Nearest beam wins (no stacking into white)."));
-    layout->addWidget(crisp_beams_check_);
-
-    thickness_row_ = EffectUiRows::AppendDoubleSliderRow(
-        layout,
-        tr("Beam thickness"),
-        0.005, 0.40, beam_thickness_,
-        3, 0.005,
-        EffectSpinOverSliderTip(tr("Base beam radius. Dynamics (intensity/dwell) scale up from this.")));
-    width_dyn_row_ = EffectUiRows::AppendDoubleSliderRow(
-        layout,
-        tr("Width dynamics"),
-        1.0, 5.0, width_dynamics_,
-        2, 0.1,
-        EffectSpinOverSliderTip(
-            tr("How much brighter/longer dwells fatten that beam’s colour into empty space "
-               "(1 = flat, 3–4 = strong). Does not mix neighbours into white.")));
-    projector_depth_row_ = EffectUiRows::AppendDoubleSliderRow(
-        layout,
-        tr("Projector depth"),
-        0.0, 1.0, projector_depth_,
-        2, 0.01,
-        EffectSpinOverSliderTip(tr("Where the projector sits along volume depth (0 = near throw face, 1 = far).")));
-    fps_row_ = EffectUiRows::AppendSliderRow(
-        layout,
-        tr("Frame rate"),
-        1, 120, fps_,
-        EffectSpinOverSliderTip(tr("ILDA frames per second before Speed scales playback.")));
-    fps_row_->setSuffix(tr(" fps"));
-    max_beams_row_ = EffectUiRows::AppendSliderRow(
-        layout,
-        tr("Max beams"),
-        0, 128, max_beams_,
-        EffectSpinOverSliderTip(
-            tr("Cap how many sparkle points / strokes draw per frame (thins busy frames). 0 = all. "
-               "Does not invent extra scanners — ILDA is still one beam path.")));
-    max_beams_row_->setSuffix(tr(" (0=all)"));
-
-    flatten_check_ = new QCheckBox(tr("Flatten Z (2D projection)"), settings_panel_);
-    flatten_check_->setChecked(flatten_z_);
-    flatten_check_->setToolTip(tr("Treat the figure as 2D on the throw plane."));
-    layout->addWidget(flatten_check_);
-
-    loop_check_ = new QCheckBox(tr("Loop show"), settings_panel_);
-    loop_check_->setChecked(loop_);
-    layout->addWidget(loop_check_);
-
-    AlignHBoxRowCaptions({machine_row, scanner_row}, 110);
-    AlignCaptionLabels({
-        thickness_row_ ? thickness_row_->captionLabel() : nullptr,
-        width_dyn_row_ ? width_dyn_row_->captionLabel() : nullptr,
-        projector_depth_row_ ? projector_depth_row_->captionLabel() : nullptr,
-        fps_row_ ? fps_row_->captionLabel() : nullptr,
-        max_beams_row_ ? max_beams_row_->captionLabel() : nullptr,
-    });
-
-    settings_panel_->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(settings_panel_, &QWidget::customContextMenuRequested,
-            this, &LaserVectorEffect::OnPanelContextMenu);
-    connect(browse_button_, &QPushButton::clicked, this, &LaserVectorEffect::OnBrowseIld);
-    connect(clear_button_, &QPushButton::clicked, this, &LaserVectorEffect::OnClearIld);
-    if(thickness_row_)
-    {
-        thickness_row_->bindValueChanged(
-            this,
-            [this](double v) { beam_thickness_ = static_cast<float>(v); },
-            [this]() { emit ParametersChanged(); });
-    }
-    if(width_dyn_row_)
-    {
-        width_dyn_row_->bindValueChanged(
-            this,
-            [this](double v) { width_dynamics_ = static_cast<float>(v); },
-            [this]() { emit ParametersChanged(); });
-    }
-    if(projector_depth_row_)
-    {
-        projector_depth_row_->bindValueChanged(
-            this,
-            [this](double v) { projector_depth_ = static_cast<float>(v); },
-            [this]() { emit ParametersChanged(); });
-    }
-    if(fps_row_)
-    {
-        fps_row_->bindValueChanged(
-            this,
-            [this](int v) { fps_ = v; },
-            nullptr,
-            [this]() { emit ParametersChanged(); });
-    }
-    if(max_beams_row_)
-    {
-        max_beams_row_->bindValueChanged(
-            this,
-            [this](int v) { max_beams_ = v; },
-            nullptr,
-            [this]() { emit ParametersChanged(); });
-    }
-    connect(machine_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
-        if(!machine_combo_)
-        {
-            return;
-        }
-        machine_profile_ = static_cast<MachineProfile>(machine_combo_->currentData().toInt());
-        emit ParametersChanged();
-    });
-    connect(scanner_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
-        if(!scanner_combo_)
-        {
-            return;
-        }
-        scanner_filter_ = scanner_combo_->currentData().toInt();
-        RebuildPlayIndices();
-        emit ParametersChanged();
-    });
-    connect(projector_check_, &QCheckBox::toggled, this, [this](bool on) {
-        projector_beams_ = on;
-        emit ParametersChanged();
-    });
-    connect(join_path_check_, &QCheckBox::toggled, this, [this](bool on) {
-        join_lit_path_ = on;
-        RebuildShowGeometry();
-        UpdateStatusLabel();
-        emit ParametersChanged();
-    });
-    connect(intensity_widen_check_, &QCheckBox::toggled, this, [this](bool on) {
-        intensity_widens_ = on;
-        emit ParametersChanged();
-    });
-    connect(dwell_widen_check_, &QCheckBox::toggled, this, [this](bool on) {
-        dwell_widens_ = on;
-        emit ParametersChanged();
-    });
-    connect(crisp_beams_check_, &QCheckBox::toggled, this, [this](bool on) {
-        crisp_beams_ = on;
-        emit ParametersChanged();
-    });
-    connect(flatten_check_, &QCheckBox::toggled, this, [this](bool on) {
-        flatten_z_ = on;
-        emit ParametersChanged();
-    });
-    connect(loop_check_, &QCheckBox::toggled, this, [this](bool on) {
-        loop_ = on;
-        emit ParametersChanged();
-    });
-
-    UpdateStatusLabel();
-    AddWidgetToParent(settings_panel_, parent);
-}
-
 void LaserVectorEffect::OnBrowseIld()
 {
     const QString path = QFileDialog::getOpenFileName(
         this,
-        tr("Open ILDA laser file"),
+        tr("Open laser file or show"),
         path_.isEmpty() ? QString() : QFileInfo(path_).absolutePath(),
-        tr("ILDA (*.ild);;All files (*.*)"));
+        tr("Laser / ShowEditor (*.ild *.heb *.shw);;ILDA (*.ild);;ShowEditor HEB (*.heb);;"
+           "ShowEditor show (*.shw);;All files (*.*)"));
     if(path.isEmpty())
     {
         return;
     }
-    LoadIldPath(path);
+    LoadLaserPath(path);
     emit ParametersChanged();
 }
 
 void LaserVectorEffect::OnClearIld()
 {
-    if(path_.isEmpty() && show_.frames.empty())
+    if(path_.isEmpty() && show_.frames.empty() && !use_show_folder_)
     {
         return;
     }
     path_.clear();
     show_ = LaserShow{};
+    show_folder_ = ShowFolder{};
+    use_show_folder_ = false;
+    show_frame_ = LaserFrame{};
     play_indices_.clear();
     scanner_filter_ = -1;
     if(scanner_combo_)
@@ -448,42 +129,56 @@ void LaserVectorEffect::OnClearIld()
     emit ParametersChanged();
 }
 
-void LaserVectorEffect::OnPanelContextMenu(const QPoint& pos)
-{
-    if(!settings_panel_)
-    {
-        return;
-    }
-    QMenu menu(settings_panel_);
-    QAction* open_act = menu.addAction(tr("Open ILDA…"));
-    open_act->setShortcut(QKeySequence(QStringLiteral("Ctrl+O")));
-    QAction* clear_act = menu.addAction(tr("Clear file"));
-    clear_act->setShortcut(QKeySequence(QStringLiteral("Ctrl+W")));
-    clear_act->setEnabled(!path_.isEmpty());
-    QAction* chosen = menu.exec(settings_panel_->mapToGlobal(pos));
-    if(chosen == open_act)
-    {
-        OnBrowseIld();
-    }
-    else if(chosen == clear_act)
-    {
-        OnClearIld();
-    }
-}
-
-void LaserVectorEffect::LoadIldPath(const QString& path)
+void LaserVectorEffect::LoadLaserPath(const QString& path)
 {
     path_ = path;
-    show_ = IldaReader::LoadFile(path.toStdString());
+    use_show_folder_ = false;
+    show_folder_ = ShowFolder{};
+    show_ = LaserShow{};
+    const QString ext = QFileInfo(path).suffix().toLower();
+    if(ext == QLatin1String("shw"))
+    {
+        show_folder_ = ShowFolderReader::LoadPath(path.toStdString());
+        use_show_folder_ = true;
+        if(!show_folder_.error.empty())
+        {
+            show_.error = show_folder_.error;
+        }
+    }
+    else if(ext == QLatin1String("heb"))
+    {
+        show_ = HebReader::LoadFile(path.toStdString());
+    }
+    else
+    {
+        show_ = IldaReader::LoadFile(path.toStdString());
+    }
     RebuildShowGeometry();
     if(scanner_combo_)
     {
         const QSignalBlocker block(scanner_combo_);
         scanner_combo_->clear();
-        scanner_combo_->addItem(tr("All scanners"), -1);
-        for(int s : show_.scanners)
+        if(use_show_folder_)
         {
-            scanner_combo_->addItem(tr("Scanner %1").arg(s), s);
+            scanner_combo_->addItem(tr("All Spur / tracks"), -1);
+            for(int t : show_folder_.tracks)
+            {
+                scanner_combo_->addItem(tr("Spur / track %1").arg(t), t);
+            }
+            scanner_combo_->setToolTip(
+                tr("ShowEditor Spur (output track). Encoded in .seq as 1+track×19.\n"
+                   "Multi projector origins place each Spur across the room; filter solos one head."));
+        }
+        else
+        {
+            scanner_combo_->addItem(tr("All scanners"), -1);
+            for(int s : show_.scanners)
+            {
+                scanner_combo_->addItem(tr("Scanner %1").arg(s), s);
+            }
+            scanner_combo_->setToolTip(
+                tr("ILDA header “scanner head” (byte 31): which scanner pair a frame is for.\n"
+                   "Multi projector origins spread heads left→right when All is selected."));
         }
         int idx = 0;
         for(int i = 0; i < scanner_combo_->count(); ++i)
@@ -504,6 +199,17 @@ void LaserVectorEffect::LoadIldPath(const QString& path)
 
 void LaserVectorEffect::RebuildShowGeometry()
 {
+    if(use_show_folder_)
+    {
+        for(auto& kv : show_folder_.figures)
+        {
+            for(LaserFrame& frame : kv.second.frames)
+            {
+                frame.RebuildSegments(join_lit_path_);
+            }
+        }
+        return;
+    }
     for(LaserFrame& frame : show_.frames)
     {
         frame.RebuildSegments(join_lit_path_);
@@ -513,6 +219,10 @@ void LaserVectorEffect::RebuildShowGeometry()
 void LaserVectorEffect::RebuildPlayIndices()
 {
     play_indices_.clear();
+    if(use_show_folder_)
+    {
+        return;
+    }
     play_indices_.reserve(show_.frames.size());
     for(size_t i = 0; i < show_.frames.size(); ++i)
     {
@@ -552,6 +262,48 @@ void LaserVectorEffect::UpdateStatusLabel()
     if(path_.isEmpty())
     {
         status_label_->setText(tr("No file loaded."));
+        return;
+    }
+    if(use_show_folder_)
+    {
+        if(!show_folder_.error.empty())
+        {
+            status_label_->setText(tr("Error: %1").arg(QString::fromStdString(show_folder_.error)));
+            return;
+        }
+        QString tracks;
+        for(int t : show_folder_.tracks)
+        {
+            if(!tracks.isEmpty())
+            {
+                tracks += QLatin1Char(',');
+            }
+            tracks += QString::number(t);
+        }
+        QString line =
+            tr("ShowEditor “%1”: %2 cues, %3 figures, Spur %4, %5 s")
+                .arg(QString::fromStdString(show_folder_.show_name))
+                .arg(show_folder_.events.size())
+                .arg(show_folder_.figures.size())
+                .arg(tracks.isEmpty() ? QStringLiteral("0") : tracks)
+                .arg(show_folder_.duration_ms / 1000.0, 0, 'f', 1);
+        if(show_folder_.tracks.size() > 1)
+        {
+            line += multi_projectors_
+                        ? tr(" — multi projector origins on")
+                        : tr(" — multi projector origins off (stacked)");
+        }
+        if(!show_folder_.info_notes.empty())
+        {
+            QString note = QString::fromStdString(show_folder_.info_notes);
+            note.replace(QLatin1Char('\n'), QLatin1Char(' '));
+            if(note.size() > 120)
+            {
+                note = note.left(117) + QStringLiteral("...");
+            }
+            line += QLatin1Char('\n') + note;
+        }
+        status_label_->setText(line);
         return;
     }
     if(!show_.error.empty())
@@ -628,6 +380,31 @@ void LaserVectorEffect::UpdateStatusLabel()
 
 const LaserFrame* LaserVectorEffect::CurrentFrame(float time) const
 {
+    if(use_show_folder_)
+    {
+        if(!show_folder_.ok())
+        {
+            return nullptr;
+        }
+        const float speed_mul = (GetSpeed() == 0) ? 0.0f : (static_cast<float>(GetSpeed()) / 100.0f);
+        double t_ms = static_cast<double>(std::max(0.0f, time)) * 1000.0 * static_cast<double>(speed_mul);
+        if(loop_ && show_folder_.duration_ms > 1.0)
+        {
+            t_ms = std::fmod(t_ms, show_folder_.duration_ms);
+            if(t_ms < 0.0)
+            {
+                t_ms += show_folder_.duration_ms;
+            }
+        }
+        show_frame_ = show_folder_.FrameAt(t_ms, static_cast<float>(fps_), scanner_filter_);
+        if(show_frame_.segments.empty() && show_frame_.dots.empty()
+           && show_frame_.points.empty())
+        {
+            return nullptr;
+        }
+        return &show_frame_;
+    }
+
     if(play_indices_.empty() || show_.frames.empty())
     {
         return nullptr;
@@ -658,246 +435,269 @@ const LaserFrame* LaserVectorEffect::CurrentFrame(float time) const
     return &show_.frames[play_indices_[idx]];
 }
 
-float LaserVectorEffect::EffectiveThickness(float intensity01, float dwell) const
+std::uint32_t LaserVectorEffect::PackNorm01Key(float n1, float n2, float n3)
 {
-    float mul = 1.0f;
-    const float dyn = std::max(1.0f, width_dynamics_);
-    if(intensity_widens_)
-    {
-        const float t = std::clamp(intensity01, 0.0f, 1.0f);
-        mul *= (1.0f + (dyn - 1.0f) * t);
-    }
-    if(dwell_widens_ && dwell > 1.0f)
-    {
-        // ~8–20 dwell samples is common at RING corners; soft log scale.
-        const float d = std::clamp(std::log2(1.0f + dwell) / 5.0f, 0.0f, 1.0f);
-        mul *= (1.0f + (dyn - 1.0f) * 0.75f * d);
-    }
-    return std::max(0.001f, beam_thickness_ * mul);
-}
-
-void LaserVectorEffect::MapMachineColour(float& r, float& g, float& b) const
-{
-    r = std::clamp(r, 0.0f, 1.0f);
-    g = std::clamp(g, 0.0f, 1.0f);
-    b = std::clamp(b, 0.0f, 1.0f);
-
-    switch(machine_profile_)
-    {
-        case MachineProfile::Rgb:
-            break;
-        case MachineProfile::Rgy:
-            // Classic RGY: no blue; yellow comes from R+G overlap.
-            b = 0.0f;
-            break;
-        case MachineProfile::Rgby:
-        {
-            // Dedicated yellow diode: pull yellow (high R+G, low B) off the mix toward pure yellow.
-            const float yellow = std::min(r, g) * (1.0f - b);
-            if(yellow > 0.05f)
-            {
-                r = std::min(1.0f, r + yellow * 0.35f);
-                g = std::min(1.0f, g + yellow * 0.45f);
-                b *= (1.0f - yellow * 0.6f);
-            }
-            break;
-        }
-        case MachineProfile::MonoGreen:
-        {
-            const float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-            r = 0.0f;
-            g = lum;
-            b = 0.0f;
-            break;
-        }
-        case MachineProfile::MonoWhite:
-        {
-            const float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-            r = g = b = lum;
-            break;
-        }
-        case MachineProfile::BeamPunch:
-        {
-            // Atmospheric beam look: crush mid greys, punch saturated primaries.
-            auto punch = [](float c) {
-                if(c < 0.12f)
-                {
-                    return 0.0f;
-                }
-                return std::pow(c, 0.65f);
-            };
-            r = punch(r);
-            g = punch(g);
-            b = punch(b);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
-float LaserVectorEffect::BeamPresence(float dist, float thickness) const
-{
-    const float t = std::max(0.001f, thickness);
-    if(dist >= t)
-    {
-        return 0.0f;
-    }
-    const float linear = 1.0f - (dist / t);
-    if(crisp_beams_)
-    {
-        // Hard core (~70% of radius), tiny edge — avoids grey halos that look like mud/white wash.
-        if(linear >= 0.30f)
-        {
-            return 1.0f;
-        }
-        return std::clamp(linear / 0.30f, 0.0f, 1.0f);
-    }
-    return linear;
-}
-
-RGBColor LaserVectorEffect::SampleLaserAtLocal01(float u, float v, float w, const LaserFrame& frame) const
-{
-    if(frame.segments.empty() && frame.dots.empty())
-    {
-        return ToRGBColor(0, 0, 0);
-    }
-
-    // Nearest shaft wins. Additive diode stacking + width dynamics painted every overlap white.
-    float best_d = 1.0e9f;
-    float best_presence = 0.0f;
-    float br = 0.0f, bg = 0.0f, bb = 0.0f;
-    bool hit = false;
-
-    const float ox = 0.5f;
-    const float oy = 0.5f;
-    const float oz = std::clamp(projector_depth_, 0.0f, 1.0f);
-
-    auto consider = [&](float d, float r, float g, float b, float thick) {
-        const float presence = BeamPresence(d, thick);
-        if(presence <= 0.0f)
-        {
-            return;
-        }
-        // Geometric nearest center — fat beams expand into black, they don't bury closer strokes.
-        if(d < best_d || (d == best_d && presence > best_presence))
-        {
-            MapMachineColour(r, g, b);
-            best_d = d;
-            best_presence = presence;
-            br = r;
-            bg = g;
-            bb = b;
-            hit = true;
-        }
+    const auto q = [](float v) -> std::uint32_t {
+        return static_cast<std::uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 1023.0f)) & 1023u;
     };
+    return (q(n1) << 20) | (q(n2) << 10) | q(n3);
+}
 
-    size_t seg_limit = frame.segments.size();
-    size_t dot_limit = frame.dots.size();
-    if(max_beams_ > 0)
+std::vector<int> LaserVectorEffect::ActiveProjectorTracks() const
+{
+    std::vector<int> tracks;
+    if(use_show_folder_ && !show_folder_.tracks.empty())
     {
-        const size_t cap = static_cast<size_t>(max_beams_);
-        // Prefer dots (sparkles) when capped; otherwise trim both proportionally.
-        if(!frame.dots.empty())
-        {
-            dot_limit = std::min(dot_limit, cap);
-            seg_limit = (dot_limit >= cap) ? 0 : std::min(seg_limit, cap - dot_limit);
-        }
-        else
-        {
-            seg_limit = std::min(seg_limit, cap);
-        }
+        tracks = show_folder_.tracks;
     }
-
-    if(projector_beams_)
+    else if(!show_.scanners.empty())
     {
-        for(size_t i = 0; i < seg_limit; ++i)
-        {
-            const LaserSegment& seg = frame.segments[i];
-            const float inten = std::max({seg.r, seg.g, seg.b});
-            const float thick = EffectiveThickness(inten, seg.dwell);
-            float fu0, fv0, fw0, fu1, fv1, fw1;
-            LaserToFarUv(seg.x0, seg.y0, fu0, fv0, fw0);
-            LaserToFarUv(seg.x1, seg.y1, fu1, fv1, fw1);
-            // One presence per stroke (closest of the fan rays) — don't add the same colour 3×.
-            const float d0 = DistPointRay01(u, v, w, ox, oy, oz, fu0, fv0, fw0);
-            const float d1 = DistPointRay01(u, v, w, ox, oy, oz, fu1, fv1, fw1);
-            const float dm = DistPointRay01(u, v, w, ox, oy, oz,
-                                            0.5f * (fu0 + fu1), 0.5f * (fv0 + fv1), 0.5f * (fw0 + fw1));
-            consider(std::min({d0, d1, dm}), seg.r, seg.g, seg.b, thick);
-        }
-        for(size_t i = 0; i < dot_limit; ++i)
-        {
-            const LaserDot& dot = frame.dots[i];
-            const float inten = std::max({dot.r, dot.g, dot.b});
-            const float thick = EffectiveThickness(inten, dot.dwell);
-            float fu, fv, fw;
-            LaserToFarUv(dot.x, dot.y, fu, fv, fw);
-            consider(DistPointRay01(u, v, w, ox, oy, oz, fu, fv, fw), dot.r, dot.g, dot.b, thick);
-        }
+        tracks = show_.scanners;
     }
     else
     {
-        const float lx = u * 2.0f - 1.0f;
-        const float ly = v * 2.0f - 1.0f;
-        const float lz = w * 2.0f - 1.0f;
-        for(size_t i = 0; i < seg_limit; ++i)
-        {
-            const LaserSegment& seg = frame.segments[i];
-            const float inten = std::max({seg.r, seg.g, seg.b});
-            const float thick = EffectiveThickness(inten, seg.dwell);
-            float d;
-            if(flatten_z_)
-            {
-                d = DistPointSegment2D(lx, ly, seg.x0, seg.y0, seg.x1, seg.y1);
-            }
-            else
-            {
-                d = DistPointSegment3D(lx, ly, lz, seg.x0, seg.y0, seg.z0, seg.x1, seg.y1, seg.z1);
-            }
-            consider(d, seg.r, seg.g, seg.b, thick);
-        }
-        for(size_t i = 0; i < dot_limit; ++i)
-        {
-            const LaserDot& dot = frame.dots[i];
-            const float inten = std::max({dot.r, dot.g, dot.b});
-            const float thick = EffectiveThickness(inten, dot.dwell);
-            float d;
-            if(flatten_z_)
-            {
-                const float ex = lx - dot.x;
-                const float ey = ly - dot.y;
-                d = std::sqrt(ex * ex + ey * ey);
-            }
-            else
-            {
-                const float ex = lx - dot.x;
-                const float ey = ly - dot.y;
-                const float ez = lz - dot.z;
-                d = std::sqrt(ex * ex + ey * ey + ez * ez);
-            }
-            consider(d, dot.r, dot.g, dot.b, thick);
-        }
+        tracks.push_back(0);
     }
-
-    if(!hit)
+    /* Keep only slots the GPU origin table can address. */
+    tracks.erase(std::remove_if(tracks.begin(), tracks.end(),
+                                [](int t) { return t < 0 || t >= kMaxProjectorTracks; }),
+                 tracks.end());
+    if(tracks.empty())
     {
-        return ToRGBColor(0, 0, 0);
+        tracks.push_back(0);
     }
-
-    const float bright = static_cast<float>(effect_brightness) / 100.0f;
-    // Crisp: full shaft colour. Soft: edge presence dims toward black (not toward white/grey mix).
-    const float gain = crisp_beams_ ? bright : (bright * best_presence);
-    return ToRGBColor(
-        static_cast<int>(std::clamp(br * gain, 0.0f, 1.0f) * 255.0f + 0.5f),
-        static_cast<int>(std::clamp(bg * gain, 0.0f, 1.0f) * 255.0f + 0.5f),
-        static_cast<int>(std::clamp(bb * gain, 0.0f, 1.0f) * 255.0f + 0.5f));
+    std::sort(tracks.begin(), tracks.end());
+    tracks.erase(std::unique(tracks.begin(), tracks.end()), tracks.end());
+    return tracks;
 }
 
-RGBColor LaserVectorEffect::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+void LaserVectorEffect::FillGpuParams(float* params, int stroke_count) const
 {
-    const LaserFrame* frame = CurrentFrame(time);
-    if(!frame)
+    const float depth = std::clamp(projector_depth_, 0.0f, 1.0f);
+    const float spread = std::clamp(projector_spread_, 0.0f, 1.0f);
+    params[0] = 0.5f;
+    params[1] = 0.5f;
+    params[2] = depth;
+    params[3] = beam_thickness_;
+    params[4] = width_dynamics_;
+    params[5] = show_beams_ ? 1.0f : 0.0f;
+    params[6] = crisp_beams_ ? 1.0f : 0.0f;
+    params[7] = intensity_widens_ ? 1.0f : 0.0f;
+    params[8] = dwell_widens_ ? 1.0f : 0.0f;
+    params[9] = static_cast<float>(stroke_count);
+    params[10] = static_cast<float>(static_cast<int>(machine_profile_));
+    params[11] = static_cast<float>(effect_brightness) / 100.0f;
+    params[12] = (max_beams_ > 0) ? static_cast<float>(max_beams_) : 0.0f;
+    params[13] = flatten_z_ ? 1.0f : 0.0f;
+    params[14] = show_graphic_ ? 1.0f : 0.0f;
+    params[15] = std::clamp(fog_, 0.0f, 1.0f);
+    params[16] = std::clamp(transparency_, 0.0f, 1.0f);
+    params[17] = std::clamp(beam_gain_, 0.0f, 1.0f);
+    params[18] = std::clamp(screen_, 0.0f, 1.0f);
+
+    const std::vector<int> tracks = ActiveProjectorTracks();
+    const bool multi = multi_projectors_ && tracks.size() > 1;
+    params[19] = multi ? 1.0f : 0.0f;
+
+    /* Default every Spur slot to the shared centre; overwrite active tracks evenly. */
+    for(int t = 0; t < kMaxProjectorTracks; ++t)
+    {
+        const int b = 20 + t * 3;
+        params[b] = 0.5f;
+        params[b + 1] = 0.5f;
+        params[b + 2] = depth;
+    }
+    const int n = static_cast<int>(tracks.size());
+    for(int i = 0; i < n; ++i)
+    {
+        const int t = tracks[static_cast<size_t>(i)];
+        const float u = (n <= 1) ? 0.5f : static_cast<float>(i) / static_cast<float>(n - 1);
+        const float x_full = 0.08f + 0.84f * u;
+        const float x = 0.5f + (x_full - 0.5f) * spread;
+        const int b = 20 + t * 3;
+        params[b] = x;
+        params[b + 1] = 0.5f;
+        params[b + 2] = depth;
+    }
+}
+
+int LaserVectorEffect::UploadGpuStrokeMedia(const LaserFrame& frame)
+{
+    const size_t seg_n = frame.segments.size();
+    const size_t dot_n = frame.dots.size();
+    size_t total = seg_n + dot_n;
+    if(total == 0)
+    {
+        volume_assist_.clearMediaTexture();
+        gpu_stroke_count_ = 0;
+        return 0;
+    }
+    if(total > static_cast<size_t>(kGpuMaxStrokes))
+    {
+        total = static_cast<size_t>(kGpuMaxStrokes);
+    }
+
+    /* width=3: xy ends | z ends | rgb+dwell — texelFetch ignores filter. */
+    QImage img(3, static_cast<int>(total), QImage::Format_RGBA8888);
+    img.fill(Qt::black);
+
+    auto encLaser = [](float v) -> unsigned char {
+        return static_cast<unsigned char>(
+            std::lround(std::clamp(0.5f + 0.5f * v, 0.0f, 1.0f) * 255.0f));
+    };
+    auto enc01 = [](float v) -> unsigned char {
+        return static_cast<unsigned char>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
+    };
+    auto writeStroke = [&](int row,
+                           float x0, float y0, float z0,
+                           float x1, float y1, float z1,
+                           float r, float g, float b, float dwell,
+                           int track) {
+        unsigned char* base = img.scanLine(row);
+        unsigned char* xy = base;
+        xy[0] = encLaser(x0);
+        xy[1] = encLaser(y0);
+        xy[2] = encLaser(x1);
+        xy[3] = encLaser(y1);
+        unsigned char* zz = base + 4;
+        zz[0] = encLaser(z0);
+        zz[1] = encLaser(z1);
+        /* Origin table covers Spur 0..11; clamp so texelFetch track matches params. */
+        zz[2] = static_cast<unsigned char>(std::clamp(track, 0, kMaxProjectorTracks - 1));
+        zz[3] = 0;
+        unsigned char* rgb = base + 8;
+        rgb[0] = enc01(r);
+        rgb[1] = enc01(g);
+        rgb[2] = enc01(b);
+        rgb[3] = enc01(std::clamp((dwell - 1.0f) / 15.0f, 0.0f, 1.0f));
+    };
+
+    auto strokeTrack = [&](int tagged) -> int {
+        /* ShowFolder tags Spur on each stroke; ILDA uses frame scanner head. */
+        if(use_show_folder_)
+        {
+            return tagged;
+        }
+        return frame.scanner;
+    };
+
+    size_t row = 0;
+    const size_t seg_limit = std::min(seg_n, total);
+    for(size_t i = 0; i < seg_limit; ++i)
+    {
+        const LaserSegment& s = frame.segments[i];
+        writeStroke(static_cast<int>(row),
+                    s.x0, s.y0, s.z0, s.x1, s.y1, s.z1,
+                    s.r, s.g, s.b, s.dwell,
+                    strokeTrack(s.track));
+        ++row;
+    }
+    for(size_t i = 0; i < dot_n && row < total; ++i)
+    {
+        const LaserDot& d = frame.dots[i];
+        writeStroke(static_cast<int>(row),
+                    d.x, d.y, d.z, d.x, d.y, d.z,
+                    d.r, d.g, d.b, d.dwell,
+                    strokeTrack(d.track));
+        ++row;
+    }
+
+    volume_assist_.setMediaTexture(img, false);
+    gpu_stroke_count_ = static_cast<int>(row);
+    return gpu_stroke_count_;
+}
+
+QVector3D LaserVectorEffect::SampleGpuField01(float n1, float n2, float n3)
+{
+    const std::uint32_t key = PackNorm01Key(n1, n2, n3);
+    const auto it = true_sample_map_.find(key);
+    if(it != true_sample_map_.end())
+    {
+        return it->second;
+    }
+    return volume_assist_.sampleTrue01(n1, n2, n3);
+}
+
+void LaserVectorEffect::PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& /*grid*/)
+{
+    true_sample_map_.clear();
+
+    const LaserFrame* frame = CurrentFrame(time_sec);
+    if(!frame || (frame->segments.empty() && frame->dots.empty()))
+    {
+        volume_assist_.clearMediaTexture();
+        gpu_stroke_count_ = 0;
+        return;
+    }
+
+    const int strokes = UploadGpuStrokeMedia(*frame);
+    float params[SpatialVolumeFieldEngine::kMaxParams] = {};
+    FillGpuParams(params, strokes);
+    volume_assist_.prepareProgram(render_sequence, time_sec, params, kGpuParamCount);
+}
+
+void LaserVectorEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
+                                                 int count,
+                                                 float /*time*/,
+                                                 const GridContext3D& grid)
+{
+    true_sample_map_.clear();
+    if(!sample_xyz || count <= 0 || !volume_assist_.isAvailable() || gpu_stroke_count_ <= 0)
+    {
+        return;
+    }
+
+    std::unordered_map<std::uint32_t, int> unique_index;
+    unique_index.reserve(static_cast<size_t>(std::max(16, count / 2)));
+    std::vector<float> n01;
+    n01.reserve(static_cast<size_t>(count) * 3u);
+    for(int i = 0; i < count; ++i)
+    {
+        const float x = sample_xyz[static_cast<size_t>(i) * 3u + 0u];
+        const float y = sample_xyz[static_cast<size_t>(i) * 3u + 1u];
+        const float z = sample_xyz[static_cast<size_t>(i) * 3u + 2u];
+        float n1 = 0.5f, n2 = 0.5f, n3 = 0.5f;
+        if(!SampleVolumeLocalUv01(x, y, z, grid, &n1, &n2, &n3))
+        {
+            continue;
+        }
+        const std::uint32_t key = PackNorm01Key(n1, n2, n3);
+        if(unique_index.find(key) != unique_index.end())
+        {
+            continue;
+        }
+        const int idx = static_cast<int>(unique_index.size());
+        unique_index.emplace(key, idx);
+        n01.push_back(n1);
+        n01.push_back(n2);
+        n01.push_back(n3);
+    }
+    const int unique = static_cast<int>(unique_index.size());
+    if(unique <= 0)
+    {
+        return;
+    }
+
+    std::vector<float> rgb(static_cast<size_t>(unique) * 3u, 0.0f);
+    if(!volume_assist_.evaluateAtPoints(n01.data(), unique, rgb.data()))
+    {
+        return;
+    }
+    true_sample_map_.reserve(static_cast<size_t>(unique));
+    for(const auto& kv : unique_index)
+    {
+        const int i = kv.second;
+        /* volumeMain packs B,G,R — convert to display R,G,B for LED ToRGBColor. */
+        true_sample_map_[kv.first] = QVector3D(
+            rgb[static_cast<size_t>(i) * 3u + 2u],
+            rgb[static_cast<size_t>(i) * 3u + 1u],
+            rgb[static_cast<size_t>(i) * 3u + 0u]);
+    }
+}
+
+RGBColor LaserVectorEffect::CalculateColorGrid(float x, float y, float z, float /*time*/, const GridContext3D& grid)
+{
+    if(gpu_stroke_count_ <= 0)
     {
         return ToRGBColor(0, 0, 0);
     }
@@ -908,53 +708,37 @@ RGBColor LaserVectorEffect::CalculateColorGrid(float x, float y, float z, float 
         return ToRGBColor(0, 0, 0);
     }
 
-    return SampleLaserAtLocal01(u, v, w, *frame);
+    const QVector3D samp = SampleGpuField01(u, v, w);
+    return ToRGBColor(
+        static_cast<int>(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
+        static_cast<int>(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
+        static_cast<int>(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));
 }
 
 bool LaserVectorEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
                                                       const GridContext3D& grid,
-                                                      float time_sec)
+                                                      float /*time_sec*/)
 {
-    const LaserFrame* frame = CurrentFrame(time_sec);
-    if(!frame || (frame->segments.empty() && frame->dots.empty()))
+    if(gpu_stroke_count_ <= 0)
     {
         return false;
     }
 
-    constexpr int kAtlasN = 24;
-    const int n = kAtlasN;
-    const int w = n;
-    const int h = n * n;
-    std::vector<unsigned char> rgba((size_t)w * (size_t)h * 4u, 0);
-
-    for(int slice = 0; slice < n; ++slice)
+    std::vector<unsigned char> rgba;
+    int n = 0;
+    if(!volume_assist_.exportAtlasRgba8(rgba, n)
+       || n < 2
+       || rgba.size() < static_cast<size_t>(n) * static_cast<size_t>(n) * static_cast<size_t>(n) * 4u)
     {
-        const float wz = (static_cast<float>(slice) + 0.5f) / static_cast<float>(n);
-        for(int y = 0; y < n; ++y)
-        {
-            const float wy = (static_cast<float>(y) + 0.5f) / static_cast<float>(n);
-            const int row = slice * n + y;
-            unsigned char* row_ptr = rgba.data() + ((size_t)row * (size_t)w) * 4u;
-            for(int x = 0; x < n; ++x)
-            {
-                const float wx = (static_cast<float>(x) + 0.5f) / static_cast<float>(n);
-                const RGBColor c = SampleLaserAtLocal01(wx, wy, wz, *frame);
-                unsigned char* px = row_ptr + (size_t)x * 4u;
-                /* FinishRgb swaps texel B↔R (volume atlases store OpenRGB 0x00BBGGRR as rgb).
-                   Pack B,G,R here so the overlay matches CalculateColorGrid / controllers. */
-                px[0] = static_cast<unsigned char>((c >> 16) & 0xFF); // B
-                px[1] = static_cast<unsigned char>((c >> 8) & 0xFF);  // G
-                px[2] = static_cast<unsigned char>(c & 0xFF);         // R
-                px[3] = 255;
-            }
-        }
+        return false;
     }
 
     out = GpuRoomGridOverlayLayer{};
     out.atlas_tex = 0;
     out.atlas_rgba = std::move(rgba);
     out.atlas_n = n;
-    out.brightness = 1.0f; /* already applied in SampleLaserAtLocal01 */
+    out.atlas_nearest = true; /* no LINEAR smear — spokes must stay saturated */
+    out.brightness = 1.0f;
     out.finish_mode = GpuRoomGridOverlayLayer::FinishRgb;
     out.sample_room = false;
     out.volume_tools = effect_volume_tools_unlocked;
@@ -967,18 +751,18 @@ bool LaserVectorEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& 
     out.origin[0] = origin.x;
     out.origin[1] = origin.y;
     out.origin[2] = origin.z;
-    out.room_min[0] = grid.min_x;
-    out.room_min[1] = grid.min_y;
-    out.room_min[2] = grid.min_z;
-    out.room_max[0] = grid.max_x;
-    out.room_max[1] = grid.max_y;
-    out.room_max[2] = grid.max_z;
 
     float hx = 1.0f, hy = 1.0f, hz = 1.0f;
     GetVolumeHalfExtents(grid, hx, hy, hz);
     out.half_ext[0] = hx;
     out.half_ext[1] = hy;
     out.half_ext[2] = hz;
+    out.room_min[0] = grid.min_x;
+    out.room_min[1] = grid.min_y;
+    out.room_min[2] = grid.min_z;
+    out.room_max[0] = grid.max_x;
+    out.room_max[1] = grid.max_y;
+    out.room_max[2] = grid.max_z;
 
     Rotation3D rot;
     rot.x = effect_rotation_pitch;
@@ -998,8 +782,15 @@ nlohmann::json LaserVectorEffect::SaveSettings() const
     j["fps"] = fps_;
     j["flatten_z"] = flatten_z_;
     j["loop"] = loop_;
-    j["projector_beams"] = projector_beams_;
+    j["show_beams"] = show_beams_;
+    j["show_graphic"] = show_graphic_;
     j["projector_depth"] = projector_depth_;
+    j["multi_projectors"] = multi_projectors_;
+    j["projector_spread"] = projector_spread_;
+    j["fog"] = fog_;
+    j["transparency"] = transparency_;
+    j["beam_gain"] = beam_gain_;
+    j["screen"] = screen_;
     j["max_beams"] = max_beams_;
     j["join_lit_path"] = join_lit_path_;
     j["scanner_filter"] = scanner_filter_;
@@ -1030,13 +821,41 @@ void LaserVectorEffect::LoadSettings(const nlohmann::json& settings)
     {
         loop_ = settings["loop"].get<bool>();
     }
-    if(settings.contains("projector_beams") && settings["projector_beams"].is_boolean())
+    if(settings.contains("show_beams") && settings["show_beams"].is_boolean())
     {
-        projector_beams_ = settings["projector_beams"].get<bool>();
+        show_beams_ = settings["show_beams"].get<bool>();
+    }
+    if(settings.contains("show_graphic") && settings["show_graphic"].is_boolean())
+    {
+        show_graphic_ = settings["show_graphic"].get<bool>();
     }
     if(settings.contains("projector_depth") && settings["projector_depth"].is_number())
     {
         projector_depth_ = std::clamp(settings["projector_depth"].get<float>(), 0.0f, 1.0f);
+    }
+    if(settings.contains("multi_projectors") && settings["multi_projectors"].is_boolean())
+    {
+        multi_projectors_ = settings["multi_projectors"].get<bool>();
+    }
+    if(settings.contains("projector_spread") && settings["projector_spread"].is_number())
+    {
+        projector_spread_ = std::clamp(settings["projector_spread"].get<float>(), 0.0f, 1.0f);
+    }
+    if(settings.contains("fog") && settings["fog"].is_number())
+    {
+        fog_ = std::clamp(settings["fog"].get<float>(), 0.0f, 1.0f);
+    }
+    if(settings.contains("transparency") && settings["transparency"].is_number())
+    {
+        transparency_ = std::clamp(settings["transparency"].get<float>(), 0.0f, 1.0f);
+    }
+    if(settings.contains("beam_gain") && settings["beam_gain"].is_number())
+    {
+        beam_gain_ = std::clamp(settings["beam_gain"].get<float>(), 0.0f, 1.0f);
+    }
+    if(settings.contains("screen") && settings["screen"].is_number())
+    {
+        screen_ = std::clamp(settings["screen"].get<float>(), 0.0f, 1.0f);
     }
     if(settings.contains("max_beams") && settings["max_beams"].is_number_integer())
     {
@@ -1081,7 +900,7 @@ void LaserVectorEffect::LoadSettings(const nlohmann::json& settings)
         // Fail closed on absurd path strings from settings JSON.
         if(!raw.empty() && raw.size() <= 4096u)
         {
-            LoadIldPath(QString::fromStdString(raw));
+            LoadLaserPath(QString::fromStdString(raw));
         }
     }
     else
@@ -1099,6 +918,26 @@ void LaserVectorEffect::LoadSettings(const nlohmann::json& settings)
     if(projector_depth_row_)
     {
         projector_depth_row_->syncSpinValue(projector_depth_);
+    }
+    if(projector_spread_row_)
+    {
+        projector_spread_row_->syncSpinValue(projector_spread_);
+    }
+    if(fog_row_)
+    {
+        fog_row_->syncSpinValue(fog_);
+    }
+    if(transparency_row_)
+    {
+        transparency_row_->syncSpinValue(transparency_);
+    }
+    if(beam_gain_row_)
+    {
+        beam_gain_row_->syncSpinValue(beam_gain_);
+    }
+    if(screen_row_)
+    {
+        screen_row_->syncSpinValue(screen_);
     }
     if(fps_row_)
     {
@@ -1123,9 +962,21 @@ void LaserVectorEffect::LoadSettings(const nlohmann::json& settings)
         }
         machine_combo_->setCurrentIndex(idx);
     }
-    if(projector_check_)
+    if(beam_check_)
     {
-        projector_check_->setChecked(projector_beams_);
+        beam_check_->setChecked(show_beams_);
+    }
+    if(graphic_check_)
+    {
+        graphic_check_->setChecked(show_graphic_);
+    }
+    if(multi_projectors_check_)
+    {
+        multi_projectors_check_->setChecked(multi_projectors_);
+    }
+    if(projector_spread_row_)
+    {
+        projector_spread_row_->setEnabled(multi_projectors_);
     }
     if(join_path_check_)
     {

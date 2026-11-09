@@ -140,6 +140,7 @@ uniform sampler2D u_atlas1;
 uniform sampler2D u_atlas2;
 uniform sampler2D u_atlas3;
 uniform int u_atlas_n[4];
+uniform int u_atlas_nearest[4];
 uniform int u_blend[4];
 uniform int u_sample_room[4];
 uniform int u_volume_tools[4];
@@ -164,9 +165,19 @@ float axis01(float v, float lo, float hi)
     return clamp((v - lo) / d, 0.0, 1.0);
 }
 
-vec3 sampleAtlas(sampler2D atlas, int n, vec3 p01)
+vec3 sampleAtlas(sampler2D atlas, int n, vec3 p01, int nearest)
 {
     float nf = float(max(n, 2));
+    if(nearest != 0)
+    {
+        /* Snap to voxel centers — keeps thin laser shafts from greying into fog. */
+        float ix = min(floor(clamp(p01.x, 0.0, 1.0) * nf), nf - 1.0);
+        float iy = min(floor(clamp(p01.y, 0.0, 1.0) * nf), nf - 1.0);
+        float iz = min(floor(clamp(p01.z, 0.0, 1.0) * nf), nf - 1.0);
+        float u = (ix + 0.5) / nf;
+        float v = (iz * nf + iy + 0.5) / (nf * nf);
+        return texture(atlas, vec2(u, v)).rgb;
+    }
     float fx = clamp(p01.x, 0.0, 1.0) * (nf - 1.0);
     float fy = clamp(p01.y, 0.0, 1.0) * (nf - 1.0);
     float fz = clamp(p01.z, 0.0, 1.0) * (nf - 1.0);
@@ -325,11 +336,12 @@ vec3 layerColor(int i, vec3 world)
     {
         return vec3(0.0);
     }
+    int nearest = u_atlas_nearest[i];
     vec3 samp;
-    if(i == 0) samp = sampleAtlas(u_atlas0, u_atlas_n[0], p01);
-    else if(i == 1) samp = sampleAtlas(u_atlas1, u_atlas_n[1], p01);
-    else if(i == 2) samp = sampleAtlas(u_atlas2, u_atlas_n[2], p01);
-    else samp = sampleAtlas(u_atlas3, u_atlas_n[3], p01);
+    if(i == 0) samp = sampleAtlas(u_atlas0, u_atlas_n[0], p01, nearest);
+    else if(i == 1) samp = sampleAtlas(u_atlas1, u_atlas_n[1], p01, nearest);
+    else if(i == 2) samp = sampleAtlas(u_atlas2, u_atlas_n[2], p01, nearest);
+    else samp = sampleAtlas(u_atlas3, u_atlas_n[3], p01, nearest);
     return applyFinish(i, samp) * u_layer_brightness[i];
 }
 
