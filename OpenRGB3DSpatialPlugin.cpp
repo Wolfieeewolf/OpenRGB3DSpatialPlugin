@@ -5,6 +5,7 @@
 #include "FolderVolumeEffect.h"
 #include "PlayerEngines.h"
 #include "Game/GameTelemetryBridge.h"
+#include "Game/GameLightingBridge.h"
 #include "ResourceManagerCallback.h"
 #include "ProfileManager.h"
 
@@ -75,6 +76,13 @@ void OpenRGB3DSpatialPlugin::Load(OpenRGBPluginAPIInterface* plugin_api_ptr)
         game_telemetry_bridge = std::make_unique<GameTelemetryBridge>();
     }
     game_telemetry_bridge->Register(APIPointer);
+
+    if(!game_lighting_bridge)
+    {
+        game_lighting_bridge = std::make_unique<GameLightingBridge>();
+    }
+    game_lighting_bridge->Register(APIPointer);
+
     RegisterFolderVolumeEffects();
     RegisterPlayerEngines();
 
@@ -98,6 +106,12 @@ void OpenRGB3DSpatialPlugin::Unload()
     {
         game_telemetry_bridge->Unregister(APIPointer);
         game_telemetry_bridge.reset();
+    }
+
+    if(game_lighting_bridge)
+    {
+        game_lighting_bridge->Unregister(APIPointer);
+        game_lighting_bridge.reset();
     }
 
     if(ui)

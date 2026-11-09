@@ -10,6 +10,7 @@
 #include "RoomSampleFrameShmReader.h"
 #include "RoomSampleConfigPublisher.h"
 #include "RoomSampleFrameProtocol.h"
+#include "WinsockLifetime.h"
 #include "PluginLog.h"
 #include <vector>
 #include <chrono>
@@ -179,24 +180,21 @@ void GameTelemetryBridge::StartUdpListener()
         return;
     }
 
-#ifdef _WIN32
-    WSADATA wsa_data;
-    if(WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
+    if(!WinsockLifetime::Acquire())
     {
         LOG_ERROR("[3DSpatial] game telemetry UDP: WinSock init failed");
         return;
     }
-#endif
 
     int fd = (int)socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if(fd < 0)
     {
 #ifdef _WIN32
         LOG_ERROR("[3DSpatial] game telemetry UDP: socket() failed (WSA error %d)", (int)WSAGetLastError());
-        WSACleanup();
 #else
         LOG_ERROR("[3DSpatial] game telemetry UDP: socket() failed (errno %d)", errno);
 #endif
+        WinsockLifetime::Release();
         return;
     }
 
@@ -219,13 +217,13 @@ void GameTelemetryBridge::StartUdpListener()
         LOG_ERROR("[3DSpatial] game telemetry UDP: bind failed on 127.0.0.1:%u (WSA error %d, port busy or blocked?)",
                   (unsigned int)kGameUdpPort,
                   (int)WSAGetLastError());
-        WSACleanup();
 #else
         LOG_ERROR("[3DSpatial] game telemetry UDP: bind failed on 127.0.0.1:%u (errno %d, port busy?)",
                   (unsigned int)kGameUdpPort,
                   errno);
 #endif
         CloseSocketFd(fd);
+        WinsockLifetime::Release();
         return;
     }
 
@@ -250,9 +248,7 @@ void GameTelemetryBridge::StopUdpListener()
         udp_thread.join();
     }
 
-#ifdef _WIN32
-    WSACleanup();
-#endif
+    WinsockLifetime::Release();
 }
 
 void GameTelemetryBridge::UdpListenLoop()

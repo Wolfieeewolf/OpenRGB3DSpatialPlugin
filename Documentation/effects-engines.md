@@ -113,6 +113,8 @@ Content: `movie-sync/effects/`. Sidecars beside the video.
 
 Minecraft under library category **Game**. Bridge mod sources: `integrations/minecraft/` (jar goes in Minecraft’s mods folder).
 
+**Game wrappers** (Chroma / similar SDK proxies): UDP **9877** → `GameLightingBridge` → **Game wrapper capture**. Shims live in `tools/game_wrappers/`; see [`GAME_WRAPPERS.md`](GAME_WRAPPERS.md). Telemetry remains on **9876**.
+
 ## Quick chooser
 
 ```text
@@ -124,6 +126,7 @@ Desktop / monitor glow                → Ambilight
 Keyboard / HID waves                  → Reactive
 Film sidecar cues                     → Movie Sync
 Minecraft Fabric telemetry            → Game
+Chroma / SDK proxy capture            → Game (Game Wrappers)
 Timed trigger actions                 → Triggers (triggers/effects)
 Film looks                            → Movie Sync (movie-sync/effects)
 ```

@@ -22,7 +22,7 @@ Flag **split** = over ~1k lines *and* a confirmed natural seam — not crumbs fo
 | `engines/screen-mirror` | Ambilight capture → room map |
 | `engines/audio` | Capture + FFT + audio-reactive helpers |
 | `engines/reactive` | HID/key reactive effect + input session |
-| `engines/game` | Minecraft effects + SHM telemetry bridge + Fabric mod sources |
+| `engines/game` | Minecraft effects + SHM telemetry bridge + game-wrapper lighting (UDP 9877) + Fabric mod sources |
 | `engines/movie-sync` | Movie Sync effect / catalog / HTTP / cue runtime |
 | `engines/triggers` | Trigger sources + binding + runtime |
 | `engines/actions` | Action pack player / applier / script (calls field engines) |
@@ -159,7 +159,11 @@ ui/                 ← DONE phase 9 (affinity folders)
 | Path | Role | Merge | Notes |
 |------|------|-------|-------|
 | `engines/game/Minecraft/**` | Health/Hunger/Air/Dura/Damage/Ambilight/… | parked deep-pass | |
-| `engines/game/Game/GameTelemetryBridge.*` | Plugin↔SHM | keep | |
+| `engines/game/Game/GameTelemetryBridge.*` | Plugin↔SHM / UDP 9876 | keep | |
+| `engines/game/Game/GameLightingBridge.*` | Wrapper UDP 9877 | keep | |
+| `engines/game/Game/GameLightingFormat.h` | GW01 frame layout | keep | |
+| `engines/game/Game/WinsockLifetime.*` | Shared WSAStartup | keep | |
+| `engines/game/GameWrappers/*` | Game wrapper capture effect | keep | |
 | `engines/game/Game/RoomSampleFrameProtocol.h` | Frame layout | keep | |
 | `engines/game/Game/RoomSampleFrameShmReader.*` | SHM read | keep | |
 | `engines/game/Game/RoomSampleConfigPublisher.*` | Config → mod | keep | |

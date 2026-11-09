@@ -1,0 +1,18 @@
+LIBRARY RazerChromaSDK64
+
+EXPORTS
+    Init
+    InitSDK
+    UnInit
+    CreateEffect
+    CreateKeyboardEffect
+    CreateMouseEffect
+    CreateHeadsetEffect
+    CreateMousepadEffect
+    CreateKeypadEffect
+    CreateChromaLinkEffect
+    DeleteEffect
+    SetEffect
+    RegisterEventNotification
+    UnregisterEventNotification
+    QueryDevice

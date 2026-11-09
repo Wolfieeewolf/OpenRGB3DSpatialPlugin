@@ -176,10 +176,15 @@ HEADERS += \
     shared/utils/QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
     engines/game/Game/GameTelemetryBridge.h \
+    engines/game/Game/GameLightingBridge.h \
+    engines/game/Game/GameLightingFormat.h \
+    engines/game/Game/WinsockLifetime.h \
     engines/game/Game/RoomSampleFrameProtocol.h \
     engines/game/Game/RoomSampleShmPaths.h \
     engines/game/Game/RoomSampleFrameShmReader.h \
     engines/game/Game/RoomSampleConfigPublisher.h \
+    engines/game/GameWrappers/GameWrapperCapture.h \
+    engines/game/GameWrappers/GameWrapperCaptureEffect3D.h \
     shared/SpatialSamplers/SpatialBasisUtils.h \
     shared/SpatialSamplers/SpatialLayerCore.h \
     shared/SpatialSamplers/RoomSampleMapping.h \
@@ -378,8 +383,12 @@ SOURCES += \
     engines/screen-mirror/ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
     engines/game/Game/GameTelemetryBridge.cpp \
+    engines/game/Game/GameLightingBridge.cpp \
+    engines/game/Game/WinsockLifetime.cpp \
     engines/game/Game/RoomSampleFrameShmReader.cpp \
     engines/game/Game/RoomSampleConfigPublisher.cpp \
+    engines/game/GameWrappers/GameWrapperCapture.cpp \
+    engines/game/GameWrappers/GameWrapperCaptureEffect3D.cpp \
     shared/SpatialSamplers/SpatialLayerCore.cpp \
     shared/SpatialSamplers/RoomSampleMapping.cpp \
     engines/game/Minecraft/MinecraftGame.cpp \
