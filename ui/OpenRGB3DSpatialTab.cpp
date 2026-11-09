@@ -151,6 +151,7 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
     effect_running = false;
     SyncScreenCaptureSession();
     SyncReactiveInputSession();
+    SyncControllerTiltSession();
 
     SavePluginUiSettings();
 
@@ -845,6 +846,7 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     effect_running = false;
     SyncScreenCaptureSession();
     SyncReactiveInputSession();
+    SyncControllerTiltSession();
 
     if(current_effect_ui)
     {

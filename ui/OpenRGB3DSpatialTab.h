@@ -366,6 +366,8 @@ private:
     void SyncScreenCaptureSession();
     bool PlaybackUsesReactive() const;
     void SyncReactiveInputSession();
+    bool PlaybackUsesControllerTorch() const;
+    void SyncControllerTiltSession();
     void UpdateAudioPanelVisibility();
     bool IsAudioEffectClass(const std::string& class_name) const;
     void PopulateEffectLibraryCategories();

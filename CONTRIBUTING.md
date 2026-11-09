@@ -160,6 +160,10 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 ## Game / Minecraft and similar effects
 
 - Telemetry (UDP on localhost for pose/vitals/damage) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
+- **Controller tilt / motion:** `Input/ControllerTiltManager` is the single place for motion devices (Wii Remote first on this branch). Effects such as **Controller Torch** consume that API only — add new pads there, not inside each effect.
+  - **Wii Remote:** HID via **hidapi** (Nintendo VID `0x057E`, PID `0x0306` / `0x0330`). Report `0x37` = buttons + accel + IR + MotionPlus. Mayflash sensor bar is IR LEDs only; DolphinBar **mode 4** (or OS Bluetooth pairing) exposes the remote as HID.
+  - **Windows writes (DolphinBar):** follow [jloehr/Wiimote-HIDAPI](https://github.com/jloehr/Wiimote-HIDAPI) — try `hid_write`, fall back to `hid_send_output_report` (`HidD_SetOutputReport`). Do **not** install the [HID-Wiimote](https://github.com/jloehr/HID-Wiimote) kernel **gamepad** driver while using this plugin; it replaces raw Nintendo reports.
+  - **Linux build:** `libhidapi-dev` (pkg-config `hidapi-hidraw` preferred). Close Dolphin / other exclusive Wiimote openers if HID open fails.
 - **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room Ambilight**. Room Ambilight colours come from the Fabric mod under **`integrations/minecraft/`** over **sparse cubemap SHM** (LED texels only; no dense/LZ4 dual path), not UDP colour streams. Treat the bridge as **vanilla-shaped alpha** — modpacks / texture packs / HD UV are largely untested (stutter and breakage expected).
 - Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
 

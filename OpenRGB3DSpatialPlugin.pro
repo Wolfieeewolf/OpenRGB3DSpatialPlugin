@@ -331,6 +331,8 @@ HEADERS += \
     Input/ReactiveInputTypes.h \
     Input/ReactiveKeyMap.h \
     Input/ReactiveInputManager.h \
+    Input/ControllerTiltManager.h \
+    Input/ControllerTiltTypes.h \
     Effects3D/Reactive/Reactive.h \
     Effects3D/Plasma/Plasma.h \
     Effects3D/Spiral/Spiral.h \
@@ -350,6 +352,7 @@ HEADERS += \
     Effects3D/ScreenMirror/ScreenMirrorWaveMath.h \
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
+    Effects3D/ControllerTorch/ControllerTorch.h \
     Effects3D/TextureProjection/TextureProjection.h \
     Effects3D/OmniShapeTexture/OmniShapeTexture.h \
     Effects3D/ShellPattern/ShellPattern.h \
@@ -523,6 +526,7 @@ SOURCES += \
     Effects3D/Reactive/Reactive.cpp \
     Input/ReactiveKeyMap.cpp \
     Input/ReactiveInputManager.cpp \
+    Input/ControllerTiltManager.cpp \
     Effects3D/PulseRing/PulseRing.cpp \
     Effects3D/SurfaceAmbient/SurfaceAmbient.cpp \
     Effects3D/Starfield/Starfield.cpp \
@@ -533,6 +537,7 @@ SOURCES += \
     Effects3D/ScreenMirror/ScreenMirror_Render.cpp \
     Effects3D/ScreenMirror/ScreenMirror_Settings.cpp \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.cpp \
+    Effects3D/ControllerTorch/ControllerTorch.cpp \
     Effects3D/TextureProjection/TextureProjection.cpp \
     Effects3D/OmniShapeTexture/OmniShapeTexture.cpp \
     Effects3D/ShellPattern/ShellPattern.cpp \
@@ -549,6 +554,32 @@ win32:LIBS += \
     -lOle32 -lOleAut32 -lAvrt -lMmdevapi -lPropsys -luuid \
     -lgdi32 -luser32 -ld3d11 -ldxgi -ld3dcompiler \
     -lws2_32 -lopengl32 -lWtsapi32
+
+# ControllerTilt Wii Remote: raw HID via hidapi (Windows + Linux).
+# Prefer hidapi-hotplug headers (hid_send_output_report) for DolphinBar writes —
+# see https://github.com/jloehr/Wiimote-HIDAPI (Julian Löhr).
+win32 {
+    INCLUDEPATH = $$PWD/OpenRGB/dependencies/hidapi-hotplug-win/include $$INCLUDEPATH
+    contains(QT_ARCH, x86_64)|contains(QT_ARCH, amd64) {
+        LIBS += -L$$PWD/OpenRGB/dependencies/hidapi-hotplug-win/x64 -lhidapi-hotplug
+    } else {
+        LIBS += -L$$PWD/OpenRGB/dependencies/hidapi-hotplug-win/x86 -lhidapi-hotplug
+    }
+}
+
+unix {
+    CONFIG += link_pkgconfig
+    packagesExist(hidapi-hidraw) {
+        PKGCONFIG += hidapi-hidraw
+    } else:packagesExist(hidapi-libusb) {
+        PKGCONFIG += hidapi-libusb
+    } else:packagesExist(hidapi) {
+        PKGCONFIG += hidapi
+    } else {
+        warning("ControllerTilt: hidapi not found via pkg-config — Wii Remote motion disabled")
+        DEFINES += CONTROLLER_TILT_NO_HIDAPI
+    }
+}
 
 win32:CONFIG(debug, debug|release): DESTDIR = debug
 win32:CONFIG(release, debug|release): DESTDIR = release
