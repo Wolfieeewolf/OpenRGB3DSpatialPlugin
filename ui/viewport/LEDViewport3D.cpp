@@ -125,6 +125,11 @@ LEDViewport3D::~LEDViewport3D()
         delete screen_preview_refresh_timer;
         screen_preview_refresh_timer = nullptr;
     }
+    if(mesh_anim_timer_)
+    {
+        mesh_anim_timer_->stop();
+        mesh_anim_timer_ = nullptr;
+    }
     if(ensureGlCurrent())
     {
         destroyViewportGlResources();
@@ -800,7 +805,13 @@ void LEDViewport3D::initViewportShaderPrograms()
     const bool ok_color = compile_one("unlit_color", &ViewportShaders::CompileUnlitColor, gl_prog_unlit_color_);
     const bool ok_point = compile_one("unlit_point", &ViewportShaders::CompileUnlitPoint, gl_prog_unlit_point_);
     const bool ok_tex = compile_one("textured_unlit", &ViewportShaders::CompileTexturedUnlit, gl_prog_textured_unlit_);
-    viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex;
+    const bool ok_mesh = compile_one("mesh_unlit", &ViewportShaders::CompileMeshUnlit, gl_prog_mesh_unlit_);
+    const bool ok_depth = compile_one("mesh_depth", &ViewportShaders::CompileMeshDepth, gl_prog_mesh_depth_);
+    const bool ok_bb = compile_one("bloom_bright", &ViewportShaders::CompileBloomBright, gl_prog_bloom_bright_);
+    const bool ok_bl = compile_one("bloom_blur", &ViewportShaders::CompileBloomBlur, gl_prog_bloom_blur_);
+    const bool ok_bc = compile_one("bloom_composite", &ViewportShaders::CompileBloomComposite, gl_prog_bloom_composite_);
+    viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex && ok_mesh && ok_depth
+                                   && ok_bb && ok_bl && ok_bc;
     if(viewport_shader_programs_ok_)
     {
         LOG_INFO("[3DSpatial] Viewport GLSL 410 programs ready");
@@ -826,6 +837,10 @@ void LEDViewport3D::destroyViewportGlResources()
     display_plane_batch_.Destroy();
     scene_prop_faces_batch_.Destroy();
     scene_prop_edges_batch_.Destroy();
+    mesh_anim_textured_batch_.Destroy();
+    ClearMeshAnimTextures();
+    ClearMeshAnimGpuCache();
+    DestroyBloomResources();
     gizmo_lines_batch_.Destroy();
     gizmo_tris_batch_.Destroy();
     room_boundary_cached_max_x_ = -1.0f;
@@ -834,6 +849,12 @@ void LEDViewport3D::destroyViewportGlResources()
     gl_prog_unlit_color_.Destroy();
     gl_prog_unlit_point_.Destroy();
     gl_prog_textured_unlit_.Destroy();
+    gl_prog_mesh_unlit_.Destroy();
+    gl_prog_mesh_depth_.Destroy();
+    gl_prog_bloom_bright_.Destroy();
+    gl_prog_bloom_blur_.Destroy();
+    gl_prog_bloom_composite_.Destroy();
+    mesh_shadow_fbo_.reset();
     viewport_shader_programs_ok_ = false;
 }
 
@@ -864,9 +885,29 @@ void LEDViewport3D::abandonViewportGlHandles()
     display_plane_textures.clear();
     display_plane_tex_upload_state.clear();
     display_plane_tex_params_set.clear();
+    /* Context may be gone — drop handles without glDelete. */
+    mesh_anim_textures_.clear();
+    for(MeshAnimGpuPart& part : mesh_anim_gpu_.parts)
+    {
+        part.batch.Abandon();
+    }
+    mesh_anim_gpu_ = MeshAnimGpuCache{};
+    mesh_anim_textured_batch_.Abandon();
+    bloom_fullscreen_batch_.Abandon();
+    bloom_scene_fbo_.reset();
+    bloom_bright_fbo_.reset();
+    bloom_blur_fbo_.reset();
+    mesh_shadow_fbo_.reset();
+    bloom_fb_w_ = 0;
+    bloom_fb_h_ = 0;
     gl_prog_unlit_color_.Destroy();
     gl_prog_unlit_point_.Destroy();
     gl_prog_textured_unlit_.Destroy();
+    gl_prog_mesh_unlit_.Destroy();
+    gl_prog_mesh_depth_.Destroy();
+    gl_prog_bloom_bright_.Destroy();
+    gl_prog_bloom_blur_.Destroy();
+    gl_prog_bloom_composite_.Destroy();
     viewport_shader_programs_ok_ = false;
 }
 

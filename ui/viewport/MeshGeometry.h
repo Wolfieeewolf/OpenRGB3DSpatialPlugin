@@ -10,6 +10,12 @@ namespace MeshGeometry
 {
 void PushPosColor(std::vector<float>& out, float x, float y, float z, float r, float g, float b);
 
+/** 8 floats/vert for MeshBatch::PosColorUv. */
+void PushPosColorUv(std::vector<float>& out,
+                    float x, float y, float z,
+                    float r, float g, float b,
+                    float u, float v);
+
 void PushTri(std::vector<float>& out,
              float x0, float y0, float z0,
              float x1, float y1, float z1,

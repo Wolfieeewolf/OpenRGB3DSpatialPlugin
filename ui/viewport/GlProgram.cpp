@@ -147,6 +147,48 @@ void GlProgram::SetUniform1f(const char* name, float value) const
     program_->setUniformValue(loc, value);
 }
 
+void GlProgram::SetUniform2f(const char* name, float x, float y) const
+{
+    if(!program_)
+    {
+        return;
+    }
+    const int loc = program_->uniformLocation(name);
+    if(loc < 0)
+    {
+        return;
+    }
+    program_->setUniformValue(loc, x, y);
+}
+
+void GlProgram::SetUniform3f(const char* name, float x, float y, float z) const
+{
+    if(!program_)
+    {
+        return;
+    }
+    const int loc = program_->uniformLocation(name);
+    if(loc < 0)
+    {
+        return;
+    }
+    program_->setUniformValue(loc, x, y, z);
+}
+
+void GlProgram::SetUniform4f(const char* name, float x, float y, float z, float w) const
+{
+    if(!program_)
+    {
+        return;
+    }
+    const int loc = program_->uniformLocation(name);
+    if(loc < 0)
+    {
+        return;
+    }
+    program_->setUniformValue(loc, x, y, z, w);
+}
+
 unsigned int GlProgram::Id() const
 {
     return program_ ? program_->programId() : 0;

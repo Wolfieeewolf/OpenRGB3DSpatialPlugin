@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "AnimatedMeshEffect.h"
 #include "EffectListManager3D.h"
 #include "ZoneGrid3D.h"
 #include "Minecraft/MinecraftGame.h"
 #include "ScreenMirror.h"
+#include "LEDViewport3D.h"
 #include "ScreenCaptureManager.h"
 #include "ReactiveInputManager.h"
 #include "ReactiveInputTypes.h"
@@ -661,6 +663,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     if(active_effects.empty())
     {
+        if(viewport)
+        {
+            viewport->SetMeshAnimOverlays({});
+        }
         const RGBColor black = 0x00000000;
         std::unordered_set<RGBControllerInterface*> controllers_to_update;
         std::unordered_set<RGBControllerInterface*> controllers_managed_by_virtuals;
@@ -1113,6 +1119,71 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         prepared_grids[effect_idx] = &active_grid;
         effect->PrepareGpuFields(effect_render_sequence, effect_time, active_grid);
         effect->PrepareStripColormapAssist(effect_render_sequence, effect_time);
+    }
+
+    if(viewport)
+    {
+        std::vector<LEDViewport3D::MeshAnimOverlay> mesh_overlays;
+        for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
+        {
+            SpatialEffect3D* effect = active_effects[effect_idx].effect;
+            auto* mesh_fx = dynamic_cast<AnimatedMeshEffect*>(effect);
+            if(!mesh_fx || !mesh_fx->HasMesh() || !prepared_grids[effect_idx])
+            {
+                continue;
+            }
+            const std::string path = mesh_fx->ResolvedMeshPath();
+            if(path.empty())
+            {
+                continue;
+            }
+            const GridContext3D& g = *prepared_grids[effect_idx];
+            LEDViewport3D::MeshAnimOverlay ov;
+            ov.path = path;
+            ov.transform.position = mesh_fx->GetEffectOriginGrid(g);
+            ov.transform.rotation = {
+                mesh_fx->GetRotationPitch(),
+                mesh_fx->GetRotationYaw(),
+                mesh_fx->GetRotationRoll()
+            };
+            ov.transform.scale = {1.0f, 1.0f, 1.0f};
+            /* Scale sizes the mesh; LED volume stays full (see GetVolumeHalfExtents override). */
+            mesh_fx->GetMeshFitHalfExtents(g, ov.hw, ov.hh, ov.hd);
+            /* Near-opaque viewport mesh so BLEND/Sketchfab glass still reads;
+               authored material alpha is applied inside MeshUnlit. */
+            ov.a = 1.0f;
+            ov.time_sec = effect_time * mesh_fx->PlaybackRate();
+            ov.animate = true;
+            /* GPU materials only — Effect colour multiplies textures (no CPU recolour path). */
+            ov.effect_tint = (mesh_fx->ColorSource()
+                              == AnimatedMeshEffect::LedColorSource::Effect);
+            /* Viewport MeshUnlit: Brightness always drives the sculpture.
+               Emissive is an extra boost (Soft glow / neon) — never crush to black at 0. */
+            const float bright01 = std::clamp(mesh_fx->GetBrightness() / 100.0f, 0.05f, 1.0f);
+            const float emis_boost = std::max(1.0f, mesh_fx->Emissive());
+            ov.bright_scale = std::clamp(bright01 * emis_boost, 0.05f, 8.0f);
+            const auto part_tints = mesh_fx->BuildPartRenderTints(effect_time);
+            ov.parts.reserve(part_tints.size());
+            for(const auto& pt : part_tints)
+            {
+                LEDViewport3D::MeshAnimPartTint tint;
+                tint.part_index = pt.part_index;
+                tint.visible = pt.visible;
+                tint.r = pt.r;
+                tint.g = pt.g;
+                tint.b = pt.b;
+                tint.emis_scale = pt.emis_scale;
+                ov.parts.push_back(tint);
+                if(pt.visible)
+                {
+                    ov.r = pt.r;
+                    ov.g = pt.g;
+                    ov.b = pt.b;
+                }
+            }
+            mesh_overlays.push_back(std::move(ov));
+        }
+        viewport->SetMeshAnimOverlays(std::move(mesh_overlays));
     }
 
     if(refresh_room_grid_overlay)

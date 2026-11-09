@@ -39,6 +39,8 @@ ViewportMat4 Multiply(const ViewportMat4& a, const ViewportMat4& b);
 
 /** Vertical FOV in degrees, OpenGL perspective (right-handed, clip Z). */
 ViewportMat4 Perspective(float fovy_degrees, float aspect, float near_plane, float far_plane);
+/** OpenGL orthographic (right-handed, clip Z −1…1). */
+ViewportMat4 Ortho(float left, float right, float bottom, float top, float near_plane, float far_plane);
 ViewportMat4 LookAt(const ViewportVec3& eye, const ViewportVec3& center, const ViewportVec3& up);
 ViewportMat4 Translation(float x, float y, float z);
 ViewportMat4 Scale(float x, float y, float z);

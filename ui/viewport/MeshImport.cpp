@@ -3,6 +3,7 @@
 #include "MeshImport.h"
 
 #include <assimp/Importer.hpp>
+#include <assimp/material.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
@@ -10,7 +11,11 @@
 #include <cctype>
 #include <cfloat>
 #include <cmath>
+#include <filesystem>
 #include <sstream>
+#include <system_error>
+
+namespace fs = std::filesystem;
 
 namespace MeshImport
 {
@@ -241,5 +246,156 @@ void AabbCenter(const TriangleMesh& mesh, float* out_cx, float* out_cy, float* o
     if(out_cx) *out_cx = 0.5f * (mesh.aabb_min[0] + mesh.aabb_max[0]);
     if(out_cy) *out_cy = 0.5f * (mesh.aabb_min[1] + mesh.aabb_max[1]);
     if(out_cz) *out_cz = 0.5f * (mesh.aabb_min[2] + mesh.aabb_max[2]);
+}
+
+namespace
+{
+bool PathStaysUnder(const fs::path& root, const fs::path& candidate)
+{
+    std::error_code ec;
+    const fs::path root_abs = fs::weakly_canonical(root, ec);
+    if(ec || root_abs.empty())
+    {
+        return false;
+    }
+    const fs::path cand_abs = fs::weakly_canonical(candidate, ec);
+    if(ec || cand_abs.empty())
+    {
+        return false;
+    }
+    auto root_it = root_abs.begin();
+    auto cand_it = cand_abs.begin();
+    for(; root_it != root_abs.end(); ++root_it, ++cand_it)
+    {
+        if(cand_it == cand_abs.end() || *cand_it != *root_it)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
+std::string InstallToMeshesDir(const std::string& meshes_dir,
+                               const std::string& source_path,
+                               std::string* error_out)
+{
+    if(meshes_dir.empty() || source_path.empty())
+    {
+        if(error_out)
+        {
+            *error_out = "Missing meshes directory or source path";
+        }
+        return {};
+    }
+
+    std::error_code ec;
+    const fs::path root(meshes_dir);
+    const fs::path src(source_path);
+    fs::create_directories(root, ec);
+
+    if(!fs::is_regular_file(src, ec))
+    {
+        if(error_out)
+        {
+            *error_out = "Source mesh is not a file";
+        }
+        return {};
+    }
+
+    /* Already in the library — reference only. */
+    if(PathStaysUnder(root, src))
+    {
+        const fs::path root_abs = fs::weakly_canonical(root, ec);
+        const fs::path src_abs = fs::weakly_canonical(src, ec);
+        return src_abs.lexically_relative(root_abs).generic_string();
+    }
+
+    /* One install with the original filename. Never invent _1 clones. */
+    const fs::path dest_name = src.filename();
+    const fs::path dest = root / dest_name;
+    if(!fs::exists(dest))
+    {
+        fs::copy_file(src, dest, ec);
+        if(ec)
+        {
+            if(error_out)
+            {
+                *error_out = ec.message();
+            }
+            return {};
+        }
+    }
+
+    /* Copy Assimp-referenced external textures / buffers for glTF / OBJ. Prefer .glb. */
+    const std::string ext = LowerExtension(source_path);
+    if(ExtEquals(ext, "gltf") || ExtEquals(ext, "obj") || ExtEquals(ext, "fbx"))
+    {
+        const fs::path src_dir = src.parent_path();
+        auto copy_ref = [&](const std::string& ref) {
+            if(ref.empty() || ref[0] == '*')
+            {
+                return;
+            }
+            fs::path from = src_dir / ref;
+            if(!fs::is_regular_file(from, ec))
+            {
+                from = fs::path(ref);
+            }
+            if(!fs::is_regular_file(from, ec))
+            {
+                return;
+            }
+            const fs::path to = root / from.filename();
+            if(!fs::exists(to, ec))
+            {
+                fs::copy_file(from, to, ec);
+            }
+        };
+        /* Common glTF sidecar buffer next to the .gltf. */
+        if(ExtEquals(ext, "gltf"))
+        {
+            const fs::path bin = src_dir / (src.stem().string() + ".bin");
+            if(fs::is_regular_file(bin, ec))
+            {
+                copy_ref(bin.filename().string());
+            }
+        }
+        Assimp::Importer importer;
+        const aiScene* scene = importer.ReadFile(
+            source_path,
+            aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+        if(scene)
+        {
+            for(unsigned int mi = 0; mi < scene->mNumMaterials; ++mi)
+            {
+                const aiMaterial* mat = scene->mMaterials[mi];
+                if(!mat)
+                {
+                    continue;
+                }
+                const aiTextureType types[] = {
+                    aiTextureType_BASE_COLOR,
+                    aiTextureType_DIFFUSE,
+                    aiTextureType_EMISSIVE,
+                    aiTextureType_NORMALS,
+                    aiTextureType_UNKNOWN
+                };
+                for(aiTextureType type : types)
+                {
+                    const unsigned int n = mat->GetTextureCount(type);
+                    for(unsigned int ti = 0; ti < n; ++ti)
+                    {
+                        aiString tex;
+                        if(AI_SUCCESS == mat->GetTexture(type, ti, &tex))
+                        {
+                            copy_ref(tex.C_Str());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return dest_name.generic_string();
 }
 } // namespace MeshImport

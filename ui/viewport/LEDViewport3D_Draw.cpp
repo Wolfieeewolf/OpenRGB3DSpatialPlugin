@@ -5,6 +5,7 @@
 #include <QFontMetrics>
 #include <QOpenGLContext>
 #include <QOpenGLExtraFunctions>
+#include <QOpenGLFramebufferObject>
 
 #include <cmath>
 #include <algorithm>
@@ -14,6 +15,7 @@
 #include "viewport/ViewportMath.h"
 #include "viewport/ViewportGLFormat.h"
 #include "viewport/MeshGeometry.h"
+#include "viewport/ViewportShaders.h"
 
 #ifdef near
 #undef near
@@ -96,11 +98,15 @@ void LEDViewport3D::paintGL()
     if(!viewport_shader_programs_ok_
        || !gl_prog_unlit_color_.IsValid()
        || !gl_prog_unlit_point_.IsValid()
-       || !gl_prog_textured_unlit_.IsValid())
+       || !gl_prog_textured_unlit_.IsValid()
+       || !gl_prog_mesh_unlit_.IsValid()
+       || !gl_prog_mesh_depth_.IsValid())
     {
         initViewportShaderPrograms();
     }
 
+    /* Mesh soft-shadow pass may leave ClearColor white — always reset. */
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if(!viewport_paint_enabled_ || width() < 2 || height() < 2)
@@ -132,6 +138,11 @@ void LEDViewport3D::paintGlScene()
 
     DrawDisplayPlanes();
     DrawSceneProps();
+    /* Mesh overlays render into HDR bloom FBO (see CompositeViewportBloom). */
+    if(!mesh_anim_overlays_.empty())
+    {
+        CompositeViewportBloom();
+    }
     if(show_room_grid_overlay)
     {
         DrawRoomGridOverlay();
@@ -563,6 +574,330 @@ void LEDViewport3D::drawTexturedBatch(const MeshBatch& batch,
     batch.Draw(MeshBatch::Primitive::Triangles);
     gl_prog_textured_unlit_.Unbind();
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void LEDViewport3D::drawMeshDepthBatch(const MeshBatch& batch, const ViewportMat4& light_mvp)
+{
+    if(!batch.IsValid() || !gl_prog_mesh_depth_.IsValid())
+    {
+        return;
+    }
+    gl_prog_mesh_depth_.Bind();
+    gl_prog_mesh_depth_.SetUniformMat4("u_mvp", light_mvp.m);
+    batch.Draw(MeshBatch::Primitive::Triangles);
+    gl_prog_mesh_depth_.Unbind();
+}
+
+bool LEDViewport3D::ensureMeshShadowFbo()
+{
+    if(mesh_shadow_fbo_ && mesh_shadow_fbo_->isValid()
+       && mesh_shadow_fbo_->width() == kMeshShadowMapSize
+       && mesh_shadow_fbo_->height() == kMeshShadowMapSize)
+    {
+        return true;
+    }
+    QOpenGLFramebufferObjectFormat fmt;
+    fmt.setAttachment(QOpenGLFramebufferObject::Depth);
+    fmt.setSamples(0);
+    mesh_shadow_fbo_ = std::make_unique<QOpenGLFramebufferObject>(
+        kMeshShadowMapSize, kMeshShadowMapSize, fmt);
+    return mesh_shadow_fbo_ && mesh_shadow_fbo_->isValid();
+}
+
+void LEDViewport3D::drawMeshMaterialBatch(const MeshBatch& batch,
+                                          const MeshAnim::Material& material,
+                                          unsigned int base_tex_id,
+                                          unsigned int emis_tex_id,
+                                          unsigned int normal_tex_id,
+                                          unsigned int mr_tex_id,
+                                          unsigned int occlusion_tex_id,
+                                          unsigned int shadow_tex_id,
+                                          const ViewportMat4* light_mvp,
+                                          float overlay_alpha,
+                                          float bright_scale,
+                                          float tint_r,
+                                          float tint_g,
+                                          float tint_b,
+                                          const ViewportMat4* model)
+{
+    if(!viewport_shader_programs_ok_ || !batch.IsValid() || !gl_prog_mesh_unlit_.IsValid())
+    {
+        return;
+    }
+
+    ViewportMat4 projection;
+    ViewportMat4 view;
+    std::memcpy(projection.m, pick_projection_, sizeof(float) * 16);
+    std::memcpy(view.m, pick_scene_modelview_, sizeof(float) * 16);
+    const ViewportMat4 mvp = model
+        ? ViewportMath::ModelViewProjection(projection, view, *model)
+        : ViewportMath::Multiply(projection, view);
+
+    const bool cull_was = glIsEnabled(GL_CULL_FACE);
+    if(material.double_sided)
+    {
+        glDisable(GL_CULL_FACE);
+    }
+
+    const bool blend_mode = material.alpha_mode == MeshAnim::AlphaMode::Blend;
+    GLboolean depth_mask = GL_TRUE;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
+    if(blend_mode)
+    {
+        glDepthMask(GL_FALSE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+
+    auto bind_tex = [this](int unit, unsigned int id) {
+        glActiveTexture(GL_TEXTURE0 + unit);
+        glBindTexture(GL_TEXTURE_2D, id != 0 ? id : 0);
+    };
+    bind_tex(0, base_tex_id);
+    bind_tex(1, emis_tex_id);
+    bind_tex(2, normal_tex_id);
+    bind_tex(3, mr_tex_id);
+    bind_tex(4, occlusion_tex_id);
+    bind_tex(5, shadow_tex_id);
+
+    ViewportMat4 mv = view;
+    if(model)
+    {
+        mv = ViewportMath::Multiply(view, *model);
+    }
+    ViewportMat4 identity = ViewportMath::Identity();
+    const ViewportMat4& light = light_mvp ? *light_mvp : identity;
+
+    gl_prog_mesh_unlit_.Bind();
+    gl_prog_mesh_unlit_.SetUniformMat4("u_mvp", mvp.m);
+    gl_prog_mesh_unlit_.SetUniformMat4("u_mv", mv.m);
+    gl_prog_mesh_unlit_.SetUniformMat4("u_light_mvp", light.m);
+    gl_prog_mesh_unlit_.SetUniform1i("u_base_tex", 0);
+    gl_prog_mesh_unlit_.SetUniform1i("u_emis_tex", 1);
+    gl_prog_mesh_unlit_.SetUniform1i("u_normal_tex", 2);
+    gl_prog_mesh_unlit_.SetUniform1i("u_mr_tex", 3);
+    gl_prog_mesh_unlit_.SetUniform1i("u_occlusion_tex", 4);
+    gl_prog_mesh_unlit_.SetUniform1i("u_shadow_tex", 5);
+    gl_prog_mesh_unlit_.SetUniform1i("u_has_base_tex", base_tex_id != 0 ? 1 : 0);
+    gl_prog_mesh_unlit_.SetUniform1i("u_has_emis_tex", emis_tex_id != 0 ? 1 : 0);
+    gl_prog_mesh_unlit_.SetUniform1i("u_has_normal_tex", normal_tex_id != 0 ? 1 : 0);
+    gl_prog_mesh_unlit_.SetUniform1i("u_has_mr_tex", mr_tex_id != 0 ? 1 : 0);
+    gl_prog_mesh_unlit_.SetUniform1i("u_has_occlusion_tex", occlusion_tex_id != 0 ? 1 : 0);
+    gl_prog_mesh_unlit_.SetUniform1i("u_has_shadow", shadow_tex_id != 0 ? 1 : 0);
+    gl_prog_mesh_unlit_.SetUniform4f("u_base_factor",
+        material.base_r, material.base_g, material.base_b, material.base_a);
+    gl_prog_mesh_unlit_.SetUniform3f("u_emis_factor",
+        material.emis_r, material.emis_g, material.emis_b);
+    gl_prog_mesh_unlit_.SetUniform1f("u_emis_strength", material.emis_strength);
+    gl_prog_mesh_unlit_.SetUniform1f("u_bright", std::max(0.05f, bright_scale));
+    gl_prog_mesh_unlit_.SetUniform1f("u_alpha", overlay_alpha);
+    gl_prog_mesh_unlit_.SetUniform1i("u_alpha_mode", (int)material.alpha_mode);
+    gl_prog_mesh_unlit_.SetUniform1f("u_alpha_cutoff", material.alpha_cutoff);
+    gl_prog_mesh_unlit_.SetUniform2f("u_base_uv_scale",
+        material.base_uv_scale_u, material.base_uv_scale_v);
+    gl_prog_mesh_unlit_.SetUniform2f("u_base_uv_offset",
+        material.base_uv_offset_u, material.base_uv_offset_v);
+    gl_prog_mesh_unlit_.SetUniform1f("u_base_uv_rotation", material.base_uv_rotation);
+    gl_prog_mesh_unlit_.SetUniform2f("u_emis_uv_scale",
+        material.emis_uv_scale_u, material.emis_uv_scale_v);
+    gl_prog_mesh_unlit_.SetUniform2f("u_emis_uv_offset",
+        material.emis_uv_offset_u, material.emis_uv_offset_v);
+    gl_prog_mesh_unlit_.SetUniform1f("u_emis_uv_rotation", material.emis_uv_rotation);
+    gl_prog_mesh_unlit_.SetUniform1f("u_normal_scale", material.normal_scale);
+    gl_prog_mesh_unlit_.SetUniform1f("u_transmission", material.transmission);
+    gl_prog_mesh_unlit_.SetUniform1f("u_metallic", material.metallic);
+    gl_prog_mesh_unlit_.SetUniform1f("u_roughness", material.roughness);
+    gl_prog_mesh_unlit_.SetUniform1f("u_specular_factor", material.specular_factor);
+    gl_prog_mesh_unlit_.SetUniform1f("u_occlusion_strength", material.occlusion_strength);
+    gl_prog_mesh_unlit_.SetUniform3f("u_tint",
+        std::max(0.0f, tint_r), std::max(0.0f, tint_g), std::max(0.0f, tint_b));
+    batch.Draw(MeshBatch::Primitive::Triangles);
+    gl_prog_mesh_unlit_.Unbind();
+
+    for(int u = 5; u >= 0; --u)
+    {
+        glActiveTexture(GL_TEXTURE0 + u);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    if(blend_mode)
+    {
+        glDepthMask(depth_mask);
+    }
+    if(material.double_sided)
+    {
+        if(cull_was)
+        {
+            glEnable(GL_CULL_FACE);
+        }
+        else
+        {
+            glDisable(GL_CULL_FACE);
+        }
+    }
+}
+
+void LEDViewport3D::DestroyBloomResources()
+{
+    bloom_scene_fbo_.reset();
+    bloom_bright_fbo_.reset();
+    bloom_blur_fbo_.reset();
+    bloom_fullscreen_batch_.Destroy();
+    bloom_fb_w_ = 0;
+    bloom_fb_h_ = 0;
+}
+
+void LEDViewport3D::EnsureBloomResources(int fb_w, int fb_h)
+{
+    if(fb_w < 2 || fb_h < 2)
+    {
+        return;
+    }
+    if(bloom_scene_fbo_ && bloom_fb_w_ == fb_w && bloom_fb_h_ == fb_h
+       && bloom_fullscreen_batch_.IsValid())
+    {
+        return;
+    }
+    DestroyBloomResources();
+    /* RGBA16F scene so MeshUnlit emissive can exceed 1.0 before tonemap. */
+    QOpenGLFramebufferObjectFormat scene_fmt;
+    scene_fmt.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
+    scene_fmt.setSamples(0);
+    scene_fmt.setInternalTextureFormat(GL_RGBA16F);
+    QOpenGLFramebufferObjectFormat ping_fmt;
+    ping_fmt.setAttachment(QOpenGLFramebufferObject::NoAttachment);
+    ping_fmt.setSamples(0);
+    ping_fmt.setInternalTextureFormat(GL_RGBA16F);
+    bloom_scene_fbo_ = std::make_unique<QOpenGLFramebufferObject>(fb_w, fb_h, scene_fmt);
+    bloom_bright_fbo_ = std::make_unique<QOpenGLFramebufferObject>(fb_w / 2, fb_h / 2, ping_fmt);
+    bloom_blur_fbo_ = std::make_unique<QOpenGLFramebufferObject>(fb_w / 2, fb_h / 2, ping_fmt);
+    bloom_fb_w_ = fb_w;
+    bloom_fb_h_ = fb_h;
+
+    std::vector<float> quad;
+    MeshGeometry::PushPosColor(quad, -1.0f, -1.0f, 0.0f, 1, 1, 1);
+    MeshGeometry::PushPosColor(quad,  1.0f, -1.0f, 0.0f, 1, 1, 1);
+    MeshGeometry::PushPosColor(quad,  1.0f,  1.0f, 0.0f, 1, 1, 1);
+    MeshGeometry::PushPosColor(quad, -1.0f, -1.0f, 0.0f, 1, 1, 1);
+    MeshGeometry::PushPosColor(quad,  1.0f,  1.0f, 0.0f, 1, 1, 1);
+    MeshGeometry::PushPosColor(quad, -1.0f,  1.0f, 0.0f, 1, 1, 1);
+    bloom_fullscreen_batch_.Upload(MeshBatch::Layout::PosColor, quad.data(), quad.size() / 6);
+}
+
+void LEDViewport3D::CompositeViewportBloom()
+{
+    if(!viewport_shader_programs_ok_
+       || !gl_prog_bloom_bright_.IsValid()
+       || !gl_prog_bloom_blur_.IsValid()
+       || !gl_prog_bloom_composite_.IsValid())
+    {
+        /* Fallback: draw meshes straight to the widget FBO. */
+        DrawMeshAnimOverlays();
+        return;
+    }
+    QOpenGLExtraFunctions* xf = QOpenGLContext::currentContext()
+        ? QOpenGLContext::currentContext()->extraFunctions()
+        : nullptr;
+    if(!xf)
+    {
+        DrawMeshAnimOverlays();
+        return;
+    }
+
+    const int fb_w = viewportFramebufferWidth(width());
+    const int fb_h = viewportFramebufferHeight(height());
+    EnsureBloomResources(fb_w, fb_h);
+    if(!bloom_scene_fbo_ || !bloom_bright_fbo_ || !bloom_blur_fbo_
+       || !bloom_fullscreen_batch_.IsValid() || !bloom_scene_fbo_->isValid())
+    {
+        DrawMeshAnimOverlays();
+        return;
+    }
+
+    const GLuint default_fbo = defaultFramebufferObject();
+
+    /* Room → HDR scene (color + depth for mesh occlusion). */
+    xf->glBindFramebuffer(GL_READ_FRAMEBUFFER, default_fbo);
+    xf->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, bloom_scene_fbo_->handle());
+    xf->glBlitFramebuffer(0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h,
+                          GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+    /* Draw mesh overlays into HDR (emissive can exceed 1.0). */
+    bloom_scene_fbo_->bind();
+    glViewport(0, 0, fb_w, fb_h);
+    DrawMeshAnimOverlays();
+
+    const int bw = bloom_bright_fbo_->width();
+    const int bh = bloom_bright_fbo_->height();
+
+    /* Bright extract (half-res) from HDR scene. */
+    bloom_bright_fbo_->bind();
+    glViewport(0, 0, bw, bh);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, bloom_scene_fbo_->texture());
+    gl_prog_bloom_bright_.Bind();
+    gl_prog_bloom_bright_.SetUniform1i("u_scene", 0);
+    gl_prog_bloom_bright_.SetUniform1f("u_threshold", 0.85f);
+    bloom_fullscreen_batch_.Draw(MeshBatch::Primitive::Triangles);
+    gl_prog_bloom_bright_.Unbind();
+    bloom_bright_fbo_->release();
+
+    /* Wider halo — three dual passes. */
+    for(int pass = 0; pass < 3; ++pass)
+    {
+        const float spread = (pass == 0) ? 1.0f : (pass == 1) ? 2.25f : 4.0f;
+        bloom_blur_fbo_->bind();
+        glViewport(0, 0, bw, bh);
+        glBindTexture(GL_TEXTURE_2D, bloom_bright_fbo_->texture());
+        gl_prog_bloom_blur_.Bind();
+        gl_prog_bloom_blur_.SetUniform1i("u_tex", 0);
+        gl_prog_bloom_blur_.SetUniform2f("u_direction", spread / (float)bw, 0.0f);
+        bloom_fullscreen_batch_.Draw(MeshBatch::Primitive::Triangles);
+        gl_prog_bloom_blur_.Unbind();
+        bloom_blur_fbo_->release();
+
+        bloom_bright_fbo_->bind();
+        glViewport(0, 0, bw, bh);
+        glBindTexture(GL_TEXTURE_2D, bloom_blur_fbo_->texture());
+        gl_prog_bloom_blur_.Bind();
+        gl_prog_bloom_blur_.SetUniform1i("u_tex", 0);
+        gl_prog_bloom_blur_.SetUniform2f("u_direction", 0.0f, spread / (float)bh);
+        bloom_fullscreen_batch_.Draw(MeshBatch::Primitive::Triangles);
+        gl_prog_bloom_blur_.Unbind();
+        bloom_bright_fbo_->release();
+    }
+
+    /* Tonemap(HDR scene + bloom) → widget FBO. */
+    xf->glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
+    glViewport(0, 0, fb_w, fb_h);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, bloom_scene_fbo_->texture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, bloom_bright_fbo_->texture());
+    gl_prog_bloom_composite_.Bind();
+    gl_prog_bloom_composite_.SetUniform1i("u_scene", 0);
+    gl_prog_bloom_composite_.SetUniform1i("u_bloom", 1);
+    gl_prog_bloom_composite_.SetUniform1f("u_intensity", 1.15f);
+    bloom_fullscreen_batch_.Draw(MeshBatch::Primitive::Triangles);
+    gl_prog_bloom_composite_.Unbind();
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    /* Mesh depth lived on the HDR FBO — copy back so later overlays occlude. */
+    xf->glBindFramebuffer(GL_READ_FRAMEBUFFER, bloom_scene_fbo_->handle());
+    xf->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, default_fbo);
+    xf->glBlitFramebuffer(0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h,
+                          GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
 }
 
 void LEDViewport3D::RebuildFloorGridCache(const GridExtents& extents)

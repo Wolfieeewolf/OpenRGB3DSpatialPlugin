@@ -83,6 +83,23 @@ ViewportMat4 Perspective(float fovy_degrees, float aspect, float near_plane, flo
     return out;
 }
 
+ViewportMat4 Ortho(float left, float right, float bottom, float top, float near_plane, float far_plane)
+{
+    ViewportMat4 out;
+    std::memset(out.m, 0, sizeof(out.m));
+    const float rl = right - left;
+    const float tb = top - bottom;
+    const float fn = far_plane - near_plane;
+    out.m[0] = (rl != 0.0f) ? (2.0f / rl) : 1.0f;
+    out.m[5] = (tb != 0.0f) ? (2.0f / tb) : 1.0f;
+    out.m[10] = (fn != 0.0f) ? (-2.0f / fn) : -1.0f;
+    out.m[12] = -(right + left) / (rl != 0.0f ? rl : 1.0f);
+    out.m[13] = -(top + bottom) / (tb != 0.0f ? tb : 1.0f);
+    out.m[14] = -(far_plane + near_plane) / (fn != 0.0f ? fn : 1.0f);
+    out.m[15] = 1.0f;
+    return out;
+}
+
 ViewportMat4 LookAt(const ViewportVec3& eye, const ViewportVec3& center, const ViewportVec3& up)
 {
     const ViewportVec3 f = Normalize({center.x - eye.x, center.y - eye.y, center.z - eye.z});

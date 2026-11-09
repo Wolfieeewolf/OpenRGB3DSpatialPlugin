@@ -19,6 +19,7 @@ If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can
 | Doc | Use it for |
 | --- | --- |
 | [effects-engines.md](Documentation/effects-engines.md) | Engines as players; Volume / Audio / Media / Shader Field / Kernel / Reactive / Ambilight / Game â€” read before adding a look |
+| [stack-roadmap.md](Documentation/stack-roadmap.md) | Backend bets: QRhi (host), fastgltf+Assimp, GLM later, capture/audio — read before adding big deps |
 | [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | mm, grid units, RoomGrid, viewport, effects, spacing â€” read before changing layout math, reference points, or LED placement |
 | [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry â€” RoomGrid â†’ game world, sparse cubemap SHM; read when changing SHM, scale publish, or mod mapping |
 | [effect-event-maker.md](Documentation/effect-event-maker.md) | Actions + Triggers |

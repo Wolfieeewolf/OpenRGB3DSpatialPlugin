@@ -20,6 +20,21 @@ void PushPosColor(std::vector<float>& out, float x, float y, float z, float r, f
     out.push_back(b);
 }
 
+void PushPosColorUv(std::vector<float>& out,
+                    float x, float y, float z,
+                    float r, float g, float b,
+                    float u, float v)
+{
+    out.push_back(x);
+    out.push_back(y);
+    out.push_back(z);
+    out.push_back(r);
+    out.push_back(g);
+    out.push_back(b);
+    out.push_back(u);
+    out.push_back(v);
+}
+
 void PushTri(std::vector<float>& out,
              float x0, float y0, float z0,
              float x1, float y1, float z1,

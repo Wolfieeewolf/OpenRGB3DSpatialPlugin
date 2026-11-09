@@ -266,7 +266,6 @@ std::unique_ptr<SceneProp3D> SceneProp3D::FromJson(const nlohmann::json& j)
             prop->mesh_body_kind = kind;
         }
     }
-
     if(j.contains("faces") && j["faces"].is_object())
     {
         const auto& fj = j["faces"];

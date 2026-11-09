@@ -6,6 +6,36 @@ File → engine map (regroup later): [plugin-file-map.md](plugin-file-map.md).
 
 Status: `pending` | `pass` | `keep` | `fixed` | `parked`.
 
+## Animated Mesh / viewport mesh (2026-10-31)
+
+Scoped catch-all on `engines/mesh-anim` + mesh overlay / MeshUnlit / bloom after GPU-only + Effect-tint work.
+
+| Finding | Action |
+|---------|--------|
+| Fake (0,0) UVs → wrong texture corner | Fixed — omit UVs when Assimp has none |
+| Silent triangle-cap truncate | Fail closed with error |
+| Skin/Morph “yes” lied about support | UI now says **ignored** |
+| Dead `Evaluate` / `EvaluateParts` / `BakePartSoups` | Deleted |
+| Part emissive ignored on GPU mesh | Wired `emis_scale` → `u_bright` |
+| `anim_speed` LoadSettings legacy shim | Removed |
+| Unused `MeshAnimGpuCache::bright_scale` | Removed |
+| Metallic/roughness unused | Loaded + PBR-lite; MR texture (G/B) + normal maps in MeshUnlit |
+| Soft shadow for mesh overlay | Fixed — directional depth-to-color map + 3×3 PCF (not cascaded) |
+| Full path tracing / cascaded shadows | **Hard ceiling** — OpenGL 4.1 plugin viewport; not in scope |
+| LED Soft glow still per-point CPU | Fixed — `u_media` sample splat + `evaluateAtPoints`; CPU nearest only if GL fails |
+| GPU node TRS for LED samples | Practical path: CPU pose → packed media; LED eval on GPU |
+| Sketchfab neon / BLEND glass (placid_flux, technotron) | Fixed — KHR_texture_transform per-slot, emissiveStrength, specularFactor, glTF metal default 1, MeshUnlit for factor-only mats, AO |
+| Soft glow / mesh still white after Assimp tip | Fixed — Assimp UVTRANSFORM order in MeshUnlit + Soft glow CPU; GL texture V-flip; empty sample → black not white |
+| stranger_star MASK dark blob | Fixed — ignore Assimp remapped UVTRANSFORM; apply raw glTF KHR_texture_transform (JSON) with V-flip-aware xform; Emissive 0 no longer crushes MeshUnlit |
+| Viewport goes white on any mesh import | Fixed — mesh soft-shadow FBO cleared with white ClearColor and never restored; paintGL resets black + shadow pass restores |
+| Sculpture OK but colours/textures washed | Fixed — MeshUnlit prioritises albedo/emissive hue over PBR env wash; milder bloom; raw glTF emis factor/strength from JSON; Assimp BGRA→RGBA |
+| Speckled white spiral (MASK look) | Fixed — sample with glTF UVs on unflipped upload; MASK keeps emissive-lit fragments |
+| Sketchfab-like look ceiling | Fixed — MeshUnlit HDR emis into RGBA16F FBO; bloom then tonemap; cheap hemisphere IBL + Blinn spec |
+| Soft glow LEDs ≠ viewport sculpture | Fixed — SampleMaterialViewportLook (MeshUnlit-ish) bakes Soft glow / surface LED colours; HDR emis no longer clamped to 1 before mix |
+| Soft glow / bloom white soup | Fixed — peak tonemap (viewport + LED bake); Soft glow no longer multiplies baked look by emis then clamps; bake at neutral exposure |
+
+Status: **fixed** (Sketchfab-ish MeshUnlit on GL 4.1). Path tracing / full cubemap IBL = later.
+
 ## Full multipass (2026-10-30)
 
 Plugin-wide catch-all (openrgb3d-multipass-review). Focus: pass 2b path/HTTP, seams (ClearActionPreview / preview dirty / once clocks), volume residual, CONTRIBUTING hygiene. No rebuild (user builds locally). FolderVolume / AudioInputManager / Reactive still oversized — **split later**, not blocked on pass status.

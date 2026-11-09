@@ -1,7 +1,8 @@
 # OpenRGB host-owned QRhi (parked)
 
 **Status:** Design parked. Stack effect-volume boxes landed on `feat/effect-volume-boxes`; QRhi spike is next when unparked.  
-**Not in scope now:** Implementing QRhi, forking OpenRGB for this, or a new plugin API repo.
+**Not in scope now:** Implementing QRhi, forking OpenRGB for this, or a new plugin API repo.  
+**Roadmap context:** [stack-roadmap.md](stack-roadmap.md) (QRhi is priority 3 after dual import + MeshUnlit ceiling).
 
 ## Goal
 
@@ -78,3 +79,4 @@ File on: https://gitlab.com/CalcProgrammer1/OpenRGB/-/issues
 | 2026-10-29 | **Park** implementation until volume-box / gizmo work on `feat/effect-volume-boxes` is finished. |
 | 2026-10-29 | Documented here; do not start OpenRGB QRhi fork in this chat pass. |
 | 2026-10-30 | Volume-box / gizmo stack work landed; QRhi remains parked until an explicit spike. |
+| 2026-10-31 | Linked from stack-roadmap; still parked — dual import / MeshUnlit first. |

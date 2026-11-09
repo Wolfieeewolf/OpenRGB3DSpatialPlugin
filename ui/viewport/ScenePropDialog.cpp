@@ -62,20 +62,6 @@ const char* FaceLabel(ScenePropFace face)
     }
 }
 
-QString UniqueMeshFileName(const filesystem::path& dir, const QString& base_name)
-{
-    QString candidate = base_name;
-    int n = 1;
-    while(filesystem::exists(dir / candidate.toStdString()))
-    {
-        const QFileInfo info(base_name);
-        candidate = QStringLiteral("%1_%2.%3")
-                        .arg(info.completeBaseName())
-                        .arg(n++)
-                        .arg(info.suffix());
-    }
-    return candidate;
-}
 } // namespace
 
 ScenePropDialog::ScenePropDialog(QWidget* parent)
@@ -429,9 +415,16 @@ void ScenePropDialog::onImportMesh()
     }
 
     PluginSettingsPaths::EnsurePluginDataLayout(resource_manager_);
+    const filesystem::path meshes_dir = PluginSettingsPaths::MeshesDir(resource_manager_);
+    std::error_code ec;
+    filesystem::create_directories(meshes_dir, ec);
+    const QString start_dir = QString::fromStdString(meshes_dir.string());
     const QString filter = QString::fromStdString(MeshImport::OpenFileFilter());
-    const QString path = QFileDialog::getOpenFileName(this, tr("Import 3D Mesh"),
-                                                     QString(), filter);
+    const QString path = QFileDialog::getOpenFileName(
+        this,
+        tr("Import 3D Mesh"),
+        start_dir,
+        filter);
     if(path.isEmpty())
     {
         return;
@@ -482,42 +475,22 @@ void ScenePropDialog::onImportMesh()
         return;
     }
 
-    const filesystem::path meshes_dir = PluginSettingsPaths::MeshesDir(resource_manager_);
-    std::error_code ec;
-    filesystem::create_directories(meshes_dir, ec);
     ScenePropMeshPaths::SetMeshesRoot(meshes_dir);
 
-    const QFileInfo src_info(path);
-    const QString dest_name = UniqueMeshFileName(meshes_dir, src_info.fileName());
-    const filesystem::path dest_path = meshes_dir / dest_name.toStdString();
-
-    if(!QFile::copy(path, QString::fromStdString(dest_path.string())))
+    std::string install_err;
+    const std::string dest_rel =
+        MeshImport::InstallToMeshesDir(meshes_dir.string(), path.toStdString(), &install_err);
+    if(dest_rel.empty())
     {
-        QMessageBox::warning(this, tr("Import Mesh"), tr("Failed to copy mesh into plugin data."));
+        QMessageBox::warning(this, tr("Import Mesh"),
+                             tr("Failed to import mesh:\n%1")
+                                 .arg(QString::fromStdString(install_err)));
         return;
     }
 
-    const QDir src_dir = src_info.absoluteDir();
-    const QStringList sidecars = src_dir.entryList(QDir::Files | QDir::NoDotAndDotDot);
-    for(const QString& sibling : sidecars)
-    {
-        if(sibling.compare(src_info.fileName(), Qt::CaseInsensitive) == 0)
-        {
-            continue;
-        }
-        const QString stem = src_info.completeBaseName();
-        if(!sibling.startsWith(stem, Qt::CaseInsensitive)
-           && !sibling.endsWith(QStringLiteral(".mtl"), Qt::CaseInsensitive)
-           && !sibling.endsWith(QStringLiteral(".bin"), Qt::CaseInsensitive))
-        {
-            continue;
-        }
-        const QString sibling_dest = UniqueMeshFileName(meshes_dir, sibling);
-        QFile::copy(src_dir.filePath(sibling),
-                    QString::fromStdString((meshes_dir / sibling_dest.toStdString()).string()));
-    }
-
-    mesh_asset_relative_ = dest_name;
+    const QFileInfo src_info(path);
+    const filesystem::path dest_path = meshes_dir / dest_rel;
+    mesh_asset_relative_ = QString::fromStdString(dest_rel);
     mesh_path_label_->setText(mesh_asset_relative_);
 
     const size_t tri_count = probe.triangleCount();
@@ -529,8 +502,9 @@ void ScenePropDialog::onImportMesh()
     }
 
     ScenePropMeshCache::instance()->Put(dest_path.string(), std::move(probe));
-    setStatus(tr("Imported %1 (%2 tris). Set Width / Height / Depth to size it.")
-                  .arg(dest_name)
+    setStatus(tr("Imported %1 (%2 tris). Set Width / Height / Depth to size it. "
+                 "Animated GLBs: Effects library \u2192 Media \u2192 Animated Mesh.")
+                  .arg(mesh_asset_relative_)
                   .arg((qulonglong)tri_count));
     refreshPreview();
 }

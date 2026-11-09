@@ -126,6 +126,7 @@ INCLUDEPATH += \
     shared/scene \
     shared/utils \
     engines/movie-sync \
+    engines/mesh-anim \
     engines/actions \
     engines/triggers \
     engines/folder-volume \
@@ -282,6 +283,7 @@ HEADERS += \
     ui/viewport/MeshBatch.h \
     ui/viewport/MeshGeometry.h \
     ui/viewport/MeshImport.h \
+    ui/viewport/MeshAnim.h \
     ui/viewport/ScenePropMeshCache.h \
     ui/viewport/ScenePropMeshPaths.h \
     ui/viewport/ViewportShaders.h \
@@ -320,6 +322,7 @@ HEADERS += \
     engines/shader-field/ShaderField.h \
     shared/PlayerEngines.h \
     engines/movie-sync/MovieSync.h \
+    engines/mesh-anim/AnimatedMeshEffect.h \
     engines/movie-sync/MovieSyncCatalog.h \
     engines/movie-sync/MovieSyncListener.h \
     engines/movie-sync/MovieSyncRuntime.h \
@@ -492,6 +495,7 @@ SOURCES += \
     ui/viewport/MeshBatch.cpp \
     ui/viewport/MeshGeometry.cpp \
     ui/viewport/MeshImport.cpp \
+    ui/viewport/MeshAnim.cpp \
     ui/viewport/ViewportShaders.cpp \
     ui/screen/CaptureZonesWidget.cpp \
     ui/widgets/StratumBandPanel.cpp \
@@ -510,6 +514,7 @@ SOURCES += \
     shared/PlayerEngines.cpp \
     shared/effects/EffectListManager3D.cpp \
     engines/movie-sync/MovieSync.cpp \
+    engines/mesh-anim/AnimatedMeshEffect.cpp \
     engines/movie-sync/MovieSyncCatalog.cpp \
     engines/movie-sync/MovieSyncListener.cpp \
     engines/movie-sync/MovieSyncRuntime.cpp \

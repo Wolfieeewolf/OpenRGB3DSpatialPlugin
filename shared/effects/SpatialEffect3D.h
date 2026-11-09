@@ -625,7 +625,7 @@ public:
     }
 
     /** Half-extents matching the gizmo OBB / volume clip (grid units). */
-    void GetVolumeHalfExtents(const GridContext3D& grid, float& hx, float& hy, float& hz) const;
+    virtual void GetVolumeHalfExtents(const GridContext3D& grid, float& hx, float& hy, float& hz) const;
 
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);

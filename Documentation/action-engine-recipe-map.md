@@ -88,6 +88,7 @@ Study vault/web demos for motion and colour language. Write original GLSL/`fx`/C
 - **Multipass (Claude)** — **parked until ~2026-11-23** (other-models usage reset). Plugin resume: [multipass-coverage.md](multipass-coverage.md) § Parked for Claude reset. Presets every-file judgment: sibling [OpenRGB3DSpatialPresets `docs/multipass-coverage.md`](../../OpenRGB3DSpatialPresets/docs/multipass-coverage.md) (hybrid hygiene done 2026-10-27; rows `pending`/`hygiene` until Claude keep/kill). Do not finish judgment passes with a weaker model.
 - **Engine folder regroup** — phases 1–10 done (`engines/*` + `shared/*` + `ui/` affinity); plugin entry remains at repo root; [plugin-file-map.md](plugin-file-map.md).
 - **Line splits (later)** — FolderVolume ~2.6k, Reactive ~1.5k, AudioInputManager ~1.4k (after Claude ratchet where noted).
-- **Effect volume boxes** — stack OBB + gizmo TRS landed on `feat/effect-volume-boxes` (absolute origin, shared Euler, preview while stopped). Follow-ups: Action-timeline placement, triggers edit UX, optional axis-scale-rotation UI cleanup (sample path no longer uses it).
+- **Effect volume boxes** — landed on main (stack OBB + gizmo). **No** Action/trigger/movie boxes — timeline tracks already place cues. Optional leftover: axis-scale-rotation UI cleanup on the stack sample path.
+- **Animated mesh effects** — on `feat/action-trigger-movie-effects`: Effects library **Media → Animated Mesh** (node-TRS GLB, volume place, colour/emissive, soft LED glow). Scene props stay **static** mesh décor. Follow-up: Action `media_mesh` for Triggers/Movie Sync. Skinning/PBR later.
 - **More showcase packs** once the first five feel good in real rooms.
 - **DualSense ControllerTorch** — parked on `feat/dualsense-controller-torch` until 9-axis mag.
