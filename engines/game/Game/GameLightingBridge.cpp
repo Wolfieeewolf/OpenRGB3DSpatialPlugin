@@ -11,9 +11,7 @@
 #include "WinsockLifetime.h"
 #include "PluginLog.h"
 
-#include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -53,11 +51,6 @@ static void CloseSocketFd(int& fd)
     close(fd);
 #endif
     fd = -1;
-}
-
-static float ClampUnit(float v)
-{
-    return std::clamp(v, 0.0f, 1.0f);
 }
 } // namespace
 
@@ -114,8 +107,7 @@ void GameLightingBridge::StartUdpListener()
         return;
     }
 
-    int reuse = 1;
-    (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, (socklen_t)sizeof(reuse));
+    /* Do not SO_REUSEADDR — a second binder on Windows can steal GW01 datagrams. */
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -203,62 +195,92 @@ void GameLightingBridge::UdpListenLoop()
 
 bool GameLightingBridge::ProcessIncomingFrame(const char* data, std::size_t size, std::string& out_source)
 {
-    constexpr std::size_t kGw01Size = 53u;
-
     std::lock_guard<std::mutex> guard(stats_mutex);
     stats.packets_total++;
 
-    if(!GameLightingFormat::IsMagic(data, size) || size != kGw01Size)
+    if(!GameLightingFormat::IsMagic(data, size) || size < GameLightingFormat::kDeviceGridHeaderSize)
     {
         stats.packets_error++;
         return false;
     }
 
-    if(data[16] != static_cast<char>(GameLightingFormat::FrameType::UniformRgb))
+    const auto frame_type = static_cast<GameLightingFormat::FrameType>(static_cast<std::uint8_t>(data[16]));
+    if(frame_type != GameLightingFormat::FrameType::DeviceGrid)
     {
         stats.packets_error++;
         return false;
     }
-
-    auto read_u32 = [&](std::size_t off) -> std::uint32_t {
-        std::uint32_t v = 0;
-        std::memcpy(&v, data + off, sizeof(v));
-        return v;
-    };
-    auto read_u64 = [&](std::size_t off) -> std::uint64_t {
-        std::uint64_t v = 0;
-        std::memcpy(&v, data + off, sizeof(v));
-        return v;
-    };
-    auto read_f32 = [&](std::size_t off) -> float {
-        float v = 0.0f;
-        std::memcpy(&v, data + off, sizeof(v));
-        return v;
-    };
 
     char src_buf[25]{};
     std::memcpy(src_buf, data + 17, 24);
     src_buf[24] = '\0';
     out_source = src_buf;
 
-    auto finite_unit = [](float v) {
-        if(!std::isfinite(v))
+    GameLightingFormat::DeviceGridHeader hdr{};
+    std::memcpy(&hdr, data, sizeof(hdr));
+    if(hdr.device_id >= GameLightingFormat::kDeviceCount || hdr.rows == 0 || hdr.cols == 0)
+    {
+        stats.packets_error++;
+        return false;
+    }
+    if(hdr.rows > GameLightingFormat::kMaxGridRows || hdr.cols > GameLightingFormat::kMaxGridCols)
+    {
+        stats.packets_error++;
+        return false;
+    }
+
+    const std::size_t cells = (std::size_t)hdr.rows * (std::size_t)hdr.cols;
+    const std::size_t need = GameLightingFormat::kDeviceGridHeaderSize + cells * 3u;
+    if(size < need || cells > GameLightingFormat::kMaxGridCells)
+    {
+        stats.packets_error++;
+        return false;
+    }
+
+    DeviceSample& out = snapshot.devices[hdr.device_id];
+    out.active = (hdr.flags & GameLightingFormat::kDeviceGridFlagActive) != 0;
+    out.has_grid = out.active;
+    out.grid_rows = hdr.rows;
+    out.grid_cols = hdr.cols;
+    out.grid_rgb.fill(0);
+    std::memcpy(out.grid_rgb.data(), data + GameLightingFormat::kDeviceGridHeaderSize, cells * 3u);
+
+    double ar = 0.0, ag = 0.0, ab = 0.0;
+    int an = 0;
+    for(std::size_t i = 0; i < cells; ++i)
+    {
+        const std::uint8_t r = out.grid_rgb[i * 3u + 0];
+        const std::uint8_t g = out.grid_rgb[i * 3u + 1];
+        const std::uint8_t b = out.grid_rgb[i * 3u + 2];
+        if(r == 0 && g == 0 && b == 0)
         {
-            return 0.0f;
+            continue;
         }
-        return ClampUnit(v);
-    };
+        ar += r;
+        ag += g;
+        ab += b;
+        ++an;
+    }
+    if(an > 0)
+    {
+        out.r = (float)(ar / (255.0 * (double)an));
+        out.g = (float)(ag / (255.0 * (double)an));
+        out.b = (float)(ab / (255.0 * (double)an));
+    }
+    else
+    {
+        out.r = out.g = out.b = 0.0f;
+    }
 
     snapshot.has_frame = true;
-    snapshot.uniform_rgb = true;
-    snapshot.sequence = read_u32(4);
-    snapshot.timestamp_ms = read_u64(8);
+    snapshot.has_devices = true;
+    snapshot.sequence = hdr.sequence;
+    snapshot.timestamp_ms = hdr.timestamp_ms;
     snapshot.received_ms = NowMs();
-    snapshot.r = finite_unit(read_f32(41));
-    snapshot.g = finite_unit(read_f32(45));
-    snapshot.b = finite_unit(read_f32(49));
-    snapshot.zones.clear();
     snapshot.source = out_source;
+    snapshot.r = out.r;
+    snapshot.g = out.g;
+    snapshot.b = out.b;
 
     stats.packets_valid++;
     stats.last_source = out_source;
@@ -277,6 +299,7 @@ GameLightingBridge::LightingSnapshot GameLightingBridge::GetSnapshot()
         if(age > 5000ull)
         {
             out.has_frame = false;
+            out.has_devices = false;
         }
     }
     return out;

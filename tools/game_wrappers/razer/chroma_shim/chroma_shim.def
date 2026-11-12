@@ -1,4 +1,4 @@
-LIBRARY RazerChromaSDK64
+; LIBRARY name comes from CMake OUTPUT_NAME (RzChromaSDK64 / RzChromaSDK)
 
 EXPORTS
     Init

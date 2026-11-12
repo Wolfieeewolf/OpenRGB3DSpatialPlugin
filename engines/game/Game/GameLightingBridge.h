@@ -3,42 +3,45 @@
 #ifndef GAMELIGHTINGBRIDGE_H
 #define GAMELIGHTINGBRIDGE_H
 
+#include "GameLightingFormat.h"
+
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
-#include <vector>
+#include <array>
 
 class OpenRGBPluginAPIInterface;
 
-/** UDP listener for game wrapper shims (port 9877). One active source at a time. */
+/** UDP listener for universal game-wrapper shims (port 9877). */
 class GameLightingBridge
 {
 public:
-    struct ZoneSample
+    struct DeviceSample
     {
-        std::uint32_t zone_id = 0;
+        bool active = false;
+        bool has_grid = false; /**< full Chroma matrix present */
         float r = 0.0f;
         float g = 0.0f;
         float b = 0.0f;
-        /** Compass bitmask (N, NE, E, …, C). 0 = all sectors. */
-        std::uint32_t loc = 0;
-        /** Vertical layer bitmask; 0 or 1 = all layers. */
-        std::uint32_t height = 0;
+        std::uint8_t grid_rows = 0;
+        std::uint8_t grid_cols = 0;
+        /** Row-major RGB888, size grid_rows*grid_cols*3 (capped at kMaxGridCells). */
+        std::array<std::uint8_t, GameLightingFormat::kMaxGridCells * 3u> grid_rgb{};
     };
 
     struct LightingSnapshot
     {
         bool has_frame = false;
-        bool uniform_rgb = true;
+        bool has_devices = false;
         std::uint32_t sequence = 0;
         std::uint64_t timestamp_ms = 0;
         unsigned long long received_ms = 0;
         float r = 0.0f;
         float g = 0.0f;
         float b = 0.0f;
-        std::vector<ZoneSample> zones;
+        std::array<DeviceSample, GameLightingFormat::kDeviceCount> devices{};
         std::string source;
     };
 
@@ -54,7 +57,6 @@ public:
                          unsigned int& packets_error,
                          std::string& last_source);
     static std::uint64_t DataRevision();
-    /** Milliseconds since last valid GW01 frame, or max value if none. */
     static unsigned long long SnapshotAgeMs();
     static bool IsConnected(unsigned long long stale_ms = 5000);
 

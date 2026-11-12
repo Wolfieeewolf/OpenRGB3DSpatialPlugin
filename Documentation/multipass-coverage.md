@@ -52,7 +52,7 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 | engines/shader-field | fixed | 2026-10-31 | Shader body/spec size caps; dropped dead `shader_path` save key. Path id fail-closed holds. |
 | engines/screen-mirror | fixed | 2026-11-01 | Audience bias removed. Spin-row sync/enable helpers. **UV:** outside/convex Newell dual (`pz−1`) — light out from glass (tunnel-into clips are an accepted trade-off). Calibration plane quads match buffer orientation. Legacy letterbox keys / dead wave label pointers gone. |
 | engines/volume\|particle\|ribbon-field | keep | 2026-10-31 | Shared-seq setParams + GpuAnimMs hold; leave named buckets. |
-| engines/game | fixed | 2026-10-31 | SHM apply rejects rgba size ≠ grid; Minecraft one-effect stubs ignored (security-only). |
+| engines/game | fixed | 2026-11-13 | SHM rgba size hold. **Game wrappers cleanup:** DeviceGrid-only wire (dropped UniformRgb/DevicesRgb + emit helpers); removed MigrateLegacyRole / `role`+`target` JSON; stripped unused room-heading UI/setting; install always `RzChromaSDK*`; GetSnapshot ages out `has_devices` with `has_frame` (no frozen paint after disconnect); docs synced. Prior: UnInit→EndSession; Ctrl+S; multi-dest; LoadSettings clamp/caps. |
 | engines/movie-sync | fixed | 2026-10-31 | Catalog size cap; Content-Length parse fail-closed. LocalHost + path escape hold. |
 | engines/triggers | fixed | 2026-10-31 | Bindings JSON size cap; ClearActionPreview idle path OK. |
 | shared/* | fixed | 2026-10-31 | Patterns kernel load fail-closed under `PatternsDir`; prior dead-defaults hold. |

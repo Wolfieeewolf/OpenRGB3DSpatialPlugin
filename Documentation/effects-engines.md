@@ -113,7 +113,7 @@ Content: `movie-sync/effects/`. Sidecars beside the video.
 
 Minecraft under library category **Game**. Bridge mod sources: `integrations/minecraft/` (jar goes in Minecraft’s mods folder).
 
-**Game wrappers** (Chroma / similar SDK proxies): UDP **9877** → `GameLightingBridge` → **Game wrapper capture**. Shims live in `tools/game_wrappers/`; see [`GAME_WRAPPERS.md`](GAME_WRAPPERS.md). Telemetry remains on **9876**.
+**Game wrappers** (per-vendor SDK proxies): UDP **9877** → `GameLightingBridge` → **Game wrapper capture**. Shims live in `tools/game_wrappers/<vendor>/` (Razer live; Logitech / iCUE / amBX stubs); shared wire in `tools/game_wrappers/common/`. See [`GAME_WRAPPERS.md`](GAME_WRAPPERS.md). Telemetry remains on **9876**.
 
 ## Quick chooser
 

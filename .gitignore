@@ -97,3 +97,12 @@ CMakeFiles/
 integrations/**/.gradle/
 integrations/**/build/
 integrations/**/run/
+
+# Game-wrapper vendor shim CMake out-of-tree builds
+tools/game_wrappers/razer/chroma_shim/build/
+tools/game_wrappers/razer/chroma_shim/build32/
+tools/game_wrappers/*/shim/build/
+tools/game_wrappers/*/shim/build32/
+
+# Local Steam ∩ Chroma shortlists (personal library dump)
+tools/game_wrappers/razer/owned_chroma_candidates.txt
