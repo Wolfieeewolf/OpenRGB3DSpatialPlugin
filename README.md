@@ -1,130 +1,118 @@
 # OpenRGB 3D Spatial LED Control
 
-Plugin for [OpenRGB](https://openrgb.org/) built around one idea: **drive lighting from a 3D layout**—where devices and surfaces sit in space—not only from zone order on a single strip. You place hardware in a **3D room**, run **spatial effects** across that model, and can add **screen capture** (ambilight-style onto geometry), **display planes**, and **game-linked** lighting.
+A plugin for [OpenRGB](https://openrgb.org/) that lights your setup **as a 3D room** instead of one strip at a time.
 
-This started as a **for-me** plugin and is still **alpha**, but the core path is solid enough to use daily: room layout, effect stack, Screen Mirror, and the presets content pack. Shared so others can try it, break it, or extend it—not as a finished product for everyone.
+You build a model of your real room — desk, PC case, monitor, light strips — and place each RGB device where it really sits. Effects then play across the **whole room**: a wave rolls from left to right through every device in its path, the ceiling glows when you walk under a pink tree in Minecraft, your screen colours spill onto the walls around it.
 
-## Engine + content
+The idea started as a modern take on the old **Philips amBX** ambient lighting system.
 
-This repo is the **raw engine**: spatial layout, Effect Library loaders, Ambilight, Reactive, Minecraft codecs, Action Editor / Triggers / Movie Sync **players**. It ships **no looks**.
+> **Honest status: personal-project alpha.** It works well for daily use on **Windows**. **Linux has known problems** and **macOS is untested**. Some effects and UI bits are rough or broken. Expect to tinker.
 
-All drop-in content (`.fs`, `.kernel`, Action Tools `.fx`, trigger/Movie Sync actions, catalogs, VLC helper, controller layouts) comes from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — copy into AppData.
+---
 
-| Engine (in the DLL) | Content folder (presets pack) |
-|---------------------|-------------------------------|
-| **Volume** | `effects/volume/*.fs` |
-| **Audio** | `effects/audio/*.fs` |
-| **Media** | `effects/media/*.fs` (textures/GIF — not movies) |
-| **Shader Field** | `effects/shader-field/*.fs` |
-| **Patterns** | `effects/patterns/*.kernel` |
-| **Actions** (Action Editor) | `action-editor/toolbox/` + timelines in `triggers/` / `movie-sync/` |
-| **Movie Sync** | `movie-sync/` + video sidecars |
-| **Triggers** | `triggers/triggers.json` + `triggers/effects/` |
-| **Ambilight / Reactive / Game** | codecs in the DLL (Minecraft bridge mod under `integrations/minecraft/`) |
+## Install
 
-```text
-<OpenRGB config>/plugins/settings/OpenRGB3DSpatialPlugin/
-  controllers/                         (nested OK — same as presets pack)
-  effects/volume|audio|media|shader-field|patterns/
-  action-editor/
-    toolbox/
-    gradients.json | colors.json | curves.json   (create-on-save)
-  triggers/
-    effects/
-    triggers.json                                (create-on-save)
-  movie-sync/
-    catalog.json
-    effects/<category>/
-    vlc/
-  meshes/                                        (scene props; plugin-only)
-```
+You need **OpenRGB 1.0** (Plugin API 5, Qt 6). Older or Qt5 builds will not load the plugin. A GPU with **OpenGL 4.1** is needed for the 3D view.
 
-Map: [Documentation/content-library.md](Documentation/content-library.md).
+Download from the **[latest release](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/releases/latest)**:
 
-## Who it is for
-
-- You already use OpenRGB and are OK reading a short **README** and poking at options.
-- You want **3D-aware** effects and layout (not only “strip modes” on a single device).
-- You can tolerate **sharp edges**: features still in motion, and setup that assumes you will experiment.
-
-If you expect plug-and-play with zero reading, this will probably frustrate you—OpenRGB itself is already a lot for many users.
-
-## Requirements
-
-- **OpenRGB 1.0** (Plugin API **5**), **Qt 6** matching the host (pipeline builds use **6.8.3**). Check **Information → Software Info**.
-- Room viewport needs **OpenGL 4.1 Core**. Qt5 hosts are not supported.
-- Release packages embed the [presets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) content pack (same feature list on every OS):
-  - **Typical** — effect looks + Action tools + Triggers + Movie Sync (no controller layouts).
-  - **Complete** — Typical plus every controller layout.
-  - **Custom** — pick effect families and only the controller brands you own.
-- **Windows:** prefer the **MSI** (`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip`) — Typical / Custom / Complete in the installer UI. Bare `.dll` zip is plugin-only.
-- **Linux:** `.deb` or `*_plugin.tar.gz` — run `./install.sh` (or `openrgb3d-install-content` after a `.deb`) for the same Typical / Complete / Custom menu as Windows. Distro OpenRGB: rebuild with `scripts/install-linux-user.sh` if the pipeline `.so` Qt does not match.
-- **macOS:** release zip — run `./install.sh` for Typical / Complete / Custom (plugin + content under `~/.config/OpenRGB/…`).
-- Flatpak OpenRGB needs the Flatpak extension — do not load a host `.so`.
-
-### Building from source
-
-Baseline toolchain matches upstream OpenRGB ([`OpenRGB/Documentation/Compiling.md`](OpenRGB/Documentation/Compiling.md)): Git, Qt, and a C++ compiler (MSVC on Windows).
-
-**Extras for this plugin:**
-
-1. Clone with submodules: `git clone --recurse-submodules …` (or `git submodule update --init`).
-2. **CMake** (needed once so the first Build can compile Assimp for mesh import — OpenRGB itself does not require it):
-   - **Windows:** Qt Maintenance Tool → *Build Tools* → **CMake**, **or** Visual Studio Installer → **C++ CMake tools for Windows** (either is enough). Ninja is optional. If you use **VS 2026**, prefer a CMake that lists the `Visual Studio 18 2026` generator (VS’s own CMake tools, or CMake 4.x) — Qt’s older *Build Tools* CMake may only know VS 2022.
-   - **Linux:** install `cmake` from your distro (`apt` / `dnf` / …).
-   - **macOS:** `brew install cmake`.
-3. Open `OpenRGB3DSpatialPlugin.pro` in Qt Creator (or qmake) and Build. Assimp is built automatically into the build tree (`_deps/`) on first link. Normal **Clean** keeps `_deps` (so the next Build stays fast); deleting the whole build folder or `scripts/build-assimp.* -Clean` / `--clean` forces an Assimp rebuild. You do not need to run those scripts by hand for day-to-day work.
-
-More detail: [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## What exists (high level)
-
-A map of areas that have real code today:
-
-- **3D viewport** — place/rotate devices, grid snap, room turntable, gizmo. OpenGL 4.1 Core (MeshBatch / GLSL 410). Pick/gizmo/camera use DPR-aware mapping (logical feel, framebuffer pick).
-- **Reference points, display planes, capture zones** — for Screen Mirror / ambilight-style mapping onto geometry.
-- **Effect stack** — pick an **engine** in the library, then a look that engine plays (Volume / Audio / Media / Shader Field files; Reactive / Ambilight / Game codecs).
-- **Actions + Triggers** — Action Editor timelines; Manual / OS / game-style Triggers. Design notes: [Documentation/effect-event-maker.md](Documentation/effect-event-maker.md).
-- **OpenRGB profiles** — layout + effects round-trip through the host profile payload (current schema only).
-- **Minecraft bridge** — Room Ambilight over **sparse cubemap SHM** (mod ≥ 0.9.46) plus UDP vitals/damage. Fabric mod under [integrations/minecraft/](integrations/minecraft/). Works well enough on **vanilla**; not a modpack matrix.
-
-## Documentation
-
-Browsable guide: **[Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki)** (user + developer pages).
-
-Contracts that ship with the code live under **[Documentation/](Documentation/)**:
-
-| Doc | When to read it |
+| OS | Files |
 | --- | --- |
-| [effects-engines.md](Documentation/effects-engines.md) | Engines as players; library categories; FolderVolume / codecs |
-| [shader-conversion.md](Documentation/shader-conversion.md) | Porting 1D / 2D / 3D shaders into those engines |
-| [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | Layout math, mm ↔ grid, RoomGrid, spacing, viewport / effects contracts |
-| [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry bridge (RoomGrid → game world, sparse cubemap SHM) |
-| [effect-event-maker.md](Documentation/effect-event-maker.md) | Actions + Triggers design |
-| [content-library.md](Documentation/content-library.md) | AppData folder map (content lives in the presets repo) |
+| **Windows** | `OpenRGB3DSpatialPlugin.dll` + `Qt6Network.dll` + `Qt6OpenGLWidgets.dll` |
+| **Linux** | `libOpenRGB3DSpatialPlugin.so` |
+| **macOS** | `libOpenRGB3DSpatialPlugin.dylib` |
 
-Looks, layouts, tools: **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)**.
+1. **Windows only:** copy `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` into the folder that contains `OpenRGB.exe`. Stock OpenRGB doesn't include them, and **without them the plugin silently won't load**.
+2. In OpenRGB: **Settings → Plugins → Install Plugin**, pick the plugin file, then **restart OpenRGB**.
+3. **Get the effects.** The plugin ships with *no* looks of its own. Download [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) (green **Code → Download ZIP**) and copy its folders into:
 
-Upstream OpenRGB docs stay in the `OpenRGB/` submodule (`OpenRGB/Documentation/…`). Day-to-day contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md).
+   | OS | Folder |
+   | --- | --- |
+   | Windows | `%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\` |
+   | Linux / macOS | `~/.config/OpenRGB/plugins/settings/OpenRGB3DSpatialPlugin/` |
 
-## What to expect (honest status)
+   Restart OpenRGB again. If the **Effect Library** is empty, this step is what's missing.
 
-Still **alpha**, with uneven polish by area:
+**Linux notes:** the release `.so` targets the OpenRGB **AppImage**. If you use your distro's OpenRGB package (Arch, CachyOS, Fedora…), build against your system Qt with `scripts/install-linux-user.sh`. Flatpak OpenRGB can't load outside plugins.
 
-- **Spatial layout / viewport** — Backbone. Furthest along; pivots, wipe directions, and DPI can still confuse.
-- **File-loaded looks** — Volume / Audio / Media / Shader Field content on disk; missing files means missing rows. UX is early but usable.
-- **Actions / Triggers** — Real path, not a mock — authoring UX is still early.
-- **Screen Mirror / ambilight** — Daily-driver capable for plane + Reach setups. UV mapping is an **outside / convex** sphere from the plane (light out from the glass). Clips that dive *into* a tunnel will feel wrong by design. Capture stays on the CPU; room fields use a GPU volume atlas.
-- **Reactive** — Keyboard / mouse / gamepad pulses from layout positions (privacy: no key logging). Mapping depends on OpenRGB LED names.
-- **Gaming** — Minecraft path above is **vanilla-shaped alpha**. Other games are “bring your own telemetry story.”
+---
 
-Until you have tried a feature on **your** PC, treat it as **unproven** for you—not “done” for everyone.
+## Your first 10 minutes
 
-## Contributing / issues
+**Think of the 3D view as your actual room.** If you've used Blender or 3ds Max it will feel familiar. The more closely the layout matches reality, the better effects look. You only set this up once.
 
-Source of truth and PRs: **GitHub** (see [CONTRIBUTING.md](CONTRIBUTING.md)). The GitLab copy is a mirror/backup. Bug reports need versions and steps; “it doesn’t work” without that may get closed.
+1. **Size the room** — *Grid Settings* tab: enter your room (or desk area) in millimetres.
+2. **Add your devices** — *Setup* tab: pick from **Available Controllers** → **Add to 3D scene**.
+3. **Put each device where it really is** — click it in the 3D view and drag the gizmo arrows, or type positions in the side panel.
+4. **Play an effect** — *Run* tab: choose a look in the **Effect Library** → **Add to stack** → **Start all**.
 
-Controller JSON and all effect/content files: **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)**.
+### Moving around the 3D view
+
+| Do this | To |
+| --- | --- |
+| Right-drag | Orbit the camera |
+| Middle-drag | Pan |
+| Mouse wheel | Zoom |
+| Left-click | Select a device |
+| **W / E / R** | Gizmo: move / rotate / scale |
+| Click the **centre sphere** of the gizmo | Cycle gizmo mode (move → rotate → scale → …) |
+| **Q** | Toggle snap to grid |
+| **F** / **Home** | Frame selection / reset camera |
+| Delete | Remove selected device |
+
+### Tip: group a PC case with a custom controller
+
+In **Object Creator** you can build a **custom controller** — e.g. your PC case with the fans, RAM, and GPU inside it in the right places (great for layered GPU lighting too). Move the case and everything inside moves with it, instead of dragging each part on its own.
+
+---
+
+## How effects work
+
+Every LED gets a real position in the room, based on real-world sizes (if you don't set LED spacing, controllers default to **10 mm** between LEDs).
+
+An effect is just a rule that answers: **"what colour should the light be at this spot, right now?"** The plugin asks that question for every LED, every frame. So effects are mapped onto the **room**, not onto individual devices — that's why a wave moves smoothly across your keyboard, case, and wall strip as one.
+
+The approach is adapted from [Pixelblaze LED mapping](https://electromage.com/docs/intro-to-mapping), scaled up to a whole room.
+
+Want to write your own effects? Start with **[How It Works](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/How-It-Works)** and **[Writing Effects](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Writing-Effects)** on the wiki.
+
+---
+
+## What's in it
+
+| Feature | What it does | Where |
+| --- | --- | --- |
+| **Spatial effects** | Waves, fields, noise, audio-reactive looks played across the room | Run → Effect Library |
+| **Screen Mirror / Ambilight** | Screen colours projected outward from your monitor onto the room (add a **Display Plane** in Object Creator first) | Run → Effect Library |
+| **Actions** | Timeline editor for your own light shows | Object Creator → object type **Actions** |
+| **Triggers** | Play an action when something happens (OS events, games) | Object Creator → object type **Triggers** |
+| **Movie Sync** | Lighting cues synced to video playback (VLC) | Effect Library + presets `movie-sync/` |
+| **Reactive** | Keyboard / mouse / gamepad pulses at the device's position (no key logging) | Effect Library |
+| **Minecraft mod** | The room reflects the game in 3D: under a pink tree → ceiling glows pink; in water → floor goes blue | [integrations/minecraft/](integrations/minecraft/) |
+
+Layouts and effect stacks are saved in your normal OpenRGB profiles.
+
+---
+
+## Known rough edges
+
+- **Linux:** works less well than Windows — known issues are being worked on.
+- **macOS:** builds, but nobody has tested it on real hardware yet.
+- Some effects don't show on the grid overlay, misbehave, or are just broken.
+- The UI is dense, and some options are only discoverable by poking around.
+
+Bug reports are welcome — please include your OS, OpenRGB version, plugin version, and steps to reproduce.
+
+---
+
+## More help
+
+- **[Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki)** — step-by-step [Getting Started](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Getting-Started), [FAQ](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Frequently-Asked-Questions), Screen Mirror, Minecraft.
+- **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)** — the effects, tools, and controller layouts.
+
+## For developers
+
+Everything technical — how a frame is rendered, the coordinate spaces and grid maths, what each engine does, how to write effects, building from source — lives in the wiki's **developer section**, starting at **[How It Works](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/How-It-Works)**. Contracts that ship with the code are in [Documentation/](Documentation/); contribution rules in [CONTRIBUTING.md](CONTRIBUTING.md). GitHub is the source of truth; GitLab is a mirror.
 
 ## License
 
@@ -132,8 +120,6 @@ GPL-2.0-only — see [LICENSE](LICENSE).
 
 ## Support
 
-This is still a for-me alpha. If you want to throw something in the tip jar anyway, I like **pizza** more than coffee:
+This is a for-me project shared because it's fun. If you want to throw something in the tip jar anyway, I like **pizza** more than coffee:
 
 <a href="https://buymeacoffee.com/wolfieee"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20pizza&emoji=%F0%9F%8D%95&slug=wolfieee&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a pizza" /></a>
-
-[buymeacoffee.com/wolfieee](https://buymeacoffee.com/wolfieee)
