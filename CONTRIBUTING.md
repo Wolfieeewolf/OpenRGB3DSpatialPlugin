@@ -129,7 +129,7 @@ Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / 
 
 Disk folder `effects/volume/` is **Volume** content (folder name = library category). See [Documentation/content-library.md](Documentation/content-library.md).
 
-**Content pack:** the plugin ships engines only. Looks live in [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). Release packaging freezes that repo into Windows MSI + Linux/macOS archives (shared feature list `scripts/ci/content-pack-features.tsv`; stage with `scripts/ci/stage-content-pack.sh`; user install `scripts/install-openrgb3d-content.sh`). Set `PRESETS_ROOT` when packaging locally. Day-to-day: copy feature folders into the plugin data root (`plugins/settings/OpenRGB3DSpatialPlugin/`). Restart OpenRGB so looks rescan. Windows: `%AppData%\OpenRGB\…`; Linux/macOS: `~/.config/OpenRGB/…`. Content cuts: merge presets, then tag/rebuild so CI re-harvests (roughly monthly unless a look must ship sooner).
+**Content pack:** the plugin ships engines only. Looks live in [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). Releases ship only the plugin binaries (`.dll` / `.so` / `.dylib`); content is not bundled. Copy feature folders into the plugin data root (`plugins/settings/OpenRGB3DSpatialPlugin/`). Restart OpenRGB so looks rescan. Windows: `%AppData%\OpenRGB\…`; Linux/macOS: `~/.config/OpenRGB/…`.
 
 ### Smoke / stable-build hygiene
 

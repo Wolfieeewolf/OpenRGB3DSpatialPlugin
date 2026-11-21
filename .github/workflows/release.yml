@@ -1,9 +1,9 @@
-name: Release builds
+name: Release
 
-# Multi-platform Qt6 pipeline builds for OpenRGB 1.0 / Plugin API 5.
-# GitHub covers the public runner subset. GitLab org CI (see .gitlab-ci.yml)
-# matches OpenRGBEffectsPlugin Qt6: Win32/64, Linux i386/amd64/armhf/arm64,
-# Debian Bookworm+Trixie debs, Fedora 44 rpm, Flatpak vs OpenRGB master, macOS.
+# Three plain plugin binaries, nothing else:
+#   Windows  OpenRGB3DSpatialPlugin.dll        (x64, Qt 6.8.3 MSVC)
+#   Linux    libOpenRGB3DSpatialPlugin.so      (amd64, Qt 6.8.3)
+#   macOS    libOpenRGB3DSpatialPlugin.dylib   (universal arm64 + x86_64, Qt 6.8.3)
 on:
   push:
     tags:
@@ -24,25 +24,22 @@ concurrency:
 
 jobs:
   build-windows:
-    name: Windows 64
+    name: Windows
     runs-on: windows-2022
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+      - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           arch: win64_msvc2022_64
           cache: true
           modules: ''
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
@@ -53,59 +50,31 @@ jobs:
       - name: Build
         shell: cmd
         run: |
-          qmake -v
           qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
           nmake
 
-      - name: Package
+      # Official OpenRGB 1.0 for Windows does not ship these two Qt modules;
+      # without them the plugin silently fails to load.
+      - name: Collect Qt DLLs OpenRGB does not ship
         shell: pwsh
-        env:
-          QT_MAJOR: '6'
-          DIST_VARIANT: Windows_64
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/package-windows.ps1
+          Copy-Item "$env:QT_ROOT_DIR\bin\Qt6Network.dll" release\
+          Copy-Item "$env:QT_ROOT_DIR\bin\Qt6OpenGLWidgets.dll" release\
 
-      - name: Checkout presets content pack
-        uses: actions/checkout@v5
+      - uses: actions/upload-artifact@v6
         with:
-          repository: Wolfieeewolf/OpenRGB3DSpatialPresets
-          path: OpenRGB3DSpatialPresets
-          fetch-depth: 1
-
-      - name: Build MSI installer
-        shell: pwsh
-        env:
-          PRESETS_ROOT: ${{ github.workspace }}/OpenRGB3DSpatialPresets
-        run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/build-msi.ps1
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: Windows_64
+          name: windows
           path: |
-            dist/*.zip
             release/OpenRGB3DSpatialPlugin.dll
+            release/Qt6Network.dll
+            release/Qt6OpenGLWidgets.dll
           if-no-files-found: error
 
   build-linux:
-    name: Linux ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-            qt_arch: linux_gcc_64
-            artifact: Linux_amd64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            qt_arch: linux_gcc_arm64
-            artifact: Linux_arm64
+    name: Linux
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
@@ -115,65 +84,44 @@ jobs:
           chmod +x scripts/ci/*.sh
           sudo bash scripts/ci/install-linux-deps.sh 6
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+      - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
-          arch: ${{ matrix.qt_arch }}
+          arch: linux_gcc_64
           cache: true
           modules: ''
 
       - name: Build Assimp
-        run: |
-          chmod +x scripts/build-assimp.sh
-          bash scripts/build-assimp.sh
+        run: bash scripts/build-assimp.sh
 
       - name: Build
+        env:
+          QT_BIN_DIR: ${{ env.QT_ROOT_DIR }}/bin
         run: bash scripts/ci/build-linux.sh 6 release
 
-      - name: Checkout presets content pack
-        uses: actions/checkout@v5
+      - uses: actions/upload-artifact@v6
         with:
-          repository: Wolfieeewolf/OpenRGB3DSpatialPresets
-          path: OpenRGB3DSpatialPresets
-          fetch-depth: 1
-
-      - name: Package
-        env:
-          QT_AQT_VERSION: '6.8.3'
-          PRESETS_ROOT: ${{ github.workspace }}/OpenRGB3DSpatialPresets
-        run: bash scripts/ci/package-linux.sh 6 ${{ matrix.arch }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ matrix.artifact }}
-          path: |
-            dist/*
-            libOpenRGB3DSpatialPlugin.so
+          name: linux
+          path: libOpenRGB3DSpatialPlugin.so
           if-no-files-found: error
 
   build-macos:
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     strategy:
-      fail-fast: false
       matrix:
         include:
-          # Qt mac desktop packages are universal (clang_64 = X86_64-ARM64).
           - arch: arm64
             runner: macos-15
-          - arch: intel
+          - arch: x86_64
             runner: macos-15-intel
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+      - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           host: mac
@@ -184,211 +132,89 @@ jobs:
           aqtversion: '>=3.2.0'
 
       - name: Build Assimp
-        id: assimp
         run: |
-          set -euo pipefail
-          chmod +x scripts/build-assimp.sh
-          cmake --version
-          # Match qmake OUT_PWD/_deps when configuring in the repo root.
           export ASSIMP_BUILD_DIR="${GITHUB_WORKSPACE}/_deps/assimp-build"
           export ASSIMP_INSTALL_DIR="${GITHUB_WORKSPACE}/_deps/assimp-install"
           export CC=clang CXX=clang++
-          set +e
-          bash scripts/build-assimp.sh 2>&1 | tee assimp-build.log
-          rc=${PIPESTATUS[0]}
-          set -e
-          if [[ "$rc" -ne 0 ]]; then
-            echo "::group::assimp-build.log (tail)"
-            tail -n 120 assimp-build.log || true
-            echo "::endgroup::"
-            echo "::error::Assimp build failed (exit $rc). See assimp-build.log artifact / group above."
-            exit "$rc"
-          fi
-          test -f "${ASSIMP_INSTALL_DIR}/lib/libassimp.a"
+          bash scripts/build-assimp.sh
 
-      - name: Upload Assimp failure log
-        if: failure() && steps.assimp.outcome == 'failure'
-        uses: actions/upload-artifact@v6
+      - name: Build
+        run: bash scripts/ci/build-macos.sh 6 release
+
+      - uses: actions/upload-artifact@v6
         with:
-          name: assimp-log-macOS-${{ matrix.arch }}
-          path: |
-            assimp-build.log
-            _deps/assimp-build/CMakeFiles/CMakeError.log
-            _deps/assimp-build/CMakeFiles/CMakeOutput.log
-          if-no-files-found: ignore
-
-      - name: Build plugin
-        run: |
-          chmod +x scripts/ci/*.sh
-          which qmake
-          qmake -v
-          bash scripts/ci/build-macos.sh 6 release
-
-      - name: Checkout presets content pack
-        uses: actions/checkout@v5
-        with:
-          repository: Wolfieeewolf/OpenRGB3DSpatialPresets
-          path: OpenRGB3DSpatialPresets
-          fetch-depth: 1
-
-      - name: Package
-        env:
-          DIST_VARIANT: macOS_${{ matrix.arch }}
-          PRESETS_ROOT: ${{ github.workspace }}/OpenRGB3DSpatialPresets
-        run: bash scripts/ci/package-macos.sh 6 ${{ matrix.arch }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: macOS_${{ matrix.arch }}
-          path: |
-            dist/*.zip
-            libOpenRGB3DSpatialPlugin.dylib
+          name: macos-${{ matrix.arch }}
+          path: libOpenRGB3DSpatialPlugin.dylib
           if-no-files-found: error
 
-  build-minecraft:
-    name: Minecraft Fabric sender
-    runs-on: ubuntu-latest
+  macos-universal:
+    name: macOS universal
+    needs: build-macos
+    runs-on: macos-15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
-          fetch-depth: 0
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: gradle
-
-      - name: Build Fabric mod
-        working-directory: integrations/minecraft
+          pattern: macos-*
+      - name: lipo
         run: |
-          set -euo pipefail
-          chmod +x gradlew
-          # Terraformers maven sometimes times out from Actions — retry a few times.
-          ok=0
-          for attempt in 1 2 3 4 5; do
-            echo "Fabric build attempt ${attempt}/5"
-            if ./gradlew --no-daemon build; then
-              ok=1
-              break
-            fi
-            echo "Build failed; waiting before retry..."
-            sleep $((attempt * 20))
-          done
-          if [[ "$ok" -ne 1 ]]; then
-            echo "Fabric mod build failed after retries"
-            exit 1
-          fi
-          ls -la build/libs/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+          lipo -create \
+            macos-arm64/libOpenRGB3DSpatialPlugin.dylib \
+            macos-x86_64/libOpenRGB3DSpatialPlugin.dylib \
+            -output libOpenRGB3DSpatialPlugin.dylib
+          lipo -info libOpenRGB3DSpatialPlugin.dylib
+      - uses: actions/upload-artifact@v6
         with:
-          name: Minecraft_Fabric
-          path: |
-            integrations/minecraft/build/libs/openrgb-minecraft-sender-*.jar
-            !integrations/minecraft/build/libs/*-sources.jar
+          name: macos
+          path: libOpenRGB3DSpatialPlugin.dylib
           if-no-files-found: error
 
   release:
     name: Publish GitHub release
-    needs: [build-windows, build-linux, build-macos, build-minecraft]
-    if: >-
-      always() &&
-      !cancelled() &&
-      (startsWith(github.ref, 'refs/tags/v') ||
-       (github.event_name == 'workflow_dispatch' && inputs.create_release))
+    needs: [build-windows, build-linux, macos-universal]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
-
-      - name: Collect release assets
-        id: assets
-        run: |
-          set -euo pipefail
-          mkdir -p release-assets
-          # Packaged plugin downloads + Minecraft companion JAR (exclude *-sources.jar).
-          find artifacts -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.tar.gz' -o -name 'openrgb-minecraft-sender-*.jar' \) -print0 \
-            | while IFS= read -r -d '' f; do
-                base="$(basename "$f")"
-                case "$base" in
-                  *-sources.jar) continue ;;
-                esac
-                cp -v "$f" "release-assets/$base"
-              done
-          echo "files=$(find release-assets -type f | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
-          ls -la release-assets
-
-      - name: Fail if no packages
-        if: steps.assets.outputs.files == '0'
-        run: |
-          echo "No packaged artifacts found — at least one OS build must succeed."
-          exit 1
-
-      - name: Resolve tag name
-        id: tag
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "name=v0.0.0-ci-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.tag.outputs.name }}"
-          NOTES="$(cat <<EOF
-          ## OpenRGB 3D Spatial Plugin ${TAG}
+          mkdir assets
+          cp artifacts/windows/OpenRGB3DSpatialPlugin.dll \
+             artifacts/windows/Qt6Network.dll \
+             artifacts/windows/Qt6OpenGLWidgets.dll \
+             artifacts/linux/libOpenRGB3DSpatialPlugin.so \
+             artifacts/macos/libOpenRGB3DSpatialPlugin.dylib assets/
+          ls -la assets
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v0.0.0-ci-${GITHUB_SHA::7}"
+          fi
+          NOTES="$(cat <<'EOF'
+          Pre-built plugins for OpenRGB 1.0 (Qt 6.8.3). Download the one for your OS:
 
-          Pre-built **Qt6** plugins. Filenames follow OpenRGB-style suffixes so the package type is obvious.
-
-          ### Which file do I want?
-
-          | You have… | Download |
+          | OS | File |
           | --- | --- |
-          | **Windows** official OpenRGB 1.0 (Qt 6.8.3) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` (DLL + content: Typical / Custom / Complete) or \`OpenRGB3DSpatialPlugin_Windows_64.zip\` (DLL only) |
-          | **Linux** AppImage / Debian pipeline (Qt 6.8.x) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` or the \`.deb\` — run \`./install.sh\` / \`openrgb3d-install-content\` (Typical / Complete / Custom menu) |
-          | **CachyOS / Arch / Fedora** system OpenRGB | rebuild with \`scripts/install-linux-user.sh\` (pipeline \`.so\` is for AppImage; may not match distro Qt); content script still works against \`~/.config/OpenRGB\` |
-          | **Linux Flatpak** OpenRGB (KDE Flatpak runtime) | Flatpak extension via \`scripts/build-flatpak-plugin.sh\` / \`flatpak/\` — do not Install Plugin a host \`.so\` |
-          | **Linux** ARM64 | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` (+ content install script) |
-          | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` — run \`./install.sh\` (Typical / Complete / Custom) |
-          | **macOS** Intel | \`OpenRGB3DSpatialPlugin_macOS_intel.zip\` (same \`./install.sh\` menu) |
-          | **Minecraft** (Fabric) Room Ambilight + vitals | \`openrgb-minecraft-sender-*.jar\` |
+          | Windows (x64) | `OpenRGB3DSpatialPlugin.dll` **plus** `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` |
+          | Linux (x86_64) | `libOpenRGB3DSpatialPlugin.so` |
+          | macOS (Apple Silicon + Intel) | `libOpenRGB3DSpatialPlugin.dylib` |
 
-          Match **OpenRGB → Information → Qt Version**. Restart OpenRGB after installing.
+          1. **Windows only:** put `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` in the folder that contains `OpenRGB.exe` (OpenRGB 1.0 does not ship them; without them the plugin will not load).
+          2. Install the plugin via OpenRGB → Settings → Plugins → Install Plugin, then restart OpenRGB.
+          3. Get the looks: copy folders from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — the plugin ships with no effects of its own.
+
+          Getting started guide: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Getting-Started
           EOF
           )"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # Drop legacy asset names from earlier v0.1.0 uploads.
-            gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
-              case "$name" in
-                *.msi|\
-                *Qt6.10.3*|\
-                OpenRGB_3D_Spatial_Plugin_Windows_64.zip|\
-                OpenRGB3DSpatialPlugin_Linux_amd64.tar.gz|\
-                OpenRGB3DSpatialPlugin_Linux_arm64.tar.gz)
-                  gh release delete-asset "$TAG" "$name" --yes || true
-                  ;;
-              esac
-            done
             gh release edit "$TAG" --notes "$NOTES"
-            gh release upload "$TAG" release-assets/* --clobber
+            gh release upload "$TAG" assets/* --clobber
           else
-            gh release create "$TAG" release-assets/* \
-              --title "$TAG" \
-              --notes "$NOTES"
+            gh release create "$TAG" assets/* --title "$TAG" --notes "$NOTES" --target "$GITHUB_SHA"
           fi

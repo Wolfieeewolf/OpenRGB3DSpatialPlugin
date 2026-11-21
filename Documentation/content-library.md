@@ -2,15 +2,7 @@
 
 The plugin is the **engine** (C++ under `engines/` / `shared/`). Plugin data root and the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) use the **same folder names** (`effects/volume/`, …). **No looks ship in the DLL**; those paths are not source-tree folders.
 
-**Release installers** embed a frozen snapshot of the presets repo (feature list: `scripts/ci/content-pack-features.tsv`):
-
-| OS | How content is chosen |
-|----|------------------------|
-| **Windows** | MSI (`scripts/ci/build-msi.ps1`) — Typical / Custom / Complete UI → AppData |
-| **Linux** | `.deb` / tarball ship `content/` + `./install.sh` (Typical / Complete / Custom checklist; deb: `openrgb3d-install-content`) → `~/.config/OpenRGB/…` |
-| **macOS** | Release zip ships `./install.sh` + `content/` (same menu) → `~/.config/OpenRGB/…` |
-
-Typical = looks/tools only; Complete = + all controllers; Custom = pick packs and controller categories. The presets git repo stays the authoring source of truth — rebuild releases when you want a new content cut (roughly monthly is enough). Dev machines can still copy-paste from a presets checkout.
+**Releases ship the plugin binary only** (`.dll` / `.so` / `.dylib`). Content comes from the presets repo: copy the feature folders you want into the plugin data root below, then restart OpenRGB.
 
 ```text
 %AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin/

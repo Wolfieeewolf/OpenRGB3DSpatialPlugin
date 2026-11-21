@@ -1,8 +1,7 @@
 name: Build
 
-# Public-runner subset of the OpenRGB 1.0 / Effects Qt6 pipeline matrix.
-# GitLab org CI additionally builds Win32, Linux i386/armhf, distro debs, Fedora,
-# and Flatpak against OpenRGB master.
+# PR / main check: same three plain binaries as release.yml (Windows .dll,
+# Linux .so, macOS .dylib on Apple Silicon), no packaging.
 on:
   pull_request:
   push:
@@ -18,25 +17,22 @@ concurrency:
 
 jobs:
   build-windows:
-    name: Windows 64 Qt 6.8.3
+    name: Windows
     runs-on: windows-2022
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+      - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           arch: win64_msvc2022_64
           cache: true
           modules: ''
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
@@ -47,23 +43,20 @@ jobs:
       - name: Build
         shell: cmd
         run: |
-          qmake -v
           qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
           nmake
 
-      - name: Upload
-        uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v6
         with:
-          name: Windows_64_Qt6.8.3
+          name: windows
           path: release/OpenRGB3DSpatialPlugin.dll
           if-no-files-found: error
 
   build-linux:
-    name: Linux amd64
+    name: Linux
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
@@ -73,8 +66,7 @@ jobs:
           chmod +x scripts/ci/*.sh
           sudo bash scripts/ci/install-linux-deps.sh 6
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+      - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           arch: linux_gcc_64
@@ -82,76 +74,64 @@ jobs:
           modules: ''
 
       - name: Build Assimp
-        run: |
-          chmod +x scripts/build-assimp.sh
-          bash scripts/build-assimp.sh
+        run: bash scripts/build-assimp.sh
 
       - name: Build
+        env:
+          QT_BIN_DIR: ${{ env.QT_ROOT_DIR }}/bin
         run: bash scripts/ci/build-linux.sh 6 release
 
-      - name: Package
-        env:
-          QT_AQT_VERSION: '6.8.3'
-        run: bash scripts/ci/package-linux.sh 6 amd64
-
-      - name: Upload
-        uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v6
         with:
-          name: Linux_amd64
-          path: |
-            dist/*
-            libOpenRGB3DSpatialPlugin.so
+          name: linux
+          path: libOpenRGB3DSpatialPlugin.so
           if-no-files-found: error
 
-  build-fedora:
-    name: Fedora 44 RPM
-    runs-on: ubuntu-latest
+  build-macos:
+    name: macOS
+    runs-on: macos-15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Build RPM in Fedora 44
-        run: |
-          chmod +x scripts/build-package-files.sh
-          docker run --rm -v "$PWD":/src -w /src fedora:44 bash -lc '
-            set -euo pipefail
-            dnf install -y rpmdevtools dnf-plugins-core gcc-c++ cmake ninja-build qt6-qtbase-devel qt6-linguist mesa-libGL-devel zlib-devel git make
-            chmod +x scripts/build-assimp.sh
-            ./scripts/build-assimp.sh
-            test -f dependencies/assimp-install/lib/libassimp.a
-            ./scripts/build-package-files.sh fedora/OpenRGB3DSpatialPlugin.spec
-            rpmdev-setuptree
-            cp fedora/OpenRGB3DSpatialPlugin.spec /root/rpmbuild/SPECS
-            cp -rp . /root/rpmbuild/SOURCES/OpenRGB3DSpatialPlugin
-            cd /root/rpmbuild
-            dnf builddep -y SPECS/OpenRGB3DSpatialPlugin.spec
-            rpmbuild -ba SPECS/OpenRGB3DSpatialPlugin.spec
-            mkdir -p /src/dist
-            cp RPMS/x86_64/openrgb-plugin-3d-spatial*.rpm /src/dist/
-          '
-
-      - name: Upload
-        uses: actions/upload-artifact@v6
+      - uses: jurplel/install-qt-action@v4
         with:
-          name: Linux_amd64_Fedora44
-          path: dist/openrgb-plugin-3d-spatial*.rpm
+          version: '6.8.3'
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+          modules: ''
+          aqtversion: '>=3.2.0'
+
+      - name: Build Assimp
+        run: |
+          export ASSIMP_BUILD_DIR="${GITHUB_WORKSPACE}/_deps/assimp-build"
+          export ASSIMP_INSTALL_DIR="${GITHUB_WORKSPACE}/_deps/assimp-install"
+          export CC=clang CXX=clang++
+          bash scripts/build-assimp.sh
+
+      - name: Build
+        run: bash scripts/ci/build-macos.sh 6 release
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: macos
+          path: libOpenRGB3DSpatialPlugin.dylib
           if-no-files-found: error
 
   presets-smoke:
     name: Presets content smoke
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout presets
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           repository: Wolfieeewolf/OpenRGB3DSpatialPresets
           path: presets
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 

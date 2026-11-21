@@ -695,9 +695,7 @@ unix:!macx {
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/
-    metainfo.path = $$PREFIX/share/metainfo/
-    metainfo.files += flatpak/org.openrgb.OpenRGB.Plugin.Spatial.metainfo.xml
-    INSTALLS += target metainfo
+    INSTALLS += target
     LIBS += -lGL
 }
 

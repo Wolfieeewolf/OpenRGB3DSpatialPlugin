@@ -28,7 +28,7 @@ Flag **split** = over ~1k lines *and* a confirmed natural seam — not crumbs fo
 | `engines/actions` | Action pack player / applier / script (calls field engines) |
 | `shared` | GL pool, room lighting/samplers, effect base, zones, controllers, types |
 | `ui` | Qt forms / viewport / layout (tree stays for now) |
-| `n/a` | Distro packaging (`debian/` `fedora/` `flatpak/`), assets, build helpers — not `release/` / `.wiki-seed/` |
+| `n/a` | Assets, build helpers — not `release/` / `.wiki-seed/` |
 
 ## Tree (phases 1–10 landed)
 
@@ -249,7 +249,6 @@ ui/                 ← DONE phase 9 (affinity folders)
 | Path | Notes |
 |------|-------|
 | `scripts/` `resources/` `images/` | Build helpers / assets (tracked) |
-| `debian/` `fedora/` `flatpak/` | Distro packaging (tracked) |
 | `release/` `.wiki-seed/` `.qtcreator/` | **Not** packaging — local/build/wiki seed only (gitignored; wiped in multipass cleanup) |
 
 ---

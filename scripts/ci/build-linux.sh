@@ -20,9 +20,13 @@ if [ "$BUILD_TYPE" = "release" ]; then
   CONFIG_ARGS+=(CONFIG+=release)
 fi
 
-QM="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
-if [ -z "$QM" ] && [ -n "${QT_BIN_DIR:-}" ] && [ -x "${QT_BIN_DIR}/qmake" ]; then
+# Explicit QT_BIN_DIR (CI: Qt 6.8.3 from install-qt-action) wins over distro qmake6.
+QM=""
+if [ -n "${QT_BIN_DIR:-}" ] && [ -x "${QT_BIN_DIR}/qmake" ]; then
   QM="${QT_BIN_DIR}/qmake"
+fi
+if [ -z "$QM" ]; then
+  QM="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
 fi
 if [ -z "$QM" ] && [ -x /usr/lib/qt6/bin/qmake ]; then
   QM=/usr/lib/qt6/bin/qmake

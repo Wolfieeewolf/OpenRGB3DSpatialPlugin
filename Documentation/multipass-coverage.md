@@ -61,7 +61,7 @@ Follow-up from [Dead code orphan survey](f4596327-7008-489e-9f7e-1233f5211fa3): 
 | ui/viewport, controllers, actions, … | fixed | 2026-10-31 | Preview dirty + action save/import under-root; LEDViewport named shards left alone. |
 | Object Creator / scene prop parity | fixed | 2026-10-31 | Scene prop Object Creator copy + Delete; Scene object **Edit scene prop…**; shared DisplayPlaneCaptureUi copy (no Windows-only strings). |
 | Documentation/ | fixed | 2026-10-31 | Tracker + file-map + recipe-map + CONTRIBUTING tab note. |
-| scripts/, debian\|fedora\|flatpak | keep | 2026-10-31 | Build helpers + distro packaging. `release/` / `.wiki-seed/` are gitignored local/build only — not tracked packaging. |
+| scripts/ | keep | 2026-11-21 | Build helpers. `release/` / `.wiki-seed/` are gitignored local/build only. |
 | .cursor/skills multipass | fixed | 2026-10-31 | Natural-seam / no-explosion + pass-2b **JSON/text size ceilings** row; synced to user store. |
 | **UI accessibility (spin-over-slider + three-ways)** | fixed | 2026-11-01 | Pass 5 gates: `EffectSliderRow` / `EffectDoubleSliderRow` (+ promote helpers) for int and double/mm chrome; SceneTransform / Action Editor / grid / spacing / display plane / scene prop / controller cards on the shared rows; `PluginUiWireListDestructiveDelete` on stack/zones/triggers/Object Creator; ActionGradientBar + viewport selection context menus. EQ vertical bands stay exempt. `OpenRGB/` excluded. **Presets repo:** no Qt UI — content half of pass 5 tracked in sibling [OpenRGB3DSpatialPresets `docs/multipass-coverage.md`](../../OpenRGB3DSpatialPresets/docs/multipass-coverage.md) § UI accessibility split. |
 | OpenRGB/ | n/a | | **Excluded** from this pass. |
