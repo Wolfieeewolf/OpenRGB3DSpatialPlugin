@@ -10,6 +10,7 @@
 #include "ActionVolumeField.h"
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"
+#include "SpatialEffect3D.h"
 #include "ZoneManager3D.h"
 
 #include <algorithm>
@@ -21,6 +22,89 @@
 
 namespace Action
 {
+
+/* ---- Room-grid field mapping (same contract as stack effects) ---------------------- */
+
+static bool ClipIsFieldClip(const Clip& clip)
+{
+    const std::string id = script::FileId(clip);
+    return script::UsesField(id) || script::UsesParticles(id) || script::UsesRibbons(id)
+        || (builtin_gpu::Uses(id) && script::FieldShader(id).empty());
+}
+
+bool ClipFieldUsesRoomGrid(const Clip& clip, const ApplySpatialContext* ctx)
+{
+    return ctx && ctx->has_room_grid && ClipUsesRoomBoxBounds(clip)
+        && !ClipUsesSequenceAxis(clip) && clip.axis_space != AxisSpace::Device
+        && ClipIsFieldClip(clip);
+}
+
+Vector3D ResolveClipOriginGrid(const Clip& clip, const ApplySpatialContext& ctx)
+{
+    Vector3D origin{ctx.anchor_x, ctx.anchor_y, ctx.anchor_z};
+    if(!clip.origin_ref.empty())
+    {
+        for(const NamedWorldPoint& p : ctx.reference_points)
+        {
+            if(p.name == clip.origin_ref)
+            {
+                origin = Vector3D{p.x, p.y, p.z};
+                break;
+            }
+        }
+    }
+    /* Offset = percent of half room per axis, as effect_offset_* in GetEffectOriginGrid. */
+    origin.x += (std::clamp(clip.origin_offset_x, -100.0f, 100.0f) / 100.0f) * 0.5f * (ctx.grid_max_x - ctx.grid_min_x);
+    origin.y += (std::clamp(clip.origin_offset_y, -100.0f, 100.0f) / 100.0f) * 0.5f * (ctx.grid_max_y - ctx.grid_min_y);
+    origin.z += (std::clamp(clip.origin_offset_z, -100.0f, 100.0f) / 100.0f) * 0.5f * (ctx.grid_max_z - ctx.grid_min_z);
+    return origin;
+}
+
+bool RoomGridFieldUv(const Clip& clip,
+                     const ApplySpatialContext& ctx,
+                     const Vector3D& clip_origin,
+                     const Vector3D& room_position,
+                     float* u, float* v, float* w)
+{
+    const GridContext3D grid(ctx.grid_min_x, ctx.grid_max_x,
+                             ctx.grid_min_y, ctx.grid_max_y,
+                             ctx.grid_min_z, ctx.grid_max_z);
+    /* Clip size plays the role of Scale (occupancy), same clamp as ResolveClipOrigin01. */
+    const float scale = std::clamp(clip.effect_size, 0.05f, 2.0f);
+    return SampleGpuVolumeOriginLocal01(room_position.x, room_position.y, room_position.z,
+                                        grid, clip_origin, scale, u, v, w);
+}
+
+void BindClipOrigin(const Clip& clip, const ApplySpatialContext* ctx)
+{
+    ClipOrigin01 origin;
+    if(ctx && ctx->has_world_bounds)
+    {
+        origin = ResolveClipOrigin01(clip,
+                                     ctx->min_x, ctx->max_x,
+                                     ctx->min_y, ctx->max_y,
+                                     ctx->min_z, ctx->max_z,
+                                     ctx->reference_points);
+    }
+    else
+    {
+        origin = ResolveClipOrigin01(clip, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
+    }
+    SetActiveClipOrigin01(origin);
+
+    /* Room-grid field clips already sample origin-local UV (anchor = 0.5, size in the
+       half-extents), so the field samplers must not shift or rescale again. */
+    ClipOrigin01 field = origin;
+    if(ClipFieldUsesRoomGrid(clip, ctx))
+    {
+        field.ox = field.oy = field.oz = 0.5f;
+        field.size = 1.0f;
+    }
+    volume_field::SetSampleOrigin01(field.ox, field.oy, field.oz, field.size);
+    particle_field::SetSampleOrigin01(field.ox, field.oy, field.oz, field.size);
+    ribbon_field::SetSampleOrigin01(field.ox, field.oy, field.oz, field.size);
+}
+
 namespace applier_detail
 {
 
@@ -173,13 +257,33 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                 return std::clamp((v - vmin) / span, 0.0f, 1.0f);
             };
 
+            /* RoomBox field clips map exactly like stack effects: origin-local UV around
+               the clip origin (grid units), unlit outside the clip box. Device / track
+               bounds keep their own box on purpose. */
+            const ApplySpatialContext* room_ctx = use_shared ? shared_bounds->room_ctx : nullptr;
+            const bool room_grid = ClipFieldUsesRoomGrid(*top, room_ctx);
+            const Vector3D clip_origin = room_grid ? ResolveClipOriginGrid(*top, *room_ctx) : Vector3D{};
+
             std::vector<float> xyz((size_t)n * 3u);
+            std::vector<char> outside((size_t)n, 0);
             for(int i = 0; i < n; ++i)
             {
-                const Vector3D& p = sample_pos[(size_t)i];
-                float nx = flat_norm(p.x, min_x, span_x);
-                float ny = flat_norm(p.y, min_y, span_y);
-                float nz = flat_norm(p.z, min_z, span_z);
+                float nx = 0.5f, ny = 0.5f, nz = 0.5f;
+                if(room_grid)
+                {
+                    if(!RoomGridFieldUv(*top, *room_ctx, clip_origin, matching[(size_t)i]->room_position,
+                                        &nx, &ny, &nz))
+                    {
+                        outside[(size_t)i] = 1;
+                    }
+                }
+                else
+                {
+                    const Vector3D& p = sample_pos[(size_t)i];
+                    nx = flat_norm(p.x, min_x, span_x);
+                    ny = flat_norm(p.y, min_y, span_y);
+                    nz = flat_norm(p.z, min_z, span_z);
+                }
                 ApplyClipUvTransform(*top, &nx, &ny);
                 xyz[(size_t)i * 3u + 0u] = nx;
                 xyz[(size_t)i * 3u + 1u] = ny;
@@ -215,6 +319,10 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
             int painted = 0;
             for(int i = 0; i < n; ++i)
             {
+                if(outside[(size_t)i])
+                {
+                    continue;
+                }
                 const float r = rgb[(size_t)i * 3u + 0u];
                 const float g = rgb[(size_t)i * 3u + 1u];
                 const float b = rgb[(size_t)i * 3u + 2u];
@@ -565,9 +673,35 @@ void BuildSpatialAxesForTarget(const Pack& pack,
             }
             return std::clamp((v - vmin) / span, 0.0f, 1.0f);
         };
+        /* Same field mapping as PaintTransformTargetSpatial so thumbnails match the LEDs. */
+        const bool room_grid = ClipFieldUsesRoomGrid(sample, room_bounds);
+        const Vector3D clip_origin = room_grid ? ResolveClipOriginGrid(sample, *room_bounds) : Vector3D{};
         for(int i = 0; i < (int)matching.size(); ++i)
         {
             const Vector3D& p = sample_pos[(size_t)i];
+            if(room_grid)
+            {
+                float u = 0.5f, v = 0.5f, w = 0.5f;
+                if(!RoomGridFieldUv(sample, *room_bounds, clip_origin, matching[(size_t)i]->room_position,
+                                    &u, &v, &w))
+                {
+                    /* Outside the clip box: thumbnails have no unlit mask, so pin to the
+                       nearest face (the LED itself stays dark in PaintTransformTargetSpatial). */
+                    const GridContext3D grid(room_bounds->grid_min_x, room_bounds->grid_max_x,
+                                             room_bounds->grid_min_y, room_bounds->grid_max_y,
+                                             room_bounds->grid_min_z, room_bounds->grid_max_z);
+                    const EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(
+                        grid, clip_origin, std::clamp(sample.effect_size, 0.05f, 2.0f));
+                    const Vector3D& rp = matching[(size_t)i]->room_position;
+                    EffectGpuAtlasUvFromGrid(rp.x, rp.y, rp.z, clip_origin, e, &u, &v, &w);
+                    u = std::clamp(u, 0.0f, 1.0f);
+                    v = std::clamp(v, 0.0f, 1.0f);
+                    w = std::clamp(w, 0.0f, 1.0f);
+                }
+                if(out_nx) { out_nx->push_back(u); }
+                if(out_ny) { out_ny->push_back(v); }
+                if(out_nz) { out_nz->push_back(w); }
+            }
             if(angular)
             {
                 out_axes->push_back(SampleSpinAngle(sample, p.x, p.y, p.z,
@@ -578,9 +712,12 @@ void BuildSpatialAxesForTarget(const Pack& pack,
                 out_axes->push_back(SampleAxisPos(sample, p.x, p.y, p.z,
                                                   min_x, max_x, min_y, max_y, min_z, max_z));
             }
-            if(out_nx) { out_nx->push_back(flat_norm(p.x, min_x, span_x)); }
-            if(out_ny) { out_ny->push_back(flat_norm(p.y, min_y, span_y)); }
-            if(out_nz) { out_nz->push_back(flat_norm(p.z, min_z, span_z)); }
+            if(!room_grid)
+            {
+                if(out_nx) { out_nx->push_back(flat_norm(p.x, min_x, span_x)); }
+                if(out_ny) { out_ny->push_back(flat_norm(p.y, min_y, span_y)); }
+                if(out_nz) { out_nz->push_back(flat_norm(p.z, min_z, span_z)); }
+            }
             out_seeds->push_back((int)(matching[(size_t)i]->zone_idx * 4096u
                                        + matching[(size_t)i]->led_idx));
         }

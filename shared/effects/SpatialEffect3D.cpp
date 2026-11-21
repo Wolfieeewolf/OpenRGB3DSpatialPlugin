@@ -1292,7 +1292,7 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
                                                    float phase01,
                                                    float time_sec,
                                                    const GridContext3D& grid,
-                                                   float normalized_scale,
+                                                   float feature_size,
                                                    const Vector3D& origin,
                                                    const Vector3D& rot) const
 {
@@ -1307,8 +1307,11 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, time_sec,
                             phase_eff, time_eff, kernel_rep_eff);
 
+    /* Same box as SampleVolumeLocalUv01 (Scale, per-axis Effect scale, rotation via rot). */
+    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
+    GetVolumeHalfExtents(grid, hx, hy, hz);
     float lx = 0.0f, ly = 0.0f, lz = 0.0f;
-    StripColormapLocalAxes(grid, normalized_scale, origin, rot, lx, ly, lz);
+    StripColormapLocalAxes(hx, hy, hz, feature_size, origin, rot, lx, ly, lz);
 
     float phase_use = phase_eff;
     float time_use = time_eff;

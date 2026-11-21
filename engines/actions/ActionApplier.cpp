@@ -177,23 +177,7 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             if(top)
             {
                 const std::string effect_id = script::FileId(*top);
-                ClipOrigin01 origin;
-                if(spatial && spatial->has_world_bounds)
-                {
-                    origin = ResolveClipOrigin01(*top,
-                                                spatial->min_x, spatial->max_x,
-                                                spatial->min_y, spatial->max_y,
-                                                spatial->min_z, spatial->max_z,
-                                                spatial->reference_points);
-                }
-                else
-                {
-                    origin = ResolveClipOrigin01(*top, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
-                }
-                SetActiveClipOrigin01(origin);
-                volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-                particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-                ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+                BindClipOrigin(*top, spatial);
                 if(script::UsesField(effect_id))
                 {
                     volume_field::PrepareForClip(*top, local_ms, field_sequence);
@@ -234,6 +218,7 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 shared_bounds.min_z = spatial->min_z;
                 shared_bounds.max_z = spatial->max_z;
                 shared_bounds.valid = true;
+                shared_bounds.room_ctx = spatial;
             }
             else if(want_track_union)
             {

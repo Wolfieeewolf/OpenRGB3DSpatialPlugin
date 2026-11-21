@@ -264,6 +264,18 @@ bool OpenRGB3DSpatialTab::GetActionRoomWorldBounds(Action::ApplySpatialContext* 
     out->max_y = world_bounds.max_y;
     out->min_z = world_bounds.min_z;
     out->max_z = world_bounds.max_z;
+    /* Same room the effect stack samples; with no effect layer the anchor is the room
+       centre (REF_MODE_ROOM_CENTER). */
+    out->has_room_grid = true;
+    out->grid_min_x = world_bounds.min_x;
+    out->grid_max_x = world_bounds.max_x;
+    out->grid_min_y = world_bounds.min_y;
+    out->grid_max_y = world_bounds.max_y;
+    out->grid_min_z = world_bounds.min_z;
+    out->grid_max_z = world_bounds.max_z;
+    out->anchor_x = 0.5f * (world_bounds.min_x + world_bounds.max_x);
+    out->anchor_y = 0.5f * (world_bounds.min_y + world_bounds.max_y);
+    out->anchor_z = 0.5f * (world_bounds.min_z + world_bounds.max_z);
     out->reference_points.clear();
     out->reference_points.reserve(reference_points.size());
     for(const auto& rp : reference_points)
@@ -414,6 +426,17 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
         spatial.max_y = origin.y + he.hh;
         spatial.min_z = origin.z - he.hd;
         spatial.max_z = origin.z + he.hd;
+        // Field clips sample the layer's real grid around its Spatial Anchor, like the effect.
+        spatial.has_room_grid = true;
+        spatial.grid_min_x = sample_grid->min_x;
+        spatial.grid_max_x = sample_grid->max_x;
+        spatial.grid_min_y = sample_grid->min_y;
+        spatial.grid_max_y = sample_grid->max_y;
+        spatial.grid_min_z = sample_grid->min_z;
+        spatial.grid_max_z = sample_grid->max_z;
+        spatial.anchor_x = origin.x;
+        spatial.anchor_y = origin.y;
+        spatial.anchor_z = origin.z;
         // Still publish scene refs so Action origin_ref resolves in Movie Sync preview.
         spatial.reference_points.clear();
         for(const auto& rp : reference_points)

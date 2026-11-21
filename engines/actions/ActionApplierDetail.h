@@ -54,6 +54,8 @@ struct SampleBounds
 {
     float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;
     bool valid = false;
+    /** Set for RoomBox bounds: lets field clips use the room-grid origin-local mapping. */
+    const ApplySpatialContext* room_ctx = nullptr;
 };
 
 void ExpandBounds(SampleBounds* b, const Vector3D& p);

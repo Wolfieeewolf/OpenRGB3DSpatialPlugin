@@ -50,7 +50,44 @@ struct ApplySpatialContext
     float max_z = 0.0f;
     /** Scene reference points for clip origin_ref resolution. */
     std::vector<NamedWorldPoint> reference_points;
+
+    /** Active room grid (grid units) — the same GridContext3D bounds stack effects sample.
+        When set, RoomBox field clips use the effect origin-local mapping (see
+        ClipFieldUsesRoomGrid). */
+    bool has_room_grid = false;
+    float grid_min_x = 0.0f;
+    float grid_max_x = 0.0f;
+    float grid_min_y = 0.0f;
+    float grid_max_y = 0.0f;
+    float grid_min_z = 0.0f;
+    float grid_max_z = 0.0f;
+    /** Spatial Anchor in grid units (GetEffectOriginGrid; room centre with no effect layer).
+        Clip origins start here, exactly like effect origins. */
+    float anchor_x = 0.0f;
+    float anchor_y = 0.0f;
+    float anchor_z = 0.0f;
 };
+
+/** True when a field clip (volume / particle / ribbon / built-in GPU) samples the room
+    with the stack-effect origin-local mapping: RoomBox play bounds + a room grid. */
+bool ClipFieldUsesRoomGrid(const Clip& clip, const ApplySpatialContext* ctx);
+
+/** Clip origin in grid units: anchor (or named reference point) plus origin_offset as a
+    percent of the half room — the same rule as SpatialEffect3D::GetEffectOriginGrid. */
+Vector3D ResolveClipOriginGrid(const Clip& clip, const ApplySpatialContext& ctx);
+
+/** Origin-local field UV for one LED (anchor = 0.5, clip size = Scale), via the shared
+    EffectGpuAtlasUvFromGrid. Returns false outside the clip box — leave that LED unlit. */
+bool RoomGridFieldUv(const Clip& clip,
+                     const ApplySpatialContext& ctx,
+                     const Vector3D& clip_origin,
+                     const Vector3D& room_position,
+                     float* u, float* v, float* w);
+
+/** Resolve the clip origin and bind it for scripts (SetActiveClipOrigin01) and the GPU
+    field samplers. Room-grid field clips get an identity remap because their sample UVs
+    are already origin-local. */
+void BindClipOrigin(const Clip& clip, const ApplySpatialContext* ctx);
 
 void BuildSpatialAxesForTarget(const Pack& pack,
                                const Target& target,

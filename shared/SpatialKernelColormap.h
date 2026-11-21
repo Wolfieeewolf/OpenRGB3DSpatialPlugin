@@ -70,25 +70,25 @@ inline float StripColormapComputeS01(int unfold_mode,
     return s01;
 }
 
-inline void StripColormapLocalAxes(const GridContext3D& grid,
-                                   float normalized_scale,
+/** Strip coordinates in the effect's own volume box (signed −1..1 at the box faces),
+ *  zoomed by Size. `rot` is origin + volume-local delta (VolumeWorldDeltaToLocal), and
+ *  hx/hy/hz come from SpatialEffect3D::GetVolumeHalfExtents — the same box volumeMain's
+ *  p01 uses, so Scale, per-axis Effect scale and rotation all apply identically.
+ *  Size is feature size (bigger = wider bands), never occupancy. */
+inline void StripColormapLocalAxes(float hx,
+                                   float hy,
+                                   float hz,
+                                   float feature_size,
                                    const Vector3D& origin,
                                    const Vector3D& rot,
                                    float& lx,
                                    float& ly,
                                    float& lz)
 {
-    float scale_eff = std::max(0.05f, normalized_scale);
-    EffectGridAxisHalfExtents e = MakeEffectGpuAtlasHalfExtents(grid, origin, scale_eff);
-    float sw = e.hw;
-    float sh = e.hh;
-    float sd = e.hd;
-    if(sw < 1e-5f)
-        sw = 1.0f;
-    if(sh < 1e-5f)
-        sh = 1.0f;
-    if(sd < 1e-5f)
-        sd = 1.0f;
+    const float s = std::max(0.05f, feature_size);
+    const float sw = std::max(1e-5f, hx) * s;
+    const float sh = std::max(1e-5f, hy) * s;
+    const float sd = std::max(1e-5f, hz) * s;
     lx = (rot.x - origin.x) / sw;
     ly = (rot.y - origin.y) / sh;
     lz = (rot.z - origin.z) / sd;

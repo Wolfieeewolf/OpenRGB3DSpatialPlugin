@@ -159,23 +159,7 @@ QImage ActionTimelineWidget::renderGpuEngineThumb(const GpuThumbRequest& req) co
         return img;
     }
 
-    Action::ClipOrigin01 origin;
-    if(room_bounds_.has_world_bounds)
-    {
-        origin = Action::ResolveClipOrigin01(req.clip,
-                                            room_bounds_.min_x, room_bounds_.max_x,
-                                            room_bounds_.min_y, room_bounds_.max_y,
-                                            room_bounds_.min_z, room_bounds_.max_z,
-                                            room_bounds_.reference_points);
-    }
-    else
-    {
-        origin = Action::ResolveClipOrigin01(req.clip, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
-    }
-    Action::SetActiveClipOrigin01(origin);
-    Action::volume_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-    Action::particle_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
-    Action::ribbon_field::SetSampleOrigin01(origin.ox, origin.oy, origin.oz, origin.size);
+    Action::BindClipOrigin(req.clip, room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
 
     const int dur = std::max(1, req.clip.end_ms - req.clip.start_ms);
     const int time_keys = std::max(4, std::min(req.sample_w, 8));
@@ -473,20 +457,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         {
             return;
         }
-        Action::ClipOrigin01 origin;
-        if(room_bounds_.has_world_bounds)
-        {
-            origin = Action::ResolveClipOrigin01(sample,
-                                                room_bounds_.min_x, room_bounds_.max_x,
-                                                room_bounds_.min_y, room_bounds_.max_y,
-                                                room_bounds_.min_z, room_bounds_.max_z,
-                                                room_bounds_.reference_points);
-        }
-        else
-        {
-            origin = Action::ResolveClipOrigin01(sample, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, {});
-        }
-        Action::SetActiveClipOrigin01(origin);
+        Action::BindClipOrigin(sample, room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
         Action::PrepareMediaForClip(sample, sample_ms, ++s_timeline_media_seq);
         last_prepare_ms = sample_ms;
     };

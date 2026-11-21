@@ -195,7 +195,14 @@ inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
  *   (that is the four-quadrant artifact). Size is feature size (ring width, etc.)
  *   via u_params, not occupancy coverage. Reconstruct world distance with
  *   MakeEffectGpuAtlasHalfExtents (same extents as the UV lookup).
- *   All origin-centric GPU volumes and Shader Field projections use this helper.
+ *
+ *   Effects (members) sample through SampleVolumeLocalUv01: the same mapping plus
+ *   gizmo rotation/shear (VolumeWorldDeltaToLocal), per-axis Effect scale X/Y/Z %, and
+ *   volume shape. At rotation 0 and 100% per-axis it equals the free helpers above.
+ *   Volume / Audio / Media / Shader Field use it; the strip colormap uses the same box
+ *   (GetVolumeHalfExtents) so palette bands track the field. Action RoomBox field clips
+ *   (no effect instance) use SampleGpuVolumeOriginLocal01 around the clip origin in grid
+ *   units, with clip size as Scale — see Action::RoomGridFieldUv.
  *
  * STRATUM Y — SampleStratumYNorm01:
  *   Room Y with anchor at 0.5 (for floor/mid/ceiling band weights).
@@ -502,7 +509,7 @@ public:
                                       float phase01,
                                       float time_sec,
                                       const GridContext3D& grid,
-                                      float normalized_scale,
+                                      float feature_size,
                                       const Vector3D& origin,
                                       const Vector3D& rot) const;
 

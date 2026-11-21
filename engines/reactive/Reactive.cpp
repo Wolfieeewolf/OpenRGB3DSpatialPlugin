@@ -1057,7 +1057,6 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
         std::fmod(radial01 * rainbow_cycles + slot_phase + GetColorCycleHz() * time + 2.0f, 1.0f);
 
     Vector3D anchor = GetEffectOriginGrid(grid);
-    Vector3D sample_pos{x, y, z};
     const float coord_y01 = SampleStratumYNorm01(y, grid, anchor);
     SpatialLayerCore::Basis basis{};
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
@@ -1078,6 +1077,9 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
     RGBColor c;
     if(UseEffectStripColormap())
     {
+        /* Strip colormap expects origin + volume-local delta, like every other caller. */
+        const Vector3D strip_local = VolumeWorldDeltaToLocal(x - anchor.x, y - anchor.y, z - anchor.z);
+        const Vector3D strip_pos{anchor.x + strip_local.x, anchor.y + strip_local.y, anchor.z + strip_local.z};
         const float strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                             GetEffectStripColormapUnfold(),
                                                             GetEffectStripColormapDirectionDeg(),
@@ -1086,7 +1088,7 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
                                                             grid,
                                                             GetNormalizedSize(),
                                                             anchor,
-                                                            sample_pos);
+                                                            strip_pos);
         c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), strip_p01, time);
     }
     else if(GetRainbowMode())
