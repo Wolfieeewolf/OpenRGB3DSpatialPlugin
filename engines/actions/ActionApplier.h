@@ -9,6 +9,7 @@
 #include <vector>
 
 class ZoneManager3D;
+struct GpuRoomGridOverlayLayer; /* shared/GpuRoomGridOverlay.h (global namespace) */
 
 namespace Action
 {
@@ -115,7 +116,9 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                           std::vector<std::unique_ptr<ControllerTransform>>* transforms,
                           bool force_hw_update,
                           ZoneManager3D* zone_manager,
-                          const ApplySpatialContext* spatial);
+                          const ApplySpatialContext* spatial,
+                          /** Optional: room-grid overlay layers for RoomBox field clips. */
+                          std::vector<::GpuRoomGridOverlayLayer>* overlay_out = nullptr);
 
 void PrepareControllersForPreview(const std::vector<RGBControllerInterface*>& controllers);
 

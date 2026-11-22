@@ -316,11 +316,43 @@ void LEDViewport3D::SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLa
     kept.reserve(layers.size());
     for(GpuRoomGridOverlayLayer& layer : layers)
     {
+        if(layer.kind == GpuRoomGridOverlayLayer::KindReactive)
+        {
+            /* Wave list: 4 RGBA32F texels per wave, read with texelFetch (no filtering). */
+            const int rows = std::max(1, layer.data_rows);
+            std::vector<float> data = layer.data_f32;
+            data.resize((size_t)rows * 16u, 0.0f);
+            GLuint dst = 0;
+            glGenTextures(1, &dst);
+            if(dst == 0)
+            {
+                continue;
+            }
+            glBindTexture(GL_TEXTURE_2D, dst);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 4, rows, 0, GL_RGBA, GL_FLOAT, data.data());
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            layer.atlas_tex = dst;
+            layer.data_f32.clear();
+            layer.data_f32.shrink_to_fit();
+            owned_overlay_atlas_textures_.push_back(dst);
+            kept.push_back(std::move(layer));
+            continue;
+        }
+        /* 2D frames (Shader Field frame, Screen Mirror stacked captures) upload at tex_w × tex_h. */
+        const bool projected = (layer.kind == GpuRoomGridOverlayLayer::KindProjected2D
+                                || layer.kind == GpuRoomGridOverlayLayer::KindScreenMirror
+                                || layer.kind == GpuRoomGridOverlayLayer::KindMinecraft);
         const int n = layer.atlas_n;
-        const int w = n;
-        const int h = n * n;
-        const size_t need = (n >= 2) ? ((size_t)w * (size_t)h * 4u) : 0u;
-        if(n < 2 || layer.atlas_rgba.size() < need)
+        const int w = projected ? layer.tex_w : n;
+        const int h = projected ? layer.tex_h : n * n;
+        const bool size_ok = projected ? (w >= 1 && h >= 1) : (n >= 2);
+        const size_t need = size_ok ? ((size_t)w * (size_t)h * 4u) : 0u;
+        if(!size_ok || layer.atlas_rgba.size() < need)
         {
             layer.atlas_tex = 0;
             layer.atlas_rgba.clear();
@@ -466,6 +498,10 @@ void LEDViewport3D::DrawRoomGridOverlay()
     const int layer_count = (int)gpu_room_grid_overlay_layers_.size();
     gl_prog_volume_atlas_point_.SetUniform1i("u_layer_count", layer_count);
 
+    /* Screen Mirror planes are shader-global (one Screen Mirror layer); a second one is skipped. */
+    bool screen_mirror_bound = false;
+    bool reactive_bound = false;
+    bool minecraft_bound = false;
     for(int i = 0; i < GpuRoomGridOverlayLayer::kMaxLayers; ++i)
     {
         const char* atlas_name = (i == 0) ? "u_atlas0" : (i == 1) ? "u_atlas1" : (i == 2) ? "u_atlas2" : "u_atlas3";
@@ -475,6 +511,62 @@ void LEDViewport3D::DrawRoomGridOverlay()
             const GpuRoomGridOverlayLayer& layer = gpu_room_grid_overlay_layers_[(size_t)i];
             glBindTexture(GL_TEXTURE_2D, layer.atlas_tex);
             gl_prog_volume_atlas_point_.SetUniform1i(atlas_name, i);
+            int layer_kind = layer.kind;
+            if(layer.kind == GpuRoomGridOverlayLayer::KindMinecraft)
+            {
+                if(minecraft_bound)
+                {
+                    layer_kind = -1;
+                }
+                else
+                {
+                    minecraft_bound = true;
+                    for(int s = 0; s < GpuRoomGridOverlayLayer::kMinecraftSlots; ++s)
+                    {
+                        char mname[32];
+                        std::snprintf(mname, sizeof(mname), "u_mc[%d]", s);
+                        gl_prog_volume_atlas_point_.SetUniform3f(mname, layer.mc[s][0], layer.mc[s][1], layer.mc[s][2]);
+                    }
+                }
+            }
+            if(layer.kind == GpuRoomGridOverlayLayer::KindReactive)
+            {
+                if(reactive_bound)
+                {
+                    layer_kind = -1;
+                }
+                else
+                {
+                    reactive_bound = true;
+                    gl_prog_volume_atlas_point_.SetUniform1i("u_rw_count", layer.data_rows);
+                    gl_prog_volume_atlas_point_.SetUniform1f("u_rw_cycles", layer.reactive_cycles);
+                    /* Reactive rings are thin shells (sigma can be a few % of LED spacing). On a
+                       cubic lattice only the axis-aligned points sit exactly on a sphere, so a thin
+                       ring reads as an X/Y/Z cross. Floor the ring width at ~one lattice step so
+                       the overlay shows the full 360° shell. Overlay only — LEDs are untouched. */
+                    float omin_x = 0.0f, omax_x = 0.0f, omin_y = 0.0f, omax_y = 0.0f, omin_z = 0.0f, omax_z = 0.0f;
+                    getRoomGridOverlayExtents(omin_x, omax_x, omin_y, omax_y, omin_z, omax_z);
+                    int onx = 1, ony = 1, onz = 1;
+                    GetRoomGridOverlayDimensions(&onx, &ony, &onz);
+                    const float step_x = (omax_x - omin_x) / (float)std::max(1, onx - 1);
+                    const float step_y = (omax_y - omin_y) / (float)std::max(1, ony - 1);
+                    const float step_z = (omax_z - omin_z) / (float)std::max(1, onz - 1);
+                    const float lattice_step = std::max(step_x, std::max(step_y, step_z));
+                    gl_prog_volume_atlas_point_.SetUniform1f("u_rw_min_sigma", 0.75f * std::max(lattice_step, 1e-4f));
+                }
+            }
+            if(layer.kind == GpuRoomGridOverlayLayer::KindScreenMirror)
+            {
+                if(screen_mirror_bound)
+                {
+                    layer_kind = -1; /* draws nothing */
+                }
+                else
+                {
+                    screen_mirror_bound = true;
+                    UploadScreenMirrorOverlayUniforms(layer);
+                }
+            }
 
             auto set_i = [&](const char* base, int value) {
                 char name[64];
@@ -498,11 +590,15 @@ void LEDViewport3D::DrawRoomGridOverlay()
             };
 
             set_i("u_atlas_n", layer.atlas_n);
+            set_i("u_kind", layer_kind);
+            set_i("u_projection", layer.projection);
             set_i("u_blend", layer.blend_mode);
             set_i("u_sample_room", layer.sample_room ? 1 : 0);
             set_i("u_volume_tools", layer.volume_tools ? 1 : 0);
             set_i("u_volume_shape", layer.volume_shape);
             set_i("u_finish", layer.finish_mode);
+            set_i("u_rainbow", layer.rainbow ? 1 : 0);
+            set_i("u_depth_shade", layer.depth_shade ? 1 : 0);
             set_f("u_layer_brightness", layer.brightness);
             set_f("u_hue_scroll", layer.hue_scroll_deg);
             set_i("u_palette_count", layer.palette_count);
@@ -747,3 +843,41 @@ void LEDViewport3D::ClearDisplayPlaneTextures()
     display_plane_tex_params_set.clear();
 }
 
+
+void LEDViewport3D::UploadScreenMirrorOverlayUniforms(const GpuRoomGridOverlayLayer& layer)
+{
+    GlProgram& prog = gl_prog_volume_atlas_point_;
+    const int count = std::min((int)layer.screen_planes.size(), GpuRoomGridOverlayLayer::kMaxScreenPlanes);
+    prog.SetUniform1i("u_sm_plane_count", count);
+    prog.SetUniform1f("u_sm_grid_scale_mm", layer.grid_scale_mm);
+    for(int k = 0; k < count; ++k)
+    {
+        const GpuRoomGridOverlayLayer::ScreenPlane& p = layer.screen_planes[(size_t)k];
+        char name[64];
+        auto nm = [&](const char* base) -> const char* {
+            std::snprintf(name, sizeof(name), "%s[%d]", base, k);
+            return name;
+        };
+        prog.SetUniform3f(nm("u_sm_frame"), (float)p.frame_w, (float)p.frame_h, (float)p.row0);
+        prog.SetUniform3f(nm("u_sm_pos"), p.pos[0], p.pos[1], p.pos[2]);
+        /* Row-major world→local passed as column-major: GLSL uses delta * M. */
+        prog.SetUniformMat3(nm("u_sm_rot"), p.rot);
+        prog.SetUniform3f(nm("u_sm_inv_scale"), p.inv_scale[0], p.inv_scale[1], p.inv_scale[2]);
+        prog.SetUniform3f(nm("u_sm_half"), p.half_w, p.half_h, (float)p.zone_count);
+        prog.SetUniform3f(nm("u_sm_crop_u"), p.crop[0], p.crop[1], 0.0f);
+        prog.SetUniform3f(nm("u_sm_crop_v"), p.crop[2], p.crop[3], 0.0f);
+        prog.SetUniform3f(nm("u_sm_falloff"), p.max_mm, p.coverage, p.softness);
+        prog.SetUniform3f(nm("u_sm_falloff2"), p.curve, p.inverted ? 1.0f : 0.0f, 0.0f);
+        prog.SetUniform3f(nm("u_sm_grade0"), p.brightness, p.threshold, p.white_rolloff);
+        prog.SetUniform3f(nm("u_sm_grade1"), p.vibrance, p.white_rolloff_max, 0.0f);
+        prog.SetUniform3f(nm("u_sm_gain"), p.gain[0], p.gain[1], p.gain[2]);
+        for(int z = 0; z < GpuRoomGridOverlayLayer::kMaxScreenZones; ++z)
+        {
+            char zname[64];
+            std::snprintf(zname, sizeof(zname), "u_sm_zone_u[%d]", k * GpuRoomGridOverlayLayer::kMaxScreenZones + z);
+            prog.SetUniform3f(zname, p.zones[z][0], p.zones[z][1], 0.0f);
+            std::snprintf(zname, sizeof(zname), "u_sm_zone_v[%d]", k * GpuRoomGridOverlayLayer::kMaxScreenZones + z);
+            prog.SetUniform3f(zname, p.zones[z][2], p.zones[z][3], 0.0f);
+        }
+    }
+}

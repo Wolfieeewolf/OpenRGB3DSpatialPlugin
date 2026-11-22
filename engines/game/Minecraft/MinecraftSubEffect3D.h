@@ -23,6 +23,10 @@ protected:
 public:
     void SetupCustomUI(QWidget* parent) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    /** Overlay: vitals / damage / Room Ambilight on the GPU (MinecraftGame::FillOverlayLayer). */
+    bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,
+                                        const GridContext3D& grid,
+                                        float time_sec) override;
     bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const override;
     bool RequiresWorldSpaceCoordinates() const override;
     void ApplyControlVisibility() override;

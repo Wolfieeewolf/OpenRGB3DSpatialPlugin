@@ -366,7 +366,7 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "phase37")
     {
-        return std::fmod(time_sec * 0.37f * speed_mul + 1000.0f, 1.0f);
+        return std::fmod(GetMotionSeconds(time_sec) * 0.37f * speed_mul + 1000.0f, 1.0f);
     }
     if(name == "ndetail")
     {
@@ -585,8 +585,14 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "harmonic_motion")
     {
+        /* u_time already carries Speed (GetMotionSeconds); this is the Speed-100 rate × flow. */
         const float flow = std::clamp(SliderRaw("harmonic_flow_amount") / 100.0f, 0.4f, 2.5f);
-        return std::clamp(GetMotionHz() * flow, 0.0f, 2.5f);
+        return std::clamp(MotionHzAtSpeed100() * flow, 0.0f, 2.5f);
+    }
+    if(name == "motion_hz_ref")
+    {
+        /* Speed-100 motion rate. Multiply u_time by this to get motion cycles. */
+        return MotionHzAtSpeed100();
     }
     if(name == "harmonic_freq")
     {

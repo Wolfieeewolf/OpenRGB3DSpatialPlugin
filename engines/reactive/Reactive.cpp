@@ -6,6 +6,7 @@
 #include "EffectSliderRow.h"
 #include "EffectListManager3D.h"
 #include "PlayerEngines.h"
+#include "GpuRoomGridOverlay.h"
 
 #include <QString>
 #include <algorithm>
@@ -362,6 +363,121 @@ float SpreadAlongDistance(float dx, float dy, float dz, int spread_mode, int spr
     }
 }
 
+/** Everything about one wave at one instant that does not depend on the sample point.
+ *  Shared by the LED path (WaveSampleEnergy) and the GPU overlay layer, so both use the
+ *  exact same kinematics / envelope / fade / glow numbers. */
+struct WaveFrame
+{
+    bool  valid = false;      /* metrics usable */
+    bool  active = false;     /* age <= lifetime: travelling front is drawn */
+    float age = 0.0f;
+    float radius = 0.0f;
+    float sigma = 1.0e-5f;
+    float expand_inst = 0.0f;
+    float gain = 0.0f;        /* envelope * distance_fade * strength */
+    float core_amp = 0.0f;    /* 0 for Ring / Double looks */
+    float core_sigma = 1.0e-5f;
+    float glow_amp = 0.0f;    /* press glow amplitude at this age (0 = off) */
+    float glow_sigma = 1.0e-4f;
+    float travel = 1.0e-4f;
+};
+
+WaveFrame ComputeWaveFrame(float spread_in,
+                           float spacing_in,
+                           float birth_time,
+                           float strength,
+                           float time,
+                           float speed01,
+                           int look_mode,
+                           int travel_pct,
+                           int ring_width_pct,
+                           int accel_pct,
+                           int distance_fade_pct,
+                           int press_glow_pct,
+                           int press_glow_deci_sec,
+                           float zone_diag)
+{
+    WaveFrame f;
+    f.age = std::max(0.0f, time - birth_time);
+
+    float spread = spread_in;
+    float spacing = spacing_in;
+    NormalizeWaveMetrics(spread, spacing, zone_diag);
+    if(spread < 1.0e-4f || spacing < 1.0e-5f)
+    {
+        return f;
+    }
+    f.valid = true;
+
+    const WaveKinematics motion =
+        ComputeWaveKinematics(spacing, spread, zone_diag, speed01, travel_pct, look_mode);
+    const float expand = motion.expand;
+    const float lifetime = motion.lifetime;
+    const float travel = std::max(motion.travel, 1.0e-4f);
+    f.travel = travel;
+    const float width01 = std::clamp(ring_width_pct / 100.0f, 0.0f, 1.0f);
+    f.sigma = std::max(1.0e-5f, RingSigma(width01, spacing, spread, zone_diag));
+    const float r_min = std::max(spacing * 0.28f, 1.0e-4f);
+    f.expand_inst = expand;
+
+    if(f.age <= lifetime)
+    {
+        f.active = true;
+        // Accel: start slow near the key, then pick up speed toward full travel.
+        // power 1 = constant; up to ~3 = strong ease-in on distance.
+        const float u = std::clamp(f.age / std::max(lifetime, 1.0e-5f), 0.0f, 1.0f);
+        const float accel01 = std::clamp(accel_pct / 100.0f, 0.0f, 1.0f);
+        const float power = 1.0f + accel01 * 2.0f;
+        const float eased = std::pow(u, power);
+        f.radius = std::min(travel, r_min + (travel - r_min) * eased);
+        // Instantaneous expand for solid/shock trail clear (dr/dt).
+        const float du_dt = 1.0f / std::max(lifetime, 1.0e-5f);
+        const float deed_du = power * std::pow(std::max(u, 1.0e-4f), power - 1.0f);
+        f.expand_inst = std::max((travel - r_min) * deed_du * du_dt, expand * 0.15f);
+
+        f.core_sigma = std::max(1.0e-5f, spacing * 0.55f);
+        f.core_amp = (look_mode == 0 || look_mode == 4) ? 0.0f : std::exp(-f.age / 0.08f);
+
+        float envelope = 1.0f;
+        if(look_mode == 2)
+        {
+            const float remain = 1.0f - u;
+            envelope = remain * remain;
+        }
+        else if(look_mode == 3)
+        {
+            envelope = std::exp(-f.age / std::max(lifetime * 0.55f, 1.0e-4f));
+        }
+        else if(look_mode == 1)
+        {
+            if(u > 0.52f)
+            {
+                envelope = 1.0f - (u - 0.52f) / 0.48f;
+            }
+        }
+        else if(u > 0.72f)
+        {
+            envelope = 1.0f - (u - 0.72f) / 0.28f;
+        }
+
+        // Fade the traveling front as it gets farther from the press.
+        const float fade01 = std::clamp(distance_fade_pct / 100.0f, 0.0f, 1.0f);
+        const float progress = std::clamp((f.radius - r_min) / std::max(travel - r_min, 1.0e-4f), 0.0f, 1.0f);
+        const float distance_fade = 1.0f - fade01 * progress * progress;
+        f.gain = envelope * distance_fade * strength;
+    }
+
+    // Optional sticky glow on/near the pressed key (independent of the traveling shell).
+    const float glow_amt = std::clamp(press_glow_pct / 100.0f, 0.0f, 1.0f);
+    if(glow_amt > 1.0e-4f)
+    {
+        const float glow_tau = std::clamp(press_glow_deci_sec / 10.0f, 0.1f, 12.0f);
+        f.glow_sigma = std::max(spacing * (0.85f + 1.8f * glow_amt), 1.0e-4f);
+        f.glow_amp = glow_amt * std::exp(-f.age / glow_tau);
+    }
+    return f;
+}
+
 float WaveSampleEnergy(const Vector3D& origin,
                        float spread_in,
                        float spacing_in,
@@ -384,22 +500,11 @@ float WaveSampleEnergy(const Vector3D& origin,
                        int press_glow_deci_sec,
                        float zone_diag)
 {
-    const float age = std::max(0.0f, time - birth_time);
-
-    float spread = spread_in;
-    float spacing = spacing_in;
-    NormalizeWaveMetrics(spread, spacing, zone_diag);
-    if(spread < 1.0e-4f || spacing < 1.0e-5f)
-    {
-        return 0.0f;
-    }
-
-    const WaveKinematics motion =
-        ComputeWaveKinematics(spacing, spread, zone_diag, speed01, travel_pct, look_mode);
-    const float expand = motion.expand;
-    const float lifetime = motion.lifetime;
-    const float travel = std::max(motion.travel, 1.0e-4f);
-    if(age > lifetime && press_glow_pct <= 0)
+    const WaveFrame f = ComputeWaveFrame(spread_in, spacing_in, birth_time, strength, time, speed01,
+                                         look_mode, travel_pct, ring_width_pct, accel_pct,
+                                         distance_fade_pct, press_glow_pct, press_glow_deci_sec,
+                                         zone_diag);
+    if(!f.valid || (!f.active && press_glow_pct <= 0))
     {
         return 0.0f;
     }
@@ -408,60 +513,15 @@ float WaveSampleEnergy(const Vector3D& origin,
     const float dy = y - origin.y;
     const float dz = z - origin.z;
     const float dist3 = std::sqrt(dx * dx + dy * dy + dz * dz);
-    const float width01 = std::clamp(ring_width_pct / 100.0f, 0.0f, 1.0f);
-    const float sigma = std::max(1.0e-5f, RingSigma(width01, spacing, spread, zone_diag));
-    const float r_min = std::max(spacing * 0.28f, 1.0e-4f);
+    const float age = f.age;
+    const float sigma = f.sigma;
+    const float radius = f.radius;
+    const float expand_inst = f.expand_inst;
 
     float energy = 0.0f;
-    float expand_inst = expand;
-    if(age <= lifetime)
+    if(f.active)
     {
-        // Accel: start slow near the key, then pick up speed toward full travel.
-        // power 1 = constant; up to ~3 = strong ease-in on distance.
-        const float u = std::clamp(age / std::max(lifetime, 1.0e-5f), 0.0f, 1.0f);
-        const float accel01 = std::clamp(accel_pct / 100.0f, 0.0f, 1.0f);
-        const float power = 1.0f + accel01 * 2.0f;
-        const float eased = std::pow(u, power);
-        const float radius = std::min(travel, r_min + (travel - r_min) * eased);
-        // Instantaneous expand for solid/shock trail clear (dr/dt).
-        const float du_dt = 1.0f / std::max(lifetime, 1.0e-5f);
-        const float deed_du = power * std::pow(std::max(u, 1.0e-4f), power - 1.0f);
-        expand_inst = std::max((travel - r_min) * deed_du * du_dt, expand * 0.15f);
-
-        const float core_sigma = std::max(1.0e-5f, spacing * 0.55f);
-        const float core =
-            (look_mode == 0 || look_mode == 4)
-                ? 0.0f
-                : (std::exp(-0.5f * (dist3 / core_sigma) * (dist3 / core_sigma)) *
-                   std::exp(-age / 0.08f));
-
-        float envelope = 1.0f;
-        if(look_mode == 2)
-        {
-            const float remain = 1.0f - u;
-            envelope = remain * remain;
-        }
-        else if(look_mode == 3)
-        {
-            envelope = std::exp(-age / std::max(lifetime * 0.55f, 1.0e-4f));
-        }
-        else if(look_mode == 1)
-        {
-            if(u > 0.52f)
-            {
-                envelope = 1.0f - (u - 0.52f) / 0.48f;
-            }
-        }
-        else if(u > 0.72f)
-        {
-            envelope = 1.0f - (u - 0.72f) / 0.28f;
-        }
-
-        // Fade the traveling front as it gets farther from the press.
-        const float fade01 = std::clamp(distance_fade_pct / 100.0f, 0.0f, 1.0f);
-        const float progress = std::clamp((radius - r_min) / std::max(travel - r_min, 1.0e-4f), 0.0f, 1.0f);
-        const float distance_fade = 1.0f - fade01 * progress * progress;
-
+        const float core = f.core_amp * std::exp(-0.5f * (dist3 / f.core_sigma) * (dist3 / f.core_sigma));
         const int orient = std::clamp(spread_orient, 0, 2);
         switch(spread_mode)
         {
@@ -498,18 +558,13 @@ float WaveSampleEnergy(const Vector3D& origin,
             energy = LookEnergy(ShellDistance(dx, dy, dz, shape), radius, sigma, look_mode, core, age, expand_inst);
             break;
         }
-        energy *= envelope * distance_fade * strength;
+        energy *= f.gain;
     }
 
     // Optional sticky glow on/near the pressed key (independent of the traveling shell).
-    const float glow_amt = std::clamp(press_glow_pct / 100.0f, 0.0f, 1.0f);
-    if(glow_amt > 1.0e-4f)
+    if(f.glow_amp > 0.0f)
     {
-        const float glow_tau = std::clamp(press_glow_deci_sec / 10.0f, 0.1f, 12.0f);
-        const float glow_sigma = std::max(spacing * (0.85f + 1.8f * glow_amt), 1.0e-4f);
-        const float glow =
-            glow_amt * std::exp(-0.5f * (dist3 / glow_sigma) * (dist3 / glow_sigma)) *
-            std::exp(-age / glow_tau);
+        const float glow = f.glow_amp * std::exp(-0.5f * (dist3 / f.glow_sigma) * (dist3 / f.glow_sigma));
         energy = energy + glow - energy * glow;
     }
 
@@ -1089,7 +1144,7 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
                                                             GetNormalizedSize(),
                                                             anchor,
                                                             strip_pos);
-        c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), strip_p01, time);
+        c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), strip_p01, time);
     }
     else if(GetRainbowMode())
     {
@@ -1222,4 +1277,68 @@ void RegisterReactiveEngine()
         "",
         "",
         []() { return new Reactive; });
+}
+
+bool Reactive::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
+                                              const GridContext3D& grid,
+                                              float time_sec)
+{
+    if(!OverlayLayerAbiOk(out))
+    {
+        return false; /* caller built against another layout — skip, never overwrite */
+    }
+    out = GpuRoomGridOverlayLayer{};
+    out.kind = GpuRoomGridOverlayLayer::KindReactive;
+    FillOverlayVolumeFrame(out, grid);
+    out.sample_room = false;
+    out.rainbow = GetRainbowMode();
+    out.reactive_cycles = std::clamp(GetNormalizedSize(), 0.25f, 2.5f);
+    out.hue_scroll_deg = GetColorCycleHz() * time_sec * 360.0f;
+    out.palette_count = 0;
+    for(const RGBColor c : GetColors())
+    {
+        if(out.palette_count >= GpuRoomGridOverlayLayer::kMaxPalette)
+        {
+            break;
+        }
+        const int pi = out.palette_count++;
+        out.palette[pi][0] = (float)(c & 0xFF) / 255.0f;
+        out.palette[pi][1] = (float)((c >> 8) & 0xFF) / 255.0f;
+        out.palette[pi][2] = (float)((c >> 16) & 0xFF) / 255.0f;
+    }
+
+    const float zone_diag =
+        std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
+    /* 4 RGBA32F texels per wave — see ViewportShaders reactiveColor(). */
+    out.data_f32.clear();
+    out.data_f32.reserve((size_t)GpuRoomGridOverlayLayer::kMaxReactiveWaves * 16u);
+    int rows = 0;
+    for(const WaveImpact& w : waves_)
+    {
+        if(rows >= GpuRoomGridOverlayLayer::kMaxReactiveWaves)
+        {
+            break;
+        }
+        const WaveFrame f = ComputeWaveFrame(w.spread, w.spacing, w.birth_time, w.strength, time_sec,
+                                             w.speed01, w.look_mode, w.travel_pct, w.ring_width_pct,
+                                             w.accel_pct, w.distance_fade_pct, w.press_glow_pct,
+                                             w.press_glow_deci_sec, zone_diag);
+        if(!f.valid || (!f.active && f.glow_amp <= 0.0f))
+        {
+            continue;
+        }
+        const float modes = (float)(std::clamp(w.spread_mode, 0, 9) * 1000 + std::clamp(w.spread_orient, 0, 2) * 100
+                                    + std::clamp(w.look_mode, 0, 9) * 10 + std::clamp(w.footprint_shape, 0, 9));
+        const float row[16] = {
+            w.origin.x, w.origin.y, w.origin.z, modes,
+            f.radius, f.sigma, f.expand_inst, f.active ? f.gain : 0.0f,
+            f.core_amp, f.core_sigma, f.age, f.glow_amp,
+            f.glow_sigma, f.travel, (float)(w.color_slot % 8u) / 8.0f, 1.0f,
+        };
+        out.data_f32.insert(out.data_f32.end(), row, row + 16);
+        ++rows;
+    }
+    out.data_rows = rows;
+    /* Empty wave list is still a valid layer (draws black) so the overlay clears. */
+    return true;
 }

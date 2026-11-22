@@ -7,6 +7,7 @@
 #include "OpenRGB3DSpatialPlugin.h"
 #include "EffectListManager3D.h"
 #include "EffectUiRows.h"
+#include "GpuRoomGridOverlay.h"
 
 #include <QVBoxLayout>
 #include <QComboBox>
@@ -20,6 +21,7 @@
 #include <QUrl>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -164,6 +166,8 @@ void ShaderField::LoadShaderBody()
     {
         return;
     }
+    /* Specs only — user values in extra_raw_ survive a reload (missing ones use the default). */
+    extra_specs_ = SpatialShaderCatalog::LoadExtraParamSliders(spec_.path);
     {
         QMutexLocker lock(&display_mutex);
         display_frame.reset();
@@ -264,11 +268,11 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     projection_combo = projection_row->combo();
     projection_combo->addItem(QStringLiteral("Floor (X\u2013Z)"));
     projection_combo->addItem(QStringLiteral("Front wall (X\u2013Y)"));
-    projection_combo->addItem(QStringLiteral("Left wall (Y\u2013Z)"));
+    projection_combo->addItem(QStringLiteral("Left wall (Z\u2013Y)"));
     projection_combo->addItem(QStringLiteral("Sphere (from origin)"));
     projection_combo->addItem(QStringLiteral("Ceiling (X\u2013Z)"));
     projection_combo->addItem(QStringLiteral("Back wall (X\u2013Y)"));
-    projection_combo->addItem(QStringLiteral("Right wall (Y\u2013Z)"));
+    projection_combo->addItem(QStringLiteral("Right wall (Z\u2013Y)"));
     projection_combo->addItem(QStringLiteral("Cylinder around Y"));
     projection_combo->addItem(QStringLiteral("Radial floor (polar XZ)"));
     projection_combo->addItem(QStringLiteral("Triplanar (dominant face)"));
@@ -318,6 +322,36 @@ void ShaderField::SetupCustomUI(QWidget* parent)
         },
         [this](int) { return QString::number(hue_shift, 'f', 3); },
         on_changed);
+
+    /* The look's own sliders (header `slider:` lines for u_params[4..7]) — same header
+       contract Volume uses, saved per effect under "shader_extra". */
+    if(extra_specs_.isEmpty())
+    {
+        extra_specs_ = SpatialShaderCatalog::LoadExtraParamSliders(spec_.path);
+    }
+    extra_sliders_.clear();
+    for(int i = 0; i < std::min(4, (int)extra_specs_.size()); ++i)
+    {
+        const SpatialShaderCatalog::ExtraParamSlider s = extra_specs_[i];
+        EffectSliderRow* row = EffectUiRows::AppendSliderRow(layout,
+                                                             s.label,
+                                                             std::min(s.min, s.max),
+                                                             std::max(s.min, s.max),
+                                                             ExtraRaw(s),
+                                                             s.tip);
+        row->setObjectName(QStringLiteral("extraParamRow_") + s.name);
+        extra_sliders_.push_back(row->slider());
+        const std::string key = s.name.toStdString();
+        const bool pct = s.pct;
+        row->bindValueChanged(
+            this,
+            [this, key](int v) {
+                extra_raw_[key] = v;
+                last_uniform_sequence = 0;
+            },
+            [pct](int v) { return pct ? QString::number(v) + QStringLiteral("%") : QString::number(v); },
+            on_changed);
+    }
 
     auto* open_folder_button = new QPushButton(QStringLiteral("Open user shaders folder"), w);
     open_folder_button->setObjectName(QStringLiteral("openFolderButton"));
@@ -369,7 +403,8 @@ void ShaderField::SyncUniforms(float time)
     }
     EnsureShaderEngineRunning();
     SpatialShaderUniforms u;
-    u.time_sec = time * GetMotionHz() * (float)(2.0 * M_PI);
+    /* u_time contract (all engines): Speed-scaled seconds, = wall seconds at Speed 100. */
+    u.time_sec = GetMotionSeconds(time);
     const float zoom = std::clamp(GetNormalizedSize(), 0.25f, 3.0f);
     const float detail = std::clamp(GetNormalizedDetail(), 0.05f, 1.0f);
     const float hue = std::fmod(hue_shift + time * GetColorCycleHz() + 1.0f, 1.0f);
@@ -377,10 +412,18 @@ void ShaderField::SyncUniforms(float time)
     u.params[1] = std::clamp(contrast, 0.35f, 2.5f);
     u.params[2] = hue;
     u.params[3] = detail;
-    u.param_count = 4;
+    const int extra_n = std::min(4, (int)extra_specs_.size());
+    for(int i = 0; i < extra_n; ++i)
+    {
+        const SpatialShaderCatalog::ExtraParamSlider& s = extra_specs_[i];
+        const float raw = (float)ExtraRaw(s);
+        u.params[4 + i] = s.pct ? raw / 100.0f : raw;
+    }
+    u.param_count = 4 + extra_n;
     shader_engine->setUniforms(u);
 }
 
+/* Mirrored in ViewportShaders VolumeAtlasPoint projectUv() for the room-grid overlay — keep in sync. */
 void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) const
 {
     const int mode = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
@@ -395,9 +438,12 @@ void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) con
         u = nx;
         v = ny;
         break;
+    /* Walls read like the front wall from inside the room: v = up (Y), u = the viewer's
+       right. Facing left (−X) right is −Z; facing right (+X) right is +Z; facing back
+       (+Z) right is −X. */
     case PROJ_SIDE_LEFT:
-        u = ny;
-        v = nz;
+        u = 1.0f - nz;
+        v = ny;
         break;
     case PROJ_CEILING:
         u = nx;
@@ -408,8 +454,8 @@ void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) con
         v = ny;
         break;
     case PROJ_SIDE_RIGHT:
-        u = 1.0f - ny;
-        v = nz;
+        u = nz;
+        v = ny;
         break;
     case PROJ_CYLINDER_Y:
     {
@@ -437,8 +483,9 @@ void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) con
         const float az = std::fabs(nz - 0.5f);
         if(ax >= ay && ax >= az)
         {
-            u = (nx >= 0.5f) ? (1.0f - ny) : ny;
-            v = nz;
+            /* Side faces: same orientation as PROJ_SIDE_LEFT / PROJ_SIDE_RIGHT. */
+            u = (nx >= 0.5f) ? nz : (1.0f - nz);
+            v = ny;
         }
         else if(ay >= ax && ay >= az)
         {
@@ -533,7 +580,24 @@ nlohmann::json ShaderField::SaveSettings() const
     j["projection_mode"] = projection_mode;
     j["shader_contrast"] = contrast;
     j["shader_hue_shift"] = hue_shift;
+    if(!extra_raw_.empty())
+    {
+        nlohmann::json extra = nlohmann::json::object();
+        for(const auto& kv : extra_raw_)
+        {
+            extra[kv.first] = kv.second;
+        }
+        j["shader_extra"] = extra;
+    }
     return j;
+}
+
+int ShaderField::ExtraRaw(const SpatialShaderCatalog::ExtraParamSlider& s) const
+{
+    const auto it = extra_raw_.find(s.name.toStdString());
+    const int lo = std::min(s.min, s.max);
+    const int hi = std::max(s.min, s.max);
+    return std::clamp(it != extra_raw_.end() ? it->second : s.def, lo, hi);
 }
 
 void ShaderField::LoadSettings(const nlohmann::json& settings)
@@ -563,4 +627,64 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
     {
         hue_slider->setValue((int)std::lround(hue_shift * 1000.0f));
     }
+    extra_raw_.clear();
+    if(settings.contains("shader_extra") && settings["shader_extra"].is_object())
+    {
+        for(auto it = settings["shader_extra"].begin(); it != settings["shader_extra"].end(); ++it)
+        {
+            if(it.value().is_number())
+            {
+                extra_raw_[it.key()] = (int)std::lround(it.value().get<double>());
+            }
+        }
+    }
+    for(int i = 0; i < (int)extra_sliders_.size() && i < (int)extra_specs_.size(); ++i)
+    {
+        if(extra_sliders_[(size_t)i])
+        {
+            /* Same as contrast/hue: setValue also refreshes the row's value label. */
+            extra_sliders_[(size_t)i]->setValue(ExtraRaw(extra_specs_[i]));
+        }
+    }
+    last_uniform_sequence = 0;
+}
+
+bool ShaderField::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
+                                                 const GridContext3D& grid,
+                                                 float /*time_sec*/)
+{
+    if(!OverlayLayerAbiOk(out))
+    {
+        return false; /* caller built against another layout — skip, never overwrite */
+    }
+    QImage frame;
+    {
+        QMutexLocker lock(&display_mutex);
+        if(!display_frame || display_frame->isNull())
+        {
+            return false;
+        }
+        frame = display_frame->convertToFormat(QImage::Format_RGBA8888);
+    }
+    const int w = frame.width();
+    const int h = frame.height();
+    if(w < 1 || h < 1)
+    {
+        return false;
+    }
+
+    out = GpuRoomGridOverlayLayer{};
+    out.kind = GpuRoomGridOverlayLayer::KindProjected2D;
+    out.tex_w = w;
+    out.tex_h = h;
+    out.projection = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
+    out.atlas_rgba.resize((size_t)w * (size_t)h * 4u);
+    for(int y = 0; y < h; ++y)
+    {
+        std::memcpy(out.atlas_rgba.data() + (size_t)y * (size_t)w * 4u, frame.constScanLine(y), (size_t)w * 4u);
+    }
+    /* Same box as CalculateColorGrid's SampleVolumeLocalUv01. */
+    FillOverlayVolumeFrame(out, grid);
+    out.sample_room = false;
+    return true;
 }

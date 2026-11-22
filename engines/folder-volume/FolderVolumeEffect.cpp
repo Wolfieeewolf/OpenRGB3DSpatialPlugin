@@ -124,7 +124,9 @@ void FolderVolumeEffect::SubmitVolumeGpu(std::uint64_t render_sequence,
                                          const float* params,
                                          int count)
 {
-    volume_assist_.prepareProgram(render_sequence, time_sec, params, count);
+    /* u_time contract (all engines): Speed-scaled seconds, = wall seconds at Speed 100.
+       C++-side ages (audio pulses, GIF steps) stay in wall seconds via params. */
+    volume_assist_.prepareProgram(render_sequence, GetMotionSeconds(time_sec), params, count);
 }
 
 std::uint32_t FolderVolumeEffect::PackNorm01Key(float n1, float n2, float n3)
@@ -150,6 +152,10 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
                                                         const GridContext3D& grid,
                                                         float time_sec)
 {
+    if(!OverlayLayerAbiOk(out))
+    {
+        return false; /* caller built against another layout — skip, never overwrite */
+    }
     /* Export RGBA under the pool GL session. Pool FBO tex ids die on the next
        PrepareGpuFields — viewport-owned upload from atlas_rgba survives Stop/idle. */
     std::vector<unsigned char> rgba;
@@ -169,16 +175,16 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
     out.atlas_tex = 0;
     out.atlas_rgba = std::move(rgba);
     out.atlas_n = n;
-    out.brightness = (float)GetBrightness() / 100.0f;
+    out.kind = GpuRoomGridOverlayLayer::KindVolumeAtlas;
+    FillOverlayVolumeFrame(out, grid);
     out.sample_room = spec_.sample_room;
-    out.volume_tools = effect_volume_tools_unlocked;
-    out.volume_shape = effect_volume_tools_unlocked ? effect_volume_shape : (int)VOLUME_SHAPE_BOX;
-    out.shear_xy = effect_shear_xy;
-    out.shear_xz = effect_shear_xz;
-    out.shear_yz = effect_shear_yz;
     out.hue_scroll_deg = time_sec * GetColorCycleHz() * 360.0f;
 
-    /* Match CalculateColorGrid finish → display RGB (not raw packed volumeMain fields). */
+    /* Match CalculateColorGrid finish → display RGB (not raw packed volumeMain fields).
+       Branch order mirrors CalculateColorGrid: rgb, surface, hsv, hex, audio, then the
+       scalar path (depth / spiral / plain). */
+    out.rainbow = GetRainbowMode();
+    out.depth_shade = spec_.finish_depth;
     if(spec_.finish_rgb)
     {
         out.finish_mode = GpuRoomGridOverlayLayer::FinishRgb;
@@ -193,12 +199,21 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
     }
     else if(spec_.finish_hex && spec_.finish_atlas)
     {
-        out.finish_mode = GpuRoomGridOverlayLayer::FinishHexAtlas;
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishHexAtlas; /* honours out.rainbow */
     }
     else if(spec_.finish_hex)
     {
+        /* LEDs colour by the hue channel (g) times value (r) — palette when Rainbow is off. */
         out.finish_mode = GetRainbowMode() ? GpuRoomGridOverlayLayer::FinishHex
-                                           : GpuRoomGridOverlayLayer::FinishScalarPalette;
+                                           : GpuRoomGridOverlayLayer::FinishHexPalette;
+    }
+    else if(spec_.finish_audio)
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishAudio;
+    }
+    else if(spec_.finish_spiral)
+    {
+        out.finish_mode = GpuRoomGridOverlayLayer::FinishSpiral;
     }
     else if(GetRainbowMode())
     {
@@ -228,32 +243,6 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
     {
         out.finish_mode = GpuRoomGridOverlayLayer::FinishScalarRainbow;
     }
-
-    const Vector3D origin = GetEffectOriginGrid(grid);
-    out.origin[0] = origin.x;
-    out.origin[1] = origin.y;
-    out.origin[2] = origin.z;
-    out.room_min[0] = grid.min_x;
-    out.room_min[1] = grid.min_y;
-    out.room_min[2] = grid.min_z;
-    out.room_max[0] = grid.max_x;
-    out.room_max[1] = grid.max_y;
-    out.room_max[2] = grid.max_z;
-
-    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
-    GetVolumeHalfExtents(grid, hx, hy, hz);
-    out.half_ext[0] = hx;
-    out.half_ext[1] = hy;
-    out.half_ext[2] = hz;
-
-    Rotation3D rot;
-    rot.x = effect_rotation_pitch;
-    rot.y = effect_rotation_yaw;
-    rot.z = effect_rotation_roll;
-    float m[9];
-    Geometry3D::ComputeRotationMatrix(rot, m);
-    /* Row-major R memcpy'd into QMatrix3x3.data() yields GLSL R^T * v (VolumeWorldDeltaToLocal). */
-    std::memcpy(out.rot_inv, m, sizeof(m));
     return true;
 }
 
@@ -458,7 +447,9 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
         const float scroll_mul = SliderRaw("motion_scroll") / 100.0f;
         const float warp_mul = SliderRaw("motion_warp") / 100.0f;
         const float phase_mul = SliderRaw("motion_phase") / 100.0f;
-        const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
+        /* Speed now reaches the shader through u_time (GetMotionSeconds), so rates below
+           are fixed at their Speed-100 value instead of applying Speed a second time. */
+        constexpr float speed_lin = 1.0f;
         const float size_m = std::max(0.08f, size);
         const float prop01 = SliderRaw("ambience_propagation") / 100.0f;
 
@@ -1018,7 +1009,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
                                                          GetNormalizedSize(),
                                                          origin,
                                                          rotated_pos);
-            c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(),
+            c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(),
                                              std::clamp(std::fmod(pal + plasma * 0.22f + 1.0f, 1.0f), 0.0f, 1.0f),
                                              time);
         }
@@ -1062,7 +1053,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
                                                        GetNormalizedScale(),
                                                        origin,
                                                        rotated_pos);
-            RGBColor c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(),
+            RGBColor c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(),
                                                       std::clamp(std::fmod(pal01 + val * 0.20f + 1.0f, 1.0f), 0.0f, 1.0f),
                                                       time);
             const int r = std::clamp((int)((float)(c & 0xFF) * val), 0, 255);
@@ -1114,7 +1105,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
                                                            origin,
                                                            rotated_pos);
             /* Keep strip colour, but hitch palette to effect intensity so the look still reads. */
-            c = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(),
+            c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(),
                                             std::fmod(p01 + v * 0.22f + 1.0f, 1.0f),
                                             time);
         }
@@ -1190,7 +1181,8 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         }
 
         float gradient_pos = samp.y();
-        uint32_t beat_slot = (uint32_t)std::floor(time * 2.5f);
+        /* 2.5 steps per Speed-scaled second: unchanged at Speed 100, frozen at Speed 0. */
+        uint32_t beat_slot = (uint32_t)std::floor(GetMotionSeconds(time) * 2.5f);
         if((spec_.audio_preset == "beat" || spec_.audio_preset == "low_punch")
            && audio_packed_pulse_count > 0)
         {
@@ -1225,7 +1217,10 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         const float rot_rel_y = rotated_pos.y - origin.y;
         const float rot_rel_z = rotated_pos.z - origin.z;
         const float radial_distance = sqrtf(rot_rel_x * rot_rel_x + rot_rel_y * rot_rel_y + rot_rel_z * rot_rel_z);
-        const float max_radius = EffectGridGpuAtlasMedianHalfExtent(grid, origin, GetNormalizedScale()) * 1.7320508f;
+        /* Same box as the sample UV (SampleVolumeLocalUv01), incl. per-axis Effect scale. */
+        float dh_x = 1.0f, dh_y = 1.0f, dh_z = 1.0f;
+        GetVolumeHalfExtents(grid, dh_x, dh_y, dh_z);
+        const float max_radius = EffectGridMedianOfHalfExtents({dh_x, dh_y, dh_z}) * 1.7320508f;
         if(max_radius > 0.001f)
         {
             const float normalized_dist = fmin(1.0f, radial_distance / max_radius);
@@ -1292,7 +1287,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
                                                              origin,
                                                              rotated_pos);
         const float tinted = std::fmod(strip_p01 + effect01 * (spec_.finish_spiral ? 0.35f : 0.28f) + 1.0f, 1.0f);
-        final_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), tinted, time);
+        final_color = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), tinted, time);
     }
     else if(spec_.finish_spiral && (pattern_index == 1 || pattern_index == 2 || pattern_index == 5 || pattern_index == 6) && !GetRainbowMode())
     {

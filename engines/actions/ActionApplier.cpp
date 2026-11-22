@@ -9,6 +9,9 @@
 #include "ActionVolumeField.h"
 #include "ActionApplierDetail.h"
 #include "ZoneManager3D.h"
+#include "GpuRoomGridOverlay.h"
+#include "SpatialEffect3D.h"
+#include "EffectInstance3D.h"
 
 #include <chrono>
 #include <cstdint>
@@ -121,6 +124,74 @@ bool LayerZoneIncludesTransform(int layer_zone_index,
     return true;
 }
 
+/** Overlay layer for one RoomBox field clip: the GPU field it just painted with, framed
+    like RoomGridFieldUv (clip origin + MakeEffectGpuAtlasHalfExtents, clip size = Scale). */
+void AppendClipFieldOverlayLayer(const Clip& clip,
+                                 int local_ms,
+                                 const ApplySpatialContext& ctx,
+                                 std::vector<GpuRoomGridOverlayLayer>* out)
+{
+    const std::string id = script::FileId(clip);
+    std::vector<unsigned char> rgba;
+    int n = 0;
+    bool ok = false;
+    /* Same engine priority as PaintTransformTargetSpatial. */
+    if(script::UsesField(id))
+    {
+        ok = volume_field::ExportAtlasRgba8(rgba, n);
+    }
+    else if(script::UsesParticles(id))
+    {
+        ok = particle_field::ExportAtlasRgba8(rgba, n);
+    }
+    else if(script::UsesRibbons(id))
+    {
+        ok = ribbon_field::ExportAtlasRgba8(rgba, n);
+    }
+    else if(builtin_gpu::Uses(id) && script::FieldShader(id).empty())
+    {
+        ok = builtin_gpu::ExportAtlasRgba8(rgba, n);
+    }
+    if(!ok || n < 2 || rgba.size() < (size_t)n * (size_t)n * (size_t)n * 4u)
+    {
+        return;
+    }
+
+    GpuRoomGridOverlayLayer layer;
+    layer.kind = GpuRoomGridOverlayLayer::KindVolumeAtlas;
+    layer.atlas_rgba = std::move(rgba);
+    layer.atlas_n = n;
+    layer.finish_mode = GpuRoomGridOverlayLayer::FinishRgb; /* same export + texel order as FolderVolume finish_rgb */
+    layer.blend_mode = (int)BlendMode::MAX;                  /* later tracks only overwrite lit LEDs */
+    layer.sample_room = false;
+    layer.volume_tools = false;
+    layer.volume_shape = 0;
+
+    const Vector3D origin = ResolveClipOriginGrid(clip, ctx);
+    const GridContext3D grid(ctx.grid_min_x, ctx.grid_max_x,
+                             ctx.grid_min_y, ctx.grid_max_y,
+                             ctx.grid_min_z, ctx.grid_max_z);
+    const EffectGridAxisHalfExtents he =
+        MakeEffectGpuAtlasHalfExtents(grid, origin, std::clamp(clip.effect_size, 0.05f, 2.0f));
+    layer.origin[0] = origin.x;
+    layer.origin[1] = origin.y;
+    layer.origin[2] = origin.z;
+    layer.half_ext[0] = he.hw;
+    layer.half_ext[1] = he.hh;
+    layer.half_ext[2] = he.hd;
+    layer.room_min[0] = ctx.grid_min_x;
+    layer.room_min[1] = ctx.grid_min_y;
+    layer.room_min[2] = ctx.grid_min_z;
+    layer.room_max[0] = ctx.grid_max_x;
+    layer.room_max[1] = ctx.grid_max_y;
+    layer.room_max[2] = ctx.grid_max_z;
+
+    float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
+    ModulateClipIntensity(clip, ClipSpanProgress(clip, local_ms), ClipPeriodProgress(clip, local_ms), &intensity);
+    layer.brightness = intensity;
+    out->push_back(std::move(layer));
+}
+
 } // namespace
 
 ApplyStats ApplyPackFrame(const Pack& pack,
@@ -129,7 +200,8 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                           std::vector<std::unique_ptr<ControllerTransform>>* transforms,
                           bool force_hw_update,
                           ZoneManager3D* zone_manager,
-                          const ApplySpatialContext* spatial)
+                          const ApplySpatialContext* spatial,
+                          std::vector<GpuRoomGridOverlayLayer>* overlay_out)
 {
     ApplyStats stats;
     std::unordered_set<RGBControllerInterface*> touched;
@@ -289,6 +361,14 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             {
                 ++stats.tracks_applied;
                 stats.viewport_leds_painted += painted;
+            }
+            /* Room-grid overlay: export the field this track just painted with (still the
+               prepared program — the next track re-prepares it), framed exactly like the
+               LED mapping in RoomGridFieldUv. */
+            if(overlay_out && top && spatial && ClipFieldUsesRoomGrid(*top, spatial)
+               && (int)overlay_out->size() < GpuRoomGridOverlayLayer::kMaxLayers)
+            {
+                AppendClipFieldOverlayLayer(*top, local_ms, *spatial, overlay_out);
             }
             continue;
         }

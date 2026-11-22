@@ -411,6 +411,8 @@ private:
     GlProgram gl_prog_unlit_color_;
     GlProgram gl_prog_unlit_point_;
     GlProgram gl_prog_volume_atlas_point_;
+    /** Push KindScreenMirror per-plane uniforms (u_sm_*) for the bound overlay program. */
+    void UploadScreenMirrorOverlayUniforms(const GpuRoomGridOverlayLayer& layer);
     std::vector<GpuRoomGridOverlayLayer> gpu_room_grid_overlay_layers_;
     /** Stable copies of volume-atlas textures for the overlay (survive pool FBO recreate). */
     std::vector<unsigned int>            owned_overlay_atlas_textures_;

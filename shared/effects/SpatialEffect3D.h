@@ -407,6 +407,11 @@ public:
                                           float /*time*/,
                                           const GridContext3D& /*grid*/) {}
 
+    /** Fill the shared overlay frame (anchor, rotation, shear, per-axis half-extents, shape,
+        room box, brightness) — the same box SampleVolumeLocalUv01 uses, so every engine's
+        overlay layer lines up with its LEDs. Call from TryFillGpuRoomGridOverlayLayer. */
+    void FillOverlayVolumeFrame(struct GpuRoomGridOverlayLayer& out, const GridContext3D& grid);
+
     /** GPU room-grid overlay layer (atlas + world→p01 + finish). Default: unsupported. */
     virtual bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& /*out*/,
                                                 const GridContext3D& /*grid*/,
@@ -868,8 +873,19 @@ protected:
     float GetNormalizedScale() const;
     void SetScaleInverted(bool inverted);
 
-    /** Speed slider → animation rate in cycles/sec. Speed 100 ≈ 0.33 Hz. */
+    /** Speed slider → animation rate in cycles/sec. Speed 100 ≈ 0.42 Hz. */
     float GetMotionHz() const;
+    /** GetMotionHz() at Speed 100 — the reference that makes GetMotionSeconds() real seconds. */
+    static float MotionHzAtSpeed100();
+    /** Shader `u_time` in every engine: Speed-scaled seconds. Equals wall-clock seconds at
+        Speed 100, 0 at Speed 0, scales with GetMotionHz() in between (Shadertoy iTime). */
+    float GetMotionSeconds(float time) const { return time * GetMotionHz() / MotionHzAtSpeed100(); }
+    /** GetColorCycleHz() at Frequency 100. */
+    static float ColorCycleHzAtFrequency100();
+    /** Frequency-scaled seconds for hue/palette scroll: wall seconds at Frequency 100, 0 at 0. */
+    float GetColorCycleSeconds(float time) const { return time * GetColorCycleHz() / ColorCycleHzAtFrequency100(); }
+    /** Strip-kernel palette colour with its hue scroll driven by Frequency (not wall time). */
+    RGBColor ResolveEffectStripKernelColor(int kernel_id, float palette01, float time) const;
     /** Frequency slider → hue/palette cycle rate. Frequency 100 ≈ 0.11 Hz. */
     float GetColorCycleHz() const;
     /** Elapsed motion cycles: time * GetMotionHz(). */

@@ -11,6 +11,7 @@
 class QWidget;
 class QString;
 struct GridContext3D;
+struct GpuRoomGridOverlayLayer; /* shared/GpuRoomGridOverlay.h (global namespace) */
 
 namespace MinecraftGame
 {
@@ -37,6 +38,16 @@ const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridConte
                                                                  float origin_x,
                                                                  float origin_y,
                                                                  float origin_z);
+/** Room-grid overlay (GPU): per-frame scalars + repacked cubemap for KindMinecraft,
+ *  computed from the same snapshot / settings RenderColor uses. */
+bool FillOverlayLayer(::GpuRoomGridOverlayLayer& out,
+                      const GameTelemetryBridge::TelemetrySnapshot& telemetry,
+                      const GridContext3D& grid,
+                      const Settings& settings,
+                      std::uint32_t channels,
+                      float origin_x,
+                      float origin_y,
+                      float origin_z);
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      float grid_x,
                      float grid_y,

@@ -21,6 +21,10 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    /** Overlay: active waves packed for the GPU; same per-wave numbers as the LEDs. */
+    bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,
+                                        const GridContext3D& grid,
+                                        float time_sec) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
     bool UsesSpatialSamplingQuantization() const override { return false; }
 

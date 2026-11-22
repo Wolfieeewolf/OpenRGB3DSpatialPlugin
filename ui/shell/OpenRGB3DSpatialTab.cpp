@@ -456,12 +456,23 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
         spatial_ptr = &spatial;
     }
 
+    /* Room-grid overlay: RoomBox field clips export the GPU field they painted with. */
+    const bool want_overlay = viewport && viewport->GetShowRoomGridOverlay();
+    std::vector<GpuRoomGridOverlayLayer> action_layers;
     Action::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
-                               force_hw_update, zone_manager.get(), spatial_ptr);
+                               force_hw_update, zone_manager.get(), spatial_ptr,
+                               want_overlay ? &action_layers : nullptr);
 
-    if(viewport && viewport->GetShowRoomGridOverlay())
+    if(want_overlay)
     {
-        viewport->ClearGpuRoomGridOverlayLayers();
+        if(action_layers.empty())
+        {
+            viewport->ClearGpuRoomGridOverlayLayers();
+        }
+        else
+        {
+            viewport->SetGpuRoomGridOverlayLayers(std::move(action_layers));
+        }
     }
     if(viewport)
     {

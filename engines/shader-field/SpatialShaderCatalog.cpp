@@ -7,7 +7,10 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
+#include <QStringList>
 #include <QTextStream>
+#include <algorithm>
 
 namespace SpatialShaderCatalog
 {
@@ -120,6 +123,128 @@ QString LoadShaderBodyFromPath(const QString& path)
         body += QLatin1Char('\n');
     }
     return body;
+}
+
+QList<ExtraParamSlider> LoadExtraParamSliders(const QString& path)
+{
+    QList<ExtraParamSlider> out;
+    QFile file(path);
+    if(path.isEmpty() || !file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return out;
+    }
+    QStringList params;
+    QHash<QString, ExtraParamSlider> sliders;
+    QTextStream stream(&file);
+    while(!stream.atEnd())
+    {
+        const QString trimmed = stream.readLine().trimmed();
+        if(trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('#')))
+        {
+            continue;
+        }
+        const int colon = trimmed.indexOf(QLatin1Char(':'));
+        if(colon <= 0 || !IsEffectShaderHeaderKey(trimmed.left(colon).trimmed()))
+        {
+            break; /* end of header */
+        }
+        const QString key = trimmed.left(colon).trimmed();
+        const QStringList parts = trimmed.mid(colon + 1).split(QLatin1Char('|'));
+        const QStringList tok = parts.value(0).trimmed().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        if(key == QStringLiteral("param") && !tok.isEmpty())
+        {
+            params << tok.last();
+        }
+        else if(key == QStringLiteral("slider") && tok.size() >= 4)
+        {
+            /* slider: name min max default [pct|unit] | Label | tooltip */
+            ExtraParamSlider s;
+            s.name = tok[0];
+            s.min = tok[1].toInt();
+            s.max = tok[2].toInt();
+            s.def = std::clamp(tok[3].toInt(), std::min(s.min, s.max), std::max(s.min, s.max));
+            s.pct = tok.contains(QStringLiteral("pct")) || tok.contains(QStringLiteral("unit"));
+            s.label = parts.value(1).trimmed();
+            if(s.label.isEmpty())
+            {
+                s.label = s.name;
+            }
+            if(!s.label.endsWith(QLatin1Char(':')))
+            {
+                s.label += QLatin1Char(':');
+            }
+            s.tip = parts.value(2).trimmed();
+            sliders.insert(s.name, s);
+        }
+    }
+    for(int i = 4; i < params.size() && out.size() < 4; ++i)
+    {
+        ExtraParamSlider s = sliders.value(params[i]);
+        if(s.name.isEmpty())
+        {
+            s.name = params[i];
+            s.label = params[i] + QLatin1Char(':');
+        }
+        out << s;
+    }
+    return out;
+}
+
+QList<float> LoadExtraParamDefaults(const QString& path)
+{
+    QList<float> out;
+    QFile file(path);
+    if(path.isEmpty() || !file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return out;
+    }
+    QStringList params;
+    QHash<QString, float> slider_defaults;
+    QTextStream stream(&file);
+    while(!stream.atEnd())
+    {
+        const QString trimmed = stream.readLine().trimmed();
+        if(trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('#')))
+        {
+            continue;
+        }
+        const int colon = trimmed.indexOf(QLatin1Char(':'));
+        if(colon <= 0 || !IsEffectShaderHeaderKey(trimmed.left(colon).trimmed()))
+        {
+            break; /* end of header */
+        }
+        const QString key = trimmed.left(colon).trimmed();
+        QString val = trimmed.mid(colon + 1).trimmed();
+        const int bar = val.indexOf(QLatin1Char('|'));
+        if(bar >= 0)
+        {
+            val = val.left(bar).trimmed();
+        }
+        const QStringList tok = val.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        if(key == QStringLiteral("param") && !tok.isEmpty())
+        {
+            params << tok.last();
+        }
+        else if(key == QStringLiteral("slider") && tok.size() >= 4)
+        {
+            /* slider: name min max default [pct|unit] */
+            bool ok = false;
+            float def = tok[3].toFloat(&ok);
+            if(ok)
+            {
+                if(tok.contains(QStringLiteral("pct")) || tok.contains(QStringLiteral("unit")))
+                {
+                    def /= 100.0f;
+                }
+                slider_defaults.insert(tok[0], def);
+            }
+        }
+    }
+    for(int i = 4; i < params.size() && out.size() < 4; ++i)
+    {
+        out << slider_defaults.value(params[i], 0.0f);
+    }
+    return out;
 }
 
 QString LoadEffectShader(const QString& id)

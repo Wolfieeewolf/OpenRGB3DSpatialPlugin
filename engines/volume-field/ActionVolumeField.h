@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace Action
 {
@@ -40,6 +41,9 @@ bool IsAvailable();
  * Applies sample-origin remap. Requires PrepareForClip first.
  */
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb);
+/** Room-grid overlay: bake the prepared field over the 0..1 cube (same program the LEDs
+    just sampled). n×n×n packed RGBA8, width n, height n*n — as FolderVolume exports. */
+bool ExportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n);
 
 /** Single-point true GPU sample (for .fx field_* helpers). */
 SampleRgb Sample01(float nx, float ny, float nz);

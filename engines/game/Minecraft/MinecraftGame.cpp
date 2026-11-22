@@ -11,6 +11,7 @@
 #include "Game/RoomSampleFrameShmReader.h"
 #include "Game/GameTelemetryBridge.h"
 #include "GridSpaceUtils.h"
+#include "GpuRoomGridOverlay.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -844,6 +845,168 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
     }
 
     return out;
+}
+
+/* KindMinecraft slot map (keep in sync with ViewportShaders minecraftColor):
+ *  0  flags (1 strip usable, 2 invert, 4 directional damage), strip axis 1..3, health mode
+ *  1  health colour (uniform / strip fallback)   2 health bar colour   3 health fill (end, slots)
+ *  4..6  hunger / air / durability colour        7..9  (mix, per_strip, active)
+ *  10..12 (fill end, total slots)                13 damage (flash, dir mix, sharpness)
+ *  14 damage dir (player-local)                  15 cubemap origin    16 (scale, face size, has_frame)
+ *  17 effect origin */
+bool FillOverlayLayer(::GpuRoomGridOverlayLayer& out,
+                      const GameTelemetryBridge::TelemetrySnapshot& t,
+                      const GridContext3D& grid,
+                      const Settings& s,
+                      std::uint32_t channels,
+                      float origin_x,
+                      float origin_y,
+                      float origin_z)
+{
+    auto set3 = [&out](int slot, float a, float b, float c) {
+        out.mc[slot][0] = a;
+        out.mc[slot][1] = b;
+        out.mc[slot][2] = c;
+    };
+    auto setc = [&set3](int slot, RGBColor c) {
+        set3(slot, (float)(c & 0xFF) / 255.0f, (float)((c >> 8) & 0xFF) / 255.0f, (float)((c >> 16) & 0xFF) / 255.0f);
+    };
+    for(auto& slot : out.mc)
+    {
+        slot[0] = slot[1] = slot[2] = 0.0f;
+    }
+
+    const float lph = (float)std::clamp(s.health_leds_per_heart, 1, 32);
+    /* Index strip mode needs each LED's order — overlay points have none, so they take the
+       same fallback the LEDs use when a strip cannot be mapped. */
+    const bool usable = !s.health_per_heart_indexed && HealthStripMappingUsable(grid, s.health_strip_axis);
+    int flags = (usable ? 1 : 0) | (s.health_strip_invert ? 2 : 0);
+
+    int health_mode = 0;
+    if(ch(channels, ChHealth) && t.has_health_state && t.hearts_max > 1e-4f)
+    {
+        const float max_h = std::max(t.hearts_max, 1e-4f);
+        const float cur_h = std::clamp(t.hearts, 0.0f, max_h);
+        const float filled_norm = std::clamp(cur_h / max_h, 0.0f, 1.0f);
+        const RGBColor low_health = (RGBColor)0x000022FF;
+        const RGBColor high_health = (RGBColor)0x0000FF22;
+        if(s.health_per_heart_strip)
+        {
+            health_mode = 2;
+            const float health_norm = (t.health_max > 0.01f) ? std::clamp(t.health / t.health_max, 0.0f, 1.0f) : filled_norm;
+            setc(1, LerpColor(low_health, high_health, health_norm));
+            setc(2, LerpColor(low_health, high_health, filled_norm));
+            set3(3, cur_h * lph, max_h * lph, 0.0f);
+        }
+        else if(t.health_max > 0.01f)
+        {
+            health_mode = 1;
+            setc(1, LerpColor(low_health, high_health, std::clamp(t.health / t.health_max, 0.0f, 1.0f)));
+        }
+    }
+
+    struct Bar
+    {
+        bool active;
+        bool per_strip;
+        float mix;
+        float value;
+        float max;
+        RGBColor lo;
+        RGBColor hi;
+    };
+    const Bar bars[3] = {
+        {ch(channels, ChHunger) && t.has_health_state && t.hunger_max > 0.01f, s.hunger_per_strip, s.hunger_mix,
+         t.hunger, t.hunger_max, (RGBColor)0x000020FF, (RGBColor)0x0000E0FF},
+        {ch(channels, ChAir) && t.has_health_state && t.air_max > 0.01f, s.air_per_strip, s.air_mix,
+         t.air, t.air_max, (RGBColor)0x0000A0FF, (RGBColor)0x00FFC040},
+        {ch(channels, ChDurability) && t.has_health_state && t.has_item_durability && t.item_durability_max > 0.01f,
+         s.durability_per_strip, s.durability_mix, t.item_durability, t.item_durability_max,
+         (RGBColor)0x000000FF, (RGBColor)0x0000FF60},
+    };
+    for(int i = 0; i < 3; ++i)
+    {
+        const Bar& b = bars[i];
+        if(!b.active)
+        {
+            continue;
+        }
+        const float norm = std::clamp(b.value / b.max, 0.0f, 1.0f);
+        setc(4 + i, LerpColor(b.lo, b.hi, norm));
+        set3(7 + i, std::clamp(b.mix, 0.0f, 1.0f), b.per_strip ? 1.0f : 0.0f, 1.0f);
+        set3(10 + i, std::clamp(b.value, 0.0f, b.max) * lph, b.max * lph, 0.0f);
+    }
+
+    if(ch(channels, ChDamage) && t.has_damage_event && t.damage_received_ms != 0)
+    {
+        const unsigned long long now = NowMs();
+        const unsigned long long elapsed_ms = (now > t.damage_received_ms) ? (now - t.damage_received_ms) : 0;
+        const float decay_ms = std::max(100.0f, s.damage_flash_decay_s * 1000.0f);
+        const float damage_t = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
+        const float damage_strength = std::clamp(t.damage_amount / 20.0f, 0.0f, 1.0f);
+        const float flash = (damage_t > 0.0f)
+            ? std::clamp(s.damage_flash_strength * damage_t * (0.2f + 0.8f * damage_strength), 0.0f, 1.0f)
+            : 0.0f;
+        float lx = 0.0f, ly = 0.0f, lz = 0.0f;
+        bool directional = false;
+        if(flash > 0.0f && s.damage_directional_mix > 1e-4f && t.has_player_pose)
+        {
+            const SpatialBasisUtils::BasisVectors basis = SpatialBasisUtils::BuildOrthonormalBasis(
+                t.forward_x, t.forward_y, t.forward_z, t.up_x, t.up_y, t.up_z);
+            float ndx, ndy, ndz;
+            if(SpatialBasisUtils::NormalizeDirection(t.damage_dir_x, t.damage_dir_y, t.damage_dir_z, ndx, ndy, ndz))
+            {
+                SpatialBasisUtils::ToLocal(basis, ndx, ndy, ndz, lx, ly, lz);
+                directional = true;
+            }
+        }
+        if(directional)
+        {
+            flags |= 4;
+        }
+        set3(13, flash, std::clamp(s.damage_directional_mix, 0.0f, 1.0f), std::max(0.5f, s.damage_dir_sharpness));
+        set3(14, lx, ly, lz);
+    }
+    set3(0, (float)flags, (float)ResolveHealthStripAxis(grid, s.health_strip_axis), (float)health_mode);
+    set3(17, origin_x, origin_y, origin_z);
+
+    /* Room Ambilight cubemap: repack [ix][iy][face] → 2D rows (face * S + iy), cols ix. */
+    const GameTelemetryBridge::RoomSampleFrameChannel& rs = t.room_sample;
+    const bool room = ch(channels, ChRoomAmbilight) && rs.has_frame && rs.rgba
+        && RoomSampleFrameProtocol::IsCubemapLayout(rs.size_x, rs.size_y, rs.size_z, rs.flags);
+    if(room)
+    {
+        const int S = rs.size_x;
+        const std::size_t need = (std::size_t)S * (std::size_t)S * 6u * 4u;
+        if(rs.rgba->size() >= need)
+        {
+            out.tex_w = S;
+            out.tex_h = S * 6;
+            out.atlas_rgba.assign(need, 0);
+            const unsigned char* src = rs.rgba->data();
+            for(int ix = 0; ix < S; ++ix)
+            {
+                for(int iy = 0; iy < S; ++iy)
+                {
+                    for(int face = 0; face < 6; ++face)
+                    {
+                        const std::size_t si = (((std::size_t)ix * (std::size_t)S + (std::size_t)iy) * 6u + (std::size_t)face) * 4u;
+                        const std::size_t di = (((std::size_t)face * (std::size_t)S + (std::size_t)iy) * (std::size_t)S + (std::size_t)ix) * 4u;
+                        std::copy(src + si, src + si + 4, out.atlas_rgba.begin() + (std::ptrdiff_t)di);
+                    }
+                }
+            }
+            set3(15, rs.effect_origin_x, rs.effect_origin_y, rs.effect_origin_z);
+            set3(16, std::clamp(rs.room_to_world_scale, 0.005f, 0.80f), (float)S, 1.0f);
+        }
+    }
+    if(out.atlas_rgba.empty())
+    {
+        out.tex_w = 1;
+        out.tex_h = 1;
+        out.atlas_rgba.assign(4, 0);
+    }
+    return true;
 }
 
 void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)

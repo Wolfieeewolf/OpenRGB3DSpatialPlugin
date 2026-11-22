@@ -21,6 +21,9 @@
 #include "ui/widgets/EffectRoomOutputPanel.h"
 #include "ui/widgets/EffectSliderPromote.h"
 #include "StripPatternSurface.h"
+#include "GpuRoomGridOverlay.h"
+#include "Geometry3DUtils.h"
+#include <cstring>
 #include <QColorDialog>
 #include <QComboBox>
 #include <QSignalBlocker>
@@ -1304,7 +1307,8 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
     float phase_eff = 0.0f;
     float time_eff = 0.0f;
     [[maybe_unused]] float kernel_rep_eff = 1.0f;
-    StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, time_sec,
+    /* Kernel motion follows Speed like every other engine (Speed-scaled seconds). */
+    StripColormapClockScale(freq_norm, detail_norm, kernel_rep, phase01, GetMotionSeconds(time_sec),
                             phase_eff, time_eff, kernel_rep_eff);
 
     /* Same box as SampleVolumeLocalUv01 (Scale, per-axis Effect scale, rotation via rot). */
@@ -1320,4 +1324,46 @@ float SpatialEffect3D::SampleEffectStripColormap01(float kernel_rep,
 
     /* Fail closed: strip kernels are GPU-only (shared pool). No CPU sine dual. */
     return std::clamp(strip_cmap_assist_.sample01(s01), 0.0f, 1.0f);
+}
+
+RGBColor SpatialEffect3D::ResolveEffectStripKernelColor(int kernel_id, float palette01, float time) const
+{
+    /* Animated palettes scroll hue over time; that is a colour cycle, so Frequency drives it. */
+    return ResolveStripKernelFinalColor(kernel_id, palette01, GetColorCycleSeconds(time));
+}
+
+void SpatialEffect3D::FillOverlayVolumeFrame(GpuRoomGridOverlayLayer& out, const GridContext3D& grid)
+{
+    out.brightness = (float)GetBrightness() / 100.0f;
+    out.volume_tools = effect_volume_tools_unlocked;
+    out.volume_shape = effect_volume_tools_unlocked ? effect_volume_shape : (int)VOLUME_SHAPE_BOX;
+    out.shear_xy = effect_shear_xy;
+    out.shear_xz = effect_shear_xz;
+    out.shear_yz = effect_shear_yz;
+
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    out.origin[0] = origin.x;
+    out.origin[1] = origin.y;
+    out.origin[2] = origin.z;
+    out.room_min[0] = grid.min_x;
+    out.room_min[1] = grid.min_y;
+    out.room_min[2] = grid.min_z;
+    out.room_max[0] = grid.max_x;
+    out.room_max[1] = grid.max_y;
+    out.room_max[2] = grid.max_z;
+
+    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
+    GetVolumeHalfExtents(grid, hx, hy, hz);
+    out.half_ext[0] = hx;
+    out.half_ext[1] = hy;
+    out.half_ext[2] = hz;
+
+    Rotation3D rot;
+    rot.x = effect_rotation_pitch;
+    rot.y = effect_rotation_yaw;
+    rot.z = effect_rotation_roll;
+    float m[9];
+    Geometry3D::ComputeRotationMatrix(rot, m);
+    /* Row-major R memcpy'd into QMatrix3x3.data() yields GLSL R^T * v (VolumeWorldDeltaToLocal). */
+    std::memcpy(out.rot_inv, m, sizeof(m));
 }

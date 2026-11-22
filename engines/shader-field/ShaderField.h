@@ -5,8 +5,12 @@
 
 #include "SpatialEffect3D.h"
 #include "SpatialShaderEngine.h"
+#include "SpatialShaderCatalog.h"
 
 #include <QImage>
+#include <QList>
+#include <map>
+#include <vector>
 #include <QMutex>
 #include <QString>
 #include <memory>
@@ -35,6 +39,10 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    /** Overlay: the same GPU frame the LEDs read, projected in the overlay shader. */
+    bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,
+                                        const GridContext3D& grid,
+                                        float time_sec) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
 
     nlohmann::json SaveSettings() const override;
@@ -76,6 +84,12 @@ private:
     QLabel* compile_log_label = nullptr;
 
     int projection_mode = 0;
+    /** Header sliders for u_params[4..7] (SpatialShaderCatalog::LoadExtraParamSliders). */
+    QList<SpatialShaderCatalog::ExtraParamSlider> extra_specs_;
+    /** User values by param name (raw slider units); missing = the file's default. */
+    std::map<std::string, int> extra_raw_;
+    std::vector<QSlider*> extra_sliders_;
+    int ExtraRaw(const SpatialShaderCatalog::ExtraParamSlider& s) const;
     float contrast = 1.0f;
     float hue_shift = 0.0f;
     uint64_t last_uniform_sequence = 0;

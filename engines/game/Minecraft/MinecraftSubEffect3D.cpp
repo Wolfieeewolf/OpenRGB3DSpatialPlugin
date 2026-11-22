@@ -3,6 +3,7 @@
 #include "MinecraftSubEffect3D.h"
 #include "MinecraftGame.h"
 #include "Game/GameTelemetryBridge.h"
+#include "GpuRoomGridOverlay.h"
 
 MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels, const char* effect_title, QWidget* parent)
     : SpatialEffect3D(parent),
@@ -111,4 +112,22 @@ bool MinecraftSubEffect3D::IsPointOnActiveSurface(float, float, float, const Gri
 bool MinecraftSubEffect3D::RequiresWorldSpaceCoordinates() const
 {
     return false;
+}
+
+bool MinecraftSubEffect3D::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
+                                                          const GridContext3D& grid,
+                                                          float /*time_sec*/)
+{
+    if(!OverlayLayerAbiOk(out))
+    {
+        return false; /* caller built against another layout — skip, never overwrite */
+    }
+    out = GpuRoomGridOverlayLayer{};
+    out.kind = GpuRoomGridOverlayLayer::KindMinecraft;
+    FillOverlayVolumeFrame(out, grid);
+    out.sample_room = false;
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    const GameTelemetryBridge::TelemetrySnapshot& t =
+        MinecraftGame::PrepareRenderFrame(grid, mc_settings_, channels_, origin.x, origin.y, origin.z);
+    return MinecraftGame::FillOverlayLayer(out, t, grid, mc_settings_, channels_, origin.x, origin.y, origin.z);
 }

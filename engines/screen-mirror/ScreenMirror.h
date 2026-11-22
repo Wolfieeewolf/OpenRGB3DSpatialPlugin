@@ -34,6 +34,10 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    /** Overlay: same per-plane mapping / zones / crop / Reach / grade, evaluated in GLSL. */
+    bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,
+                                        const GridContext3D& grid,
+                                        float time_sec) override;
     bool UsesSpatialSamplingQuantization() const override { return false; }
     bool RequiresWorldSpaceCoordinates() const override { return true; }
     bool RequiresWorldSpaceGridBounds() const override { return true; }

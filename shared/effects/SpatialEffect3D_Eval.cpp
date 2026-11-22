@@ -213,7 +213,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
                                                    GetNormalizedSize(),
                                                    p.origin,
                                                    p.rotated_pos);
-            return ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), p01, p.time);
+            return ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), p01, p.time);
         }
         return GetPerBeatPulseColor(slot);
     }
@@ -255,7 +255,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
                                                GetNormalizedSize(),
                                                p.origin,
                                                p.rotated_pos);
-        spatial_color = ResolveStripKernelFinalColor(GetEffectStripColormapKernel(), std::min(p01, 1.0f), p.time);
+        spatial_color = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), std::min(p01, 1.0f), p.time);
     }
     else if(GetRainbowMode())
     {
@@ -433,9 +433,11 @@ void ApplySpatialSamplingQuantization(float& x, float& y, float& z, const GridCo
     const float sx = std::max(1e-6f, grid.max_x - grid.min_x);
     const float sy = std::max(1e-6f, grid.max_y - grid.min_y);
     const float sz = std::max(1e-6f, grid.max_z - grid.min_z);
-    float nx = std::clamp((x - grid.min_x) / sx, 0.0f, 1.0f);
-    float ny = std::clamp((y - grid.min_y) / sy, 0.0f, 1.0f);
-    float nz = std::clamp((z - grid.min_z) / sz, 0.0f, 1.0f);
+    /* Unclamped: snap to the same cell lattice but keep LEDs outside the room outside,
+       so the effect's own "outside = unlit" test still sees them. */
+    float nx = GridAxisToUnitUnclamped(x, grid.min_x, grid.max_x);
+    float ny = GridAxisToUnitUnclamped(y, grid.min_y, grid.max_y);
+    float nz = GridAxisToUnitUnclamped(z, grid.min_z, grid.max_z);
     constexpr int kVirtualCells = 128;
     Geometry3D::QuantizeNormalizedAxis01(nx, resolution_pct, kVirtualCells);
     Geometry3D::QuantizeNormalizedAxis01(ny, resolution_pct, kVirtualCells);
@@ -595,6 +597,20 @@ float SpatialEffect3D::GetMotionHz() const
         return 0.0f;
     }
     return std::max(0.02f, GetNormalizedSpeed()) * 1.06f;
+}
+
+float SpatialEffect3D::MotionHzAtSpeed100()
+{
+    /* Same curve as GetMotionHz with effect_speed = 100: (100/200)^1.35 * 1.06 ≈ 0.4159. */
+    static const float hz = std::max(0.02f, std::pow(0.5f, 1.35f)) * 1.06f;
+    return hz;
+}
+
+float SpatialEffect3D::ColorCycleHzAtFrequency100()
+{
+    /* Same curve as GetColorCycleHz with effect_frequency = 100. */
+    static const float hz = std::max(0.02f, std::pow(0.5f, 1.35f)) * 0.28f;
+    return hz;
 }
 
 float SpatialEffect3D::GetColorCycleHz() const

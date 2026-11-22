@@ -405,6 +405,16 @@ bool IsAvailable()
     return g_ready && g_assist && g_assist->isAvailable();
 }
 
+bool ExportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n)
+{
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(!g_ready || !g_assist)
+    {
+        return false;
+    }
+    return g_assist->exportAtlasRgba8(out_rgba, out_n);
+}
+
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)
 {
     std::lock_guard<std::mutex> lock(g_mu);

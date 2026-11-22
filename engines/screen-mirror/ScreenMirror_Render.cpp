@@ -9,6 +9,7 @@
 #include "GridSpaceUtils.h"
 #include "ScreenMirrorCalibrationPattern.h"
 #include "ScreenMirror_Internal.h"
+#include "GpuRoomGridOverlay.h"
 
 #include <chrono>
 #include <cmath>
@@ -660,4 +661,156 @@ ScreenMirror::LEDKey ScreenMirror::MakeLEDKey(float x, float y, float z) const
     key.y = (int)std::lround(y * quantize_scale);
     key.z = (int)std::lround(z * quantize_scale);
     return key;
+}
+
+bool ScreenMirror::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
+                                                  const GridContext3D& grid,
+                                                  float /*time_sec*/)
+{
+    if(!OverlayLayerAbiOk(out))
+    {
+        return false; /* caller built against another layout — skip, never overwrite */
+    }
+    /* GPU overlay mirrors CalculateColorGrid per plane. Frames are downsampled (nearest,
+       stride) to keep the per-tick upload small; the overlay is a preview lattice. */
+    constexpr int kOverlayMaxW = 320;
+    constexpr int kOverlayMaxH = 180;
+
+    out = GpuRoomGridOverlayLayer{};
+    out.kind = GpuRoomGridOverlayLayer::KindScreenMirror;
+    FillOverlayVolumeFrame(out, grid);
+    out.sample_room = false;
+    out.grid_scale_mm = tick_scale_mm_;
+
+    struct Src
+    {
+        const uint8_t* rgba;
+        int w;
+        int h;
+        int ow;
+        int oh;
+    };
+    std::vector<Src> srcs;
+    int tex_w = 1;
+    int tex_h = 0;
+    for(const SampleMonitor& sm : sample_tick_)
+    {
+        if((int)out.screen_planes.size() >= GpuRoomGridOverlayLayer::kMaxScreenPlanes)
+        {
+            break;
+        }
+        if(!sm.plane || !sm.settings)
+        {
+            continue;
+        }
+        const uint8_t* rgba = nullptr;
+        int fw = 0;
+        int fh = 0;
+        if(sm.calibration && sm.cal_rgba)
+        {
+            rgba = sm.cal_rgba;
+            fw = sm.cal_w;
+            fh = sm.cal_h;
+        }
+        else if(sm.latest && sm.latest->valid && !sm.latest->data.empty())
+        {
+            rgba = sm.latest->data.data();
+            fw = sm.latest->width;
+            fh = sm.latest->height;
+        }
+        if(!rgba || fw <= 0 || fh <= 0)
+        {
+            continue;
+        }
+        const MonitorSettings& s = *sm.settings;
+        const int ow = std::min(fw, kOverlayMaxW);
+        const int oh = std::min(fh, kOverlayMaxH);
+
+        GpuRoomGridOverlayLayer::ScreenPlane p;
+        p.frame_w = ow;
+        p.frame_h = oh;
+        p.row0 = tex_h;
+        const Transform3D& tr = sm.plane->GetTransform();
+        p.pos[0] = tr.position.x;
+        p.pos[1] = tr.position.y;
+        p.pos[2] = tr.position.z;
+        /* Rotation columns from the LED-path transform itself (position 0, scale 1). */
+        Transform3D rot_only = tr;
+        rot_only.position = Vector3D{0.0f, 0.0f, 0.0f};
+        rot_only.scale = Vector3D{1.0f, 1.0f, 1.0f};
+        const Vector3D ex = Geometry3D::TransformDisplayPlaneWorldToLocal(Vector3D{1, 0, 0}, rot_only);
+        const Vector3D ey = Geometry3D::TransformDisplayPlaneWorldToLocal(Vector3D{0, 1, 0}, rot_only);
+        const Vector3D ez = Geometry3D::TransformDisplayPlaneWorldToLocal(Vector3D{0, 0, 1}, rot_only);
+        const float rot[9] = {ex.x, ey.x, ez.x,
+                              ex.y, ey.y, ez.y,
+                              ex.z, ey.z, ez.z};
+        std::copy(rot, rot + 9, p.rot);
+        p.inv_scale[0] = (std::fabs(tr.scale.x) > 1e-8f) ? 1.0f / tr.scale.x : 1.0f;
+        p.inv_scale[1] = (std::fabs(tr.scale.y) > 1e-8f) ? 1.0f / tr.scale.y : 1.0f;
+        p.inv_scale[2] = (std::fabs(tr.scale.z) > 1e-8f) ? 1.0f / tr.scale.z : 1.0f;
+        p.half_w = 0.5f * std::max(MMToGridUnits(sm.plane->GetWidthMM(), tick_scale_mm_), 1e-4f);
+        p.half_h = 0.5f * std::max(MMToGridUnits(sm.plane->GetHeightMM(), tick_scale_mm_), 1e-4f);
+
+        for(const CaptureZone& z : s.capture_zones)
+        {
+            if(!z.enabled || p.zone_count >= GpuRoomGridOverlayLayer::kMaxScreenZones)
+            {
+                continue;
+            }
+            p.zones[p.zone_count][0] = z.u_min;
+            p.zones[p.zone_count][1] = z.u_max;
+            p.zones[p.zone_count][2] = z.v_min;
+            p.zones[p.zone_count][3] = z.v_max;
+            ++p.zone_count;
+        }
+        p.crop[0] = std::clamp(s.black_bar_left_percent, 0.0f, 49.0f) / 100.0f;
+        p.crop[1] = 1.0f - std::clamp(s.black_bar_right_percent, 0.0f, 49.0f) / 100.0f;
+        p.crop[2] = std::clamp(s.black_bar_bottom_percent, 0.0f, 49.0f) / 100.0f;
+        p.crop[3] = 1.0f - std::clamp(s.black_bar_top_percent, 0.0f, 49.0f) / 100.0f;
+        p.max_mm = sm.max_distance_mm;
+        p.coverage = s.scale;
+        p.softness = s.edge_softness;
+        p.curve = s.falloff_curve_exponent;
+        p.inverted = s.scale_inverted;
+        p.brightness = s.brightness_multiplier;
+        p.threshold = s.brightness_threshold;
+        p.white_rolloff = s.white_rolloff;
+        p.white_rolloff_max = kWhiteRolloffStoredMax;
+        p.vibrance = s.vibrance;
+        p.gain[0] = s.led_output_gain_r;
+        p.gain[1] = s.led_output_gain_g;
+        p.gain[2] = s.led_output_gain_b;
+        out.screen_planes.push_back(p);
+        srcs.push_back(Src{rgba, fw, fh, ow, oh});
+        tex_w = std::max(tex_w, ow);
+        tex_h += oh;
+    }
+    if(out.screen_planes.empty() || tex_h <= 0)
+    {
+        return false;
+    }
+
+    out.tex_w = tex_w;
+    out.tex_h = tex_h;
+    out.atlas_rgba.assign((size_t)tex_w * (size_t)tex_h * 4u, 0);
+    for(size_t pi = 0; pi < srcs.size(); ++pi)
+    {
+        const Src& s = srcs[pi];
+        const int row0 = out.screen_planes[pi].row0;
+        for(int y = 0; y < s.oh; ++y)
+        {
+            const int sy = (s.oh <= 1) ? 0 : (int)std::lround((float)y * (float)(s.h - 1) / (float)(s.oh - 1));
+            for(int x = 0; x < s.ow; ++x)
+            {
+                const int sx = (s.ow <= 1) ? 0 : (int)std::lround((float)x * (float)(s.w - 1) / (float)(s.ow - 1));
+                const uint8_t* src = s.rgba + ((size_t)sy * (size_t)s.w + (size_t)sx) * 4u;
+                uint8_t* dst = out.atlas_rgba.data() + ((size_t)(row0 + y) * (size_t)tex_w + (size_t)x) * 4u;
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                dst[3] = 255;
+            }
+        }
+    }
+    return true;
 }
