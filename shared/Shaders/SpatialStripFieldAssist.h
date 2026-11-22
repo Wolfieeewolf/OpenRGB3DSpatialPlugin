@@ -14,6 +14,8 @@ public:
 
     float sample01(float s01) const;
     float sampleKernelSigned(float s01) const;
+    /** Copy the baked strip for the GPU overlay; false while unavailable. */
+    bool copyStrip01(float* out, int n) const;
 
 private:
     void applyEngineSize(SpatialStripFieldEngine& engine) override;

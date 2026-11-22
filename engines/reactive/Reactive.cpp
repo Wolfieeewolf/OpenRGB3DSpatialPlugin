@@ -840,7 +840,7 @@ void Reactive::SpawnWave(const Vector3D& origin,
     wave.strength = std::clamp(strength, 0.05f, 1.0f);
     wave.spread = std::max(0.0f, spread);
     wave.spacing = std::max(0.0f, spacing);
-    wave.speed01 = GetNormalizedSpeed();
+    wave.speed01 = GetSpeed01();
     wave.spread_mode = std::clamp(spread_mode_, 0, SPREAD_COUNT - 1);
     wave.spread_orient = std::clamp(spread_orient_, 0, SPREAD_ORIENT_COUNT - 1);
     wave.look_mode = std::clamp(look_mode_, 0, LOOK_COUNT - 1);
@@ -1132,19 +1132,11 @@ RGBColor Reactive::CalculateColorGrid(float x, float y, float z, float time, con
     RGBColor c;
     if(UseEffectStripColormap())
     {
-        /* Strip colormap expects origin + volume-local delta, like every other caller. */
+        /* Pattern is the colour; the wave intensity applied later is the shape.
+           The pattern expects origin + volume-local delta, like every other caller. */
         const Vector3D strip_local = VolumeWorldDeltaToLocal(x - anchor.x, y - anchor.y, z - anchor.z);
         const Vector3D strip_pos{anchor.x + strip_local.x, anchor.y + strip_local.y, anchor.z + strip_local.z};
-        const float strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
-                                                            GetEffectStripColormapUnfold(),
-                                                            GetEffectStripColormapDirectionDeg(),
-                                                            color_driver,
-                                                            time,
-                                                            grid,
-                                                            GetNormalizedSize(),
-                                                            anchor,
-                                                            strip_pos);
-        c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), strip_p01, time);
+        c = ResolvePatternColor(time, grid, anchor, strip_pos);
     }
     else if(GetRainbowMode())
     {
@@ -1292,6 +1284,7 @@ bool Reactive::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
     FillOverlayVolumeFrame(out, grid);
     out.sample_room = false;
     out.rainbow = GetRainbowMode();
+    FillOverlayPattern(out, time_sec);
     out.reactive_cycles = std::clamp(GetNormalizedSize(), 0.25f, 2.5f);
     out.hue_scroll_deg = GetColorCycleHz() * time_sec * 360.0f;
     out.palette_count = 0;

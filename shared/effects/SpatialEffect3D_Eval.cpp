@@ -202,18 +202,8 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
     {
         if(UseEffectStripColormap() && p.grid)
         {
-            const size_t n = std::max(GetColors().size(), size_t(1));
-            const float ph01 = std::fmod((float)slot / (float)n, 1.0f);
-            float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
-                                                   GetEffectStripColormapUnfold(),
-                                                   GetEffectStripColormapDirectionDeg(),
-                                                   ph01,
-                                                   p.time,
-                                                   *p.grid,
-                                                   GetNormalizedSize(),
-                                                   p.origin,
-                                                   p.rotated_pos);
-            return ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), p01, p.time);
+            /* A pattern replaces the per-beat colour cycle: the pattern is the colour. */
+            return ResolvePatternColor(p.time, *p.grid, p.origin, p.rotated_pos);
         }
         return GetPerBeatPulseColor(slot);
     }
@@ -243,19 +233,7 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
     RGBColor spatial_color;
     if(UseEffectStripColormap())
     {
-        float ph01 = std::fmod(gradient_pos + CalculateProgress(p.time) * 0.25f
-                                   + p.time * GetColorCycleHz() * bb.speed_mul + 1.0f,
-                               1.0f);
-        float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
-                                               GetEffectStripColormapUnfold(),
-                                               GetEffectStripColormapDirectionDeg(),
-                                               ph01,
-                                               p.time,
-                                               *p.grid,
-                                               GetNormalizedSize(),
-                                               p.origin,
-                                               p.rotated_pos);
-        spatial_color = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), std::min(p01, 1.0f), p.time);
+        spatial_color = ResolvePatternColor(p.time, *p.grid, p.origin, p.rotated_pos);
     }
     else if(GetRainbowMode())
     {
@@ -352,10 +330,23 @@ Vector3D SpatialEffect3D::GetEffectOriginGrid(const GridContext3D& grid) const
     return base;
 }
 
-float SpatialEffect3D::GetNormalizedSpeed() const
+float SpatialEffect3D::GetSpeed01() const
 {
     float normalized = std::clamp(effect_speed / 200.0f, 0.0f, 1.0f);
     return std::pow(normalized, 1.35f);
+}
+
+float SpatialEffect3D::GetNormalizedSpeed() const
+{
+    /* 0..100 keeps the tuned normal pace (Speed 100 = real seconds for u_time).
+       100..200 rises exponentially so 200 is 5x Speed 100, not 2.55x. */
+    if(effect_speed <= 100)
+    {
+        return GetSpeed01();
+    }
+    const float at100 = std::pow(0.5f, 1.35f);
+    const float over = std::clamp((effect_speed - 100.0f) / 100.0f, 0.0f, 1.0f);
+    return at100 * std::pow(5.0f, over);
 }
 
 float SpatialEffect3D::GetNormalizedFrequency() const

@@ -35,3 +35,8 @@ float SpatialStripFieldAssist::sampleKernelSigned(float s01) const
     }
     return engine_->sampleKernelSigned(s01);
 }
+
+bool SpatialStripFieldAssist::copyStrip01(float* out, int n) const
+{
+    return isAvailable() && engine_->copyStrip01(out, n);
+}

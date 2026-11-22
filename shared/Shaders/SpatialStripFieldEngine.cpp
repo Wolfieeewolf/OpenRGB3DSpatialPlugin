@@ -315,3 +315,16 @@ float SpatialStripFieldEngine::sampleKernelSigned(float s01) const
 {
     return sample01(s01) * 2.0f - 1.0f;
 }
+
+bool SpatialStripFieldEngine::copyStrip01(float* out, int n) const
+{
+    if(!out || n < 2 || strip_w_ < 2 || strip_r_.empty())
+    {
+        return false;
+    }
+    for(int i = 0; i < n; ++i)
+    {
+        out[i] = sample01((float)i / (float)(n - 1));
+    }
+    return true;
+}

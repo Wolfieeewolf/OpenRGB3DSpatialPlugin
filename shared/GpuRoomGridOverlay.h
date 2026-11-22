@@ -17,7 +17,7 @@ struct GpuRoomGridOverlayLayer
     unsigned int abi_size = (unsigned int)sizeof(GpuRoomGridOverlayLayer);
 
     static constexpr int kMaxLayers = 4;
-    static constexpr int kMaxPalette = 4;
+    static constexpr int kMaxPalette = 8;
 
     /** How to interpret atlas RGB → display RGB (see ViewportShaders::VolumeAtlasPoint). */
     enum Finish : int
@@ -116,6 +116,19 @@ struct GpuRoomGridOverlayLayer
     float hue_scroll_deg = 0.0f;
     int palette_count = 0;
     float palette[kMaxPalette][3] = {};
+
+    /** Colors and patterns: the strip pattern supplies the colour and the effect value stays
+     *  the brightness mask — same rule as SpatialEffect3D::ResolvePatternColor on the LEDs. */
+    static constexpr int kPatternWidth = 256;
+    bool pattern_on = false;
+    int pattern_unfold = 0;          /* StripPatternSurface::UnfoldMode */
+    float pattern_dir_deg = 0.0f;
+    float pattern_feature = 1.0f;    /* Size: zoom of the strip axes */
+    float pattern_phase_s01 = 0.0f;  /* EffectPhaseOnly: one strip position for every point */
+    float pattern_strip[kPatternWidth] = {};   /* baked kernel strip, 0..1 */
+    float pattern_lut[kPatternWidth][3] = {};  /* kernel palette, RGB 0..1 */
+    /** Viewport-owned 256 × 2 RGBA32F texture (row 0 strip, row 1 palette); 0 while staging. */
+    unsigned int pattern_tex = 0;
 
     bool sample_room = false;
     float origin[3] = {0.0f, 0.0f, 0.0f};

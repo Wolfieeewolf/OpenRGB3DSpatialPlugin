@@ -181,7 +181,18 @@ uniform int u_rainbow[4];     /* Rainbow vs palette for audio / spiral / hex-atl
 uniform int u_depth_shade[4]; /* finish_depth anchor-distance shade */
 uniform float u_hue_scroll[4];
 uniform int u_palette_count[4];
-uniform vec3 u_palette[16]; /* 4 layers * 4 stops */
+uniform vec3 u_palette[32]; /* 4 layers * 8 stops (GpuRoomGridOverlayLayer::kMaxPalette) */
+/* Colors and patterns (SpatialEffect3D::ResolvePatternColor): 256 × 2 float texture per
+   layer — row 0 = baked strip value, row 1 = kernel palette RGB. */
+uniform sampler2D u_pat0;
+uniform sampler2D u_pat1;
+uniform sampler2D u_pat2;
+uniform sampler2D u_pat3;
+uniform int u_pat_on[4];
+uniform int u_pat_mode[4];     /* StripPatternSurface::UnfoldMode */
+uniform float u_pat_dir[4];    /* PlaneXZ direction, degrees */
+uniform float u_pat_feature[4]; /* Size: zoom of the strip axes */
+uniform float u_pat_phase[4];  /* EffectPhaseOnly strip position */
 out vec4 frag_color;
 
 float axis01(float v, float lo, float hi)
@@ -243,12 +254,12 @@ vec3 hsv2rgb(float h, float s, float v)
 
 vec3 samplePalette(int layer, float t)
 {
-    int n = clamp(u_palette_count[layer], 1, 4);
+    int n = clamp(u_palette_count[layer], 1, 8);
     float pos = clamp(t, 0.0, 1.0) * float(n - 1);
     int i0 = int(floor(pos));
     int i1 = min(i0 + 1, n - 1);
     float f = pos - float(i0);
-    int base = layer * 4;
+    int base = layer * 8;
     return mix(u_palette[base + i0], u_palette[base + i1], f);
 }
 
@@ -797,7 +808,7 @@ vec3 reactiveColor(int i, vec3 world)
         }
         else if(pn == 1)
         {
-            col = u_palette[i * 4];
+            col = u_palette[i * 8];
         }
         else
         {
@@ -805,7 +816,7 @@ vec3 reactiveColor(int i, vec3 world)
             float scaled = driver * float(pn);
             int i0 = int(floor(scaled)) % pn;
             int i1 = (i0 + 1) % pn;
-            col = mix(u_palette[i * 4 + i0], u_palette[i * 4 + i1], scaled - floor(scaled));
+            col = mix(u_palette[i * 8 + i0], u_palette[i * 8 + i1], scaled - floor(scaled));
         }
     }
     return col * intensity;
@@ -943,6 +954,77 @@ vec3 minecraftColor(int i, vec3 world)
     return col;
 }
 
+vec4 patFetch(int i, ivec2 c)
+{
+    if(i == 0) return texelFetch(u_pat0, c, 0);
+    if(i == 1) return texelFetch(u_pat1, c, 0);
+    if(i == 2) return texelFetch(u_pat2, c, 0);
+    return texelFetch(u_pat3, c, 0);
+}
+
+/* Mirror of StripPatternSurface::StripCoord01 — keep in sync. */
+float stripCoord01(vec3 l, int mode, float dir_deg)
+{
+    float s = 0.5;
+    if(mode == 0) s = 0.5 + 0.5 * tanh(l.x);
+    else if(mode == 1) s = 0.5 + 0.5 * tanh(l.y);
+    else if(mode == 2) s = 0.5 + 0.5 * tanh(l.z);
+    else if(mode == 3 || mode == 8)
+    {
+        float r = radians(dir_deg);
+        s = 0.5 + 0.35 * (cos(r) * l.x + sin(r) * l.z);
+    }
+    else if(mode == 4)
+    {
+        return fract(atan(l.z, l.x) / 6.2831853 + 1.0);
+    }
+    else if(mode == 5) s = 0.5 + 0.5 * tanh((l.x + l.y + l.z) / 3.0);
+    else if(mode == 6) s = (abs(l.x) + abs(l.y) + abs(l.z)) / 3.0;
+    return clamp(s, 0.0, 1.0);
+}
+
+/* The pattern's colour at this point: strip value (smootherstep blend, like
+   SpatialStripFieldEngine::sample01) → kernel palette (blended between entries). */
+vec3 patternColor(int i, vec3 world)
+{
+    vec3 local = u_rot[i] * (world - u_origin[i]);
+    if(u_volume_tools[i] != 0)
+    {
+        local.y -= u_shear[i].z * local.z;
+        local.x -= u_shear[i].x * local.y + u_shear[i].y * local.z;
+    }
+    vec3 l = local / (max(u_half_ext[i], vec3(1e-4)) * max(u_pat_feature[i], 0.05));
+    int mode = u_pat_mode[i];
+    float s01 = (mode == 7) ? u_pat_phase[i] : stripCoord01(l, mode, u_pat_dir[i]);
+
+    float fx = clamp(s01, 0.0, 1.0) * 255.0;
+    int x0 = int(floor(fx));
+    int x1 = min(x0 + 1, 255);
+    float t = fx - float(x0);
+    float u = t * t * (3.0 - 2.0 * t);
+    float pal = clamp(mix(patFetch(i, ivec2(x0, 0)).r, patFetch(i, ivec2(x1, 0)).r, u), 0.0, 1.0);
+
+    /* Palette entry k holds position k/256 and the palette wraps, so blend cyclically. */
+    float px = fract(pal) * 256.0;
+    int p0 = int(floor(px)) % 256;
+    int p1 = (p0 + 1) % 256;
+    return mix(patFetch(i, ivec2(p0, 1)).rgb, patFetch(i, ivec2(p1, 1)).rgb, px - floor(px));
+}
+
+/* The effect value each finish multiplies its colour by — the shape mask when a
+   pattern supplies the colour (same masks as FolderVolumeEffect::CalculateColorGrid). */
+float finishValue(int layer, vec3 samp)
+{
+    int mode = u_finish[layer];
+    if(mode == 0) return clamp(max(samp.x, max(samp.y, samp.z)), 0.0, 1.0);
+    if(mode == 1) return (samp.y <= 1e-5) ? 0.0 : clamp(samp.y, 0.0, 1.0);
+    if(mode == 6) return samp.z > 0.0 ? clamp(samp.z, 0.0, 1.0) : 1.0;
+    float v = clamp(samp.x, 0.0, 1.0);
+    if(mode == 7) return (v < 0.04) ? 0.0 : clamp(0.08 + 0.92 * pow(v, 0.88), 0.0, 1.15);
+    if(mode == 8) return pow(v, 0.85);
+    return v;
+}
+
 vec3 layerColor(int i, vec3 world)
 {
     if(u_kind[i] < 0)
@@ -965,7 +1047,13 @@ vec3 layerColor(int i, vec3 world)
     if(u_kind[i] == 3)
     {
         /* Brightness is folded into intensity inside, like the LED path. */
-        return reactiveColor(i, world);
+        vec3 rc = reactiveColor(i, world);
+        if(u_pat_on[i] != 0)
+        {
+            /* Pattern is the colour; the wave's brightness is the shape. */
+            return patternColor(i, world) * max(rc.r, max(rc.g, rc.b));
+        }
+        return rc;
     }
     if(u_kind[i] == 1)
     {
@@ -993,6 +1081,11 @@ vec3 layerColor(int i, vec3 world)
         vec3 local = (p01 - 0.5) * 2.0 * he;
         float nd = min(1.0, length(local) / max(max_r, 1e-3));
         shade = 0.45 + 0.55 * (1.0 - nd * 0.6);
+    }
+    if(u_pat_on[i] != 0)
+    {
+        /* Pattern is the colour; the finish's own value is the shape mask. */
+        return patternColor(i, world) * finishValue(i, samp) * shade * u_layer_brightness[i];
     }
     return applyFinish(i, samp) * shade * u_layer_brightness[i];
 }

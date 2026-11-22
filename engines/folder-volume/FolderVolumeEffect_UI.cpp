@@ -277,7 +277,7 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "motion")
     {
-        return GetNormalizedSpeed();
+        return GetSpeed01();
     }
     if(name == "motion_hz")
     {

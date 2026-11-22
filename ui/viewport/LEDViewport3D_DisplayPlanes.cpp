@@ -312,10 +312,50 @@ void LEDViewport3D::SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLa
        tex ids — Stop/idle PrepareGpuFields recreates those FBOs and the overlay goes black. */
     releaseOwnedOverlayAtlasTextures();
     makeCurrent();
+
+    /* Colors-and-patterns strip: 256 × 2 RGBA32F, row 0 = strip value (R), row 1 = kernel
+       palette RGB. Float texels keep full colour precision; the shader blends entries. */
+    auto upload_pattern = [this](GpuRoomGridOverlayLayer& layer) {
+        layer.pattern_tex = 0;
+        if(!layer.pattern_on)
+        {
+            return;
+        }
+        constexpr int n = GpuRoomGridOverlayLayer::kPatternWidth;
+        std::vector<float> texels((size_t)n * 2u * 4u, 0.0f);
+        for(int x = 0; x < n; ++x)
+        {
+            texels[(size_t)x * 4u] = layer.pattern_strip[x];
+            float* pal = &texels[((size_t)n + (size_t)x) * 4u];
+            pal[0] = layer.pattern_lut[x][0];
+            pal[1] = layer.pattern_lut[x][1];
+            pal[2] = layer.pattern_lut[x][2];
+            pal[3] = 1.0f;
+        }
+        GLuint id = 0;
+        glGenTextures(1, &id);
+        if(id == 0)
+        {
+            layer.pattern_on = false;
+            return;
+        }
+        glBindTexture(GL_TEXTURE_2D, id);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, n, 2, 0, GL_RGBA, GL_FLOAT, texels.data());
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        layer.pattern_tex = id;
+        owned_overlay_atlas_textures_.push_back(id);
+    };
+
     std::vector<GpuRoomGridOverlayLayer> kept;
     kept.reserve(layers.size());
     for(GpuRoomGridOverlayLayer& layer : layers)
     {
+        upload_pattern(layer);
         if(layer.kind == GpuRoomGridOverlayLayer::KindReactive)
         {
             /* Wave list: 4 RGBA32F texels per wave, read with texelFetch (no filtering). */
@@ -609,6 +649,19 @@ void LEDViewport3D::DrawRoomGridOverlay()
             const float shear[3] = {layer.shear_xy, layer.shear_xz, layer.shear_yz};
             set_3("u_shear", shear);
             set_m3("u_rot", layer.rot_inv);
+            /* Colors and patterns: pattern texture on unit 4 + i (atlases use 0..3). */
+            {
+                const char* pat_name = (i == 0) ? "u_pat0" : (i == 1) ? "u_pat1" : (i == 2) ? "u_pat2" : "u_pat3";
+                glActiveTexture(GL_TEXTURE4 + i);
+                glBindTexture(GL_TEXTURE_2D, layer.pattern_tex);
+                gl_prog_volume_atlas_point_.SetUniform1i(pat_name, 4 + i);
+                glActiveTexture(GL_TEXTURE0 + i);
+                set_i("u_pat_on", (layer.pattern_on && layer.pattern_tex != 0) ? 1 : 0);
+                set_i("u_pat_mode", layer.pattern_unfold);
+                set_f("u_pat_dir", layer.pattern_dir_deg);
+                set_f("u_pat_feature", layer.pattern_feature);
+                set_f("u_pat_phase", layer.pattern_phase_s01);
+            }
             for(int pi = 0; pi < GpuRoomGridOverlayLayer::kMaxPalette; ++pi)
             {
                 char pname[64];
@@ -623,6 +676,10 @@ void LEDViewport3D::DrawRoomGridOverlay()
         {
             glBindTexture(GL_TEXTURE_2D, 0);
             gl_prog_volume_atlas_point_.SetUniform1i(atlas_name, i);
+            const char* pat_name = (i == 0) ? "u_pat0" : (i == 1) ? "u_pat1" : (i == 2) ? "u_pat2" : "u_pat3";
+            glActiveTexture(GL_TEXTURE4 + i);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            gl_prog_volume_atlas_point_.SetUniform1i(pat_name, 4 + i);
         }
     }
 
@@ -631,6 +688,8 @@ void LEDViewport3D::DrawRoomGridOverlay()
     for(int i = 0; i < GpuRoomGridOverlayLayer::kMaxLayers; ++i)
     {
         glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE4 + i);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
     glActiveTexture(GL_TEXTURE0);

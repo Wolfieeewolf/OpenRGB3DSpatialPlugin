@@ -1332,6 +1332,64 @@ RGBColor SpatialEffect3D::ResolveEffectStripKernelColor(int kernel_id, float pal
     return ResolveStripKernelFinalColor(kernel_id, palette01, GetColorCycleSeconds(time));
 }
 
+RGBColor SpatialEffect3D::ResolvePatternColor(float time,
+                                              const GridContext3D& grid,
+                                              const Vector3D& origin,
+                                              const Vector3D& rotated_pos) const
+{
+    /* Phase 0: the pattern moves by its own kernel animation only, never by the effect's
+       hue or value — that bending made patterns unreadable. */
+    const float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+                                                  GetEffectStripColormapUnfold(),
+                                                  GetEffectStripColormapDirectionDeg(),
+                                                  0.0f,
+                                                  time,
+                                                  grid,
+                                                  GetNormalizedSize(),
+                                                  origin,
+                                                  rotated_pos);
+    return ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), p01, time);
+}
+
+void SpatialEffect3D::FillOverlayPattern(GpuRoomGridOverlayLayer& out, float time) const
+{
+    out.pattern_on = false;
+    if(!UseEffectStripColormap())
+    {
+        return;
+    }
+    constexpr int n = GpuRoomGridOverlayLayer::kPatternWidth;
+    if(!strip_cmap_assist_.copyStrip01(out.pattern_strip, n))
+    {
+        return;
+    }
+    const int kernel = GetEffectStripColormapKernel();
+    const float cycle_sec = GetColorCycleSeconds(time);
+    for(int i = 0; i < n; ++i)
+    {
+        /* Entry i = palette position i/n (the palette wraps, so never sample 1.0). */
+        const RGBColor c = ResolveStripKernelFinalColor(kernel, (float)i / (float)n, cycle_sec);
+        out.pattern_lut[i][0] = (float)(c & 0xFF) / 255.0f;
+        out.pattern_lut[i][1] = (float)((c >> 8) & 0xFF) / 255.0f;
+        out.pattern_lut[i][2] = (float)((c >> 16) & 0xFF) / 255.0f;
+    }
+    out.pattern_unfold = GetEffectStripColormapUnfold();
+    out.pattern_dir_deg = GetEffectStripColormapDirectionDeg();
+    out.pattern_feature = std::max(0.05f, GetNormalizedSize());
+
+    /* EffectPhaseOnly uses one strip position for the whole room — compute it exactly as
+       SampleEffectStripColormap01 does (phase 0, Speed-scaled seconds). */
+    const float freq_norm = std::clamp(0.35f + GetNormalizedFrequency() * 1.2f, 0.25f, 2.5f);
+    const float detail_norm = std::clamp(0.35f + GetNormalizedDetail() * 1.2f, 0.25f, 2.5f);
+    float phase_eff = 0.0f;
+    float time_eff = 0.0f;
+    float rep_eff = 1.0f;
+    StripColormapClockScale(freq_norm, detail_norm, GetEffectStripColormapRepeats(), 0.0f,
+                            GetMotionSeconds(time), phase_eff, time_eff, rep_eff);
+    out.pattern_phase_s01 = std::clamp(std::fmod(phase_eff + time_eff * 0.12f + 1000.0f, 1.0f), 0.0f, 1.0f);
+    out.pattern_on = true;
+}
+
 void SpatialEffect3D::FillOverlayVolumeFrame(GpuRoomGridOverlayLayer& out, const GridContext3D& grid)
 {
     out.brightness = (float)GetBrightness() / 100.0f;

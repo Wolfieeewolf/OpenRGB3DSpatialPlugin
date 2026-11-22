@@ -177,6 +177,7 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
     out.atlas_n = n;
     out.kind = GpuRoomGridOverlayLayer::KindVolumeAtlas;
     FillOverlayVolumeFrame(out, grid);
+    FillOverlayPattern(out, time_sec);
     out.sample_room = spec_.sample_room;
     out.hue_scroll_deg = time_sec * GetColorCycleHz() * 360.0f;
 
@@ -892,7 +893,6 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
 
     progress = CalculateProgress(time);
     const float detail = std::max(0.05f, GetScaledDetail());
-    const float size_multiplier = GetNormalizedSize();
     /* Local-frame stand-in for stratum / audio helpers that expect a grid point. */
     const Vector3D local = VolumeWorldDeltaToLocal(x - origin.x, y - origin.y, z - origin.z);
     Vector3D rotated_pos{origin.x + local.x, origin.y + local.y, origin.z + local.z};
@@ -910,10 +910,18 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
     const float stratum_mot01 = ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
     const float prog = progress * bb.speed_mul;
-    const float pshift = EffectStratumBlend::PhaseShift01(bb);
     if(spec_.finish_rgb)
     {
         const QVector3D samp = SampleField01(n1, n2, n3);
+        if(UseEffectStripColormap())
+        {
+            /* Pattern is the colour; the look's own brightness (strongest channel) is the shape. */
+            const float v = std::clamp(std::max(samp.x(), std::max(samp.y(), samp.z())), 0.0f, 1.0f);
+            const RGBColor c = ResolvePatternColor(time, grid, origin, rotated_pos);
+            return ToRGBColor((int)((float)(c & 0xFF) * v + 0.5f),
+                              (int)((float)((c >> 8) & 0xFF) * v + 0.5f),
+                              (int)((float)((c >> 16) & 0xFF) * v + 0.5f));
+        }
         return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));
@@ -997,21 +1005,8 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         }
         else if(UseEffectStripColormap())
         {
-            /* Hitch strip phase to material plasma so pattern colour follows the shell field. */
-            const float ph01 = std::fmod(time * GetColorCycleHz() * bb.speed_mul +
-                                             phase01 + plasma * 0.72f + 1.f, 1.f);
-            const float pal = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
-                                                         GetEffectStripColormapUnfold(),
-                                                         GetEffectStripColormapDirectionDeg(),
-                                                         ph01,
-                                                         time,
-                                                         grid,
-                                                         GetNormalizedSize(),
-                                                         origin,
-                                                         rotated_pos);
-            c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(),
-                                             std::clamp(std::fmod(pal + plasma * 0.22f + 1.0f, 1.0f), 0.0f, 1.0f),
-                                             time);
+            /* Pattern is the colour; `intensity` below stays the shape mask. */
+            c = ResolvePatternColor(time, grid, origin, rotated_pos);
         }
         else if(GetRainbowMode())
         {
@@ -1042,20 +1037,8 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
                       + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
         if(UseEffectStripColormap())
         {
-            /* Strip supplies RGB; effect value is the intensity mask (same contract as hex). */
-            const float ph01 = std::fmod(h + val * 0.28f + 1.0f, 1.0f);
-            float pal01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
-                                                       GetEffectStripColormapUnfold(),
-                                                       GetEffectStripColormapDirectionDeg(),
-                                                       ph01,
-                                                       time,
-                                                       grid,
-                                                       GetNormalizedScale(),
-                                                       origin,
-                                                       rotated_pos);
-            RGBColor c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(),
-                                                      std::clamp(std::fmod(pal01 + val * 0.20f + 1.0f, 1.0f), 0.0f, 1.0f),
-                                                      time);
+            /* Pattern is the colour; the effect value is the shape mask. */
+            const RGBColor c = ResolvePatternColor(time, grid, origin, rotated_pos);
             const int r = std::clamp((int)((float)(c & 0xFF) * val), 0, 255);
             const int g = std::clamp((int)((float)((c >> 8) & 0xFF) * val), 0, 255);
             const int b = std::clamp((int)((float)((c >> 16) & 0xFF) * val), 0, 255);
@@ -1095,19 +1078,8 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         RGBColor c = 0;
         if(UseEffectStripColormap())
         {
-            const float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
-                                                           GetEffectStripColormapUnfold(),
-                                                           GetEffectStripColormapDirectionDeg(),
-                                                           h01,
-                                                           time,
-                                                           grid,
-                                                           GetNormalizedSize(),
-                                                           origin,
-                                                           rotated_pos);
-            /* Keep strip colour, but hitch palette to effect intensity so the look still reads. */
-            c = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(),
-                                            std::fmod(p01 + v * 0.22f + 1.0f, 1.0f),
-                                            time);
+            /* Pattern is the colour; the effect value is the shape mask. */
+            c = ResolvePatternColor(time, grid, origin, rotated_pos);
         }
         else if(GetRainbowMode())
         {
@@ -1245,7 +1217,6 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
     sp.y_norm = coord2;
 
     RGBColor final_color = 0;
-    const float phase01 = std::fmod(prog + pshift + 1.0f, 1.0f);
     const float arms = std::max(1, SliderRaw("num_arms"));
     const float coil01 = SliderRaw("coil_amount") / 100.0f;
     const float height01 = SliderRaw("height_coil_amount") / 100.0f;
@@ -1271,23 +1242,8 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
 
     if(UseEffectStripColormap())
     {
-        /* Map strip/pattern onto the effect field — phase was progress-only before, so
-           Plasma (and other depth finishes) showed flat pattern colour with no look. */
-        const float effect01 = std::clamp(value, 0.0f, 1.0f);
-        const float strip_phase = spec_.finish_spiral
-            ? phase01
-            : std::fmod(effect01 * 0.82f + phase01 * 0.18f + 1.0f, 1.0f);
-        const float strip_p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
-                                                             GetEffectStripColormapUnfold(),
-                                                             GetEffectStripColormapDirectionDeg(),
-                                                             strip_phase,
-                                                             time,
-                                                             grid,
-                                                             size_multiplier,
-                                                             origin,
-                                                             rotated_pos);
-        const float tinted = std::fmod(strip_p01 + effect01 * (spec_.finish_spiral ? 0.35f : 0.28f) + 1.0f, 1.0f);
-        final_color = ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), tinted, time);
+        /* Pattern is the colour; the `mask` below (effect value) keeps the effect's shape. */
+        final_color = ResolvePatternColor(time, grid, origin, rotated_pos);
     }
     else if(spec_.finish_spiral && (pattern_index == 1 || pattern_index == 2 || pattern_index == 5 || pattern_index == 6) && !GetRainbowMode())
     {

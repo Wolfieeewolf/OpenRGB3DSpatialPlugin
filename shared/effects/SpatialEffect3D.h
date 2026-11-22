@@ -866,7 +866,11 @@ protected:
     RGBColor ResolveAudioReactiveColor(const AudioReactiveSettings3D& cfg,
                                        const AudioReactiveColorParams& params) const;
 
+    /** Speed curve that drives motion: gentle 0..100 (0..~0.39), then steeper to 5x Speed 100
+        at 200 (~1.96). Not clamped to 1 — use GetSpeed01() where a 0..1 range is required. */
     float GetNormalizedSpeed() const;
+    /** Speed mapped to 0..1 for consumers that clamp (Reactive wave speed, the `motion` token). */
+    float GetSpeed01() const;
     float GetNormalizedFrequency() const;
     float GetNormalizedDetail() const;
     float GetNormalizedSize() const;
@@ -886,6 +890,16 @@ protected:
     float GetColorCycleSeconds(float time) const { return time * GetColorCycleHz() / ColorCycleHzAtFrequency100(); }
     /** Strip-kernel palette colour with its hue scroll driven by Frequency (not wall time). */
     RGBColor ResolveEffectStripKernelColor(int kernel_id, float palette01, float time) const;
+    /** Colors and patterns rule for every engine: the pattern's colour at this point, laid out
+     *  by position (unfold mode + effect box + Size) with the kernel's own animation. Callers
+     *  multiply by the effect's value — the effect is the shape, the pattern is the colour. */
+    RGBColor ResolvePatternColor(float time,
+                                 const GridContext3D& grid,
+                                 const Vector3D& origin,
+                                 const Vector3D& rotated_pos) const;
+    /** Copy the active pattern (strip + kernel palette) into an overlay layer so the grid
+     *  overlay applies the same rule; leaves pattern_on false when no pattern is active. */
+    void FillOverlayPattern(struct GpuRoomGridOverlayLayer& out, float time) const;
     /** Frequency slider → hue/palette cycle rate. Frequency 100 ≈ 0.11 Hz. */
     float GetColorCycleHz() const;
     /** Elapsed motion cycles: time * GetMotionHz(). */
