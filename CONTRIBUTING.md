@@ -1,264 +1,180 @@
 # Contributing to OpenRGB 3D Spatial Plugin
 
-## Repository and workflow
+Thanks for helping. You don't need to be an expert: a clear bug report or a single new look is a real contribution.
 
-Day-to-day work is on **GitHub** (free Actions builds and releases). GitLab is a **mirror** so OpenRGB people can still find the project there, and as a backup if GitHub `main` is ever wrecked.
+**Quick start**
 
-| Role | Location |
-| ---- | -------- |
-| **Source of truth** | [github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin) |
-| **CI / releases / artifacts** | GitHub Actions (`.github/workflows/release.yml`) on `v*` tags |
-| **GitLab mirror** | [gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin) — updated from GitHub when `GITLAB_MIRROR_TOKEN` is set |
+- **Found a bug or want a feature?** Open an issue on [GitHub](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new/choose) and fill in the template.
+- **Want to make a new look?** It's a content file, not C++. It goes in the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). Start with the wiki page [Writing Effects](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Writing-Effects).
+- **Want to change the plugin code?** Fork on GitHub, branch from `main`, open a pull request. Read [Code rules](#code-rules) and run the [checklist](#before-you-open-a-pull-request) first.
 
-**Fork on GitHub**, branch from `main`, open a **pull request** on GitHub. Do not push new work to GitLab `main`; that copy is overwritten by the mirror.
+## Where things live
 
-If this later moves under `OpenRGBDevelopers` on GitLab with org runners, we can flip the arrow. Until then, GitHub is canonical.
+| What | Where |
+| ---- | ----- |
+| Source of truth, PRs, CI, releases | [github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin) |
+| GitLab mirror (read-only copy) | [gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin](https://gitlab.com/Wolfieeewolf/OpenRGB3DSpatialPlugin). Don't push work here; the mirror overwrites it. |
+| Looks, layouts, Action tools, Movie Sync looks | [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). Never add stock content to the plugin tree. |
+| User guide and developer reference (grid, coordinates, sliders, engines) | [Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki) |
+| Contracts reviewed with PRs | [`Documentation/`](Documentation/) (table below) |
 
-**Plugin docs:** browsable **[Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki)** (user + developer). Contracts reviewed with PRs live under [`Documentation/`](Documentation/):
+| Doc | Read it before |
+| --- | -------------- |
+| [effects-engines.md](Documentation/effects-engines.md) | Adding or porting a look; touching an engine (Volume / Audio / Media / Shader Field / Patterns / Reactive / Ambilight / Game) |
+| [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | Changing layout math, mm ↔ grid units, reference points, LED placement |
+| [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Changing the Minecraft / telemetry bridge (SHM, scale, mod mapping) |
+| [effect-event-maker.md](Documentation/effect-event-maker.md) | Actions, Triggers, pack format, once / loop playback |
+| [content-library.md](Documentation/content-library.md) | Adding a content folder or changing where files load from |
+| [shader-conversion.md](Documentation/shader-conversion.md) | Porting a Shadertoy / strip / 3D shader |
 
-| Doc | Use it for |
-| --- | --- |
-| [effects-engines.md](Documentation/effects-engines.md) | Engines as players; Volume / Audio / Media / Shader Field / Kernel / Reactive / Ambilight / Game — read before adding a look |
-| [PluginSpatialMeasurement.md](Documentation/PluginSpatialMeasurement.md) | mm, grid units, RoomGrid, viewport, effects, spacing — read before changing layout math, reference points, or LED placement |
-| [SpatialMeasurement.md](Documentation/SpatialMeasurement.md) | Minecraft / telemetry — RoomGrid → game world, sparse cubemap SHM; read when changing SHM, scale publish, or mod mapping |
-| [effect-event-maker.md](Documentation/effect-event-maker.md) | Actions + Triggers |
-| [shader-conversion.md](Documentation/shader-conversion.md) | Porting shaders into Shader Field / Volume / strip kernels |
+## Issues
 
-**Engine vs content:** this repo is the player/codecs only. Layouts, `.fs` / `.kernel` / Action Tools / Movie Sync looks / trigger actions: **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)** — do not add stock content packs to the plugin tree.
+Plugin bugs, engines, UI, Screen Mirror and game telemetry go in **this repo**. Controller layouts, `.fs` / `.kernel` files, Action tools and timeline content go in the **[presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)**.
 
-To refresh the GitHub wiki from the local seed: `.\scripts\publish-wiki.ps1` (after the wiki has been created once in the GitHub UI).
+Pick the **Bug Report** or **Feature Request** template. Game-integration ideas use Feature Request.
 
-### GitHub secrets (maintainers)
+| Helpful | Not helpful |
+| ------- | ----------- |
+| One topic per issue | A list of twenty games or devices in one ticket |
+| Versions, GPU and steps to reproduce | "It doesn't work" with no details |
+| What you expected vs what happened | Vague demands with no example |
+| "Not sure yet" when you don't know the technical path | Pretending a data path exists when none is described |
 
-| Secret | Purpose |
-| ------ | ------- |
-| `GITLAB_MIRROR_TOKEN` | GitLab PAT — Actions pushes `main` and tags to the GitLab mirror |
+**Game integrations** depend on how the plugin can learn the game's state (a mod, companion app, UDP, an API). Say what you looked into; it's fine not to know. Issues that skip the template may be closed so they can be resubmitted with the details. Maintainers label after triage (`bug`, `enhancement`, `game-integration`).
 
-**Refresh when Actions says “HTTP Basic: Access denied” on the mirror job:**
+## Pull requests and AI
 
-1. GitLab → [Preferences → Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens) → create a token with **`write_repository`** and **`read_repository`** (Project Access Token on the mirror project also works).
-2. GitHub → this repo → **Settings → Secrets and variables → Actions** → edit **`GITLAB_MIRROR_TOKEN`** → paste the new token.
-3. Re-run **Mirror to GitLab** (or push any commit/tag). A bad token no longer fails the workflow; it only warns until refreshed.
+This plugin is built largely with AI coding tools, and that's welcome here. Crediting the AI in commits (for example a `Co-Authored-By:` line) is fine in this repo and the presets repo.
 
-### GitLab CI (optional backup)
+Whatever wrote it, **you own what you submit**: you've built it, run it in OpenRGB, and understand what it does.
 
-| Variable | Purpose |
-| -------- | ------- |
-| `RUN_CI` | Set to `true` (pipeline variable) to auto-run Linux/Windows **build** jobs. Otherwise those jobs stay **manual** so shared-runner minutes are not spent on every push. Or use **Build → Pipelines → Run pipeline** (web) when you want a build. Primary packaged releases stay on GitHub Actions. |
+## Code rules
 
-Until the project namespace is finalized on `OpenRGBDevelopers`, the maintainer fork `Wolfieeewolf/OpenRGB3DSpatialPlugin` is also treated as upstream for automatic CI (see `.gitlab-ci.yml` rules).
+### Scope
 
-## Issues and pull requests
+- Plugin rules cover plugin-owned code: `engines/`, `shared/`, `ui/`, the root `.pro` and plugin entry.
+- Don't edit `OpenRGB/` (the upstream submodule) unless that's the point of the change.
 
-We use **GitHub issue templates** under `.github/ISSUE_TEMPLATE/` (GitLab copies under `.gitlab/` stay for the mirror).
+### Engines, not one-off effects
 
-### Which repository?
+The plugin is a **player**: library categories are engine names, and each engine plays the content files it finds. At Load (`OpenRGB3DSpatialPlugin.cpp`):
 
-| Topic | Open an issue in |
-| ----- | ---------------- |
-| Plugin bugs, engines, UI, screen mirror, game telemetry | **[OpenRGB3DSpatialPlugin on GitHub](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues)** |
-| Controller layouts, `.fs` / `.kernel` / Action Tools / timeline content | **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)** |
+1. `RegisterFolderVolumeEffects()` scans `effects/volume|audio|media/**/*.fs` (**Volume** / **Audio** / **Media**).
+2. `RegisterPlayerEngines()` (`shared/PlayerEngines.*`) adds **Reactive**, **Ambilight** (Screen Mirror), **Movie Sync** and one row per `effects/shader-field/*.fs`.
+3. Minecraft layers (Health, Hunger, Air, Durability, Damage, Room Ambilight) use `REGISTER_EFFECT_3D` under **Game**.
 
-### Templates on GitHub (plugin)
+A new look is a **file on an existing engine**. Don't add `REGISTER_EFFECT_3D` for anything except a new programmed Game pack.
 
-| Template | Use for |
-| -------- | ------- |
-| Bug Report | Crashes, wrong behavior, regressions |
-| Feature Request | New capabilities and UX improvements |
+### Effect contracts
 
-Game-integration requests can use Feature Request with a clear game/telemetry section.
+Full detail lives in the wiki ([Coordinate Spaces](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Coordinate-Spaces), [Effect Controls](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Effect-Controls), [Engines](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Engines)). The short version:
 
-**Blank issues** may be disabled. Pick a template so triage has version info and reproduction steps.
+- **Anchor:** get it from `GetEffectOriginGrid(grid)`. Normalize with `SampleVolumeLocalUv01` (origin-local, honours rotation and per-axis scale), `SampleGpuVolumeOriginLocal01` (origin-local room axes) or `SampleGpuRoomVolume01` (room UV). Never `(x - grid.min_x) / span` by hand.
+- **Units:** effects sample in grid units. For mm, use `grid.grid_scale_mm` or `GridUnitsToMM`, never a literal `10`. New distance logic goes through `GridSpaceUtils`.
+- **Sliders:** Speed drives motion (`GetMotionHz`, `CalculateProgress`, `GetMotionSeconds`). Frequency drives hue cycling (`GetColorCycleHz`, `GetColorCycleSeconds`). **Size** is feature size, **Scale** is occupancy. Speed 0 freezes motion; Frequency 0 freezes hue.
+- **`u_time`** is Speed-scaled seconds in every engine (Shadertoy `iTime`; real seconds at Speed 100).
+- **Rendering entry point:** stack code calls `SpatialEffect3D::EvaluateColorGrid` (applies Sampling quantization), never `CalculateColorGrid` directly. Effects implement `CalculateColorGrid`. Texture / GIF effects reuse `MediaTextureEffectUtils.h`.
 
-Direct link: [new issue](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new)
+### GPU only, no CPU fallbacks
 
-### What makes a useful issue (common sense)
-
-You do **not** need to be a developer. We do need **enough detail to act**, not a vent with no context.
-
-| Do | Avoid |
-|----|--------|
-| **One topic per issue** (one bug, one feature, one game) | Lists of many games or devices in a single ticket |
-| **Versions and steps** (plugin, OpenRGB, OS) for bugs | "It doesn't work" / "WTF" with no reproduction |
-| **Plain language** about what you want | Vague demands with no example behavior |
-| **"Not sure yet"** when you do not know the technical path | Pretending there is a data path when there is none described |
-| **[Pull request](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/compare)** if you already have a fix or mod/bridge | Expecting others to guess your setup |
-
-**Game integration** almost always depends on **how the plugin can learn game state** (mod, companion app, UDP, API, existing tool). Minecraft (Java mods), some **Unity** titles, and community tools are common examples; **Unreal** and others are often harder—say what you looked into. It is fine not to know; it is not fine to ask for twenty games with no lighting goals and no research.
-
-Issues that ignore the form or read like low-effort rants may be **closed** so someone can resubmit with the fields filled in. That is not personal—it keeps triage fair for everyone.
-
-After triage, apply labels such as `bug`, `enhancement`, or `game-integration` (create them under **Issues → Labels**). Issue forms intentionally omit auto-labels so templates stay visible even before labels exist.
-
-## OpenRGB reference documentation
-
-When changing plugin behavior—especially anything that touches devices, colors, zones, builds, or user-facing setup—stay consistent with upstream OpenRGB docs in the `OpenRGB/` submodule:
-
-| Document | Use it for |
-| -------- | ---------- |
-| `OpenRGB/CONTRIBUTING.md` | Merge-request style, C++/Qt style guidelines, logging (`LogManager` not `QDebug`/`printf`), general contribution expectations. |
-| `OpenRGB/Documentation/RGBControllerAPI.md` | LEDs, zones, modes, `colors` layout, `SetCustomMode` / `UpdateLEDs` expectations—any path that reads or writes controller state. |
-| `OpenRGB/Documentation/OpenRGBSDK.md` | Network SDK packet layout and plugin-related IDs—only if you change or document SDK-facing behavior. |
-| `OpenRGB/Documentation/OpenRGB SDK Wireshark Dissector.lua` | Optional Wireshark helper for SDK traffic—only when debugging or documenting network SDK packets. |
-| `OpenRGB/Documentation/Common-Modes.md` | Naming and meaning of **firmware** modes on devices; plugin spatial effects are software-driven but avoid confusing users with conflicting terminology where it overlaps UI copy. |
-| `OpenRGB/Documentation/Compiling.md` | How OpenRGB itself is built; align user-facing build hints (Qt, qmake, deps) with this where relevant. |
-| `OpenRGB/Documentation/UdevRules.md` | Linux permissions for USB/HID access—reference when documenting Linux install or troubleshooting detection. |
-| `OpenRGB/Documentation/USBAccess.md` | USB setup and permission notes—user docs or issues involving USB devices. |
-| `OpenRGB/Documentation/SMBusAccess.md` | SMBus/I2C setup (Windows/Linux/macOS)—user docs for RAM/motherboard RGB access issues. |
-| `OpenRGB/Documentation/KernelParameters.md` | Kernel cmdline (e.g. ACPI/SMBus conflicts)—user docs, not plugin C++ unless you add explicit guidance text. |
-
-**Minimum bar for this repo:** treat `OpenRGB/CONTRIBUTING.md` and `OpenRGB/Documentation/RGBControllerAPI.md` as binding for code style and anything that touches `RGBController` / LED indices / zones. The others apply when you document behavior, debug hardware access, or work near those subsystems.
-
-## Scope
-
-- Plugin rules apply to plugin-owned code in this repository (e.g. `engines/`, `shared/`, `ui/`, root `.pro`).
-- Do not modify files under `OpenRGB/` (upstream subtree) unless explicitly requested.
-- **Effects engines** (Volume, Shader Field, Kernel, Media, Audio, Reactive, Ambilight, Games): authoring contracts in `Documentation/effects-engines.md`. Prefer thin content on an existing engine over a new programmed host.
-
-### Effects registration (Load)
-
-The plugin is a **player**: library categories are **engine names**; each engine lists the looks it can play.
-
-At plugin Load (`OpenRGB3DSpatialPlugin.cpp`):
-
-1. **`RegisterFolderVolumeEffects()`** — scans `effects/volume|audio|media/**/*.fs`. Folder name = library category (**Volume** / **Audio** / **Media**).
-2. **`RegisterPlayerEngines()`** (`shared/PlayerEngines.*`) — **Reactive**, **Ambilight** (Screen Mirror), **Movie Sync**, and one row per `effects/shader-field/*.fs`.
-3. **Minecraft** sub-effects still use **`REGISTER_EFFECT_3D`** under category **Game** (programmed pack; fat-addon work later).
-
-Do **not** add `REGISTER_EFFECT_3D` for Volume / Audio / Media / Shader Field / Reactive / Ambilight / Movie Sync looks. New looks are files (or a new programmed Game pack).
-
-Disk folder `effects/volume/` is **Volume** content (folder name = library category). See [Documentation/content-library.md](Documentation/content-library.md).
-
-**Content pack:** the plugin ships engines only. Looks live in [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). Releases ship only the plugin binaries (`.dll` / `.so` / `.dylib`); content is not bundled. Copy feature folders into the plugin data root (`plugins/settings/OpenRGB3DSpatialPlugin/`). Restart OpenRGB so looks rescan. Windows: `%AppData%\OpenRGB\…`; Linux/macOS: `~/.config/OpenRGB/…`.
-
-### Smoke / stable-build hygiene
-
-Before a release cut (or after GL / FolderVolume / timeline changes):
-
-1. **Presets static smoke** (no OpenRGB): in the presets checkout run `python scripts/smoke_presets.py`. Optionally `pip install moderngl` and `python scripts/smoke_presets.py --compile-glsl` on a machine with OpenGL 4.1.
-2. **Plugin build** — existing GitHub/GitLab Qt 6.8.3 jobs must stay green.
-3. **Manual overlay pass** (grid overlay on): one Volume look each of `finish: depth|hex|hsv|spiral|rgb`, one audio look, Omni + Texture Projection, one Shader Field, then a short timeline using Chase / Twinkle / Confetti / Blink / Alternating.
-4. **Installed data sync** — after merging presets, overwrite the local plugin data trees from the presets repo so AppData is not older than `main`/`master`.
-
-Timeline `.fx` notes: `hash_byte(seed, local_ms, period, shift)` — when using epochs, pass `epoch * period` as `local_ms` (see `twinkle.fx`). Circular wrap `min(delta, 1-delta)` belongs on **angular** fields (e.g. Helix), not linear chase along `axis`.
-
-## Code quality
-
-- No debug code or dead code.
-- Before keeping a **non-virtual** public or private helper, grep the repo for call sites; unused batch paths and similar leftovers should be removed.
+- The viewport, LED evaluation and the room-grid overlay run on **OpenGL 4.1 Core** on the shared `SpatialOffscreenGlPool`. Requires Qt 6.8+, built with the same Qt as the OpenRGB host (CI uses 6.8.3).
+- Volume / Audio / Media and the Action field engines evaluate the real `volumeMain` at each LED (`evaluateAtPoints` / `BakeTrueGpuVolumeSamples`). Strip colormaps (`PrepareStripColormapAssist`) bake a 1D atlas from `effects/patterns/*.kernel`.
+- **Every engine draws its own GPU overlay layer** (`TryFillGpuRoomGridOverlayLayer`) from the same data as its LEDs. Changing `GpuRoomGridOverlayLayer` needs a full rebuild; keep `abi_size` / `OverlayLayerAbiOk`.
+- **Never add a CPU formula beside a GPU path** for the same look. If GL is unavailable, fail closed (dark), don't fake it.
+- GLSL bodies are versionless Core GLSL with no reserved words (`layout`, `packed`, `flat`, `shared`, `half`, `fixed`, `filter`, ...). Embedded GLSL raw strings stay under 16 KB each (MSVC limit); split adjacent literals if needed.
 
 ### No legacy or backward-compatibility paths
 
-**Do not add** migration shims, dual-format loaders, fuzzy preset matching, or “try the old key if the new one is missing” logic in plugin-owned code.
+Don't add migration shims, dual-format loaders, fuzzy matching or "try the old key" fallbacks. Remove them when you find one, and mention it in the PR so it isn't reintroduced.
 
-**Remove** when you find it (grep for `legacy`, `migration`, `backward`, `compat`, `grid_pitch`, `old_` key fallbacks, and optional JSON branches that only exist for pre-v1 files):
+| Area | Current contract | Don't keep |
+| ---- | ---------------- | ---------- |
+| OpenRGB profile payload | Plugin payload **version 1** with required `layout` and `effects` objects | Standalone layout / effect profiles, auto-load, quick-save, parallel session files |
+| Layout data | `OpenRGB3DSpatialLayout` **version 7** only. Camera isn't written and is ignored if present | Defaults for missing required fields; layout version 6 |
+| Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** with `spacing_mm_x/y/z`, `column_widths_mm`, `row_heights_mm`, `layer_depths_mm`, `layer_names`, `leds_per_cluster` | Alternate key names; optional-array fallbacks; `Normalize*` / `TryRead*` import helpers |
+| Effect settings | Each effect's `SaveSettings` / `LoadSettings`; embedded effects **version 9** only. Room output role is `Direct` (0) or `EmitterRelay` (1) | Other versions; obsolete role ints; renamed-key migration |
+| Effect UI | `EffectUiRows` + shared `ui/forms/Effect*.ui` panels | Per-effect legacy `.ui` trees or duplicate control paths |
+| Presets / scripts | Current schema only | One-off `convert_*.py` / generator scripts in the repo |
+| Plugin settings | `LEDSpacing` X/Y/Z in host settings JSON | `legacy_grid_pitch_mm` and other retired keys |
 
-| Area | Current contract | Do not keep |
-|------|------------------|-------------|
-| OpenRGB profile payload | Plugin payload **version 1** with required `layout` and `effects` objects | Standalone layout/effect profiles, auto-load, quick-save, or parallel session files |
-| Layout data | Write `OpenRGB3DSpatialLayout` **version 7**; load **7 only**. Camera is not written and is ignored if present | Defaults for missing required sections/fields; standalone file profiles; layout version 6 |
-| Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** — `spacing_mm_x/y/z`, `column_widths_mm`, `row_heights_mm`, `layer_depths_mm`, `layer_names`, `leds_per_cluster` required | Alternate spacing key names; optional array fallbacks; `Normalize*` / `TryRead*` import helpers |
-| Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings`; write embedded effects **version 9**, load **9 only**. Room output role is `Direct` (0) or `EmitterRelay` (1) | Versions outside 9; obsolete room output role ints; renamed-key migration |
-| Effect UI | `EffectUiRows` + shared `ui/forms/Effect*.ui` panels | Per-effect legacy-only `.ui` trees or duplicate control paths “for old layouts” |
-| Presets / scripts | Export/import uses current schema only | One-off `convert_*.py` migration tools in the repo |
-| Plugin settings | `LEDSpacing` X/Y/Z in host settings JSON | `legacy_grid_pitch_mm` or other retired keys |
+### Style
 
-**Exception — viewport only:** the Qt **OpenGL 4.1 Core** room (`LEDViewport3D` / `QOpenGLWidget` + `QOpenGLFunctions_4_1_Core`) is the only viewport path (no GPU shader dual path). That is rendering infrastructure, not data-format backward compatibility. Requires **Qt 6.8 or newer**, built with the same Qt as the OpenRGB host (pipeline Windows/AppImage **6.8.3**; distro and Flatpak hosts may use a newer Qt — rebuild or use the Flatpak extension).
+We follow [OpenRGB's coding rules](OpenRGB/CONTRIBUTING.md), plus a few of our own (the rules on this page). Where they differ, ours win, and the existing style in the file you're editing comes first of all.
 
-**GPU volume/strip field assists:** Volume/Audio/Media (FolderVolume) and Action field engines evaluate true `volumeMain` at each LED and room-grid overlay sample (`evaluateAtPoints` / `BakeTrueGpuVolumeSamples`). Bake collectors use `PrepareTrueGpuSamplePoint` (sampling quantization) so map keys match `EvaluateColorGrid`. Strip assists still bake a 1D atlas. Do not keep parallel CPU formula fallbacks. Volume frame (rotation/shear/occupancy) is applied inside `SampleVolumeLocalUv01` / `EffectGridSampleOutsideVolume` / `VolumeWorldDeltaToLocal` — not a pre-warp on the render path. Origin-centric volumes prefer `SampleVolumeLocalUv01` (same half-extents as the gizmo OBB via `GetVolumeHalfExtents`). Legacy helpers `SampleGpuVolumeOriginLocal01` / `MakeEffectGpuAtlasHalfExtents` remain for room-axis UV without rotation. Wall/floor/ceiling Volume looks (`sample: room`, e.g. Surface Ambient content) use `SampleGpuRoomVolume01` on the same active grid plus OBB cull. Shader Field projections use volume-local UV. Stratum band scalars are applied in finish / `PrepareGpuFields` — full per-LED multi-field stratum baking is out of scope until designed deliberately.
+- 4 spaces; braces on their own lines; no space before the parenthesis (`if(x)`, not `if (x)`).
+- `snake_case` variables, `CamelCase` types and functions.
+- Log with `LogManager`. No `printf`, `std::cout` or `QDebug`.
+- Avoid `auto` where the type isn't obvious; use indexed loops when index maths matters.
+- SPDX licence identifier at the top of new or substantially rewritten files.
+- No debug or dead code. Before keeping a non-virtual helper, grep for call sites.
+- Keep it simple (DRY, KISS, YAGNI). Comments only for non-obvious *why*, not *what*.
+- User-visible text is UTF-8; prefer `QStringLiteral` with `\uXXXX` escapes for special characters in source.
 
-**Shell Pattern / Surface Ambient:** Volume FolderVolume content (`effects/volume/shell-pattern.fs`, `surface-ambient.fs`). Palette / stratum finish stays on CPU where the host finish path requires it. Thickness and edge fade use shared motion controls (`global: thickness` / `edge`). Do not reintroduce `EvaluateCubeDisplay`, a strip-assist path beside the Shell volume, or a CPU `kernel_on_wall` wall loop.
+### RGBController safety
 
-**Strip colormap (Surface Look Pattern):** `SpatialEffect3D::PrepareStripColormapAssist` builds a 1D atlas from `effects/patterns/*.kernel` via `SpatialPatternKernelShader()` on shared **`SpatialOffscreenGlPool`**. Per-LED `SampleEffectStripColormap01` unfolds on CPU then samples the atlas; palette finish stays `ResolveStripKernelFinalColor`. Fail closed if the GPU assist is unavailable (no CPU kernel dual). Shell Pattern content does not use this assist.
+Follow [`OpenRGB/Documentation/RGBControllerAPI.md`](OpenRGB/Documentation/RGBControllerAPI.md):
 
-When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
-- Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
-- Comments should be minimal and explain non-obvious intent only.
+- Guard pointers before use (`controller`, `transform`, `virtual_controller`, `zone_manager`).
+- Check `idx < zones.size()` before `zones[idx]`, global LED index against `colors.size()` before writing, and mapping index against `led_positions.size()`.
+- Prefer early `continue` for invalid mappings or stale data.
 
-## Style
+### UI
 
-- Follow **existing style in the file first**, then `OpenRGB/CONTRIBUTING.md` where it does not conflict.
-- 4 spaces, braces on their own lines, `snake_case` variables, `CamelCase` types/functions.
-- Avoid `printf`, `std::cout`, and `QDebug`; use `LogManager`.
-- Prefer explicit types when they improve readability; avoid unnecessary `auto`.
-- Prefer indexed loops where index math matters; range loops are fine for simple read-only traversal.
-- New/changed files: SPDX license identifier in the header; keep headers minimal unless the file warrants more.
+**Reuse shared UI before writing new controls.**
 
-## RGBController safety rules
+- `SpatialEffect3D::CreateCommonEffectControls` mounts the common sections for every effect, in this order: layer banner (Start / Stop) → **Motion and pattern** → **Effect-specific settings** (`SetupCustomUI`) → **Colors and patterns** (rainbow / stops, plus the strip colormap when `supports_strip_colormap`) → **Advanced** (Surfaces, Output shaping, Effect geometry, Height motion bands when `supports_height_bands`).
+- Turn on shared sections with `EffectInfo3D` flags (`supports_strip_colormap`, `supports_height_bands`, `show_*_control`); don't rebuild them in `SetupCustomUI`.
+- Build effect-specific rows with `ui/widgets/EffectUiRows.h` (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, ...). Give rows a stable `objectName` so `EffectUiSync` can restore them after a profile load.
+- Numeric settings use `EffectSliderRow` / `EffectDoubleSliderRow` (spin over a thin slider). No bare `QSlider` + `QLabel` pairs.
+- Every add / remove / edit action works three ways: mouse, keyboard and a menu. Right-click opens a menu; it never deletes instantly.
+- If two effects need the same custom control, make a shared helper (like `engines/audio/AudioReactiveUi.h`) instead of copying it.
+- **No custom theme:** no `setStyleSheet` on plugin widgets and no `QPalette` overrides on panels or group boxes, so the host theme applies. Exception: controller / custom-device cards may tint with the host's `QPalette::Highlight` (`PluginUiPaletteColor`).
+- Keep signal connect / disconnect symmetrical for dynamic effect UI, keep list / combo / selection state in sync, and disable dependent controls when the selection is invalid.
+- The main tab is `ui/forms/OpenRGB3DSpatialTab.ui`, implemented in `ui/shell/OpenRGB3DSpatialTab_*.cpp` by concern; reach widgets through `ui->…` and panel getters.
 
-Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for mapped devices:
+### Game integrations
 
-- Always guard pointers before dereference (`controller`, `transform`, `virtual_controller`, `zone_manager`).
-- Before `zones[idx]`, validate `idx < zones.size()`.
-- Before color writes, validate global LED index against `colors.size()`.
-- For mapped LEDs, validate mapping index against `led_positions.size()` before use.
-- Prefer early-continue guards for invalid mappings or stale data.
+- Telemetry (localhost UDP for pose / vitals / damage) is separate from the RGBController protocol; still validate input, log with `LogManager` and keep it thread-safe.
+- Minecraft Room Ambilight reads a **sparse cubemap over SHM** from the Fabric mod in `integrations/minecraft/` (LED texels only). Treat the bridge as alpha: vanilla-shaped, modpacks largely untested.
 
-## Game / Minecraft and similar effects
+## Before you open a pull request
 
-- Telemetry (UDP on localhost for pose/vitals/damage) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
-- **Minecraft stack layers today:** Health, Hunger, Air, Durability, Damage, **Room Ambilight**. Room Ambilight colours come from the Fabric mod under **`integrations/minecraft/`** over **sparse cubemap SHM** (LED texels only; no dense/LZ4 dual path), not UDP colour streams. Treat the bridge as **vanilla-shaped alpha** — modpacks / texture packs / HD UV are largely untested (stutter and breakage expected).
-- Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
+- [ ] Builds, and you've run it in OpenRGB (note your OS and Qt version)
+- [ ] Changes stay in plugin-owned paths (no casual `OpenRGB/` edits)
+- [ ] New looks are content on an existing engine; no new `REGISTER_EFFECT_3D` except Game packs
+- [ ] LEDs and the grid overlay show the same thing; no CPU fallback added
+- [ ] No legacy / migration paths added; any you touched are removed
+- [ ] `LogManager` for logging; SPDX header on new files; file style matched
+- [ ] No `setStyleSheet` or theme palette overrides on structural UI
+- [ ] Null pointers guarded; zone and LED indices checked before `colors[]` / mapping writes
+- [ ] Docs updated if behaviour or wording changed (engine names match `Documentation/effects-engines.md`)
 
-## UI
+## Release smoke test
 
-### Main spatial tab (Designer)
+Before tagging a release, or after GL / FolderVolume / timeline changes:
 
-The **3D Spatial** plugin tab shell is built from `ui/forms/OpenRGB3DSpatialTab.ui` plus embedded panel widgets. Widgets are accessed via `ui->…` and panel getters (`OpenRGB3DSpatialTab::zonesList()`, etc.)—not duplicated pointer members on `OpenRGB3DSpatialTab`. Tab implementation lives under `ui/shell/OpenRGB3DSpatialTab_*.cpp` by concern (Setup / Layout / Scene / Effects / Audio / …)—prefer named seams over crumb files; shared controller cards in `ui/ControllerCards.cpp`.
+1. **Presets static check** (no OpenRGB needed): in the presets checkout run `python scripts/smoke_presets.py`. Add `--compile-glsl` (needs `pip install moderngl` and OpenGL 4.1) to compile every shader.
+2. **CI:** the GitHub Build workflow must be green on Windows, Linux and macOS.
+3. **Manual pass with the grid overlay on:** one Volume look each of `finish: depth|hex|hsv|spiral|rgb`, one Audio look, Omni and Texture Projection, one Shader Field, one Reactive and one Screen Mirror layer, then a short timeline using Chase / Twinkle / Confetti / Blink / Alternating.
+4. **Sync your data folder** from the presets repo so your AppData copy isn't older than `master`.
 
-### Reuse shared UI (all effects)
+## OpenRGB reference docs
 
-Default rule for every effect: **reuse existing panels and helpers before writing new controls.** Do not copy-paste slider rows, color pickers, or section layouts into individual `.cpp` files when a shared widget or helper already covers that purpose.
+Upstream docs in the `OpenRGB/` submodule. The first two are binding for code style and anything touching LEDs, zones or colours; the rest matter when you document or debug hardware access.
 
-**Use first (stack / library):**
+| Doc | Use it for |
+| --- | ---------- |
+| `OpenRGB/CONTRIBUTING.md` | C++ / Qt style, logging, merge-request expectations |
+| `OpenRGB/Documentation/RGBControllerAPI.md` | LEDs, zones, modes, `colors` layout, `UpdateLEDs` |
+| `OpenRGB/Documentation/Compiling.md` | Build hints (Qt, qmake, deps) in user-facing docs |
+| `OpenRGB/Documentation/OpenRGBSDK.md` | Network SDK packets and plugin IDs |
+| `OpenRGB/Documentation/Common-Modes.md` | Firmware mode names, so UI wording doesn't clash |
+| `OpenRGB/Documentation/UdevRules.md`, `USBAccess.md`, `SMBusAccess.md`, `KernelParameters.md` | Linux / USB / SMBus permission and detection help |
 
-- `SpatialEffect3D::CreateCommonEffectControls` and the `ui/widgets/*` panels (Surfaces, Motion, Output, Geometry, Colors, `StratumBandPanel`, strip colormap). Layout for Surfaces / Motion / Output / Geometry / Colors / layer banner lives in **`ui/forms/Effect*.ui`** (Qt Designer); C++ subclasses load with `setupUi` and expose the same widget pointers as before. Thin hosts (`EffectControlsRoot`, `EffectCustomHost`, tab effect-controls shell) are built in C++ with `QVBoxLayout` only.
-- `EffectInfo3D` flags (`supports_height_bands`, `supports_strip_colormap`, `show_*_control`) so common sections appear instead of custom duplicates.
-- `AddWidgetToParent` and the standard mount flow (`MountSettingsUi` / `createEffectSettingsUi`).
+## Maintainers
 
-**Add new UI only when** the control is truly effect-specific or no shared helper exists yet—and if two or more effects need the same custom control, add or extend a shared helper (like `engines/audio/AudioReactiveUi.h`) instead of duplicating code.
+**GitHub secret `GITLAB_MIRROR_TOKEN`:** a GitLab token with `read_repository` and `write_repository`, used by the **Mirror to GitLab** workflow. If the mirror job warns "HTTP Basic: Access denied", create a new token in GitLab (Preferences → Access Tokens), paste it into GitHub → Settings → Secrets and variables → Actions, and re-run the workflow.
 
-Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path. **Minecraft** game layers use dedicated settings under `engines/game/Minecraft/` (**Room Ambilight** drives the SHM cubemap path). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
+**GitLab CI** is a backup. Build jobs stay manual unless the pipeline variable `RUN_CI=true` is set, or you start a pipeline from the web UI. Releases come from GitHub Actions on `v*` tags.
 
-### Effect settings tab order (stack / library)
-
-`SpatialEffect3D::CreateCommonEffectControls` defines the **fixed section order** for every effect that uses the common mount (not Screen Mirror `CustomOnly` or Minecraft chrome overrides):
-
-1. **Surfaces** → 2. **Motion and pattern** → 3. **Output shaping** → 4. **Effect geometry** → 5. **Colors and patterns** (rainbow/stops; strip colormap when `supports_strip_colormap`) → 6. **Height motion bands** (`StratumBandPanel` when `supports_height_bands`) → 7. **Effect-specific settings** (`SetupCustomUI` only).
-
-Do **not** duplicate strip colormap or floor/mid/ceiling band controls in `SetupCustomUI`—set `supports_strip_colormap` / `supports_height_bands` on `EffectInfo3D` and use `GetStratumTuning()` / `GetStratumLayoutMode()` in render.
-
-Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`EffectUiRows`** (`AppendComboRow`, `AppendSliderRow`, …). Give each row a stable `objectName` when `LoadSettings` must resync after profile load (`EffectUiSync`). Prefer caching widget pointers (sliders/combos) when the effect already holds them; use `EffectUiSync` on the nested `NewEffectPanel` when controls live only inside that panel.
-
-**Audio looks:** Volume host under `effects/audio/*.fs` (`drive: audio`, `audio_preset:`). Prefer strip-first looks with zone/controller targeting for floor/wall/ceiling strips; use full-room 3D when one layer should cover everything. Shared audio UI helpers live in `engines/audio/AudioReactiveUi.h`. Global **16-band EQ** is on the **Audio Input** panel (show when any Audio-engine layer is on the stack).
-
-- Spectrum / strip presets use frequency band + response and sample FFT bins in the Hz range.
-- Level presets use Role / Hz + Feel + Color mode.
-- Beat / low-punch presets use the beat-wave section for origin shockwaves.
-
-- Keep signal wiring/disconnect paths symmetrical for dynamically created effect UI widgets.
-- Keep list, combo, and selection state synchronized.
-- Clear/disable dependent controls when selection is invalid.
-- **No custom UI chrome styling:** do not use `setStyleSheet` on plugin widgets, and do not override `QPalette` on panels, frames, `QGroupBox`, or other structural chrome—widgets must inherit the host OpenRGB / system theme. Layout, `QFrame` shape/shadow, `autoFillBackground`, and standard Qt widgets only. (Helpers like dimmed helper labels or RGB swatch icons are content, not theme overrides for containers.)
-- **Exception — list/card selection:** controller and custom-device cards may tint `cardFrame` using `PluginUiPaletteColor` / `QPalette::Highlight` from the host theme only (see `SpatialControllerCardWidget`, `CustomControllerDeviceWidget`). Do not introduce new `setStyleSheet` or fixed RGB chrome colours.
-
-## Pre-submit checklist (plugin-owned code)
-
-Aligned with **this file**, **`OpenRGB/CONTRIBUTING.md`**, and the OpenRGB docs in **OpenRGB reference documentation** above (minimum: **`RGBControllerAPI.md`** when touching LEDs/zones/colors).
-
-- [ ] **Scope:** changes only under plugin-owned paths; no edits in `OpenRGB/` unless intentional.
-- [ ] **Engines:** new looks go on an existing engine (`.fs` / `.kernel` or player codec); no new `REGISTER_EFFECT_3D` except Game/Minecraft-style packs (see **Effects registration**).
-- [ ] **No legacy paths:** no new migration or old-format fallbacks; remove any you touch (viewport is OpenGL 4.1 Core only — see **No legacy or backward-compatibility paths**).
-- [ ] **Logging:** no `QDebug`, `printf`, or `std::cout`; use `LogManager`.
-- [ ] **UI chrome:** no `setStyleSheet` on structural chrome; no custom theme `QPalette` on panels/`QGroupBox` (card selection exception in **UI** only).
-- [ ] **Headers:** SPDX on new or substantially new `.cpp`/`.h`; match brace/naming style in the file.
-- [ ] **Effects:** stack/render paths call `SpatialEffect3D::EvaluateColorGrid`, not `CalculateColorGrid`, except inside effect implementations.
-- [ ] **RGB safety:** guard null pointers; validate zone and LED indices before `colors[]` / mapping writes (see **RGBController safety rules**).
-- [ ] **Docs:** user-facing build/troubleshooting text matches `OpenRGB/Documentation/Compiling.md` and the relevant USB/SMBus/Udev/Kernel docs when applicable; engine/category wording matches `Documentation/effects-engines.md`.
-- [ ] **Strings:** user-visible text uses correct UTF-8 (prefer `QStringLiteral` with `\\uXXXX` escapes for special characters in source files).
-
-## Effect rendering entry points
-
-- Effect stack code should call **`SpatialEffect3D::EvaluateColorGrid`** (applies global **Sampling** / spatial quantization where enabled), not `CalculateColorGrid` directly.
-- Implement per-effect color in **`CalculateColorGrid`**; override **`UsesSpatialSamplingQuantization()`** only when the effect already handles resolution in UV space (e.g. texture projection, screen mirror).
-- **Texture / GIF effects:** reuse **`MediaTextureEffectUtils.h`** (`MediaTextureEffect` namespace) for bilinear sampling and RGB lerp—avoid duplicating those helpers in individual `.cpp` files.
+**Wiki:** edit the wiki checkout (`OpenRGB3DSpatialPlugin.wiki`) directly and push it.

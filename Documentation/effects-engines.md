@@ -39,7 +39,10 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 3. No parallel CPU formula beside a GPU `volumeMain` / field program for the same look (fail closed if GL is unavailable).
 4. Prefer shared globals (`speed`, `brightness`, `size`, `scale`, ...) over one-off knobs when >=2 effects need the same control.
 5. Reject ports that need `iChannel`, `iMouse`, raymarch, webcam, or per-effect native hooks unless you are writing a programmed addon.
-6. **GPU standard:** viewport, preview, Volume/Audio/Media LED point-eval, room-grid overlay atlas sampling, and remaining field engines (strip kernels, Shader Field atlas where used) run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, ...).
+6. **GPU standard:** viewport, preview, Volume/Audio/Media LED point-eval, room-grid overlay atlas sampling, and remaining field engines (strip kernels, Shader Field atlas where used) run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, `half`, `fixed`, `filter`, ...); the presets smoke test checks them.
+
+7. **Time and sliders:** `u_time` is **Speed-scaled seconds** in every engine (Shadertoy `iTime`; real seconds at Speed 100, frozen at Speed 0). Speed drives motion, Frequency drives hue cycling, **Size** is feature size, **Scale** is occupancy. Full slider and coordinate contract: wiki [Effect Controls](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Effect-Controls) and [Coordinate Spaces](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Coordinate-Spaces).
+8. **Overlay:** every engine draws its own GPU room-grid overlay layer from the same data as its LEDs. No CPU overlay path.
 
 Porting helpers: [shader-conversion.md](shader-conversion.md).
 
@@ -64,7 +67,7 @@ category: Volume
 | `instances:` | When >0, forces the effect instance count (e.g. searchlight cone default) |
 | `sample: room` | Wall/floor/ceiling UV (`SampleGpuRoomVolume01`); default is origin-local occupancy |
 
-(See full Volume / Audio / Media / Shader Field sections below for controls — paths above supersede older `effects/spatial` wording.)
+Body: `void volumeMain(out vec4 out_color, in vec3 p01)`. `p01` is origin-local UV (anchor at 0.5) unless `sample: room`. `u_params[0]` = progress (Speed-scaled cycles); `u_time` = Speed-scaled seconds.
 
 ## Shader Field engine
 
@@ -76,7 +79,11 @@ category: Volume
 | `class:` / `name:` / `description:` | Registration id + UI |
 | `category:` | Library grouping (optional; folder wins) |
 
-Author body: versionless GLSL with `spatialMain(out, frag_coord)`; uniforms `u_time`, `u_resolution`, `u_params[0..3]` (zoom / contrast / hue / detail). Do not put `#version` in the file.
+Author body: versionless GLSL with `spatialMain(out, frag_coord)`; uniforms `u_time` (Speed-scaled seconds), `u_resolution`, `u_params[0..3]` (zoom / contrast / hue / detail). `param:` lines beyond the first four feed `u_params[4..7]`; a matching `slider: name min max default [pct] | Label | tooltip` line shows it as an on-screen slider saved with the effect. Do not put `#version` in the file.
+
+## Patterns engine
+
+**Runs:** strip colormap — each `effects/patterns/*.kernel` adds a 1D kernel that colours LEDs along their strip (Colors and patterns section of any effect that supports it). Set `index:` so saved ids stay stable. Not a library category of its own.
 
 ## Media engine
 
@@ -100,6 +107,8 @@ Library category **Ambilight**. No Effect Library content folder.
 
 **GPU vs CPU:** DXGI capture + quality downscale are GPU (D3D11); LED mapping (plane UV, zones, reach/falloff, wave, grade) stays CPU — same pattern as Action Media frame sampling, not FolderVolume `volumeMain`. Default capture quality is **1080p** so DXGI GPU-scales before CPU readback; **Native** is opt-in for full-res.
 
+**Overlay:** the grid overlay draws the same capture frames on the GPU (up to 4 planes); temporal wave and smoothing are LED-only.
+
 **Reach / wave origin:** always each **display plane’s centre**. Screen Mirror does not use the layer Spatial Anchor (that control is for Volume / Movie Sync / etc.).
 
 **Screen UV (`SpatialMapToScreen`):** **outside / convex** sphere map (Newell dual with `pz − 1`) from the plane centre — light reads as an extension of the screen pushing **out** into the room (not a concave cave into mid-frame). Trade-off: clips that dive *into* a tunnel will feel wrong; ambilight is meant to send light out from the glass, not recreate into-the-screen perspective. Reach / falloff owns 360° brightness; wave / time-to-edge still adds travel delay.
@@ -122,8 +131,8 @@ Image / GIF / texture projection      → Media
 Beat / FFT driven fields              → Audio
 Desktop / monitor glow                → Ambilight
 Keyboard / HID waves                  → Reactive
-Film sidecar cues                     → Movie Sync
+Film sidecar cues and looks           → Movie Sync (movie-sync/effects)
 Minecraft Fabric telemetry            → Game
 Timed trigger actions                 → Triggers (triggers/effects)
-Film looks                            → Movie Sync (movie-sync/effects)
+Strip chase / comet colormap          → Patterns (effects/patterns)
 ```

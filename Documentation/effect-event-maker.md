@@ -104,7 +104,11 @@ World tools may declare `ribbons: arc` (also `helix` / `sweep` / `cables`) for a
 
 **Toolbox headers:** same-engine sibling `.fx` tools share one header skeleton (icons / knobs / paint). If an `.fx` has `shader:` and a `pulse` knob, the paired `.fs` must read size via `param: size` / `u_params[2]`. UI copy stays human-readable (no raw ids / placeholder junk).
 
-**Seamless play:** looping packs should animate from `u_time` (continuous); once packs should finish at black.
+**Seamless play (once vs loop):**
+
+- **`loop: once`**: drive the look with span/sweep `progress` (0→1; speed may finish early but must not wrap), fade to **black** before the end, then the player clears LEDs. No `fract` on progress. Helpers: `ClipSpanProgress` (envelope / once fade), `ClipSweepProgress` (script `progress`).
+- **`loop: forever` / `while_active`**: animate from continuous `u_time` / script `time_ms` only (`GpuAnimMs` / `GpuAnimMsOr`), never wrapping `progress` or `local_ms`, which flashes at the pack seam.
+- Every path that empties the player (Stop, uncheck, level-off, natural end) calls `ClearActionPreview`.
 
 **Placement (world / field / particle / ribbon):** clip `origin_ref` (layout reference point name, or empty = room center), `origin_offset_x/y/z` (% of half-room), and `effect_size` (0.05–2.0). Scripts can read `ox` / `oy` / `oz` / `effect_size`. Sample normalize uses `play_bounds` (track LED AABB vs full room box).
 
@@ -253,16 +257,9 @@ Actions (.action.json)
 LED frames over time -> OpenRGB + 3D viewport (layout-aware)
 ```
 
-## Build order
+## Later
 
-1. Pack format + player (incl. ~60s + loop + priority). **done**
-2. Effects library UI (create/preview/save with minimal tools). **done**
-3. Bindings UI  -  Manual + Windows session/focus/display events. **done** (toast notifications later)
-4. Linux + macOS OS sources. **done**
-5. Production clean: event edges, LogManager tracing, CONTRIBUTING chrome/legacy. **done**
-6. Structural split of editor/timeline/pack eval mega-files. **done** (Pass 1)
-7. Pack-eval dispatcher + ActionApplier peel. **done**
-8. Later: Minecraft bindings / media cues / WinRT toasts / Discord.
+Minecraft bindings, media cues, WinRT toasts, Discord.
 
 ## Non-goals for v1
 
