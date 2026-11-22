@@ -101,6 +101,11 @@ void LEDViewport3D::paintGL()
         initViewportShaderPrograms();
     }
 
+    /* Set every frame: QPainter text and field passes may leave other values behind. */
+    glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_TRUE);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if(!viewport_paint_enabled_ || width() < 2 || height() < 2)
@@ -110,6 +115,25 @@ void LEDViewport3D::paintGL()
 
     paintGlScene();
     paintViewportText2D();
+    sealOpaqueAlpha();
+}
+
+void LEDViewport3D::sealOpaqueAlpha()
+{
+    /* Blending also lowers the framebuffer's alpha. Wayland and composited X11 honour it, so
+       the desktop showed through the 3D view; force alpha back to 1. */
+    if(QOpenGLContext* ctx = context())
+    {
+        if(QOpenGLExtraFunctions* xf = ctx->extraFunctions())
+        {
+            xf->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+        }
+    }
+    glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
 void LEDViewport3D::paintGlScene()

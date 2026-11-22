@@ -44,3 +44,11 @@ if [ ! -f libOpenRGB3DSpatialPlugin.so ]; then
   echo "Expected libOpenRGB3DSpatialPlugin.so after build"
   exit 1
 fi
+
+# Release builds: look for Qt libraries OpenRGB does not ship next to the plugin
+# (the default RUNPATH is a directory that only exists on the build machine).
+# Local distro builds (install-linux-user.sh) keep using the system Qt.
+if command -v patchelf >/dev/null 2>&1; then
+  patchelf --set-rpath '$ORIGIN' libOpenRGB3DSpatialPlugin.so
+  patchelf --print-rpath libOpenRGB3DSpatialPlugin.so
+fi

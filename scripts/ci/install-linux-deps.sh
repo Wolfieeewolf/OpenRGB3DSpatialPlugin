@@ -22,6 +22,7 @@ apt-get install -y -qq \
   libhidapi-dev \
   libgl1-mesa-dev \
   libglu1-mesa-dev \
+  patchelf \
   python3 \
   python3-pip \
   python3-venv

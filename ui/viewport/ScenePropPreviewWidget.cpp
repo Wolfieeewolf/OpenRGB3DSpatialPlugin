@@ -311,6 +311,11 @@ void ScenePropPreviewWidget::paintGL()
         glDepthMask(GL_TRUE);
     }
     drawBatch(edges_batch_, MeshBatch::Primitive::Lines, 0.9f);
+
+    /* Same as LEDViewport3D::sealOpaqueAlpha: blending must not make the window see-through. */
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
 void ScenePropPreviewWidget::mousePressEvent(QMouseEvent* event)

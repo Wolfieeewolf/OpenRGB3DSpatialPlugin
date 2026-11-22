@@ -1,9 +1,10 @@
 name: Release
 
-# Three plain plugin binaries, nothing else:
-#   Windows  OpenRGB3DSpatialPlugin.dll        (x64, Qt 6.8.3 MSVC)
-#   Linux    libOpenRGB3DSpatialPlugin.so      (amd64, Qt 6.8.3)
-#   macOS    libOpenRGB3DSpatialPlugin.dylib   (universal arm64 + x86_64, Qt 6.8.3)
+# One plugin binary per OS, plus the two Qt modules OpenRGB does not ship
+# (Network and OpenGLWidgets):
+#   Windows  OpenRGB3DSpatialPlugin.dll        (x64, Qt 6.8.3 MSVC) + 2 DLLs
+#   Linux    libOpenRGB3DSpatialPlugin.so      (amd64, Qt 6.8.3)    + 2 .so.6
+#   macOS    libOpenRGB3DSpatialPlugin.dylib   (universal, Qt 6.8.3) + frameworks zip
 on:
   push:
     tags:
@@ -99,10 +100,23 @@ jobs:
           QT_BIN_DIR: ${{ env.QT_ROOT_DIR }}/bin
         run: bash scripts/ci/build-linux.sh 6 release
 
+      # OpenRGB's AppImage does not bundle these; a distro's own copy is usually a
+      # different Qt version and will not load next to the AppImage's Qt.
+      - name: Collect Qt libraries OpenRGB does not ship
+        run: |
+          for lib in Network OpenGLWidgets; do
+            cp -L "$QT_ROOT_DIR/lib/libQt6${lib}.so.6" "libQt6${lib}.so.6"
+            patchelf --set-rpath '$ORIGIN' "libQt6${lib}.so.6"
+          done
+          readelf -d libOpenRGB3DSpatialPlugin.so | grep -E 'NEEDED|RUNPATH'
+
       - uses: actions/upload-artifact@v6
         with:
           name: linux
-          path: libOpenRGB3DSpatialPlugin.so
+          path: |
+            libOpenRGB3DSpatialPlugin.so
+            libQt6Network.so.6
+            libQt6OpenGLWidgets.so.6
           if-no-files-found: error
 
   build-macos:
@@ -139,7 +153,28 @@ jobs:
           bash scripts/build-assimp.sh
 
       - name: Build
-        run: bash scripts/ci/build-macos.sh 6 release
+        run: |
+          bash scripts/ci/build-macos.sh 6 release
+          otool -L libOpenRGB3DSpatialPlugin.dylib
+
+      # Official Qt frameworks are universal, so one job packs them.
+      - name: Pack Qt frameworks OpenRGB.app does not ship
+        if: matrix.arch == 'arm64'
+        run: |
+          mkdir -p qtfw
+          for fw in QtNetwork QtOpenGLWidgets; do
+            cp -R "$QT_ROOT_DIR/lib/${fw}.framework" qtfw/
+            rm -rf "qtfw/${fw}.framework/Headers" "qtfw/${fw}.framework/Versions/A/Headers"
+            codesign --force --sign - "qtfw/${fw}.framework/Versions/A"
+          done
+          (cd qtfw && zip -qry ../macOS-Qt-frameworks.zip .)
+
+      - uses: actions/upload-artifact@v6
+        if: matrix.arch == 'arm64'
+        with:
+          name: qtfw-macos
+          path: macOS-Qt-frameworks.zip
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v6
         with:
@@ -161,6 +196,7 @@ jobs:
             macos-arm64/libOpenRGB3DSpatialPlugin.dylib \
             macos-x86_64/libOpenRGB3DSpatialPlugin.dylib \
             -output libOpenRGB3DSpatialPlugin.dylib
+          codesign --force --sign - libOpenRGB3DSpatialPlugin.dylib
           lipo -info libOpenRGB3DSpatialPlugin.dylib
       - uses: actions/upload-artifact@v6
         with:
@@ -189,7 +225,10 @@ jobs:
              artifacts/windows/Qt6Network.dll \
              artifacts/windows/Qt6OpenGLWidgets.dll \
              artifacts/linux/libOpenRGB3DSpatialPlugin.so \
-             artifacts/macos/libOpenRGB3DSpatialPlugin.dylib assets/
+             artifacts/linux/libQt6Network.so.6 \
+             artifacts/linux/libQt6OpenGLWidgets.so.6 \
+             artifacts/macos/libOpenRGB3DSpatialPlugin.dylib \
+             artifacts/qtfw-macos/macOS-Qt-frameworks.zip assets/
           ls -la assets
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF_NAME}"
@@ -202,12 +241,16 @@ jobs:
           | OS | File |
           | --- | --- |
           | Windows (x64) | `OpenRGB3DSpatialPlugin.dll` **plus** `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` |
-          | Linux (x86_64) | `libOpenRGB3DSpatialPlugin.so` |
-          | macOS (Apple Silicon + Intel) | `libOpenRGB3DSpatialPlugin.dylib` |
+          | Linux (x86_64, OpenRGB **AppImage**) | `libOpenRGB3DSpatialPlugin.so` **plus** `libQt6Network.so.6` and `libQt6OpenGLWidgets.so.6` |
+          | macOS (Apple Silicon + Intel) | `libOpenRGB3DSpatialPlugin.dylib` **plus** `macOS-Qt-frameworks.zip` |
 
           1. **Windows only:** put `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` in the folder that contains `OpenRGB.exe` (OpenRGB 1.0 does not ship them; without them the plugin will not load).
-          2. Install the plugin via OpenRGB → Settings → Plugins → Install Plugin, then restart OpenRGB.
-          3. Get the looks: copy folders from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — the plugin ships with no effects of its own.
+          2. **Linux AppImage:** put the two `libQt6*.so.6` files in `~/.config/OpenRGB/plugins/`, next to the plugin. Using your distro's OpenRGB package instead? Do not use these files; build with `scripts/install-linux-user.sh` so the plugin matches your Qt.
+          3. **macOS:** unzip `macOS-Qt-frameworks.zip` into the same folder as the plugin (`~/.config/OpenRGB/plugins/`).
+          4. Install the plugin via OpenRGB → Settings → Plugins → Install Plugin, then restart OpenRGB.
+          5. Get the **current** looks from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — the plugin ships with no effects of its own, and older copies run at the wrong speed with this version.
+
+          **Status:** tested on Windows only. Linux has known problems and macOS is untested. Please [report](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new/choose) what you see, with your GPU, driver and OpenRGB log.
 
           Getting started guide: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Getting-Started
           EOF

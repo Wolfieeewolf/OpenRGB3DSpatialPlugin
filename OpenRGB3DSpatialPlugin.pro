@@ -701,6 +701,10 @@ unix:!macx {
 
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
 macx:LIBS += -framework OpenGL -framework CoreFoundation -framework IOKit
+# Qt 6.8 links AGL by default; macOS 26 removed it and we never use it.
+macx:QMAKE_LIBS_OPENGL = -framework OpenGL
+# Find Qt frameworks OpenRGB.app does not ship next to the plugin.
+macx:QMAKE_LFLAGS += -Wl,-rpath,@loader_path
 
 message("VERSION_NUM: "$$VERSION_NUM)
 message("VERSION_STR: "$$VERSION_STR)

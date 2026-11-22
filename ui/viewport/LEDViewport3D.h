@@ -282,6 +282,7 @@ private:
     void loadScenePickMatrices(float modelview[16], float projection[16], int viewport[4]);
     void loadPickViewport(int viewport[4]);
     void paintGlScene();
+    void sealOpaqueAlpha();
     void prepareForQtPainterInPaintGl();
     void initViewportShaderPrograms();
     void destroyViewportGlResources();

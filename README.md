@@ -19,10 +19,13 @@ Download from the **[latest release](https://github.com/Wolfieeewolf/OpenRGB3DSp
 | OS | Files |
 | --- | --- |
 | **Windows** | `OpenRGB3DSpatialPlugin.dll` + `Qt6Network.dll` + `Qt6OpenGLWidgets.dll` |
-| **Linux** | `libOpenRGB3DSpatialPlugin.so` |
-| **macOS** | `libOpenRGB3DSpatialPlugin.dylib` |
+| **Linux** (OpenRGB AppImage) | `libOpenRGB3DSpatialPlugin.so` + `libQt6Network.so.6` + `libQt6OpenGLWidgets.so.6` |
+| **macOS** | `libOpenRGB3DSpatialPlugin.dylib` + `macOS-Qt-frameworks.zip` |
 
-1. **Windows only:** copy `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` into the folder that contains `OpenRGB.exe`. Stock OpenRGB doesn't include them, and **without them the plugin silently won't load**.
+1. **Add the Qt files.** Stock OpenRGB doesn't include them, and **without them the plugin silently won't load**.
+   - **Windows:** copy the two `.dll` files into the folder that contains `OpenRGB.exe`.
+   - **Linux (AppImage):** copy the two `libQt6*.so.6` files into `~/.config/OpenRGB/plugins/`, next to the plugin.
+   - **macOS:** unzip `macOS-Qt-frameworks.zip` into `~/.config/OpenRGB/plugins/`, next to the plugin.
 2. In OpenRGB: **Settings → Plugins → Install Plugin**, pick the plugin file, then **restart OpenRGB**.
 3. **Get the effects.** The plugin ships with *no* looks of its own. Download [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) (green **Code → Download ZIP**) and copy its folders into:
 
@@ -33,7 +36,7 @@ Download from the **[latest release](https://github.com/Wolfieeewolf/OpenRGB3DSp
 
    Restart OpenRGB again. If the **Effect Library** is empty, this step is what's missing.
 
-**Linux notes:** the release `.so` targets the OpenRGB **AppImage**. If you use your distro's OpenRGB package (Arch, CachyOS, Fedora…), build against your system Qt with `scripts/install-linux-user.sh`. Flatpak OpenRGB can't load outside plugins.
+**Linux notes:** the release `.so` targets the OpenRGB **AppImage**. If you use your distro's OpenRGB package (Arch, CachyOS, Fedora…), build against your system Qt with `scripts/install-linux-user.sh`, and **don't** add the `libQt6*.so.6` files from the release (they must match OpenRGB's Qt). Flatpak OpenRGB can't load outside plugins.
 
 ---
 
