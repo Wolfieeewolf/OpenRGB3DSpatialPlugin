@@ -280,9 +280,9 @@ vec3 applyFinish(int layer, vec3 samp)
     float scroll = u_hue_scroll[layer];
     if(mode == 0)
     {
-        /* FinishRgb: volume shaders pack like OpenRGB 0x00BBGGRR (texel rgb is B,G,R)
-           — swap to linear/display RGB for the overlay. */
-        return vec3(samp.b, samp.g, samp.r);
+        /* FinishRgb: shaders write plain R,G,B and the atlas is RGBA, like the LED path
+           (samp.x = red → ToRGBColor). No channel swap: it drew orange fire as blue. */
+        return samp;
     }
     if(mode == 1)
     {
