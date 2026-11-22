@@ -18,7 +18,7 @@ The player ships a **small set of engines** (power only). Authors drop **content
 | **Movie Sync** | Player codec + `movie-sync/effects/` | Script API + VLC sidecars |
 | **Game** | Player codec (`integrations/minecraft/` mod sources) | Minecraft bridge |
 
-Shared hard services (FFT, HID input, screen capture, game telemetry) stay in the player. Engines stay **in the plugin binary** for now; see [extract-later.md](extract-later.md).
+Shared hard services (FFT, HID input, screen capture, game telemetry) stay in the player. Engines stay **in the plugin binary** for now.
 
 ### Registration (plugin Load)
 

@@ -94,7 +94,7 @@ World tools may declare `shader: <id>` (or `field:`) to bind a Volume-style `.fs
 
 World tools may declare `particles: burst` (also `rain` / `fireflies` / `meteors` / `embers` / `swarm`) for a room particle field. Particle motion lives in GLSL `volumeMain` (GPGPU); LED apply runs that shader at each LED. GL required — if unavailable the clip paints nothing (fail closed).
 
-World tools may declare `ribbons: arc` (also `helix` / `sweep` / `cables`) for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos. Recipe map: [action-engine-recipe-map.md](action-engine-recipe-map.md).
+World tools may declare `ribbons: arc` (also `helix` / `sweep` / `cables`) for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos.
 
 **GL pool / thumbs:** field, particle, ribbon, and built-in GPU clips share **`SpatialOffscreenGlPool`** with the room viewport (no second offscreen context). Action Editor timeline thumbs use the same pool — deferred, cached, fail closed to black (no gradient / CPU fake).
 
@@ -104,7 +104,7 @@ World tools may declare `ribbons: arc` (also `helix` / `sweep` / `cables`) for a
 
 **Toolbox headers:** same-engine sibling `.fx` tools share one header skeleton (icons / knobs / paint). If an `.fx` has `shader:` and a `pulse` knob, the paired `.fs` must read size via `param: size` / `u_params[2]`. UI copy stays human-readable (no raw ids / placeholder junk).
 
-**Seamless play:** looping packs should animate from `u_time` (continuous); once packs should finish at black. See [action-engine-recipe-map.md](action-engine-recipe-map.md#playback-seams-once-vs-loop).
+**Seamless play:** looping packs should animate from `u_time` (continuous); once packs should finish at black.
 
 **Placement (world / field / particle / ribbon):** clip `origin_ref` (layout reference point name, or empty = room center), `origin_offset_x/y/z` (% of half-room), and `effect_size` (0.05–2.0). Scripts can read `ox` / `oy` / `oz` / `effect_size`. Sample normalize uses `play_bounds` (track LED AABB vs full room box).
 
