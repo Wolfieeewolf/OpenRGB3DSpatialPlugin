@@ -621,7 +621,8 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     }
     if(ui->effectGlobalSettingsPanel)
     {
-        ui->effectGlobalSettingsPanel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+        /* Maximum: never take leftover height (that goes to detailContentSpacer). */
+        ui->effectGlobalSettingsPanel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Maximum);
         ui->effectGlobalSettingsPanel->setMinimumWidth(0);
     }
     if(ui->settingsTabs)
@@ -636,7 +637,9 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     }
     if(ui->detailContentSpacer)
     {
-        ui->detailContentSpacer->changeSize(0, 0, QSizePolicy::Ignored, QSizePolicy::Minimum);
+        /* Expanding: the scroll area sizes its content to at least the viewport height;
+           this spacer must soak up the slack or the panels above stretch (Room output gap). */
+        ui->detailContentSpacer->changeSize(0, 0, QSizePolicy::Ignored, QSizePolicy::Expanding);
     }
 
     ui->effectLibraryPanel->bindTab(this);

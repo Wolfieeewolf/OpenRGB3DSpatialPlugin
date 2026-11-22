@@ -149,7 +149,7 @@
    <item row="5" column="1">
     <widget class="QWidget" name="roomOutputHost" native="true">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+      <sizepolicy hsizetype="Expanding" vsizetype="Maximum">
        <horstretch>1</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
