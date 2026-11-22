@@ -428,7 +428,9 @@ bool projectUv(int mode, vec3 n, out vec2 uv)
     uv = vec2(u, v);
     return !(u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0);
 }
-
+)GLSL"
+    /* split: MSVC caps one string literal at 16 KB (C2026) */
+    R"GLSL(
 vec3 sampleFrame(int i, vec2 uv)
 {
     /* Frame rows are uploaded top-first; the LED path reads row (1 - v). */
@@ -689,7 +691,9 @@ float rwAlong(vec3 d, int spread, int orient, int shape) /* SpreadAlongDistance 
     if(spread == 4) return max(abs(d.x), max(abs(d.y), abs(d.z)));
     return rwShell(d, shape);
 }
-
+)GLSL"
+    /* split: MSVC caps one string literal at 16 KB (C2026) */
+    R"GLSL(
 vec4 rwFetch(int i, int row, int col)
 {
     ivec2 px = ivec2(col, row);
