@@ -109,6 +109,8 @@ void OpenRGB3DSpatialTab::removeEffectFromStackClicked()
 
     if(effect_stack.empty())
     {
+        /* The user emptied the stack: do not bring hidden layers back on save. */
+        unavailable_stack_layers_.clear();
         if(effect_running) stopEffectClicked();
         if(effectConfigGroup()) effectConfigGroup()->setVisible(false);
     }
@@ -1084,10 +1086,37 @@ void OpenRGB3DSpatialTab::SyncReactiveInputSession()
 
 void OpenRGB3DSpatialTab::startEffectClicked()
 {
+    StartEffectPlayback(true);
+}
+
+void OpenRGB3DSpatialTab::TryResumeProfilePlayback()
+{
+    if(!resume_playback_pending_)
+    {
+        return;
+    }
+    if(effect_running || effect_stack.empty())
+    {
+        resume_playback_pending_ = false;
+        return;
+    }
+    /* Devices may still be detecting: stay pending until they attach. */
+    StartEffectPlayback(false);
+}
+
+bool OpenRGB3DSpatialTab::StartEffectPlayback(bool interactive)
+{
+    auto warn = [this, interactive](const char* title, const char* text) {
+        if(interactive)
+        {
+            QMessageBox::warning(this, title, text);
+        }
+    };
+
     if(controller_transforms.empty())
     {
-        QMessageBox::warning(this, "No Controllers", "Please add controllers to the 3D scene before starting effects.");
-        return;
+        warn("No Controllers", "Please add controllers to the 3D scene before starting effects.");
+        return false;
     }
 
     /* Bake Mapped lights hub at play start - fixed ref while controllers move through the field. */
@@ -1110,19 +1139,21 @@ void OpenRGB3DSpatialTab::startEffectClicked()
     {
         if(!stack_ready)
         {
-            QMessageBox::warning(this, "No Enabled Effects", "Enable at least one effect in the stack before starting.");
-            return;
+            warn("No Enabled Effects", "Enable at least one effect in the stack before starting.");
+            resume_playback_pending_ = false;
+            return false;
         }
 
         bool has_valid_controller = false;
         SetControllersToCustomMode(has_valid_controller);
         if(!has_valid_controller)
         {
-            QMessageBox::warning(this, "No Valid Controllers", "No controllers are available for effects.");
-            return;
+            warn("No Valid Controllers", "No controllers are available for effects.");
+            return false;
         }
 
         effect_running = true;
+        resume_playback_pending_ = false;
         effect_time = 0.0f;
         effect_elapsed.restart();
         if(viewport)
@@ -1137,24 +1168,25 @@ void OpenRGB3DSpatialTab::startEffectClicked()
         UpdateStartStopAllButtons();
         SyncScreenCaptureSession();
         SyncReactiveInputSession();
-        return;
+        return true;
     }
 
     if(!current_effect_ui)
     {
-        QMessageBox::warning(this, "No Effects", "Add an effect to the stack before starting.");
-        return;
+        warn("No Effects", "Add an effect to the stack before starting.");
+        return false;
     }
 
     bool has_valid_controller = false;
     SetControllersToCustomMode(has_valid_controller);
     if(!has_valid_controller)
     {
-        QMessageBox::warning(this, "No Valid Controllers", "No controllers are available for effects.");
-        return;
+        warn("No Valid Controllers", "No controllers are available for effects.");
+        return false;
     }
 
     effect_running = true;
+    resume_playback_pending_ = false;
     effect_time = 0.0f;
     effect_elapsed.restart();
     if(viewport)
@@ -1168,12 +1200,14 @@ void OpenRGB3DSpatialTab::startEffectClicked()
     if(stop_effect_button) stop_effect_button->setEnabled(true);
     SyncScreenCaptureSession();
     SyncReactiveInputSession();
+    return true;
 }
 
 void OpenRGB3DSpatialTab::stopEffectClicked()
 {
     const bool was_running = effect_running;
     effect_running = false;
+    resume_playback_pending_ = false;
     if(viewport)
     {
         viewport->SetEffectRenderOwnsScreenPreviewUploads(false);
@@ -1305,6 +1339,7 @@ bool OpenRGB3DSpatialTab::RebuildEffectStackFromJson(const nlohmann::json& effec
 {
     LoadStackEffectControls(nullptr);
     effect_stack.clear();
+    unavailable_stack_layers_.clear();
 
     if(!effects_array.is_array())
     {
@@ -1321,8 +1356,9 @@ bool OpenRGB3DSpatialTab::RebuildEffectStackFromJson(const nlohmann::json& effec
         }
         if(!EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
         {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] Skipping stack layer (effect no longer available): %s",
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Stack layer not available (kept for saving): %s",
                         instance->effect_class_name.c_str());
+            unavailable_stack_layers_.emplace_back((size_t)i, effects_array[i]);
             continue;
         }
         effect_stack.push_back(std::move(instance));
@@ -1573,6 +1609,15 @@ void OpenRGB3DSpatialTab::saveStackPresetClicked()
     }
 
     std::unique_ptr<StackPreset3D> preset = StackPreset3D::CreateFromStack(preset_name, effect_stack);
+    for(const auto& missing : unavailable_stack_layers_)
+    {
+        if(std::unique_ptr<EffectInstance3D> kept = EffectInstance3D::FromJson(missing.second))
+        {
+            const size_t pos = std::min(missing.first, preset->effect_instances.size());
+            preset->effect_instances.insert(preset->effect_instances.begin() + (std::ptrdiff_t)pos,
+                                            std::move(kept));
+        }
+    }
     stack_presets.push_back(std::move(preset));
 
     SaveStackPresets();
@@ -1680,7 +1725,15 @@ nlohmann::json OpenRGB3DSpatialTab::BuildEffectProfileJson() const
             stack_json.push_back(effect_stack[i]->ToJson());
         }
     }
+    /* Put layers whose effect is missing back at their saved positions, like OpenRGB keeps
+       devices that are not currently connected. */
+    for(const auto& missing : unavailable_stack_layers_)
+    {
+        const size_t pos = std::min(missing.first, stack_json.size());
+        stack_json.insert(stack_json.begin() + (nlohmann::json::difference_type)pos, missing.second);
+    }
     profile_json["stack"] = stack_json;
+    profile_json["playing"] = effect_running || resume_playback_pending_;
     profile_json["selected_stack_index"] = effectStackList() ? effectStackList()->currentRow() : -1;
 
     if(effectOriginCombo())
@@ -1749,6 +1802,10 @@ bool OpenRGB3DSpatialTab::ApplyEffectProfileJson(const nlohmann::json& profile_j
         }
 
         ApplyLoadedStackSelection(desired_index);
+
+        resume_playback_pending_ = profile_json.contains("playing")
+            && profile_json["playing"].is_boolean()
+            && profile_json["playing"].get<bool>();
 
         return true;
     }

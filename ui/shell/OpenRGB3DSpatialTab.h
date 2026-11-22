@@ -24,6 +24,7 @@
 #include <QProgressBar>
 #include <QHash>
 #include <QVector3D>
+#include <utility>
 #include <vector>
 #include <string>
 #include <memory>
@@ -359,6 +360,10 @@ private:
     void LoadStackEffectControls(EffectInstance3D* instance);
     void DisplayEffectInstanceDetails(EffectInstance3D* instance);
     bool PrepareStackForPlayback();
+    /** Start the stack; `interactive` shows warnings, otherwise failures are silent. */
+    bool StartEffectPlayback(bool interactive);
+    /** Resume playback saved in an OpenRGB profile once devices are in the scene. */
+    void TryResumeProfilePlayback();
     void SetControllersToCustomMode(bool& has_valid_controller);
 
     void LoadStackPresets();
@@ -523,6 +528,13 @@ private:
     QTimer*                     effect_timer = nullptr;
     bool                        deferred_startup_done_ = false;
     bool                        effect_running = false;
+    /** Loaded profile was playing when saved; cleared on start, Stop or the next load. */
+    bool                        resume_playback_pending_ = false;
+    /** Stack layers whose effect is not installed: kept verbatim (saved position + JSON)
+        so saving a profile does not delete them. */
+    std::vector<std::pair<size_t, nlohmann::json>> unavailable_stack_layers_;
+    /** Last payload saved or loaded without error; returned if a later save fails. */
+    nlohmann::json              last_good_profile_payload_;
     float                       effect_time = 0.0f;
     QElapsedTimer               effect_elapsed;
     /** Throttle LED re-eval while the volume gizmo is dragged (full refresh on release). */

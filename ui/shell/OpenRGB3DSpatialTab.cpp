@@ -1856,6 +1856,7 @@ nlohmann::json OpenRGB3DSpatialTab::GetPluginSettings() const
 
 void OpenRGB3DSpatialTab::OnProfileAboutToLoad()
 {
+    resume_playback_pending_ = false;
     if(effect_running)
     {
         stopEffectClicked();
@@ -1916,6 +1917,10 @@ void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& profile_data)
         }
 
         ClearLayoutDirty();
+        last_good_profile_payload_ = profile_data;
+
+        /* After OpenRGB finishes loading: start now, or when devices attach. */
+        QTimer::singleShot(0, this, [this]() { TryResumeProfilePlayback(); });
     }
     catch(const std::exception& e)
     {
@@ -1932,12 +1937,16 @@ nlohmann::json OpenRGB3DSpatialTab::OnProfileSave()
         payload["layout"] = BuildLayoutJson();
         payload["effects"] = BuildEffectProfileJson();
         ClearLayoutDirty();
+        last_good_profile_payload_ = payload;
         return payload;
     }
     catch(const std::exception& e)
     {
+        /* OpenRGB stores whatever we return, so an empty object would erase the profile's
+           spatial data. Hand back the last good state instead. */
         LOG_ERROR("[OpenRGB3DSpatialPlugin] OnProfileSave failed: %s", e.what());
-        return nlohmann::json::object();
+        return last_good_profile_payload_.is_object() ? last_good_profile_payload_
+                                                      : nlohmann::json::object();
     }
 }
 

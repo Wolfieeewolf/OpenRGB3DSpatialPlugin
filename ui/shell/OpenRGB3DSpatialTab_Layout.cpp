@@ -947,6 +947,13 @@ bool OpenRGB3DSpatialTab::AppendLayoutControllerEntry(
 
 void OpenRGB3DSpatialTab::TryAttachMissingLayoutControllers()
 {
+    /* Runs after every attach attempt: a profile that was playing may be waiting for devices. */
+    struct ResumeOnExit
+    {
+        OpenRGB3DSpatialTab* tab;
+        ~ResumeOnExit() { tab->TryResumeProfilePlayback(); }
+    } resume_on_exit{this};
+
     if(!resource_manager || cached_profile_layout_.empty() || !cached_profile_layout_.contains("controllers"))
     {
         return;
@@ -989,6 +996,13 @@ void OpenRGB3DSpatialTab::TryAttachMissingLayoutControllers()
     }
 
     RebindCustomControllerDeviceMappings();
+
+    if(effect_running)
+    {
+        /* Late device while playing: it needs custom mode too. */
+        bool has_valid_controller = false;
+        SetControllersToCustomMode(has_valid_controller);
+    }
 
     if(viewport)
     {

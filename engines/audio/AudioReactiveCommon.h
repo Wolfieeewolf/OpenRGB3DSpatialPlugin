@@ -279,7 +279,8 @@ inline void AudioReactiveSaveToJson(nlohmann::json& j, const AudioReactiveSettin
 {
     j["low_hz"] = cfg.low_hz;
     j["high_hz"] = cfg.high_hz;
-    j["smoothing"] = cfg.smoothing;
+    /* Not "smoothing": that key is the Output shaping slider in the same JSON object. */
+    j["audio_smoothing"] = cfg.smoothing;
     j["falloff"] = cfg.falloff;
     j["peak_boost"] = cfg.peak_boost;
     j["drive_mode"] = cfg.drive_mode;
@@ -297,8 +298,8 @@ inline void AudioReactiveLoadFromJson(AudioReactiveSettings3D& cfg, const nlohma
         cfg.low_hz = settings["low_hz"].get<int>();
     if(settings.contains("high_hz"))
         cfg.high_hz = settings["high_hz"].get<int>();
-    if(settings.contains("smoothing"))
-        cfg.smoothing = settings["smoothing"].get<float>();
+    if(settings.contains("audio_smoothing"))
+        cfg.smoothing = settings["audio_smoothing"].get<float>();
     if(settings.contains("falloff"))
         cfg.falloff = settings["falloff"].get<float>();
     if(settings.contains("peak_boost"))

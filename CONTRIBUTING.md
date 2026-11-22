@@ -89,7 +89,7 @@ Don't add migration shims, dual-format loaders, fuzzy matching or "try the old k
 
 | Area | Current contract | Don't keep |
 | ---- | ---------------- | ---------- |
-| OpenRGB profile payload | Plugin payload **version 1** with required `layout` and `effects` objects | Standalone layout / effect profiles, auto-load, quick-save, parallel session files |
+| OpenRGB profile payload | Plugin payload **version 1** with required `layout` and `effects` objects (`effects.playing` = resume after load). Never return an empty payload; keep layers whose effect is missing | Standalone layout / effect profiles, auto-load, quick-save, parallel session files |
 | Layout data | `OpenRGB3DSpatialLayout` **version 7** only. Camera isn't written and is ignored if present | Defaults for missing required fields; layout version 6 |
 | Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** with `spacing_mm_x/y/z`, `column_widths_mm`, `row_heights_mm`, `layer_depths_mm`, `layer_names`, `leds_per_cluster` | Alternate key names; optional-array fallbacks; `Normalize*` / `TryRead*` import helpers |
 | Effect settings | Each effect's `SaveSettings` / `LoadSettings`; embedded effects **version 9** only. Room output role is `Direct` (0) or `EmitterRelay` (1) | Other versions; obsolete role ints; renamed-key migration |

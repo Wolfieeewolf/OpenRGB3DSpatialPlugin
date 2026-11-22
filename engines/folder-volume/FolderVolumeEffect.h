@@ -9,6 +9,7 @@
 
 #include <QImage>
 #include <QMutex>
+#include <QPointer>
 #include <QString>
 #include <QVector3D>
 #include <cstdint>
@@ -19,6 +20,7 @@
 #include <vector>
 
 class QCheckBox;
+class EffectSliderRow;
 class QComboBox;
 class QLabel;
 class QMovie;
@@ -159,12 +161,16 @@ private:
     void PublishDisplayFrame(const QImage& src);
     void ApplyGifPlaybackSpeed();
     void BindMediaAmbienceBlock(class QVBoxLayout* layout);
+    /** Show the loaded slider / combo / mode values; controls are built before settings load. */
+    void SyncCustomUiFromModel();
 
     FolderVolumeSpec spec_;
     QComboBox* pattern_combo = nullptr;
     int pattern_index = 0;
     std::vector<int> combo_values;
     std::vector<int> slider_values;
+    std::vector<QPointer<EffectSliderRow>> slider_rows_;
+    std::vector<QPointer<QComboBox>> combo_boxes_;
     float progress = 0.0f;
     float time_sec = 0.0f;
     float speed_mul = 1.0f;

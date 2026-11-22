@@ -17,6 +17,7 @@
 #include <QMovie>
 #include <QMutexLocker>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -45,6 +46,9 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
     QVBoxLayout* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(0, 0, 0, 0);
     const auto on_changed = [this]() { emit ParametersChanged(); };
+
+    slider_rows_.assign(spec_.sliders.size(), nullptr);
+    combo_boxes_.assign(spec_.combos.size(), nullptr);
 
     QVBoxLayout* step_target = layout;
 
@@ -98,6 +102,7 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
             const FolderVolumeSpec::Combo& combo = spec_.combos[(size_t)step.index];
             EffectLabeledComboRow* row = EffectUiRows::AppendComboRow(step_target, combo.label);
             QComboBox* box = row->combo();
+            combo_boxes_[(size_t)step.index] = box;
             for(int i = 0; i < (int)combo.options.size(); ++i)
             {
                 box->addItem(combo.options[(size_t)i].name);
@@ -151,6 +156,7 @@ void FolderVolumeEffect::SetupCustomUI(QWidget* parent)
             slider.max,
             slider_values[(size_t)i],
             slider.tip);
+        slider_rows_[(size_t)i] = row;
         row->bindValueChanged(
             this,
             [this, i](int value) { slider_values[(size_t)i] = value; },
@@ -710,6 +716,34 @@ void FolderVolumeEffect::SetSpeed(unsigned int speed)
     }
 }
 
+void FolderVolumeEffect::SyncCustomUiFromModel()
+{
+    /* Signals blocked: a change signal here would save half-loaded settings. */
+    if(pattern_combo)
+    {
+        QSignalBlocker blocker(pattern_combo);
+        pattern_combo->setCurrentIndex(std::clamp(pattern_index, 0, std::max(0, pattern_combo->count() - 1)));
+    }
+    for(size_t i = 0; i < combo_boxes_.size() && i < combo_values.size(); ++i)
+    {
+        if(QComboBox* box = combo_boxes_[i].data())
+        {
+            QSignalBlocker blocker(box);
+            box->setCurrentIndex(combo_values[i]);
+        }
+    }
+    for(size_t i = 0; i < slider_rows_.size() && i < slider_values.size(); ++i)
+    {
+        if(EffectSliderRow* row = slider_rows_[i].data())
+        {
+            const bool percent = spec_.sliders[i].show_percent && !IsMediaAmbienceSliderKey(spec_.sliders[i].key);
+            row->syncSliderValue(slider_values[i], [percent](int value) {
+                return percent ? QString::number(value) + QStringLiteral("%") : QString::number(value);
+            });
+        }
+    }
+}
+
 void FolderVolumeEffect::BindMediaAmbienceBlock(QVBoxLayout* layout)
 {
     const auto on_changed = [this]() { emit ParametersChanged(); };
@@ -733,6 +767,10 @@ void FolderVolumeEffect::BindMediaAmbienceBlock(QVBoxLayout* layout)
             return;
         }
         const FolderVolumeSpec::Slider& spec_slider = spec_.sliders[(size_t)idx];
+        if((size_t)idx < slider_rows_.size())
+        {
+            slider_rows_[(size_t)idx] = row;
+        }
         row->setCaptionText(caption);
         row->configure(spec_slider.min, spec_slider.max, slider_values[(size_t)idx], tip);
         row->bindValueChanged(

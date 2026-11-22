@@ -1406,10 +1406,6 @@ void FolderVolumeEffect::LoadSettings(const nlohmann::json& settings)
             pattern_index = std::clamp(pattern_value.get<int>(), 0, pattern_count - 1);
         }
     }
-    if(pattern_combo)
-    {
-        pattern_combo->setCurrentIndex(pattern_index);
-    }
     for(size_t i = 0; i < spec_.combos.size(); ++i)
     {
         const std::string& key = spec_.combos[i].key;
@@ -1438,6 +1434,7 @@ void FolderVolumeEffect::LoadSettings(const nlohmann::json& settings)
         }
         slider_values[i] = std::clamp(stored, spec_.sliders[i].min, spec_.sliders[i].max);
     }
+    SyncCustomUiFromModel();
     if(spec_.uses_audio)
     {
         AudioReactiveLoadFromJson(audio_settings, settings);
