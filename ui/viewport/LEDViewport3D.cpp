@@ -3,6 +3,7 @@
 #include <QHideEvent>
 #include <QShowEvent>
 #include <QEvent>
+#include <QNativeGestureEvent>
 #include <QTimer>
 #include <QSurfaceFormat>
 #include <QOpenGLContext>
@@ -108,7 +109,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setToolTip(QStringLiteral(
-        "Left: select / gizmo · Middle-drag: pan · Right-drag: orbit · Wheel: zoom\n"
+        "Left: select / gizmo · Middle-drag or Shift+right-drag: pan · Right-drag: orbit · Wheel: zoom\n"
         "W move · E rotate · R scale · Y skew · T freeroam · Q toggle grid snap\n"
         "Delete / Backspace: remove controller from view · F: frame selection · Home: reset camera\n"
         "Right-click (no drag) on a selection: context menu"));
@@ -939,6 +940,19 @@ void LEDViewport3D::resizeGL(int w, int h)
 
 bool LEDViewport3D::event(QEvent* event)
 {
+    /* Trackpad pinch (macOS; some Linux touchpads): zoom like the wheel. */
+    if(event->type() == QEvent::NativeGesture)
+    {
+        const QNativeGestureEvent* gesture = static_cast<QNativeGestureEvent*>(event);
+        if(gesture->gestureType() == Qt::ZoomNativeGesture)
+        {
+            camera_distance *= std::clamp(1.0f - (float)gesture->value(), 0.5f, 2.0f);
+            camera_distance = std::clamp(camera_distance, 1.0f, 50000.0f);
+            pick_matrices_valid_ = false;
+            update();
+            return true;
+        }
+    }
 #if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
     if(event->type() == QEvent::DevicePixelRatioChange)
     {

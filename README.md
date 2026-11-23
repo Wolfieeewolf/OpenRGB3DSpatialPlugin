@@ -54,8 +54,8 @@ Download from the **[latest release](https://github.com/Wolfieeewolf/OpenRGB3DSp
 | Do this | To |
 | --- | --- |
 | Right-drag | Orbit the camera |
-| Middle-drag | Pan |
-| Mouse wheel | Zoom |
+| Middle-drag, or Shift + right-drag (trackpads) | Pan |
+| Mouse wheel or trackpad pinch | Zoom |
 | Left-click | Select a device |
 | **W / E / R** | Gizmo: move / rotate / scale |
 | Click the **centre sphere** of the gizmo | Cycle gizmo mode (move → rotate → scale → …) |

@@ -338,6 +338,9 @@ void CustomControllerDialog::SetupUI()
     connect(escape_shortcut, &QShortcut::activated, this, &QDialog::reject);
     QShortcut* delete_shortcut = new QShortcut(QKeySequence::Delete, this);
     connect(delete_shortcut, &QShortcut::activated, this, &CustomControllerDialog::clearCellClicked);
+    /* The Mac "delete" key is Backspace; QKeySequence::Delete there is only fn+delete. */
+    QShortcut* backspace_shortcut = new QShortcut(QKeySequence(Qt::Key_Backspace), this);
+    connect(backspace_shortcut, &QShortcut::activated, this, &CustomControllerDialog::clearCellClicked);
     QShortcut* copy_shortcut = new QShortcut(QKeySequence::Copy, this);
     connect(copy_shortcut, &QShortcut::activated, this, &CustomControllerDialog::copySelectionClicked);
     QShortcut* cut_shortcut = new QShortcut(QKeySequence::Cut, this);

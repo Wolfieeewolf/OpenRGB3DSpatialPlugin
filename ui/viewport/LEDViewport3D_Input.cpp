@@ -228,9 +228,11 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
     }
     else if(event->button() == Qt::RightButton)
     {
+        /* Shift + right drag pans too: trackpads (every MacBook) have no middle button. */
+        const bool pan = (event->modifiers() & Qt::ShiftModifier) != 0;
         dragging_grab = false;
-        dragging_pan = false;
-        dragging_rotate = true;
+        dragging_pan = pan;
+        dragging_rotate = !pan;
     }
 }
 
@@ -340,7 +342,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         pick_matrices_valid_ = false;
         update();
     }
-    else if(dragging_pan && (event->buttons() & Qt::MiddleButton))
+    else if(dragging_pan && (event->buttons() & (Qt::MiddleButton | Qt::RightButton)))
     {
         float pan_sensitivity = 0.002f * camera_distance;
 
@@ -424,6 +426,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     else if(event->button() == Qt::RightButton)
     {
         dragging_rotate = false;
+        dragging_pan = false;
         const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
         const float distance = sqrtf((float)(delta.x() * delta.x() + delta.y() * delta.y()));
         if(distance < kViewportClickSlopQtPx && hasViewportSelectionForContextMenu())
