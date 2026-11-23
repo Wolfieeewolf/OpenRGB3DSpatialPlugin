@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
 package me.wolfi.openrgb;
 
 import com.mojang.blaze3d.platform.NativeImage;

@@ -1,128 +1,111 @@
 # OpenRGB 3D Spatial LED Control
 
-A plugin for [OpenRGB](https://openrgb.org/) that lights your setup **as a 3D room** instead of one strip at a time.
+A plugin for [OpenRGB](https://openrgb.org/) that treats your RGB devices as one 3D room rather than separate strips.
 
-You build a model of your real room — desk, PC case, monitor, light strips — and place each RGB device where it really sits. Effects then play across the **whole room**: a wave rolls from left to right through every device in its path, the ceiling glows when you walk under a pink tree in Minecraft, your screen colours spill onto the walls around it.
+Each device is placed in a 3D model of your room at its real position and size. Effects are then calculated for the room as a whole, so a wave or colour field travels across every device in its path: keyboard, PC case, monitor, light strips and walls. The project was inspired by the Philips amBX ambient lighting system.
 
-The idea started as a modern take on the old **Philips amBX** ambient lighting system.
+## Status
 
-> **Honest status: personal-project alpha.** It works well for daily use on **Windows**. **Linux has known problems** and **macOS is untested**. Some effects and UI bits are rough or broken. Expect to tinker.
+The plugin is in alpha.
 
----
+* **Windows:** tested and in daily use.
+* **Linux:** supported, with less testing than Windows. See [Linux notes](#linux-notes).
+* **macOS:** builds, but is experimental and untested. Audio effects are not available.
 
-## Install
+Some effects and parts of the interface are still being worked on. Bug reports are welcome.
 
-You need **OpenRGB 1.0** (Plugin API 5, Qt 6). Older or Qt5 builds will not load the plugin. A GPU with **OpenGL 4.1** is needed for the 3D view.
+## Features
 
-Download from the **[latest release](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/releases/latest)**:
+* Place devices in a 3D room model using real-world sizes in millimetres
+* Effects that play across the whole room, layered in a stack with blend modes
+* Grid overlay in the 3D view that shows the effect exactly as the LEDs do
+* Audio-reactive effects
+* Screen Mirror (Ambilight): screen colours carried outward from the monitor into the room
+* Reactive effects: waves that start at the key, mouse button or gamepad button pressed
+* Actions: a timeline editor for your own light shows
+* Triggers: play an action on a system or game event
+* Movie Sync: lighting cues synchronised with video playback in VLC
+* Minecraft integration: the room reflects the game world around the player
+* Custom controllers: group devices, for example a PC case with its fans and RAM inside
+* Layouts and effect stacks are saved in OpenRGB profiles
+
+## Requirements
+
+* OpenRGB 1.0 with Qt 6 (Plugin API 5). Earlier versions and Qt 5 builds are not supported.
+* A GPU with OpenGL 4.1 or newer.
+
+## Installation
+
+Download the files for your system from the [latest release](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/releases/latest):
 
 | OS | Files |
 | --- | --- |
-| **Windows** | `OpenRGB3DSpatialPlugin.dll` + `Qt6Network.dll` + `Qt6OpenGLWidgets.dll` |
-| **Linux** (OpenRGB AppImage) | `libOpenRGB3DSpatialPlugin.so` + `libQt6Network.so.6` + `libQt6OpenGLWidgets.so.6` |
-| **macOS** | `libOpenRGB3DSpatialPlugin.dylib` + `macOS-Qt-frameworks.zip` |
+| Windows | `OpenRGB3DSpatialPlugin.dll`, `Qt6Network.dll`, `Qt6OpenGLWidgets.dll` |
+| Linux (OpenRGB AppImage) | `libOpenRGB3DSpatialPlugin.so`, `libQt6Network.so.6`, `libQt6OpenGLWidgets.so.6` |
+| macOS | `libOpenRGB3DSpatialPlugin.dylib`, `macOS-Qt-frameworks.zip` |
 
-1. **Add the Qt files.** Stock OpenRGB doesn't include them, and **without them the plugin silently won't load**.
-   - **Windows:** copy the two `.dll` files into the folder that contains `OpenRGB.exe`.
-   - **Linux (AppImage):** copy the two `libQt6*.so.6` files into `~/.config/OpenRGB/plugins/`, next to the plugin.
-   - **macOS:** unzip `macOS-Qt-frameworks.zip` into `~/.config/OpenRGB/plugins/`, next to the plugin.
-2. In OpenRGB: **Settings → Plugins → Install Plugin**, pick the plugin file, then **restart OpenRGB**.
-3. **Get the effects.** The plugin ships with *no* looks of its own. Download [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) (green **Code → Download ZIP**) and copy its folders into:
+1. Add the two Qt modules OpenRGB does not include. The plugin will not load without them.
+   * **Windows:** copy both `.dll` files into the folder that contains `OpenRGB.exe`.
+   * **Linux:** copy both `libQt6*.so.6` files into `~/.config/OpenRGB/plugins/`.
+   * **macOS:** unzip `macOS-Qt-frameworks.zip` into `~/.config/OpenRGB/plugins/`.
+2. In OpenRGB, open **Settings → Plugins → Install Plugin**, select the plugin file and restart OpenRGB.
+3. Install the effects. The plugin itself contains no effects; they are in the [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) repository. Download it (**Code → Download ZIP**) and copy its folders into:
 
    | OS | Folder |
    | --- | --- |
    | Windows | `%AppData%\OpenRGB\plugins\settings\OpenRGB3DSpatialPlugin\` |
    | Linux / macOS | `~/.config/OpenRGB/plugins/settings/OpenRGB3DSpatialPlugin/` |
 
-   Restart OpenRGB again. If the **Effect Library** is empty, this step is what's missing.
+   Restart OpenRGB. An empty Effect Library means this step is missing.
 
-**Linux notes:** the release `.so` targets the OpenRGB **AppImage**. If you use your distro's OpenRGB package (Arch, CachyOS, Fedora…), build against your system Qt with `scripts/install-linux-user.sh`, and **don't** add the `libQt6*.so.6` files from the release (they must match OpenRGB's Qt). Flatpak OpenRGB can't load outside plugins.
+### Linux notes
 
----
+* The release `.so` is built for the OpenRGB AppImage. With a distribution package of OpenRGB (Arch, CachyOS, Fedora and others), build the plugin against your system Qt with `scripts/install-linux-user.sh` and do not add the `libQt6*.so.6` files.
+* The Flatpak version of OpenRGB cannot load external plugins.
+* Audio effects need `pactl` and `parec` (the `pulseaudio-utils` package, or `libpulse` on Arch). They work with PulseAudio and PipeWire.
+* Reactive effects read input devices directly, which requires your user to be in the `input` group.
+* Screen Mirror currently requires an X11 session.
 
-## Your first 10 minutes
+## Getting started
 
-**Think of the 3D view as your actual room.** If you've used Blender or 3ds Max it will feel familiar. The more closely the layout matches reality, the better effects look. You only set this up once.
+1. **Grid Settings:** enter the size of your room or desk area in millimetres.
+2. **Setup:** select devices under **Available Controllers** and choose **Add to 3D scene**.
+3. **3D view:** select each device and move it to its real position with the gizmo, or enter exact values in the side panel.
+4. **Run:** choose an effect in the **Effect Library**, select **Add to stack**, then **Start all**.
 
-1. **Size the room** — *Grid Settings* tab: enter your room (or desk area) in millimetres.
-2. **Add your devices** — *Setup* tab: pick from **Available Controllers** → **Add to 3D scene**.
-3. **Put each device where it really is** — click it in the 3D view and drag the gizmo arrows, or type positions in the side panel.
-4. **Play an effect** — *Run* tab: choose a look in the **Effect Library** → **Add to stack** → **Start all**.
+The closer the layout matches your room, the better the effects line up. Unless set otherwise, LEDs are spaced 10 mm apart.
 
-### Moving around the 3D view
+### 3D view controls
 
-| Do this | To |
+| Input | Action |
 | --- | --- |
-| Right-drag | Orbit the camera |
-| Middle-drag, or Shift + right-drag (trackpads) | Pan |
+| Right-drag | Orbit |
+| Middle-drag, or Shift + right-drag | Pan |
 | Mouse wheel or trackpad pinch | Zoom |
-| Left-click | Select a device |
-| **W / E / R** | Gizmo: move / rotate / scale |
-| Click the **centre sphere** of the gizmo | Cycle gizmo mode (move → rotate → scale → …) |
-| **Q** | Toggle snap to grid |
-| **F** / **Home** | Frame selection / reset camera |
-| Delete | Remove selected device |
+| Left-click | Select |
+| W / E / R | Move / rotate / scale gizmo |
+| Q | Snap to grid |
+| F / Home | Frame selection / reset camera |
+| Delete | Remove the selected device from the scene |
 
-### Tip: group a PC case with a custom controller
+## Documentation
 
-In **Object Creator** you can build a **custom controller** — e.g. your PC case with the fans, RAM, and GPU inside it in the right places (great for layered GPU lighting too). Move the case and everything inside moves with it, instead of dragging each part on its own.
+* [Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki): [Getting Started](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Getting-Started), [FAQ](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Frequently-Asked-Questions), Screen Mirror and Minecraft guides.
+* Developer documentation, including how effects are rendered and how to write your own, starts at [How It Works](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/How-It-Works).
+* File formats and contracts that ship with the code are in [Documentation/](Documentation/).
 
----
+## Contributing
 
-## How effects work
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [Building from Source](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Building-from-Source). When reporting a bug, please include your OS, OpenRGB version, plugin version, GPU and the OpenRGB log.
 
-Every LED gets a real position in the room, based on real-world sizes (if you don't set LED spacing, controllers default to **10 mm** between LEDs).
-
-An effect is just a rule that answers: **"what colour should the light be at this spot, right now?"** The plugin asks that question for every LED, every frame. So effects are mapped onto the **room**, not onto individual devices — that's why a wave moves smoothly across your keyboard, case, and wall strip as one.
-
-The approach is adapted from [Pixelblaze LED mapping](https://electromage.com/docs/intro-to-mapping), scaled up to a whole room.
-
-Want to write your own effects? Start with **[How It Works](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/How-It-Works)** and **[Writing Effects](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Writing-Effects)** on the wiki.
-
----
-
-## What's in it
-
-| Feature | What it does | Where |
-| --- | --- | --- |
-| **Spatial effects** | Waves, fields, noise, audio-reactive looks played across the room | Run → Effect Library |
-| **Screen Mirror / Ambilight** | Screen colours projected outward from your monitor onto the room (add a **Display Plane** in Object Creator first) | Run → Effect Library |
-| **Actions** | Timeline editor for your own light shows | Object Creator → object type **Actions** |
-| **Triggers** | Play an action when something happens (OS events, games) | Object Creator → object type **Triggers** |
-| **Movie Sync** | Lighting cues synced to video playback (VLC) | Effect Library + presets `movie-sync/` |
-| **Reactive** | Keyboard / mouse / gamepad pulses at the device's position (no key logging) | Effect Library |
-| **Minecraft mod** | The room reflects the game in 3D: under a pink tree → ceiling glows pink; in water → floor goes blue | [integrations/minecraft/](integrations/minecraft/) |
-
-Layouts and effect stacks are saved in your normal OpenRGB profiles.
-
----
-
-## Known rough edges
-
-- **Linux:** works less well than Windows — known issues are being worked on.
-- **macOS:** builds, but nobody has tested it on real hardware yet.
-- Some effects don't show on the grid overlay, misbehave, or are just broken.
-- The UI is dense, and some options are only discoverable by poking around.
-
-Bug reports are welcome — please include your OS, OpenRGB version, plugin version, and steps to reproduce.
-
----
-
-## More help
-
-- **[Wiki](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki)** — step-by-step [Getting Started](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Getting-Started), [FAQ](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Frequently-Asked-Questions), Screen Mirror, Minecraft.
-- **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets)** — the effects, tools, and controller layouts.
-
-## For developers
-
-Everything technical — how a frame is rendered, the coordinate spaces and grid maths, what each engine does, how to write effects, building from source — lives in the wiki's **developer section**, starting at **[How It Works](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/How-It-Works)**. Contracts that ship with the code are in [Documentation/](Documentation/); contribution rules in [CONTRIBUTING.md](CONTRIBUTING.md). GitHub is the source of truth; GitLab is a mirror.
+GitHub is the main repository; GitLab is a mirror.
 
 ## License
 
-GPL-2.0-only — see [LICENSE](LICENSE).
+GPL-2.0-only. See [LICENSE](LICENSE). Third-party components and credits are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Support
 
-This is a for-me project shared because it's fun. If you want to throw something in the tip jar anyway, I like **pizza** more than coffee:
+If you would like to support development:
 
 <a href="https://buymeacoffee.com/wolfieee"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20pizza&emoji=%F0%9F%8D%95&slug=wolfieee&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a pizza" /></a>

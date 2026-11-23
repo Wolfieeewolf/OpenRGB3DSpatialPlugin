@@ -18,6 +18,13 @@ Also: **Media** / **Audio** (Volume host + texture or FFT), **Reactive** / **Amb
 
 When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/webcam. Prefer soft plasma / noise / ripples / aurora for 2D; strip chase/comet for 1D; true density fields for 3D.
 
+## Licences
+
+Using an idea or technique from another shader is fine. Copying its code is not, unless its licence allows it:
+
+- **Shadertoy** shaders are licensed CC BY-NC-SA 3.0 unless the author states otherwise. That licence is not compatible with this project, so do not copy their code. Write your own version of the effect, or use a shader whose author gives a permissive licence (MIT, BSD, CC0, public domain).
+- When a file contains code from another project, add a header line naming the source, the author and the licence, for example `# Source: <url> by <author> (MIT)`.
+
 ## Adapters
 
 **Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time` (both are seconds; ours is Speed-scaled, so Speed 100 matches Shadertoy and Speed 0 freezes); `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`. Plugin strips `#` / `key: value` headers via `LoadShaderBodyFromPath` before compile.

@@ -1,12 +1,10 @@
 # Contributing to OpenRGB 3D Spatial Plugin
 
-Thanks for helping. You don't need to be an expert: a clear bug report or a single new look is a real contribution.
+Contributions of all sizes are welcome, from bug reports to new effects and code changes.
 
-**Quick start**
-
-- **Found a bug or want a feature?** Open an issue on [GitHub](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new/choose) and fill in the template.
-- **Want to make a new look?** It's a content file, not C++. It goes in the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). Start with the wiki page [Writing Effects](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Writing-Effects).
-- **Want to change the plugin code?** Fork on GitHub, branch from `main`, open a pull request. Read [Code rules](#code-rules) and run the [checklist](#before-you-open-a-pull-request) first.
+- **Bugs and feature requests:** open an issue on [GitHub](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new/choose) using the template.
+- **New effects:** effects are content files, not C++, and belong in the [presets repository](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets). See [Writing Effects](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Writing-Effects).
+- **Code changes:** fork on GitHub, branch from `main` and open a pull request. Please read the [code rules](#code-rules) and the [checklist](#before-you-open-a-pull-request) first.
 
 ## Where things live
 
@@ -31,22 +29,19 @@ Thanks for helping. You don't need to be an expert: a clear bug report or a sing
 
 Plugin bugs, engines, UI, Screen Mirror and game telemetry go in **this repo**. Controller layouts, `.fs` / `.kernel` files, Action tools and timeline content go in the **[presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)**.
 
-Pick the **Bug Report** or **Feature Request** template. Game-integration ideas use Feature Request.
+Use the **Bug Report** or **Feature Request** template; game-integration ideas use Feature Request. A good issue:
 
-| Helpful | Not helpful |
-| ------- | ----------- |
-| One topic per issue | A list of twenty games or devices in one ticket |
-| Versions, GPU and steps to reproduce | "It doesn't work" with no details |
-| What you expected vs what happened | Vague demands with no example |
-| "Not sure yet" when you don't know the technical path | Pretending a data path exists when none is described |
+- covers one topic,
+- includes your OS, OpenRGB and plugin versions, GPU and steps to reproduce,
+- describes what you expected and what happened instead.
 
-**Game integrations** depend on how the plugin can learn the game's state (a mod, companion app, UDP, an API). Say what you looked into; it's fine not to know. Issues that skip the template may be closed so they can be resubmitted with the details. Maintainers label after triage (`bug`, `enhancement`, `game-integration`).
+**Game integrations** depend on how the plugin can read the game's state (a mod, a companion app, UDP or an API). Mention what you have looked into, or say if you are not sure. Issues without the template details may be closed and reopened once the details are added. Maintainers add labels after triage (`bug`, `enhancement`, `game-integration`).
 
 ## Pull requests and AI
 
-This plugin is built largely with AI coding tools, and that's welcome here. Crediting the AI in commits (for example a `Co-Authored-By:` line) is fine in this repo and the presets repo.
+This plugin is built largely with AI coding tools, and AI-assisted contributions are welcome. Crediting the AI in commits (for example with a `Co-Authored-By:` line) is fine in this repository and the presets repository.
 
-Whatever wrote it, **you own what you submit**: you've built it, run it in OpenRGB, and understand what it does.
+However the code was written, the contributor is responsible for it: it should be built, run in OpenRGB and understood before it is submitted.
 
 ## Code rules
 
@@ -82,6 +77,10 @@ Full detail lives in the wiki ([Coordinate Spaces](https://github.com/Wolfieeewo
 - **Every engine draws its own GPU overlay layer** (`TryFillGpuRoomGridOverlayLayer`) from the same data as its LEDs. Changing `GpuRoomGridOverlayLayer` needs a full rebuild; keep `abi_size` / `OverlayLayerAbiOk`.
 - **Never add a CPU formula beside a GPU path** for the same look. If GL is unavailable, fail closed (dark), don't fake it.
 - GLSL bodies are versionless Core GLSL with no reserved words (`layout`, `packed`, `flat`, `shared`, `half`, `fixed`, `filter`, ...). Embedded GLSL raw strings stay under 16 KB each (MSVC limit); split adjacent literals if needed.
+
+### Licences and borrowed code
+
+The plugin is GPL-2.0-only, and contributions are accepted under the same licence. Ideas and techniques from other projects are welcome; copied code must come from a licence compatible with GPL-2.0-only (MIT, BSD, zlib, Boost, GPL-2.0, EUPL-1.2 and similar) and must credit its source in a comment and in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Shadertoy code is CC BY-NC-SA 3.0 by default and cannot be copied; see [shader-conversion.md](Documentation/shader-conversion.md#licences).
 
 ### No legacy or backward-compatibility paths
 
