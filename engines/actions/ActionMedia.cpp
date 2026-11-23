@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "ActionMedia.h"
+#include "ActionMediaGpu.h"
 #include "MediaTextureEffectUtils.h"
 
 #include <QFont>
@@ -398,12 +399,15 @@ void InvalidateMediaTextCache()
 
 void ResetMediaGpu()
 {
-    QMutexLocker lock(&g_media_mutex);
-    g_prepared_frame = QImage();
-    g_prepared_ok = false;
-    g_prepared_seq = 0;
-    g_prepared_ms = -1;
-    g_prepared_key.clear();
+    {
+        QMutexLocker lock(&g_media_mutex);
+        g_prepared_frame = QImage();
+        g_prepared_ok = false;
+        g_prepared_seq = 0;
+        g_prepared_ms = -1;
+        g_prepared_key.clear();
+    }
+    media_gpu::Reset();
 }
 
 bool CopyCachedFrame(const std::string& path, int elapsed_ms, QImage* out_frame);
@@ -546,6 +550,45 @@ bool EvaluateMediaAtUv(const Clip& clip,
         *out_intensity = intensity;
     }
     return true;
+}
+
+bool EvaluateMediaAtUvsGpu(const Clip& clip,
+                           int local_ms,
+                           const float* uvs,
+                           const unsigned char* collapse_flags,
+                           int count,
+                           float uv_aspect,
+                           float* out_rgb,
+                           unsigned char* out_lit)
+{
+    if(!uvs || !out_rgb || !out_lit || count <= 0 || !IsMediaClip(clip))
+    {
+        return false;
+    }
+    /* Caller must PrepareMediaForClip first (ActionApplier does once per track). */
+    if(!g_prepared_ok || g_prepared_frame.isNull())
+    {
+        return false;
+    }
+    if(!media_gpu::UploadPreparedFrame(g_prepared_frame))
+    {
+        return false;
+    }
+
+    const int anim_ms = GpuAnimMsOr(local_ms);
+    std::vector<float> mapped((size_t)count * 2u);
+    for(int i = 0; i < count; ++i)
+    {
+        float u = uvs[(size_t)i * 2u];
+        float v = uvs[(size_t)i * 2u + 1u];
+        ApplyClipUvTransform(clip, &u, &v);
+        float su = u;
+        float sv = v;
+        MapSampleUv(clip, g_prepared_frame, u, v, uv_aspect, anim_ms, &su, &sv);
+        mapped[(size_t)i * 2u] = su;
+        mapped[(size_t)i * 2u + 1u] = sv;
+    }
+    return media_gpu::SampleAtUvs(mapped.data(), collapse_flags, count, out_rgb, out_lit);
 }
 
 } // namespace Action

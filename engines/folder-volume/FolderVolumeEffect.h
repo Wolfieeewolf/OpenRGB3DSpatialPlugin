@@ -190,6 +190,8 @@ private:
     SpatialVolumeFieldAssist volume_assist_;
     std::unordered_map<std::uint32_t, QVector3D> true_sample_map_;
     std::uint64_t true_sample_seq_ = 0;
+    /** true_sample_map_ holds finished display RGB (overlay applyFinish), not raw volumeMain. */
+    bool true_samples_are_display_ = false;
 
     AudioReactiveSettings3D audio_settings;
     float audio_smoothed = 0.0f;

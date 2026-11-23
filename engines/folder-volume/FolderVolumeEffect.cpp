@@ -12,6 +12,7 @@
 #include "AudioReactiveUi.h"
 #include "AudioInputManager.h"
 #include "GpuRoomGridOverlay.h"
+#include "SpatialOffscreenGlPool.h"
 #include "Geometry3DUtils.h"
 
 #include <QDateTime>
@@ -156,26 +157,39 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
     {
         return false; /* caller built against another layout — skip, never overwrite */
     }
-    /* Export RGBA under the pool GL session. Pool FBO tex ids die on the next
-       PrepareGpuFields — viewport-owned upload from atlas_rgba survives Stop/idle. */
-    std::vector<unsigned char> rgba;
-    int n = 0;
-    /* Do not gate on isAvailable() alone — export re-bakes the atlas if the
-       program was prepared but the dense FBO was never drawn (common when idle). */
-    if(!volume_assist_.exportAtlasRgba8(rgba, n))
-    {
-        return false;
-    }
-    if(n < 2 || rgba.size() < (size_t)n * (size_t)n * (size_t)n * 4u)
-    {
-        return false;
-    }
-
+    /* Prefer durable overlay handoff. Pool warm → fail closed (no CPU dual). */
     out = GpuRoomGridOverlayLayer{};
     out.atlas_tex = 0;
-    out.atlas_rgba = std::move(rgba);
-    out.atlas_n = n;
     out.kind = GpuRoomGridOverlayLayer::KindVolumeAtlas;
+    if(volume_assist_.ensureAtlasTextureReady())
+    {
+        const unsigned int src = volume_assist_.atlasTextureId();
+        const int n = volume_assist_.atlasTextureResolution();
+        if(src != 0 && n >= 2)
+        {
+            out.pool_src_tex = src;
+            out.pool_src_w = n;
+            out.pool_src_h = n * n;
+            out.atlas_n = n;
+        }
+    }
+    if(out.pool_src_tex == 0)
+    {
+        if(SpatialOffscreenGlPool::hostContextReady())
+        {
+            return false;
+        }
+        std::vector<unsigned char> rgba;
+        int n = 0;
+        if(!volume_assist_.exportAtlasRgba8(rgba, n)
+           || n < 2
+           || rgba.size() < (size_t)n * (size_t)n * (size_t)n * 4u)
+        {
+            return false;
+        }
+        out.atlas_rgba = std::move(rgba);
+        out.atlas_n = n;
+    }
     FillOverlayVolumeFrame(out, grid);
     FillOverlayPattern(out, time_sec);
     out.sample_room = spec_.sample_room;
@@ -249,10 +263,11 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
 
 void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
                                                   int count,
-                                                  float /*time*/,
+                                                  float time,
                                                   const GridContext3D& grid)
 {
     true_sample_map_.clear();
+    true_samples_are_display_ = false;
     if(!sample_xyz || count <= 0 || !volume_assist_.isAvailable())
     {
         return;
@@ -307,6 +322,95 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
     {
         return;
     }
+
+    /* GPU display finish (overlay applyFinish) when the mode is sample-only — skips
+       per-LED HSV/surface/hex work. Position-dependent finishes stay raw+CPU. */
+    const bool strip = UseEffectStripColormap();
+    const bool surface_styled = spec_.finish_surface && ComboIndex("style") > 0;
+    const bool audio_complex = spec_.finish_audio
+        && (spec_.audio_preset == "high_sparkle" || spec_.audio_preset == "beat"
+            || spec_.audio_preset == "low_punch");
+    const bool edge_fade = spec_.finish_hex && GetEdgeFade() > 0;
+    const bool spatial_rainbow = GetRainbowMode()
+        && (spec_.finish_hsv || (spec_.finish_hex && !spec_.finish_atlas));
+    const bool needs_depth = spec_.finish_depth;
+    bool baked_display = false;
+    if(!strip && !surface_styled && !audio_complex && !edge_fade && !spatial_rainbow
+       && !needs_depth)
+    {
+        SpatialVolumeFieldEngine::DisplayFinish fin;
+        fin.hue_scroll_deg = time * GetColorCycleHz() * 360.0f;
+        fin.rainbow = GetRainbowMode();
+        if(spec_.finish_rgb)
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishRgb;
+            baked_display = true;
+        }
+        else if(spec_.finish_hsv)
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishHsv;
+            baked_display = true;
+        }
+        else if(spec_.finish_surface)
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishSurface;
+            baked_display = true;
+        }
+        else if(spec_.finish_hex && spec_.finish_atlas)
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishHexAtlas;
+            baked_display = true;
+        }
+        else if(spec_.finish_hex)
+        {
+            fin.mode = GetRainbowMode() ? GpuRoomGridOverlayLayer::FinishHex
+                                       : GpuRoomGridOverlayLayer::FinishHexPalette;
+            baked_display = true;
+        }
+        else if(spec_.finish_audio)
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishAudio;
+            baked_display = true;
+        }
+        else if(spec_.finish_spiral)
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishSpiral;
+            baked_display = true;
+        }
+        else if(GetRainbowMode())
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishScalarRainbow;
+            baked_display = true;
+        }
+        else
+        {
+            fin.mode = GpuRoomGridOverlayLayer::FinishScalarPalette;
+            baked_display = true;
+        }
+
+        if(baked_display && fin.mode != GpuRoomGridOverlayLayer::FinishRgb)
+        {
+            const std::vector<RGBColor>& cols = GetColors();
+            for(size_t i = 0; i < cols.size() && fin.palette_count < 8; ++i)
+            {
+                const RGBColor c = cols[i];
+                const int pi = fin.palette_count++;
+                fin.palette[pi][0] = (float)(c & 0xFF) / 255.0f;
+                fin.palette[pi][1] = (float)((c >> 8) & 0xFF) / 255.0f;
+                fin.palette[pi][2] = (float)((c >> 16) & 0xFF) / 255.0f;
+            }
+            if(fin.palette_count == 0 && fin.mode == GpuRoomGridOverlayLayer::FinishScalarPalette)
+            {
+                fin.mode = GpuRoomGridOverlayLayer::FinishScalarRainbow;
+            }
+            if(!volume_assist_.applyDisplayFinish(rgb.data(), unique, fin))
+            {
+                baked_display = false;
+            }
+        }
+    }
+    true_samples_are_display_ = baked_display;
+
     true_sample_map_.reserve((size_t)unique);
     for(const auto& kv : unique_index)
     {
@@ -322,6 +426,7 @@ void FolderVolumeEffect::PrepareGpuFields(std::uint64_t render_sequence, float t
 {
     this->time_sec = time_sec;
     true_sample_map_.clear();
+    true_samples_are_display_ = false;
     true_sample_seq_ = render_sequence;
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
@@ -899,6 +1004,15 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
     if(!volume_assist_.isAvailable())
     {
         return 0x00000000;
+    }
+
+    /* Finish already baked into true_sample_map_ (GPU applyFinish). Strip never takes this path. */
+    if(true_samples_are_display_)
+    {
+        const QVector3D samp = SampleField01(n1, n2, n3);
+        return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                          (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                          (int)(std::clamp(samp.z(), 0.0f, 1.0f) * 255.0f + 0.5f));
     }
 
     const float coord2 = SampleStratumYNorm01(rotated_pos.y, grid, origin);

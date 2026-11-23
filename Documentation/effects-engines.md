@@ -23,7 +23,7 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 ### Registration (plugin Load)
 
 1. `RegisterFolderVolumeEffects()` — Volume / Audio / Media from `effects/volume|audio|media`.
-2. `RegisterPlayerEngines()` — Reactive, Screen Mirror (Ambilight), Movie Sync, Shader Field files.
+2. `RegisterPlayerEngines()` — Reactive, Screen Mirror (Ambilight), Movie Sync, Shader Field files (GPU UV point-eval for LEDs).
 3. Minecraft — `REGISTER_EFFECT_3D` under **Game**.
 
 **Movie Sync:** add the effect to the stack and enable Script API. Cue timelines are **sidecars next to the video** (`Movie.movie_sync.json`). Shared looks / VLC helper / authoring notes ship in the [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) under `movie-sync/`.
@@ -39,7 +39,7 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 3. No parallel CPU formula beside a GPU `volumeMain` / field program for the same look (fail closed if GL is unavailable).
 4. Prefer shared globals (`speed`, `brightness`, `size`, `scale`, ...) over one-off knobs when >=2 effects need the same control.
 5. Reject ports that need `iChannel`, `iMouse`, raymarch, webcam, or per-effect native hooks unless you are writing a programmed addon.
-6. **GPU standard:** viewport, preview, Volume/Audio/Media LED point-eval, room-grid overlay atlas sampling, and remaining field engines (strip kernels, Shader Field atlas where used) run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, `half`, `fixed`, `filter`, ...); the presets smoke test checks them.
+6. **GPU standard:** viewport, preview, Volume/Audio/Media/Shader Field LED point-eval, room-grid overlay atlas sampling, and strip kernels run **OpenGL 4.1 Core**. Engine wrappers inject `#version 410 core`. Author `.fs` bodies stay **versionless** and must use Core GLSL (`texture()`, no `texture2D` / `attribute` / `varying` / `gl_FragColor`). Avoid GLSL reserved identifiers (`layout`, `packed`, `flat`, `shared`, `half`, `fixed`, `filter`, ...); the presets smoke test checks them.
 
 7. **Time and sliders:** `u_time` is **Speed-scaled seconds** in every engine (Shadertoy `iTime`; real seconds at Speed 100, frozen at Speed 0). Speed drives motion, Frequency drives hue cycling, **Size** is feature size, **Scale** is occupancy. Full slider and coordinate contract: wiki [Effect Controls](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Effect-Controls) and [Coordinate Spaces](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Coordinate-Spaces).
 8. **Overlay:** every engine draws its own GPU room-grid overlay layer from the same data as its LEDs. No CPU overlay path.
@@ -69,9 +69,13 @@ category: Volume
 
 Body: `void volumeMain(out vec4 out_color, in vec3 p01)`. `p01` is origin-local UV (anchor at 0.5) unless `sample: room`. `u_params[0]` = progress (Speed-scaled cycles); `u_time` = Speed-scaled seconds.
 
+**Shared VFX lib (`SpatialVfxLib410`):** injected ahead of every Volume / particle / ribbon / strip / Shader Field body. Opt-in `vfx*` helpers — SDF primitives (sphere/box/torus/capsule/plane/octahedron/hex), smooth min/max, rotations, domain warp, ridge/fbm, curl, streak, pulse/once envelopes, heat/palette colours, `vfxCoreRim` / `vfxShell`, `vfxDetailWidth` (Detail 0..1 → calm soft → hologram sharp). Prefer core+rim over a single fat blob for showcase looks. Action particle/ribbon builtins use the lib. Existing library `.fs` that ignore `vfx*` are unchanged until rewritten.
+
+**Volume overlay atlas:** `kMaxResolution` = 64 (LEDs still point-eval). Default assist resolution 32. Set `resolution:` in the `.fs` header up to 64 for denser room-grid preview.
+
 ## Shader Field engine
 
-**Runs:** 2D `spatialMain` → offscreen atlas via `SpatialShaderEngine`, then sample onto LEDs by projection mode (floor/walls/sphere/…). Bodies load through `SpatialShaderCatalog::LoadShaderBodyFromPath` (same `#` / `key: value` header strip as Volume `.fs`).  
+**Runs:** 2D `spatialMain` via `SpatialShaderEngine`. LED colours use **true GPU UV point-eval** (`BakeTrueGpuVolumeSamples` → `sampleAtUvs` with PBO readback) — same idea as Volume `evaluateAtPoints`; projection (floor/walls/sphere/…) stays on CPU. Overlay borrows a durable upright `SpatialOverlayHandoff` of the atlas (default 1024×576); fail closed when the GL pool is warm (CPU `exportAtlasRgba8` only if the pool is cold). Bodies load through `SpatialShaderCatalog::LoadShaderBodyFromPath` (same `#` / `key: value` header strip as Volume `.fs`).  
 **Library category:** Shader Field (`effects/shader-field/`).
 
 | Header keys (common) | Meaning |
@@ -107,7 +111,7 @@ Library category **Ambilight**. No Effect Library content folder.
 
 **GPU vs CPU:** DXGI capture + quality downscale are GPU (D3D11); LED mapping (plane UV, zones, reach/falloff, wave, grade) stays CPU — same pattern as Action Media frame sampling, not FolderVolume `volumeMain`. Default capture quality is **1080p** so DXGI GPU-scales before CPU readback; **Native** is opt-in for full-res.
 
-**Overlay:** the grid overlay draws the same capture frames on the GPU (up to 4 planes); temporal wave and smoothing are LED-only.
+**Overlay:** stacked plane atlas via `SpatialOverlayHandoff` (GPU NEAREST scale into durable handoff; viewport borrows). Up to 4 planes, preview denseness up to 640×360. Temporal wave and smoothing are LED-only.
 
 **Reach / wave origin:** always each **display plane’s centre**. Screen Mirror does not use the layer Spatial Anchor (that control is for Volume / Movie Sync / etc.).
 
@@ -121,6 +125,23 @@ Content: `movie-sync/effects/`. Sidecars beside the video.
 ## Game engine
 
 Minecraft under library category **Game**. Bridge mod sources: `integrations/minecraft/` (jar goes in Minecraft’s mods folder).
+
+## GPU push (what runs where)
+
+| Path | GPU | Notes |
+|------|-----|--------|
+| Volume / Audio / Media LEDs | Yes — `evaluateAtPoints` + display finish bake | Overlay-matching HSV/surface/hex/… when sample-only |
+| Shader Field LEDs | Yes — `sampleAtUvs` + PBO | Projection UV on CPU |
+| Action field / particle / ribbon | Yes — `EvaluateAtPoints` | |
+| Action Media LEDs | Yes — `EvaluateMediaAtUvsGpu` | NEAREST + alpha; column-max for 1D; fail closed (no CPU dual) |
+| Patterns strip bake | Yes bake, CPU sample | 512×1 — negligible |
+| Room-grid Volume/Shader/Action overlay | Borrow `SpatialOverlayHandoff` | Volume zero-copy shared; Shader upright copy; fail closed when pool warm |
+| Ambilight overlay atlas | GPU composite handoff | NEAREST scale + stack; fail closed when pool warm; CPU pack only if pool cold |
+| Patterns overlay W×2 atlas | Pool `publishFromRgba32f` handoff | Fail closed when pool warm; LEDs still CPU `sample01` (512) |
+| Ambilight capture | DXGI GPU | LED map intentionally CPU |
+| Reactive waves | CPU (cheap) | Overlay wave tex GPU |
+
+Target GPUs (Arc / 1050 Ti verified; typical 3060+) have headroom — prefer denser overlay atlases and point-eval over CPU field sampling.
 
 ## Quick chooser
 

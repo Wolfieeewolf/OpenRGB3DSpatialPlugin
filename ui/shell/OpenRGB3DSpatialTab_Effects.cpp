@@ -1227,7 +1227,7 @@ void OpenRGB3DSpatialTab::stopEffectClicked()
     if(start_effect_button) start_effect_button->setEnabled(true);
     if(stop_effect_button) stop_effect_button->setEnabled(false);
     UpdateStartStopAllButtons();
-    /* Black LEDs, then re-bake overlay into viewport-owned atlas copies.
+    /* Black LEDs, then re-publish overlay handoffs for the viewport to borrow.
        Do not skip the overlay bake — Stop used to leave dead pool FBO tex ids. */
     if(was_running)
     {

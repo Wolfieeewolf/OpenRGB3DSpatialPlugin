@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "ScreenMirror.h"
+#include "SpatialOffscreenGlPool.h"
 #include "ScreenCaptureManager.h"
 #include "ScreenCaptureDownscale.h"
 #include "DisplayPlane3D.h"
@@ -70,7 +71,17 @@ ScreenMirror::ScreenMirror(QWidget* parent)
 {
 }
 
-ScreenMirror::~ScreenMirror() = default;
+ScreenMirror::~ScreenMirror()
+{
+    if(SpatialOffscreenGlPool::hostContextReady())
+    {
+        SpatialOffscreenGlPool::Session gl;
+        if(gl)
+        {
+            overlay_handoff_.destroy();
+        }
+    }
+}
 
 EffectInfo3D ScreenMirror::GetEffectInfo() const
 {

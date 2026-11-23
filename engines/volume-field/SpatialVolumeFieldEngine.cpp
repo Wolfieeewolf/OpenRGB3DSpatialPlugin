@@ -3,6 +3,8 @@
 #include "SpatialVolumeFieldEngine.h"
 #include "SpatialOffscreenGlPool.h"
 #include "FieldFullscreenQuad410.h"
+#include "SpatialVfxLib410.h"
+#include "VolumeDisplayFinish410.h"
 #include "GlslUniformArray.h"
 
 #include <QOffscreenSurface>
@@ -12,6 +14,7 @@
 #include <QOpenGLFunctions>
 #include <QOpenGLShaderProgram>
 #include <QVector2D>
+#include <QVector3D>
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +41,7 @@ QString BuildFragmentShader(const QString& user_body)
                "uniform sampler2D u_media;\n"
                "out vec4 frag_color;\n"
                "void volumeMain(out vec4 out_color, in vec3 p01);\n")
+           + SpatialVfxLib410::GlslSource()
            + user_body
            + QStringLiteral(
                "\nvoid main() {\n"
@@ -71,6 +75,7 @@ QString BuildPointFragmentShader(const QString& user_body)
                "uniform int u_point_count;\n"
                "out vec4 frag_color;\n"
                "void volumeMain(out vec4 out_color, in vec3 p01);\n")
+           + SpatialVfxLib410::GlslSource()
            + user_body
            + QStringLiteral(
                "\nvoid main() {\n"
@@ -254,10 +259,17 @@ void SpatialVolumeFieldEngine::shutdownGl()
     {
         destroyMediaTexture();
         destroyPointsTexture();
+        destroyRawRgbTexture();
+        if(fbo_ && fbo_->isValid())
+        {
+            overlay_handoff_.retireBeforeDestroy(fbo_->takeTexture());
+        }
         fbo_.reset();
         point_fbo_.reset();
+        overlay_handoff_.destroy();
         program_.reset();
         point_program_.reset();
+        finish_program_.reset();
     }
     else
     {
@@ -267,10 +279,15 @@ void SpatialVolumeFieldEngine::shutdownGl()
         points_tex_id_ = 0;
         points_tex_w_ = 0;
         points_tex_h_ = 0;
+        raw_rgb_tex_id_ = 0;
+        raw_rgb_tex_w_ = 0;
+        raw_rgb_tex_h_ = 0;
         fbo_.reset();
         point_fbo_.reset();
+        overlay_handoff_ = SpatialOverlayHandoff{};
         program_.reset();
         point_program_.reset();
+        finish_program_.reset();
     }
     fbo_n_ = 0;
     point_fbo_w_ = 0;
@@ -434,7 +451,8 @@ bool SpatialVolumeFieldEngine::ensureAtlasTextureReady()
     std::lock_guard<std::mutex> lock(mutex_);
     if(!body_dirty_ && !params_dirty_ && !size_dirty_ && !media_dirty_
        && atlas_gpu_n_ > 0 && fbo_ && fbo_->isValid()
-       && atlas_gpu_time_sec_ == params_.time_sec)
+       && atlas_gpu_time_sec_ == params_.time_sec
+       && !overlay_handoff_.empty())
     {
         available_.store(true);
         return true;
@@ -501,11 +519,7 @@ bool SpatialVolumeFieldEngine::exportAtlasRgba8(std::vector<unsigned char>& out_
 unsigned int SpatialVolumeFieldEngine::atlasTextureId() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if(!fbo_ || !fbo_->isValid() || atlas_gpu_n_ <= 0)
-    {
-        return 0;
-    }
-    return fbo_->texture();
+    return overlay_handoff_.textureId();
 }
 
 int SpatialVolumeFieldEngine::atlasTextureResolution() const
@@ -585,6 +599,13 @@ bool SpatialVolumeFieldEngine::ensureFbo(int n)
         return true;
     }
     destroyPbos();
+    /* Steal the colour texture before destroying the FBO so the overlay handoff
+       can defer-delete it after the viewport adopts the next publish. */
+    if(fbo_ && fbo_->isValid())
+    {
+        const unsigned int stolen = fbo_->takeTexture();
+        overlay_handoff_.retireBeforeDestroy(stolen);
+    }
     fbo_ = std::make_unique<QOpenGLFramebufferObject>(n, n * n);
     fbo_n_ = n;
     const bool ok = fbo_->isValid();
@@ -795,6 +816,9 @@ bool SpatialVolumeFieldEngine::renderAtlas(bool readback_cpu)
         return false;
     }
 
+    /* Free ids retired last bake — viewport has already adopted the newer publish. */
+    overlay_handoff_.releaseDeferred();
+
     if(body_dirty_ || !program_ || !point_program_)
     {
         if(!compilePrograms(fragment_body_))
@@ -866,6 +890,14 @@ bool SpatialVolumeFieldEngine::renderAtlas(bool readback_cpu)
         atlas_gpu_n_ = n;
         atlas_gpu_time_sec_ = params_.time_sec;
         glf->glFlush();
+        if(!overlay_handoff_.publishShared(tex, n, n * n))
+        {
+            last_error_ = QStringLiteral("Overlay handoff publish failed.");
+            fbo_->release();
+            program_->release();
+            available_.store(false);
+            return false;
+        }
     }
 
     if(readback_cpu)
@@ -884,7 +916,7 @@ bool SpatialVolumeFieldEngine::renderAtlas(bool readback_cpu)
     }
     else
     {
-        available_.store(atlas_gpu_n_ > 0);
+        available_.store(atlas_gpu_n_ > 0 && !overlay_handoff_.empty());
     }
     return available_.load();
 }
@@ -1041,6 +1073,161 @@ bool SpatialVolumeFieldEngine::evaluateAtPoints(const float* xyz01, int count, f
     params_dirty_ = false;
     last_error_.clear();
     available_.store(true);
+    return true;
+}
+
+void SpatialVolumeFieldEngine::destroyRawRgbTexture()
+{
+    if(raw_rgb_tex_id_ == 0)
+    {
+        return;
+    }
+    QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
+    QOpenGLFunctions* gl = ctx ? ctx->functions() : nullptr;
+    if(gl)
+    {
+        gl->glDeleteTextures(1, &raw_rgb_tex_id_);
+    }
+    raw_rgb_tex_id_ = 0;
+    raw_rgb_tex_w_ = 0;
+    raw_rgb_tex_h_ = 0;
+}
+
+bool SpatialVolumeFieldEngine::uploadRawRgbTexture(const float* rgb, int count, int w, int h)
+{
+    QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
+    QOpenGLFunctions* gl = ctx ? ctx->functions() : nullptr;
+    if(!gl || !rgb || count <= 0 || w < 1 || h < 1)
+    {
+        return false;
+    }
+    const int cells = w * h;
+    raw_rgb_upload_.assign((size_t)cells * 3u, 0.0f);
+    for(int i = 0; i < count; ++i)
+    {
+        raw_rgb_upload_[(size_t)i * 3u + 0u] = rgb[(size_t)i * 3u + 0u];
+        raw_rgb_upload_[(size_t)i * 3u + 1u] = rgb[(size_t)i * 3u + 1u];
+        raw_rgb_upload_[(size_t)i * 3u + 2u] = rgb[(size_t)i * 3u + 2u];
+    }
+    if(raw_rgb_tex_id_ == 0)
+    {
+        gl->glGenTextures(1, &raw_rgb_tex_id_);
+        if(raw_rgb_tex_id_ == 0)
+        {
+            return false;
+        }
+    }
+    gl->glBindTexture(GL_TEXTURE_2D, raw_rgb_tex_id_);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, w, h, 0, GL_RGB, GL_FLOAT, raw_rgb_upload_.data());
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    raw_rgb_tex_w_ = w;
+    raw_rgb_tex_h_ = h;
+    return true;
+}
+
+bool SpatialVolumeFieldEngine::ensureFinishProgram()
+{
+    if(finish_program_)
+    {
+        return true;
+    }
+    auto prog = std::make_unique<QOpenGLShaderProgram>();
+    if(!prog->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader)
+       || !prog->addShaderFromSourceCode(QOpenGLShader::Fragment, VolumeDisplayFinish410::FragmentSource())
+       || !prog->link())
+    {
+        last_error_ = prog->log();
+        return false;
+    }
+    finish_program_ = std::move(prog);
+    return true;
+}
+
+bool SpatialVolumeFieldEngine::applyDisplayFinish(float* rgb_inout, int count, const DisplayFinish& finish)
+{
+    if(!rgb_inout || count <= 0 || count > kMaxPointEdge * kMaxPointEdge)
+    {
+        return false;
+    }
+    if(finish.mode == 0)
+    {
+        return true; /* FinishRgb — already display */
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(!initGl())
+    {
+        return false;
+    }
+    SpatialOffscreenGlPool::Session gl;
+    if(!gl)
+    {
+        return false;
+    }
+    if(!ensureFinishProgram())
+    {
+        return false;
+    }
+
+    const int w = std::min(count, kMaxPointEdge);
+    const int h = (count + w - 1) / w;
+    if(!ensurePointFbo(w, h) || !uploadRawRgbTexture(rgb_inout, count, w, h))
+    {
+        return false;
+    }
+
+    QOpenGLContext* ctx = SpatialOffscreenGlPool::sharedContext();
+    QOpenGLFunctions* glf = ctx ? ctx->functions() : nullptr;
+    if(!glf || !finish_program_)
+    {
+        return false;
+    }
+
+    finish_program_->bind();
+    point_fbo_->bind();
+    glf->glViewport(0, 0, w, h);
+    glf->glActiveTexture(GL_TEXTURE0);
+    glf->glBindTexture(GL_TEXTURE_2D, raw_rgb_tex_id_);
+    finish_program_->setUniformValue("u_raw", 0);
+    finish_program_->setUniformValue("u_point_atlas", QVector2D((float)w, (float)h));
+    finish_program_->setUniformValue("u_point_count", count);
+    finish_program_->setUniformValue("u_finish", finish.mode);
+    finish_program_->setUniformValue("u_hue_scroll", finish.hue_scroll_deg);
+    finish_program_->setUniformValue("u_rainbow", finish.rainbow ? 1 : 0);
+    const int pc = std::clamp(finish.palette_count, 0, 8);
+    finish_program_->setUniformValue("u_palette_count", pc);
+    QVector3D pals[8];
+    for(int i = 0; i < 8; ++i)
+    {
+        pals[i] = QVector3D(finish.palette[i][0], finish.palette[i][1], finish.palette[i][2]);
+    }
+    finish_program_->setUniformValueArray("u_palette", pals, 8);
+
+    if(!FieldFullscreenQuad410::Draw(ctx))
+    {
+        glf->glBindTexture(GL_TEXTURE_2D, 0);
+        point_fbo_->release();
+        finish_program_->release();
+        return false;
+    }
+
+    const size_t bytes = (size_t)w * (size_t)h * 4u;
+    if(readback_staging_.size() < bytes)
+    {
+        readback_staging_.resize(bytes);
+    }
+    glf->glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glf->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, readback_staging_.data());
+    unpackPointReadback(readback_staging_.data(), w, h, count, rgb_inout);
+
+    glf->glBindTexture(GL_TEXTURE_2D, 0);
+    point_fbo_->release();
+    finish_program_->release();
     return true;
 }
 

@@ -7,14 +7,14 @@
 #include "SpatialShaderEngine.h"
 #include "SpatialShaderCatalog.h"
 
-#include <QImage>
 #include <QList>
-#include <map>
-#include <vector>
-#include <QMutex>
 #include <QString>
-#include <memory>
+#include <QVector3D>
+#include <cstdint>
+#include <map>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 class QComboBox;
 class QLabel;
@@ -38,8 +38,13 @@ public:
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
+    bool PrefersTrueGpuVolumeSamples() const override { return true; }
+    void BakeTrueGpuVolumeSamples(const float* sample_xyz,
+                                  int count,
+                                  float time,
+                                  const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
-    /** Overlay: the same GPU frame the LEDs read, projected in the overlay shader. */
+    /** Overlay: atlas bake of the same spatialMain LEDs evaluate at exact UVs. */
     bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,
                                         const GridContext3D& grid,
                                         float time_sec) override;
@@ -58,6 +63,8 @@ private:
     void LoadShaderBody();
     void SyncUniforms(float time);
     void SampleUv(float nx, float ny, float nz, float& u, float& v) const;
+    static std::uint32_t PackUvKey(float u, float v);
+    QVector3D SampleField01(float u, float v) const;
     RGBColor SampleField(float u, float v) const;
 
     enum ProjectionMode : int
@@ -95,8 +102,9 @@ private:
     uint64_t last_uniform_sequence = 0;
     float last_uniform_time = -1.0f;
 
-    mutable QMutex display_mutex;
-    std::shared_ptr<QImage> display_frame;
+    std::unordered_map<std::uint32_t, QVector3D> true_sample_map_;
+    /** Set after BakeTrueGpuVolumeSamples; miss → black (no per-LED GL). */
+    bool true_samples_ready_ = false;
 };
 
 #endif

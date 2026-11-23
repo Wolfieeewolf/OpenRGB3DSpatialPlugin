@@ -38,7 +38,6 @@ std::string g_gpu_mode;
  * - thin misses, orange mush, sync blink, progress-wrap flashes, linger after once
  */
 const char* kBurstBody = R"GLSL(
-float hash11(float n) { return fract(sin(n) * 43758.5453123); }
 void volumeMain(out vec4 out_color, vec3 p01)
 {
     int n = int(u_params[6] + 0.5);
@@ -49,55 +48,43 @@ void volumeMain(out vec4 out_color, vec3 p01)
     float speed = max(0.15, u_params[7]);
     float dens = 0.0;
     vec3 col = vec3(0.0);
-    // Pack gate + early explosiveness (most shards spawn in the first beat)
-    float gate = pow(max(0.0, 1.0 - prog * 1.2), 1.7);
-    gate *= 1.0 - smoothstep(0.88, 1.0, prog);
+    float gate = vfxEnvOnce(prog) * pow(max(0.0, 1.0 - prog * 0.35), 0.85);
     if(gate < 1e-4) { out_color = vec4(0.0); return; }
     for(int i = 0; i < 64; ++i)
     {
         if(i >= n) break;
         float fi = float(i);
-        float u = hash11(fi * 17.1 + 3.1);
-        float v = hash11(fi * 29.7 + 7.3);
+        float u = vfxHash11(fi * 17.1 + 3.1);
+        float v = vfxHash11(fi * 29.7 + 7.3);
         float z = u * 2.0 - 1.0;
         float a = v * 6.2831853;
         float rr = sqrt(max(0.0, 1.0 - z * z));
         vec3 dir = normalize(vec3(rr * cos(a), rr * sin(a) * 0.85 + 0.25, z));
-        float phase = hash11(fi * 13.0 + 1.7) * 0.18;
-        float life_scale = 0.75 + 0.45 * hash11(fi * 7.3);
+        float phase = vfxHash11(fi * 13.0 + 1.7) * 0.18;
+        float life_scale = 0.75 + 0.45 * vfxHash11(fi * 7.3);
         float age = clamp((prog * speed * 1.15 + phase) * life_scale, 0.0, 1.0);
         if(age >= 0.995) continue;
-        // Gravity arc so shards read as sparks, not expanding foam
-        float dist = age * reach * (0.85 + 0.3 * hash11(fi * 5.1));
+        float dist = age * reach * (0.85 + 0.3 * vfxHash11(fi * 5.1));
         vec3 pos = origin + dir * dist;
         pos.y -= age * age * 0.22 * reach;
         pos = clamp(pos, 0.0, 1.0);
         float life = age < 0.18 ? (age / 0.18) : pow(1.0 - (age - 0.18) / 0.82, 1.7);
         life *= gate;
-        // Velocity-aligned ellipsoid (streak, not ball) + bright core
         vec3 d = p01 - pos;
-        float along = dot(d, dir);
-        vec3 perp = d - dir * along;
-        float rx = soft * 0.85;
-        float ry = soft * (2.4 + 1.6 * (1.0 - age));
-        float e = dot(perp, perp) / (rx * rx) + (along * along) / (ry * ry);
-        float w = life * exp(-e);
-        float core = life * 1.4 * exp(-dot(d, d) / (soft * soft * 0.35));
-        w += core;
+        float streak = vfxStreak(d, dir, soft * (2.4 + 1.6 * (1.0 - age)), soft * 0.85);
+        float core = vfxCoreRim(length(d), soft * 0.55);
+        float w = life * (streak + core * 1.15);
         dens += w;
-        vec3 hot = vec3(1.0, 0.95, 0.85);
-        vec3 mid = vec3(1.0, 0.45 + 0.2 * hash11(fi + 2.0), 0.08);
-        vec3 cool = vec3(0.55, 0.12, 0.02);
-        col += w * mix(cool, mix(mid, hot, core / max(w, 1e-4)), life);
+        vec3 mid = vec3(1.0, 0.45 + 0.2 * vfxHash11(fi + 2.0), 0.08);
+        col += w * vfxPalette3(life, vec3(0.55, 0.12, 0.02), mid, vec3(1.0, 0.95, 0.85));
     }
-    dens = clamp(dens * 1.25, 0.0, 1.0);
+    dens = clamp(dens * 1.30, 0.0, 1.0);
     if(dens < 1e-4) { out_color = vec4(0.0); return; }
     out_color = vec4(clamp(col / max(dens, 1e-4), 0.0, 1.0) * dens, dens);
 }
 )GLSL";
 
 const char* kRainBody = R"GLSL(
-float hash11(float n) { return fract(sin(n) * 43758.5453123); }
 void volumeMain(out vec4 out_color, vec3 p01)
 {
     int n = int(u_params[6] + 0.5);
@@ -105,7 +92,6 @@ void volumeMain(out vec4 out_color, vec3 p01)
     vec3 origin = vec3(u_params[1], u_params[2], u_params[3]);
     float spread = u_params[4];
     float rate = max(0.25, u_params[7]);
-    // Continuous fall — each drop has its own speed so the field never "resets"
     float dens = 0.0;
     vec3 col = vec3(0.0);
     float wind = 0.12 * sin(u_time * 0.35);
@@ -113,39 +99,31 @@ void volumeMain(out vec4 out_color, vec3 p01)
     {
         if(i >= n) break;
         float fi = float(i);
-        float ux = hash11(fi * 17.0) * 2.0 - 1.0;
-        float uz = hash11(fi * 29.0) * 2.0 - 1.0;
-        float phase = hash11(fi * 41.0);
-        float spd = 0.7 + 0.6 * hash11(fi * 13.0);
-        float len = 0.7 + 0.9 * hash11(fi * 59.0);
+        float ux = vfxHash11(fi * 17.0) * 2.0 - 1.0;
+        float uz = vfxHash11(fi * 29.0) * 2.0 - 1.0;
+        float phase = vfxHash11(fi * 41.0);
+        float spd = 0.7 + 0.6 * vfxHash11(fi * 13.0);
+        float len = 0.7 + 0.9 * vfxHash11(fi * 59.0);
         float y = fract(1.0 - u_time * rate * spd + phase);
         float shear = wind * (1.0 - y) + ux * 0.08;
         vec3 tip = clamp(vec3(
             origin.x + ux * spread + shear,
             y,
             origin.z + uz * spread + wind * 0.35 * (1.0 - y)), 0.0, 1.0);
-        // Fall direction for anisotropic streak
         vec3 dir = normalize(vec3(shear * 0.4, -1.0, wind * 0.15));
-        float rx = soft * (1.05 + 0.35 * hash11(fi * 3.0));
         float ry = soft * (3.2 + 2.4 * len);
         vec3 d = p01 - tip;
         float along = dot(d, dir);
-        // Keep the bright tip; soft wake above it
         if(along > soft * 0.4 || along < -ry * 2.2) continue;
-        vec3 perp = d - dir * along;
-        float e = dot(perp, perp) / (rx * rx) + (along * along) / (ry * ry);
-        float tip_glow = exp(-dot(d, d) / (soft * soft * 0.55));
+        float streak = vfxStreak(d, dir, ry, soft * (1.05 + 0.35 * vfxHash11(fi * 3.0)));
+        float tip_glow = vfxCoreRim(length(d), soft * 0.65);
         float life = 0.55 + 0.45 * (1.0 - y);
-        float w = life * (exp(-e) + 0.85 * tip_glow);
-        // Floor splash (reads on desk/floor devices)
+        float w = life * (streak + 0.9 * tip_glow);
         float splash = (1.0 - smoothstep(0.0, 0.14, y)) * life * 0.55
-            * exp(-((p01.x - tip.x) * (p01.x - tip.x) + (p01.z - tip.z) * (p01.z - tip.z))
-                  / (soft * soft * 2.8));
+            * vfxSoftBand(length(vec2(p01.x - tip.x, p01.z - tip.z)), soft * 1.65);
         w += splash;
         dens += w;
-        vec3 bodyc = vec3(0.35, 0.55, 0.95);
-        vec3 tipc = vec3(0.85, 0.95, 1.0);
-        col += w * mix(bodyc, tipc, tip_glow);
+        col += w * mix(vec3(0.35, 0.55, 0.95), vec3(0.85, 0.95, 1.0), tip_glow);
     }
     dens = clamp(dens * 1.85, 0.0, 1.0);
     if(dens < 1e-4) { out_color = vec4(0.0); return; }
@@ -154,7 +132,6 @@ void volumeMain(out vec4 out_color, vec3 p01)
 )GLSL";
 
 const char* kFirefliesBody = R"GLSL(
-float hash11(float n) { return fract(sin(n) * 43758.5453123); }
 void volumeMain(out vec4 out_color, vec3 p01)
 {
     int n = int(u_params[6] + 0.5);
@@ -168,30 +145,23 @@ void volumeMain(out vec4 out_color, vec3 p01)
     {
         if(i >= n) break;
         float fi = float(i);
-        float a0 = hash11(fi * 19.0) * 6.2831853;
-        float b0 = hash11(fi * 37.0) * 6.2831853;
-        float c0 = hash11(fi * 53.0) * 6.2831853;
-        float wob = 0.55 + 0.55 * hash11(fi * 71.0);
-        float rad = orbit * (0.55 + 0.55 * hash11(fi * 11.0));
-        // Lissajous drift — fills the room volume, not a flat ring
+        float a0 = vfxHash11(fi * 19.0) * 6.2831853;
+        float b0 = vfxHash11(fi * 37.0) * 6.2831853;
+        float c0 = vfxHash11(fi * 53.0) * 6.2831853;
+        float wob = 0.55 + 0.55 * vfxHash11(fi * 71.0);
+        float rad = orbit * (0.55 + 0.55 * vfxHash11(fi * 11.0));
         vec3 pos = clamp(vec3(
             origin.x + cos(a0 + t * 1.1 * wob) * rad + 0.18 * sin(c0 + t * 0.4),
             origin.y + 0.42 * sin(b0 + t * 0.85) * rad + 0.12 * cos(a0 * 0.7 + t * 0.55),
             origin.z + sin(a0 * 0.9 + t * 1.05 * wob) * rad + 0.15 * sin(b0 + t * 0.33)), 0.0, 1.0);
-        // Asymmetric blink: long dark, short bright (firefly language)
-        float blink_t = fract(t * (0.35 + 0.55 * hash11(fi * 23.0)) + a0 * 0.15);
+        float blink_t = fract(t * (0.35 + 0.55 * vfxHash11(fi * 23.0)) + a0 * 0.15);
         float blink = pow(smoothstep(0.0, 0.08, blink_t) * (1.0 - smoothstep(0.12, 0.45, blink_t)), 1.2);
         float life = 0.12 + 0.88 * blink;
-        vec3 d = p01 - pos;
-        float soft2 = soft * soft;
-        float core = exp(-dot(d, d) / (soft2 * 0.28));
-        float halo = exp(-dot(d, d) / (soft2 * 2.4));
-        float w = life * (1.35 * core + 0.55 * halo);
+        float core = vfxCoreRim(length(p01 - pos), soft);
+        float w = life * (1.25 * core + 0.35 * vfxSoftBand(length(p01 - pos), soft * 1.8));
         dens += w;
-        float tint = hash11(fi * 3.0);
-        vec3 gold = vec3(1.0, 0.85, 0.25);
-        vec3 lime = vec3(0.55, 1.0, 0.3);
-        vec3 warm = mix(gold, lime, tint);
+        float tint = vfxHash11(fi * 3.0);
+        vec3 warm = mix(vec3(1.0, 0.85, 0.25), vec3(0.55, 1.0, 0.3), tint);
         col += w * mix(warm * 0.45, warm, core);
     }
     dens = clamp(dens, 0.0, 1.0);
@@ -201,7 +171,6 @@ void volumeMain(out vec4 out_color, vec3 p01)
 )GLSL";
 
 const char* kMeteorBody = R"GLSL(
-float hash11(float n) { return fract(sin(n) * 43758.5453123); }
 void volumeMain(out vec4 out_color, vec3 p01)
 {
     int n = int(u_params[6] + 0.5);
@@ -214,44 +183,31 @@ void volumeMain(out vec4 out_color, vec3 p01)
     {
         if(i >= n) break;
         float fi = float(i);
-        float sx = hash11(fi * 11.0);
-        float sz = hash11(fi * 23.0);
-        float phase = hash11(fi * 47.0);
-        float spd = 0.65 + 0.7 * hash11(fi * 31.0);
+        float sx = vfxHash11(fi * 11.0);
+        float sz = vfxHash11(fi * 23.0);
+        float phase = vfxHash11(fi * 47.0);
+        float spd = 0.65 + 0.7 * vfxHash11(fi * 31.0);
         float age = fract(u_time * rate * spd + phase);
-        // Unique dive vector per meteor
         vec3 dir = normalize(vec3(
             0.25 + 0.7 * sx,
-            -0.75 - 0.2 * hash11(fi * 5.0),
+            -0.75 - 0.2 * vfxHash11(fi * 5.0),
             0.15 + 0.6 * sz));
-        vec3 start = vec3(0.05 + sx * 0.55, 0.92 + 0.06 * hash11(fi * 9.0), 0.08 + sz * 0.55);
+        vec3 start = vec3(0.05 + sx * 0.55, 0.92 + 0.06 * vfxHash11(fi * 9.0), 0.08 + sz * 0.55);
         vec3 head = clamp(start + dir * (age * (0.9 + 0.5 * reach)), 0.0, 1.0);
         float life = pow(1.0 - age, 1.25) * smoothstep(0.0, 0.08, age);
-        // Anisotropic head+tail in dive frame
         vec3 d = p01 - head;
-        float along = dot(d, dir);
-        vec3 perp = d - dir * along;
-        float rx = soft * 0.75;
-        float ry = soft * (2.6 + 2.0 * (1.0 - age));
-        float e = dot(perp, perp) / (rx * rx) + (along * along) / (ry * ry);
-        float head_w = life * 1.6 * exp(-dot(d, d) / (soft * soft * 0.4));
-        float tail_w = life * exp(-e);
-        // Trail beads behind the head (reads as sparks on sparse grids)
+        float head_w = life * 1.55 * vfxCoreRim(length(d), soft * 0.7);
+        float tail_w = life * vfxStreak(d, dir, soft * (2.6 + 2.0 * (1.0 - age)), soft * 0.75);
         float beads = 0.0;
         for(int k = 1; k <= 3; ++k)
         {
             float fk = float(k);
             vec3 bp = clamp(head - dir * (0.05 * fk * reach), 0.0, 1.0);
-            float bw = life * (0.55 / fk) * exp(-dot(p01 - bp, p01 - bp) / (soft * soft * 1.1));
-            beads += bw;
+            beads += life * (0.55 / fk) * vfxCoreRim(length(p01 - bp), soft * 0.95);
         }
         float w = head_w + tail_w + beads;
         dens += w;
-        vec3 white = vec3(1.0, 0.97, 0.9);
-        vec3 amber = vec3(1.0, 0.5, 0.12);
-        vec3 ember = vec3(0.7, 0.12, 0.02);
-        vec3 mc = mix(ember, mix(amber, white, head_w / max(w, 1e-4)), life);
-        col += w * mc;
+        col += w * vfxPalette3(life, vec3(0.7, 0.12, 0.02), vec3(1.0, 0.5, 0.12), vec3(1.0, 0.97, 0.9));
     }
     dens = clamp(dens * 1.45, 0.0, 1.0);
     if(dens < 1e-4) { out_color = vec4(0.0); return; }
@@ -259,9 +215,7 @@ void volumeMain(out vec4 out_color, vec3 p01)
 }
 )GLSL";
 
-/* Slow rising embers / floating dust — ambient wow that always reads on sparse LEDs. */
 const char* kEmbersBody = R"GLSL(
-float hash11(float n) { return fract(sin(n) * 43758.5453123); }
 void volumeMain(out vec4 out_color, vec3 p01)
 {
     int n = int(u_params[6] + 0.5);
@@ -274,30 +228,23 @@ void volumeMain(out vec4 out_color, vec3 p01)
     {
         if(i >= n) break;
         float fi = float(i);
-        float ux = hash11(fi * 17.0);
-        float uz = hash11(fi * 29.0);
-        float phase = hash11(fi * 41.0);
-        float spd = 0.45 + 0.7 * hash11(fi * 13.0);
+        float ux = vfxHash11(fi * 17.0);
+        float uz = vfxHash11(fi * 29.0);
+        float phase = vfxHash11(fi * 41.0);
+        float spd = 0.45 + 0.7 * vfxHash11(fi * 13.0);
         float rise = fract(u_time * rate * spd + phase);
-        float wob = 0.08 * sin(u_time * (0.7 + hash11(fi * 7.0)) + fi);
+        float wob = 0.08 * sin(u_time * (0.7 + vfxHash11(fi * 7.0)) + fi);
         vec3 pos = clamp(vec3(
             0.12 + ux * 0.76 + wob + (ux - 0.5) * spread * 0.15,
             rise,
             0.12 + uz * 0.76 + 0.6 * wob), 0.0, 1.0);
         float life = 0.35 + 0.65 * sin(3.14159265 * rise);
-        // Rare bright pop
-        float pop = pow(hash11(fi * 3.0 + floor(u_time * 0.5)), 8.0);
+        float pop = pow(vfxHash11(fi * 3.0 + floor(u_time * 0.5)), 8.0);
         life += pop * 0.9;
-        vec3 d = p01 - pos;
-        float soft2 = soft * soft;
-        float core = exp(-dot(d, d) / (soft2 * 0.35));
-        float halo = exp(-dot(d, d) / (soft2 * 2.8));
-        float w = life * (1.2 * core + 0.45 * halo);
+        float core = vfxCoreRim(length(p01 - pos), soft);
+        float w = life * (1.15 * core + 0.4 * vfxSoftBand(length(p01 - pos), soft * 1.9));
         dens += w;
-        vec3 cool = vec3(0.45, 0.08, 0.01);
-        vec3 hot = vec3(1.0, 0.65, 0.18);
-        vec3 white = vec3(1.0, 0.9, 0.55);
-        col += w * mix(cool, mix(hot, white, pop), core);
+        col += w * mix(vfxHeatRgb(0.25 + 0.55 * core), vec3(1.0, 0.9, 0.55), pop);
     }
     dens = clamp(dens * 1.15, 0.0, 1.0);
     if(dens < 1e-4) { out_color = vec4(0.0); return; }
@@ -529,6 +476,20 @@ bool ExportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n)
         return false;
     }
     return g_assist->exportAtlasRgba8(out_rgba, out_n);
+}
+
+bool ExportAtlasGpu(unsigned int& out_tex, int& out_n)
+{
+    out_tex = 0;
+    out_n = 0;
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(!g_ready || !g_assist || !g_assist->ensureAtlasTextureReady())
+    {
+        return false;
+    }
+    out_tex = g_assist->atlasTextureId();
+    out_n = g_assist->atlasTextureResolution();
+    return out_tex != 0 && out_n >= 2;
 }
 
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)

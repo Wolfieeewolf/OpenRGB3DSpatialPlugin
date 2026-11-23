@@ -20,5 +20,5 @@ public:
 private:
     void applyEngineSize(SpatialStripFieldEngine& engine) override;
 
-    int width_ = 256;
+    int width_ = SpatialStripFieldEngine::kMaxWidth;
 };

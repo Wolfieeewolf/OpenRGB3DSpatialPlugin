@@ -18,6 +18,20 @@ bool EvaluateMediaAtUv(const Clip& clip,
                        float uv_aspect = 1.0f);
 
 /**
+ * Batch GPU UV sample for media clips (NEAREST + alpha, optional column-max).
+ * uvs: interleaved device UVs before MapSampleUv (nx,ny per LED).
+ * collapse_flags: 1 = column reduce. Writes RGB 0..1 + lit flags.
+ */
+bool EvaluateMediaAtUvsGpu(const Clip& clip,
+                           int local_ms,
+                           const float* uvs,
+                           const unsigned char* collapse_flags,
+                           int count,
+                           float uv_aspect,
+                           float* out_rgb,
+                           unsigned char* out_lit);
+
+/**
  * Pin the current image/GIF/text frame once per pack frame for true UV sampling at LEDs.
  * Avoids reloading the source on every LED sample.
  */

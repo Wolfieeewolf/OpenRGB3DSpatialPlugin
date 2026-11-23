@@ -12,6 +12,8 @@
 #include "viewport/MeshBatch.h"
 #include "ScreenCaptureManager.h"
 
+#include <QOpenGLContext>
+
 namespace
 {
 constexpr float kRoomGridOverlayCellEps = 1e-4f;
@@ -219,7 +221,8 @@ void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* 
     int nx = RoomGridOverlaySampleCountAlong(RoomGridOverlayCellCountAlong(min_x, max_x), step);
     int ny = RoomGridOverlaySampleCountAlong(RoomGridOverlayCellCountAlong(min_y, max_y), step);
     int nz = RoomGridOverlaySampleCountAlong(RoomGridOverlayCellCountAlong(min_z, max_z), step);
-    const size_t max_overlay_points = 35000u;
+    /* Allow denser room-grid sampling (~41³) so overlay matches higher volume atlases. */
+    const size_t max_overlay_points = 70000u;
     size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
     if(count > max_overlay_points)
     {
@@ -308,18 +311,25 @@ void LEDViewport3D::SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLa
         layers.resize((size_t)GpuRoomGridOverlayLayer::kMaxLayers);
     }
 
-    /* Upload CPU-exported atlas RGBA into viewport-owned textures. Never keep pool FBO
-       tex ids — Stop/idle PrepareGpuFields recreates those FBOs and the overlay goes black. */
+    /* Prefer same-frame pool_src_tex (durable SpatialOverlayHandoff). Borrow the share-group
+       name as atlas_tex — do not blit or own it. atlas_rgba only when the pool was cold. */
     releaseOwnedOverlayAtlasTextures();
     makeCurrent();
 
-    /* Colors-and-patterns strip: 256 × 2 RGBA32F, row 0 = strip value (R), row 1 = kernel
-       palette RGB. Float texels keep full colour precision; the shader blends entries. */
+    /* Colors-and-patterns strip: kPatternWidth × 2 RGBA32F, row 0 = strip value (R),
+       row 1 = kernel palette RGB. Float texels keep full colour precision while blending;
+       LEDs still finish as 8-bit/channel RGB. */
     auto upload_pattern = [this](GpuRoomGridOverlayLayer& layer) {
         layer.pattern_tex = 0;
         if(!layer.pattern_on)
         {
             return;
+        }
+        if(layer.pattern_pool_src_tex != 0)
+        {
+            layer.pattern_tex = layer.pattern_pool_src_tex;
+            layer.pattern_pool_src_tex = 0;
+            return; /* borrowed handoff — do not glDelete */
         }
         constexpr int n = GpuRoomGridOverlayLayer::kPatternWidth;
         std::vector<float> texels((size_t)n * 2u * 4u, 0.0f);
@@ -388,36 +398,87 @@ void LEDViewport3D::SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLa
                                 || layer.kind == GpuRoomGridOverlayLayer::KindScreenMirror
                                 || layer.kind == GpuRoomGridOverlayLayer::KindMinecraft);
         const int n = layer.atlas_n;
-        const int w = projected ? layer.tex_w : n;
-        const int h = projected ? layer.tex_h : n * n;
-        const bool size_ok = projected ? (w >= 1 && h >= 1) : (n >= 2);
-        const size_t need = size_ok ? ((size_t)w * (size_t)h * 4u) : 0u;
-        if(!size_ok || layer.atlas_rgba.size() < need)
+        int w = projected ? layer.tex_w : n;
+        int h = projected ? layer.tex_h : n * n;
+        if(layer.pool_src_tex != 0 && layer.pool_src_w > 0 && layer.pool_src_h > 0)
+        {
+            w = layer.pool_src_w;
+            h = layer.pool_src_h;
+        }
+        const bool size_ok = projected ? (w >= 1 && h >= 1) : (n >= 2 || (layer.pool_src_tex != 0 && w >= 1 && h >= 1));
+        if(!size_ok)
         {
             layer.atlas_tex = 0;
+            layer.pool_src_tex = 0;
             layer.atlas_rgba.clear();
             continue;
         }
+
         GLuint dst = 0;
-        glGenTextures(1, &dst);
-        if(dst == 0)
+        bool uploaded = false;
+        bool borrowed = false;
+        if(layer.pool_src_tex != 0)
+        {
+            /* Durable handoff from the pool — borrow; do not glDelete. */
+            dst = layer.pool_src_tex;
+            uploaded = true;
+            borrowed = true;
+        }
+        if(!uploaded)
+        {
+            const size_t need = (size_t)w * (size_t)h * 4u;
+            if(layer.atlas_rgba.size() < need)
+            {
+                layer.atlas_tex = 0;
+                layer.pool_src_tex = 0;
+                layer.atlas_rgba.clear();
+                continue;
+            }
+            glGenTextures(1, &dst);
+            if(dst == 0)
+            {
+                layer.atlas_tex = 0;
+                layer.pool_src_tex = 0;
+                layer.atlas_rgba.clear();
+                continue;
+            }
+            glBindTexture(GL_TEXTURE_2D, dst);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                         layer.atlas_rgba.data());
+            uploaded = true;
+        }
+        if(!uploaded || dst == 0)
         {
             layer.atlas_tex = 0;
+            layer.pool_src_tex = 0;
             layer.atlas_rgba.clear();
             continue;
         }
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     layer.atlas_rgba.data());
         layer.atlas_tex = dst;
+        layer.pool_src_tex = 0;
+        layer.pool_src_w = 0;
+        layer.pool_src_h = 0;
+        layer.pool_src_flip_y = false;
         layer.atlas_rgba.clear();
         layer.atlas_rgba.shrink_to_fit();
-        owned_overlay_atlas_textures_.push_back(dst);
+        if(projected)
+        {
+            layer.tex_w = w;
+            layer.tex_h = h;
+        }
+        else
+        {
+            layer.atlas_n = n > 0 ? n : (int)std::lround(std::sqrt((double)h));
+        }
+        if(!borrowed)
+        {
+            owned_overlay_atlas_textures_.push_back(dst);
+        }
         kept.push_back(std::move(layer));
     }
     glBindTexture(GL_TEXTURE_2D, 0);

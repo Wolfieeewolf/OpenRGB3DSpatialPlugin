@@ -50,8 +50,8 @@ void volumeMain(out vec4 out_color, vec3 p01)
         float offset = (fg - 1.0) * radius * 2.8;
         float dx = p01.x - (plane + offset);
         float dz = p01.z - (origin.z + (p01.x - origin.x) * 0.08);
-        float d2 = dx * dx + dz * dz * 0.35;
-        float w = exp(-d2 / (radius * radius));
+        float d = sqrt(dx * dx + dz * dz * 0.35);
+        float w = vfxCoreRim(d, radius);
         w *= 0.85 + 0.15 * (1.0 - abs(p01.y - origin.y));
         w *= 0.45 + 0.55 * exp(-abs(dx) * 10.0);
         float amp = (g == 1) ? 1.0 : 0.35;
@@ -61,8 +61,8 @@ void volumeMain(out vec4 out_color, vec3 p01)
         vec3 hot = vec3(0.55, 1.0, 1.0);
         col += w * mix(cool, hot, clamp(w * 1.4, 0.0, 1.0));
     }
-    dens *= 1.0 - smoothstep(0.88, 1.0, prog);
-    dens = clamp(dens * 1.35, 0.0, 1.0);
+    dens *= vfxEnvOnce(prog);
+    dens = clamp(dens * 1.40, 0.0, 1.0);
     if(dens < 1e-4) { out_color = vec4(0.0); return; }
     out_color = vec4(clamp(col / max(dens, 1e-4), 0.0, 1.0) * dens, dens);
 }
@@ -413,6 +413,20 @@ bool ExportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n)
         return false;
     }
     return g_assist->exportAtlasRgba8(out_rgba, out_n);
+}
+
+bool ExportAtlasGpu(unsigned int& out_tex, int& out_n)
+{
+    out_tex = 0;
+    out_n = 0;
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(!g_ready || !g_assist || !g_assist->ensureAtlasTextureReady())
+    {
+        return false;
+    }
+    out_tex = g_assist->atlasTextureId();
+    out_n = g_assist->atlasTextureResolution();
+    return out_tex != 0 && out_n >= 2;
 }
 
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)

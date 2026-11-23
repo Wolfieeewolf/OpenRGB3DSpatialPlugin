@@ -99,7 +99,7 @@ public:
     void ClearRoomGridOverlayBounds();
     void SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLayer> layers);
     void ClearGpuRoomGridOverlayLayers();
-    /** Drop viewport-owned atlas copies (FBO tex IDs from the volume pool go stale after re-bake). */
+    /** Drop viewport-owned atlas uploads (CPU fallback / pattern / reactive). Borrowed handoffs are not owned. */
     void releaseOwnedOverlayAtlasTextures();
 
     void SetCamera(float distance, float yaw, float pitch,
@@ -415,7 +415,7 @@ private:
     /** Push KindScreenMirror per-plane uniforms (u_sm_*) for the bound overlay program. */
     void UploadScreenMirrorOverlayUniforms(const GpuRoomGridOverlayLayer& layer);
     std::vector<GpuRoomGridOverlayLayer> gpu_room_grid_overlay_layers_;
-    /** Stable copies of volume-atlas textures for the overlay (survive pool FBO recreate). */
+    /** Viewport-owned overlay uploads only (not borrowed SpatialOverlayHandoff ids). */
     std::vector<unsigned int>            owned_overlay_atlas_textures_;
     GlProgram gl_prog_textured_unlit_;
     bool      viewport_shader_programs_ok_ = false;

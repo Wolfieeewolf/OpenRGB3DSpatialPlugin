@@ -344,6 +344,76 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
         }
     }
 
+    /* Media clips: one GPU UV batch (NEAREST + alpha / column-max). Fail closed — no CPU dual. */
+    if(top && have_bounds && !use_sequence && IsMediaClip(*top))
+    {
+        const int n = (int)matching.size();
+        const float sx = max_x - min_x;
+        const float sy = max_y - min_y;
+        const float sz = max_z - min_z;
+        const float diag = std::max(1e-5f, std::sqrt(sx * sx + sy * sy + sz * sz));
+        const float eps = diag * 0.02f;
+        const float spans[3] = {sx, sy, sz};
+        int order[3] = {0, 1, 2};
+        if(spans[order[1]] > spans[order[0]]) { std::swap(order[0], order[1]); }
+        if(spans[order[2]] > spans[order[1]]) { std::swap(order[1], order[2]); }
+        if(spans[order[1]] > spans[order[0]]) { std::swap(order[0], order[1]); }
+        int u_axis = order[0];
+        int v_axis = order[1];
+        if(order[1] == 0)
+        {
+            u_axis = 0;
+            v_axis = order[0];
+        }
+        const bool collapse_v = (spans[v_axis] <= eps);
+        const float span_u = std::max(eps, spans[u_axis]);
+        const float span_v = collapse_v ? span_u : std::max(eps, spans[v_axis]);
+        const float uv_aspect = span_u / span_v;
+
+        std::vector<float> uvs((size_t)n * 2u);
+        std::vector<unsigned char> collapse((size_t)n, collapse_v ? 1 : 0);
+        for(int i = 0; i < n; ++i)
+        {
+            const Vector3D& p = sample_pos[(size_t)i];
+            const float coords[3] = {
+                (sx > eps) ? std::clamp((p.x - min_x) / sx, 0.0f, 1.0f) : 0.5f,
+                (sy > eps) ? std::clamp((p.y - min_y) / sy, 0.0f, 1.0f) : 0.5f,
+                (sz > eps) ? std::clamp((p.z - min_z) / sz, 0.0f, 1.0f) : 0.5f
+            };
+            uvs[(size_t)i * 2u] = coords[u_axis];
+            uvs[(size_t)i * 2u + 1u] = collapse_v ? 0.5f : coords[v_axis];
+        }
+
+        std::vector<float> rgb((size_t)n * 3u, 0.0f);
+        std::vector<unsigned char> lit((size_t)n, 0);
+        if(EvaluateMediaAtUvsGpu(*top, local_ms, uvs.data(), collapse.data(), n, uv_aspect,
+                                 rgb.data(), lit.data()))
+        {
+            float intensity = std::clamp(top->intensity, 0.0f, 1.0f);
+            ModulateClipIntensity(*top, ClipSpanProgress(*top, local_ms),
+                                  ClipPeriodProgress(*top, local_ms), &intensity);
+            int painted = 0;
+            for(int i = 0; i < n; ++i)
+            {
+                if(!lit[(size_t)i])
+                {
+                    continue;
+                }
+                const RGBColor color = ToRGBColor(
+                    (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 0u] * intensity, 0.0f, 1.0f) * 255.0f),
+                    (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 1u] * intensity, 0.0f, 1.0f) * 255.0f),
+                    (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 2u] * intensity, 0.0f, 1.0f) * 255.0f));
+                LEDPosition3D* led = matching[(size_t)i];
+                led->preview_color = color;
+                ApplyColorToMappedLed(*led, transform->controller, color, touched);
+                ++painted;
+            }
+            return painted;
+        }
+        /* Fail closed — no CPU dual beside the GPU media sampler (same as field clips). */
+        return 0;
+    }
+
     int painted = 0;
     for(int i = 0; i < (int)matching.size(); ++i)
     {

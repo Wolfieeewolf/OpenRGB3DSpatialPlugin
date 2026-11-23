@@ -11,6 +11,7 @@
 #include "ZoneManager3D.h"
 #include "GpuRoomGridOverlay.h"
 #include "SpatialEffect3D.h"
+#include "SpatialOffscreenGlPool.h"
 #include "EffectInstance3D.h"
 
 #include <chrono>
@@ -132,35 +133,67 @@ void AppendClipFieldOverlayLayer(const Clip& clip,
                                  std::vector<GpuRoomGridOverlayLayer>* out)
 {
     const std::string id = script::FileId(clip);
-    std::vector<unsigned char> rgba;
+    unsigned int src_tex = 0;
     int n = 0;
-    bool ok = false;
-    /* Same engine priority as PaintTransformTargetSpatial. */
+    bool ok_gpu = false;
+    /* Same engine priority as PaintTransformTargetSpatial. Prefer overlay handoff. */
     if(script::UsesField(id))
     {
-        ok = volume_field::ExportAtlasRgba8(rgba, n);
+        ok_gpu = volume_field::ExportAtlasGpu(src_tex, n);
     }
     else if(script::UsesParticles(id))
     {
-        ok = particle_field::ExportAtlasRgba8(rgba, n);
+        ok_gpu = particle_field::ExportAtlasGpu(src_tex, n);
     }
     else if(script::UsesRibbons(id))
     {
-        ok = ribbon_field::ExportAtlasRgba8(rgba, n);
+        ok_gpu = ribbon_field::ExportAtlasGpu(src_tex, n);
     }
     else if(builtin_gpu::Uses(id) && script::FieldShader(id).empty())
     {
-        ok = builtin_gpu::ExportAtlasRgba8(rgba, n);
-    }
-    if(!ok || n < 2 || rgba.size() < (size_t)n * (size_t)n * (size_t)n * 4u)
-    {
-        return;
+        ok_gpu = builtin_gpu::ExportAtlasGpu(src_tex, n);
     }
 
     GpuRoomGridOverlayLayer layer;
     layer.kind = GpuRoomGridOverlayLayer::KindVolumeAtlas;
-    layer.atlas_rgba = std::move(rgba);
-    layer.atlas_n = n;
+    if(ok_gpu && src_tex != 0 && n >= 2)
+    {
+        layer.pool_src_tex = src_tex;
+        layer.pool_src_w = n;
+        layer.pool_src_h = n * n;
+        layer.atlas_n = n;
+    }
+    else if(SpatialOffscreenGlPool::hostContextReady())
+    {
+        return; /* pool warm — fail closed, no CPU dual beside GPU handoff */
+    }
+    else
+    {
+        std::vector<unsigned char> rgba;
+        bool ok = false;
+        if(script::UsesField(id))
+        {
+            ok = volume_field::ExportAtlasRgba8(rgba, n);
+        }
+        else if(script::UsesParticles(id))
+        {
+            ok = particle_field::ExportAtlasRgba8(rgba, n);
+        }
+        else if(script::UsesRibbons(id))
+        {
+            ok = ribbon_field::ExportAtlasRgba8(rgba, n);
+        }
+        else if(builtin_gpu::Uses(id) && script::FieldShader(id).empty())
+        {
+            ok = builtin_gpu::ExportAtlasRgba8(rgba, n);
+        }
+        if(!ok || n < 2 || rgba.size() < (size_t)n * (size_t)n * (size_t)n * 4u)
+        {
+            return;
+        }
+        layer.atlas_rgba = std::move(rgba);
+        layer.atlas_n = n;
+    }
     layer.finish_mode = GpuRoomGridOverlayLayer::FinishRgb; /* same export + texel order as FolderVolume finish_rgb */
     layer.blend_mode = (int)BlendMode::MAX;                  /* later tracks only overwrite lit LEDs */
     layer.sample_room = false;

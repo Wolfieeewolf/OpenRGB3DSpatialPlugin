@@ -31,6 +31,7 @@
 #include "SpatialLayerCore.h"
 #include "EffectStratumBlend.h"
 #include "AudioReactiveCommon.h"
+#include "SpatialOverlayHandoff.h"
 #include "SpatialStripFieldAssist.h"
 #include <nlohmann/json.hpp>
 #include <cstdint>
@@ -858,6 +859,8 @@ protected:
     StripKernelColormapPanel* effect_strip_cmap_panel = nullptr;
     SpatialStripFieldAssist strip_cmap_assist_;
     bool strip_cmap_body_ready_ = false;
+    /** Durable W×2 pattern atlas for overlay borrow (strip + palette). Mutable: FillOverlayPattern is const. */
+    mutable SpatialOverlayHandoff pattern_overlay_handoff_;
 
     Vector3D GetEffectOrigin() const;
     RGBColor GetRainbowColor(float hue) const;

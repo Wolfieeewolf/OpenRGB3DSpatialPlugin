@@ -4,8 +4,9 @@
 #include <vector>
 
 /** One FolderVolume (or similar) atlas layer sampled on the GPU for the room-grid overlay.
- *  Prefer atlas_rgba (CPU export from the offscreen pool) so the viewport can upload a
- *  durable owned texture — pool FBO tex ids go stale after the next PrepareGpuFields.
+ *  Prefer same-frame pool_src_tex from SpatialOverlayHandoff — the viewport borrows that
+ *  share-group name as atlas_tex (no blit, no ownership). Never pass a transient bake-FBO
+ *  texture. atlas_rgba is only when the GL pool is cold (host not ready); pool warm → fail closed.
  *  Atlas texels are volumeMain packed samples — finish_mode maps them to display RGB
  *  the same way FolderVolumeEffect::CalculateColorGrid does on the CPU. */
 struct GpuRoomGridOverlayLayer
@@ -107,7 +108,16 @@ struct GpuRoomGridOverlayLayer
 
     /** Viewport-owned GL texture after SetGpuRoomGridOverlayLayers; 0 while staging. */
     unsigned int atlas_tex = 0;
-    /** RGBA8 packed atlas (width=n, height=n*n) from the volume pool — survives Stop/idle. */
+    /**
+     * Same-frame durable handoff texture (SpatialOverlayHandoff). Viewport borrows as
+     * atlas_tex — cleared by SetGpuRoomGridOverlayLayers; never retain across PrepareGpuFields.
+     */
+    unsigned int pool_src_tex = 0;
+    int pool_src_w = 0;
+    int pool_src_h = 0;
+    /** Unused for handoff publishers (already upright). Kept for ABI / legacy fillers. */
+    bool pool_src_flip_y = false;
+    /** RGBA8 packed atlas (width=n, height=n*n) — CPU fallback when pool_src_tex is 0. */
     std::vector<unsigned char> atlas_rgba;
     int atlas_n = 0;
     int blend_mode = 0; /* BlendMode as int */
@@ -118,16 +128,23 @@ struct GpuRoomGridOverlayLayer
     float palette[kMaxPalette][3] = {};
 
     /** Colors and patterns: the strip pattern supplies the colour and the effect value stays
-     *  the brightness mask — same rule as SpatialEffect3D::ResolvePatternColor on the LEDs. */
-    static constexpr int kPatternWidth = 256;
+     *  the brightness mask — same rule as SpatialEffect3D::ResolvePatternColor on the LEDs.
+     *  Width is spatial/LUT sample count (not colour bit depth). 512 = SpatialStripFieldEngine
+     *  max — smoother long-strip Patterns; still a 1×N bake (no real GPU bottleneck). */
+    static constexpr int kPatternWidth = 512;
     bool pattern_on = false;
     int pattern_unfold = 0;          /* StripPatternSurface::UnfoldMode */
     float pattern_dir_deg = 0.0f;
     float pattern_feature = 1.0f;    /* Size: zoom of the strip axes */
     float pattern_phase_s01 = 0.0f;  /* EffectPhaseOnly: one strip position for every point */
-    float pattern_strip[kPatternWidth] = {};   /* baked kernel strip, 0..1 */
-    float pattern_lut[kPatternWidth][3] = {};  /* kernel palette, RGB 0..1 */
-    /** Viewport-owned 256 × 2 RGBA32F texture (row 0 strip, row 1 palette); 0 while staging. */
+    float pattern_strip[kPatternWidth] = {};   /* baked kernel strip, 0..1 — CPU fallback */
+    float pattern_lut[kPatternWidth][3] = {};  /* kernel palette, RGB 0..1 — CPU fallback */
+    /**
+     * Durable kPatternWidth × 2 RGBA32F handoff (row 0 strip, row 1 palette).
+     * Viewport borrows as pattern_tex when set; else uploads from pattern_strip/lut.
+     */
+    unsigned int pattern_pool_src_tex = 0;
+    /** Viewport-owned or borrowed pattern texture after SetGpuRoomGridOverlayLayers. */
     unsigned int pattern_tex = 0;
 
     bool sample_room = false;

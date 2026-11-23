@@ -37,6 +37,7 @@ bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 /** Room-grid overlay: bake the prepared field over the 0..1 cube (same program the LEDs
     just sampled). n×n×n packed RGBA8, width n, height n*n — as FolderVolume exports. */
 bool ExportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n);
+bool ExportAtlasGpu(unsigned int& out_tex, int& out_n);
 
 /** Soft tube density at normalized room coords (0..1) via true GPU sample. */
 float SampleDensity01(float nx, float ny, float nz);

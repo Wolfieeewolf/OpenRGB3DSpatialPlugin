@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
+#include "SpatialOverlayHandoff.h"
+
 #include <QImage>
 #include <QString>
 #include <QVector3D>
@@ -25,7 +27,8 @@ class SpatialVolumeFieldEngine
 public:
     static constexpr int kMaxParams = 64;
     static constexpr int kMinResolution = 8;
-    static constexpr int kMaxResolution = 32;
+    /** Dense overlay atlas edge. LEDs use point-eval (not this). 64³ ≈ 5.3× cost of 32³. */
+    static constexpr int kMaxResolution = 64;
     static constexpr int kMaxMediaEdge = 1024;
     static constexpr int kMaxPointEdge = 2048;
 
@@ -60,8 +63,9 @@ public:
     /** Rebuild atlas if dirty (includes CPU readback for sample01). */
     bool ensureReady();
 
-    /** Dense atlas FBO only (no CPU readback) for GPU room-grid overlay. */
+    /** Dense atlas FBO + overlay handoff (no CPU readback) for room-grid overlay. */
     bool ensureAtlasTextureReady();
+    /** Durable handoff texture (share-group); never the transient bake-FBO id alone. */
     unsigned int atlasTextureId() const;
     int atlasTextureResolution() const;
     /**
@@ -77,6 +81,17 @@ public:
      */
     bool evaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 
+    /** Overlay-matching display finish (HSV/surface/hex/…). In-place on interleaved RGB. */
+    struct DisplayFinish
+    {
+        int mode = 0; /* GpuRoomGridOverlayLayer::Finish */
+        float hue_scroll_deg = 0.0f;
+        bool rainbow = false;
+        int palette_count = 0;
+        float palette[8][3] = {};
+    };
+    bool applyDisplayFinish(float* rgb_inout, int count, const DisplayFinish& finish);
+
     /** Trilinear sample of atlas RGB (0..1). Safe if ensureReady failed (returns 0). */
     QVector3D sample01(float x, float y, float z) const;
 
@@ -90,6 +105,7 @@ private:
     bool initGl();
     void shutdownGl();
     bool compilePrograms(const QString& body);
+    bool ensureFinishProgram();
     bool ensureFbo(int n);
     bool ensurePointFbo(int w, int h);
     bool renderAtlas(bool readback_cpu);
@@ -102,11 +118,13 @@ private:
     bool uploadMediaTexture();
     void destroyPointsTexture();
     bool uploadPointsTexture(const float* xyz01, int count, int w, int h);
+    void destroyRawRgbTexture();
+    bool uploadRawRgbTexture(const float* rgb, int count, int w, int h);
     void unpackPointReadback(const unsigned char* rgba, int w, int h, int count, float* out_rgb);
 
     QString fragment_body_;
     Params params_{};
-    int resolution_ = 18;
+    int resolution_ = 32;
 
     mutable std::mutex mutex_;
     std::vector<float> atlas_rgb_;
@@ -129,14 +147,20 @@ private:
 
     std::unique_ptr<QOpenGLShaderProgram> program_;
     std::unique_ptr<QOpenGLShaderProgram> point_program_;
+    std::unique_ptr<QOpenGLShaderProgram> finish_program_;
     std::unique_ptr<QOpenGLFramebufferObject> fbo_;
     std::unique_ptr<QOpenGLFramebufferObject> point_fbo_;
+    SpatialOverlayHandoff overlay_handoff_;
     int fbo_n_ = 0;
     int point_fbo_w_ = 0;
     int point_fbo_h_ = 0;
     unsigned int points_tex_id_ = 0;
     int points_tex_w_ = 0;
     int points_tex_h_ = 0;
+    unsigned int raw_rgb_tex_id_ = 0;
+    int raw_rgb_tex_w_ = 0;
+    int raw_rgb_tex_h_ = 0;
+    std::vector<float> raw_rgb_upload_;
     bool gl_ok_ = false;
 
     unsigned int pbos_[2] = {0, 0};

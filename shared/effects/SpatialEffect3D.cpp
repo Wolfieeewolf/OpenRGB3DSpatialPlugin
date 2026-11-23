@@ -22,6 +22,7 @@
 #include "ui/widgets/EffectSliderPromote.h"
 #include "StripPatternSurface.h"
 #include "GpuRoomGridOverlay.h"
+#include "SpatialOffscreenGlPool.h"
 #include "Geometry3DUtils.h"
 #include <cstring>
 #include <QColorDialog>
@@ -30,6 +31,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+
+static_assert(GpuRoomGridOverlayLayer::kPatternWidth <= SpatialStripFieldEngine::kMaxWidth,
+              "pattern atlas width must fit SpatialStripFieldEngine");
 
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
@@ -174,7 +178,17 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     plane_combo = nullptr;
 }
 
-SpatialEffect3D::~SpatialEffect3D() = default;
+SpatialEffect3D::~SpatialEffect3D()
+{
+    if(SpatialOffscreenGlPool::hostContextReady())
+    {
+        SpatialOffscreenGlPool::Session gl;
+        if(gl)
+        {
+            pattern_overlay_handoff_.destroy();
+        }
+    }
+}
 
 void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_start_stop)
 {
@@ -1249,7 +1263,7 @@ void SpatialEffect3D::PrepareStripColormapAssist(std::uint64_t render_sequence, 
     if(!strip_cmap_body_ready_)
     {
         strip_cmap_assist_.setFragmentBody(SpatialPatternKernelShader());
-        strip_cmap_assist_.setWidth(256);
+        strip_cmap_assist_.setWidth(GpuRoomGridOverlayLayer::kPatternWidth);
         strip_cmap_body_ready_ = true;
     }
 
@@ -1354,6 +1368,7 @@ RGBColor SpatialEffect3D::ResolvePatternColor(float time,
 void SpatialEffect3D::FillOverlayPattern(GpuRoomGridOverlayLayer& out, float time) const
 {
     out.pattern_on = false;
+    out.pattern_pool_src_tex = 0;
     if(!UseEffectStripColormap())
     {
         return;
@@ -1390,6 +1405,32 @@ void SpatialEffect3D::FillOverlayPattern(GpuRoomGridOverlayLayer& out, float tim
     float time_use = 0.0f;
     out.pattern_phase_s01 = StripColormapComputeS01((int)StripPatternSurface::UnfoldMode::EffectPhaseOnly, 0.0f,
                                                     phase_eff, time_eff, 0.0f, 0.0f, 0.0f, phase_use, time_use);
+
+    /* Pool warm → durable handoff only (fail closed). Pool cold → viewport uploads floats. */
+    if(SpatialOffscreenGlPool::hostContextReady())
+    {
+        SpatialOffscreenGlPool::Session gl;
+        if(!gl)
+        {
+            return;
+        }
+        std::vector<float> texels((size_t)n * 2u * 4u, 0.0f);
+        for(int x = 0; x < n; ++x)
+        {
+            texels[(size_t)x * 4u] = out.pattern_strip[x];
+            float* pal = &texels[((size_t)n + (size_t)x) * 4u];
+            pal[0] = out.pattern_lut[x][0];
+            pal[1] = out.pattern_lut[x][1];
+            pal[2] = out.pattern_lut[x][2];
+            pal[3] = 1.0f;
+        }
+        pattern_overlay_handoff_.releaseDeferred();
+        if(!pattern_overlay_handoff_.publishFromRgba32f(texels.data(), n, 2))
+        {
+            return;
+        }
+        out.pattern_pool_src_tex = pattern_overlay_handoff_.textureId();
+    }
     out.pattern_on = true;
 }
 

@@ -7,6 +7,7 @@
 #include "SpatialShaderCatalog.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "AudioReactiveCommon.h"
+#include "SpatialVolumeFieldEngine.h"
 
 #include "filesystem.h"
 
@@ -231,7 +232,8 @@ FolderVolumeSpec ReadSpec(const QString& path)
         }
         else if(key == QStringLiteral("resolution"))
         {
-            spec.resolution = val.toInt();
+            /* Overlay denseness only — LEDs point-eval. Clamp to engine max. */
+            spec.resolution = std::clamp(val.toInt(), 0, SpatialVolumeFieldEngine::kMaxResolution);
         }
         else if(key == QStringLiteral("rainbow") && val == QStringLiteral("true"))
         {

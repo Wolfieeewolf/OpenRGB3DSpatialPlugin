@@ -194,6 +194,7 @@ HEADERS += \
     engines/game/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.h \
     engines/actions/Action.h \
     engines/actions/ActionMedia.h \
+    engines/actions/ActionMediaGpu.h \
     engines/actions/ActionPlayer.h \
     engines/actions/ActionApplier.h \
     engines/actions/ActionApplierDetail.h \
@@ -338,7 +339,10 @@ HEADERS += \
     shared/Shaders/SpatialFieldAssistBase.h \
     engines/volume-field/SpatialVolumeFieldEngine.h \
     shared/Shaders/SpatialOffscreenGlPool.h \
+    shared/Shaders/SpatialOverlayHandoff.h \
     shared/Shaders/FieldFullscreenQuad410.h \
+    shared/Shaders/SpatialVfxLib410.h \
+    shared/Shaders/VolumeDisplayFinish410.h \
     engines/volume-field/SpatialVolumeFieldAssist.h \
     shared/Shaders/SpatialStripFieldEngine.h \
     shared/Shaders/SpatialStripFieldAssist.h \
@@ -395,6 +399,7 @@ SOURCES += \
     engines/game/Minecraft/MinecraftRoomAmbilight/MinecraftRoomAmbilightEffect3D.cpp \
     engines/actions/Action.cpp \
     engines/actions/ActionMedia.cpp \
+    engines/actions/ActionMediaGpu.cpp \
     engines/actions/ActionSerialize.cpp \
     engines/actions/ActionClipEvalAxis.cpp \
     engines/actions/ActionSpatial.cpp \
@@ -523,6 +528,7 @@ SOURCES += \
     engines/shader-field/SpatialShaderCatalog.cpp \
     engines/volume-field/SpatialVolumeFieldEngine.cpp \
     shared/Shaders/SpatialOffscreenGlPool.cpp \
+    shared/Shaders/SpatialOverlayHandoff.cpp \
     shared/Shaders/FieldFullscreenQuad410.cpp \
     engines/volume-field/SpatialVolumeFieldAssist.cpp \
     shared/Shaders/SpatialStripFieldEngine.cpp \

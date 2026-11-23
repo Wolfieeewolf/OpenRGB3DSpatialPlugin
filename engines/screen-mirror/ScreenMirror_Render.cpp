@@ -10,6 +10,7 @@
 #include "ScreenMirrorCalibrationPattern.h"
 #include "ScreenMirror_Internal.h"
 #include "GpuRoomGridOverlay.h"
+#include "SpatialOffscreenGlPool.h"
 
 #include <chrono>
 #include <cmath>
@@ -672,9 +673,9 @@ bool ScreenMirror::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
         return false; /* caller built against another layout — skip, never overwrite */
     }
     /* GPU overlay mirrors CalculateColorGrid per plane. Frames are downsampled (nearest,
-       stride) to keep the per-tick upload small; the overlay is a preview lattice. */
-    constexpr int kOverlayMaxW = 320;
-    constexpr int kOverlayMaxH = 180;
+       stride) for the preview lattice — denser than LED path needs, still cheap vs capture. */
+    constexpr int kOverlayMaxW = 640;
+    constexpr int kOverlayMaxH = 360;
 
     out = GpuRoomGridOverlayLayer{};
     out.kind = GpuRoomGridOverlayLayer::KindScreenMirror;
@@ -792,6 +793,42 @@ bool ScreenMirror::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
 
     out.tex_w = tex_w;
     out.tex_h = tex_h;
+
+    /* GPU NEAREST scale into durable handoff. Pool warm → fail closed (no CPU dual). */
+    if(SpatialOffscreenGlPool::hostContextReady())
+    {
+        SpatialOffscreenGlPool::Session gl;
+        if(!gl)
+        {
+            return false;
+        }
+        overlay_handoff_.releaseDeferred();
+        if(!overlay_handoff_.beginCompositeRgba8(tex_w, tex_h))
+        {
+            return false;
+        }
+        for(size_t pi = 0; pi < srcs.size(); ++pi)
+        {
+            const Src& s = srcs[pi];
+            const int row0 = out.screen_planes[pi].row0;
+            if(!overlay_handoff_.compositePlaneRgba8(s.rgba, s.w, s.h, 0, row0, s.ow, s.oh))
+            {
+                return false;
+            }
+        }
+        if(overlay_handoff_.empty())
+        {
+            return false;
+        }
+        out.pool_src_tex = overlay_handoff_.textureId();
+        out.pool_src_w = tex_w;
+        out.pool_src_h = tex_h;
+        out.pool_src_flip_y = false;
+        out.atlas_rgba.clear();
+        return true;
+    }
+
+    /* Pool cold (viewport GL not up yet) — CPU pack is the only path. */
     out.atlas_rgba.assign((size_t)tex_w * (size_t)tex_h * 4u, 0);
     for(size_t pi = 0; pi < srcs.size(); ++pi)
     {

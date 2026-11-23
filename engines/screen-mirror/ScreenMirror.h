@@ -4,6 +4,7 @@
 #define SCREENMIRROR_H
 
 #include "SpatialEffect3D.h"
+#include "SpatialOverlayHandoff.h"
 #include <map>
 #include <unordered_map>
 #include <deque>
@@ -294,6 +295,9 @@ private:
     std::vector<SampleMonitor> sample_tick_;
     float tick_scale_mm_;
     float smooth_ms_;
+
+    /** Stacked plane atlas for room-grid overlay (GPU scale + durable handoff). */
+    SpatialOverlayHandoff overlay_handoff_;
 };
 
 #endif

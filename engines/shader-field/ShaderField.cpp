@@ -8,6 +8,7 @@
 #include "EffectListManager3D.h"
 #include "EffectUiRows.h"
 #include "GpuRoomGridOverlay.h"
+#include "SpatialOffscreenGlPool.h"
 
 #include <QVBoxLayout>
 #include <QComboBox>
@@ -124,7 +125,8 @@ ShaderField::ShaderField(ShaderFieldSpec spec, QWidget* parent)
     , spec_(std::move(spec))
 {
     shader_engine = new SpatialShaderEngine(this);
-    shader_engine->setRenderSize(256, 144);
+    /* Atlas size is for overlay only; LEDs evaluate spatialMain at exact UVs on GPU. */
+    shader_engine->setRenderSize(1024, 576);
     connect(shader_engine,
             &SpatialShaderEngine::compileMessage,
             this,
@@ -168,10 +170,6 @@ void ShaderField::LoadShaderBody()
     }
     /* Specs only — user values in extra_raw_ survive a reload (missing ones use the default). */
     extra_specs_ = SpatialShaderCatalog::LoadExtraParamSliders(spec_.path);
-    {
-        QMutexLocker lock(&display_mutex);
-        display_frame.reset();
-    }
     last_uniform_sequence = 0;
     last_uniform_time = -1.0f;
     shader_engine->setFragmentBody(body);
@@ -180,34 +178,22 @@ void ShaderField::LoadShaderBody()
 
 void ShaderField::PrepareGpuFields(std::uint64_t /*render_sequence*/, float time_sec, const GridContext3D& /*grid*/)
 {
+    true_sample_map_.clear();
+    true_samples_ready_ = false;
     if(!shader_engine)
     {
         return;
     }
     shader_engine->start();
     SyncUniforms(time_sec);
+    /* Compile programs; LED colours come from BakeTrueGpuVolumeSamples. */
     if(!shader_engine->ensureReady())
     {
-        {
-            QMutexLocker lock(&display_mutex);
-            display_frame.reset();
-        }
         if(compile_log_label && !shader_engine->lastError().isEmpty())
         {
             compile_log_label->setVisible(true);
             compile_log_label->setText(shader_engine->lastError().left(280));
         }
-        return;
-    }
-    const QImage img = shader_engine->latestFrame();
-    QMutexLocker lock(&display_mutex);
-    if(!img.isNull())
-    {
-        display_frame = std::make_shared<QImage>(img);
-    }
-    else
-    {
-        display_frame.reset();
     }
 }
 
@@ -535,14 +521,113 @@ void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) con
     }
 }
 
+std::uint32_t ShaderField::PackUvKey(float u, float v)
+{
+    const auto q = [](float x) -> std::uint32_t {
+        return (std::uint32_t)std::lround(std::clamp(x, 0.0f, 1.0f) * 65535.0f) & 65535u;
+    };
+    return (q(u) << 16) | q(v);
+}
+
+QVector3D ShaderField::SampleField01(float u, float v) const
+{
+    const std::uint32_t key = PackUvKey(u, v);
+    const auto it = true_sample_map_.find(key);
+    if(it != true_sample_map_.end())
+    {
+        return it->second;
+    }
+    /* After a bake pass, miss = outside unique UV set — fail closed (no N× GL). */
+    if(true_samples_ready_)
+    {
+        return QVector3D(0.0f, 0.0f, 0.0f);
+    }
+    /* Preview without EffectsRender bake: one GPU UV eval. */
+    if(!shader_engine)
+    {
+        return QVector3D(0.0f, 0.0f, 0.0f);
+    }
+    const float uv[2] = {u, v};
+    float rgb[3] = {0.0f, 0.0f, 0.0f};
+    if(!shader_engine->sampleAtUvs(uv, 1, rgb))
+    {
+        return QVector3D(0.0f, 0.0f, 0.0f);
+    }
+    return QVector3D(rgb[0], rgb[1], rgb[2]);
+}
+
 RGBColor ShaderField::SampleField(float u, float v) const
 {
-    QMutexLocker lock(&display_mutex);
-    if(!display_frame || display_frame->isNull())
+    const QVector3D c = SampleField01(u, v);
+    return ToRGBColor((int)(std::clamp(c.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                      (int)(std::clamp(c.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
+                      (int)(std::clamp(c.z(), 0.0f, 1.0f) * 255.0f + 0.5f));
+}
+
+void ShaderField::BakeTrueGpuVolumeSamples(const float* sample_xyz,
+                                           int count,
+                                           float /*time*/,
+                                           const GridContext3D& grid)
+{
+    true_sample_map_.clear();
+    true_samples_ready_ = true;
+    if(!sample_xyz || count <= 0 || !shader_engine)
     {
-        return 0x00000000;
+        return;
     }
-    return MediaTextureEffect::SampleImageBilinear(*display_frame, u, v);
+
+    std::unordered_map<std::uint32_t, int> unique_index;
+    unique_index.reserve((size_t)std::max(16, count / 2));
+    std::vector<float> uv01;
+    uv01.reserve((size_t)count * 2u);
+
+    for(int i = 0; i < count; ++i)
+    {
+        const float x = sample_xyz[(size_t)i * 3u + 0u];
+        const float y = sample_xyz[(size_t)i * 3u + 1u];
+        const float z = sample_xyz[(size_t)i * 3u + 2u];
+        float nx = 0.5f, ny = 0.5f, nz = 0.5f;
+        if(!SampleVolumeLocalUv01(x, y, z, grid, &nx, &ny, &nz))
+        {
+            continue;
+        }
+        float u = 0.5f;
+        float v = 0.5f;
+        SampleUv(nx, ny, nz, u, v);
+        if(u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
+        {
+            continue;
+        }
+        const std::uint32_t key = PackUvKey(u, v);
+        if(unique_index.find(key) != unique_index.end())
+        {
+            continue;
+        }
+        const int idx = (int)unique_index.size();
+        unique_index.emplace(key, idx);
+        uv01.push_back(u);
+        uv01.push_back(v);
+    }
+
+    const int unique = (int)unique_index.size();
+    if(unique <= 0)
+    {
+        return;
+    }
+
+    std::vector<float> rgb((size_t)unique * 3u, 0.0f);
+    if(!shader_engine->sampleAtUvs(uv01.data(), unique, rgb.data()))
+    {
+        return;
+    }
+    true_sample_map_.reserve((size_t)unique);
+    for(const auto& kv : unique_index)
+    {
+        const int i = kv.second;
+        true_sample_map_[kv.first] = QVector3D(rgb[(size_t)i * 3u + 0u],
+                                               rgb[(size_t)i * 3u + 1u],
+                                               rgb[(size_t)i * 3u + 2u]);
+    }
 }
 
 RGBColor ShaderField::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -657,31 +742,45 @@ bool ShaderField::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
     {
         return false; /* caller built against another layout — skip, never overwrite */
     }
-    QImage frame;
-    {
-        QMutexLocker lock(&display_mutex);
-        if(!display_frame || display_frame->isNull())
-        {
-            return false;
-        }
-        frame = display_frame->convertToFormat(QImage::Format_RGBA8888);
-    }
-    const int w = frame.width();
-    const int h = frame.height();
-    if(w < 1 || h < 1)
+    if(!shader_engine)
     {
         return false;
     }
-
     out = GpuRoomGridOverlayLayer{};
     out.kind = GpuRoomGridOverlayLayer::KindProjected2D;
-    out.tex_w = w;
-    out.tex_h = h;
     out.projection = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
-    out.atlas_rgba.resize((size_t)w * (size_t)h * 4u);
-    for(int y = 0; y < h; ++y)
+    if(shader_engine->ensureAtlasTextureReady())
     {
-        std::memcpy(out.atlas_rgba.data() + (size_t)y * (size_t)w * 4u, frame.constScanLine(y), (size_t)w * 4u);
+        const unsigned int src = shader_engine->atlasTextureId();
+        const int w = shader_engine->atlasTextureWidth();
+        const int h = shader_engine->atlasTextureHeight();
+        if(src != 0 && w >= 1 && h >= 1)
+        {
+            out.pool_src_tex = src;
+            out.pool_src_w = w;
+            out.pool_src_h = h;
+            out.pool_src_flip_y = false; /* handoff publishCopy already upright */
+            out.tex_w = w;
+            out.tex_h = h;
+        }
+    }
+    if(out.pool_src_tex == 0)
+    {
+        if(SpatialOffscreenGlPool::hostContextReady())
+        {
+            return false; /* pool warm — fail closed, no CPU dual */
+        }
+        std::vector<unsigned char> rgba;
+        int w = 0;
+        int h = 0;
+        if(!shader_engine->exportAtlasRgba8(rgba, w, h) || w < 1 || h < 1
+           || rgba.size() < (size_t)w * (size_t)h * 4u)
+        {
+            return false;
+        }
+        out.tex_w = w;
+        out.tex_h = h;
+        out.atlas_rgba = std::move(rgba);
     }
     /* Same box as CalculateColorGrid's SampleVolumeLocalUv01. */
     FillOverlayVolumeFrame(out, grid);

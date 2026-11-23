@@ -248,6 +248,20 @@ bool ExportAtlasRgba8(std::vector<unsigned char>& out_rgba, int& out_n)
     return g_assist->exportAtlasRgba8(out_rgba, out_n);
 }
 
+bool ExportAtlasGpu(unsigned int& out_tex, int& out_n)
+{
+    out_tex = 0;
+    out_n = 0;
+    std::lock_guard<std::mutex> lock(g_mu);
+    if(!g_ready || !g_assist || !g_assist->ensureAtlasTextureReady())
+    {
+        return false;
+    }
+    out_tex = g_assist->atlasTextureId();
+    out_n = g_assist->atlasTextureResolution();
+    return out_tex != 0 && out_n >= 2;
+}
+
 bool EvaluateAtPoints(const float* xyz01, int count, float* out_rgb)
 {
     if(!xyz01 || !out_rgb || count <= 0)

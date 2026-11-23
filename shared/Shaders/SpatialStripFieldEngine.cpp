@@ -3,6 +3,7 @@
 #include "SpatialStripFieldEngine.h"
 #include "SpatialOffscreenGlPool.h"
 #include "FieldFullscreenQuad410.h"
+#include "SpatialVfxLib410.h"
 #include "GlslUniformArray.h"
 
 #include <QOpenGLContext>
@@ -28,6 +29,7 @@ QString BuildStripFragmentShader(const QString& user_body)
            + QStringLiteral(
                "out vec4 frag_color;\n"
                "void stripMain(out vec4 out_color, in float s01);\n")
+           + SpatialVfxLib410::GlslSource()
            + user_body
            + QStringLiteral(
                "\nvoid main() {\n"

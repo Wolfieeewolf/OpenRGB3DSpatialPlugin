@@ -31,6 +31,9 @@ public:
     /** volumeMain at each point (interleaved xyz -> interleaved rgb). */
     bool evaluateAtPoints(const float* xyz01, int count, float* out_rgb);
 
+    /** Overlay-matching finish bake into rgb_inout (LED display colours). */
+    bool applyDisplayFinish(float* rgb_inout, int count, const SpatialVolumeFieldEngine::DisplayFinish& finish);
+
     /** Single-point volumeMain; prefer evaluateAtPoints for batches. */
     QVector3D sampleTrue01(float x, float y, float z);
 
@@ -38,7 +41,7 @@ private:
     void applyEngineSize(SpatialVolumeFieldEngine& engine) override;
     bool engineNeedsRefresh() const override;
 
-    int resolution_ = 18;
+    int resolution_ = 32;
     QImage pending_media_;
     bool pending_wrap_ = false;
     bool has_pending_media_ = false;

@@ -86,6 +86,17 @@ bool SpatialVolumeFieldAssist::evaluateAtPoints(const float* xyz01, int count, f
     return engine_->evaluateAtPoints(xyz01, count, out_rgb);
 }
 
+bool SpatialVolumeFieldAssist::applyDisplayFinish(float* rgb_inout,
+                                                  int count,
+                                                  const SpatialVolumeFieldEngine::DisplayFinish& finish)
+{
+    if(!engine_ || !rgb_inout || count <= 0)
+    {
+        return false;
+    }
+    return engine_->applyDisplayFinish(rgb_inout, count, finish);
+}
+
 QVector3D SpatialVolumeFieldAssist::sampleTrue01(float x, float y, float z)
 {
     float xyz[3] = {

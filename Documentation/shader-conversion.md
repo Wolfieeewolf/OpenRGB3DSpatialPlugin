@@ -35,9 +35,24 @@ Using an idea or technique from another shader is fine. Copying its code is not,
 
 **Pattern labels:** a combo fed by `pattern:` lines in the effect `.fs` file. Order is the saved index. Text after `|` is the item tooltip.
 
+## Shared VFX helpers (OpenGL 4.1)
+
+Engines inject [`SpatialVfxLib410`](../shared/Shaders/SpatialVfxLib410.h) before author bodies. Use for hologram / magic / smoke language without reinventing soft blobs:
+
+| Helper | Use |
+|--------|-----|
+| `vfxDetailWidth(detail01)` | Map Detail 0..1 soft → sharp (mid ≈ old Detail 100) |
+| `vfxCoreRim` / `vfxShell` / `vfxStreak` | Bright core + rim / motion streaks |
+| `vfxSd*` (sphere/box/torus/capsule/plane/octa/hex) | SDF features in room space |
+| `vfxSmoothMin` / `vfxRot*` / `vfxDomainWarp` | Blend / spin / smoke warp |
+| `vfxFbm3` / `vfxRidge3` / `vfxCurl2` | Smoke / twist motion |
+| `vfxEnvOnce` / `vfxPulse01` / `vfxHeatRgb` / `vfxPalette3` | Timing + colour language |
+
+Particle and ribbon Action bodies compile through the Volume field engine and already call these helpers.
+
 ## GPU vs CPU
 
-Volume/Audio/Media LED point-eval, room-grid GPU atlas overlay, strip/Shader Field engines where they still bake fields, and the room viewport use **OpenGL 4.1 Core** with `#version 410 core` wrappers. Author `.fs` bodies must not include `#version` or legacy GLSL (`texture2D`, `attribute`, `varying`, `gl_FragColor`). Do not use GLSL reserved words as identifiers (`layout`, `packed`, `flat`, `shared`, ...) — rename them (e.g. `place`, `pack_val`, `y_fall`).
+Volume/Audio/Media/Shader Field LED point-eval, room-grid overlay handoff, strip kernel bake, and the room viewport use **OpenGL 4.1 Core** with `#version 410 core` wrappers. Author `.fs` bodies must not include `#version` or legacy GLSL (`texture2D`, `attribute`, `varying`, `gl_FragColor`). Do not use GLSL reserved words as identifiers (`layout`, `packed`, `flat`, `shared`, ...) — rename them (e.g. `place`, `pack_val`, `y_fall`).
 
 GPU for room fields — including audio visual fields via `SpatialVolumeFieldAssist` — runs on shared **`SpatialOffscreenGlPool`** (no second context; fail closed if GL is unavailable — no parallel CPU formula for the same look).
 

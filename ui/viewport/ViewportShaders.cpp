@@ -182,8 +182,9 @@ uniform int u_depth_shade[4]; /* finish_depth anchor-distance shade */
 uniform float u_hue_scroll[4];
 uniform int u_palette_count[4];
 uniform vec3 u_palette[32]; /* 4 layers * 8 stops (GpuRoomGridOverlayLayer::kMaxPalette) */
-/* Colors and patterns (SpatialEffect3D::ResolvePatternColor): 256 × 2 float texture per
-   layer — row 0 = baked strip value, row 1 = kernel palette RGB. */
+/* Colors and patterns (SpatialEffect3D::ResolvePatternColor): N × 2 float texture per
+   layer (N = texture width, matches GpuRoomGridOverlayLayer::kPatternWidth) —
+   row 0 = baked strip value, row 1 = kernel palette RGB. */
 uniform sampler2D u_pat0;
 uniform sampler2D u_pat1;
 uniform sampler2D u_pat2;
@@ -962,6 +963,14 @@ vec4 patFetch(int i, ivec2 c)
     return texelFetch(u_pat3, c, 0);
 }
 
+int patWidth(int i)
+{
+    if(i == 0) return max(textureSize(u_pat0, 0).x, 1);
+    if(i == 1) return max(textureSize(u_pat1, 0).x, 1);
+    if(i == 2) return max(textureSize(u_pat2, 0).x, 1);
+    return max(textureSize(u_pat3, 0).x, 1);
+}
+
 /* Mirror of StripPatternSurface::StripCoord01 — keep in sync. */
 float stripCoord01(vec3 l, int mode, float dir_deg)
 {
@@ -997,17 +1006,18 @@ vec3 patternColor(int i, vec3 world)
     int mode = u_pat_mode[i];
     float s01 = (mode == 7) ? u_pat_phase[i] : stripCoord01(l, mode, u_pat_dir[i]);
 
-    float fx = clamp(s01, 0.0, 1.0) * 255.0;
+    int nw = patWidth(i);
+    float fx = clamp(s01, 0.0, 1.0) * float(nw - 1);
     int x0 = int(floor(fx));
-    int x1 = min(x0 + 1, 255);
+    int x1 = min(x0 + 1, nw - 1);
     float t = fx - float(x0);
     float u = t * t * (3.0 - 2.0 * t);
     float pal = clamp(mix(patFetch(i, ivec2(x0, 0)).r, patFetch(i, ivec2(x1, 0)).r, u), 0.0, 1.0);
 
-    /* Palette entry k holds position k/256 and the palette wraps, so blend cyclically. */
-    float px = fract(pal) * 256.0;
-    int p0 = int(floor(px)) % 256;
-    int p1 = (p0 + 1) % 256;
+    /* Palette entry k holds position k/N and the palette wraps, so blend cyclically. */
+    float px = fract(pal) * float(nw);
+    int p0 = int(floor(px)) % nw;
+    int p1 = (p0 + 1) % nw;
     return mix(patFetch(i, ivec2(p0, 1)).rgb, patFetch(i, ivec2(p1, 1)).rgb, px - floor(px));
 }
 
