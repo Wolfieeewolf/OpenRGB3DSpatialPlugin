@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef MINECRAFTAIREFFECT3D_H
 #define MINECRAFTAIREFFECT3D_H

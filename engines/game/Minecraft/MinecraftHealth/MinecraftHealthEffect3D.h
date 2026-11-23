@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef MINECRAFTHEALTHEFFECT3D_H
 #define MINECRAFTHEALTHEFFECT3D_H

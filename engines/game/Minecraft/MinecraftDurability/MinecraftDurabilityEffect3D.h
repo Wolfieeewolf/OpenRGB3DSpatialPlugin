@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef MINECRAFTDURABILITYEFFECT3D_H
 #define MINECRAFTDURABILITYEFFECT3D_H

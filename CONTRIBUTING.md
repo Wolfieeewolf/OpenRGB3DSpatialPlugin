@@ -80,7 +80,12 @@ Full detail lives in the wiki ([Coordinate Spaces](https://github.com/Wolfieeewo
 
 ### Licences and borrowed code
 
-The plugin is GPL-2.0-only, and contributions are accepted under the same licence. Ideas and techniques from other projects are welcome; copied code must come from a licence compatible with GPL-2.0-only (MIT, BSD, zlib, Boost, GPL-2.0, EUPL-1.2 and similar) and must credit its source in a comment and in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Shadertoy code is CC BY-NC-SA 3.0 by default and cannot be copied; see [shader-conversion.md](Documentation/shader-conversion.md#licences).
+The plugin is GPL-2.0-or-later, like OpenRGB, and contributions are accepted under the same licence. Ideas and techniques from other projects are welcome. Copied code must:
+
+- come from a compatible licence: GPL-2.0-or-later, GPL-3.0, LGPL, MIT, BSD, zlib, Boost, Apache-2.0, EUPL-1.2, CC0 or public domain;
+- not mix GPL-2.0-only code with GPL-3.0 or Apache-2.0 code;
+- not come from code with no licence, or from Shadertoy (CC BY-NC-SA 3.0 by default; see [shader-conversion.md](Documentation/shader-conversion.md#licences));
+- name its source, author and licence in a comment and in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ### No legacy or backward-compatibility paths
 
@@ -104,7 +109,7 @@ We follow [OpenRGB's coding rules](OpenRGB/CONTRIBUTING.md), plus a few of our o
 - `snake_case` variables, `CamelCase` types and functions.
 - Log with `LogManager`. No `printf`, `std::cout` or `QDebug`.
 - Avoid `auto` where the type isn't obvious; use indexed loops when index maths matters.
-- SPDX licence identifier at the top of new or substantially rewritten files.
+- SPDX licence identifier (`GPL-2.0-or-later`) at the top of new or substantially rewritten files.
 - No debug or dead code. Before keeping a non-virtual helper, grep for call sites.
 - Keep it simple (DRY, KISS, YAGNI). Comments only for non-obvious *why*, not *what*.
 - User-visible text is UTF-8; prefer `QStringLiteral` with `\uXXXX` escapes for special characters in source.

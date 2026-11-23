@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef SPATIAL_PATTERN_KERNELS_H
 #define SPATIAL_PATTERN_KERNELS_H

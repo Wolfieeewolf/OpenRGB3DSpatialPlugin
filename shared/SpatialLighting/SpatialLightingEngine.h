@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Per-LED spatial lighting: emissive sources, direct light with occlusion, ambient AO.
 
 #ifndef SPATIALLIGHTINGENGINE_H

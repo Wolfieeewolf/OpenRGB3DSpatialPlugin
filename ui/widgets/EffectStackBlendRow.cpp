@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "EffectStackBlendRow.h"
 #include "EffectInstance3D.h"

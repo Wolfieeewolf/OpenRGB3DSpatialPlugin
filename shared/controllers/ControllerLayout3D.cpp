@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "ControllerLayout3D.h"
 #include "Geometry3DUtils.h"

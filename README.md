@@ -102,7 +102,7 @@ GitHub is the main repository; GitLab is a mirror.
 
 ## License
 
-GPL-2.0-only. See [LICENSE](LICENSE). Third-party components and credits are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+GPL-2.0-or-later, the same as OpenRGB. See [LICENSE](LICENSE). Third-party components and credits are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Support
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef OPENRGB3DSPATIALTAB_H
 #define OPENRGB3DSPATIALTAB_H

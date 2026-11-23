@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef AUDIOANALYZERSETTINGS_H
 #define AUDIOANALYZERSETTINGS_H

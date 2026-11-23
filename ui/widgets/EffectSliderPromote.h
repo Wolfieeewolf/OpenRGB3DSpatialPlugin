@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 #ifndef EFFECTSLIDERPROMOTE_H
 #define EFFECTSLIDERPROMOTE_H
 

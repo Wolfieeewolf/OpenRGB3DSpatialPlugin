@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef SCREENMIRROR_WAVE_MATH_H
 #define SCREENMIRROR_WAVE_MATH_H

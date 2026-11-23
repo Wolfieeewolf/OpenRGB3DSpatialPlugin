@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+﻿// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef ZONE3D_H
 #define ZONE3D_H

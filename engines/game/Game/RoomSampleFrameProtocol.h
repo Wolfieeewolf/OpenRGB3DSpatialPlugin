@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 //
 // Room Ambilight: OpenGL-style cubemap from the eye, sampled per mapped LED by room direction
 // onto the existing controllers/grid. Rays stay within the published room bounds.

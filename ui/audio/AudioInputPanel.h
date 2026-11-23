@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef AUDIOINPUTPANEL_H
 #define AUDIOINPUTPANEL_H

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef SPATIALCONTROLLERCARDLIST_H
 #define SPATIALCONTROLLERCARDLIST_H

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef GEOMETRY3DUTILS_H
 #define GEOMETRY3DUTILS_H

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef EFFECTVOLUME3D_H
 #define EFFECTVOLUME3D_H

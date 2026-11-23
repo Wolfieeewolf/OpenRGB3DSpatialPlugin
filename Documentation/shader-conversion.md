@@ -22,7 +22,7 @@ When porting external shaders, reject: `iChannel`, `iMouse`, raymarch, audio/web
 
 Using an idea or technique from another shader is fine. Copying its code is not, unless its licence allows it:
 
-- **Shadertoy** shaders are licensed CC BY-NC-SA 3.0 unless the author states otherwise. That licence is not compatible with this project, so do not copy their code. Write your own version of the effect, or use a shader whose author gives a permissive licence (MIT, BSD, CC0, public domain).
+- **Shadertoy** shaders are licensed CC BY-NC-SA 3.0 unless the author states otherwise. That licence is not compatible with this project (GPL-2.0-or-later), so do not copy their code. Write your own version of the effect, or use a shader whose author gives a permissive licence (MIT, BSD, CC0, public domain).
 - When a file contains code from another project, add a header line naming the source, the author and the licence, for example `# Source: <url> by <author> (MIT)`.
 
 ## Adapters

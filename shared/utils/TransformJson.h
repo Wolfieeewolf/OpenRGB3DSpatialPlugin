@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Shared JSON helpers for Transform3D vectors (object {x,y,z} only).
 
 #ifndef TRANSFORMJSON_H

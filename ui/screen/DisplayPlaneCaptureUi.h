@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Shared UI copy for display-plane capture (Object Creator, Scene object, Screen Mirror, dialogs).
 
 #ifndef DISPLAYPLANE_CAPTURE_UI_H

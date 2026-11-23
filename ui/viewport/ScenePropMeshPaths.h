@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef SCENEPROPMESHPATHS_H
 #define SCENEPROPMESHPATHS_H

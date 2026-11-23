@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Room evaluation taxonomy: how an effect uses 3D layout (not game probe tinting).
 
 #ifndef SPATIALROOMTYPES_H

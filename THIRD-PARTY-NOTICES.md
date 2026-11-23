@@ -1,12 +1,12 @@
 # Third-party notices
 
-OpenRGB 3D Spatial LED Control is licensed under the GNU General Public License, version 2 only (GPL-2.0-only); see [LICENSE](LICENSE). It includes, links to or adapts the work listed below. Each item keeps its own licence.
+OpenRGB 3D Spatial LED Control is licensed under the GNU General Public License, version 2 or (at your option) any later version (GPL-2.0-or-later); see [LICENSE](LICENSE). It includes, links to or adapts the work listed below. Each item keeps its own licence.
 
 ## Included in the plugin binary
 
 | Component | Licence | Notes |
 | --- | --- | --- |
-| [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) | GPL-2.0-only | Plugin API and shared source files (`OpenRGB/` submodule) |
+| [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) | GPL-2.0-or-later | Plugin API and shared source files (`OpenRGB/` submodule) |
 | [nlohmann/json](https://github.com/nlohmann/json) | MIT | JSON library, via OpenRGB's `dependencies/json` |
 | [Open Asset Import Library (Assimp)](https://github.com/assimp/assimp) | BSD-3-Clause | Mesh import; linked statically (`dependencies/assimp` submodule) |
 | Libraries built into Assimp | Various permissive | pugixml (MIT), RapidJSON (MIT), Clipper (Boost Software License 1.0), poly2tri (BSD-3-Clause), Open3DGC (MIT), OpenDDL Parser (MIT), utf8cpp (BSL-1.0), stb (MIT or public domain), minizip (zlib), kuba--/zip (Unlicense) and miniz (MIT). Licence texts are in `dependencies/assimp/contrib/`. |
@@ -24,19 +24,35 @@ The plugin also uses Qt Core, Gui, Widgets, OpenGL and (on Linux) DBus from the 
 
 ## Minecraft integration
 
-The Fabric mod in [`integrations/minecraft/`](integrations/minecraft/) is part of this project and licensed GPL-2.0-only. It runs on Minecraft and the Fabric toolchain, which are not distributed with it.
+The Fabric mod in [`integrations/minecraft/`](integrations/minecraft/) is part of this project and licensed GPL-2.0-or-later. It runs on Minecraft and the Fabric toolchain, which are not distributed with it.
 
 ## Ideas and adapted work
 
 Many effects, patterns and techniques here are based on ideas and code from other projects, rewritten to work in 3D space with this plugin. Credit goes to:
 
-* **LED and lighting projects:** [WLED](https://github.com/wled/WLED) (EUPL-1.2, which allows use under GPL-2.0), [FastLED](https://github.com/FastLED/FastLED) (MIT), [Pixelblaze](https://github.com/simap/pixelblaze) patterns and LED mapping
-* **Audio visualisation:** [ColorChord](https://www.colorchord.net/) ([cnlohr/colorchord](https://github.com/cnlohr/colorchord), [ColorChord.NET](https://github.com/CaiB/ColorChord.NET)), [LedFx](https://github.com/LedFx/LedFx)
-* **RGB software:** [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) ([openrgb.org](https://openrgb.org/)) and the [OpenRGB Effects Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBEffectsPlugin) (GPL), [CarbonRGB](https://gitlab.com/kakewhinter/carbonrgb), [LightTrackPlugin](https://github.com/qiangqiang101/LightTrackPlugin/tree/devdev)
-* **Particles and visual effects:** [Godot VFX Library](https://github.com/haowg/GODOT-VFX-LIBRARY), [Effekseer](https://effekseer.github.io/en/index.html), [Particleify](https://particleify.talizen.com/generator), [ShaderParticleEngine](https://github.com/squarefeet/ShaderParticleEngine), [tsParticles](https://github.com/tsparticles/tsparticles)
-* **Shaders and 3D:** [Shadertoy](https://www.shadertoy.com/) and its shader authors, [Sketchfab](https://sketchfab.com/feed)
-* **Laser shows:** the [ILDA file format](https://laserboy.org/ilda_file_format.html) reference at LaserBoy
+Some of these provided ideas and techniques only; from others, code was adapted.
 
-Licences are noted where known; each project's own licence applies to any of its code used here.
+| Project | Licence |
+| --- | --- |
+| [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) ([openrgb.org](https://openrgb.org/)) | GPL-2.0-or-later |
+| [OpenRGB Effects Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBEffectsPlugin) | GPL-2.0-or-later |
+| [CarbonRGB](https://gitlab.com/kakewhinter/carbonrgb) | GPL-2.0-or-later |
+| [LightTrackPlugin](https://github.com/qiangqiang101/LightTrackPlugin/tree/devdev) | GPL-2.0 |
+| [WLED](https://github.com/wled/WLED) | EUPL-1.2 |
+| [FastLED](https://github.com/FastLED/FastLED) | MIT |
+| [LedFx](https://github.com/LedFx/LedFx) | GPL-3.0 |
+| [ColorChord](https://www.colorchord.net/) ([cnlohr/colorchord](https://github.com/cnlohr/colorchord)) | BSD-3-Clause, MIT or CC0 |
+| [ColorChord.NET](https://github.com/CaiB/ColorChord.NET) | Apache-2.0 |
+| [Effekseer](https://effekseer.github.io/en/index.html) | MIT |
+| [Godot VFX Library](https://github.com/haowg/GODOT-VFX-LIBRARY) | MIT |
+| [ShaderParticleEngine](https://github.com/squarefeet/ShaderParticleEngine) | MIT |
+| [tsParticles](https://github.com/tsparticles/tsparticles) | MIT |
+| [Pixelblaze](https://github.com/simap/pixelblaze) patterns and LED mapping | No licence stated (ideas only) |
+| [Particleify](https://particleify.talizen.com/generator) | Website (ideas only) |
+| [Shadertoy](https://www.shadertoy.com/) and its shader authors | Per shader; CC BY-NC-SA 3.0 by default |
+| [Sketchfab](https://sketchfab.com/feed) | Per model (ideas only) |
+| [ILDA file format](https://laserboy.org/ilda_file_format.html) reference at LaserBoy | Specification |
+
+Code from the GPL-3.0 and Apache-2.0 projects means a release that contains it is distributed under GPL-3.0, which the "or later" licence allows.
 
 Ideas and techniques are free to reuse; code copied from another project keeps that project's licence and must credit its author. If you recognise your own work here and it is not credited, or not used as your licence allows, please [open an issue](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues) and it will be corrected or removed.

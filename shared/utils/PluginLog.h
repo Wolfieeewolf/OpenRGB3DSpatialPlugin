@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 //
 // Plugin logging shim for OpenRGB Plugin API v5+.
 //

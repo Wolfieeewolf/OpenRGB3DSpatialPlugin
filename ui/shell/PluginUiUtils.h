@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef PLUGIN_UI_UTILS_H
 #define PLUGIN_UI_UTILS_H

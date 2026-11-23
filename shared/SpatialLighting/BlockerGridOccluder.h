@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef BLOCKERGRIDOCCLUDER_H
 #define BLOCKERGRIDOCCLUDER_H

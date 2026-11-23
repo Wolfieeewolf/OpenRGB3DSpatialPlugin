@@ -264,7 +264,7 @@ jobs:
 
           Getting started guide: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Getting-Started
 
-          Licence: GPL-2.0-only (`LICENSE`). Third-party components, including the LGPL Qt libraries above, are listed in `THIRD-PARTY-NOTICES.md`.
+          Licence: GPL-2.0-or-later (`LICENSE`). Third-party components, including the LGPL Qt libraries above, are listed in `THIRD-PARTY-NOTICES.md`.
           EOF
           )"
           if gh release view "$TAG" >/dev/null 2>&1; then

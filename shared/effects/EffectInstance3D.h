@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef EFFECTINSTANCE3D_H
 #define EFFECTINSTANCE3D_H

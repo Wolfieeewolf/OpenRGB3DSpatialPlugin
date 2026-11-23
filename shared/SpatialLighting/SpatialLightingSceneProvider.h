@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef SPATIALLIGHTINGSCENEPROVIDER_H
 #define SPATIALLIGHTINGSCENEPROVIDER_H

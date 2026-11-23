@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef DISPLAYPLANE_CAPTURE_COMBO_H
 #define DISPLAYPLANE_CAPTURE_COMBO_H

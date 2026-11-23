@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef DISPLAYPLANE3D_H
 #define DISPLAYPLANE3D_H

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef CUSTOMCONTROLLERGRIDSCENE_H
 #define CUSTOMCONTROLLERGRIDSCENE_H

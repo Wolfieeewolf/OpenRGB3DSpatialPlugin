@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 /* Linux and macOS audio capture. Windows uses WASAPI (AudioInputManager_Wasapi.cpp).
 
