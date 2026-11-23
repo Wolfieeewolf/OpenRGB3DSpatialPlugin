@@ -13,7 +13,9 @@
 #include <cstdlib>
 #include <cmath>
 #include <fstream>
+#include <locale>
 #include <mutex>
+#include <sstream>
 #include <unordered_map>
 
 namespace Action
@@ -536,7 +538,11 @@ std::vector<Tok> Tokenize(const std::string& body)
             }
             Tok t;
             t.kind = Tok::Num;
-            t.n = std::strtod(body.c_str() + i, nullptr);
+            /* Not strtod: Qt sets the system locale on Linux, where "0.5" can parse as 0. */
+            std::istringstream num(body.substr(i, j - i));
+            num.imbue(std::locale::classic());
+            t.n = 0.0;
+            num >> t.n;
             out.push_back(t);
             i = j;
             continue;
@@ -1053,12 +1059,19 @@ void ScanDir(const filesystem::path& dir, const std::string& section, int depth)
     {
         return;
     }
+    /* Sorted: directory order is arbitrary on Linux, and a later duplicate wins. */
+    std::vector<filesystem::directory_entry> entries;
     for(const auto& entry : filesystem::directory_iterator(dir, ec))
     {
         if(ec)
         {
             break;
         }
+        entries.push_back(entry);
+    }
+    std::sort(entries.begin(), entries.end());
+    for(const auto& entry : entries)
+    {
         if(entry.is_directory())
         {
             const std::string name = entry.path().filename().string();

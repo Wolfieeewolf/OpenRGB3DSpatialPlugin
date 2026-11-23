@@ -1484,6 +1484,12 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
         }
     }
 
+    /* Directory order is arbitrary on Linux. */
+    std::sort(stack_presets.begin(), stack_presets.end(),
+              [](const std::unique_ptr<StackPreset3D>& a, const std::unique_ptr<StackPreset3D>& b) {
+                  return a->name < b->name;
+              });
+
     UpdateStackPresetsList();
     UpdateEffectCombo();
 }

@@ -28,6 +28,7 @@ typedef int socklen_t;
 #else
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
@@ -206,6 +207,19 @@ void GameTelemetryBridge::StartUdpListener()
         LOG_ERROR("[3DSpatial] game telemetry UDP: setsockopt(SO_REUSEADDR) failed");
     }
 
+    /* Wake regularly so the listener can stop: on Linux, closing a socket does not unblock a
+       recvfrom in another thread, and the join on unload would hang OpenRGB. */
+#ifdef _WIN32
+    const DWORD recv_timeout = 250;
+#else
+    timeval recv_timeout{};
+    recv_timeout.tv_usec = 250 * 1000;
+#endif
+    if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&recv_timeout, (socklen_t)sizeof(recv_timeout)) != 0)
+    {
+        LOG_ERROR("[3DSpatial] game telemetry UDP: setsockopt(SO_RCVTIMEO) failed");
+    }
+
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(kGameUdpPort);
@@ -243,12 +257,14 @@ void GameTelemetryBridge::StopUdpListener()
     }
 
     udp_running = false;
-    CloseSocketFd(udp_socket_fd);
 
+    /* Close after the join (the listener wakes every 250 ms): closing first lets another
+       thread reuse the descriptor. */
     if(udp_thread.joinable())
     {
         udp_thread.join();
     }
+    CloseSocketFd(udp_socket_fd);
 
 #ifdef _WIN32
     WSACleanup();

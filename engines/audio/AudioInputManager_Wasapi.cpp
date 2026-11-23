@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
+/* Windows capture (WASAPI). Linux and macOS: AudioInputManager_Unix.cpp. */
+
+#ifdef _WIN32
+
 #include "AudioInputManager.h"
 
 #include <algorithm>
@@ -8,7 +12,6 @@
 #include <vector>
 #include <atomic>
 
-#ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -20,9 +23,7 @@
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "Avrt.lib")
 #pragma comment(lib, "Mmdevapi.lib")
-#endif
 
-#ifdef _WIN32
 class AudioInputManager::WasapiCapturer
 {
 public:
@@ -168,12 +169,10 @@ private:
     QString dev_id;
     bool loopback = true;
 };
-#endif // _WIN32
 
 QStringList AudioInputManager::listInputDevices()
 {
     QStringList names;
-#ifdef _WIN32
     device_names.clear();
     device_ids.clear();
     device_is_loopback.clear();
@@ -244,7 +243,6 @@ QStringList AudioInputManager::listInputDevices()
     }
     if(enumerator) enumerator->Release();
     if(SUCCEEDED(coinithr)) CoUninitialize();
-#endif
     return names;
 }
 
@@ -253,25 +251,14 @@ void AudioInputManager::start()
     QMutexLocker lock(&mutex);
     if(running) return;
 
-#ifdef _WIN32
     if(selected_index < 0 || selected_index >= (int)device_ids.size()) return;
     if(capturer) { delete capturer; capturer = nullptr; }
-    if(selected_index < 0 || selected_index >= (int)device_ids.size())
-    {
-        return;
-    }
     QString devId = device_ids[selected_index];
     bool is_loop = (selected_index < (int)device_is_loopback.size()) ? device_is_loopback[selected_index] : true;
     capturer = new WasapiCapturer(this, devId, is_loop);
     running = true;
     resetAutoLevel();
     level_timer.start();
-    return;
-#else
-    running = true;
-    resetAutoLevel();
-    level_timer.start();
-#endif
 }
 
 void AudioInputManager::stop()
@@ -281,13 +268,11 @@ void AudioInputManager::stop()
 
     level_timer.stop();
 
-#ifdef _WIN32
     if(capturer)
     {
         delete capturer;
         capturer = nullptr;
     }
-#endif
     running = false;
     current_level.store(0.0f);
     resetAutoLevel();
@@ -302,3 +287,5 @@ void AudioInputManager::stop()
             std::fill(chroma12.begin(), chroma12.end(), 0.0f);
     }
 }
+
+#endif // _WIN32

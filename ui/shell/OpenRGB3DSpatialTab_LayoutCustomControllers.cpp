@@ -974,12 +974,19 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
     {
         try
         {
+            /* Sorted: directory order is arbitrary on Linux, so the list would shuffle. */
+            std::vector<filesystem::path> files;
             for(const filesystem::directory_entry& entry : filesystem::recursive_directory_iterator(dir_path))
             {
                 if(entry.is_regular_file() && entry.path().extension() == ".json")
                 {
-                    LoadControllerFromJsonFile(entry.path(), false);
+                    files.push_back(entry.path());
                 }
+            }
+            std::sort(files.begin(), files.end());
+            for(const filesystem::path& file : files)
+            {
+                LoadControllerFromJsonFile(file, false);
             }
         }
         catch(const std::exception& e)

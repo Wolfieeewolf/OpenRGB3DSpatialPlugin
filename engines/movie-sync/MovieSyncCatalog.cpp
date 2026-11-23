@@ -3,8 +3,10 @@
 #include "MovieSyncCatalog.h"
 
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <fstream>
 #include <system_error>
+#include <vector>
 
 namespace MovieSync
 {
@@ -143,9 +145,24 @@ void ScanCategoryFolders(const filesystem::path& movie_effects_dir, Catalog* out
     {
         return;
     }
-    for(const auto& cat_entry : filesystem::directory_iterator(movie_effects_dir, ec))
+    /* Sorted: directory order is arbitrary on Linux. */
+    auto sorted_entries = [](const filesystem::path& dir) {
+        std::vector<filesystem::directory_entry> entries;
+        std::error_code list_ec;
+        for(const auto& entry : filesystem::directory_iterator(dir, list_ec))
+        {
+            if(list_ec)
+            {
+                break;
+            }
+            entries.push_back(entry);
+        }
+        std::sort(entries.begin(), entries.end());
+        return entries;
+    };
+    for(const auto& cat_entry : sorted_entries(movie_effects_dir))
     {
-        if(ec || !cat_entry.is_directory())
+        if(!cat_entry.is_directory())
         {
             continue;
         }
@@ -154,10 +171,9 @@ void ScanCategoryFolders(const filesystem::path& movie_effects_dir, Catalog* out
         {
             continue;
         }
-        std::error_code ec2;
-        for(const auto& file_entry : filesystem::directory_iterator(cat_entry.path(), ec2))
+        for(const auto& file_entry : sorted_entries(cat_entry.path()))
         {
-            if(ec2 || !file_entry.is_regular_file())
+            if(!file_entry.is_regular_file())
             {
                 continue;
             }

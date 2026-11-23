@@ -81,7 +81,13 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
     const QStringList devs = AudioInputManager::instance()->listInputDevices();
     if(devs.isEmpty())
     {
+#if defined(__APPLE__)
+        ui->deviceRow->combo()->addItem(QStringLiteral("Audio capture is not available on macOS yet"));
+#elif defined(__linux__)
+        ui->deviceRow->combo()->addItem(QStringLiteral("No audio sources (needs pactl and parec)"));
+#else
         ui->deviceRow->combo()->addItem(QStringLiteral("No input devices detected"));
+#endif
         ui->deviceRow->combo()->setEnabled(false);
     }
     else

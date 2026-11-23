@@ -10,8 +10,11 @@
 #include <QTimer>
 #include <QString>
 #include <QStringList>
+#include <QByteArray>
 #include <atomic>
 #include <vector>
+
+class QProcess;
 
 class AudioInputManager : public QObject
 {
@@ -163,6 +166,12 @@ private:
     QStringList device_names;
     std::vector<QString> device_ids;
     std::vector<bool> device_is_loopback;
+#elif defined(__linux__)
+    /* PulseAudio / PipeWire source names; "parec" streams the chosen one as 16-bit mono. */
+    QProcess* parec = nullptr;
+    QStringList device_ids;
+    QByteArray parec_pending;
+    void readParec();
 #endif
 };
 

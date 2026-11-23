@@ -49,6 +49,12 @@ bool LinuxLoginWatcher::ResolveSessionPath()
                                                      static_cast<uint>(getpid()));
     if(!reply.isValid())
     {
+        /* Started by a systemd user service or autostart, OpenRGB belongs to no session;
+           "auto" picks the user's graphical session instead. */
+        reply = manager.call(QStringLiteral("GetSession"), QStringLiteral("auto"));
+    }
+    if(!reply.isValid())
+    {
         return false;
     }
     session_path_ = reply.value().path();

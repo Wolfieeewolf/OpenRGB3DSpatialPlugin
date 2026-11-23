@@ -5,12 +5,17 @@
 #include "ScreenCaptureDownscale.h"
 #include <chrono>
 #include <algorithm>
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <vector>
+#include <QCoreApplication>
 #include <QGuiApplication>
+#include <QMetaObject>
+#include <QObject>
 #include <QScreen>
 #include <QImage>
 
@@ -1547,13 +1552,24 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
 #else
 
+/* Receives grab requests on the GUI thread. Deleting it drops requests still queued, so none
+   can run after the capture threads stop or the plugin unloads. */
+static QObject* g_grab_context = nullptr;
+
 bool ScreenCaptureManager::InitializePlatform()
 {
+    if(!g_grab_context && QCoreApplication::instance())
+    {
+        g_grab_context = new QObject();
+        g_grab_context->moveToThread(QCoreApplication::instance()->thread());
+    }
     return true;
 }
 
 void ScreenCaptureManager::ShutdownPlatform()
 {
+    delete g_grab_context;
+    g_grab_context = nullptr;
 }
 
 void ScreenCaptureManager::EnumerateSourcesPlatform()
@@ -1640,6 +1656,52 @@ static QImage GrabScreenQt(QScreen* screen)
     return image;
 }
 
+namespace
+{
+struct GrabRequest
+{
+    std::mutex              mutex;
+    std::condition_variable ready;
+    QImage                  image;
+    bool                    screen_found = false;
+    bool                    done         = false;
+};
+
+/* QScreen::grabWindow and QPixmap belong to the GUI thread. Waits in short steps so a stop
+   request (which joins this thread from the GUI thread) can never deadlock. */
+bool GrabScreenFromWorker(int screen_index, const std::atomic<bool>& active, QImage& image, bool& screen_found)
+{
+    if(!g_grab_context)
+    {
+        return false;
+    }
+    std::shared_ptr<GrabRequest> request = std::make_shared<GrabRequest>();
+    QMetaObject::invokeMethod(g_grab_context, [request, screen_index]() {
+        QList<QScreen*> screens = QGuiApplication::screens();
+        QScreen* screen = (screen_index >= 0 && screen_index < screens.size()) ? screens[screen_index] : nullptr;
+        QImage grabbed = GrabScreenQt(screen);
+        std::lock_guard<std::mutex> lock(request->mutex);
+        request->image        = grabbed;
+        request->screen_found = (screen != nullptr);
+        request->done         = true;
+        request->ready.notify_one();
+    }, Qt::QueuedConnection);
+
+    std::unique_lock<std::mutex> lock(request->mutex);
+    while(!request->done)
+    {
+        if(!active.load())
+        {
+            return false;
+        }
+        request->ready.wait_for(lock, std::chrono::milliseconds(20));
+    }
+    image        = request->image;
+    screen_found = request->screen_found;
+    return true;
+}
+} // namespace
+
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 {
     std::atomic<bool>* active_flag = nullptr;
@@ -1671,6 +1733,17 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         return;
     }
 
+    if(QGuiApplication::platformName().startsWith(QLatin1String("wayland")))
+    {
+        LOG_WARNING("[ScreenCapture] Wayland does not allow screen grabbing; Screen Mirror stays dark. "
+                    "Use an X11 session instead.");
+        while(active_flag->load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        return;
+    }
+
     uint64_t frame_counter = 0;
     bool logged_screen_unavailable = false;
     bool logged_grab_failed = false;
@@ -1681,14 +1754,17 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         const int target_frame_time_ms = 1000 / (loop_fps > 0 ? loop_fps : 1);
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
 
-        QList<QScreen*> screens = QGuiApplication::screens();
-        QScreen* screen = nullptr;
-        if(screen_index >= 0 && screen_index < screens.size())
+        QImage image;
+        bool screen_found = false;
+        if(!GrabScreenFromWorker(screen_index, *active_flag, image, screen_found))
         {
-            screen = screens[screen_index];
+            if(active_flag->load())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            continue;
         }
-
-        if(!screen)
+        if(!screen_found)
         {
             if(!logged_screen_unavailable)
             {
@@ -1703,13 +1779,12 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             logged_screen_unavailable = false;
         }
 
-        QImage image = GrabScreenQt(screen);
         if(image.isNull())
         {
             if(!logged_grab_failed)
             {
                 LOG_WARNING("[ScreenCapture] QScreen::grabWindow failed for screen %d "
-                            "(Wayland may require portal permission; macOS needs Screen Recording)",
+                            "(macOS needs Screen Recording permission)",
                             screen_index);
                 logged_grab_failed = true;
             }

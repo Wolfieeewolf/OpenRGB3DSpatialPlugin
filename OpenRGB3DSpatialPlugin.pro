@@ -536,7 +536,8 @@ SOURCES += \
     shared/SpatialPatternKernels/SpatialPatternKernels.cpp \
     shared/SpatialPatternKernels/SpatialPatternPalettes.cpp \
     engines/audio/AudioInputManager.cpp \
-    engines/audio/AudioInputManager_Wasapi.cpp
+    engines/audio/AudioInputManager_Wasapi.cpp \
+    engines/audio/AudioInputManager_Unix.cpp
 
 win32:CONFIG += QTPLUGIN
 win32:LIBS += \
@@ -701,8 +702,9 @@ unix:!macx {
 
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
 macx:LIBS += -framework OpenGL -framework CoreFoundation -framework IOKit
-# Qt 6.8 links AGL by default; macOS 26 removed it and we never use it.
-macx:QMAKE_LIBS_OPENGL = -framework OpenGL
+# Qt 6.8's OpenGL libs pull in AGL, which macOS 26 removed and we never use: drop any
+# library nothing in the plugin references.
+macx:QMAKE_LFLAGS += -Wl,-dead_strip_dylibs
 # Find Qt frameworks OpenRGB.app does not ship next to the plugin.
 macx:QMAKE_LFLAGS += -Wl,-rpath,@loader_path
 

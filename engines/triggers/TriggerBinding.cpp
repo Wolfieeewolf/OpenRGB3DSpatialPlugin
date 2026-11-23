@@ -3,6 +3,7 @@
 #include "TriggerBinding.h"
 #include "Action.h"
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <random>
@@ -205,13 +206,22 @@ void LoadCatalog(const filesystem::path& dir, std::vector<Binding>* out, std::ve
     {
         return;
     }
+    /* Sorted: directory order is arbitrary on Linux, and the first copy of an id wins. */
+    std::vector<filesystem::path> files;
     for(const filesystem::directory_entry& ent : filesystem::directory_iterator(dir, ec))
     {
-        if(ec || !ent.is_regular_file())
+        if(ec)
         {
-            continue;
+            break;
         }
-        const filesystem::path path = ent.path();
+        if(ent.is_regular_file())
+        {
+            files.push_back(ent.path());
+        }
+    }
+    std::sort(files.begin(), files.end());
+    for(const filesystem::path& path : files)
+    {
         if(path.extension() != ".json")
         {
             continue;
