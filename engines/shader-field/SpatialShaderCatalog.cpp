@@ -67,14 +67,14 @@ bool IsEffectShaderHeaderKey(const QString& key)
         || key == QStringLiteral("param") || key == QStringLiteral("pattern_key") || key == QStringLiteral("colors")
         || key == QStringLiteral("supports_strip_colormap") || key == QStringLiteral("supports_height_bands")
         || key == QStringLiteral("slider") || key == QStringLiteral("resolution") || key == QStringLiteral("rainbow")
-        || key == QStringLiteral("needs_frequency") || key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis")
+        || key == QStringLiteral("needs_frequency")
         || key == QStringLiteral("user_colors") || key == QStringLiteral("pattern_label")
         || key == QStringLiteral("combo") || key == QStringLiteral("option") || key == QStringLiteral("pattern_index")
         || key == QStringLiteral("pattern_source") || key == QStringLiteral("sample")
         || key == QStringLiteral("flow") || key == QStringLiteral("global") || key == QStringLiteral("media")
         || key == QStringLiteral("drive") || key == QStringLiteral("audio_preset") || key == QStringLiteral("audio_media")
         || key == QStringLiteral("shader") || key == QStringLiteral("media_layout")
-        || key == QStringLiteral("instances") || key == QStringLiteral("soft_catch");
+        || key == QStringLiteral("instances");
 }
 
 } // namespace

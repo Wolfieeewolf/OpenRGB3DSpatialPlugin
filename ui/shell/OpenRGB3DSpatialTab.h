@@ -401,7 +401,6 @@ private:
     bool IsAmbilightEffectClass(const std::string& class_name) const;
     bool PlaybackUsesScreenMirror() const;
     void SyncScreenCaptureSession();
-    bool PlaybackUsesReactive() const;
     void SyncReactiveInputSession();
     void UpdateAudioPanelVisibility();
     bool IsAudioEffectClass(const std::string& class_name) const;

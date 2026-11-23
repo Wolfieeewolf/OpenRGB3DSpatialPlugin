@@ -1377,8 +1377,8 @@ void SpatialEffect3D::FillOverlayPattern(GpuRoomGridOverlayLayer& out, float tim
     out.pattern_dir_deg = GetEffectStripColormapDirectionDeg();
     out.pattern_feature = std::max(0.05f, GetNormalizedSize());
 
-    /* EffectPhaseOnly uses one strip position for the whole room — compute it exactly as
-       SampleEffectStripColormap01 does (phase 0, Speed-scaled seconds). */
+    /* EffectPhaseOnly uses one strip position for the whole room: same clock and formula as
+       SampleEffectStripColormap01 (phase 0, Speed-scaled seconds). */
     const float freq_norm = std::clamp(0.35f + GetNormalizedFrequency() * 1.2f, 0.25f, 2.5f);
     const float detail_norm = std::clamp(0.35f + GetNormalizedDetail() * 1.2f, 0.25f, 2.5f);
     float phase_eff = 0.0f;
@@ -1386,7 +1386,10 @@ void SpatialEffect3D::FillOverlayPattern(GpuRoomGridOverlayLayer& out, float tim
     float rep_eff = 1.0f;
     StripColormapClockScale(freq_norm, detail_norm, GetEffectStripColormapRepeats(), 0.0f,
                             GetMotionSeconds(time), phase_eff, time_eff, rep_eff);
-    out.pattern_phase_s01 = std::clamp(std::fmod(phase_eff + time_eff * 0.12f + 1000.0f, 1.0f), 0.0f, 1.0f);
+    float phase_use = 0.0f;
+    float time_use = 0.0f;
+    out.pattern_phase_s01 = StripColormapComputeS01((int)StripPatternSurface::UnfoldMode::EffectPhaseOnly, 0.0f,
+                                                    phase_eff, time_eff, 0.0f, 0.0f, 0.0f, phase_use, time_use);
     out.pattern_on = true;
 }
 

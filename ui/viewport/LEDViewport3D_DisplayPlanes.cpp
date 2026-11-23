@@ -545,6 +545,7 @@ void LEDViewport3D::DrawRoomGridOverlay()
     for(int i = 0; i < GpuRoomGridOverlayLayer::kMaxLayers; ++i)
     {
         const char* atlas_name = (i == 0) ? "u_atlas0" : (i == 1) ? "u_atlas1" : (i == 2) ? "u_atlas2" : "u_atlas3";
+        const char* pat_name = (i == 0) ? "u_pat0" : (i == 1) ? "u_pat1" : (i == 2) ? "u_pat2" : "u_pat3";
         glActiveTexture(GL_TEXTURE0 + i);
         if(i < layer_count)
         {
@@ -651,7 +652,6 @@ void LEDViewport3D::DrawRoomGridOverlay()
             set_m3("u_rot", layer.rot_inv);
             /* Colors and patterns: pattern texture on unit 4 + i (atlases use 0..3). */
             {
-                const char* pat_name = (i == 0) ? "u_pat0" : (i == 1) ? "u_pat1" : (i == 2) ? "u_pat2" : "u_pat3";
                 glActiveTexture(GL_TEXTURE4 + i);
                 glBindTexture(GL_TEXTURE_2D, layer.pattern_tex);
                 gl_prog_volume_atlas_point_.SetUniform1i(pat_name, 4 + i);
@@ -676,7 +676,6 @@ void LEDViewport3D::DrawRoomGridOverlay()
         {
             glBindTexture(GL_TEXTURE_2D, 0);
             gl_prog_volume_atlas_point_.SetUniform1i(atlas_name, i);
-            const char* pat_name = (i == 0) ? "u_pat0" : (i == 1) ? "u_pat1" : (i == 2) ? "u_pat2" : "u_pat3";
             glActiveTexture(GL_TEXTURE4 + i);
             glBindTexture(GL_TEXTURE_2D, 0);
             gl_prog_volume_atlas_point_.SetUniform1i(pat_name, 4 + i);

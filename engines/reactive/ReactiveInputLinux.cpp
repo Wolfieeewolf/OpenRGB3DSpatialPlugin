@@ -273,7 +273,7 @@ public:
                 continue;
             }
             const std::string path = std::string("/dev/input/") + entry->d_name;
-            if(devices_.count(path) || ignored_.count(path))
+            if(devices_.count(path))
             {
                 continue;
             }
@@ -286,11 +286,11 @@ public:
                 }
                 continue;
             }
+            /* Re-checked every scan: a freed eventN path can come back as a different device. */
             Device device;
             if(!Describe(fd, &device))
             {
                 close(fd);
-                ignored_.insert(path);
                 continue;
             }
             devices_[path] = device;
@@ -538,7 +538,6 @@ private:
 
     const Reader::Sink& sink_;
     std::map<std::string, Device> devices_;
-    std::set<std::string> ignored_;
     std::uint32_t next_pad_ = 0;
     bool warned_ = false;
     bool want_keyboard_ = true;

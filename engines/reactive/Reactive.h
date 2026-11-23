@@ -15,11 +15,12 @@ class Reactive : public SpatialEffect3D
     Q_OBJECT
 
 public:
-    /* Which presses start waves (the Keyboard / Mouse / Gamepad ticks). */
-    bool SourceEnabled(ReactiveSourceKind kind) const;
     explicit Reactive(QWidget* parent = nullptr);
 
     EffectInfo3D GetEffectInfo() const override;
+
+    /* Which presses start waves (the Keyboard / Mouse / Gamepad ticks). */
+    bool SourceEnabled(ReactiveSourceKind kind) const;
     void SetupCustomUI(QWidget* parent) override;
     void PrepareGpuFields(std::uint64_t render_sequence, float time_sec, const GridContext3D& grid) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;

@@ -1047,25 +1047,6 @@ void OpenRGB3DSpatialTab::SyncScreenCaptureSession()
     capture_mgr.SetCaptureSessionActive(want_capture);
 }
 
-bool OpenRGB3DSpatialTab::PlaybackUsesReactive() const
-{
-    for(size_t i = 0; i < effect_stack.size(); i++)
-    {
-        const std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
-        if(inst && inst->enabled && inst->effect_class_name == "Reactive")
-        {
-            return true;
-        }
-    }
-
-    if(effect_stack.empty() && current_effect_ui)
-    {
-        return dynamic_cast<Reactive*>(current_effect_ui) != nullptr;
-    }
-
-    return false;
-}
-
 void OpenRGB3DSpatialTab::SyncReactiveInputSession()
 {
     ReactiveInputManager* mgr = ReactiveInputManager::instance();
@@ -1098,7 +1079,7 @@ void OpenRGB3DSpatialTab::SyncReactiveInputSession()
     }
     mgr->setWantedKinds(keyboard, mouse, gamepad);
 
-    const bool want = effect_running && PlaybackUsesReactive() && mgr->isInputAllowed() && mgr->wantsAnyKind();
+    const bool want = effect_running && mgr->isInputAllowed() && mgr->wantsAnyKind();
     if(want)
     {
         mgr->start();

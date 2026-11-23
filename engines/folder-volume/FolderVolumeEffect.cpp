@@ -917,10 +917,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         {
             /* Pattern is the colour; the look's own brightness (strongest channel) is the shape. */
             const float v = std::clamp(std::max(samp.x(), std::max(samp.y(), samp.z())), 0.0f, 1.0f);
-            const RGBColor c = ResolvePatternColor(time, grid, origin, rotated_pos);
-            return ToRGBColor((int)((float)(c & 0xFF) * v + 0.5f),
-                              (int)((float)((c >> 8) & 0xFF) * v + 0.5f),
-                              (int)((float)((c >> 16) & 0xFF) * v + 0.5f));
+            return ScaleRGBColor(ResolvePatternColor(time, grid, origin, rotated_pos), v);
         }
         return ToRGBColor((int)(std::clamp(samp.x(), 0.0f, 1.0f) * 255.0f + 0.5f),
                           (int)(std::clamp(samp.y(), 0.0f, 1.0f) * 255.0f + 0.5f),
@@ -1038,11 +1035,7 @@ RGBColor FolderVolumeEffect::CalculateColorGrid(float x, float y, float z, float
         if(UseEffectStripColormap())
         {
             /* Pattern is the colour; the effect value is the shape mask. */
-            const RGBColor c = ResolvePatternColor(time, grid, origin, rotated_pos);
-            const int r = std::clamp((int)((float)(c & 0xFF) * val), 0, 255);
-            const int g = std::clamp((int)((float)((c >> 8) & 0xFF) * val), 0, 255);
-            const int b = std::clamp((int)((float)((c >> 16) & 0xFF) * val), 0, 255);
-            return (RGBColor)((b << 16) | (g << 8) | r);
+            return ScaleRGBColor(ResolvePatternColor(time, grid, origin, rotated_pos), val);
         }
         if(GetRainbowMode())
         {

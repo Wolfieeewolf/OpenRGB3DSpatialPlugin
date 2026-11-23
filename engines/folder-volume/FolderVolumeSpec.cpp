@@ -241,11 +241,6 @@ FolderVolumeSpec ReadSpec(const QString& path)
         {
             spec.needs_frequency = val == QStringLiteral("true");
         }
-        else if(key == QStringLiteral("needs_arms") || key == QStringLiteral("show_axis")
-                || key == QStringLiteral("soft_catch"))
-        {
-            /* Catalog / UI hints — ignore so later finish/param/slider lines still parse. */
-        }
         else if(key == QStringLiteral("user_colors"))
         {
             spec.user_colors = val.toInt();
@@ -316,10 +311,7 @@ FolderVolumeSpec ReadSpec(const QString& path)
                 && key != QStringLiteral("audio_media")
                 && key != QStringLiteral("shader")
                 && key != QStringLiteral("media_layout")
-                && key != QStringLiteral("instances")
-                && key != QStringLiteral("needs_arms")
-                && key != QStringLiteral("show_axis")
-                && key != QStringLiteral("soft_catch"))
+                && key != QStringLiteral("instances"))
         {
             break;
         }

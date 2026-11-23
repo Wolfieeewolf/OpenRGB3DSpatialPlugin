@@ -57,7 +57,7 @@ bool IsFsHeaderKey(const QString& key)
     static const char* kKeys[] = {
         "name", "description", "section", "pattern", "index", "palette", "class", "category",
         "finish", "param", "pattern_key", "colors", "supports_strip_colormap", "supports_height_bands",
-        "slider", "resolution", "rainbow", "needs_frequency", "needs_arms", "show_axis",
+        "slider", "resolution", "rainbow", "needs_frequency",
         "user_colors", "pattern_label", "combo", "option", "pattern_index", "pattern_source",
         "sample", "flow", "global", "media", "drive", "audio_preset", "audio_media", "shader",
         "media_layout", "instances", "duration_ms", "loop", "swatch"

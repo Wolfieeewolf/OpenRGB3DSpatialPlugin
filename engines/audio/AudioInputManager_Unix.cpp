@@ -143,7 +143,8 @@ void AudioInputManager::readParec()
         return;
     }
     parec_pending.append(parec->readAllStandardOutput());
-    const int whole = (int)(parec_pending.size() / (int)sizeof(int16_t)) * (int)sizeof(int16_t);
+    /* An odd trailing byte waits for its other half. */
+    const qsizetype whole = parec_pending.size() - parec_pending.size() % (qsizetype)sizeof(int16_t);
     if(whole <= 0)
     {
         return;

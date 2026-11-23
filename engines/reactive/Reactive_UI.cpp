@@ -114,9 +114,9 @@ void Reactive::SetupCustomUI(QWidget* parent)
 
     EffectUiRows::AppendInfoLabel(
         layout,
-        QStringLiteral("While this effect plays, the plugin sees every key, mouse button and gamepad button "
-                       "you press, in any app, to know where to start a wave. Presses are never saved, "
-                       "logged or sent anywhere, and nothing is read while the effect is stopped."));
+        QStringLiteral("While this effect plays, the plugin sees what you press on the devices ticked below, "
+                       "in any app, to know where to start a wave. Presses are never saved, logged or sent "
+                       "anywhere, and nothing is read while the effect is stopped."));
 #if defined(__linux__)
     EffectUiRows::AppendInfoLabel(
         layout,
@@ -132,7 +132,7 @@ void Reactive::SetupCustomUI(QWidget* parent)
         layout,
         QStringLiteral("Allow reading keys and buttons (all Reactive effects)"),
         input->isInputAllowed(),
-        QStringLiteral("Off: the plugin never reads your keyboard, mouse or gamepad. Reactive effects stay dark."));
+        QStringLiteral("Off: the plugin never reads your keyboard, mouse or gamepad, and Reactive effects make no waves."));
     if(allow_row && allow_row->checkBox())
     {
         QCheckBox* box = allow_row->checkBox();

@@ -38,6 +38,24 @@
 namespace
 {
 constexpr int kEdgeCap = 32;
+/* Same key from two devices within this window counts once. */
+constexpr unsigned long long kDuplicatePressMs = 80;
+
+unsigned long long NowMs()
+{
+    return (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+unsigned KindBit(ReactiveSourceKind kind)
+{
+    return 1u << static_cast<unsigned>(kind);
+}
+
+bool WantsKind(unsigned wanted, ReactiveSourceKind kind)
+{
+    return (wanted & KindBit(kind)) != 0;
+}
 
 std::string ToLowerCopy(const std::string& s)
 {
@@ -595,7 +613,7 @@ public:
     void PushEdge(uint32_t packed, bool down_now, uint16_t vid = 0, uint16_t pid = 0)
     {
         QMutexLocker lock(&mutex);
-        if(!running.load() || (wanted_kinds & (1u << static_cast<unsigned>(UnpackKind(packed)))) == 0)
+        if(!running.load() || !WantsKind(wanted_kinds, UnpackKind(packed)))
         {
             return;
         }
@@ -603,13 +621,12 @@ public:
         if(down_now && UnpackKind(packed) == ReactiveSourceKind::Keyboard)
         {
             const uint32_t vk = UnpackVk(packed);
-            const unsigned long long now_ms = (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now().time_since_epoch()).count();
+            const unsigned long long now_ms = NowMs();
             const unsigned long long prev_ms = last_press_ms.load();
             const uint32_t prev_vk = last_press_vk.load();
             const uint32_t prev_id = last_press_vidpid.load();
             const uint32_t id = (static_cast<uint32_t>(vid) << 16) | pid;
-            if(prev_ms != 0 && now_ms >= prev_ms && (now_ms - prev_ms) < 80ull &&
+            if(prev_ms != 0 && now_ms >= prev_ms && (now_ms - prev_ms) < kDuplicatePressMs &&
                prev_vk == vk && prev_id != 0 && id != prev_id)
             {
                 return;
@@ -1026,14 +1043,6 @@ ReactiveInputManager::~ReactiveInputManager()
     impl_ = nullptr;
 }
 
-namespace
-{
-unsigned KindBit(ReactiveSourceKind kind)
-{
-    return 1u << static_cast<unsigned>(kind);
-}
-}
-
 void ReactiveInputManager::setWantedKinds(bool keyboard, bool mouse, bool gamepad)
 {
     const unsigned wanted = (keyboard ? KindBit(ReactiveSourceKind::Keyboard) : 0u) |
@@ -1075,9 +1084,6 @@ void ReactiveInputManager::start()
         return;
     }
     const unsigned wanted = wanted_kinds_.load();
-    const bool want_keyboard = (wanted & KindBit(ReactiveSourceKind::Keyboard)) != 0;
-    const bool want_mouse = (wanted & KindBit(ReactiveSourceKind::Mouse)) != 0;
-    const bool want_gamepad = (wanted & KindBit(ReactiveSourceKind::Gamepad)) != 0;
     impl_->wanted_kinds = wanted;
 #ifdef _WIN32
     if(!impl_->sink)
@@ -1101,12 +1107,12 @@ void ReactiveInputManager::start()
         d.dwFlags     = RIDEV_INPUTSINK;
         d.hwndTarget  = target;
     };
-    if(want_keyboard)
+    if(WantsKind(wanted, ReactiveSourceKind::Keyboard))
     {
         add_usage(0x06);
         add_usage(0x07);
     }
-    if(want_mouse)
+    if(WantsKind(wanted, ReactiveSourceKind::Mouse))
     {
         add_usage(0x02);
     }
@@ -1118,11 +1124,6 @@ void ReactiveInputManager::start()
         impl_->watcher = nullptr;
         return;
     }
-    (void)want_gamepad;
-#else
-    (void)want_keyboard;
-    (void)want_mouse;
-    (void)want_gamepad;
 #endif
     {
         QMutexLocker lock(&impl_->mutex);
@@ -1135,9 +1136,9 @@ void ReactiveInputManager::start()
         [impl](const ReactiveLinuxInput::Edge& edge) {
             impl->PushEdge(PackId(edge.kind, edge.payload, edge.pad), edge.down, edge.vid, edge.pid);
         },
-        want_keyboard,
-        want_mouse,
-        want_gamepad);
+        WantsKind(wanted, ReactiveSourceKind::Keyboard),
+        WantsKind(wanted, ReactiveSourceKind::Mouse),
+        WantsKind(wanted, ReactiveSourceKind::Gamepad));
 #endif
 }
 
@@ -1193,7 +1194,7 @@ void ReactiveInputManager::CopyOriginEdgesForFrame(std::uint64_t frame_key,
         return;
     }
 #ifdef _WIN32
-    if(impl_->running.load() && (impl_->wanted_kinds & (1u << static_cast<unsigned>(ReactiveSourceKind::Gamepad))))
+    if(impl_->running.load() && WantsKind(impl_->wanted_kinds, ReactiveSourceKind::Gamepad))
     {
         impl_->PollXInput();
     }
@@ -1228,9 +1229,7 @@ void ReactiveInputManager::CopyOriginEdgesForFrame(std::uint64_t frame_key,
         impl_->edges.fill(EdgeSlot{});
         impl_->edge_head = 0;
         impl_->edge_count = 0;
-        const unsigned long long now_ms = (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
-        if(now_ms - impl_->last_press_ms.load() >= 80ull)
+        if(NowMs() - impl_->last_press_ms.load() >= kDuplicatePressMs)
         {
             impl_->last_press_ms.store(0);
             impl_->last_press_vk.store(0);
