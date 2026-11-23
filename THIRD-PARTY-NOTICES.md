@@ -37,7 +37,6 @@ Some of these provided ideas and techniques only; from others, code was adapted.
 | [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) ([openrgb.org](https://openrgb.org/)) | GPL-2.0-or-later |
 | [OpenRGB Effects Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBEffectsPlugin) | GPL-2.0-or-later |
 | [CarbonRGB](https://gitlab.com/kakewhinter/carbonrgb) | GPL-2.0-or-later |
-| [LightTrackPlugin](https://github.com/qiangqiang101/LightTrackPlugin/tree/devdev) | GPL-2.0 |
 | [WLED](https://github.com/wled/WLED) | EUPL-1.2 |
 | [FastLED](https://github.com/FastLED/FastLED) | MIT |
 | [LedFx](https://github.com/LedFx/LedFx) | GPL-3.0 |
@@ -47,7 +46,11 @@ Some of these provided ideas and techniques only; from others, code was adapted.
 | [Godot VFX Library](https://github.com/haowg/GODOT-VFX-LIBRARY) | MIT |
 | [ShaderParticleEngine](https://github.com/squarefeet/ShaderParticleEngine) | MIT |
 | [tsParticles](https://github.com/tsparticles/tsparticles) | MIT |
-| [Pixelblaze](https://github.com/simap/pixelblaze) patterns and LED mapping | No licence stated (ideas only) |
+| [Pixelblaze](https://github.com/simap/pixelblaze) patterns, pattern library and LED mapping | No licence stated (ideas only) |
+| Arduino 8×8×8 LED cube sketch by Chris | No licence stated (ideas only) |
+| 16×16×16 (4096 LED) cube project | No licence stated (ideas only) |
+| [Effekseer](https://effekseer.github.io/en/index.html) sample effects and community effect packs | Per pack (ideas only) |
+| Blood: Coagulated voxel mod by Cheello and Adam Matthews | Ideas only |
 | [Particleify](https://particleify.talizen.com/generator) | Website (ideas only) |
 | [Shadertoy](https://www.shadertoy.com/) and its shader authors | Per shader; CC BY-NC-SA 3.0 by default |
 | [Sketchfab](https://sketchfab.com/feed) | Per model (ideas only) |
