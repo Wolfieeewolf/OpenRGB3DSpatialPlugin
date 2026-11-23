@@ -24,6 +24,9 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <cstdio>
+#include <fstream>
 #endif
 
 namespace
@@ -34,7 +37,6 @@ static GridContext3D g_publish_room_grid(0, 1, 0, 1, 0, 1, 10.0f);
 static std::vector<float> g_frame_led_xyz;
 static std::vector<std::uint32_t> g_last_important_cells;
 
-#ifdef _WIN32
 static unsigned long long NowMs()
 {
     return (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -117,6 +119,7 @@ static void BuildImportantCubemapTexels(const RoomSampleFrameProtocol::ConfigHea
     std::sort(out.begin(), out.end());
 }
 
+#ifdef _WIN32
 static bool WriteConfigFile(const RoomSampleFrameProtocol::ConfigHeader& hdr,
                             const std::vector<std::uint32_t>& important_cells)
 {
@@ -159,6 +162,34 @@ static bool WriteConfigFile(const RoomSampleFrameProtocol::ConfigHeader& hdr,
     CloseHandle(file);
     return true;
 }
+#else
+/* Written to a temporary file and renamed over the old one, so the mod never reads half a file. */
+static bool WriteConfigFile(const RoomSampleFrameProtocol::ConfigHeader& hdr,
+                            const std::vector<std::uint32_t>& important_cells)
+{
+    if(!RoomSampleShmPaths::EnsureBaseDir())
+    {
+        return false;
+    }
+    const std::string path = RoomSampleShmPaths::ConfigFilePath();
+    const std::string temp = path + ".tmp";
+    {
+        std::ofstream file(temp, std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(&hdr), sizeof(hdr));
+        if(!important_cells.empty())
+        {
+            file.write(reinterpret_cast<const char*>(important_cells.data()),
+                       (std::streamsize)(important_cells.size() * sizeof(std::uint32_t)));
+        }
+        if(!file.flush())
+        {
+            std::remove(temp.c_str());
+            return false;
+        }
+    }
+    return std::rename(temp.c_str(), path.c_str()) == 0;
+}
+#endif
 
 static std::uint32_t HashConfig(const RoomSampleFrameProtocol::ConfigHeader& h,
                                 const std::vector<std::uint32_t>& important_cells)
@@ -185,7 +216,6 @@ static std::uint32_t HashConfig(const RoomSampleFrameProtocol::ConfigHeader& h,
     }
     return hash;
 }
-#endif
 }
 
 namespace RoomSampleConfigPublisher
@@ -220,15 +250,6 @@ void PublishIfNeeded(const GridContext3D& grid,
                      float effect_origin_z,
                      float room_to_world_scale)
 {
-#ifndef _WIN32
-    (void)grid;
-    (void)settings;
-    (void)effect_origin_x;
-    (void)effect_origin_y;
-    (void)effect_origin_z;
-    (void)room_to_world_scale;
-    return;
-#else
     static std::uint32_t last_hash = 0;
     static unsigned long long last_write_ms = 0;
     const unsigned long long now = NowMs();
@@ -348,7 +369,6 @@ void PublishIfNeeded(const GridContext3D& grid,
 
     last_hash = hash;
     last_write_ms = now;
-#endif
 }
 
 bool GetLastPublishedConfig(RoomSampleFrameProtocol::ConfigHeader& out)
@@ -368,7 +388,6 @@ const std::vector<std::uint32_t>& GetLastImportantCells()
 
 void Disable()
 {
-#ifdef _WIN32
     RoomSampleFrameProtocol::ConfigHeader hdr{};
     hdr.magic = RoomSampleFrameProtocol::kConfigMagic;
     hdr.version = RoomSampleFrameProtocol::kVersion;
@@ -379,7 +398,6 @@ void Disable()
     WriteConfigFile(hdr, {});
     g_has_last_config = false;
     g_last_important_cells.clear();
-#endif
 }
 
 }

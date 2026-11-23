@@ -11,6 +11,7 @@
 #include <atomic>
 #include <thread>
 #include <cstdint>
+#include <functional>
 
 struct CaptureSourceInfo
 {
@@ -61,6 +62,11 @@ public:
     void SetCaptureSessionActive(bool active);
     bool IsCaptureSessionActive() const { return capture_session_active.load(); }
 
+    /* Wayland: the portal's restore token remembers which monitors the user agreed to share,
+       so the dialog only appears once. The saver is called whenever the portal issues a new one. */
+    void SetScreenShareRestoreToken(const std::string& token) { screen_share_token = token; }
+    void SetScreenShareTokenSaver(std::function<void(const std::string&)> saver) { screen_share_token_saver = std::move(saver); }
+
 private:
     ScreenCaptureManager();
     ~ScreenCaptureManager();
@@ -92,6 +98,9 @@ private:
     mutable std::mutex                      threads_mutex;
     std::map<std::string, std::thread>      capture_threads;
     std::map<std::string, std::atomic<bool>> capture_active;
+
+    std::string                             screen_share_token;
+    std::function<void(const std::string&)> screen_share_token_saver;
 };
 
 #endif

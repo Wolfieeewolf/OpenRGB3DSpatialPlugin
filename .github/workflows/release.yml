@@ -259,8 +259,8 @@ jobs:
           5. Get the **current** looks from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — the plugin ships with no effects of its own, and older copies run at the wrong speed with this version.
 
           **Status:** tested on Windows only. Please [report](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new/choose) what you see, with your GPU, driver and OpenRGB log.
-          - **Linux:** audio effects need `pactl` and `parec` (pulseaudio-utils; libpulse on Arch). Screen Mirror needs an X11 session for now. Reactive keyboard/mouse needs your user in the `input` group. Minecraft Room Ambilight is Windows-only for now.
-          - **macOS (experimental, untested):** audio effects do not work (OpenRGB does not ask macOS for audio permission); Reactive keyboard/mouse and Minecraft Room Ambilight are Windows-only. Screen Mirror needs Screen Recording permission. Everything else should work.
+          - **Linux:** audio effects need `pactl` and `parec` (pulseaudio-utils; libpulse on Arch). On Wayland, Screen Mirror asks once which monitors to share (needs PipeWire and xdg-desktop-portal). Reactive keyboard/mouse needs your user in the `input` group.
+          - **macOS (experimental, untested):** audio effects do not work (OpenRGB does not ask macOS for audio permission); Reactive keyboard/mouse is not available yet. Screen Mirror needs Screen Recording permission. Everything else should work.
 
           Getting started guide: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/wiki/Getting-Started
 

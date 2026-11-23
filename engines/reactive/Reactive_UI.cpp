@@ -116,7 +116,9 @@ void Reactive::SetupCustomUI(QWidget* parent)
         layout,
         QStringLiteral("While this effect plays, the plugin sees what you press on the devices ticked below, "
                        "in any app, to know where to start a wave. Presses are never saved, logged or sent "
-                       "anywhere, and nothing is read while the effect is stopped."));
+                       "anywhere, and nothing is read while the effect is stopped. Keys typed in password "
+                       "fields are ignored (on Linux, in apps that support accessibility). Other private "
+                       "fields, such as card numbers, look like ordinary text boxes and cannot be detected."));
 #if defined(__linux__)
     EffectUiRows::AppendInfoLabel(
         layout,

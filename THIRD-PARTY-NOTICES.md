@@ -11,6 +11,7 @@ OpenRGB 3D Spatial LED Control is licensed under the GNU General Public License,
 | [Open Asset Import Library (Assimp)](https://github.com/assimp/assimp) | BSD-3-Clause | Mesh import; linked statically (`dependencies/assimp` submodule) |
 | Libraries built into Assimp | Various permissive | pugixml (MIT), RapidJSON (MIT), Clipper (Boost Software License 1.0), poly2tri (BSD-3-Clause), Open3DGC (MIT), OpenDDL Parser (MIT), utf8cpp (BSL-1.0), stb (MIT or public domain), minizip (zlib), kuba--/zip (Unlicense) and miniz (MIT). Licence texts are in `dependencies/assimp/contrib/`. |
 | [zlib](https://zlib.net/) | zlib | Linked statically on Windows; the system zlib is used on Linux and macOS |
+| [PipeWire](https://pipewire.org/) and SPA headers | MIT | Linux only: inline helpers from the headers, for Screen Mirror on Wayland. The system's libpipewire is loaded at run time and not shipped. |
 
 The Assimp licence requires this notice: *Copyright (c) 2006-2026, assimp team. All rights reserved.* The full text is in [`dependencies/assimp/LICENSE`](dependencies/assimp/LICENSE).
 
@@ -50,6 +51,8 @@ Some of these provided ideas and techniques only; from others, code was adapted.
 | 16×16×16 (4096 LED) cube project | No licence stated (ideas only) |
 | [Effekseer](https://effekseer.github.io/en/index.html) sample effects and community effect packs | Per pack (ideas only) |
 | Blood: Coagulated voxel mod by Cheello and Adam Matthews | Ideas only |
+| [Vixen](https://github.com/VixenLights/Vixen) sequencer and editor layout | Ideas only |
+| [xLights](https://github.com/xLightsSequencer/xLights) sequencer timeline and 3D layout | Ideas only |
 | [Particleify](https://particleify.talizen.com/generator) | Website (ideas only) |
 | [Shadertoy](https://www.shadertoy.com/) and its shader authors | Per shader; CC BY-NC-SA 3.0 by default |
 | [Sketchfab](https://sketchfab.com/feed) | Per model (ideas only) |

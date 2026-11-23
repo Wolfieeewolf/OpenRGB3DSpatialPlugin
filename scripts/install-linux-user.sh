@@ -16,7 +16,7 @@ fi
 cd "$ROOT"
 QM="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
 if [ -z "$QM" ]; then
-  echo "qmake6 not found. On CachyOS: pacman -S qt6-base qt6-tools mesa glu"
+  echo "qmake6 not found. On CachyOS: pacman -S qt6-base qt6-tools mesa glu libpipewire"
   exit 1
 fi
 

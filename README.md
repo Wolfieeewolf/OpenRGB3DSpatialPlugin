@@ -64,7 +64,7 @@ Download the files for your system from the [latest release](https://github.com/
 * The Flatpak version of OpenRGB cannot load external plugins.
 * Audio effects need `pactl` and `parec` (the `pulseaudio-utils` package, or `libpulse` on Arch). They work with PulseAudio and PipeWire.
 * Reactive effects read input devices directly, which requires your user to be in the `input` group.
-* Screen Mirror currently requires an X11 session.
+* On Wayland, Screen Mirror asks once which monitors to share. It needs PipeWire and xdg-desktop-portal, which most desktops include.
 
 ## Getting started
 

@@ -21,11 +21,12 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <fstream>
 #endif
 
 namespace
 {
-#ifdef _WIN32
 static unsigned long long NowMs()
 {
     return (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -33,6 +34,7 @@ static unsigned long long NowMs()
         .count();
 }
 
+#ifdef _WIN32
 static bool ReadMappedOrFileBytes(const std::wstring& path, std::vector<unsigned char>& out_bytes)
 {
     out_bytes.clear();
@@ -92,6 +94,48 @@ static bool ReadMappedOrFileBytes(const std::wstring& path, std::vector<unsigned
     CloseHandle(file);
     return true;
 }
+#else
+/* The mod maps the same file; a plain read sees its writes through the page cache. Reads only
+   the header and the payload it names, then checks the sequence did not move meanwhile. */
+static bool ReadMappedOrFileBytes(const std::string& path, std::vector<unsigned char>& out_bytes)
+{
+    using RoomSampleFrameProtocol::FrameHeader;
+    out_bytes.clear();
+    std::ifstream file(path, std::ios::binary);
+    if(!file)
+    {
+        return false;
+    }
+    FrameHeader hdr{};
+    if(!file.read(reinterpret_cast<char*>(&hdr), sizeof(hdr)) || (hdr.sequence & 1u))
+    {
+        return false;
+    }
+    std::size_t total = sizeof(hdr);
+    if(hdr.header_bytes == RoomSampleFrameProtocol::kFrameHeaderBytes &&
+       (std::size_t)hdr.header_bytes + hdr.rgba_stored_size <= RoomSampleFrameProtocol::kShmTotalBytes)
+    {
+        total = (std::size_t)hdr.header_bytes + hdr.rgba_stored_size;
+    }
+    out_bytes.resize(total);
+    std::memcpy(out_bytes.data(), &hdr, sizeof(hdr));
+    if(total > sizeof(hdr) &&
+       !file.read(reinterpret_cast<char*>(out_bytes.data() + sizeof(hdr)), (std::streamsize)(total - sizeof(hdr))))
+    {
+        out_bytes.clear();
+        return false;
+    }
+    std::uint32_t sequence_after = 0;
+    file.seekg((std::streamoff)offsetof(FrameHeader, sequence));
+    if(!file.read(reinterpret_cast<char*>(&sequence_after), sizeof(sequence_after)) ||
+       sequence_after != hdr.sequence)
+    {
+        out_bytes.clear();
+        return false;
+    }
+    return true;
+}
+#endif
 
 static bool PeekFrameId(const unsigned char* base, std::size_t view_size, std::uint32_t& frame_id_out)
 {
@@ -225,7 +269,6 @@ static bool ReadSnapshot(const unsigned char* base,
     }
     return true;
 }
-#endif
 }
 
 RoomSampleFrameShmReader::RoomSampleFrameShmReader() = default;
@@ -237,13 +280,11 @@ RoomSampleFrameShmReader::~RoomSampleFrameShmReader()
 
 void RoomSampleFrameShmReader::Start()
 {
-#ifdef _WIN32
     if(running_.exchange(true))
     {
         return;
     }
     thread_ = std::thread(&RoomSampleFrameShmReader::PollLoop, this);
-#endif
 }
 
 void RoomSampleFrameShmReader::Stop()
@@ -260,7 +301,6 @@ void RoomSampleFrameShmReader::Stop()
 
 bool RoomSampleFrameShmReader::TryApplyLatest()
 {
-#ifdef _WIN32
     static thread_local std::uint32_t last_applied_frame_id = 0;
     static thread_local int last_size_x = -1;
     static thread_local int last_size_y = -1;
@@ -268,7 +308,11 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
     static thread_local unsigned long long last_fail_log_ms = 0;
     static thread_local unsigned long long last_missing_log_ms = 0;
 
+#ifdef _WIN32
     const std::wstring path = RoomSampleShmPaths::FrameFilePathW();
+#else
+    const std::string path = RoomSampleShmPaths::FrameFilePath();
+#endif
     static thread_local std::vector<unsigned char> file_bytes;
     static thread_local std::vector<unsigned char> rgba;
     if(!ReadMappedOrFileBytes(path, file_bytes))
@@ -335,18 +379,13 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
     GameTelemetryBridge::ApplyRoomSampleShmFrame(hdr, std::move(rgba));
     GameTelemetryBridge::NotifyTelemetryDataUpdated();
     return true;
-#else
-    return false;
-#endif
 }
 
 void RoomSampleFrameShmReader::PollLoop()
 {
-#ifdef _WIN32
     while(running_.load())
     {
         TryApplyLatest();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-#endif
 }

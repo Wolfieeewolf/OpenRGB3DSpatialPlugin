@@ -20,6 +20,7 @@ apt-get install -y -qq \
   build-essential \
   libusb-1.0-0-dev \
   libhidapi-dev \
+  libpipewire-0.3-dev \
   libgl1-mesa-dev \
   libglu1-mesa-dev \
   patchelf \

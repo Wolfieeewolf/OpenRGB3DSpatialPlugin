@@ -348,6 +348,7 @@ HEADERS += \
     engines/reactive/ReactiveKeyMap.h \
     engines/reactive/ReactiveInputManager.h \
     engines/reactive/ReactiveInputLinux.h \
+    engines/reactive/SensitiveFieldWatch.h \
     engines/reactive/Reactive.h \
     engines/folder-volume/FolderVolumeEffect.h \
     engines/screen-mirror/ScreenMirror.h \
@@ -531,6 +532,7 @@ SOURCES += \
     engines/reactive/ReactiveKeyMap.cpp \
     engines/reactive/ReactiveInputManager.cpp \
     engines/reactive/ReactiveInputLinux.cpp \
+    engines/reactive/SensitiveFieldWatch.cpp \
     engines/screen-mirror/ScreenMirror.cpp \
     engines/screen-mirror/ScreenMirror_Render.cpp \
     engines/screen-mirror/ScreenMirror_Settings.cpp \
@@ -694,7 +696,18 @@ FORMS += \
 unix:!macx {
     QT += dbus
     # Q_OBJECT helper - only moc on Linux (header is #ifdef Q_OS_LINUX).
-    HEADERS += engines/triggers/LinuxLoginWatcher.h
+    HEADERS += engines/triggers/LinuxLoginWatcher.h engines/reactive/SensitiveFieldWatchLinux.h
+    # Screen Mirror on Wayland: needs only the PipeWire headers; libpipewire is loaded at runtime.
+    PIPEWIRE_CFLAGS = $$system(pkg-config --cflags libpipewire-0.3 2>/dev/null)
+    !isEmpty(PIPEWIRE_CFLAGS) {
+        QMAKE_CXXFLAGS += $$PIPEWIRE_CFLAGS
+        DEFINES += SPATIAL_HAVE_PIPEWIRE
+        HEADERS += engines/screen-mirror/WaylandScreenCast.h
+        SOURCES += engines/screen-mirror/WaylandScreenCast.cpp
+        LIBS += -ldl
+    } else {
+        message("libpipewire-0.3 headers not found: Screen Mirror will not capture on Wayland")
+    }
     # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
     QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/

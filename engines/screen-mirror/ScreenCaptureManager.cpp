@@ -3,6 +3,7 @@
 #include "ScreenCaptureManager.h"
 #include "PluginLog.h"
 #include "ScreenCaptureDownscale.h"
+#include "WaylandScreenCast.h"
 #include <chrono>
 #include <algorithm>
 #include <condition_variable>
@@ -1556,6 +1557,12 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
    can run after the capture threads stop or the plugin unloads. */
 static QObject* g_grab_context = nullptr;
 
+#if defined(Q_OS_LINUX) && defined(SPATIAL_HAVE_PIPEWIRE)
+/* Created and deleted with the capture session, on the GUI thread; capture threads are joined
+   before it goes away. */
+static WaylandScreenCast* g_screen_cast = nullptr;
+#endif
+
 bool ScreenCaptureManager::InitializePlatform()
 {
     if(!g_grab_context && QCoreApplication::instance())
@@ -1563,11 +1570,29 @@ bool ScreenCaptureManager::InitializePlatform()
         g_grab_context = new QObject();
         g_grab_context->moveToThread(QCoreApplication::instance()->thread());
     }
+#if defined(Q_OS_LINUX) && defined(SPATIAL_HAVE_PIPEWIRE)
+    if(!g_screen_cast && QCoreApplication::instance() && WaylandScreenCast::IsUsable())
+    {
+        g_screen_cast = new WaylandScreenCast();
+        g_screen_cast->SetRestoreToken(QString::fromStdString(screen_share_token));
+        g_screen_cast->SetTokenSaver([this](const QString& token) {
+            screen_share_token = token.toStdString();
+            if(screen_share_token_saver)
+            {
+                screen_share_token_saver(screen_share_token);
+            }
+        });
+    }
+#endif
     return true;
 }
 
 void ScreenCaptureManager::ShutdownPlatform()
 {
+#if defined(Q_OS_LINUX) && defined(SPATIAL_HAVE_PIPEWIRE)
+    delete g_screen_cast;
+    g_screen_cast = nullptr;
+#endif
     delete g_grab_context;
     g_grab_context = nullptr;
 }
@@ -1733,18 +1758,27 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         return;
     }
 
+    /* Wayland has no direct screen grab: frames come from the ScreenCast portal over PipeWire. */
+    WaylandScreenCast* screen_cast = nullptr;
     if(QGuiApplication::platformName().startsWith(QLatin1String("wayland")))
     {
-        LOG_WARNING("[ScreenCapture] Wayland does not allow screen grabbing; Screen Mirror stays dark. "
-                    "Use an X11 session instead.");
-        while(active_flag->load())
+#if defined(Q_OS_LINUX) && defined(SPATIAL_HAVE_PIPEWIRE)
+        screen_cast = g_screen_cast;
+#endif
+        if(!screen_cast)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            LOG_WARNING("[ScreenCapture] Wayland screen capture needs PipeWire and xdg-desktop-portal; "
+                        "Screen Mirror stays dark.");
+            while(active_flag->load())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            return;
         }
-        return;
     }
 
     uint64_t frame_counter = 0;
+    uint64_t cast_serial = 0;
     bool logged_screen_unavailable = false;
     bool logged_grab_failed = false;
 
@@ -1756,7 +1790,30 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
         QImage image;
         bool screen_found = false;
-        if(!GrabScreenFromWorker(screen_index, *active_flag, image, screen_found))
+        if(screen_cast)
+        {
+#if defined(Q_OS_LINUX) && defined(SPATIAL_HAVE_PIPEWIRE)
+            /* Grab at twice the working size so the box filter below still averages. */
+            screen_cast->SetFrameLimits(target_width.load() * 2, target_height.load() * 2, loop_fps);
+            screen_cast->RequestSession();
+            if(screen_cast->HasFailed())
+            {
+                while(active_flag->load())
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                return;
+            }
+            /* Compositors only send a frame when the screen changes; the last one stays shown. */
+            if(!screen_cast->TakeFrame(screen_index, cast_serial, image))
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(std::max(5, target_frame_time_ms / 2)));
+                continue;
+            }
+            screen_found = true;
+#endif
+        }
+        else if(!GrabScreenFromWorker(screen_index, *active_flag, image, screen_found))
         {
             if(active_flag->load())
             {

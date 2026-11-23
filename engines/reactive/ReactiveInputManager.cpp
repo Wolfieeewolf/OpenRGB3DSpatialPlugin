@@ -2,6 +2,7 @@
 
 #include "ReactiveInputManager.h"
 #include "ReactiveKeyMap.h"
+#include "SensitiveFieldWatch.h"
 #ifdef __linux__
 #include "ReactiveInputLinux.h"
 #endif
@@ -307,6 +308,9 @@ public:
     std::atomic<uint32_t> last_press_vk{0};
     std::atomic<uint32_t> last_press_vidpid{0};
     unsigned wanted_kinds = 0;
+    /* Keyboard focus is in a password field: keys are dropped before they reach any effect. */
+    std::atomic<bool> in_password_field{false};
+    SensitiveFieldWatch password_watch;
 #ifdef _WIN32
     int raw_registered = 0;
     RAWINPUTDEVICE raw_devices[3]{};
@@ -617,6 +621,10 @@ public:
         {
             return;
         }
+        if(in_password_field.load() && UnpackKind(packed) == ReactiveSourceKind::Keyboard)
+        {
+            return;
+        }
         /* One press reported by two devices at once (a keyboard and its remapper): keep one. */
         if(down_now && UnpackKind(packed) == ReactiveSourceKind::Keyboard)
         {
@@ -653,14 +661,45 @@ public:
         {
             down.erase(source);
         }
+        AppendEdgeLocked(EdgeSlot{packed, down_now, vid, pid});
+    }
+
+    void AppendEdgeLocked(const EdgeSlot& edge)
+    {
         if(edge_count == kEdgeCap)
         {
             edge_head = (edge_head + 1) % kEdgeCap;
             edge_count -= 1;
         }
         const int idx = (edge_head + edge_count) % kEdgeCap;
-        edges[static_cast<size_t>(idx)] = EdgeSlot{packed, down_now, vid, pid};
+        edges[static_cast<size_t>(idx)] = edge;
         edge_count += 1;
+    }
+
+    /* Entering a password field releases every held key, so nothing stays lit and the
+       duplicate filter forgets the last key. */
+    void SetInPasswordField(bool in_field)
+    {
+        if(in_password_field.exchange(in_field) == in_field || !in_field)
+        {
+            return;
+        }
+        QMutexLocker lock(&mutex);
+        for(std::unordered_map<uint64_t, DownKey>::iterator it = down.begin(); it != down.end();)
+        {
+            if(UnpackKind(it->second.packed) == ReactiveSourceKind::Keyboard)
+            {
+                AppendEdgeLocked(EdgeSlot{it->second.packed, false, it->second.vid, it->second.pid});
+                it = down.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        last_press_ms.store(0);
+        last_press_vk.store(0);
+        last_press_vidpid.store(0);
     }
 
     void WipeLocked()
@@ -1130,6 +1169,11 @@ void ReactiveInputManager::start()
         impl_->WipeLocked();
         impl_->running.store(true);
     }
+    if(WantsKind(wanted, ReactiveSourceKind::Keyboard))
+    {
+        Impl* watched = impl_;
+        impl_->password_watch.Start([watched](bool in_field) { watched->SetInPasswordField(in_field); });
+    }
 #ifdef __linux__
     Impl* impl = impl_;
     impl_->linux_input.Start(
@@ -1149,6 +1193,8 @@ void ReactiveInputManager::stop()
         return;
     }
     impl_->running.store(false);
+    impl_->password_watch.Stop();
+    impl_->in_password_field.store(false);
 #ifdef _WIN32
     for(int i = 0; i < impl_->raw_registered; ++i)
     {

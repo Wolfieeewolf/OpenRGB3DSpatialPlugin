@@ -3,6 +3,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "AudioInputPanel.h"
 #include "ReactiveInputManager.h"
+#include "ScreenCaptureManager.h"
 #include "ControllerDisplayUtils.h"
 #include "EffectControlsHostPanel.h"
 #include "EffectGlobalSettingsPanel.h"
@@ -190,6 +191,7 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
     }
     effect_running = false;
     SyncScreenCaptureSession();
+    ScreenCaptureManager::Instance().SetScreenShareTokenSaver(nullptr);
     SyncReactiveInputSession();
 
     SavePluginUiSettings();
@@ -672,6 +674,14 @@ void OpenRGB3DSpatialTab::bindUiPanels()
             SyncReactiveInputSession();
         });
     }
+    /* Wayland: remembers which monitors the user shared, so the portal asks only once. */
+    ScreenCaptureManager::Instance().SetScreenShareRestoreToken(
+        startup_settings.value("ScreenShareRestoreToken", std::string()));
+    ScreenCaptureManager::Instance().SetScreenShareTokenSaver([this](const std::string& token) {
+        nlohmann::json settings = GetPluginSettings();
+        settings["ScreenShareRestoreToken"] = token;
+        SetPluginSettings(settings);
+    });
     try
     {
         if(startup_settings.contains("Ui") &&
