@@ -36,7 +36,6 @@ Some of these provided ideas and techniques only; from others, code was adapted.
 | --- | --- |
 | [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) ([openrgb.org](https://openrgb.org/)) | GPL-2.0-or-later |
 | [OpenRGB Effects Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBEffectsPlugin) | GPL-2.0-or-later |
-| [CarbonRGB](https://gitlab.com/kakewhinter/carbonrgb) | GPL-2.0-or-later |
 | [WLED](https://github.com/wled/WLED) | EUPL-1.2 |
 | [FastLED](https://github.com/FastLED/FastLED) | MIT |
 | [LedFx](https://github.com/LedFx/LedFx) | GPL-3.0 |
