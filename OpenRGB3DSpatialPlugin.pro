@@ -552,11 +552,17 @@ win32:LIBS += \
 # Assimp (scene-prop mesh import). Default: build into $$OUT_PWD/_deps on first link
 # via scripts/build-assimp.* (PRE_TARGETDEPS). Override ASSIMP_DIR to use a system prefix
 # (skips auto-build). Scripts stabilize Windows link name as assimp.lib.
+# MSVC Debug builds need a Debug Assimp (debug runtime and iterator checks must match),
+# so they build their own copy in separate folders.
+ASSIMP_CONFIG = Release
+win32:CONFIG(debug, debug|release): ASSIMP_CONFIG = Debug
+ASSIMP_SUFFIX =
+equals(ASSIMP_CONFIG, Debug): ASSIMP_SUFFIX = -debug
 isEmpty(ASSIMP_DIR) {
-    ASSIMP_DIR = $$OUT_PWD/_deps/assimp-install
+    ASSIMP_DIR = $$OUT_PWD/_deps/assimp-install$$ASSIMP_SUFFIX
     ASSIMP_AUTO_BUILD = 1
 }
-ASSIMP_BUILD_DIR = $$OUT_PWD/_deps/assimp-build
+ASSIMP_BUILD_DIR = $$OUT_PWD/_deps/assimp-build$$ASSIMP_SUFFIX
 ASSIMP_LIBDIR = $$ASSIMP_DIR/lib
 INCLUDEPATH += $$ASSIMP_DIR/include
 DEFINES += ASSIMP_STATIC
@@ -583,7 +589,7 @@ equals(ASSIMP_AUTO_BUILD, 1) {
     win32 {
         ASSIMP_LIB_FILE = $$ASSIMP_LIBDIR/assimp.lib
         ensure_assimp.target = $$ASSIMP_LIB_FILE
-        ensure_assimp.commands = powershell -NoProfile -ExecutionPolicy Bypass -File $$shell_quote($$shell_path($$PWD/scripts/build-assimp.ps1)) -BuildDir $$shell_quote($$shell_path($$ASSIMP_BUILD_DIR)) -InstallDir $$shell_quote($$shell_path($$ASSIMP_DIR))
+        ensure_assimp.commands = powershell -NoProfile -ExecutionPolicy Bypass -File $$shell_quote($$shell_path($$PWD/scripts/build-assimp.ps1)) -BuildDir $$shell_quote($$shell_path($$ASSIMP_BUILD_DIR)) -InstallDir $$shell_quote($$shell_path($$ASSIMP_DIR)) -Config $$ASSIMP_CONFIG
         ensure_assimp.depends = $$PWD/dependencies/assimp/CMakeLists.txt
         QMAKE_EXTRA_TARGETS += ensure_assimp
         PRE_TARGETDEPS += $$ASSIMP_LIB_FILE

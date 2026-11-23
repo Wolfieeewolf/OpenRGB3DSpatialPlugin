@@ -4,12 +4,15 @@
 # Usage:
 #   powershell -File scripts/build-assimp.ps1
 #   powershell -File scripts/build-assimp.ps1 -Clean
+#   powershell -File scripts/build-assimp.ps1 -Config Debug   (for MSVC Debug builds of the plugin)
 # Idempotent: skips when install\lib\assimp.lib already exists (unless -Clean).
 
 param(
     [switch]$Clean,
     [string]$BuildDir = "",
-    [string]$InstallDir = ""
+    [string]$InstallDir = "",
+    [ValidateSet("Release", "Debug")]
+    [string]$Config = "Release"
 )
 
 $ErrorActionPreference = "Stop"
@@ -148,7 +151,7 @@ if ($hasNinja -and $hasCl) {
 }
 
 Invoke-CmakeChecked -S $AssimpSrc -B $BuildDir @generatorArgs `
-    -DCMAKE_BUILD_TYPE=Release `
+    "-DCMAKE_BUILD_TYPE=$Config" `
     -DCMAKE_INSTALL_PREFIX="$InstallDir" `
     -DCMAKE_INSTALL_LIBDIR=lib `
     -DASSIMP_BUILD_TESTS=OFF `
@@ -166,13 +169,13 @@ Invoke-CmakeChecked -S $AssimpSrc -B $BuildDir @generatorArgs `
     -DASSIMP_WARNINGS_AS_ERRORS=OFF `
     -DASSIMP_INJECT_DEBUG_POSTFIX=OFF
 
-Invoke-CmakeChecked --build $BuildDir --config Release --parallel
-Invoke-CmakeChecked --install $BuildDir --config Release
+Invoke-CmakeChecked --build $BuildDir --config $Config --parallel
+Invoke-CmakeChecked --install $BuildDir --config $Config
 
 $libDir = Join-Path $InstallDir "lib"
 New-Item -ItemType Directory -Force -Path $libDir | Out-Null
 if (-not (Test-Path $StableLib)) {
-    $candidate = Get-ChildItem $libDir -Filter "assimp-vc*-mt.lib" -ErrorAction SilentlyContinue |
+    $candidate = Get-ChildItem $libDir -Filter "assimp-vc*-mt*.lib" -ErrorAction SilentlyContinue |
         Select-Object -First 1
     if (-not $candidate) {
         $candidate = Get-ChildItem $libDir -Filter "assimp*.lib" -ErrorAction SilentlyContinue |
@@ -182,6 +185,16 @@ if (-not (Test-Path $StableLib)) {
     if ($candidate) {
         Copy-Item $candidate.FullName $StableLib -Force
         Write-Host "Stabilized link name: $($candidate.Name) → assimp.lib"
+    }
+}
+
+# Debug builds of zlib may carry a "d" suffix; the plugin links zlibstatic.lib.
+$StableZlib = Join-Path $libDir "zlibstatic.lib"
+if (-not (Test-Path $StableZlib)) {
+    $zlib = Get-ChildItem $libDir -Filter "zlibstatic*.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($zlib) {
+        Copy-Item $zlib.FullName $StableZlib -Force
+        Write-Host "Stabilized link name: $($zlib.Name) → zlibstatic.lib"
     }
 }
 
