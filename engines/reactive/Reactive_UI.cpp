@@ -6,9 +6,11 @@
 #include "EffectCheckRow.h"
 #include "EffectSliderRow.h"
 #include "EffectLabeledComboRow.h"
+#include "ReactiveInputManager.h"
 
 #include <QComboBox>
 #include <QCheckBox>
+#include <QSignalBlocker>
 #include <QString>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -112,7 +114,34 @@ void Reactive::SetupCustomUI(QWidget* parent)
 
     EffectUiRows::AppendInfoLabel(
         layout,
-        QStringLiteral("Listens only while this effect is running. Presses are not saved or shown."));
+        QStringLiteral("While this effect plays, the plugin sees every key, mouse button and gamepad button "
+                       "you press, in any app, to know where to start a wave. Presses are never saved, "
+                       "logged or sent anywhere, and nothing is read while the effect is stopped."));
+#if defined(__linux__)
+    EffectUiRows::AppendInfoLabel(
+        layout,
+        QStringLiteral("Linux: needs your user in the \"input\" group (sudo usermod -aG input $USER, then log "
+                       "out and back in). That group lets any program you run read the keyboard, not just "
+                       "OpenRGB. Reading pauses while the screen is locked."));
+#elif defined(__APPLE__)
+    EffectUiRows::AppendInfoLabel(layout, QStringLiteral("macOS: key and button presses aren't available yet."));
+#endif
+
+    ReactiveInputManager* input = ReactiveInputManager::instance();
+    EffectCheckRow* allow_row = EffectUiRows::AppendCheckRow(
+        layout,
+        QStringLiteral("Allow reading keys and buttons (all Reactive effects)"),
+        input->isInputAllowed(),
+        QStringLiteral("Off: the plugin never reads your keyboard, mouse or gamepad. Reactive effects stay dark."));
+    if(allow_row && allow_row->checkBox())
+    {
+        QCheckBox* box = allow_row->checkBox();
+        QObject::connect(box, &QCheckBox::toggled, input, [input](bool on) { input->setInputAllowed(on); });
+        QObject::connect(input, &ReactiveInputManager::inputAllowedChanged, box, [box](bool on) {
+            const QSignalBlocker block(box);
+            box->setChecked(on);
+        });
+    }
 
     EffectCheckRow* keyboard_row = EffectUiRows::AppendCheckRow(
         layout,

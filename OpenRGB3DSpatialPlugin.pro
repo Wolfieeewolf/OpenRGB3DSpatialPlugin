@@ -347,6 +347,7 @@ HEADERS += \
     engines/reactive/ReactiveInputTypes.h \
     engines/reactive/ReactiveKeyMap.h \
     engines/reactive/ReactiveInputManager.h \
+    engines/reactive/ReactiveInputLinux.h \
     engines/reactive/Reactive.h \
     engines/folder-volume/FolderVolumeEffect.h \
     engines/screen-mirror/ScreenMirror.h \
@@ -529,6 +530,7 @@ SOURCES += \
     engines/reactive/Reactive_UI.cpp \
     engines/reactive/ReactiveKeyMap.cpp \
     engines/reactive/ReactiveInputManager.cpp \
+    engines/reactive/ReactiveInputLinux.cpp \
     engines/screen-mirror/ScreenMirror.cpp \
     engines/screen-mirror/ScreenMirror_Render.cpp \
     engines/screen-mirror/ScreenMirror_Settings.cpp \

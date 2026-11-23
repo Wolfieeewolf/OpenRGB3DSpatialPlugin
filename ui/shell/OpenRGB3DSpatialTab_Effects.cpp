@@ -1073,7 +1073,32 @@ void OpenRGB3DSpatialTab::SyncReactiveInputSession()
     {
         return;
     }
-    const bool want = effect_running && PlaybackUsesReactive();
+    /* Read only what the playing Reactive effects listen to (their Keyboard / Mouse / Gamepad ticks). */
+    bool keyboard = false;
+    bool mouse = false;
+    bool gamepad = false;
+    auto collect = [&](const SpatialEffect3D* effect) {
+        if(const Reactive* reactive = dynamic_cast<const Reactive*>(effect))
+        {
+            keyboard = keyboard || reactive->SourceEnabled(ReactiveSourceKind::Keyboard);
+            mouse = mouse || reactive->SourceEnabled(ReactiveSourceKind::Mouse);
+            gamepad = gamepad || reactive->SourceEnabled(ReactiveSourceKind::Gamepad);
+        }
+    };
+    for(const std::unique_ptr<EffectInstance3D>& inst : effect_stack)
+    {
+        if(inst && inst->enabled)
+        {
+            collect(inst->effect.get());
+        }
+    }
+    if(effect_stack.empty())
+    {
+        collect(current_effect_ui);
+    }
+    mgr->setWantedKinds(keyboard, mouse, gamepad);
+
+    const bool want = effect_running && PlaybackUsesReactive() && mgr->isInputAllowed() && mgr->wantsAnyKind();
     if(want)
     {
         mgr->start();

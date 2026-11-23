@@ -2,6 +2,9 @@
 
 #include "ReactiveInputManager.h"
 #include "ReactiveKeyMap.h"
+#ifdef __linux__
+#include "ReactiveInputLinux.h"
+#endif
 
 #include <QAbstractNativeEventFilter>
 #include <QApplication>
@@ -13,6 +16,7 @@
 #include <array>
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -281,11 +285,16 @@ public:
     std::vector<ReactiveOriginEvent> edge_frame;
     std::unordered_map<uint64_t, DownKey> down;
     std::vector<ReactiveLedSample> samples;
-#ifdef _WIN32
-    std::unordered_map<std::uintptr_t, uint32_t> hid_vidpid;
     std::atomic<unsigned long long> last_press_ms{0};
     std::atomic<uint32_t> last_press_vk{0};
     std::atomic<uint32_t> last_press_vidpid{0};
+    unsigned wanted_kinds = 0;
+#ifdef _WIN32
+    int raw_registered = 0;
+    RAWINPUTDEVICE raw_devices[3]{};
+    std::unordered_map<std::uintptr_t, uint32_t> hid_vidpid;
+#elif defined(__linux__)
+    ReactiveLinuxInput::Reader linux_input;
 #endif
 
 #ifdef _WIN32
@@ -586,15 +595,16 @@ public:
     void PushEdge(uint32_t packed, bool down_now, uint16_t vid = 0, uint16_t pid = 0)
     {
         QMutexLocker lock(&mutex);
-        if(!running.load())
+        if(!running.load() || (wanted_kinds & (1u << static_cast<unsigned>(UnpackKind(packed)))) == 0)
         {
             return;
         }
-#ifdef _WIN32
+        /* One press reported by two devices at once (a keyboard and its remapper): keep one. */
         if(down_now && UnpackKind(packed) == ReactiveSourceKind::Keyboard)
         {
             const uint32_t vk = UnpackVk(packed);
-            const unsigned long long now_ms = GetTickCount64();
+            const unsigned long long now_ms = (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
             const unsigned long long prev_ms = last_press_ms.load();
             const uint32_t prev_vk = last_press_vk.load();
             const uint32_t prev_id = last_press_vidpid.load();
@@ -608,7 +618,6 @@ public:
             last_press_vk.store(vk);
             last_press_vidpid.store(id);
         }
-#endif
         const uint64_t source = MakeSourceKey(packed, vid, pid);
         const bool was_down = down.find(source) != down.end();
         if(down_now && was_down)
@@ -647,11 +656,11 @@ public:
         edge_frame_valid = false;
         down.clear();
         samples.clear();
-#ifdef _WIN32
-        hid_vidpid.clear();
         last_press_ms.store(0);
         last_press_vk.store(0);
         last_press_vidpid.store(0);
+#ifdef _WIN32
+        hid_vidpid.clear();
         pad_buttons.fill(0);
         pad_lt.fill(false);
         pad_rt.fill(false);
@@ -1017,6 +1026,43 @@ ReactiveInputManager::~ReactiveInputManager()
     impl_ = nullptr;
 }
 
+namespace
+{
+unsigned KindBit(ReactiveSourceKind kind)
+{
+    return 1u << static_cast<unsigned>(kind);
+}
+}
+
+void ReactiveInputManager::setWantedKinds(bool keyboard, bool mouse, bool gamepad)
+{
+    const unsigned wanted = (keyboard ? KindBit(ReactiveSourceKind::Keyboard) : 0u) |
+                            (mouse ? KindBit(ReactiveSourceKind::Mouse) : 0u) |
+                            (gamepad ? KindBit(ReactiveSourceKind::Gamepad) : 0u);
+    if(wanted_kinds_.exchange(wanted) == wanted)
+    {
+        return;
+    }
+    if(isRunning())
+    {
+        stop();
+        start();
+    }
+}
+
+void ReactiveInputManager::setInputAllowed(bool allowed)
+{
+    if(input_allowed_.exchange(allowed) == allowed)
+    {
+        return;
+    }
+    if(!allowed)
+    {
+        stop();
+    }
+    emit inputAllowedChanged(allowed);
+}
+
 bool ReactiveInputManager::isRunning() const
 {
     return impl_ && impl_->running.load();
@@ -1024,10 +1070,15 @@ bool ReactiveInputManager::isRunning() const
 
 void ReactiveInputManager::start()
 {
-    if(!impl_ || impl_->running.load())
+    if(!impl_ || impl_->running.load() || !input_allowed_.load() || wanted_kinds_.load() == 0)
     {
         return;
     }
+    const unsigned wanted = wanted_kinds_.load();
+    const bool want_keyboard = (wanted & KindBit(ReactiveSourceKind::Keyboard)) != 0;
+    const bool want_mouse = (wanted & KindBit(ReactiveSourceKind::Mouse)) != 0;
+    const bool want_gamepad = (wanted & KindBit(ReactiveSourceKind::Gamepad)) != 0;
+    impl_->wanted_kinds = wanted;
 #ifdef _WIN32
     if(!impl_->sink)
     {
@@ -1038,31 +1089,56 @@ void ReactiveInputManager::start()
     {
         impl_->watcher = new Impl::Watcher(impl_);
     }
-    RAWINPUTDEVICE rid[3]{};
-    rid[0].usUsagePage = 0x01;
-    rid[0].usUsage     = 0x06;
-    rid[0].dwFlags     = RIDEV_INPUTSINK;
-    rid[0].hwndTarget  = reinterpret_cast<HWND>(impl_->sink->winId());
-    rid[1].usUsagePage = 0x01;
-    rid[1].usUsage     = 0x02;
-    rid[1].dwFlags     = RIDEV_INPUTSINK;
-    rid[1].hwndTarget  = rid[0].hwndTarget;
-    rid[2].usUsagePage = 0x01;
-    rid[2].usUsage     = 0x07;
-    rid[2].dwFlags     = RIDEV_INPUTSINK;
-    rid[2].hwndTarget  = rid[0].hwndTarget;
-    if(!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE)))
+    /* Ask Windows only for the kinds a playing Reactive effect listens to.
+       Gamepads are polled (XInput), never registered. */
+    impl_->raw_registered = 0;
+    const HWND target = reinterpret_cast<HWND>(impl_->sink->winId());
+    auto add_usage = [&](USHORT usage) {
+        RAWINPUTDEVICE& d = impl_->raw_devices[impl_->raw_registered++];
+        d = RAWINPUTDEVICE{};
+        d.usUsagePage = 0x01;
+        d.usUsage     = usage;
+        d.dwFlags     = RIDEV_INPUTSINK;
+        d.hwndTarget  = target;
+    };
+    if(want_keyboard)
     {
+        add_usage(0x06);
+        add_usage(0x07);
+    }
+    if(want_mouse)
+    {
+        add_usage(0x02);
+    }
+    if(impl_->raw_registered > 0
+       && !RegisterRawInputDevices(impl_->raw_devices, (UINT)impl_->raw_registered, sizeof(RAWINPUTDEVICE)))
+    {
+        impl_->raw_registered = 0;
         delete impl_->watcher;
         impl_->watcher = nullptr;
         return;
     }
+    (void)want_gamepad;
+#else
+    (void)want_keyboard;
+    (void)want_mouse;
+    (void)want_gamepad;
 #endif
     {
         QMutexLocker lock(&impl_->mutex);
         impl_->WipeLocked();
         impl_->running.store(true);
     }
+#ifdef __linux__
+    Impl* impl = impl_;
+    impl_->linux_input.Start(
+        [impl](const ReactiveLinuxInput::Edge& edge) {
+            impl->PushEdge(PackId(edge.kind, edge.payload, edge.pad), edge.down, edge.vid, edge.pid);
+        },
+        want_keyboard,
+        want_mouse,
+        want_gamepad);
+#endif
 }
 
 void ReactiveInputManager::stop()
@@ -1073,20 +1149,16 @@ void ReactiveInputManager::stop()
     }
     impl_->running.store(false);
 #ifdef _WIN32
-    RAWINPUTDEVICE rid[3]{};
-    rid[0].usUsagePage = 0x01;
-    rid[0].usUsage     = 0x06;
-    rid[0].dwFlags     = RIDEV_REMOVE;
-    rid[0].hwndTarget  = nullptr;
-    rid[1].usUsagePage = 0x01;
-    rid[1].usUsage     = 0x02;
-    rid[1].dwFlags     = RIDEV_REMOVE;
-    rid[1].hwndTarget  = nullptr;
-    rid[2].usUsagePage = 0x01;
-    rid[2].usUsage     = 0x07;
-    rid[2].dwFlags     = RIDEV_REMOVE;
-    rid[2].hwndTarget  = nullptr;
-    RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE));
+    for(int i = 0; i < impl_->raw_registered; ++i)
+    {
+        impl_->raw_devices[i].dwFlags    = RIDEV_REMOVE;
+        impl_->raw_devices[i].hwndTarget = nullptr;
+    }
+    if(impl_->raw_registered > 0)
+    {
+        RegisterRawInputDevices(impl_->raw_devices, (UINT)impl_->raw_registered, sizeof(RAWINPUTDEVICE));
+    }
+    impl_->raw_registered = 0;
     delete impl_->watcher;
     impl_->watcher = nullptr;
     if(impl_->xinput_dll)
@@ -1095,6 +1167,8 @@ void ReactiveInputManager::stop()
         FreeLibrary(impl_->xinput_dll);
         impl_->xinput_dll = nullptr;
     }
+#elif defined(__linux__)
+    impl_->linux_input.Stop();
 #endif
     QMutexLocker lock(&impl_->mutex);
     impl_->WipeLocked();
@@ -1119,7 +1193,7 @@ void ReactiveInputManager::CopyOriginEdgesForFrame(std::uint64_t frame_key,
         return;
     }
 #ifdef _WIN32
-    if(impl_->running.load())
+    if(impl_->running.load() && (impl_->wanted_kinds & (1u << static_cast<unsigned>(ReactiveSourceKind::Gamepad))))
     {
         impl_->PollXInput();
     }
@@ -1150,8 +1224,18 @@ void ReactiveInputManager::CopyOriginEdgesForFrame(std::uint64_t frame_key,
             ev.source_key = MakeSourceKey(slot.packed, slot.vid, slot.pid);
             impl_->edge_frame.push_back(ev);
         }
+        /* Forget the raw presses as soon as they are turned into wave positions. */
+        impl_->edges.fill(EdgeSlot{});
         impl_->edge_head = 0;
         impl_->edge_count = 0;
+        const unsigned long long now_ms = (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        if(now_ms - impl_->last_press_ms.load() >= 80ull)
+        {
+            impl_->last_press_ms.store(0);
+            impl_->last_press_vk.store(0);
+            impl_->last_press_vidpid.store(0);
+        }
         impl_->edge_frame_key = frame_key;
         impl_->edge_frame_valid = true;
     }

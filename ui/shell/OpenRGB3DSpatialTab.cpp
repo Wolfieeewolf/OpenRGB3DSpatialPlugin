@@ -2,6 +2,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "AudioInputPanel.h"
+#include "ReactiveInputManager.h"
 #include "ControllerDisplayUtils.h"
 #include "EffectControlsHostPanel.h"
 #include "EffectGlobalSettingsPanel.h"
@@ -661,6 +662,16 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     ui->middlePanelLayout->setStretch(1, 1);
 
     const nlohmann::json startup_settings = GetPluginSettings();
+    if(ReactiveInputManager* reactive_input = ReactiveInputManager::instance())
+    {
+        reactive_input->setInputAllowed(startup_settings.value("ReactiveInputAllowed", true));
+        connect(reactive_input, &ReactiveInputManager::inputAllowedChanged, this, [this](bool allowed) {
+            nlohmann::json settings = GetPluginSettings();
+            settings["ReactiveInputAllowed"] = allowed;
+            SetPluginSettings(settings);
+            SyncReactiveInputSession();
+        });
+    }
     try
     {
         if(startup_settings.contains("Ui") &&

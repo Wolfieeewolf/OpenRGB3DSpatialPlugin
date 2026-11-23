@@ -15,6 +15,8 @@ class Reactive : public SpatialEffect3D
     Q_OBJECT
 
 public:
+    /* Which presses start waves (the Keyboard / Mouse / Gamepad ticks). */
+    bool SourceEnabled(ReactiveSourceKind kind) const;
     explicit Reactive(QWidget* parent = nullptr);
 
     EffectInfo3D GetEffectInfo() const override;
@@ -109,7 +111,6 @@ private:
         int      press_glow_pct = 0;
         int      press_glow_deci_sec = 20;
         uint32_t color_slot = 0;
-        uint64_t source_key = 0;
     };
 
     static const char* TriggerName(int mode);
@@ -121,7 +122,6 @@ private:
     static uint64_t OriginKey(const Vector3D& p);
     static uint64_t PulseKey(uint64_t source_key, const Vector3D& origin);
 
-    bool SourceEnabled(ReactiveSourceKind kind) const;
     bool ShouldSpawnOnEdge(bool down) const;
     bool UsesHeldRepeats() const;
     int  PulseBudget() const;

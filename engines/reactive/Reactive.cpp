@@ -852,7 +852,6 @@ void Reactive::SpawnWave(const Vector3D& origin,
     wave.press_glow_pct = std::clamp(press_glow_pct_, 0, 100);
     wave.press_glow_deci_sec = std::clamp(press_glow_deci_sec_, 1, 120);
     wave.color_slot = next_color_slot_++;
-    wave.source_key = source_key;
     if(static_cast<int>(waves_.size()) >= kMaxWaves)
     {
         // Drop the wave nearest finishing — not blindly the oldest FIFO slot —
@@ -985,17 +984,21 @@ void Reactive::TickWaves(float time, const GridContext3D& grid, std::uint64_t fr
             SpawnWave(h.room_position, time, 0.85f, h.device_spread, h.led_spacing, h.source_key, zone_diag);
             spawn_counts_[key_h] += 1;
         }
+        /* Keep per-key state only while that key is held, so no list of pressed keys builds up. */
         for(auto it = spawn_counts_.begin(); it != spawn_counts_.end();)
         {
-            if(held_keys.find(it->first) == held_keys.end())
-            {
-                it = spawn_counts_.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
+            it = (held_keys.find(it->first) == held_keys.end()) ? spawn_counts_.erase(it) : std::next(it);
         }
+        for(auto it = last_spawn_time_.begin(); it != last_spawn_time_.end();)
+        {
+            it = (held_keys.find(it->first) == held_keys.end()) ? last_spawn_time_.erase(it) : std::next(it);
+        }
+    }
+    else
+    {
+        /* Single pulses need no per-key state at all. */
+        spawn_counts_.clear();
+        last_spawn_time_.clear();
     }
 
     waves_.erase(std::remove_if(waves_.begin(),
