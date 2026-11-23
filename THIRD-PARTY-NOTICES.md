@@ -53,6 +53,7 @@ Some of these provided ideas and techniques only; from others, code was adapted.
 | Blood: Coagulated voxel mod by Cheello and Adam Matthews | Ideas only |
 | [Vixen](https://github.com/VixenLights/Vixen) sequencer and editor layout | Ideas only |
 | [xLights](https://github.com/xLightsSequencer/xLights) sequencer timeline and 3D layout | Ideas only |
+| [LightTrackPlugin](https://github.com/qiangqiang101/LightTrackPlugin/tree/devdev) timeline | Ideas only |
 | [Particleify](https://particleify.talizen.com/generator) | Website (ideas only) |
 | [Shadertoy](https://www.shadertoy.com/) and its shader authors | Per shader; CC BY-NC-SA 3.0 by default |
 | [Sketchfab](https://sketchfab.com/feed) | Per model (ideas only) |
