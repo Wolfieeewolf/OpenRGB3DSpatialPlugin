@@ -16,6 +16,9 @@ class StripKernelColormapPanel : public QWidget
     Q_OBJECT
 
 public:
+    /** Color from: Pattern palette (0) or Effect Look/Custom/Rainbow stack (1). */
+    enum ColorFrom : int { ColorFromPattern = 0, ColorFromEffect = 1 };
+
     explicit StripKernelColormapPanel(QWidget* parent = nullptr);
     ~StripKernelColormapPanel() override;
 
@@ -24,8 +27,9 @@ public:
     float kernelRepeats() const;
     int unfoldMode() const;
     float directionDeg() const;
+    int colorFrom() const;
 
-    void mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg);
+    void mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg, int color_from = 0);
 
 signals:
     void colormapChanged();
@@ -33,6 +37,7 @@ signals:
 private slots:
     void onSourceChanged(int);
     void onKernelChanged(int);
+    void onColorFromChanged(int);
     void onUnfoldChanged(int);
     void onRepeatsChanged(int);
     void onDirChanged(int);

@@ -375,9 +375,11 @@ QLabel* EffectGeometryPanel::rotationRollLabel() const
 QPushButton* EffectGeometryPanel::rotationResetButton() const { return ui->rotationResetButton; }
 #include "EffectColorPanel.h"
 
+#include "EffectSliderPromote.h"
 #include "ui_EffectColorPanel.h"
 
 #include <QComboBox>
+#include <QFont>
 #include <QLabel>
 #include <QPushButton>
 #include <algorithm>
@@ -392,6 +394,13 @@ EffectColorPanel::EffectColorPanel(int color_source, int material_rich, QWidget*
     , ui(new Ui::EffectColorPanel)
 {
     ui->setupUi(this);
+    if(ui->colourSectionCaption)
+    {
+        QFont heading = ui->colourSectionCaption->font();
+        heading.setBold(true);
+        ui->colourSectionCaption->setFont(heading);
+    }
+    AlignCaptionLabels({ui->sourceCaption, ui->styleCaption}, 48);
     initCombos(color_source, material_rich);
 }
 
@@ -417,6 +426,8 @@ QComboBox* EffectColorPanel::sourceCombo() const { return ui->sourceCombo; }
 QComboBox* EffectColorPanel::styleCombo() const { return ui->styleCombo; }
 QPushButton* EffectColorPanel::resetLookButton() const { return ui->resetLookButton; }
 QVBoxLayout* EffectColorPanel::tintHostLayout() const { return ui->tintHostLayout; }
+QWidget* EffectColorPanel::colourBlockWidget() const { return ui->colourBlockWidget; }
+QLabel* EffectColorPanel::colourSectionCaption() const { return ui->colourSectionCaption; }
 QWidget* EffectColorPanel::colorButtonsWidget() const { return ui->colorButtonsWidget; }
 QHBoxLayout* EffectColorPanel::colorButtonsLayout() const { return ui->colorButtonsLayout; }
 QWidget* EffectColorPanel::huePaletteWidget() const { return ui->huePaletteWidget; }

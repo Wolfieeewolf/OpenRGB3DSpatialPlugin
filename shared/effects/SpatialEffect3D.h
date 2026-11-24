@@ -526,6 +526,12 @@ public:
     float GetEffectStripColormapRepeats() const { return effect_strip_cmap_rep; }
     int GetEffectStripColormapUnfold() const { return effect_strip_cmap_unfold; }
     float GetEffectStripColormapDirectionDeg() const { return effect_strip_cmap_dir; }
+    /** 0 = Pattern palette, 1 = Effect Look/Custom/Rainbow (+ Hue/Sat + Flat/Rich). */
+    int GetEffectStripColormapColorFrom() const { return effect_strip_cmap_color_from_; }
+    bool UseEffectStripColormapEffectColors() const
+    {
+        return effect_strip_cmap_on && effect_strip_cmap_color_from_ != 0;
+    }
 
     /** Once-per-frame: rebuild 1D strip-colormap atlas when Surface Look Pattern is on. */
     void PrepareStripColormapAssist(std::uint64_t render_sequence, float time_sec);
@@ -756,11 +762,12 @@ protected:
     class EffectDoubleSliderRow* color_hue_row_ = nullptr;
     class EffectDoubleSliderRow* color_sat_row_ = nullptr;
 
+    QWidget*            colour_block_widget_ = nullptr;
+    QLabel*             colour_section_caption_ = nullptr;
     QWidget*            color_buttons_widget;
     QHBoxLayout*        color_buttons_layout;
     QWidget*            hue_palette_widget_ = nullptr;
     QHBoxLayout*        hue_palette_layout_ = nullptr;
-    QLabel*             hue_palette_caption_ = nullptr;
     QPushButton*        add_color_button;
     QPushButton*        remove_color_button;
     std::vector<QPushButton*> color_buttons;
@@ -894,6 +901,7 @@ protected:
     float effect_strip_cmap_rep = 4.0f;
     int effect_strip_cmap_unfold = 0;
     float effect_strip_cmap_dir = 0.0f;
+    int effect_strip_cmap_color_from_ = 0; /* 0 Pattern palette, 1 Effect colors */
     StripKernelColormapPanel* effect_strip_cmap_panel = nullptr;
     SpatialStripFieldAssist strip_cmap_assist_;
     bool strip_cmap_body_ready_ = false;
@@ -991,6 +999,7 @@ private slots:
     void OnAddColorClicked();
     void OnRemoveColorClicked();
     void OnColorButtonClicked();
+    void EditColorStopAt(int index);
     void OnRotationChanged();
     void OnRotationResetClicked();
     void OnAxisScaleResetClicked();

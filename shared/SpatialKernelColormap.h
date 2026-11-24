@@ -99,7 +99,8 @@ inline void StripColormapSaveCanonical(nlohmann::json& j,
                                       int kern,
                                       float rep,
                                       int unfold,
-                                      float dir)
+                                      float dir,
+                                      int color_from = 0)
 {
     j["strip_cmap_on"] = on;
     kern = SpatialPatternKernelClamp(kern);
@@ -115,6 +116,7 @@ inline void StripColormapSaveCanonical(nlohmann::json& j,
     j["strip_cmap_rep"] = rep;
     j["strip_cmap_unfold"] = unfold;
     j["strip_cmap_dir"] = dir;
+    j["strip_cmap_color_from"] = std::clamp(color_from, 0, 1);
 }
 
 inline void StripColormapLoadCanonical(const nlohmann::json& settings,
@@ -122,7 +124,8 @@ inline void StripColormapLoadCanonical(const nlohmann::json& settings,
                                        int& kern,
                                        float& rep,
                                        int& unfold,
-                                       float& dir)
+                                       float& dir,
+                                       int& color_from)
 {
     if(settings.contains("strip_cmap_on") && settings["strip_cmap_on"].is_boolean())
         on = settings["strip_cmap_on"].get<bool>();
@@ -144,6 +147,8 @@ inline void StripColormapLoadCanonical(const nlohmann::json& settings,
         unfold = std::clamp(settings["strip_cmap_unfold"].get<int>(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("strip_cmap_dir") && settings["strip_cmap_dir"].is_number())
         dir = std::fmod(settings["strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
+    if(settings.contains("strip_cmap_color_from") && settings["strip_cmap_color_from"].is_number_integer())
+        color_from = std::clamp(settings["strip_cmap_color_from"].get<int>(), 0, 1);
 }
 
 #endif

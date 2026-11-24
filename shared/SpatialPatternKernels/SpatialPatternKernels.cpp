@@ -240,7 +240,8 @@ QString SpatialPatternKernelShader()
         "    float t = clamp((x - e0) / max(e1 - e0, 1e-5), 0.0, 1.0);\n"
         "    return t * t * (3.0 - 2.0 * t);\n"
         "}\n"
-        "float evalStripKernelSigned(int kid, float s01, float phase01, float repeats, float time_sec)\n"
+        "float evalStripKernelSigned(int kid, float s01, float phase01, float repeats, float time_sec,\n"
+        "                             float t01, float u01)\n"
         "{\n"
         "    float rep = max(repeats, 1.0);\n"
         "    float tsec = time_sec * 0.35;\n"
@@ -248,6 +249,9 @@ QString SpatialPatternKernelShader()
         "    float r = 1.0 + (rep - 1.0) * 0.72;\n"
         "    float u_phase = fractf(s01 * r + ph + 1000.0);\n"
         "    float TWO_PI = 6.2831853;\n"
+        "    /* Cross-axis pilots (2D/3D-feel). 1D kernels may ignore t01/u01. */\n"
+        "    t01 = clamp(t01, 0.0, 1.0);\n"
+        "    u01 = clamp(u01, 0.0, 1.0);\n"
         "    float k = sin(TWO_PI * (s01 * r + ph));\n");
     for(size_t i = 0; i < g_kernels.size(); ++i)
     {
@@ -266,7 +270,10 @@ QString SpatialPatternKernelShader()
         "    float phase01 = u_params[1];\n"
         "    float repeats = max(u_params[2], 1.0);\n"
         "    float time_sec = u_params[3];\n"
-        "    float k = evalStripKernelSigned(kid, s01, phase01, repeats, time_sec);\n"
+        "    /* Provisional cross-axes along the 1D bake — spatial room sampling still uses s01. */\n"
+        "    float t01 = fractf(s01 * 0.6180339 + phase01 * 0.37 + time_sec * 0.04);\n"
+        "    float u01 = fractf(s01 * 0.3819660 + phase01 * 0.19 + time_sec * 0.025);\n"
+        "    float k = evalStripKernelSigned(kid, s01, phase01, repeats, time_sec, t01, u01);\n"
         "    float enc = clamp((k + 1.0) * 0.5, 0.0, 1.0);\n"
         "    out_color = vec4(enc, enc, enc, 1.0);\n"
         "}\n");

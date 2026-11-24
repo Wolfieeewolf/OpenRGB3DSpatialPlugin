@@ -725,6 +725,8 @@ void LEDViewport3D::DrawRoomGridOverlay()
                 set_f("u_pat_dir", layer.pattern_dir_deg);
                 set_f("u_pat_feature", layer.pattern_feature);
                 set_f("u_pat_phase", layer.pattern_phase_s01);
+                set_i("u_pat_color_from", layer.pattern_color_from);
+                set_i("u_pat_rich", layer.pattern_material_rich);
             }
             for(int pi = 0; pi < GpuRoomGridOverlayLayer::kMaxPalette; ++pi)
             {

@@ -27,7 +27,7 @@
 #include "Geometry3DUtils.h"
 #include <cstring>
 #include <QColor>
-#include <QColorDialog>
+#include "EffectColorWheelDialog.h"
 #include <QComboBox>
 #include <QLabel>
 #include <QMenu>
@@ -123,11 +123,12 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     reset_look_button = nullptr;
     color_hue_row_ = nullptr;
     color_sat_row_ = nullptr;
+    colour_block_widget_ = nullptr;
+    colour_section_caption_ = nullptr;
     color_buttons_widget = nullptr;
     color_buttons_layout = nullptr;
     hue_palette_widget_ = nullptr;
     hue_palette_layout_ = nullptr;
-    hue_palette_caption_ = nullptr;
     add_color_button = nullptr;
     remove_color_button = nullptr;
     hue_palette_buttons_.clear();
@@ -656,6 +657,7 @@ void SpatialEffect3D::OnEffectStripColormapChanged()
         effect_strip_cmap_rep = effect_strip_cmap_panel->kernelRepeats();
         effect_strip_cmap_unfold = effect_strip_cmap_panel->unfoldMode();
         effect_strip_cmap_dir = effect_strip_cmap_panel->directionDeg();
+        effect_strip_cmap_color_from_ = effect_strip_cmap_panel->colorFrom();
     }
     SyncColorControlVisibilityForPatternMode();
     emit ParametersChanged();
@@ -669,7 +671,8 @@ void SpatialEffect3D::SyncEffectStripColormapPanelFromModel()
                                                        effect_strip_cmap_kernel,
                                                        effect_strip_cmap_rep,
                                                        effect_strip_cmap_unfold,
-                                                       effect_strip_cmap_dir);
+                                                       effect_strip_cmap_dir,
+                                                       effect_strip_cmap_color_from_);
     }
 }
 
@@ -680,13 +683,15 @@ void SpatialEffect3D::LoadEffectStripColormapSettings(const nlohmann::json& sett
     effect_strip_cmap_rep = 4.0f;
     effect_strip_cmap_unfold = 0;
     effect_strip_cmap_dir = 0.0f;
+    effect_strip_cmap_color_from_ = 0;
 
     StripColormapLoadCanonical(settings,
                                effect_strip_cmap_on,
                                effect_strip_cmap_kernel,
                                effect_strip_cmap_rep,
                                effect_strip_cmap_unfold,
-                               effect_strip_cmap_dir);
+                               effect_strip_cmap_dir,
+                               effect_strip_cmap_color_from_);
 
     SyncEffectStripColormapPanelFromModel();
 }
@@ -698,6 +703,7 @@ void SpatialEffect3D::SaveEffectStripColormapSettings(nlohmann::json& j) const
     float rep = effect_strip_cmap_rep;
     int unfold = effect_strip_cmap_unfold;
     float dir = effect_strip_cmap_dir;
+    int color_from = effect_strip_cmap_color_from_;
     if(effect_strip_cmap_panel)
     {
         on = effect_strip_cmap_panel->useStripColormap();
@@ -705,8 +711,9 @@ void SpatialEffect3D::SaveEffectStripColormapSettings(nlohmann::json& j) const
         rep = effect_strip_cmap_panel->kernelRepeats();
         unfold = effect_strip_cmap_panel->unfoldMode();
         dir = effect_strip_cmap_panel->directionDeg();
+        color_from = effect_strip_cmap_panel->colorFrom();
     }
-    StripColormapSaveCanonical(j, on, kern, rep, unfold, dir);
+    StripColormapSaveCanonical(j, on, kern, rep, unfold, dir, color_from);
 }
 
 void SpatialEffect3D::AddBandModulationWidget(QWidget* widget)
@@ -775,12 +782,24 @@ void SpatialEffect3D::SaveEffectStratumSettings(nlohmann::json& j) const
 
 void SpatialEffect3D::SyncColorControlVisibilityForPatternMode()
 {
-    // Surface Look Pattern owns colors — hide effect source/stops while Pattern is selected.
-    const bool use_pattern_look =
+    /* Pattern + Color from Pattern: hide effect colour chrome (kernel palette).
+       Pattern + Color from Effect, or Effect Colors: show Look/Custom/Rainbow stack. */
+    const bool use_pattern =
         shared_strip_cmap_panel &&
         shared_strip_cmap_panel->useStripColormap();
+    const bool pattern_owns_palette =
+        use_pattern &&
+        shared_strip_cmap_panel->colorFrom() == StripKernelColormapPanel::ColorFromPattern;
 
-    const bool show_color_chrome = !use_pattern_look;
+    const bool show_color_chrome = !pattern_owns_palette;
+    if(colour_section_caption_)
+    {
+        colour_section_caption_->setVisible(show_color_chrome);
+    }
+    if(colour_block_widget_)
+    {
+        colour_block_widget_->setVisible(show_color_chrome);
+    }
     if(color_source_combo)
     {
         color_source_combo->setVisible(show_color_chrome);
@@ -838,14 +857,18 @@ void SpatialEffect3D::RefreshHuePaletteSwatches()
         return;
     }
 
-    const bool use_pattern_look =
+    /* Same visibility as Colour chrome: hide only when Pattern owns the palette. */
+    const bool use_pattern =
         shared_strip_cmap_panel &&
         shared_strip_cmap_panel->useStripColormap();
+    const bool pattern_owns_palette =
+        use_pattern &&
+        shared_strip_cmap_panel->colorFrom() == StripKernelColormapPanel::ColorFromPattern;
     const bool tint_active =
         std::fabs(color_hue_shift_deg_) > 0.5f
         || std::fabs(color_sat_mul_ - 1.0f) > 0.01f;
     const bool show =
-        !use_pattern_look
+        !pattern_owns_palette
         && color_source_ != ColorSourceRainbow
         && tint_active;
 
@@ -904,11 +927,12 @@ void SpatialEffect3D::CreateColorControls()
     color_source_combo = color_panel->sourceCombo();
     color_style_combo = color_panel->styleCombo();
     reset_look_button = color_panel->resetLookButton();
+    colour_block_widget_ = color_panel->colourBlockWidget();
+    colour_section_caption_ = color_panel->colourSectionCaption();
     color_buttons_widget = color_panel->colorButtonsWidget();
     color_buttons_layout = color_panel->colorButtonsLayout();
     hue_palette_widget_ = color_panel->huePaletteWidget();
     hue_palette_layout_ = color_panel->huePaletteLayout();
-    hue_palette_caption_ = color_panel->huePaletteCaption();
     color_pattern_settings_host = color_panel->patternHostWidget();
     shared_strip_cmap_panel = nullptr;
     add_color_button = color_panel->addColorButton();
@@ -959,7 +983,7 @@ void SpatialEffect3D::CreateColorControls()
         AlignCaptionLabels({
             color_hue_row_ ? color_hue_row_->captionLabel() : nullptr,
             color_sat_row_ ? color_sat_row_->captionLabel() : nullptr,
-            hue_palette_caption_,
+            color_panel->huePaletteCaption(),
         });
     }
 
@@ -990,9 +1014,11 @@ void SpatialEffect3D::CreateColorButton(RGBColor color)
     color_button->setMinimumSize(40, 30);
     color_button->setMaximumSize(40, 30);
     color_button->setToolTip(QStringLiteral(
-        "Authored stop (base). Click to change. After Hue strip shows Hue/Sat preview."));
+        "Authored stop (base). Click or Enter/Space when focused to open the OpenRGB colour wheel. "
+        "Colors menu → Edit stop. After Hue strip shows Hue/Sat preview."));
     color_button->setAccessibleName(
         QStringLiteral("Color stop %1").arg((int)color_buttons.size() + 1));
+    color_button->setFocusPolicy(Qt::StrongFocus);
     int r = color & 0xFF;
     int g = (color >> 8) & 0xFF;
     int b = (color >> 16) & 0xFF;
@@ -1114,9 +1140,11 @@ void SpatialEffect3D::ShowColorsContextMenu(const QPoint& pos)
     menu.addSeparator();
     QAction* add_act = menu.addAction(QStringLiteral("Add stop"));
     QAction* rem_act = menu.addAction(QStringLiteral("Remove stop"));
+    QAction* edit_act = menu.addAction(QStringLiteral("Edit stop…"));
     QAction* reset_act = menu.addAction(QStringLiteral("Reset to Look"));
     QAction* hue_hint = menu.addAction(QStringLiteral("After Hue = live preview (read-only)"));
     hue_hint->setEnabled(false);
+    edit_act->setEnabled(!colors.empty() && color_source_ != ColorSourceRainbow);
     look_act->setCheckable(true);
     custom_act->setCheckable(true);
     rainbow_act->setCheckable(true);
@@ -1156,6 +1184,19 @@ void SpatialEffect3D::ShowColorsContextMenu(const QPoint& pos)
     else if(chosen == rem_act)
     {
         OnRemoveColorClicked();
+    }
+    else if(chosen == edit_act)
+    {
+        int index = 0;
+        for(size_t i = 0; i < color_buttons.size(); ++i)
+        {
+            if(color_buttons[i] && color_buttons[i]->hasFocus())
+            {
+                index = (int)i;
+                break;
+            }
+        }
+        EditColorStopAt(index);
     }
     else if(chosen == reset_act)
     {
@@ -1232,29 +1273,39 @@ void SpatialEffect3D::OnColorButtonClicked()
     std::vector<QPushButton*>::iterator it = std::find(color_buttons.begin(), color_buttons.end(), clicked_button);
     if(it == color_buttons.end()) return;
 
-    int index = std::distance(color_buttons.begin(), it);
-    if(index >= (int)colors.size()) return;
+    EditColorStopAt((int)std::distance(color_buttons.begin(), it));
+}
 
-    QColorDialog color_dialog;
-    int r = colors[index] & 0xFF;
-    int g = (colors[index] >> 8) & 0xFF;
-    int b = (colors[index] >> 16) & 0xFF;
-    color_dialog.setCurrentColor(QColor(r, g, b));
-
-    if(color_dialog.exec() == QDialog::Accepted)
+void SpatialEffect3D::EditColorStopAt(int index)
+{
+    if(index < 0 || index >= (int)colors.size() || index >= (int)color_buttons.size())
     {
-        if(color_source_ == ColorSourceLook)
-        {
-            SetColorSource(ColorSourceCustom);
-        }
-        QColor new_color = color_dialog.currentColor();
-        colors[index] = ((unsigned int)new_color.blue() << 16) | ((unsigned int)new_color.green() << 8) | (unsigned int)new_color.red();
-
-        PluginUiSetRgbSwatchButton(clicked_button, new_color.red(), new_color.green(), new_color.blue());
-        RefreshHuePaletteSwatches();
-
-        emit ParametersChanged();
+        return;
     }
+
+    const int r = colors[index] & 0xFF;
+    const int g = (colors[index] >> 8) & 0xFF;
+    const int b = (colors[index] >> 16) & 0xFF;
+    QColor picked(r, g, b);
+    if(!EffectColorWheelDialog::pickColor(
+            this,
+            picked,
+            tr("Colour stop %1").arg(index + 1)))
+    {
+        return;
+    }
+
+    if(color_source_ == ColorSourceLook)
+    {
+        SetColorSource(ColorSourceCustom);
+    }
+    colors[index] = ((unsigned int)picked.blue() << 16)
+                  | ((unsigned int)picked.green() << 8)
+                  | (unsigned int)picked.red();
+
+    PluginUiSetRgbSwatchButton(color_buttons[index], picked.red(), picked.green(), picked.blue());
+    RefreshHuePaletteSwatches();
+    emit ParametersChanged();
 }
 
 void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)
@@ -1717,9 +1768,8 @@ RGBColor SpatialEffect3D::ResolvePatternColor(float time,
                                               const Vector3D& origin,
                                               const Vector3D& rotated_pos) const
 {
-    /* Phase 0: the pattern moves by its own kernel animation only, never by the effect's
-       hue or value — that bending made patterns unreadable. */
-    const float p01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
+    /* Strip sample is encoded kernel k as (k+1)/2 — pattern motion / shade. */
+    const float k01 = SampleEffectStripColormap01(GetEffectStripColormapRepeats(),
                                                   GetEffectStripColormapUnfold(),
                                                   GetEffectStripColormapDirectionDeg(),
                                                   0.0f,
@@ -1728,7 +1778,58 @@ RGBColor SpatialEffect3D::ResolvePatternColor(float time,
                                                   GetNormalizedSize(),
                                                   origin,
                                                   rotated_pos);
-    return ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), p01, time);
+
+    if(!UseEffectStripColormapEffectColors())
+    {
+        /* Color from Pattern: kernel palette at k (legacy behaviour). */
+        return ResolveEffectStripKernelColor(GetEffectStripColormapKernel(), k01, time);
+    }
+
+    /* Color from Effect: Look/Custom/Rainbow at spatial strip position, Hue/Sat, Flat/Rich. */
+    const float freq_norm = std::clamp(0.35f + GetNormalizedFrequency() * 1.2f, 0.25f, 2.5f);
+    const float detail_norm = std::clamp(0.35f + GetNormalizedDetail() * 1.2f, 0.25f, 2.5f);
+    float phase_eff = 0.0f;
+    float time_eff = 0.0f;
+    float kernel_rep_eff = 1.0f;
+    StripColormapClockScale(freq_norm, detail_norm, GetEffectStripColormapRepeats(), 0.0f,
+                            GetMotionSeconds(time), phase_eff, time_eff, kernel_rep_eff);
+    float hx = 1.0f, hy = 1.0f, hz = 1.0f;
+    GetVolumeHalfExtents(grid, hx, hy, hz);
+    float lx = 0.0f, ly = 0.0f, lz = 0.0f;
+    StripColormapLocalAxes(hx, hy, hz, GetNormalizedSize(), origin, rotated_pos, lx, ly, lz);
+    float phase_use = phase_eff;
+    float time_use = time_eff;
+    const float s01 = StripColormapComputeS01(GetEffectStripColormapUnfold(),
+                                              GetEffectStripColormapDirectionDeg(),
+                                              phase_eff, time_eff, lx, ly, lz,
+                                              phase_use, time_use);
+
+    RGBColor base = GetRainbowMode() ? GetRainbowColor(s01 * 360.0f) : GetColorAtPosition(s01);
+    base = PreviewColorWithHueSat(base, GetColorHueShiftDeg(), GetColorSatMul());
+
+    const float shade = std::clamp(k01, 0.0f, 1.0f);
+    auto lerpf = [](float a, float b, float t) { return a + (b - a) * t; };
+    int r = (int)(base & 0xFFu);
+    int g = (int)((base >> 8) & 0xFFu);
+    int b = (int)((base >> 16) & 0xFFu);
+    if(GetMaterialRich() == 0)
+    {
+        /* Flat: colour × intensity from kernel. */
+        const float lum = lerpf(0.12f, 1.0f, shade);
+        r = (int)std::lround(std::clamp((float)r * lum, 0.0f, 255.0f));
+        g = (int)std::lround(std::clamp((float)g * lum, 0.0f, 255.0f));
+        b = (int)std::lround(std::clamp((float)b * lum, 0.0f, 255.0f));
+    }
+    else
+    {
+        /* Rich: same-hue shade/lift from kernel (no white wash). */
+        const float lum = lerpf(0.38f, 1.0f, std::pow(shade, 0.72f));
+        const float tip = lerpf(1.0f, 1.28f, shade * 0.35f);
+        r = (int)std::lround(std::clamp((float)r * lum * tip, 0.0f, 255.0f));
+        g = (int)std::lround(std::clamp((float)g * lum * tip, 0.0f, 255.0f));
+        b = (int)std::lround(std::clamp((float)b * lum * tip, 0.0f, 255.0f));
+    }
+    return ((unsigned int)b << 16) | ((unsigned int)g << 8) | (unsigned int)r;
 }
 
 void SpatialEffect3D::FillOverlayPattern(GpuRoomGridOverlayLayer& out, float time) const
@@ -1746,10 +1847,22 @@ void SpatialEffect3D::FillOverlayPattern(GpuRoomGridOverlayLayer& out, float tim
     }
     const int kernel = GetEffectStripColormapKernel();
     const float cycle_sec = GetColorCycleSeconds(time);
+    out.pattern_color_from = GetEffectStripColormapColorFrom();
+    out.pattern_material_rich = GetMaterialRich();
     for(int i = 0; i < n; ++i)
     {
-        /* Entry i = palette position i/n (the palette wraps, so never sample 1.0). */
-        const RGBColor c = ResolveStripKernelFinalColor(kernel, (float)i / (float)n, cycle_sec);
+        const float t = (float)i / (float)n;
+        RGBColor c;
+        if(UseEffectStripColormapEffectColors())
+        {
+            c = GetRainbowMode() ? GetRainbowColor(t * 360.0f) : GetColorAtPosition(t);
+            c = PreviewColorWithHueSat(c, GetColorHueShiftDeg(), GetColorSatMul());
+        }
+        else
+        {
+            /* Entry i = palette position i/n (the palette wraps, so never sample 1.0). */
+            c = ResolveStripKernelFinalColor(kernel, t, cycle_sec);
+        }
         out.pattern_lut[i][0] = (float)(c & 0xFF) / 255.0f;
         out.pattern_lut[i][1] = (float)((c >> 8) & 0xFF) / 255.0f;
         out.pattern_lut[i][2] = (float)((c >> 16) & 0xFF) / 255.0f;

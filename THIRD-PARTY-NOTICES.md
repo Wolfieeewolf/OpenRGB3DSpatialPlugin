@@ -7,6 +7,7 @@ OpenRGB 3D Spatial LED Control is licensed under the GNU General Public License,
 | Component | Licence | Notes |
 | --- | --- | --- |
 | [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) | GPL-2.0-or-later | Plugin API and shared source files (`OpenRGB/` submodule) |
+| [Qt-Plus ColorWheel](https://github.com/liuyanghejerry/Qt-Plus) (via OpenRGB) | As distributed with OpenRGB (GPL-2.0-or-later tree) | Colour wheel widget compiled from `OpenRGB/dependencies/ColorWheel` for effect stop picking |
 | [nlohmann/json](https://github.com/nlohmann/json) | MIT | JSON library, via OpenRGB's `dependencies/json` |
 | [Open Asset Import Library (Assimp)](https://github.com/assimp/assimp) | BSD-3-Clause | Mesh import; linked statically (`dependencies/assimp` submodule) |
 | Libraries built into Assimp | Various permissive | pugixml (MIT), RapidJSON (MIT), Clipper (Boost Software License 1.0), poly2tri (BSD-3-Clause), Open3DGC (MIT), OpenDDL Parser (MIT), utf8cpp (BSL-1.0), stb (MIT or public domain), minizip (zlib), kuba--/zip (Unlicense) and miniz (MIT). Licence texts are in `dependencies/assimp/contrib/`. |

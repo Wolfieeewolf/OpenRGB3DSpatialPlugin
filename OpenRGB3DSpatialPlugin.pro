@@ -90,6 +90,7 @@ INCLUDEPATH += \
     OpenRGB/SPDAccessor \
     OpenRGB/hidapi_wrapper \
     OpenRGB/dependencies/hidapi-win/include \
+    OpenRGB/dependencies/ColorWheel \
     OpenRGB/i2c_smbus \
     OpenRGB/RGBController \
     OpenRGB/net_port \
@@ -103,6 +104,7 @@ HEADERS += \
     OpenRGB/RGBController/RGBControllerInterface.h \
     OpenRGB/RGBController/RGBController.h \
     OpenRGB/LogManager.h \
+    OpenRGB/dependencies/ColorWheel/ColorWheel.h \
     shared/utils/PluginLog.h
 
 RESOURCES += \
@@ -308,6 +310,7 @@ HEADERS += \
     ui/widgets/EffectLayerBanner.h \
     ui/widgets/EffectStackBlendRow.h \
     ui/widgets/EffectColorPanel.h \
+    ui/widgets/EffectColorWheelDialog.h \
     ui/widgets/EffectCustomHost.h \
     ui/widgets/EffectTransportRow.h \
     ui/widgets/EffectSliderRow.h \
@@ -506,6 +509,8 @@ SOURCES += \
     ui/widgets/StratumBandPanel.cpp \
     ui/widgets/StripKernelColormapPanel.cpp \
     ui/widgets/EffectCommonPanels.cpp \
+    ui/widgets/EffectColorWheelDialog.cpp \
+    OpenRGB/dependencies/ColorWheel/ColorWheel.cpp \
     ui/widgets/EffectRowWidgets.cpp \
     ui/widgets/RoomSpatialLightSettingsPanel.cpp \
     ui/widgets/EffectRoomOutputPanel.cpp \

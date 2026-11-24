@@ -197,6 +197,8 @@ uniform int u_pat_mode[4];     /* StripPatternSurface::UnfoldMode */
 uniform float u_pat_dir[4];    /* PlaneXZ direction, degrees */
 uniform float u_pat_feature[4]; /* Size: zoom of the strip axes */
 uniform float u_pat_phase[4];  /* EffectPhaseOnly strip position */
+uniform int u_pat_color_from[4]; /* 0 kernel palette, 1 effect colours */
+uniform int u_pat_rich[4];       /* Flat=0 Rich=1 when color_from Effect */
 out vec4 frag_color;
 
 float axis01(float v, float lo, float hi)
@@ -1085,8 +1087,7 @@ float stripCoord01(vec3 l, int mode, float dir_deg)
     return clamp(s, 0.0, 1.0);
 }
 
-/* The pattern's colour at this point: strip value (smootherstep blend, like
-   SpatialStripFieldEngine::sample01) → kernel palette (blended between entries). */
+/* Pattern colour: strip k → palette (Color from Pattern), or s01 → effect ramp + k shade (Effect). */
 vec3 patternColor(int i, vec3 world)
 {
     vec3 local = u_rot[i] * (world - u_origin[i]);
@@ -1105,13 +1106,29 @@ vec3 patternColor(int i, vec3 world)
     int x1 = min(x0 + 1, nw - 1);
     float t = fx - float(x0);
     float u = t * t * (3.0 - 2.0 * t);
-    float pal = clamp(mix(patFetch(i, ivec2(x0, 0)).r, patFetch(i, ivec2(x1, 0)).r, u), 0.0, 1.0);
+    float k01 = clamp(mix(patFetch(i, ivec2(x0, 0)).r, patFetch(i, ivec2(x1, 0)).r, u), 0.0, 1.0);
 
-    /* Palette entry k holds position k/N and the palette wraps, so blend cyclically. */
-    float px = fract(pal) * float(nw);
+    float lut_t = (u_pat_color_from[i] != 0) ? clamp(s01, 0.0, 1.0) : k01;
+    float px = fract(lut_t) * float(nw);
     int p0 = int(floor(px)) % nw;
     int p1 = (p0 + 1) % nw;
-    return mix(patFetch(i, ivec2(p0, 1)).rgb, patFetch(i, ivec2(p1, 1)).rgb, px - floor(px));
+    vec3 col = mix(patFetch(i, ivec2(p0, 1)).rgb, patFetch(i, ivec2(p1, 1)).rgb, px - floor(px));
+
+    if(u_pat_color_from[i] != 0)
+    {
+        float shade = k01;
+        if(u_pat_rich[i] == 0)
+        {
+            col *= mix(0.12, 1.0, shade);
+        }
+        else
+        {
+            float lum = mix(0.38, 1.0, pow(shade, 0.72));
+            float tip = mix(1.0, 1.28, shade * 0.35);
+            col = clamp(col * lum * tip, 0.0, 1.0);
+        }
+    }
+    return col;
 }
 
 /* The effect value each finish multiplies its colour by — the shape mask when a

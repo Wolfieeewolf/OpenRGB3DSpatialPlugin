@@ -102,26 +102,26 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
     if(palette == "fire")
     {
         RGBColor black = PackBGR(0, 0, 0);
-        RGBColor red = PackBGR(255, 24, 0);
-        RGBColor orange = PackBGR(255, 120, 0);
-        RGBColor yellow = PackBGR(255, 220, 40);
-        RGBColor white = PackBGR(255, 245, 220);
-        if(p01 < 0.25f)
-            return LerpBGR(black, red, p01 / 0.25f);
-        if(p01 < 0.5f)
-            return LerpBGR(red, orange, (p01 - 0.25f) / 0.25f);
-        if(p01 < 0.78f)
-            return LerpBGR(orange, yellow, (p01 - 0.5f) / 0.28f);
-        return LerpBGR(yellow, white, (p01 - 0.78f) / 0.22f);
+        RGBColor red = PackBGR(255, 18, 0);
+        RGBColor orange = PackBGR(255, 110, 8);
+        RGBColor yellow = PackBGR(255, 210, 36);
+        RGBColor white = PackBGR(255, 248, 210);
+        if(p01 < 0.18f)
+            return LerpBGR(black, red, p01 / 0.18f);
+        if(p01 < 0.42f)
+            return LerpBGR(red, orange, (p01 - 0.18f) / 0.24f);
+        if(p01 < 0.72f)
+            return LerpBGR(orange, yellow, (p01 - 0.42f) / 0.30f);
+        return LerpBGR(yellow, white, (p01 - 0.72f) / 0.28f);
     }
     if(palette == "ocean")
     {
-        RGBColor deep = PackBGR(8, 40, 120);
-        RGBColor mid = PackBGR(30, 140, 200);
-        RGBColor foam = PackBGR(180, 230, 255);
-        if(p01 < 0.55f)
-            return LerpBGR(deep, mid, p01 / 0.55f);
-        return LerpBGR(mid, foam, (p01 - 0.55f) / 0.45f);
+        RGBColor deep = PackBGR(4, 28, 96);
+        RGBColor mid = PackBGR(20, 130, 190);
+        RGBColor foam = PackBGR(200, 240, 255);
+        if(p01 < 0.48f)
+            return LerpBGR(deep, mid, p01 / 0.48f);
+        return LerpBGR(mid, foam, (p01 - 0.48f) / 0.52f);
     }
     if(palette == "matrix")
     {
@@ -131,11 +131,11 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
     if(palette == "halloween")
         return LerpBGR(PackBGR(255, 80, 0), PackBGR(140, 0, 200), 0.35f + 0.65f * p01);
     if(palette == "cylon")
-        return LerpBGR(PackBGR(40, 0, 0), PackBGR(255, 20, 10), std::pow(p01, 2.2f));
+        return LerpBGR(PackBGR(18, 0, 0), PackBGR(255, 28, 8), std::pow(p01, 1.85f));
     if(palette == "candle")
-        return LerpBGR(PackBGR(255, 120, 40), PackBGR(255, 230, 160), p01);
+        return LerpBGR(PackBGR(255, 100, 28), PackBGR(255, 236, 170), std::pow(p01, 0.9f));
     if(palette == "meteor")
-        return LerpBGR(PackBGR(255, 200, 80), PackBGR(40, 20, 80), 1.0f - p01);
+        return LerpBGR(PackBGR(255, 220, 110), PackBGR(28, 12, 70), std::pow(1.0f - p01, 0.85f));
     if(palette == "frequency")
         return HsvToBgr(p01 * 200.0f + time_sec * 18.0f, 0.78f, 0.9f);
     if(palette == "distortion")

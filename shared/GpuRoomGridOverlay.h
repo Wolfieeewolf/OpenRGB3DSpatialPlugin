@@ -141,8 +141,11 @@ struct GpuRoomGridOverlayLayer
     float pattern_dir_deg = 0.0f;
     float pattern_feature = 1.0f;    /* Size: zoom of the strip axes */
     float pattern_phase_s01 = 0.0f;  /* EffectPhaseOnly: one strip position for every point */
+    /** 0 = LUT is kernel palette (index by strip k); 1 = LUT is effect colours (index by s01), strip k = shade. */
+    int pattern_color_from = 0;
+    int pattern_material_rich = 1;
     float pattern_strip[kPatternWidth] = {};   /* baked kernel strip, 0..1 — CPU fallback */
-    float pattern_lut[kPatternWidth][3] = {};  /* kernel palette, RGB 0..1 — CPU fallback */
+    float pattern_lut[kPatternWidth][3] = {};  /* palette / effect ramp, RGB 0..1 — CPU fallback */
     /**
      * Durable kPatternWidth × 2 RGBA32F handoff (row 0 strip, row 1 palette).
      * Viewport borrows as pattern_tex when set; else uploads from pattern_strip/lut.

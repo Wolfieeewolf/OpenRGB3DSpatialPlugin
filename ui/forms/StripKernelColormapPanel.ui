@@ -16,11 +16,31 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="QComboBox" name="sourceCombo">
-     <property name="toolTip">
-      <string>Surface Look paints the lit parts of the effect. Effect Colors uses rainbow/stops. Pattern uses a kernel with its own colors and animation.</string>
+    <layout class="QHBoxLayout" name="surfaceLookRow">
+     <property name="spacing">
+      <number>6</number>
      </property>
-    </widget>
+     <item>
+      <widget class="QLabel" name="surfaceLookCaption">
+       <property name="text">
+        <string>Surface Look:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignRight|Qt::AlignVCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="sourceCombo">
+       <property name="toolTip">
+        <string>Effect Colors = Look/Custom/Rainbow on the lit shape. Pattern = kernel motion/layout (Color from chooses palette vs effect colours).</string>
+       </property>
+       <property name="accessibleName">
+        <string>Surface Look</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QWidget" name="secondaryPanel">
@@ -48,23 +68,40 @@
        <widget class="QComboBox" name="kernelCombo"/>
       </item>
       <item row="1" column="0">
+       <widget class="QLabel" name="colorFromCaption">
+        <property name="text">
+         <string>Color from:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QComboBox" name="colorFromCombo">
+        <property name="toolTip">
+         <string>Pattern = kernel palette. Effect = Look/Custom/Rainbow with Hue/Sat and Flat/Rich; the pattern supplies motion and shade.</string>
+        </property>
+        <property name="accessibleName">
+         <string>Pattern color from</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
        <widget class="QLabel" name="unfoldCaption">
         <property name="text">
          <string>Map onto:</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1" colspan="2">
+      <item row="2" column="1" colspan="2">
        <widget class="QComboBox" name="unfoldCombo"/>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="repeatsCaption">
         <property name="text">
          <string>Density:</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <widget class="QSlider" name="repeatsSlider">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -80,7 +117,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="2">
+      <item row="3" column="2">
        <widget class="QLabel" name="repeatsLabel">
         <property name="minimumSize">
          <size>
@@ -93,14 +130,14 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="4" column="0">
        <widget class="QLabel" name="dirCaption">
         <property name="text">
          <string>Angle:</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="4" column="1">
        <widget class="QSlider" name="dirSlider">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -110,7 +147,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="2">
+      <item row="4" column="2">
        <widget class="QLabel" name="dirLabel">
         <property name="minimumSize">
          <size>

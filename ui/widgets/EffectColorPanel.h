@@ -27,6 +27,8 @@ public:
     QComboBox* styleCombo() const;
     QPushButton* resetLookButton() const;
     QVBoxLayout* tintHostLayout() const;
+    QWidget* colourBlockWidget() const;
+    QLabel* colourSectionCaption() const;
     QWidget* colorButtonsWidget() const;
     QHBoxLayout* colorButtonsLayout() const;
     QWidget* huePaletteWidget() const;
