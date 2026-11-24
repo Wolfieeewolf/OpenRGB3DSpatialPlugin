@@ -377,15 +377,34 @@ QPushButton* EffectGeometryPanel::rotationResetButton() const { return ui->rotat
 
 #include "ui_EffectColorPanel.h"
 
-#include <QCheckBox>
+#include <QComboBox>
 #include <QPushButton>
+#include <algorithm>
 
 EffectColorPanel::EffectColorPanel(bool rainbow_mode, QWidget* parent)
+    : EffectColorPanel(rainbow_mode ? 2 : 1, 1, parent)
+{
+}
+
+EffectColorPanel::EffectColorPanel(int color_source, int material_rich, QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::EffectColorPanel)
 {
     ui->setupUi(this);
-    ui->rainbowModeCheck->setChecked(rainbow_mode);
+    initCombos(color_source, material_rich);
+}
+
+void EffectColorPanel::initCombos(int color_source, int material_rich)
+{
+    if(ui->sourceCombo)
+    {
+        ui->sourceCombo->setCurrentIndex(std::clamp(color_source, 0, 2));
+    }
+    if(ui->styleCombo)
+    {
+        /* Flat = 0, Rich = 1 — combo index matches material_rich. */
+        ui->styleCombo->setCurrentIndex(material_rich != 0 ? 1 : 0);
+    }
 }
 
 EffectColorPanel::~EffectColorPanel()
@@ -393,7 +412,10 @@ EffectColorPanel::~EffectColorPanel()
     delete ui;
 }
 
-QCheckBox* EffectColorPanel::rainbowModeCheck() const { return ui->rainbowModeCheck; }
+QComboBox* EffectColorPanel::sourceCombo() const { return ui->sourceCombo; }
+QComboBox* EffectColorPanel::styleCombo() const { return ui->styleCombo; }
+QPushButton* EffectColorPanel::resetLookButton() const { return ui->resetLookButton; }
+QVBoxLayout* EffectColorPanel::tintHostLayout() const { return ui->tintHostLayout; }
 QWidget* EffectColorPanel::colorButtonsWidget() const { return ui->colorButtonsWidget; }
 QHBoxLayout* EffectColorPanel::colorButtonsLayout() const { return ui->colorButtonsLayout; }
 QWidget* EffectColorPanel::patternHostWidget() const { return ui->patternHostWidget; }

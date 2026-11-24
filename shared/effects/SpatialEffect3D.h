@@ -451,6 +451,27 @@ public:
     virtual std::vector<RGBColor> GetColors() const;
     virtual void SetRainbowMode(bool enabled);
     virtual bool GetRainbowMode() const;
+
+    /** Color source: Look (authored), Custom (user stops), Rainbow. */
+    enum ColorSource : int { ColorSourceLook = 0, ColorSourceCustom = 1, ColorSourceRainbow = 2 };
+    void SetColorSource(int source);
+    int GetColorSource() const { return color_source_; }
+    /** Material style: 0 = Flat/Basic, 1 = Rich/Masterpiece. Both stay first-class. */
+    void SetMaterialRich(int rich);
+    int GetMaterialRich() const { return material_rich_; }
+    void SetColorHueShiftDeg(float deg);
+    float GetColorHueShiftDeg() const { return color_hue_shift_deg_; }
+    void SetColorSatMul(float mul);
+    float GetColorSatMul() const { return color_sat_mul_; }
+    /** Snapshot authored Look stops (FolderVolume colors: / effect defaults). */
+    void SetLookColors(const std::vector<RGBColor>& look);
+    const std::vector<RGBColor>& GetLookColors() const { return look_colors_; }
+    void ResetColorsToLook();
+    /** Palette for finish packing — Look/Custom stops; empty when Rainbow. */
+    std::vector<RGBColor> GetFinishPaletteColors() const;
+    /** Rich Custom: densify thin stop lists for smoother ramp sampling. Flat uses stops as-is. */
+    static void EnrichPaletteForRich(std::vector<RGBColor>& stops, int target_stops = 6);
+
     bool UseSpatialRoomTint() const { return spatial_mapping_mode != SpatialMappingMode::Off; }
 
     void SetSpatialMappingMode(SpatialMappingMode mode);
@@ -728,7 +749,12 @@ protected:
     QWidget*            color_pattern_settings_host;
     QWidget*            band_modulation_settings_host;
     StripKernelColormapPanel* shared_strip_cmap_panel = nullptr;
-    QCheckBox*          rainbow_mode_check;
+    QCheckBox*          rainbow_mode_check = nullptr; /* legacy; panel uses source combo */
+    QComboBox*          color_source_combo = nullptr;
+    QComboBox*          color_style_combo = nullptr;
+    QPushButton*        reset_look_button = nullptr;
+    class EffectDoubleSliderRow* color_hue_row_ = nullptr;
+    class EffectDoubleSliderRow* color_sat_row_ = nullptr;
 
     QWidget*            color_buttons_widget;
     QHBoxLayout*        color_buttons_layout;
@@ -736,6 +762,11 @@ protected:
     QPushButton*        remove_color_button;
     std::vector<QPushButton*> color_buttons;
     std::vector<RGBColor> colors;
+    std::vector<RGBColor> look_colors_;
+    int                 color_source_ = ColorSourceCustom;
+    int                 material_rich_ = 1; /* default Rich; Flat remains one click away */
+    float               color_hue_shift_deg_ = 0.0f;
+    float               color_sat_mul_ = 1.0f;
 
     QPushButton*        start_effect_button;
     QPushButton*        stop_effect_button;
@@ -943,6 +974,11 @@ protected:
 private slots:
     void OnParameterChanged();
     void OnRainbowModeChanged();
+    void OnColorSourceChanged();
+    void OnColorStyleChanged();
+    void OnResetLookClicked();
+    void SyncColorSourceUi();
+    void ShowColorsContextMenu(const QPoint& pos);
     void OnEffectStratumBandChanged();
     void OnEffectStripColormapChanged();
     void OnAddColorClicked();

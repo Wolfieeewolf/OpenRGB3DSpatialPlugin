@@ -39,11 +39,24 @@ FolderVolumeEffect::FolderVolumeEffect(FolderVolumeSpec spec, QWidget* parent)
     {
         slider_values[i] = spec_.sliders[i].value;
     }
-    if(GetColors().empty() && !spec_.colors.empty())
+    if(!spec_.colors.empty())
     {
-        SetColors(spec_.colors);
+        SetLookColors(spec_.colors);
+        if(GetColors().empty() || GetColors().size() <= 2)
+        {
+            SetColors(spec_.colors);
+        }
     }
-    SetRainbowMode(spec_.rainbow);
+    if(spec_.rainbow)
+    {
+        SetRainbowMode(true);
+        SetColorSource(ColorSourceRainbow);
+    }
+    else if(!spec_.colors.empty())
+    {
+        SetColorSource(ColorSourceLook);
+    }
+    SetMaterialRich(1); /* Rich default; Flat stays one click away */
     if(spec_.effect_instances > 0)
     {
         effect_instance_count = spec_.effect_instances;
@@ -199,6 +212,9 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
        Branch order mirrors CalculateColorGrid: rgb, surface, hsv, hex, audio, then the
        scalar path (depth / spiral / plain). */
     out.rainbow = GetRainbowMode();
+    out.material_rich = GetMaterialRich();
+    out.hue_shift_deg = GetColorHueShiftDeg();
+    out.sat_mul = GetColorSatMul();
     out.depth_shade = spec_.finish_depth;
     if(spec_.finish_rgb)
     {
@@ -244,7 +260,11 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
         && GetRainbowMode();
     if(!surface_rainbow)
     {
-        const std::vector<RGBColor>& cols = GetColors();
+        std::vector<RGBColor> cols = GetFinishPaletteColors();
+        if(GetMaterialRich() != 0 && GetColorSource() == ColorSourceCustom)
+        {
+            EnrichPaletteForRich(cols, 6);
+        }
         for(size_t i = 0; i < cols.size() && out.palette_count < GpuRoomGridOverlayLayer::kMaxPalette; ++i)
         {
             const RGBColor c = cols[i];
@@ -341,6 +361,9 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
         SpatialVolumeFieldEngine::DisplayFinish fin;
         fin.hue_scroll_deg = time * GetColorCycleHz() * 360.0f;
         fin.rainbow = GetRainbowMode();
+        fin.material_rich = GetMaterialRich();
+        fin.hue_shift_deg = GetColorHueShiftDeg();
+        fin.sat_mul = GetColorSatMul();
         if(spec_.finish_rgb)
         {
             fin.mode = GpuRoomGridOverlayLayer::FinishRgb;
@@ -390,7 +413,11 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
 
         if(baked_display && fin.mode != GpuRoomGridOverlayLayer::FinishRgb)
         {
-            const std::vector<RGBColor>& cols = GetColors();
+            std::vector<RGBColor> cols = GetFinishPaletteColors();
+            if(GetMaterialRich() != 0 && GetColorSource() == ColorSourceCustom)
+            {
+                EnrichPaletteForRich(cols, 6);
+            }
             for(size_t i = 0; i < cols.size() && fin.palette_count < 8; ++i)
             {
                 const RGBColor c = cols[i];

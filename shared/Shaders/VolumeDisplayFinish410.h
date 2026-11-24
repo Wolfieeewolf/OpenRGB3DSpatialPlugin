@@ -6,6 +6,10 @@
 /**
  * Shared display-finish GLSL matching ViewportShaders::applyFinish (overlay).
  * Used by SpatialVolumeFieldEngine to bake finished RGB into LED point samples.
+ *
+ * u_material_rich: 0 = Flat/Basic (legacy colour × intensity / classic HSV rainbow)
+ *                  1 = Rich/Masterpiece (shade + highlight + spectral rainbow)
+ * u_hue_shift / u_sat_mul: HSV tweak applied after material sample (Look/Custom).
  */
 namespace VolumeDisplayFinish410
 {
@@ -21,6 +25,9 @@ uniform float u_hue_scroll;
 uniform int u_rainbow;
 uniform int u_palette_count;
 uniform vec3 u_palette[8];
+uniform int u_material_rich;
+uniform float u_hue_shift;
+uniform float u_sat_mul;
 out vec4 frag_color;
 
 vec3 rainbowHue(float hue_deg)
@@ -56,6 +63,32 @@ vec3 hsv2rgb(float h, float s, float v)
     return vec3(v, p, q);
 }
 
+vec3 rgb2hsv(vec3 c)
+{
+    float cmax = max(c.r, max(c.g, c.b));
+    float cmin = min(c.r, min(c.g, c.b));
+    float d = cmax - cmin;
+    float h = 0.0;
+    if(d > 1e-5)
+    {
+        if(cmax == c.r) h = mod((c.g - c.b) / d, 6.0);
+        else if(cmax == c.g) h = (c.b - c.r) / d + 2.0;
+        else h = (c.r - c.g) / d + 4.0;
+        h /= 6.0;
+        if(h < 0.0) h += 1.0;
+    }
+    float s = (cmax <= 1e-5) ? 0.0 : d / cmax;
+    return vec3(h, s, cmax);
+}
+
+vec3 applyHueSat(vec3 rgb)
+{
+    vec3 hsv = rgb2hsv(rgb);
+    hsv.x = fract(hsv.x + u_hue_shift / 360.0);
+    hsv.y = clamp(hsv.y * max(u_sat_mul, 0.0), 0.0, 1.0);
+    return hsv2rgb(hsv.x, hsv.y, hsv.z);
+}
+
 vec3 samplePalette(float t)
 {
     int n = clamp(u_palette_count, 1, 8);
@@ -66,7 +99,25 @@ vec3 samplePalette(float t)
     return mix(u_palette[i0], u_palette[i1], f);
 }
 
-vec3 paletteOrRainbow(float t01, float scroll_deg)
+/* Soft spectral / iridescent rainbow — Rich style only. */
+vec3 spectralIridescent(float t01, float shade, float gloss)
+{
+    float t = fract(t01);
+    vec3 a = rainbowHue(t * 360.0);
+    vec3 b = rainbowHue(fract(t + 0.08) * 360.0);
+    vec3 c = rainbowHue(fract(t + 0.92) * 360.0);
+    vec3 base = mix(mix(c, a, 0.55), b, 0.28);
+    float sat = mix(0.92, 0.55, gloss);
+    float val = mix(0.35, 1.0, pow(clamp(shade, 0.0, 1.0), 0.85));
+    vec3 hsv = rgb2hsv(base);
+    hsv.y *= sat;
+    hsv.z = mix(hsv.z * 0.55, 1.0, val);
+    vec3 col = hsv2rgb(hsv.x, hsv.y, hsv.z);
+    col = mix(col, vec3(1.0), gloss * 0.45 * shade);
+    return clamp(col, 0.0, 1.0);
+}
+
+vec3 paletteOrRainbowFlat(float t01, float scroll_deg)
 {
     if(u_rainbow != 0 || u_palette_count <= 0)
     {
@@ -75,10 +126,39 @@ vec3 paletteOrRainbow(float t01, float scroll_deg)
     return samplePalette(fract(t01 + scroll_deg / 360.0));
 }
 
+vec3 paletteOrRainbowRich(float t01, float scroll_deg, float shade, float gloss)
+{
+    if(u_rainbow != 0 || u_palette_count <= 0)
+    {
+        return spectralIridescent(t01 + scroll_deg / 360.0, shade, gloss);
+    }
+    vec3 base = samplePalette(fract(t01 + scroll_deg / 360.0));
+    return applyHueSat(base);
+}
+
+/* Lit material: ramp colour × shade + highlight toward white/hot tip. */
+vec3 litMaterial(vec3 base, float shade, float gloss)
+{
+    float sh = clamp(shade, 0.0, 1.0);
+    float gl = clamp(gloss, 0.0, 1.0);
+    /* Wider shade range + hotter tips — Flat stays colour×intensity; Rich lifts depth. */
+    float body_sh = pow(sh, 0.82);
+    vec3 body = base * mix(0.10, 1.05, body_sh);
+    vec3 tip = mix(base, vec3(1.0), 0.78);
+    if(u_palette_count >= 2)
+    {
+        tip = mix(base, samplePalette(1.0), 0.88);
+        tip = applyHueSat(tip);
+    }
+    float tip_w = max(gl, sh * sh * 0.22) * (0.28 + 0.72 * sh);
+    return clamp(mix(body, tip, tip_w), 0.0, 1.0);
+}
+
 vec3 applyFinish(vec3 samp)
 {
     int mode = u_finish;
     float scroll = u_hue_scroll;
+    int rich = u_material_rich;
     if(mode == 0) return samp;
     if(mode == 1)
     {
@@ -89,6 +169,14 @@ vec3 applyFinish(vec3 samp)
     {
         float inten = samp.x;
         if(inten < 0.01) return vec3(0.0);
+        float gloss = clamp(samp.z, 0.0, 1.0);
+        if(rich != 0)
+        {
+            vec3 base = (u_palette_count > 0)
+                ? applyHueSat(samplePalette(samp.y))
+                : spectralIridescent(samp.y + scroll / 360.0, inten, gloss);
+            return litMaterial(base, inten, gloss);
+        }
         vec3 c = (u_palette_count > 0) ? samplePalette(samp.y)
                                        : rainbowHue(samp.y * 360.0 + scroll);
         return c * inten;
@@ -97,18 +185,24 @@ vec3 applyFinish(vec3 samp)
     {
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
+        if(rich != 0)
+            return litMaterial(spectralIridescent(v + scroll / 360.0, v, samp.z), v, clamp(samp.z, 0.0, 1.0));
         return rainbowHue(v * 360.0 + scroll) * v;
     }
     if(mode == 4)
     {
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
+        if(rich != 0)
+            return litMaterial(applyHueSat(samplePalette(v)), v, clamp(samp.z, 0.0, 1.0));
         return samplePalette(v) * v;
     }
     if(mode == 5)
     {
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
+        if(rich != 0)
+            return litMaterial(spectralIridescent(samp.y + scroll / 360.0, v, samp.z), v, clamp(samp.z, 0.0, 1.0));
         return rainbowHue(samp.y * 360.0 + scroll) * v;
     }
     if(mode == 6)
@@ -116,26 +210,41 @@ vec3 applyFinish(vec3 samp)
         float hue = atan(samp.y * 2.0 - 1.0, samp.x * 2.0 - 1.0) / 6.2831853;
         float v = samp.z > 0.0 ? clamp(samp.z, 0.0, 1.0) : 1.0;
         if(v < 0.01) return vec3(0.0);
-        return paletteOrRainbow(fract(hue + 1.0), scroll) * v;
+        if(rich != 0)
+            return litMaterial(paletteOrRainbowRich(fract(hue + 1.0), scroll, v, 0.35), v, 0.35 * v);
+        return paletteOrRainbowFlat(fract(hue + 1.0), scroll) * v;
     }
     if(mode == 7)
     {
         float inten = clamp(samp.x, 0.0, 1.0);
         if(inten < 0.04) return vec3(0.0);
         float lift = clamp(0.08 + 0.92 * pow(inten, 0.88), 0.0, 1.15);
-        return paletteOrRainbow(clamp(samp.y, 0.0, 1.0), scroll) * lift;
+        float gloss = clamp(samp.z, 0.0, 1.0);
+        if(rich != 0)
+            return litMaterial(paletteOrRainbowRich(clamp(samp.y, 0.0, 1.0), scroll, inten, gloss), lift, gloss);
+        return paletteOrRainbowFlat(clamp(samp.y, 0.0, 1.0), scroll) * lift;
     }
     if(mode == 8)
     {
         float v = clamp(samp.x, 0.0, 1.0);
         if(v < 0.01) return vec3(0.0);
-        return paletteOrRainbow(v, scroll) * pow(v, 0.85);
+        if(rich != 0)
+            return litMaterial(paletteOrRainbowRich(v, scroll, v, samp.z), pow(v, 0.85), clamp(samp.z, 0.0, 1.0));
+        return paletteOrRainbowFlat(v, scroll) * pow(v, 0.85);
     }
     if(mode == 9)
     {
+        /* finish_hex palette: heat in .g, gloss in .b — Flat keeps legacy multiply. */
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
-        return paletteOrRainbow(clamp(samp.y, 0.0, 1.0), 0.0) * v;
+        float heat = clamp(samp.y, 0.0, 1.0);
+        float gloss = clamp(samp.z, 0.0, 1.0);
+        if(rich != 0)
+        {
+            vec3 base = paletteOrRainbowRich(heat, scroll, v, gloss);
+            return litMaterial(base, v, max(gloss, heat * 0.35));
+        }
+        return paletteOrRainbowFlat(heat, scroll) * v;
     }
     return samp;
 }

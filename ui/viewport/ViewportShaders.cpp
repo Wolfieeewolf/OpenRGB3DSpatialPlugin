@@ -179,7 +179,10 @@ uniform float u_rw_min_sigma; /* overlay-only ring width floor (~0.75 lattice st
 uniform vec3 u_mc[18];
 uniform int u_rainbow[4];     /* Rainbow vs palette for audio / spiral / hex-atlas finishes */
 uniform int u_depth_shade[4]; /* finish_depth anchor-distance shade */
+uniform int u_material_rich[4]; /* 0 Flat/Basic, 1 Rich/Masterpiece */
 uniform float u_hue_scroll[4];
+uniform float u_hue_shift[4];
+uniform float u_sat_mul[4];
 uniform int u_palette_count[4];
 uniform vec3 u_palette[32]; /* 4 layers * 8 stops (GpuRoomGridOverlayLayer::kMaxPalette) */
 /* Colors and patterns (SpatialEffect3D::ResolvePatternColor): N × 2 float texture per
@@ -264,9 +267,50 @@ vec3 samplePalette(int layer, float t)
     return mix(u_palette[base + i0], u_palette[base + i1], f);
 }
 
-/* Palette (user colours) unless Rainbow is on or there are no colours — the same
-   GetColorAtPosition / GetRainbowColor choice the LED finishes make. */
-vec3 paletteOrRainbow(int layer, float t01, float scroll_deg)
+vec3 rgb2hsv(vec3 c)
+{
+    float cmax = max(c.r, max(c.g, c.b));
+    float cmin = min(c.r, min(c.g, c.b));
+    float d = cmax - cmin;
+    float h = 0.0;
+    if(d > 1e-5)
+    {
+        if(cmax == c.r) h = mod((c.g - c.b) / d, 6.0);
+        else if(cmax == c.g) h = (c.b - c.r) / d + 2.0;
+        else h = (c.r - c.g) / d + 4.0;
+        h /= 6.0;
+        if(h < 0.0) h += 1.0;
+    }
+    float s = (cmax <= 1e-5) ? 0.0 : d / cmax;
+    return vec3(h, s, cmax);
+}
+
+vec3 applyHueSat(int layer, vec3 rgb)
+{
+    vec3 hsv = rgb2hsv(rgb);
+    hsv.x = fract(hsv.x + u_hue_shift[layer] / 360.0);
+    hsv.y = clamp(hsv.y * max(u_sat_mul[layer], 0.0), 0.0, 1.0);
+    return hsv2rgb(hsv.x, hsv.y, hsv.z);
+}
+
+vec3 spectralIridescent(float t01, float shade, float gloss)
+{
+    float t = fract(t01);
+    vec3 a = rainbowHue(t * 360.0);
+    vec3 b = rainbowHue(fract(t + 0.08) * 360.0);
+    vec3 c = rainbowHue(fract(t + 0.92) * 360.0);
+    vec3 base = mix(mix(c, a, 0.55), b, 0.28);
+    float sat = mix(0.92, 0.55, gloss);
+    float val = mix(0.35, 1.0, pow(clamp(shade, 0.0, 1.0), 0.85));
+    vec3 hsv = rgb2hsv(base);
+    hsv.y *= sat;
+    hsv.z = mix(hsv.z * 0.55, 1.0, val);
+    vec3 col = hsv2rgb(hsv.x, hsv.y, hsv.z);
+    col = mix(col, vec3(1.0), gloss * 0.45 * shade);
+    return clamp(col, 0.0, 1.0);
+}
+
+vec3 paletteOrRainbowFlat(int layer, float t01, float scroll_deg)
 {
     if(u_rainbow[layer] != 0 || u_palette_count[layer] <= 0)
     {
@@ -275,10 +319,44 @@ vec3 paletteOrRainbow(int layer, float t01, float scroll_deg)
     return samplePalette(layer, fract(t01 + scroll_deg / 360.0));
 }
 
+vec3 paletteOrRainbowRich(int layer, float t01, float scroll_deg, float shade, float gloss)
+{
+    if(u_rainbow[layer] != 0 || u_palette_count[layer] <= 0)
+    {
+        return spectralIridescent(t01 + scroll_deg / 360.0, shade, gloss);
+    }
+    return applyHueSat(layer, samplePalette(layer, fract(t01 + scroll_deg / 360.0)));
+}
+
+vec3 litMaterial(int layer, vec3 base, float shade, float gloss)
+{
+    float sh = clamp(shade, 0.0, 1.0);
+    float gl = clamp(gloss, 0.0, 1.0);
+    /* Wider shade range + hotter tips — Flat stays colour×intensity; Rich lifts depth. */
+    float body_sh = pow(sh, 0.82);
+    vec3 body = base * mix(0.10, 1.05, body_sh);
+    vec3 tip = mix(base, vec3(1.0), 0.78);
+    if(u_palette_count[layer] >= 2)
+    {
+        tip = mix(base, samplePalette(layer, 1.0), 0.88);
+        tip = applyHueSat(layer, tip);
+    }
+    float tip_w = max(gl, sh * sh * 0.22) * (0.28 + 0.72 * sh);
+    return clamp(mix(body, tip, tip_w), 0.0, 1.0);
+}
+
+/* Palette (user colours) unless Rainbow is on or there are no colours — the same
+   GetColorAtPosition / GetRainbowColor choice the LED finishes make. */
+vec3 paletteOrRainbow(int layer, float t01, float scroll_deg)
+{
+    return paletteOrRainbowFlat(layer, t01, scroll_deg);
+}
+
 vec3 applyFinish(int layer, vec3 samp)
 {
     int mode = u_finish[layer];
     float scroll = u_hue_scroll[layer];
+    int rich = u_material_rich[layer];
     if(mode == 0)
     {
         /* FinishRgb: shaders write plain R,G,B and the atlas is RGBA, like the LED path
@@ -293,9 +371,16 @@ vec3 applyFinish(int layer, vec3 samp)
     }
     if(mode == 2)
     {
-        /* finish_surface: r=intensity, g=plasma */
         float inten = samp.x;
         if(inten < 0.01) return vec3(0.0);
+        float gloss = clamp(samp.z, 0.0, 1.0);
+        if(rich != 0)
+        {
+            vec3 base = (u_palette_count[layer] > 0)
+                ? applyHueSat(layer, samplePalette(layer, samp.y))
+                : spectralIridescent(samp.y + scroll / 360.0, inten, gloss);
+            return litMaterial(layer, base, inten, gloss);
+        }
         vec3 c = (u_palette_count[layer] > 0)
             ? samplePalette(layer, samp.y)
             : rainbowHue(samp.y * 360.0 + scroll);
@@ -305,18 +390,24 @@ vec3 applyFinish(int layer, vec3 samp)
     {
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
+        if(rich != 0)
+            return litMaterial(layer, spectralIridescent(v + scroll / 360.0, v, samp.z), v, clamp(samp.z, 0.0, 1.0));
         return rainbowHue(v * 360.0 + scroll) * v;
     }
     if(mode == 4)
     {
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
+        if(rich != 0)
+            return litMaterial(layer, applyHueSat(layer, samplePalette(layer, v)), v, clamp(samp.z, 0.0, 1.0));
         return samplePalette(layer, v) * v;
     }
     if(mode == 5)
     {
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
+        if(rich != 0)
+            return litMaterial(layer, spectralIridescent(samp.y + scroll / 360.0, v, samp.z), v, clamp(samp.z, 0.0, 1.0));
         return rainbowHue(samp.y * 360.0 + scroll) * v;
     }
     if(mode == 6)
@@ -324,29 +415,40 @@ vec3 applyFinish(int layer, vec3 samp)
         float hue = atan(samp.y * 2.0 - 1.0, samp.x * 2.0 - 1.0) / 6.2831853;
         float v = samp.z > 0.0 ? clamp(samp.z, 0.0, 1.0) : 1.0;
         if(v < 0.01) return vec3(0.0);
-        return paletteOrRainbow(layer, fract(hue + 1.0), scroll) * v;
+        if(rich != 0)
+            return litMaterial(layer, paletteOrRainbowRich(layer, fract(hue + 1.0), scroll, v, 0.35), v, 0.35 * v);
+        return paletteOrRainbowFlat(layer, fract(hue + 1.0), scroll) * v;
     }
     if(mode == 7)
     {
-        /* finish_audio: r=intensity, g=gradient; AudioEffectDisplayBrightness curve. */
         float inten = clamp(samp.x, 0.0, 1.0);
         if(inten < 0.04) return vec3(0.0);
         float lift = clamp(0.08 + 0.92 * pow(inten, 0.88), 0.0, 1.15);
-        return paletteOrRainbow(layer, clamp(samp.y, 0.0, 1.0), scroll) * lift;
+        float gloss = clamp(samp.z, 0.0, 1.0);
+        if(rich != 0)
+            return litMaterial(layer, paletteOrRainbowRich(layer, clamp(samp.y, 0.0, 1.0), scroll, inten, gloss), lift, gloss);
+        return paletteOrRainbowFlat(layer, clamp(samp.y, 0.0, 1.0), scroll) * lift;
     }
     if(mode == 8)
     {
-        /* finish_spiral: value drives colour and the value^0.85 mask. */
         float v = clamp(samp.x, 0.0, 1.0);
         if(v < 0.01) return vec3(0.0);
-        return paletteOrRainbow(layer, v, scroll) * pow(v, 0.85);
+        if(rich != 0)
+            return litMaterial(layer, paletteOrRainbowRich(layer, v, scroll, v, samp.z), pow(v, 0.85), clamp(samp.z, 0.0, 1.0));
+        return paletteOrRainbowFlat(layer, v, scroll) * pow(v, 0.85);
     }
     if(mode == 9)
     {
-        /* finish_hex with Rainbow off: palette at the hue channel, times value. */
         float v = samp.x;
         if(v < 0.01) return vec3(0.0);
-        return paletteOrRainbow(layer, clamp(samp.y, 0.0, 1.0), 0.0) * v;
+        float heat = clamp(samp.y, 0.0, 1.0);
+        float gloss = clamp(samp.z, 0.0, 1.0);
+        if(rich != 0)
+        {
+            vec3 base = paletteOrRainbowRich(layer, heat, scroll, v, gloss);
+            return litMaterial(layer, base, v, max(gloss, heat * 0.35));
+        }
+        return paletteOrRainbowFlat(layer, heat, scroll) * v;
     }
     return samp;
 }

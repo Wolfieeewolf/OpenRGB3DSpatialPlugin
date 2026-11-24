@@ -38,6 +38,10 @@ struct GpuRoomGridOverlayLayer
     bool depth_shade = false;
     /** Rainbow (vs palette) for FinishAudio / FinishSpiral. */
     bool rainbow = false;
+    /** 0 = Flat/Basic colour×intensity; 1 = Rich shade/highlight material. */
+    int material_rich = 1;
+    float hue_shift_deg = 0.0f;
+    float sat_mul = 1.0f;
 
     /** What the texture holds and how the overlay shader reads it. */
     enum Kind : int

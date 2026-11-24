@@ -87,6 +87,10 @@ public:
         int mode = 0; /* GpuRoomGridOverlayLayer::Finish */
         float hue_scroll_deg = 0.0f;
         bool rainbow = false;
+        /** 0 = Flat/Basic (legacy), 1 = Rich/Masterpiece shading. */
+        int material_rich = 1;
+        float hue_shift_deg = 0.0f;
+        float sat_mul = 1.0f;
         int palette_count = 0;
         float palette[8][3] = {};
     };

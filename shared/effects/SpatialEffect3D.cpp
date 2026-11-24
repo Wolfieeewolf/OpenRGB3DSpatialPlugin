@@ -11,6 +11,7 @@
 #include "EffectColorPanel.h"
 #include "EffectCustomHost.h"
 #include "EffectControlsRoot.h"
+#include "EffectUiRows.h"
 #include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "Colors.h"
@@ -27,6 +28,7 @@
 #include <cstring>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QMenu>
 #include <QSignalBlocker>
 #include <algorithm>
 #include <cmath>
@@ -48,6 +50,10 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_bounds_mode = (int)BOUNDS_MODE_GLOBAL;
     effect_fps = 30;
     rainbow_mode = false;
+    color_source_ = ColorSourceCustom;
+    material_rich_ = 1;
+    color_hue_shift_deg_ = 0.0f;
+    color_sat_mul_ = 1.0f;
     spatial_mapping_mode = SpatialMappingMode::Off;
     compass_layer_spin_preset = 2;
     rainbow_progress = 0.0f;
@@ -110,6 +116,11 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     color_pattern_settings_host = nullptr;
     band_modulation_settings_host = nullptr;
     rainbow_mode_check = nullptr;
+    color_source_combo = nullptr;
+    color_style_combo = nullptr;
+    reset_look_button = nullptr;
+    color_hue_row_ = nullptr;
+    color_sat_row_ = nullptr;
     color_buttons_widget = nullptr;
     color_buttons_layout = nullptr;
     add_color_button = nullptr;
@@ -758,27 +769,49 @@ void SpatialEffect3D::SaveEffectStratumSettings(nlohmann::json& j) const
 
 void SpatialEffect3D::SyncColorControlVisibilityForPatternMode()
 {
-    // Surface Look Pattern owns colors — hide effect rainbow/stops while Pattern is selected.
+    // Surface Look Pattern owns colors — hide effect source/stops while Pattern is selected.
     const bool use_pattern_look =
         shared_strip_cmap_panel &&
         shared_strip_cmap_panel->useStripColormap();
 
-    if(rainbow_mode_check)
+    const bool show_color_chrome = !use_pattern_look;
+    if(color_source_combo)
     {
-        rainbow_mode_check->setVisible(!use_pattern_look);
+        color_source_combo->setVisible(show_color_chrome);
+    }
+    if(color_style_combo)
+    {
+        color_style_combo->setVisible(show_color_chrome);
+    }
+    if(reset_look_button)
+    {
+        reset_look_button->setVisible(show_color_chrome && color_source_ != ColorSourceRainbow);
+    }
+    if(color_hue_row_)
+    {
+        color_hue_row_->setVisible(show_color_chrome);
+    }
+    if(color_sat_row_)
+    {
+        color_sat_row_->setVisible(show_color_chrome);
     }
     if(color_buttons_widget)
     {
-        color_buttons_widget->setVisible(!use_pattern_look && !rainbow_mode);
+        color_buttons_widget->setVisible(show_color_chrome && color_source_ != ColorSourceRainbow);
     }
 }
 
 void SpatialEffect3D::CreateColorControls()
 {
-    auto* color_panel = new EffectColorPanel(rainbow_mode);
+    auto* color_panel = new EffectColorPanel(color_source_, material_rich_);
     color_controls_group = color_panel;
+    color_panel->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(color_panel, &QWidget::customContextMenuRequested, this, &SpatialEffect3D::ShowColorsContextMenu);
 
-    rainbow_mode_check = color_panel->rainbowModeCheck();
+    rainbow_mode_check = nullptr;
+    color_source_combo = color_panel->sourceCombo();
+    color_style_combo = color_panel->styleCombo();
+    reset_look_button = color_panel->resetLookButton();
     color_buttons_widget = color_panel->colorButtonsWidget();
     color_buttons_layout = color_panel->colorButtonsLayout();
     color_pattern_settings_host = color_panel->patternHostWidget();
@@ -787,16 +820,69 @@ void SpatialEffect3D::CreateColorControls()
     remove_color_button = color_panel->removeColorButton();
     remove_color_button->setEnabled(colors.size() > 1);
 
+    if(QVBoxLayout* tint = color_panel->tintHostLayout())
+    {
+        color_hue_row_ = EffectUiRows::AppendDoubleSliderRow(
+            tint,
+            QStringLiteral("Hue:"),
+            -180.0,
+            180.0,
+            (double)color_hue_shift_deg_,
+            0,
+            1.0,
+            QStringLiteral("Hue shift in degrees (spin for fine, slider for coarse). Applies as a tint on Look/Custom; still works on Flat."));
+        if(color_hue_row_)
+        {
+            color_hue_row_->setSuffix(QStringLiteral("°"));
+            color_hue_row_->bindValueChanged(this,
+                [this](double v)
+                {
+                    color_hue_shift_deg_ = (float)v;
+                },
+                [this]() { emit ParametersChanged(); });
+        }
+        color_sat_row_ = EffectUiRows::AppendDoubleSliderRow(
+            tint,
+            QStringLiteral("Sat:"),
+            0.0,
+            2.0,
+            (double)color_sat_mul_,
+            2,
+            0.05,
+            QStringLiteral("Saturation multiplier (1.00 = authored). Spin for fine, slider for coarse."));
+        if(color_sat_row_)
+        {
+            color_sat_row_->bindValueChanged(this,
+                [this](double v)
+                {
+                    color_sat_mul_ = (float)std::clamp(v, 0.0, 2.0);
+                },
+                [this]() { emit ParametersChanged(); });
+        }
+        AlignCaptionLabels({
+            color_hue_row_ ? color_hue_row_->captionLabel() : nullptr,
+            color_sat_row_ ? color_sat_row_->captionLabel() : nullptr,
+        });
+    }
+
     for(unsigned int i = 0; i < colors.size(); i++)
     {
         CreateColorButton(colors[i]);
     }
 
-    color_buttons_widget->setVisible(!rainbow_mode);
+    if(look_colors_.empty() && !colors.empty())
+    {
+        look_colors_ = colors;
+    }
 
-    connect(rainbow_mode_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnRainbowModeChanged);
+    connect(color_source_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SpatialEffect3D::OnColorSourceChanged);
+    connect(color_style_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SpatialEffect3D::OnColorStyleChanged);
+    connect(reset_look_button, &QPushButton::clicked, this, &SpatialEffect3D::OnResetLookClicked);
     connect(add_color_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAddColorClicked);
     connect(remove_color_button, &QPushButton::clicked, this, &SpatialEffect3D::OnRemoveColorClicked);
+    SyncColorSourceUi();
     SyncColorControlVisibilityForPatternMode();
 }
 
@@ -834,9 +920,144 @@ void SpatialEffect3D::RemoveLastColorButton()
 
 void SpatialEffect3D::OnRainbowModeChanged()
 {
-    rainbow_mode = rainbow_mode_check->isChecked();
+    if(rainbow_mode_check)
+    {
+        rainbow_mode = rainbow_mode_check->isChecked();
+        color_source_ = rainbow_mode ? ColorSourceRainbow : ColorSourceCustom;
+    }
+    SyncColorSourceUi();
     SyncColorControlVisibilityForPatternMode();
     emit ParametersChanged();
+}
+
+void SpatialEffect3D::OnColorSourceChanged()
+{
+    if(!color_source_combo)
+    {
+        return;
+    }
+    const int src = std::clamp(color_source_combo->currentIndex(), 0, 2);
+    if(src == ColorSourceLook)
+    {
+        if(!look_colors_.empty())
+        {
+            SetColors(look_colors_);
+        }
+        rainbow_mode = false;
+    }
+    else if(src == ColorSourceRainbow)
+    {
+        rainbow_mode = true;
+    }
+    else
+    {
+        rainbow_mode = false;
+    }
+    color_source_ = src;
+    SyncColorControlVisibilityForPatternMode();
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::OnColorStyleChanged()
+{
+    if(!color_style_combo)
+    {
+        return;
+    }
+    /* Flat = index 0, Rich = index 1 */
+    material_rich_ = (color_style_combo->currentIndex() == 0) ? 0 : 1;
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::OnResetLookClicked()
+{
+    ResetColorsToLook();
+}
+
+void SpatialEffect3D::SyncColorSourceUi()
+{
+    if(color_source_combo)
+    {
+        QSignalBlocker blocker(color_source_combo);
+        color_source_combo->setCurrentIndex(std::clamp(color_source_, 0, 2));
+    }
+    if(color_style_combo)
+    {
+        QSignalBlocker blocker(color_style_combo);
+        color_style_combo->setCurrentIndex(material_rich_ != 0 ? 1 : 0);
+    }
+    if(color_hue_row_)
+    {
+        color_hue_row_->syncSpinValue(color_hue_shift_deg_);
+    }
+    if(color_sat_row_)
+    {
+        color_sat_row_->syncSpinValue(color_sat_mul_);
+    }
+}
+
+void SpatialEffect3D::ShowColorsContextMenu(const QPoint& pos)
+{
+    QWidget* panel = qobject_cast<QWidget*>(sender());
+    if(!panel)
+    {
+        return;
+    }
+    QMenu menu(panel);
+    QAction* look_act = menu.addAction(QStringLiteral("Source: Look"));
+    QAction* custom_act = menu.addAction(QStringLiteral("Source: Custom"));
+    QAction* rainbow_act = menu.addAction(QStringLiteral("Source: Rainbow"));
+    menu.addSeparator();
+    QAction* flat_act = menu.addAction(QStringLiteral("Style: Flat (Basic)"));
+    QAction* rich_act = menu.addAction(QStringLiteral("Style: Rich"));
+    menu.addSeparator();
+    QAction* add_act = menu.addAction(QStringLiteral("Add stop"));
+    QAction* rem_act = menu.addAction(QStringLiteral("Remove stop"));
+    QAction* reset_act = menu.addAction(QStringLiteral("Reset to Look"));
+    look_act->setCheckable(true);
+    custom_act->setCheckable(true);
+    rainbow_act->setCheckable(true);
+    flat_act->setCheckable(true);
+    rich_act->setCheckable(true);
+    look_act->setChecked(color_source_ == ColorSourceLook);
+    custom_act->setChecked(color_source_ == ColorSourceCustom);
+    rainbow_act->setChecked(color_source_ == ColorSourceRainbow);
+    flat_act->setChecked(material_rich_ == 0);
+    rich_act->setChecked(material_rich_ != 0);
+    rem_act->setEnabled(colors.size() > 1);
+    QAction* chosen = menu.exec(panel->mapToGlobal(pos));
+    if(chosen == look_act)
+    {
+        SetColorSource(ColorSourceLook);
+    }
+    else if(chosen == custom_act)
+    {
+        SetColorSource(ColorSourceCustom);
+    }
+    else if(chosen == rainbow_act)
+    {
+        SetColorSource(ColorSourceRainbow);
+    }
+    else if(chosen == flat_act)
+    {
+        SetMaterialRich(0);
+    }
+    else if(chosen == rich_act)
+    {
+        SetMaterialRich(1);
+    }
+    else if(chosen == add_act)
+    {
+        OnAddColorClicked();
+    }
+    else if(chosen == rem_act)
+    {
+        OnRemoveColorClicked();
+    }
+    else if(chosen == reset_act)
+    {
+        ResetColorsToLook();
+    }
 }
 
 void SpatialEffect3D::ConnectStackRoomOutputPanel(EffectRoomOutputPanel* panel,
@@ -871,6 +1092,10 @@ void SpatialEffect3D::DisconnectStackRoomOutputPanel()
 
 void SpatialEffect3D::OnAddColorClicked()
 {
+    if(color_source_ == ColorSourceLook || color_source_ == ColorSourceRainbow)
+    {
+        SetColorSource(ColorSourceCustom);
+    }
     RGBColor new_color = GetRainbowColor(colors.size() * 60.0f);
     colors.push_back(new_color);
     CreateColorButton(new_color);
@@ -883,6 +1108,10 @@ void SpatialEffect3D::OnRemoveColorClicked()
 {
     if(colors.size() > 1)
     {
+        if(color_source_ == ColorSourceLook)
+        {
+            SetColorSource(ColorSourceCustom);
+        }
         colors.pop_back();
         RemoveLastColorButton();
         remove_color_button->setEnabled(colors.size() > 1);
@@ -909,6 +1138,10 @@ void SpatialEffect3D::OnColorButtonClicked()
 
     if(color_dialog.exec() == QDialog::Accepted)
     {
+        if(color_source_ == ColorSourceLook)
+        {
+            SetColorSource(ColorSourceCustom);
+        }
         QColor new_color = color_dialog.currentColor();
         colors[index] = ((unsigned int)new_color.blue() << 16) | ((unsigned int)new_color.green() << 8) | (unsigned int)new_color.red();
 
@@ -920,30 +1153,57 @@ void SpatialEffect3D::OnColorButtonClicked()
 
 void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)
 {
-    if(slider && value_label)
+    if(!slider)
     {
-        slider->setVisible(visible);
-        value_label->setVisible(visible);
+        return;
+    }
 
-        QWidget* parent = slider->parentWidget();
-        if(parent)
+    /* EffectSliderRow: spin sits above the thin slider. Toggling only the QSlider
+       left orphan spins (Thickness / Edge fade / Count looked unlike Speed). Hide
+       the whole row; never force the optional valueLabel on. */
+    if(EffectSliderRow* row = qobject_cast<EffectSliderRow*>(slider->parentWidget()))
+    {
+        row->setVisible(visible);
+        QWidget* host = row->parentWidget();
+        if(host)
         {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(int i = 0; i < labels.size(); i++)
+            for(QLabel* label : host->findChildren<QLabel*>())
             {
-                QLabel* label = labels[i];
-                if(label->text() == label_text)
+                if(label && label->text() == label_text && label->parentWidget() == host)
                 {
                     label->setVisible(visible);
                     break;
                 }
             }
         }
-
         if(slider == scale_slider && scale_invert_check)
         {
             scale_invert_check->setVisible(visible);
         }
+        return;
+    }
+
+    slider->setVisible(visible);
+    if(value_label)
+    {
+        value_label->setVisible(visible);
+    }
+    QWidget* parent = slider->parentWidget();
+    if(parent)
+    {
+        const QList<QLabel*> labels = parent->findChildren<QLabel*>();
+        for(QLabel* label : labels)
+        {
+            if(label && label->text() == label_text)
+            {
+                label->setVisible(visible);
+                break;
+            }
+        }
+    }
+    if(slider == scale_slider && scale_invert_check)
+    {
+        scale_invert_check->setVisible(visible);
     }
 }
 

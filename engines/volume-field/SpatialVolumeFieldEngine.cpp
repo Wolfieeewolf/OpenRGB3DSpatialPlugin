@@ -1199,6 +1199,9 @@ bool SpatialVolumeFieldEngine::applyDisplayFinish(float* rgb_inout, int count, c
     finish_program_->setUniformValue("u_finish", finish.mode);
     finish_program_->setUniformValue("u_hue_scroll", finish.hue_scroll_deg);
     finish_program_->setUniformValue("u_rainbow", finish.rainbow ? 1 : 0);
+    finish_program_->setUniformValue("u_material_rich", finish.material_rich);
+    finish_program_->setUniformValue("u_hue_shift", finish.hue_shift_deg);
+    finish_program_->setUniformValue("u_sat_mul", finish.sat_mul);
     const int pc = std::clamp(finish.palette_count, 0, 8);
     finish_program_->setUniformValue("u_palette_count", pc);
     QVector3D pals[8];

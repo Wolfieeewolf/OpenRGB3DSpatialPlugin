@@ -50,7 +50,10 @@ Porting helpers: [shader-conversion.md](shader-conversion.md).
 
 ## Volume engine
 
-**Runs:** soft 3D fields via `engines/volume-field` (`SpatialVolumeFieldEngine`) hosted by `engines/folder-volume` (FolderVolume) on shared **`SpatialOffscreenGlPool`** (**4.1 Core**; shares with the room viewport — no second context). LEDs use **true** `volumeMain` via `evaluateAtPoints` (PBO bake) then FolderVolume finish (HSV/surface/rainbow/…). Room-grid overlay samples the dense atlas on the GPU and applies the same finish family in `VolumeAtlasPoint` (no voxel CPU readback / no CPU overlay path). Fail closed if GL is unavailable.  
+**Runs:** soft 3D fields via `engines/volume-field` (`SpatialVolumeFieldEngine`) hosted by `engines/folder-volume` (FolderVolume) on shared **`SpatialOffscreenGlPool`** (**4.1 Core**; shares with the room viewport — no second context). LEDs use **true** `volumeMain` via `evaluateAtPoints` (PBO bake) then FolderVolume finish (HSV/surface/rainbow/…). Room-grid overlay samples the dense atlas on the GPU and applies the same finish family in `VolumeAtlasPoint` (no voxel CPU readback / no CPU overlay path). Fail closed if GL is unavailable.
+
+**Colors:** Source **Look | Custom | Rainbow** × Style **Flat | Rich**. Flat keeps simple colour×intensity (and classic HSV rainbow); Rich adds shade/highlight materials and spectral rainbow. Default is Look+Rich; Flat/Basic stay first-class. Hue/Sat tint; Reset to Look restores authored `colors:`. Pack gloss in `out_color.b` for Rich tips (Flat ignores `.b`).
+
 **Library category / AppData content:** Volume (`effects/volume/*.fs` — presets repo / plugin data root, not the C++ tree).
 
 ### Required header (FolderVolume)

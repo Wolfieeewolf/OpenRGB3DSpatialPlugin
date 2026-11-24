@@ -19,14 +19,127 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="QCheckBox" name="rainbowModeCheck">
-     <property name="text">
-      <string>Rainbow</string>
+    <layout class="QHBoxLayout" name="sourceStyleRow">
+     <property name="spacing">
+      <number>6</number>
      </property>
-     <property name="toolTip">
-      <string>Use full-spectrum rainbow instead of manual color stops.</string>
-     </property>
+     <item>
+      <widget class="QLabel" name="sourceCaption">
+       <property name="text">
+        <string>Source:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignRight|Qt::AlignVCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="sourceCombo">
+       <property name="toolTip">
+        <string>Look = authored effect ramp. Custom = your colour stops. Rainbow = full spectrum. Mouse, keyboard (Tab/arrows), and the Colors context menu all change this.</string>
+       </property>
+       <property name="accessibleName">
+        <string>Color source</string>
+       </property>
+       <item>
+        <property name="text">
+         <string>Look</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Custom</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Rainbow</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="styleCaption">
+       <property name="text">
+        <string>Style:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignRight|Qt::AlignVCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="styleCombo">
+       <property name="toolTip">
+        <string>Flat = simple colour × intensity (Basic). Rich = shade, highlights, and denser materials. Both stay available — pick what you like. Mouse, keyboard, and the Colors context menu.</string>
+       </property>
+       <property name="accessibleName">
+        <string>Color style</string>
+       </property>
+       <item>
+        <property name="text">
+         <string>Flat</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Rich</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QWidget" name="tintHostWidget">
+     <layout class="QVBoxLayout" name="tintHostLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+     </layout>
     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="resetRow">
+     <item>
+      <widget class="QPushButton" name="resetLookButton">
+       <property name="text">
+        <string>Reset to Look</string>
+       </property>
+       <property name="toolTip">
+        <string>Restore the effect's authored Look colours and Source=Look. Click, Enter when focused, or Colors menu → Reset to Look.</string>
+       </property>
+       <property name="accessibleName">
+        <string>Reset to Look colors</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="resetSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QWidget" name="colorButtonsWidget">
@@ -58,7 +171,10 @@
          <string>+</string>
         </property>
         <property name="toolTip">
-         <string>Add a new color stop</string>
+         <string>Add a color stop (mouse). Keyboard: focus then Enter/Space. Colors menu → Add stop.</string>
+        </property>
+        <property name="accessibleName">
+         <string>Add color stop</string>
         </property>
        </widget>
       </item>
@@ -74,7 +190,10 @@
          <string>-</string>
         </property>
         <property name="toolTip">
-         <string>Remove the last color stop</string>
+         <string>Remove the last color stop (mouse). Keyboard: Delete while stops focused. Colors menu → Remove stop.</string>
+        </property>
+        <property name="accessibleName">
+         <string>Remove color stop</string>
         </property>
        </widget>
       </item>

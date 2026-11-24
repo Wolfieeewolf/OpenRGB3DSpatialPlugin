@@ -180,6 +180,21 @@ void SpatialEffect3D::SetColors(const std::vector<RGBColor>& new_colors)
     {
         colors.push_back(COLOR_RED);
     }
+    if(color_buttons_layout)
+    {
+        while(!color_buttons.empty())
+        {
+            RemoveLastColorButton();
+        }
+        for(RGBColor c : colors)
+        {
+            CreateColorButton(c);
+        }
+        if(remove_color_button)
+        {
+            remove_color_button->setEnabled(colors.size() > 1);
+        }
+    }
 }
 
 std::vector<RGBColor> SpatialEffect3D::GetColors() const
@@ -190,15 +205,134 @@ std::vector<RGBColor> SpatialEffect3D::GetColors() const
 void SpatialEffect3D::SetRainbowMode(bool enabled)
 {
     rainbow_mode = enabled;
+    color_source_ = enabled ? ColorSourceRainbow : (color_source_ == ColorSourceRainbow ? ColorSourceCustom : color_source_);
     if(rainbow_mode_check)
     {
         rainbow_mode_check->setChecked(enabled);
     }
+    SyncColorSourceUi();
+    SyncColorControlVisibilityForPatternMode();
 }
 
 bool SpatialEffect3D::GetRainbowMode() const
 {
-    return rainbow_mode;
+    return rainbow_mode || color_source_ == ColorSourceRainbow;
+}
+
+void SpatialEffect3D::SetColorSource(int source)
+{
+    color_source_ = std::clamp(source, 0, 2);
+    if(color_source_ == ColorSourceLook)
+    {
+        rainbow_mode = false;
+        if(!look_colors_.empty())
+        {
+            SetColors(look_colors_);
+        }
+    }
+    else if(color_source_ == ColorSourceRainbow)
+    {
+        rainbow_mode = true;
+    }
+    else
+    {
+        rainbow_mode = false;
+    }
+    SyncColorSourceUi();
+    SyncColorControlVisibilityForPatternMode();
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::SetMaterialRich(int rich)
+{
+    material_rich_ = (rich != 0) ? 1 : 0;
+    SyncColorSourceUi();
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::SetColorHueShiftDeg(float deg)
+{
+    color_hue_shift_deg_ = std::clamp(deg, -180.0f, 180.0f);
+    if(color_hue_row_)
+    {
+        color_hue_row_->syncSpinValue(color_hue_shift_deg_);
+    }
+}
+
+void SpatialEffect3D::SetColorSatMul(float mul)
+{
+    color_sat_mul_ = std::clamp(mul, 0.0f, 2.0f);
+    if(color_sat_row_)
+    {
+        color_sat_row_->syncSpinValue(color_sat_mul_);
+    }
+}
+
+void SpatialEffect3D::SetLookColors(const std::vector<RGBColor>& look)
+{
+    look_colors_ = look;
+    if(look_colors_.empty())
+    {
+        look_colors_.push_back(COLOR_RED);
+    }
+}
+
+void SpatialEffect3D::ResetColorsToLook()
+{
+    if(look_colors_.empty() && !colors.empty())
+    {
+        look_colors_ = colors;
+    }
+    SetColorSource(ColorSourceLook);
+}
+
+std::vector<RGBColor> SpatialEffect3D::GetFinishPaletteColors() const
+{
+    if(GetRainbowMode())
+    {
+        return {};
+    }
+    if(color_source_ == ColorSourceLook && !look_colors_.empty())
+    {
+        return look_colors_;
+    }
+    return colors;
+}
+
+void SpatialEffect3D::EnrichPaletteForRich(std::vector<RGBColor>& stops, int target_stops)
+{
+    target_stops = std::clamp(target_stops, 2, 8);
+    if((int)stops.size() >= target_stops || stops.empty())
+    {
+        return;
+    }
+    if(stops.size() == 1)
+    {
+        /* Keep the crayon; add a lifted highlight tip for shade/highlight mix. */
+        const RGBColor c = stops[0];
+        const int r = std::min(255, (int)(c & 0xFF) + 48);
+        const int g = std::min(255, (int)((c >> 8) & 0xFF) + 48);
+        const int b = std::min(255, (int)((c >> 16) & 0xFF) + 48);
+        stops.push_back((RGBColor)((b << 16) | (g << 8) | r));
+    }
+    std::vector<RGBColor> dense;
+    dense.reserve((size_t)target_stops);
+    const int n = (int)stops.size();
+    for(int i = 0; i < target_stops; ++i)
+    {
+        const float t = (target_stops == 1) ? 0.0f : (float)i / (float)(target_stops - 1);
+        const float pos = t * (float)(n - 1);
+        const int i0 = (int)std::floor(pos);
+        const int i1 = std::min(i0 + 1, n - 1);
+        const float f = pos - (float)i0;
+        const RGBColor a = stops[(size_t)i0];
+        const RGBColor b = stops[(size_t)i1];
+        const int r = (int)std::lround((1.0f - f) * (float)(a & 0xFF) + f * (float)(b & 0xFF));
+        const int g = (int)std::lround((1.0f - f) * (float)((a >> 8) & 0xFF) + f * (float)((b >> 8) & 0xFF));
+        const int bl = (int)std::lround((1.0f - f) * (float)((a >> 16) & 0xFF) + f * (float)((b >> 16) & 0xFF));
+        dense.push_back((RGBColor)((bl << 16) | (g << 8) | r));
+    }
+    stops.swap(dense);
 }
 
 void SpatialEffect3D::SetFrequency(unsigned int frequency)
@@ -298,7 +432,11 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["scale_value"] = effect_scale;
     j["scale_inverted"] = scale_inverted;
     j["effect_bounds_mode"] = effect_bounds_mode;
-    j["rainbow_mode"] = rainbow_mode;
+    j["rainbow_mode"] = rainbow_mode || color_source_ == ColorSourceRainbow;
+    j["color_source"] = color_source_;
+    j["material_rich"] = material_rich_;
+    j["color_hue_shift_deg"] = color_hue_shift_deg_;
+    j["color_sat_mul"] = color_sat_mul_;
     j["spatial_mapping_mode"] = (int)spatial_mapping_mode;
     j["compass_layer_spin_preset"] = compass_layer_spin_preset;
     j["effect_sampler_influence_centi"] = effect_sampler_influence_centi;
@@ -392,6 +530,28 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("rainbow_mode"))
         SetRainbowMode(settings["rainbow_mode"].get<bool>());
+
+    if(settings.contains("color_source") && settings["color_source"].is_number_integer())
+    {
+        SetColorSource(settings["color_source"].get<int>());
+    }
+    else if(settings.contains("rainbow_mode"))
+    {
+        SetColorSource(rainbow_mode ? ColorSourceRainbow : ColorSourceCustom);
+    }
+
+    if(settings.contains("material_rich") && settings["material_rich"].is_number_integer())
+    {
+        SetMaterialRich(settings["material_rich"].get<int>());
+    }
+    if(settings.contains("color_hue_shift_deg") && settings["color_hue_shift_deg"].is_number())
+    {
+        SetColorHueShiftDeg(settings["color_hue_shift_deg"].get<float>());
+    }
+    if(settings.contains("color_sat_mul") && settings["color_sat_mul"].is_number())
+    {
+        SetColorSatMul(settings["color_sat_mul"].get<float>());
+    }
 
     if(settings.contains("spatial_mapping_mode"))
     {
@@ -626,6 +786,8 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         QSignalBlocker blocker(rainbow_mode_check);
         rainbow_mode_check->setChecked(rainbow_mode);
     }
+    SyncColorSourceUi();
+    SyncColorControlVisibilityForPatternMode();
 
     SyncEffectSliderValue(intensity_slider, (int)effect_intensity);
     SyncEffectSliderValue(sharpness_slider, (int)effect_sharpness);

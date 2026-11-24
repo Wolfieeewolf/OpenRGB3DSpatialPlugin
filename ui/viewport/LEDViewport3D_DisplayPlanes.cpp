@@ -701,8 +701,11 @@ void LEDViewport3D::DrawRoomGridOverlay()
             set_i("u_finish", layer.finish_mode);
             set_i("u_rainbow", layer.rainbow ? 1 : 0);
             set_i("u_depth_shade", layer.depth_shade ? 1 : 0);
+            set_i("u_material_rich", layer.material_rich);
             set_f("u_layer_brightness", layer.brightness);
             set_f("u_hue_scroll", layer.hue_scroll_deg);
+            set_f("u_hue_shift", layer.hue_shift_deg);
+            set_f("u_sat_mul", layer.sat_mul);
             set_i("u_palette_count", layer.palette_count);
             set_3("u_origin", layer.origin);
             set_3("u_half_ext", layer.half_ext);

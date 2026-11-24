@@ -384,7 +384,8 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "motion_clock")
     {
-        return time_sec * std::max(0.0f, GetMotionHz() * speed_mul);
+        /* Same Speed-scaled seconds as u_time (0 at Speed 0), times stratum speed_mul. */
+        return GetMotionSeconds(time_sec) * std::max(0.0f, speed_mul);
     }
     if(name == "speed_mul")
     {
@@ -557,16 +558,33 @@ float FolderVolumeEffect::ParamValue(const std::string& name, float detail, floa
     }
     if(name == "psize")
     {
-        return std::clamp(std::max(0.15f, SliderRaw("pf_size") / 100.0f) * size * 0.26f, 0.030f, 0.30f);
+        /* 0 slider = particles off. */
+        const float raw = SliderRaw("pf_size") / 100.0f;
+        if(raw < 0.005f)
+        {
+            return 0.0f;
+        }
+        return std::clamp(raw * size * 0.26f, 0.020f, 0.30f);
     }
     if(name == "pthick")
     {
-        return std::clamp(std::max(0.20f, SliderRaw("pf_thickness") / 100.0f) * 0.130f, 0.022f, 0.22f);
+        const float raw = SliderRaw("pf_thickness") / 100.0f;
+        if(raw < 0.005f)
+        {
+            return 0.0f;
+        }
+        return std::clamp(raw * 0.130f, 0.014f, 0.22f);
     }
     if(name == "bubble_thick")
     {
+        /* 0 slider = no film (off). */
+        const float raw = SliderRaw("bubble_thickness") / 100.0f;
+        if(raw < 0.005f)
+        {
+            return 0.0f;
+        }
         const float detail_s = std::max(0.05f, GetScaledDetail());
-        return std::clamp(std::max(0.02f, SliderRaw("bubble_thickness") / 100.0f) * 0.11f / std::max(0.35f, detail_s), 0.014f, 0.14f);
+        return std::clamp(raw * 0.11f / std::max(0.35f, detail_s), 0.010f, 0.14f);
     }
     if(name == "bubble_rise")
     {
