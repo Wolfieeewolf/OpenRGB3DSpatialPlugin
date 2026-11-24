@@ -214,6 +214,75 @@
     </widget>
    </item>
    <item>
+    <widget class="QWidget" name="huePaletteWidget">
+     <property name="toolTip">
+      <string>Live preview after Hue/Sat — matches LEDs/overlay (read-only).</string>
+     </property>
+     <layout class="QHBoxLayout" name="huePaletteRowLayout">
+      <property name="spacing">
+       <number>6</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="huePaletteCaption">
+        <property name="text">
+         <string>After Hue:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignVCenter</set>
+        </property>
+        <property name="toolTip">
+         <string>Live preview after Hue/Sat — matches LEDs/overlay (read-only).</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="huePaletteLayout">
+        <property name="spacing">
+         <number>4</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <spacer name="huePaletteSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QWidget" name="patternHostWidget">
      <layout class="QVBoxLayout" name="patternHostLayout">
       <property name="spacing">

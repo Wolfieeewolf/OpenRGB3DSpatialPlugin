@@ -7,6 +7,7 @@
 
 class QComboBox;
 class QHBoxLayout;
+class QLabel;
 class QPushButton;
 class QVBoxLayout;
 
@@ -28,6 +29,9 @@ public:
     QVBoxLayout* tintHostLayout() const;
     QWidget* colorButtonsWidget() const;
     QHBoxLayout* colorButtonsLayout() const;
+    QWidget* huePaletteWidget() const;
+    QHBoxLayout* huePaletteLayout() const;
+    QLabel* huePaletteCaption() const;
     QWidget* patternHostWidget() const;
     QVBoxLayout* patternHostLayout() const;
     QPushButton* addColorButton() const;

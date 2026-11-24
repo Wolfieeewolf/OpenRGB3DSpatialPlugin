@@ -26,8 +26,10 @@
 #include "SpatialOffscreenGlPool.h"
 #include "Geometry3DUtils.h"
 #include <cstring>
+#include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QLabel>
 #include <QMenu>
 #include <QSignalBlocker>
 #include <algorithm>
@@ -123,8 +125,12 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     color_sat_row_ = nullptr;
     color_buttons_widget = nullptr;
     color_buttons_layout = nullptr;
+    hue_palette_widget_ = nullptr;
+    hue_palette_layout_ = nullptr;
+    hue_palette_caption_ = nullptr;
     add_color_button = nullptr;
     remove_color_button = nullptr;
+    hue_palette_buttons_.clear();
 
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
@@ -799,6 +805,92 @@ void SpatialEffect3D::SyncColorControlVisibilityForPatternMode()
     {
         color_buttons_widget->setVisible(show_color_chrome && color_source_ != ColorSourceRainbow);
     }
+    RefreshHuePaletteSwatches();
+}
+
+RGBColor SpatialEffect3D::PreviewColorWithHueSat(RGBColor c, float hue_deg, float sat_mul)
+{
+    /* Match VolumeDisplayFinish410 applyHueSat: fract(h + deg/360), sat *= mul. */
+    const int r = (int)(c & 0xFFu);
+    const int g = (int)((c >> 8) & 0xFFu);
+    const int b = (int)((c >> 16) & 0xFFu);
+    const QColor qc(r, g, b);
+    float h = (float)qc.hueF();
+    const float s = (float)qc.saturationF();
+    const float v = (float)qc.valueF();
+    if(h < 0.0f)
+    {
+        h = 0.0f;
+    }
+    float nh = h + hue_deg / 360.0f;
+    nh -= std::floor(nh);
+    const float ns = std::clamp(s * std::max(sat_mul, 0.0f), 0.0f, 1.0f);
+    const QColor out = QColor::fromHsvF((qreal)nh, (qreal)ns, (qreal)v);
+    return ((unsigned int)out.blue() << 16)
+         | ((unsigned int)out.green() << 8)
+         | (unsigned int)out.red();
+}
+
+void SpatialEffect3D::RefreshHuePaletteSwatches()
+{
+    if(!hue_palette_widget_ || !hue_palette_layout_)
+    {
+        return;
+    }
+
+    const bool use_pattern_look =
+        shared_strip_cmap_panel &&
+        shared_strip_cmap_panel->useStripColormap();
+    const bool tint_active =
+        std::fabs(color_hue_shift_deg_) > 0.5f
+        || std::fabs(color_sat_mul_ - 1.0f) > 0.01f;
+    const bool show =
+        !use_pattern_look
+        && color_source_ != ColorSourceRainbow
+        && tint_active;
+
+    hue_palette_widget_->setVisible(show);
+    if(!show)
+    {
+        return;
+    }
+
+    while(hue_palette_buttons_.size() > colors.size())
+    {
+        QPushButton* last = hue_palette_buttons_.back();
+        hue_palette_layout_->removeWidget(last);
+        hue_palette_buttons_.pop_back();
+        last->deleteLater();
+    }
+    while(hue_palette_buttons_.size() < colors.size())
+    {
+        const int index = (int)hue_palette_buttons_.size();
+        QPushButton* swatch = new QPushButton();
+        swatch->setMinimumSize(40, 30);
+        swatch->setMaximumSize(40, 30);
+        swatch->setFocusPolicy(Qt::NoFocus);
+        swatch->setCursor(Qt::ArrowCursor);
+        swatch->setToolTip(QStringLiteral(
+            "Live preview after Hue/Sat — matches LEDs/overlay (read-only)."));
+        swatch->setAccessibleName(QStringLiteral("After Hue stop %1").arg(index + 1));
+        const int insert_pos = hue_palette_layout_->count() > 0
+            ? hue_palette_layout_->count() - 1
+            : 0;
+        hue_palette_layout_->insertWidget(insert_pos, swatch);
+        hue_palette_buttons_.push_back(swatch);
+    }
+
+    for(size_t i = 0; i < colors.size() && i < hue_palette_buttons_.size(); ++i)
+    {
+        const RGBColor preview = PreviewColorWithHueSat(
+            colors[i], color_hue_shift_deg_, color_sat_mul_);
+        const int r = (int)(preview & 0xFFu);
+        const int g = (int)((preview >> 8) & 0xFFu);
+        const int b = (int)((preview >> 16) & 0xFFu);
+        PluginUiSetRgbSwatchButton(hue_palette_buttons_[i], r, g, b);
+        hue_palette_buttons_[i]->setAccessibleName(
+            QStringLiteral("After Hue stop %1").arg((int)i + 1));
+    }
 }
 
 void SpatialEffect3D::CreateColorControls()
@@ -814,6 +906,9 @@ void SpatialEffect3D::CreateColorControls()
     reset_look_button = color_panel->resetLookButton();
     color_buttons_widget = color_panel->colorButtonsWidget();
     color_buttons_layout = color_panel->colorButtonsLayout();
+    hue_palette_widget_ = color_panel->huePaletteWidget();
+    hue_palette_layout_ = color_panel->huePaletteLayout();
+    hue_palette_caption_ = color_panel->huePaletteCaption();
     color_pattern_settings_host = color_panel->patternHostWidget();
     shared_strip_cmap_panel = nullptr;
     add_color_button = color_panel->addColorButton();
@@ -830,7 +925,7 @@ void SpatialEffect3D::CreateColorControls()
             (double)color_hue_shift_deg_,
             0,
             1.0,
-            QStringLiteral("Hue shift in degrees (spin for fine, slider for coarse). Applies as a tint on Look/Custom; still works on Flat."));
+            QStringLiteral("Hue shift in degrees (spin for fine, slider for coarse). Applies as a tint on Look/Custom; still works on Flat. After Hue strip live-previews the result."));
         if(color_hue_row_)
         {
             color_hue_row_->setSuffix(QStringLiteral("°"));
@@ -838,6 +933,7 @@ void SpatialEffect3D::CreateColorControls()
                 [this](double v)
                 {
                     color_hue_shift_deg_ = (float)v;
+                    RefreshHuePaletteSwatches();
                 },
                 [this]() { emit ParametersChanged(); });
         }
@@ -849,19 +945,21 @@ void SpatialEffect3D::CreateColorControls()
             (double)color_sat_mul_,
             2,
             0.05,
-            QStringLiteral("Saturation multiplier (1.00 = authored). Spin for fine, slider for coarse."));
+            QStringLiteral("Saturation multiplier (1.00 = authored). Spin for fine, slider for coarse. After Hue strip live-previews the result."));
         if(color_sat_row_)
         {
             color_sat_row_->bindValueChanged(this,
                 [this](double v)
                 {
                     color_sat_mul_ = (float)std::clamp(v, 0.0, 2.0);
+                    RefreshHuePaletteSwatches();
                 },
                 [this]() { emit ParametersChanged(); });
         }
         AlignCaptionLabels({
             color_hue_row_ ? color_hue_row_->captionLabel() : nullptr,
             color_sat_row_ ? color_sat_row_->captionLabel() : nullptr,
+            hue_palette_caption_,
         });
     }
 
@@ -891,7 +989,10 @@ void SpatialEffect3D::CreateColorButton(RGBColor color)
     QPushButton* color_button = new QPushButton();
     color_button->setMinimumSize(40, 30);
     color_button->setMaximumSize(40, 30);
-    color_button->setToolTip("Click to change color");
+    color_button->setToolTip(QStringLiteral(
+        "Authored stop (base). Click to change. After Hue strip shows Hue/Sat preview."));
+    color_button->setAccessibleName(
+        QStringLiteral("Color stop %1").arg((int)color_buttons.size() + 1));
     int r = color & 0xFF;
     int g = (color >> 8) & 0xFF;
     int b = (color >> 16) & 0xFF;
@@ -1014,6 +1115,8 @@ void SpatialEffect3D::ShowColorsContextMenu(const QPoint& pos)
     QAction* add_act = menu.addAction(QStringLiteral("Add stop"));
     QAction* rem_act = menu.addAction(QStringLiteral("Remove stop"));
     QAction* reset_act = menu.addAction(QStringLiteral("Reset to Look"));
+    QAction* hue_hint = menu.addAction(QStringLiteral("After Hue = live preview (read-only)"));
+    hue_hint->setEnabled(false);
     look_act->setCheckable(true);
     custom_act->setCheckable(true);
     rainbow_act->setCheckable(true);
@@ -1101,6 +1204,7 @@ void SpatialEffect3D::OnAddColorClicked()
     CreateColorButton(new_color);
 
     remove_color_button->setEnabled(colors.size() > 1);
+    RefreshHuePaletteSwatches();
     emit ParametersChanged();
 }
 
@@ -1115,6 +1219,7 @@ void SpatialEffect3D::OnRemoveColorClicked()
         colors.pop_back();
         RemoveLastColorButton();
         remove_color_button->setEnabled(colors.size() > 1);
+        RefreshHuePaletteSwatches();
         emit ParametersChanged();
     }
 }
@@ -1146,6 +1251,7 @@ void SpatialEffect3D::OnColorButtonClicked()
         colors[index] = ((unsigned int)new_color.blue() << 16) | ((unsigned int)new_color.green() << 8) | (unsigned int)new_color.red();
 
         PluginUiSetRgbSwatchButton(clicked_button, new_color.red(), new_color.green(), new_color.blue());
+        RefreshHuePaletteSwatches();
 
         emit ParametersChanged();
     }

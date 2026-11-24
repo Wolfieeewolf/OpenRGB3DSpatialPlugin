@@ -758,9 +758,13 @@ protected:
 
     QWidget*            color_buttons_widget;
     QHBoxLayout*        color_buttons_layout;
+    QWidget*            hue_palette_widget_ = nullptr;
+    QHBoxLayout*        hue_palette_layout_ = nullptr;
+    QLabel*             hue_palette_caption_ = nullptr;
     QPushButton*        add_color_button;
     QPushButton*        remove_color_button;
     std::vector<QPushButton*> color_buttons;
+    std::vector<QPushButton*> hue_palette_buttons_;
     std::vector<RGBColor> colors;
     std::vector<RGBColor> look_colors_;
     int                 color_source_ = ColorSourceCustom;
@@ -869,6 +873,9 @@ protected:
     void AddWidgetToParent(QWidget* w, QWidget* container);
     QWidget* CustomSettingsPanelWidget() const;
     void SyncColorControlVisibilityForPatternMode();
+    /** Live Hue/Sat preview strip — recolors with sliders; never mutates stored stops. */
+    void RefreshHuePaletteSwatches();
+    static RGBColor PreviewColorWithHueSat(RGBColor c, float hue_deg, float sat_mul);
     void EnsureHeightBandsPanel();
     void LoadEffectStratumSettings(const nlohmann::json& settings);
     void SaveEffectStratumSettings(nlohmann::json& j) const;

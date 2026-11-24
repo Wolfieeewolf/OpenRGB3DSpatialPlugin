@@ -99,21 +99,17 @@ vec3 samplePalette(float t)
     return mix(u_palette[i0], u_palette[i1], f);
 }
 
-/* Soft spectral / iridescent rainbow — Rich style only. */
+/* Rich rainbow: still the vivid HSV spectrum, with light shade — never chalk/wash. */
 vec3 spectralIridescent(float t01, float shade, float gloss)
 {
     float t = fract(t01);
-    vec3 a = rainbowHue(t * 360.0);
-    vec3 b = rainbowHue(fract(t + 0.08) * 360.0);
-    vec3 c = rainbowHue(fract(t + 0.92) * 360.0);
-    vec3 base = mix(mix(c, a, 0.55), b, 0.28);
-    float sat = mix(0.92, 0.55, gloss);
-    float val = mix(0.35, 1.0, pow(clamp(shade, 0.0, 1.0), 0.85));
-    vec3 hsv = rgb2hsv(base);
-    hsv.y *= sat;
-    hsv.z = mix(hsv.z * 0.55, 1.0, val);
-    vec3 col = hsv2rgb(hsv.x, hsv.y, hsv.z);
-    col = mix(col, vec3(1.0), gloss * 0.45 * shade);
+    vec3 base = rainbowHue(t * 360.0);
+    vec3 lobe = rainbowHue(fract(t + 0.05) * 360.0);
+    base = mix(base, lobe, 0.15);
+    float lum = mix(0.42, 1.0, pow(clamp(shade, 0.0, 1.0), 0.70));
+    vec3 col = base * lum;
+    /* Same-hue tip lift — do not mix toward white (that killed the unicorn vomit). */
+    col = mix(col, min(base * 1.22, vec3(1.0)), clamp(gloss, 0.0, 1.0) * 0.22 * clamp(shade, 0.0, 1.0));
     return clamp(col, 0.0, 1.0);
 }
 
@@ -136,21 +132,16 @@ vec3 paletteOrRainbowRich(float t01, float scroll_deg, float shade, float gloss)
     return applyHueSat(base);
 }
 
-/* Lit material: ramp colour × shade + highlight toward white/hot tip. */
+/* Lit material: keep the authored hue. Red stays red — only value/shade moves. */
 vec3 litMaterial(vec3 base, float shade, float gloss)
 {
     float sh = clamp(shade, 0.0, 1.0);
     float gl = clamp(gloss, 0.0, 1.0);
-    /* Wider shade range + hotter tips — Flat stays colour×intensity; Rich lifts depth. */
-    float body_sh = pow(sh, 0.82);
-    vec3 body = base * mix(0.10, 1.05, body_sh);
-    vec3 tip = mix(base, vec3(1.0), 0.78);
-    if(u_palette_count >= 2)
-    {
-        tip = mix(base, samplePalette(1.0), 0.88);
-        tip = applyHueSat(tip);
-    }
-    float tip_w = max(gl, sh * sh * 0.22) * (0.28 + 0.72 * sh);
+    /* Flat is colour×intensity; Rich adds depth without bleaching chroma. */
+    float lum = mix(0.38, 1.0, pow(sh, 0.72));
+    vec3 body = base * lum;
+    vec3 tip = min(base * mix(1.0, 1.28, gl), vec3(1.0));
+    float tip_w = gl * 0.28 * sh;
     return clamp(mix(body, tip, tip_w), 0.0, 1.0);
 }
 
@@ -210,8 +201,9 @@ vec3 applyFinish(vec3 samp)
         float hue = atan(samp.y * 2.0 - 1.0, samp.x * 2.0 - 1.0) / 6.2831853;
         float v = samp.z > 0.0 ? clamp(samp.z, 0.0, 1.0) : 1.0;
         if(v < 0.01) return vec3(0.0);
+        /* Atlas hue wheel: no forced gloss (that carved a blue/dark seam). */
         if(rich != 0)
-            return litMaterial(paletteOrRainbowRich(fract(hue + 1.0), scroll, v, 0.35), v, 0.35 * v);
+            return litMaterial(paletteOrRainbowRich(fract(hue + 1.0), scroll, v, 0.0), v, 0.0);
         return paletteOrRainbowFlat(fract(hue + 1.0), scroll) * v;
     }
     if(mode == 7)
@@ -242,7 +234,7 @@ vec3 applyFinish(vec3 samp)
         if(rich != 0)
         {
             vec3 base = paletteOrRainbowRich(heat, scroll, v, gloss);
-            return litMaterial(base, v, max(gloss, heat * 0.35));
+            return litMaterial(base, v, gloss);
         }
         return paletteOrRainbowFlat(heat, scroll) * v;
     }

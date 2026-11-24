@@ -195,6 +195,7 @@ void SpatialEffect3D::SetColors(const std::vector<RGBColor>& new_colors)
             remove_color_button->setEnabled(colors.size() > 1);
         }
     }
+    RefreshHuePaletteSwatches();
 }
 
 std::vector<RGBColor> SpatialEffect3D::GetColors() const
@@ -257,6 +258,7 @@ void SpatialEffect3D::SetColorHueShiftDeg(float deg)
     {
         color_hue_row_->syncSpinValue(color_hue_shift_deg_);
     }
+    RefreshHuePaletteSwatches();
 }
 
 void SpatialEffect3D::SetColorSatMul(float mul)
@@ -266,6 +268,7 @@ void SpatialEffect3D::SetColorSatMul(float mul)
     {
         color_sat_row_->syncSpinValue(color_sat_mul_);
     }
+    RefreshHuePaletteSwatches();
 }
 
 void SpatialEffect3D::SetLookColors(const std::vector<RGBColor>& look)
@@ -308,11 +311,11 @@ void SpatialEffect3D::EnrichPaletteForRich(std::vector<RGBColor>& stops, int tar
     }
     if(stops.size() == 1)
     {
-        /* Keep the crayon; add a lifted highlight tip for shade/highlight mix. */
+        /* Keep the crayon; add a slightly brighter same-hue stop (not white chalk). */
         const RGBColor c = stops[0];
-        const int r = std::min(255, (int)(c & 0xFF) + 48);
-        const int g = std::min(255, (int)((c >> 8) & 0xFF) + 48);
-        const int b = std::min(255, (int)((c >> 16) & 0xFF) + 48);
+        const int r = std::min(255, (int)std::lround((float)(c & 0xFF) * 1.18f));
+        const int g = std::min(255, (int)std::lround((float)((c >> 8) & 0xFF) * 1.18f));
+        const int b = std::min(255, (int)std::lround((float)((c >> 16) & 0xFF) * 1.18f));
         stops.push_back((RGBColor)((b << 16) | (g << 8) | r));
     }
     std::vector<RGBColor> dense;

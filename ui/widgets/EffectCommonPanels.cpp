@@ -378,6 +378,7 @@ QPushButton* EffectGeometryPanel::rotationResetButton() const { return ui->rotat
 #include "ui_EffectColorPanel.h"
 
 #include <QComboBox>
+#include <QLabel>
 #include <QPushButton>
 #include <algorithm>
 
@@ -418,6 +419,9 @@ QPushButton* EffectColorPanel::resetLookButton() const { return ui->resetLookBut
 QVBoxLayout* EffectColorPanel::tintHostLayout() const { return ui->tintHostLayout; }
 QWidget* EffectColorPanel::colorButtonsWidget() const { return ui->colorButtonsWidget; }
 QHBoxLayout* EffectColorPanel::colorButtonsLayout() const { return ui->colorButtonsLayout; }
+QWidget* EffectColorPanel::huePaletteWidget() const { return ui->huePaletteWidget; }
+QHBoxLayout* EffectColorPanel::huePaletteLayout() const { return ui->huePaletteLayout; }
+QLabel* EffectColorPanel::huePaletteCaption() const { return ui->huePaletteCaption; }
 QWidget* EffectColorPanel::patternHostWidget() const { return ui->patternHostWidget; }
 QVBoxLayout* EffectColorPanel::patternHostLayout() const { return ui->patternHostLayout; }
 QPushButton* EffectColorPanel::addColorButton() const { return ui->addColorButton; }
