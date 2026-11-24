@@ -46,6 +46,22 @@ Shared hard services (FFT, HID input, screen capture, game telemetry) stay in th
 
 Porting helpers: [shader-conversion.md](shader-conversion.md).
 
+### Shared control captions (glossary)
+
+Same job → same wording across engines. Look-specific knobs stay look-specific.
+
+| Job | Caption | Used by |
+|-----|---------|---------|
+| Map a 2D look onto the occupancy box | **Projection:** | Shader Field, Media texture-projection, Patterns strip unfold |
+| Which shell LEDs may light | **Surfaces** | Volume `global: surface` |
+| Which axis motion/fill travels | **Path:** | Volume/Audio `global: path` / `axis` |
+| Pulse plane/axis geometry | **Orientation:** | Reactive |
+| Distance falloff from emitters/planes | **Reach:** | Screen Mirror |
+| Wipe / action travel | **Direction:** | Actions, some Volume combos |
+| Which face a look aims at | **Aim:** | Rotating cone (not the Surfaces mask) |
+
+Do **not** call Surfaces / Path / Orientation / Reach “Projection”. Form captions use a trailing colon; sentence case unless a proper noun.
+
 ---
 
 ## Volume engine
@@ -72,6 +88,8 @@ category: Volume
 
 Body: `void volumeMain(out vec4 out_color, in vec3 p01)`. `p01` is origin-local UV (anchor at 0.5) unless `sample: room`. `u_params[0]` = progress (Speed-scaled cycles); `u_time` = Speed-scaled seconds.
 
+**Spatial Anchor:** Volume (incl. Grid Kit), Audio, and Media follow the stack Spatial Anchor every LED frame. Origin-local UV recentres on the hub (`SampleVolumeLocalUv01`). `sample: room` (Surface Ambient) keeps room-shell UV for the look; Scale / occupancy still gate via `EffectGridSampleOutsideVolume` and the same hub. At **Scale 100%**, half-extents reach the farthest room face, so changing the hub recentres UV (0.5) but the lit box still fills the room — use Scale &lt; 100% or Position offset to see a tight translate.
+
 **Shared VFX lib (`SpatialVfxLib410`):** injected ahead of every Volume / particle / ribbon / strip / Shader Field body. Opt-in `vfx*` helpers — SDF primitives (sphere/box/torus/capsule/plane/octahedron/hex), smooth min/max, rotations, domain warp, ridge/fbm, curl, streak, pulse/once envelopes, heat/palette colours, `vfxCoreRim` / `vfxShell`, `vfxDetailWidth` (Detail 0..1 → calm soft → hologram sharp). Prefer core+rim over a single fat blob for showcase looks. Action particle/ribbon builtins use the lib. Existing library `.fs` that ignore `vfx*` are unchanged until rewritten.
 
 **Volume overlay atlas:** `kMaxResolution` = 64 (LEDs still point-eval). Default assist resolution 32. Set `resolution:` in the `.fs` header up to 64 for denser room-grid preview.
@@ -80,6 +98,18 @@ Body: `void volumeMain(out vec4 out_color, in vec3 p01)`. `p01` is origin-local 
 
 **Runs:** 2D `spatialMain` via `SpatialShaderEngine`. LED colours use **true GPU UV point-eval** (`BakeTrueGpuVolumeSamples` → `sampleAtUvs` with PBO readback) — same idea as Volume `evaluateAtPoints`; projection (floor/walls/sphere/…) stays on CPU. Overlay borrows a durable upright `SpatialOverlayHandoff` of the atlas (default 1024×576); fail closed when the GL pool is warm (CPU `exportAtlasRgba8` only if the pool is cold). Bodies load through `SpatialShaderCatalog::LoadShaderBodyFromPath` (same `#` / `key: value` header strip as Volume `.fs`).  
 **Library category:** Shader Field (`effects/shader-field/`).
+
+**Spatial Anchor:** same origin-local path as Volume (`SampleVolumeLocalUv01` + `FillOverlayVolumeFrame`). Stack Spatial Anchor and Position offset apply every LED frame. Scale 100% behaviour matches Volume (hub recentres UV; occupancy still fills the room).
+
+**Room-fill UV (authoring):** LED / overlay sample a **square** occupancy UV `[0,1]²` (not the 16:9 overlay atlas). Prefer Volume-style centred coords — **no** `u_resolution.x/y` aspect stretch:
+
+```glsl
+vec2 p = (uv - 0.5) * (2.0 * zoom);  /* edge mid |p|=1, corner √2 */
+```
+
+Do not hard-clip or soft-kill the field before `r ≈ √2` (that leaves a centre disc on the floor). Soft edge fades, if any, start past the UV corners. Wash/crest owns contrast — not a centred disc mask. Radial floor projection normalizes radius by √2 so box corners stay lit.
+
+**Projection modes (UI order):** Floor / Ceiling (X–Z), Front / Back wall (X–Y), Left / Right wall (Z–Y), Sphere, Cylinder (Y), Radial floor, Box unwrap. Saved `projection_mode` uses stable enum ids (not combo index). Legacy “Nearest cube face” (10) coerces to Box unwrap (9).
 
 | Header keys (common) | Meaning |
 |----------------------|---------|
@@ -107,6 +137,8 @@ Author body: versionless GLSL with `spatialMain(out, frag_coord)`; uniforms `u_t
 **Player codec** registered at Load via `RegisterReactiveEngine()`.  
 Library category **Reactive**. No Effect Library content folder.
 
+**Spatial Anchor:** ignored — waves use device/key space, not the stack hub.
+
 ## Ambilight engine (Screen Mirror)
 
 **Player codec** registered at Load via `RegisterScreenMirrorEngine()`.  
@@ -116,7 +148,7 @@ Library category **Ambilight**. No Effect Library content folder.
 
 **Overlay:** stacked plane atlas via `SpatialOverlayHandoff` (GPU NEAREST scale into durable handoff; viewport borrows). Up to 4 planes, preview denseness up to 640×360. Temporal wave and smoothing are LED-only.
 
-**Reach / wave origin:** always each **display plane’s centre**. Screen Mirror does not use the layer Spatial Anchor (that control is for Volume / Movie Sync / etc.).
+**Reach / wave origin:** always each **display plane’s centre**. Screen Mirror does **not** use the stack Spatial Anchor (explicit LED-frame exception alongside Reactive). That control is for Volume / Audio / Media / Shader Field / Movie Sync / Minecraft (and for `sample: room` occupancy).
 
 **Screen UV (`SpatialMapToScreen`):** **outside / convex** sphere map (Newell dual with `pz − 1`) from the plane centre — light reads as an extension of the screen pushing **out** into the room (not a concave cave into mid-frame). Trade-off: clips that dive *into* a tunnel will feel wrong; ambilight is meant to send light out from the glass, not recreate into-the-screen perspective. Reach / falloff owns 360° brightness; wave / time-to-edge still adds travel delay.
 
@@ -125,9 +157,26 @@ Library category **Ambilight**. No Effect Library content folder.
 **Player codec** registered at Load via `RegisterMovieSyncEngine()`.  
 Content: `movie-sync/effects/`. Sidecars beside the video.
 
+**Spatial Anchor:** follows the stack hub (same LED-frame apply as Volume / Shader Field). Action RoomBox clips use their own `origin_ref`, not the stack combo — see [effect-event-maker.md](effect-event-maker.md).
+
 ## Game engine
 
 Minecraft under library category **Game**. Bridge mod sources: `integrations/minecraft/` (jar goes in Minecraft’s mods folder).
+
+**Spatial Anchor:** Minecraft sub-effects use `GetEffectOriginGrid` and follow the stack hub every LED frame.
+
+### Stack Spatial Anchor matrix
+
+| Engine | Stack Spatial Anchor | Notes |
+|--------|----------------------|-------|
+| Volume / Audio / Media (default) | Yes — origin-local UV | Incl. Grid Kit; hub at UV 0.5 |
+| Volume `sample: room` | Occupancy / Scale yes (origin hub); look UV = room shell | Surface Ambient |
+| Shader Field | Yes — origin-local UV | Position offset forced on |
+| Movie Sync | Yes | Action clips: own `origin_ref` |
+| Minecraft (Game) | Yes | |
+| Screen Mirror | No | Reach = display plane centres |
+| Reactive | No | Device / key space |
+| Unlocked volume gizmo | Gizmo owns origin until locked | LED loop skips yank |
 
 ## GPU push (what runs where)
 

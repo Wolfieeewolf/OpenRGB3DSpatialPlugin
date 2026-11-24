@@ -29,6 +29,8 @@ Using an idea or technique from another shader is fine. Copying its code is not,
 
 **Shadertoy → 2D:** `mainImage` → `spatialMain`; `iTime` → `u_time` (both are seconds; ours is Speed-scaled, so Speed 100 matches Shadertoy and Speed 0 freezes); `iResolution` → `u_resolution`; map look to zoom/contrast/hue/detail (`u_params[0..3]`). Drop the file in `effects/shader-field/`. Plugin strips `#` / `key: value` headers via `LoadShaderBodyFromPath` before compile.
 
+**Room fill:** LED UV is a **square** occupancy domain (Floor / walls), not the 16:9 overlay atlas. Prefer `vec2 p = (uv - 0.5) * (2.0 * zoom)` — do **not** multiply by `u_resolution.x/y` aspect (that darkens the room sides). Soft radial fades, if any, start past `r ≈ √2`. Same rule as Volume’s `(p01 - 0.5) * 2.0`.
+
 **2D → 3D (only soft fields):** replace UV with a plane from `p01` (e.g. `p01.xz`); output intensity in R (optional palette in G). Install under AppData `effects/volume/` for **Volume** (or `effects/audio/` / `effects/media/`) with a FolderVolume `class:` header — not under the plugin `engines/` tree.
 
 **Strip → 1D:** drop a `effects/patterns/<name>.kernel` file. Set `index` so saved ids stay stable. The plugin composes `evalStripKernelSigned` from the folder.

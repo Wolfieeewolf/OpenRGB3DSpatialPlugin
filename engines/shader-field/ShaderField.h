@@ -78,10 +78,14 @@ private:
         PROJ_SIDE_RIGHT = 6,
         PROJ_CYLINDER_Y = 7,
         PROJ_RADIAL_XZ = 8,
-        PROJ_TRIPLANAR = 9,
-        PROJ_CUBE_FACE = 10,
+        PROJ_TRIPLANAR = 9,       /* UI: "Box unwrap" */
+        PROJ_CUBE_FACE = 10,      /* Deprecated alias of PROJ_TRIPLANAR — coerce on load */
         PROJ_COUNT
     };
+
+    void PopulateProjectionCombo();
+    void SyncProjectionComboToMode();
+    static int NormalizeProjectionMode(int mode);
 
     ShaderFieldSpec spec_{};
     SpatialShaderEngine* shader_engine = nullptr;

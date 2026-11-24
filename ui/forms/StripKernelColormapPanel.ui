@@ -23,7 +23,7 @@
      <item>
       <widget class="QLabel" name="surfaceLookCaption">
        <property name="text">
-        <string>Surface Look:</string>
+        <string>Apply as:</string>
        </property>
        <property name="alignment">
         <set>Qt::AlignRight|Qt::AlignVCenter</set>
@@ -36,7 +36,7 @@
         <string>Effect Colors = Look/Custom/Rainbow on the lit shape. Pattern = kernel motion/layout (Color from chooses palette vs effect colours).</string>
        </property>
        <property name="accessibleName">
-        <string>Surface Look</string>
+        <string>Apply as</string>
        </property>
       </widget>
      </item>
@@ -87,7 +87,7 @@
       <item row="2" column="0">
        <widget class="QLabel" name="unfoldCaption">
         <property name="text">
-         <string>Map onto:</string>
+         <string>Projection:</string>
         </property>
        </widget>
       </item>

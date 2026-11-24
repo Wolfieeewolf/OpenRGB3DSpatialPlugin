@@ -520,10 +520,11 @@ void ActionEditorDialog::buildUi()
     dir_form->setContentsMargins(0, 0, 0, 0);
     dir_form->setSpacing(6);
     dir_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    dir_form->addRow(QStringLiteral("Play on"), play_bounds_combo_);
-    dir_form->addRow(QStringLiteral("Axes in"), axis_space_combo_);
-    dir_form->addRow(QStringLiteral("Axis"), axis_mode_combo_);
-    dir_form->addRow(QStringLiteral("Wipe toward"), direction_combo_);
+    dir_form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    dir_form->addRow(QStringLiteral("Play on:"), play_bounds_combo_);
+    dir_form->addRow(QStringLiteral("Axes in:"), axis_space_combo_);
+    dir_form->addRow(QStringLiteral("Axis:"), axis_mode_combo_);
+    dir_form->addRow(QStringLiteral("Direction:"), direction_combo_);
     flip_direction_button_ = new QPushButton(QStringLiteral("Flip direction"));
     flip_direction_button_->setToolTip(
         QStringLiteral("Swap to the opposite wipe direction (Left\u2194Right, Forward\u2194Back, \u2026)"));
@@ -548,10 +549,10 @@ void ActionEditorDialog::buildUi()
     flip_layout->addStretch(1);
     dir_form->addRow(QString(), flip_direction_button_);
     dir_form->addRow(QString(), reverse_check_);
-    dir_form->addRow(QStringLiteral("Mirror"), flip_row);
-    dir_form->addRow(QStringLiteral("Rotate"), rotate_combo_);
-    dir_form->addRow(QStringLiteral("Yaw"), yaw_field.first);
-    dir_form->addRow(QStringLiteral("Pitch"), pitch_field.first);
+    dir_form->addRow(QStringLiteral("Mirror:"), flip_row);
+    dir_form->addRow(QStringLiteral("Rotate:"), rotate_combo_);
+    dir_form->addRow(QStringLiteral("Yaw:"), yaw_field.first);
+    dir_form->addRow(QStringLiteral("Pitch:"), pitch_field.first);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->addLayout(dir_form);
     props_inner_layout->addWidget(direction_section_);
 

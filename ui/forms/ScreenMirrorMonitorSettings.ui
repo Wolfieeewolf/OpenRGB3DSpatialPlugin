@@ -94,7 +94,7 @@
       <item row="3" column="0">
        <widget class="QLabel" name="softnessCaption">
         <property name="text">
-         <string>Edge Softness:</string>
+         <string>Edge softness:</string>
         </property>
        </widget>
       </item>
@@ -138,7 +138,7 @@
       <item row="1" column="0">
        <widget class="QLabel" name="brightnessThresholdCaption">
         <property name="text">
-         <string>Brightness Threshold:</string>
+         <string>Brightness threshold:</string>
         </property>
        </widget>
       </item>
@@ -338,7 +338,7 @@
       <item row="1" column="0">
        <widget class="QLabel" name="screenPreviewCaption">
         <property name="text">
-         <string>Screen Preview:</string>
+         <string>Screen preview:</string>
         </property>
        </widget>
       </item>

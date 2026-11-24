@@ -250,6 +250,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     fps_label = motion_pattern_group->fpsLabel();
     path_axis_combo = motion_pattern_group->pathAxisCombo();
     path_axis_combo->setCurrentIndex(std::clamp(effect_path_axis, 0, 2));
+    plane_combo = motion_pattern_group->planeCombo();
+    plane_combo->setCurrentIndex(std::clamp(effect_plane, 0, 2));
     thickness_slider = motion_pattern_group->thicknessSlider();
     thickness_label = motion_pattern_group->thicknessLabel();
     edge_fade_slider = motion_pattern_group->edgeFadeSlider();
@@ -427,6 +429,7 @@ void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geo
     connect(edge_fade_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(count_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(path_axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnParameterChanged);
+    connect(plane_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnParameterChanged);
     connect(detail_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(size_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -1393,6 +1396,21 @@ void SpatialEffect3D::ApplyControlVisibility()
             }
         }
     }
+    if(plane_combo)
+    {
+        plane_combo->setVisible(info.show_plane_control);
+        const QList<QLabel*> labels = plane_combo->parentWidget()
+            ? plane_combo->parentWidget()->findChildren<QLabel*>()
+            : QList<QLabel*>();
+        for(QLabel* label : labels)
+        {
+            if(label->text() == QStringLiteral("Projection:"))
+            {
+                label->setVisible(info.show_plane_control);
+                break;
+            }
+        }
+    }
 
     if(color_controls_group)
     {
@@ -1482,6 +1500,10 @@ void SpatialEffect3D::OnParameterChanged()
     if(path_axis_combo)
     {
         effect_path_axis = std::clamp(path_axis_combo->currentIndex(), 0, 2);
+    }
+    if(plane_combo)
+    {
+        effect_plane = std::clamp(plane_combo->currentIndex(), 0, 2);
     }
 
     if(size_slider && size_label)

@@ -84,7 +84,7 @@
       <item row="1" column="0">
        <widget class="QLabel" name="waveDecayCaption">
         <property name="text">
-         <string>Wave Decay:</string>
+         <string>Wave decay:</string>
         </property>
        </widget>
       </item>

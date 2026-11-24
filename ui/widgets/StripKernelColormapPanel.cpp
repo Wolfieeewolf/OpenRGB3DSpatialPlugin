@@ -24,8 +24,8 @@ const char* StripKernelColormapPanel::UnfoldLabel(int m)
     case 4: return "Radial XZ";
     case 5: return "Diagonal x+y+z";
     case 6: return "Manhattan";
-    case 7: return "Effect animation only (no room projection)";
-    case 8: return "Static room projection (angle)";
+    case 7: return "Effect animation only";
+    case 8: return "Static room (angle)";
     default: return "Along X";
     }
 }

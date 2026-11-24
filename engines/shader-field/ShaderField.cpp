@@ -222,6 +222,8 @@ EffectInfo3D ShaderField::GetEffectInfo() const
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
+    /* Origin-local SampleVolumeLocalUv01 + stack Spatial Anchor — match Volume UI. */
+    info.show_position_offset_control = true;
     info.show_color_controls = false;
     info.supports_height_bands = false;
     info.supports_strip_colormap = false;
@@ -252,24 +254,14 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     EffectLabeledComboRow* projection_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Projection:"));
     projection_row->setObjectName(QStringLiteral("projectionRow"));
     projection_combo = projection_row->combo();
-    projection_combo->addItem(QStringLiteral("Floor (X\u2013Z)"));
-    projection_combo->addItem(QStringLiteral("Front wall (X\u2013Y)"));
-    projection_combo->addItem(QStringLiteral("Left wall (Z\u2013Y)"));
-    projection_combo->addItem(QStringLiteral("Sphere (from origin)"));
-    projection_combo->addItem(QStringLiteral("Ceiling (X\u2013Z)"));
-    projection_combo->addItem(QStringLiteral("Back wall (X\u2013Y)"));
-    projection_combo->addItem(QStringLiteral("Right wall (Z\u2013Y)"));
-    projection_combo->addItem(QStringLiteral("Cylinder around Y"));
-    projection_combo->addItem(QStringLiteral("Radial floor (polar XZ)"));
-    projection_combo->addItem(QStringLiteral("Triplanar (dominant face)"));
-    projection_combo->addItem(QStringLiteral("Nearest cube face"));
-    projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
+    PopulateProjectionCombo();
+    SyncProjectionComboToMode();
     projection_combo->setToolTip(QStringLiteral(
         "How the 2D shader pattern maps onto the Spatial Anchor occupancy box "
         "(target bounds AABB × Scale).\n"
         "Planes = wallpaper on that box's floor/ceiling/walls.\n"
         "Sphere / Cylinder / Radial = wrap from the Spatial Anchor.\n"
-        "Triplanar / Nearest cube face = pick the strongest axis like a box unwrap."));
+        "Box unwrap = pick the strongest face like a cube map."));
     connect(projection_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ShaderField::OnProjectionModeChanged);
 
@@ -355,9 +347,67 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(w, parent);
 }
 
+int ShaderField::NormalizeProjectionMode(int mode)
+{
+    if(mode == PROJ_CUBE_FACE)
+    {
+        return PROJ_TRIPLANAR;
+    }
+    return std::clamp(mode, 0, PROJ_TRIPLANAR);
+}
+
+void ShaderField::PopulateProjectionCombo()
+{
+    if(!projection_combo)
+    {
+        return;
+    }
+    projection_combo->clear();
+    /* Display order ≠ enum order; itemData holds stable ProjectionMode ids. */
+    const struct
+    {
+        const char* label;
+        int mode;
+    } items[] = {
+        {"Floor (X\u2013Z)", PROJ_FLOOR},
+        {"Ceiling (X\u2013Z)", PROJ_CEILING},
+        {"Front wall (X\u2013Y)", PROJ_FRONT},
+        {"Back wall (X\u2013Y)", PROJ_BACK},
+        {"Left wall (Z\u2013Y)", PROJ_SIDE_LEFT},
+        {"Right wall (Z\u2013Y)", PROJ_SIDE_RIGHT},
+        {"Sphere", PROJ_SPHERE},
+        {"Cylinder (Y)", PROJ_CYLINDER_Y},
+        {"Radial floor", PROJ_RADIAL_XZ},
+        {"Box unwrap", PROJ_TRIPLANAR},
+    };
+    for(const auto& item : items)
+    {
+        projection_combo->addItem(QString::fromUtf8(item.label), item.mode);
+    }
+}
+
+void ShaderField::SyncProjectionComboToMode()
+{
+    if(!projection_combo)
+    {
+        return;
+    }
+    projection_mode = NormalizeProjectionMode(projection_mode);
+    const int idx = projection_combo->findData(projection_mode);
+    if(idx >= 0)
+    {
+        projection_combo->setCurrentIndex(idx);
+    }
+}
+
 void ShaderField::OnProjectionModeChanged(int index)
 {
-    projection_mode = std::clamp(index, 0, PROJ_COUNT - 1);
+    if(!projection_combo || index < 0)
+    {
+        return;
+    }
+    const QVariant data = projection_combo->itemData(index);
+    projection_mode = NormalizeProjectionMode(data.isValid() ? data.toInt() : index);
     emit ParametersChanged();
 }
 
@@ -412,7 +462,7 @@ void ShaderField::SyncUniforms(float time)
 /* Mirrored in ViewportShaders VolumeAtlasPoint projectUv() for the room-grid overlay — keep in sync. */
 void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) const
 {
-    const int mode = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
+    const int mode = NormalizeProjectionMode(projection_mode);
     bool wrap_u = false;
     switch(mode)
     {
@@ -457,13 +507,14 @@ void ShaderField::SampleUv(float nx, float ny, float nz, float& u, float& v) con
         const float rx = nx * 2.0f - 1.0f;
         const float rz = nz * 2.0f - 1.0f;
         u = std::atan2(rz, rx) / (float)(2.0 * M_PI) + 0.5f;
-        v = std::sqrt(rx * rx + rz * rz);
+        /* Normalize by √2 so box corners map to v=1 (fill occupancy), not inscribed disc. */
+        v = std::sqrt(rx * rx + rz * rz) / std::sqrt(2.0f);
         wrap_u = true;
         break;
     }
     case PROJ_TRIPLANAR:
-    case PROJ_CUBE_FACE:
     {
+        /* PROJ_CUBE_FACE (10) is coerced to TRIPLANAR in NormalizeProjectionMode. */
         const float ax = std::fabs(nx - 0.5f);
         const float ay = std::fabs(ny - 0.5f);
         const float az = std::fabs(nz - 0.5f);
@@ -662,7 +713,7 @@ RGBColor ShaderField::CalculateColorGrid(float x, float y, float z, float time, 
 nlohmann::json ShaderField::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["projection_mode"] = projection_mode;
+    j["projection_mode"] = NormalizeProjectionMode(projection_mode);
     j["shader_contrast"] = contrast;
     j["shader_hue_shift"] = hue_shift;
     if(!extra_raw_.empty())
@@ -690,11 +741,8 @@ void ShaderField::LoadSettings(const nlohmann::json& settings)
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("projection_mode") && settings["projection_mode"].is_number_integer())
     {
-        projection_mode = std::clamp(settings["projection_mode"].get<int>(), 0, PROJ_COUNT - 1);
-        if(projection_combo)
-        {
-            projection_combo->setCurrentIndex(std::clamp(projection_mode, 0, PROJ_COUNT - 1));
-        }
+        projection_mode = NormalizeProjectionMode(settings["projection_mode"].get<int>());
+        SyncProjectionComboToMode();
     }
     if(settings.contains("shader_contrast") && settings["shader_contrast"].is_number())
     {
@@ -748,7 +796,7 @@ bool ShaderField::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer& out,
     }
     out = GpuRoomGridOverlayLayer{};
     out.kind = GpuRoomGridOverlayLayer::KindProjected2D;
-    out.projection = std::clamp(projection_mode, 0, PROJ_COUNT - 1);
+    out.projection = NormalizeProjectionMode(projection_mode);
     if(shader_engine->ensureAtlasTextureReady())
     {
         const unsigned int src = shader_engine->atlasTextureId();

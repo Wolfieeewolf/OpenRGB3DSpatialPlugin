@@ -198,7 +198,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    (int)std::lround(std::clamp(settings.scale, 0.0f, 1.0f) * 100.0f),
                    QStringLiteral("Ambilight fill radius as % of room corner distance from this "
                                   "display plane's centre (not Room light reach mm). Start near 55%; "
-                                  "raise only if far walls stay dark. Edge Softness / Falloff curve "
+                                  "raise only if far walls stay dark. Edge softness / Falloff curve "
                                   "shape the fade — overshoot past 100% is not needed."),
                    QStringLiteral("%"));
 
@@ -227,7 +227,7 @@ void ScreenMirrorMonitorPanel::initialize(ScreenMirror* effect,
                    100,
                    (int)settings.edge_softness,
                    QStringLiteral("Flat bright core inside Ambilight reach before fading "
-                                  "(0 = pure gradient, high values fill most of the reach and look like "
+                                  "(0–100%; 0 = pure gradient, high values fill most of the reach and look like "
                                   "a room wash — keep low unless you want that)."),
                    QString());
 

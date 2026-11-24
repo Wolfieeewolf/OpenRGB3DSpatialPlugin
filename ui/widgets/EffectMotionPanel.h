@@ -45,6 +45,7 @@ public:
     QSlider* fpsSlider() const;
     QLabel* fpsLabel() const;
     QComboBox* pathAxisCombo() const;
+    QComboBox* planeCombo() const;
     QSlider* thicknessSlider() const;
     QLabel* thicknessLabel() const;
     QSlider* edgeFadeSlider() const;

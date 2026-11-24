@@ -1031,9 +1031,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         {
             continue;
         }
-        /* Ambilight / other CustomOnly codecs without a 3D origin ignore the layer
-           Spatial Anchor (Reach uses display plane centres). */
-        if(!effect->GetEffectInfo().needs_3d_origin)
+        /* Explicit stack-anchor exceptions: Screen Mirror Reach uses display plane
+           centres; Reactive uses device/key space. Everything else that samples
+           via SampleVolumeLocalUv01 / FillOverlayVolumeFrame (Volume incl. Grid Kit,
+           Shader Field, Audio, Media, Movie Sync, Minecraft, and sample: room
+           occupancy) gets the hub every LED frame. */
+        const SpatialEffectType effect_type = effect->GetEffectInfo().effect_type;
+        if(effect_type == SPATIAL_EFFECT_SCREEN_MIRROR
+           || effect_type == SPATIAL_EFFECT_REACTIVE)
         {
             continue;
         }

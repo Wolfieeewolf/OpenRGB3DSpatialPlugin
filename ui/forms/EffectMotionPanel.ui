@@ -269,6 +269,24 @@
     </layout>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="planeRow">
+     <item>
+      <widget class="QLabel" name="planeCaption">
+       <property name="text">
+        <string>Projection:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="planeCombo">
+       <property name="toolTip">
+        <string>Which plane the look maps onto: Floor X–Z, Front wall X–Y, or Side wall Z–Y.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <layout class="QHBoxLayout" name="thicknessRow">
      <item>
       <widget class="QLabel" name="thicknessCaption">

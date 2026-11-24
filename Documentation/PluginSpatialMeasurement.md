@@ -99,7 +99,9 @@ When `spacing_mm_*` is unset (≤ 0.001), layout uses **1.0 grid unit** per cell
 |-------|------|
 | `VirtualReferencePoint3D.transform.position` | grid units |
 
-Reference points are RoomGrid positions. Effect origin modes (`REF_MODE_ROOM_CENTER`, custom point, LED centroid, etc.) resolve to grid units via `SpatialEffect3D::GetReferencePointGrid` / `GetEffectOriginGrid`. That stack **Spatial Anchor** is for Volume / Movie Sync / similar — not Screen Mirror Reach.
+Reference points are RoomGrid positions. Effect origin modes (`REF_MODE_ROOM_CENTER`, custom point, LED centroid, etc.) resolve to grid units via `SpatialEffect3D::GetReferencePointGrid` / `GetEffectOriginGrid`.
+
+Stack **Spatial Anchor** is applied every LED frame (and on combo change) to Volume (incl. Grid Kit), Audio, Media, Shader Field, Movie Sync, and Minecraft. **Exceptions:** Screen Mirror Reach (display plane centres), Reactive (device/key space), and unlocked volume gizmos (gizmo owns origin until locked). `sample: room` looks keep room-shell UV but still use the hub for Scale / occupancy. At **Scale 100%**, half-extents reach the farthest room face — changing the hub recentres UV (0.5) while the lit box still fills the room; use Scale &lt; 100% or Position offset for a tight translate. Full matrix: [effects-engines.md](effects-engines.md) (Stack Spatial Anchor matrix).
 
 Effect offset sliders are **percent of half room size in grid units** (`effect_offset_x/y/z / 100 * half_w/h/d`) — not mm.
 

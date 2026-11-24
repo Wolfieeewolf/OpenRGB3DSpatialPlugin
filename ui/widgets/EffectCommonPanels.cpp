@@ -134,6 +134,10 @@ EffectMotionPanel::EffectMotionPanel(unsigned int speed,
     ui->pathAxisCombo->addItem(QStringLiteral("Y (up/down)"));
     ui->pathAxisCombo->addItem(QStringLiteral("Z (depth)"));
     ui->pathAxisCombo->setCurrentIndex(1);
+    ui->planeCombo->addItem(QStringLiteral("Floor (X\u2013Z)"));
+    ui->planeCombo->addItem(QStringLiteral("Front wall (X\u2013Y)"));
+    ui->planeCombo->addItem(QStringLiteral("Side wall (Z\u2013Y)"));
+    ui->planeCombo->setCurrentIndex(1);
     ui->thicknessSlider->setValue(15);
     ui->edgeFadeSlider->setValue(0);
     ui->countSlider->setValue(12);
@@ -153,7 +157,7 @@ EffectMotionPanel::EffectMotionPanel(unsigned int speed,
 
     AlignCaptionLabels({ui->speedCaption, ui->brightnessCaption, ui->frequencyCaption, ui->detailCaption,
                         ui->sizeCaption, ui->scaleCaption, ui->fpsCaption, ui->thicknessCaption,
-                        ui->edgeFadeCaption, ui->countCaption, ui->pathCaption},
+                        ui->edgeFadeCaption, ui->countCaption, ui->pathCaption, ui->planeCaption},
                        96);
     setMinimumWidth(0);
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
@@ -180,6 +184,7 @@ QCheckBox* EffectMotionPanel::scaleInvertCheck() const { return ui->scaleInvertC
 QSlider* EffectMotionPanel::fpsSlider() const { return fps_row_ ? fps_row_->slider() : nullptr; }
 QLabel* EffectMotionPanel::fpsLabel() const { return fps_row_ ? fps_row_->valueLabel() : nullptr; }
 QComboBox* EffectMotionPanel::pathAxisCombo() const { return ui->pathAxisCombo; }
+QComboBox* EffectMotionPanel::planeCombo() const { return ui->planeCombo; }
 QSlider* EffectMotionPanel::thicknessSlider() const { return thickness_row_ ? thickness_row_->slider() : nullptr; }
 QLabel* EffectMotionPanel::thicknessLabel() const { return thickness_row_ ? thickness_row_->valueLabel() : nullptr; }
 QSlider* EffectMotionPanel::edgeFadeSlider() const { return edge_fade_row_ ? edge_fade_row_->slider() : nullptr; }

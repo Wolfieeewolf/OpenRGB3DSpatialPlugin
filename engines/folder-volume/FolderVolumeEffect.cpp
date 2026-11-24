@@ -109,7 +109,10 @@ EffectInfo3D FolderVolumeEffect::GetEffectInfo() const
     info.user_colors = (unsigned int)std::max(0, spec_.user_colors);
     info.has_custom_settings = !spec_.patterns.empty() || !spec_.sliders.empty()
         || !spec_.combos.empty() || spec_.uses_media || spec_.uses_audio;
-    info.needs_3d_origin = spec_.uses_media;
+    /* All FolderVolume looks use GetEffectOriginGrid for Scale/occupancy (sample: room
+       only changes look UV). LED-frame stack-anchor exceptions are by effect_type
+       (Screen Mirror / Reactive), not this flag. */
+    info.needs_3d_origin = true;
     info.effect_type = SPATIAL_EFFECT_FOLDER_VOLUME;
     info.needs_frequency = spec_.needs_frequency;
     info.use_size_parameter = spec_.show_size;

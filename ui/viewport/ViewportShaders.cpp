@@ -509,7 +509,8 @@ bool projectUv(int mode, vec3 n, out vec2 uv)
     {
         vec2 r = vec2(n.x, n.z) * 2.0 - 1.0;
         u = atan(r.y, r.x) / TWO_PI + 0.5;
-        v = length(r);
+        /* Match CPU: /√2 so box corners are v=1 (full occupancy), not an inscribed disc. */
+        v = length(r) * 0.70710678;
         wrap_u = true;
     }
     else if(mode == 9 || mode == 10)                       /* triplanar / cube face */

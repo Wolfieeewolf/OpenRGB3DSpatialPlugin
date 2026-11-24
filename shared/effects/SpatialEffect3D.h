@@ -533,7 +533,7 @@ public:
         return effect_strip_cmap_on && effect_strip_cmap_color_from_ != 0;
     }
 
-    /** Once-per-frame: rebuild 1D strip-colormap atlas when Surface Look Pattern is on. */
+    /** Once-per-frame: rebuild 1D strip-colormap atlas when Apply as = Pattern is on. */
     void PrepareStripColormapAssist(std::uint64_t render_sequence, float time_sec);
 
     float SampleEffectStripColormap01(float kernel_rep,
