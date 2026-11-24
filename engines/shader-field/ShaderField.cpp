@@ -353,7 +353,7 @@ int ShaderField::NormalizeProjectionMode(int mode)
     {
         return PROJ_TRIPLANAR;
     }
-    return std::clamp(mode, 0, PROJ_TRIPLANAR);
+    return std::clamp(mode, 0, static_cast<int>(PROJ_TRIPLANAR));
 }
 
 void ShaderField::PopulateProjectionCombo()
