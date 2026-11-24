@@ -204,9 +204,43 @@ jobs:
           path: libOpenRGB3DSpatialPlugin.dylib
           if-no-files-found: error
 
+  # Companion Fabric mod (integrations/minecraft) — stays in this repo, not presets.
+  build-minecraft:
+    name: Minecraft Fabric mod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+          cache-dependency-path: integrations/minecraft/**/gradle-wrapper.properties
+      - name: Build mod
+        working-directory: integrations/minecraft
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon
+          mkdir -p "$GITHUB_WORKSPACE/minecraft-out"
+          # Remap jar only (skip -sources / -dev / -javadoc).
+          mapfile -t jars < <(find build/libs -maxdepth 1 -type f -name 'openrgb-minecraft-sender-*.jar' \
+            ! -name '*-sources.jar' ! -name '*-dev.jar' ! -name '*-javadoc.jar')
+          if [[ ${#jars[@]} -ne 1 ]]; then
+            echo "expected exactly one remapped jar, found:" >&2
+            ls -la build/libs >&2
+            exit 1
+          fi
+          cp "${jars[0]}" "$GITHUB_WORKSPACE/minecraft-out/"
+          ls -la "$GITHUB_WORKSPACE/minecraft-out"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: minecraft
+          path: minecraft-out/*.jar
+          if-no-files-found: error
+
   release:
     name: Publish GitHub release
-    needs: [build-windows, build-linux, macos-universal]
+    needs: [build-windows, build-linux, macos-universal, build-minecraft]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
     runs-on: ubuntu-latest
     steps:
@@ -236,7 +270,9 @@ jobs:
              artifacts/linux/libQt6Network.so.6 \
              artifacts/linux/libQt6OpenGLWidgets.so.6 \
              artifacts/macos/libOpenRGB3DSpatialPlugin.dylib \
-             artifacts/qtfw-macos/macOS-Qt-frameworks.zip              LICENSE THIRD-PARTY-NOTICES.md assets/
+             artifacts/qtfw-macos/macOS-Qt-frameworks.zip \
+             artifacts/minecraft/*.jar \
+             LICENSE THIRD-PARTY-NOTICES.md assets/
           ls -la assets
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF_NAME}"
@@ -251,12 +287,14 @@ jobs:
           | Windows (x64) | `OpenRGB3DSpatialPlugin.dll` **plus** `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` |
           | Linux (x86_64, OpenRGB **AppImage**) | `libOpenRGB3DSpatialPlugin.so` **plus** `libQt6Network.so.6` and `libQt6OpenGLWidgets.so.6` |
           | macOS (Apple Silicon + Intel) | `libOpenRGB3DSpatialPlugin.dylib` **plus** `macOS-Qt-frameworks.zip` |
+          | Minecraft (Fabric) | `openrgb-minecraft-sender-*.jar` → drop in the Minecraft `mods` folder |
 
           1. **Windows only:** put `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` in the folder that contains `OpenRGB.exe` (OpenRGB 1.0 does not ship them; without them the plugin will not load).
           2. **Linux AppImage:** put the two `libQt6*.so.6` files in `~/.config/OpenRGB/plugins/`, next to the plugin. Using your distro's OpenRGB package instead? Do not use these files; build with `scripts/install-linux-user.sh` so the plugin matches your Qt.
           3. **macOS:** unzip `macOS-Qt-frameworks.zip` into the same folder as the plugin (`~/.config/OpenRGB/plugins/`).
           4. Install the plugin via OpenRGB → Settings → Plugins → Install Plugin, then restart OpenRGB.
           5. Get the **current** looks from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — the plugin ships with no effects of its own, and older copies run at the wrong speed with this version.
+          6. **Minecraft Room Ambilight / Game effects:** install the Fabric jar from this release into `.minecraft/mods` (see `integrations/minecraft/README.md`). Sources stay in this plugin repo — not the presets pack.
 
           **Status:** tested on Windows only. Please [report](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new/choose) what you see, with your GPU, driver and OpenRGB log.
           - **Linux:** audio effects need `pactl` and `parec` (pulseaudio-utils; libpulse on Arch). On Wayland, Screen Mirror asks once which monitors to share (needs PipeWire and xdg-desktop-portal). Reactive keyboard/mouse needs your user in the `input` group.

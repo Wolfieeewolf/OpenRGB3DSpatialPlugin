@@ -87,3 +87,9 @@ CMakeFiles/
 integrations/**/.gradle/
 integrations/**/build/
 integrations/**/run/
+
+# Local game-wrapper CMake outs (sources may live on feature/game-wrappers)
+tools/**/build/
+tools/**/build32/
+tools/**/_stage_*/
+tools/**/_ref/
