@@ -1232,6 +1232,7 @@ void ActionEditorDialog::applyClipToForm()
     {
         suppress_ui_ = false;
         updatePropVisibility();
+        updateCentreReadout();
         return;
     }
     Action::EnsureClipGradient(b);
@@ -1377,6 +1378,7 @@ void ActionEditorDialog::applyClipToForm()
     syncGradientBar();
     syncCurveBar();
     updatePropVisibility();
+    updateCentreReadout();
 }
 
 void ActionEditorDialog::applyFormToSelectedClip()
@@ -1627,7 +1629,69 @@ void ActionEditorDialog::onClipFieldChanged()
     if(!suppress_ui_)
     {
         syncGradientBar();
+        updateCentreReadout();
         // applyFormToSelectedClip already scheduled a coalesced timeline refresh.
+    }
+}
+
+void ActionEditorDialog::updateCentreReadout()
+{
+    if(!placement_centre_label_)
+    {
+        return;
+    }
+    const Action::Clip* b = selectedClip();
+    if(!b || selected_track_ < 0 || selected_track_ >= (int)pack_.tracks.size())
+    {
+        placement_centre_label_->clear();
+        return;
+    }
+    const Action::Target& target = pack_.tracks[(size_t)selected_track_].target;
+    const bool room = b->play_bounds == Action::PlayBounds::RoomBox;
+    const bool zone = target.kind == Action::TargetKind::SceneZone;
+    const bool device_frame = !room && b->axis_space == Action::AxisSpace::Device;
+
+    /* One centre per clip, decided by its row: a picked reference point wins, then the
+       room anchor (whole room), the zone's middle, or the row's own lights. */
+    QString default_centre;
+    QString scale;
+    if(room)
+    {
+        default_centre = QStringLiteral("room anchor");
+        scale = QStringLiteral("the room");
+    }
+    else if(zone)
+    {
+        default_centre = QStringLiteral("middle of zone \u201c%1\u201d")
+            .arg(QString::fromStdString(target.scene_zone_name));
+        scale = QStringLiteral("the zone");
+    }
+    else if(device_frame)
+    {
+        default_centre = QStringLiteral("this device, in its own frame");
+        scale = QStringLiteral("this device");
+    }
+    else
+    {
+        default_centre = QStringLiteral("middle of this row\u2019s lights");
+        scale = QStringLiteral("this row\u2019s lights");
+    }
+    QString centre = default_centre;
+    if(!b->origin_ref.empty())
+    {
+        centre = QStringLiteral("reference point \u201c%1\u201d")
+            .arg(QString::fromStdString(b->origin_ref));
+    }
+    placement_centre_label_->setText(QStringLiteral("Centre: %1. Offsets and size are a percentage of %2.")
+                                         .arg(centre, scale));
+    if(origin_ref_combo_ && origin_ref_combo_->count() > 0)
+    {
+        QString first = default_centre;
+        if(!first.isEmpty())
+        {
+            first[0] = first[0].toUpper();
+        }
+        origin_ref_combo_->setItemText(0, first);
     }
 }
 

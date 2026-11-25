@@ -279,10 +279,49 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         if(use_transforms)
         {
             const Clip* top = FindActiveClip(track, local_ms);
+            applier_detail::SampleBounds shared_bounds;
+            applier_detail::SeqAxesMap seq_map;
+            const bool want_room_box = top && ClipUsesRoomBoxBounds(*top);
+            const bool want_track_union = top && ClipUsesTrackWorldUnion(*top);
+            const bool want_sequence = top && ClipUsesSequenceAxis(*top);
+            if(want_track_union)
+            {
+                std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
+                applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
+                for(const auto& pair : ordered)
+                {
+                    if(pair.second)
+                    {
+                        applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
+                    }
+                }
+            }
             if(top)
             {
                 const std::string effect_id = script::FileId(*top);
-                BindClipOrigin(*top, spatial);
+                /* A clip on its own lights (a scene zone, a device in room frame) is centred
+                   on those lights: origin, offsets and size resolve against their box, so a
+                   pulse on a "PC case" zone grows from the middle of the case. Reference
+                   points still win when one is picked. */
+                ApplySpatialContext row_ctx;
+                const ApplySpatialContext* origin_ctx = spatial;
+                if(want_track_union && shared_bounds.valid)
+                {
+                    if(spatial)
+                    {
+                        row_ctx = *spatial;
+                    }
+                    row_ctx.has_world_bounds = true;
+                    row_ctx.has_room_grid = false;
+                    row_ctx.min_x = shared_bounds.min_x;
+                    row_ctx.max_x = shared_bounds.max_x;
+                    row_ctx.min_y = shared_bounds.min_y;
+                    row_ctx.max_y = shared_bounds.max_y;
+                    row_ctx.min_z = shared_bounds.min_z;
+                    row_ctx.max_z = shared_bounds.max_z;
+                    origin_ctx = &row_ctx;
+                }
+                BindClipOrigin(*top, origin_ctx);
                 if(script::UsesField(effect_id))
                 {
                     volume_field::PrepareForClip(*top, local_ms, field_sequence);
@@ -304,12 +343,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                     builtin_gpu::PrepareForClip(*top, local_ms, field_sequence);
                 }
             }
-            applier_detail::SampleBounds shared_bounds;
-            applier_detail::SeqAxesMap seq_map;
-            const bool want_room_box = top && ClipUsesRoomBoxBounds(*top);
-            const bool want_track_union = top && ClipUsesTrackWorldUnion(*top);
-            const bool want_sequence = top && ClipUsesSequenceAxis(*top);
-
             if(want_room_box)
             {
                 if(!spatial || !spatial->has_world_bounds)
@@ -324,18 +357,6 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 shared_bounds.max_z = spatial->max_z;
                 shared_bounds.valid = true;
                 shared_bounds.room_ctx = spatial;
-            }
-            else if(want_track_union)
-            {
-                std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
-                applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
-                for(const auto& pair : ordered)
-                {
-                    if(pair.second)
-                    {
-                        applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
-                    }
-                }
             }
             if(want_sequence)
             {

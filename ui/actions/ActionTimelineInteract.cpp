@@ -340,7 +340,7 @@ bool ActionTimelineWidget::expandClipAcrossRows(int src_track, int src_clip, int
         }
         if(!Action::IsMediaClip(moved))
         {
-            moved.play_bounds = Action::PlayBounds::RoomBox;
+            moved.play_bounds = Action::DefaultPlayBoundsFor(new_target);
         }
     }
     else if(moved.axis_space == Action::AxisSpace::Sequence)
@@ -910,7 +910,7 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
                 copy.axis_space = Action::AxisSpace::Room;
                 if(!Action::IsMediaClip(copy))
                 {
-                    copy.play_bounds = Action::PlayBounds::RoomBox;
+                    copy.play_bounds = Action::DefaultPlayBoundsFor(pack_->tracks[(size_t)dest_track].target);
                 }
             }
             pack_->tracks[(size_t)dest_track].clips.push_back(std::move(copy));
@@ -938,7 +938,7 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
         copy.axis_space = Action::AxisSpace::Room;
         if(!Action::IsMediaClip(copy))
         {
-            copy.play_bounds = Action::PlayBounds::RoomBox;
+            copy.play_bounds = Action::DefaultPlayBoundsFor(pack_->tracks[(size_t)dest_track].target);
         }
     }
     pack_->tracks[(size_t)dest_track].clips.push_back(std::move(copy));

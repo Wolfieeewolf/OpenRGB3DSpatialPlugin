@@ -619,7 +619,7 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
     clip.direction = Action::Direction::Right;
     const bool multi = Action::TargetIsMultiDeviceGroup(row.target);
     clip.axis_space = multi ? Action::AxisSpace::Room : Action::AxisSpace::Device;
-    clip.play_bounds = multi ? Action::PlayBounds::RoomBox : Action::PlayBounds::TrackLights;
+    clip.play_bounds = Action::DefaultPlayBoundsFor(row.target);
     clip.axis_mode = Action::AxisMode::Preset;
     clip.axis_yaw_deg = 0.0f;
     clip.axis_pitch_deg = 0.0f;
@@ -643,7 +643,7 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
                 || Action::script::UsesParticles(clip.effect_id)
                 || Action::script::UsesRibbons(clip.effect_id)))
     {
-        clip.play_bounds = Action::PlayBounds::RoomBox;
+        clip.play_bounds = Action::DefaultPlayBoundsFor(row.target);
         clip.axis_space = Action::AxisSpace::Room;
     }
     Action::EnsureClipGradient(&clip);
@@ -671,6 +671,10 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
         if(clip.play_bounds == Action::PlayBounds::RoomBox)
         {
             space_tip = QStringLiteral("Play on whole room");
+        }
+        else if(row.target.kind == Action::TargetKind::SceneZone)
+        {
+            space_tip = QStringLiteral("Play on this zone, centred on it");
         }
         else
         {

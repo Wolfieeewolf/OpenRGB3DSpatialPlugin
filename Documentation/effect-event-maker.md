@@ -191,7 +191,17 @@ Hand-authored packs: pack identity -> playback -> tracks -> clip type / timing /
 | `clips[].type` | See table above |
 | `axis_space` | `device` \| `room` \| `sequence`  -  travel frame; default Room on All/scene_zone, else Device |
 | `play_bounds` | `track_lights` \| `room_box`  -  UV/world canvas; default RoomBox on All/scene_zone, else TrackLights |
-| `origin_ref` | Layout reference point name; empty -> room center |
+| `origin_ref` | Layout reference point name; empty -> the row's default centre (below) |
+
+**One centre per clip.** The row decides the default and a picked `origin_ref` always wins:
+
+| Row | `play_bounds` for new clips | Default centre | Offsets / size are a % of |
+| --- | --- | --- | --- |
+| All (this pack) | `room_box` | Room anchor | The room |
+| Scene zone | `track_lights` | Middle of the zone's lights | The zone |
+| Device / zone / LEDs | `track_lights` | Middle of the row's lights (Device frame: the device's own frame) | The row's lights |
+
+A scene zone is its own little room: a pulse on a "PC case" zone grows from the middle of the case across every controller in it. Packs saved before this keep their stored `play_bounds`. The Placement section shows the clip's centre in words.
 | `axis_mode` | `preset` \| `custom` |
 | `axis_yaw_deg` / `axis_pitch_deg` | Custom unit axis in the chosen travel frame |
 | `intensity_curve` | Optional `{pos,value}` envelope over **clip length** (0...1) |

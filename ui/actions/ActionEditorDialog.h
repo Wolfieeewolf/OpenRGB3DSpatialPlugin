@@ -135,6 +135,8 @@ private:
     void addClipAt(int row_index, int ms, const QString& effect_id = QString());
     int currentTimelineRow() const;
     Action::Clip* selectedClip();
+    /** Placement readout: where the selected clip is centred and what its offsets scale to. */
+    void updateCentreReadout();
     void applyGradientPresetToClip(Action::Clip* clip, const QString& preset_id);
     void refillGradientPresets();
     void syncTimeSliderRanges();
@@ -229,6 +231,7 @@ private:
     QWidget* speed_section_ = nullptr;
     QWidget* pulse_section_ = nullptr;
     QWidget* placement_section_ = nullptr;
+    QLabel* placement_centre_label_ = nullptr;
     QWidget* color_to_row_ = nullptr;
     QWidget* period_row_ = nullptr;
     QWidget* speed_row_ = nullptr;

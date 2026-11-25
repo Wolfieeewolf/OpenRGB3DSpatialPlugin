@@ -673,7 +673,11 @@ void ActionEditorDialog::buildUi()
     const auto oy_field = attachIntSpinSlider(origin_offset_y_spin_, QStringLiteral("Offset Y (% of half room)"), 1, 5);
     const auto oz_field = attachIntSpinSlider(origin_offset_z_spin_, QStringLiteral("Offset Z (% of half room)"), 1, 5);
     const auto size_field = attachIntSpinSlider(effect_size_spin_, QStringLiteral("Spatial footprint — 100% = default room scale"), 1, 5);
+    placement_centre_label_ = new QLabel();
+    placement_centre_label_->setWordWrap(true);
+    placement_centre_label_->setForegroundRole(QPalette::PlaceholderText);
     auto* place_form = new QFormLayout();
+    place_form->addRow(placement_centre_label_);
     place_form->addRow(QStringLiteral("Origin"), origin_ref_combo_);
     place_form->addRow(QStringLiteral("Offset X"), ox_field.first);
     place_form->addRow(QStringLiteral("Offset Y"), oy_field.first);

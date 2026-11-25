@@ -135,6 +135,14 @@ inline bool TargetIsMultiDeviceGroup(const Target& t)
     return t.kind == TargetKind::All || t.kind == TargetKind::SceneZone;
 }
 
+/** Canvas a new clip gets on this row. "All" plays on the whole room; a scene zone is its
+    own little room (centred on the zone, offsets and size relative to it); device, zone
+    and LED rows stay on their own lights. */
+inline PlayBounds DefaultPlayBoundsFor(const Target& t)
+{
+    return t.kind == TargetKind::All ? PlayBounds::RoomBox : PlayBounds::TrackLights;
+}
+
 struct GradientStop
 {
     float pos = 0.0f;
