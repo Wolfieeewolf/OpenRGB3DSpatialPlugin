@@ -225,6 +225,11 @@ A scene zone is its own little room: a pulse on a "PC case" zone grows from the 
 | `min_intensity` / `max_intensity` | Script floor/ceiling (always editable in Brightness) |
 | `blend` | Optional: `normal` (default) \| `add` \| `screen` \| `lighten` \| `multiply` \| `darken`. How the clip combines with tracks listed above it. `add`/`screen` let flashes and hits brighten a background instead of covering it; `add` eases into full brightness instead of clipping flat |
 | `trail_ms` | Optional 0...10000 afterglow: lights the clip touched fade out over this time in real time (squared falloff, brightest wins) |
+| `layer` | Optional lane inside the track (default 0). Lanes paint in order, each over the ones before it, using each clip's `blend`; `normal` plays the effect as-is |
+
+Tracks may also carry `layers` (an array of `{ "name", "muted" }`, one per lane, written only when a lane is named or muted, or the track has more than one) and `layers_open` (show every lane at full height). Solo is an editor audition and never saved.
+
+**Layer lanes in the editor.** Several effects can play on one row at once, each in its own lane, like effect layers in xLights or Vixen. Folded, a layered row shows its lanes as thin stripes and a "N layers" button; unfolded, the row grows to one full-height lane per layer, with a name and **M** (mute) / **S** (solo) buttons in the gutter. Dropping an effect over a busy lane puts it on a free lane above (or a new lane on top), so it layers with what is playing instead of hiding it; dragging a clip onto another lane moves it there. The row menu adds a layer, folds or shows the lanes, renames a layer, and removes empty layers.
 
 **Playback.** Previews and runtimes tick at about 60 fps. Each controller is flushed as often as it keeps up with (at most every 12 ms), so a slow device no longer holds back the rest. When several trigger or Movie Sync cues play at once they share one frame: they blend in priority order (each clip's `blend` applies across cues too) instead of the later cue blanking the earlier one, and controllers are flushed once per frame.
 | `media_path` | Image/GIF file for `media_image` / `media_gif` |

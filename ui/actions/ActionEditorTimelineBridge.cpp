@@ -655,6 +655,13 @@ void ActionEditorDialog::addClipAt(int row_index, int ms, const QString& effect_
             applyGradientPresetToClip(&clip, preset);
         }
     }
+    /* Layer lanes: the lane under the pointer when free, otherwise the first free lane, or a
+       new lane on top, so a drop over a playing effect layers with it instead of hiding it. */
+    {
+        const bool own_row = timeline_->trackIndexForRow(row_index) == track;
+        clip.layer = Action::ChooseClipLayer(pack_.tracks[(size_t)track], clip.start_ms, clip.end_ms,
+                                             own_row ? timeline_->laneHint() : Action::TrackLayerCount(pack_.tracks[(size_t)track]) - 1);
+    }
     pack_.tracks[(size_t)track].clips.push_back(clip);
     selected_track_ = track;
     selected_clip_ = (int)pack_.tracks[(size_t)track].clips.size() - 1;

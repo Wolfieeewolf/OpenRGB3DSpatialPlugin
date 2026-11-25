@@ -103,6 +103,8 @@ public:
     int selectedTrackIndex() const { return selected_track_; }
     int selectedClipIndex() const { return selected_clip_; }
     int selectedRowIndex() const { return selected_row_; }
+    /** Layer lane under the last press / drop / placement (for clips added there). */
+    int laneHint() const { return lane_hint_; }
     bool isClipDragging() const { return drag_op_ == DragOp::Move
                                        || drag_op_ == DragOp::ResizeStart
                                        || drag_op_ == DragOp::ResizeEnd
@@ -125,6 +127,8 @@ signals:
     void placementFinished();
     /** Markers were added, moved, renamed or removed (the pack changed). */
     void markersChanged();
+    /** Layer lanes were added, folded, renamed, muted, soloed or tidied (the pack changed). */
+    void layersChanged();
     void zoomChanged(double pixels_per_second);
     void clipSelected(int track_index, int clip_index);
     void clipEdited(int track_index, int clip_index);
@@ -242,6 +246,29 @@ private:
     bool hitTestClip(int x, int y, int* out_row, int* out_track, int* out_clip,
                       ClipHit* out_hit = nullptr) const;
     QRect clipRect(int row, const Action::Clip& clip) const;
+    /** One lane's band inside a row's clip area (lanes stack downwards, 1 px apart). */
+    static QRect LaneBand(const QRect& full, int lanes, int lane);
+    /** clipRect narrowed to the clip's layer lane on its track. */
+    QRect clipRectOnTrack(int row, int track, const Action::Clip& clip) const;
+
+    /* Row layout: rows are row_height_ tall, except a track with its layers shown, which
+       grows to one full-height lane per layer. */
+    void layoutRows();
+    int rowTop(int row) const;
+    int rowHeightAt(int row) const;
+    /** Row under widget y: -1 above the rows, visible_rows_.size() or more below them. */
+    int rowAtY(int y) const;
+    int laneCountForTrack(int track) const;
+    /** Lane of the row's own track under y (0 when that track has one lane). */
+    int laneAtY(int row, int y) const;
+    QRect laneFoldRect(int row) const;
+    QRect laneMuteRect(int row, int lane) const;
+    QRect laneSoloRect(int row, int lane) const;
+    QRect laneNameRect(int row, int lane) const;
+    /** Fold / mute / solo buttons in the gutter; true when one was hit. */
+    bool handleLaneGutterClick(int row, int x, int y);
+    /** Drop lanes no clip uses and renumber the rest (keeps names and mutes). */
+    void compactTrackLayers(int track);
     /** Absolute rect of a clip on any row it covers (for marquee hit-testing). */
     QRect clipAbsRect(int track, int clip_index) const;
     Action::Clip* mutableClip(int track, int clip);
@@ -351,6 +378,13 @@ private:
     int snap_reach_px_ = 8;
     /** Time the last drag snapped to, for the guide line (-1 = none). */
     int snap_guide_ms_ = -1;
+    /** Height of one lane when a track shows its layers. */
+    int open_lane_height_ = 24;
+    /** Top of each visible row (relative to the header) plus the total at the end. */
+    QVector<int> row_tops_;
+    int lane_hint_ = 0;
+    /** Lane under the pointer during a Move (-1 = none). */
+    int drag_dest_lane_ = -1;
     QString placing_effect_id_;
     int place_row_ = -1;
     int place_ms_ = 0;

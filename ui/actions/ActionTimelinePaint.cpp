@@ -793,6 +793,31 @@ void ActionTimelineWidget::paintEvent(QPaintEvent* event)
     p.drawPath(handle.simplified());
 }
 
+namespace
+{
+/** Small outlined gutter button (layer fold / mute / solo); filled when on. */
+void PaintLaneButton(QPainter& p, const QRect& r, const QString& label, bool on, const QColor& on_color,
+                     const QPalette& pal)
+{
+    if(r.isEmpty())
+    {
+        return;
+    }
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setPen(QPen(on ? on_color : PluginTheme::Line(pal, 120, 120), 1));
+    p.setBrush(on ? QBrush(PluginTheme::WithAlpha(on_color, 170)) : QBrush(Qt::NoBrush));
+    p.drawRoundedRect(QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5), 3, 3);
+    QFont f = p.font();
+    f.setPointSize(7);
+    f.setBold(on);
+    p.setFont(f);
+    p.setPen(on ? QColor(255, 255, 255) : PluginTheme::WithAlpha(pal.color(QPalette::Text), 210));
+    p.drawText(r, Qt::AlignCenter, label);
+    p.restore();
+}
+} // namespace
+
 void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
 {
     const QPalette pal = palette();
@@ -880,11 +905,12 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
     for(int row = 0; row < visible_rows_.size(); ++row)
     {
         const Row& r = visible_rows_[row];
-        const int y = header_height_ + row * row_height_;
+        const int y = rowTop(row);
+        const int h = rowHeightAt(row);
         const QColor bg = (row % 2 == 0) ? row_a : row_b;
         const QColor gutter_bg = (selected_row_ == row) ? MixColor(window, accent, 0.28) : window;
-        p.fillRect(0, y, gutter_width_, row_height_, gutter_bg);
-        p.fillRect(gutter_width_, y, end_x - gutter_width_, row_height_, bg);
+        p.fillRect(0, y, gutter_width_, h, gutter_bg);
+        p.fillRect(gutter_width_, y, end_x - gutter_width_, h, bg);
         if(show_minor)
         {
             p.setPen(grid_minor);
@@ -893,7 +919,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
                 if(ms % step != 0)
                 {
                     const int x = timeToX(ms);
-                    p.drawLine(x, y, x, y + row_height_);
+                    p.drawLine(x, y, x, y + h);
                 }
             }
         }
@@ -901,17 +927,17 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         for(int ms = step; ms <= duration_ms_; ms += step)
         {
             const int x = timeToX(ms);
-            p.drawLine(x, y, x, y + row_height_);
+            p.drawLine(x, y, x, y + h);
         }
         p.setPen(separator);
-        p.drawLine(0, y + row_height_ - 1, end_x, y + row_height_ - 1);
+        p.drawLine(0, y + h - 1, end_x, y + h - 1);
         if(pack_ && !pack_->markers.empty())
         {
             p.setPen(PluginTheme::WithAlpha(marker_color, 70));
             for(const Action::Marker& m : pack_->markers)
             {
                 const int x = timeToX(m.ms);
-                p.drawLine(x, y, x, y + row_height_);
+                p.drawLine(x, y, x, y + h);
             }
         }
 
@@ -926,7 +952,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             {
                 tag = QColor(120, 200, 140);
             }
-            p.fillRect(0, y + 2, 3, row_height_ - 4, tag);
+            p.fillRect(0, y + 2, 3, h - 4, tag);
         }
         if(row_reorder_from_ >= 0 && row == row_reorder_hover_ && row != row_reorder_from_)
         {
@@ -934,7 +960,12 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         }
         if(drag_op_ == DragOp::Move && drag_moved_ && drag_dest_row_ == row)
         {
-            p.fillRect(gutter_width_, y, end_x - gutter_width_, row_height_, PluginTheme::WithAlpha(accent, 34));
+            const QRect dest(gutter_width_, y, end_x - gutter_width_, h);
+            const int dest_lanes = laneCountForTrack(trackIndexForRow(row));
+            p.fillRect(drag_dest_lane_ >= 0 && dest_lanes > 1
+                           ? LaneBand(dest.adjusted(0, 3, 0, -3), dest_lanes, drag_dest_lane_)
+                           : dest,
+                       PluginTheme::WithAlpha(accent, 34));
         }
 
         const int indent = 6 + r.depth * 14;
@@ -966,8 +997,57 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
 
         p.setPen(r.depth == 0 ? text : PluginTheme::WithAlpha(text, 185));
         const int text_x = indent + (r.expandable ? expand_hit_ + 4 : 4);
-        p.drawText(text_x, y, gutter_width_ - text_x - 4, row_height_,
+        /* Layer lanes: the row's own track may hold several lanes (folded = thin
+           stripes, shown = one full-height lane each with mute / solo). */
+        const int own_track = trackIndexForRow(row);
+        const int own_lanes = laneCountForTrack(own_track);
+        const bool own_open = own_lanes > 1 && pack_->tracks[(size_t)own_track].layers_open;
+        const int label_right = own_lanes > 1 ? (own_open ? gutter_width_ - 104 : gutter_width_ - 62) : gutter_width_ - 4;
+        p.drawText(text_x, y, std::max(10, label_right - text_x), row_height_,
                    Qt::AlignVCenter | Qt::AlignLeft, r.label);
+        if(own_lanes > 1)
+        {
+            const Action::Track& ot = pack_->tracks[(size_t)own_track];
+            const QRect lane_area(gutter_width_, y + 3, end_x - gutter_width_, h - 6);
+            for(int lane = 0; lane < own_lanes; ++lane)
+            {
+                const QRect band = LaneBand(lane_area, own_lanes, lane);
+                if(!Action::TrackLayerAudible(ot, lane))
+                {
+                    p.fillRect(band, PluginTheme::WithAlpha(QColor(0, 0, 0), dark ? 80 : 28));
+                }
+                if(lane > 0)
+                {
+                    p.setPen(QPen(PluginTheme::Line(pal, 60, 70), 1, Qt::DotLine));
+                    p.drawLine(gutter_width_, band.top() - 1, end_x, band.top() - 1);
+                }
+            }
+            PaintLaneButton(p, laneFoldRect(row),
+                            own_open ? QStringLiteral("Fold") : QStringLiteral("%1 layers").arg(own_lanes),
+                            false, accent, pal);
+            if(own_open)
+            {
+                for(int lane = 0; lane < own_lanes; ++lane)
+                {
+                    const Action::TrackLayer* info = lane < (int)ot.layers.size() ? &ot.layers[(size_t)lane] : nullptr;
+                    const QString name = (info && !info->name.empty()) ? QString::fromStdString(info->name)
+                                                                        : QStringLiteral("Layer %1").arg(lane + 1);
+                    const QRect nr = laneNameRect(row, lane);
+                    p.save();
+                    QFont lf = p.font();
+                    lf.setPointSize(7);
+                    p.setFont(lf);
+                    p.setPen(PluginTheme::WithAlpha(text, Action::TrackLayerAudible(ot, lane) ? 200 : 110));
+                    p.drawText(nr, Qt::AlignVCenter | Qt::AlignRight,
+                               p.fontMetrics().elidedText(name, Qt::ElideRight, nr.width() - 4));
+                    p.restore();
+                    PaintLaneButton(p, laneMuteRect(row, lane), QStringLiteral("M"), info && info->muted,
+                                    QColor(220, 70, 60), pal);
+                    PaintLaneButton(p, laneSoloRect(row, lane), QStringLiteral("S"), info && info->solo,
+                                    QColor(230, 170, 30), pal);
+                }
+            }
+        }
 
         const QVector<PaintClip> clips = paintClipsForRow(row);
         for(const PaintClip& pb : clips)
@@ -991,13 +1071,23 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             // Paint on every covered row (parent + LED children). A single tall
             // draw on the parent is covered by later opaque row backgrounds.
             const bool selected = isClipSelected(pb.track, pb.clip_index);
-            paintClipVisual(p, clipRect(row, *pb.clip), pb, selected);
+            /* Muted layers (or layers outside a solo) stay visible but faded. */
+            const bool audible = Action::TrackLayerAudible(pack_->tracks[(size_t)pb.track], pb.clip->layer);
+            if(!audible)
+            {
+                p.setOpacity(0.35);
+            }
+            paintClipVisual(p, clipRectOnTrack(row, pb.track, *pb.clip), pb, selected);
+            if(!audible)
+            {
+                p.setOpacity(1.0);
+            }
         }
     }
 
     // End of the pack: a solid line through the ruler and rows.
     {
-        const int rows_bottom = header_height_ + (int)visible_rows_.size() * row_height_;
+        const int rows_bottom = rowTop((int)visible_rows_.size());
         p.setPen(QPen(PluginTheme::Line(pal, 150, 170), 2));
         p.drawLine(end_x - 1, 0, end_x - 1, rows_bottom);
     }
@@ -1014,7 +1104,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             Action::Clip origin = b;
             origin.start_ms = drag_origin_start_;
             origin.end_ms = drag_origin_end_;
-            const QRect home = clipRect(drag_home_row_, origin);
+            const QRect home = clipRectOnTrack(drag_home_row_, drag_track_, origin);
             p.save();
             p.setRenderHint(QPainter::Antialiasing, true);
             p.setPen(Qt::NoPen);
@@ -1032,7 +1122,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         int float_top = drag_float_y_ - drag_grab_offset_y_;
         const int min_top = header_height_ + 3;
         const int row_count = (int)visible_rows_.size();
-        const int max_top = header_height_ + std::max(0, row_count) * row_height_ - (row_height_ - 3);
+        const int max_top = rowTop(std::max(0, row_count)) - (row_height_ - 3);
         float_top = std::clamp(float_top, min_top, std::max(min_top, max_top));
         const QRect floating(live.x(), float_top, live.width(), row_height_ - 6);
         p.setOpacity(0.92);
@@ -1052,8 +1142,8 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         const int hi = std::max(drag_span_anchor_row_, drag_span_hover_row_);
         const int x0 = timeToX(b.start_ms);
         const int x1 = std::max(x0 + 4, timeToX(b.end_ms));
-        const int y0 = header_height_ + lo * row_height_ + 3;
-        const int y1 = header_height_ + (hi + 1) * row_height_ - 3;
+        const int y0 = rowTop(lo) + 3;
+        const int y1 = rowTop(hi + 1) - 3;
         PaintClip pb;
         pb.clip = &b;
         pb.track = drag_track_;

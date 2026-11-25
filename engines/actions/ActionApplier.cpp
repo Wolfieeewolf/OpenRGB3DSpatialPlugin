@@ -398,151 +398,170 @@ ApplyStats ApplyPackFrame(const Pack& pack,
     {
         if(use_transforms)
         {
-            const Clip* top = FindActiveClip(track, local_ms);
-            applier_detail::SampleBounds shared_bounds;
-            applier_detail::SeqAxesMap seq_map;
-            const bool want_room_box = top && ClipUsesRoomBoxBounds(*top);
-            const bool want_track_union = top && ClipUsesTrackWorldUnion(*top);
-            const bool want_sequence = top && ClipUsesSequenceAxis(*top);
-            if(want_track_union)
+            /* Layer lanes paint in order, so each lane blends over the ones before it
+               with its clips' blend modes. Muted lanes (or lanes outside a solo) skip. */
+            const int lanes = TrackLayerCount(track);
+            bool track_painted = false;
+            for(int lane = 0; lane < lanes; ++lane)
             {
-                std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
-                applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
-                for(const auto& pair : ordered)
-                {
-                    if(pair.second)
-                    {
-                        applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
-                    }
-                }
-            }
-            if(top)
-            {
-                const std::string effect_id = script::FileId(*top);
-                /* A clip on its own lights (a scene zone, a device in room frame) is centred
-                   on those lights: origin, offsets and size resolve against their box, so a
-                   pulse on a "PC case" zone grows from the middle of the case. Reference
-                   points still win when one is picked. */
-                ApplySpatialContext row_ctx;
-                const ApplySpatialContext* origin_ctx = spatial;
-                if(want_track_union && shared_bounds.valid)
-                {
-                    if(spatial)
-                    {
-                        row_ctx = *spatial;
-                    }
-                    row_ctx.has_world_bounds = true;
-                    row_ctx.has_room_grid = false;
-                    row_ctx.min_x = shared_bounds.min_x;
-                    row_ctx.max_x = shared_bounds.max_x;
-                    row_ctx.min_y = shared_bounds.min_y;
-                    row_ctx.max_y = shared_bounds.max_y;
-                    row_ctx.min_z = shared_bounds.min_z;
-                    row_ctx.max_z = shared_bounds.max_z;
-                    origin_ctx = &row_ctx;
-                }
-                BindClipOrigin(*top, origin_ctx);
-                if(script::UsesField(effect_id))
-                {
-                    volume_field::PrepareForClip(*top, local_ms, field_sequence);
-                }
-                if(script::UsesParticles(effect_id))
-                {
-                    particle_field::PrepareForClip(*top, local_ms, field_sequence);
-                }
-                if(script::UsesRibbons(effect_id))
-                {
-                    ribbon_field::PrepareForClip(*top, local_ms, field_sequence);
-                }
-                if(IsMediaClip(*top))
-                {
-                    PrepareMediaForClip(*top, local_ms, field_sequence);
-                }
-                if(builtin_gpu::Uses(effect_id))
-                {
-                    builtin_gpu::PrepareForClip(*top, local_ms, field_sequence);
-                }
-            }
-            if(want_room_box)
-            {
-                if(!spatial || !spatial->has_world_bounds)
+                if(!TrackLayerAudible(track, lane))
                 {
                     continue;
                 }
-                shared_bounds.min_x = spatial->min_x;
-                shared_bounds.max_x = spatial->max_x;
-                shared_bounds.min_y = spatial->min_y;
-                shared_bounds.max_y = spatial->max_y;
-                shared_bounds.min_z = spatial->min_z;
-                shared_bounds.max_z = spatial->max_z;
-                shared_bounds.valid = true;
-                shared_bounds.room_ctx = spatial;
-            }
-            if(want_sequence)
-            {
-                std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
-                applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
-                // Sequence march must match the zone filter used when painting, or visible
-                // LEDs get the wrong slice of the 0..1 wipe.
-                if(layer_zone != -1)
+                const Clip* top = FindActiveClipOnLayer(track, local_ms, lane);
+                if(!top)
                 {
-                    std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> filtered;
-                    filtered.reserve(ordered.size());
+                    continue;
+                }
+                applier_detail::SampleBounds shared_bounds;
+                applier_detail::SeqAxesMap seq_map;
+                const bool want_room_box = top && ClipUsesRoomBoxBounds(*top);
+                const bool want_track_union = top && ClipUsesTrackWorldUnion(*top);
+                const bool want_sequence = top && ClipUsesSequenceAxis(*top);
+                if(want_track_union)
+                {
+                    std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
+                    applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
                     for(const auto& pair : ordered)
                     {
-                        int ti = -1;
-                        for(int i = 0; i < (int)transforms->size(); ++i)
+                        if(pair.second)
                         {
-                            if((*transforms)[(size_t)i].get() == pair.first)
-                            {
-                                ti = i;
-                                break;
-                            }
-                        }
-                        if(LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
-                        {
-                            filtered.push_back(pair);
+                            applier_detail::ExpandBounds(&shared_bounds, pair.second->world_position);
                         }
                     }
-                    ordered.swap(filtered);
                 }
-                applier_detail::BuildSequenceAxesMap(ordered, &seq_map);
-            }
+                if(top)
+                {
+                    const std::string effect_id = script::FileId(*top);
+                    /* A clip on its own lights (a scene zone, a device in room frame) is centred
+                       on those lights: origin, offsets and size resolve against their box, so a
+                       pulse on a "PC case" zone grows from the middle of the case. Reference
+                       points still win when one is picked. */
+                    ApplySpatialContext row_ctx;
+                    const ApplySpatialContext* origin_ctx = spatial;
+                    if(want_track_union && shared_bounds.valid)
+                    {
+                        if(spatial)
+                        {
+                            row_ctx = *spatial;
+                        }
+                        row_ctx.has_world_bounds = true;
+                        row_ctx.has_room_grid = false;
+                        row_ctx.min_x = shared_bounds.min_x;
+                        row_ctx.max_x = shared_bounds.max_x;
+                        row_ctx.min_y = shared_bounds.min_y;
+                        row_ctx.max_y = shared_bounds.max_y;
+                        row_ctx.min_z = shared_bounds.min_z;
+                        row_ctx.max_z = shared_bounds.max_z;
+                        origin_ctx = &row_ctx;
+                    }
+                    BindClipOrigin(*top, origin_ctx);
+                    if(script::UsesField(effect_id))
+                    {
+                        volume_field::PrepareForClip(*top, local_ms, field_sequence);
+                    }
+                    if(script::UsesParticles(effect_id))
+                    {
+                        particle_field::PrepareForClip(*top, local_ms, field_sequence);
+                    }
+                    if(script::UsesRibbons(effect_id))
+                    {
+                        ribbon_field::PrepareForClip(*top, local_ms, field_sequence);
+                    }
+                    if(IsMediaClip(*top))
+                    {
+                        PrepareMediaForClip(*top, local_ms, field_sequence);
+                    }
+                    if(builtin_gpu::Uses(effect_id))
+                    {
+                        builtin_gpu::PrepareForClip(*top, local_ms, field_sequence);
+                    }
+                }
+                if(want_room_box)
+                {
+                    if(!spatial || !spatial->has_world_bounds)
+                    {
+                        continue;
+                    }
+                    shared_bounds.min_x = spatial->min_x;
+                    shared_bounds.max_x = spatial->max_x;
+                    shared_bounds.min_y = spatial->min_y;
+                    shared_bounds.max_y = spatial->max_y;
+                    shared_bounds.min_z = spatial->min_z;
+                    shared_bounds.max_z = spatial->max_z;
+                    shared_bounds.valid = true;
+                    shared_bounds.room_ctx = spatial;
+                }
+                if(want_sequence)
+                {
+                    std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> ordered;
+                    applier_detail::BuildOrderedSequenceLeds(pack, track, transforms, zone_manager, &ordered);
+                    // Sequence march must match the zone filter used when painting, or visible
+                    // LEDs get the wrong slice of the 0..1 wipe.
+                    if(layer_zone != -1)
+                    {
+                        std::vector<std::pair<ControllerTransform*, LEDPosition3D*>> filtered;
+                        filtered.reserve(ordered.size());
+                        for(const auto& pair : ordered)
+                        {
+                            int ti = -1;
+                            for(int i = 0; i < (int)transforms->size(); ++i)
+                            {
+                                if((*transforms)[(size_t)i].get() == pair.first)
+                                {
+                                    ti = i;
+                                    break;
+                                }
+                            }
+                            if(LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
+                            {
+                                filtered.push_back(pair);
+                            }
+                        }
+                        ordered.swap(filtered);
+                    }
+                    applier_detail::BuildSequenceAxesMap(ordered, &seq_map);
+                }
 
-            int painted = 0;
-            for(int ti = 0; ti < (int)transforms->size(); ++ti)
-            {
-                ControllerTransform* transform = (*transforms)[(size_t)ti].get();
-                if(!LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
+                int painted = 0;
+                for(int ti = 0; ti < (int)transforms->size(); ++ti)
                 {
-                    continue;
+                    ControllerTransform* transform = (*transforms)[(size_t)ti].get();
+                    if(!LayerZoneIncludesTransform(layer_zone, ti, zone_manager))
+                    {
+                        continue;
+                    }
+                    if(!TrackAppliesToTransform(pack, track, transform, ti, zone_manager))
+                    {
+                        continue;
+                    }
+                    const std::vector<float>* seq_axes = nullptr;
+                    auto it = seq_map.find(transform);
+                    if(it != seq_map.end())
+                    {
+                        seq_axes = &it->second;
+                    }
+                    painted += applier_detail::PaintTransformTargetSpatial(transform, track, top, local_ms, &touched,
+                                                           shared_bounds.valid ? &shared_bounds : nullptr,
+                                                           seq_axes);
                 }
-                if(!TrackAppliesToTransform(pack, track, transform, ti, zone_manager))
+                if(painted > 0)
                 {
-                    continue;
+                    track_painted = true;
+                    stats.viewport_leds_painted += painted;
                 }
-                const std::vector<float>* seq_axes = nullptr;
-                auto it = seq_map.find(transform);
-                if(it != seq_map.end())
+                /* Room-grid overlay: export the field this track just painted with (still the
+                   prepared program — the next track re-prepares it), framed exactly like the
+                   LED mapping in RoomGridFieldUv. */
+                if(overlay_out && top && spatial && ClipFieldUsesRoomGrid(*top, spatial)
+                   && (int)overlay_out->size() < GpuRoomGridOverlayLayer::kMaxLayers)
                 {
-                    seq_axes = &it->second;
+                    AppendClipFieldOverlayLayer(*top, local_ms, *spatial, overlay_out);
                 }
-                painted += applier_detail::PaintTransformTargetSpatial(transform, track, local_ms, &touched,
-                                                       shared_bounds.valid ? &shared_bounds : nullptr,
-                                                       seq_axes);
             }
-            if(painted > 0)
+            if(track_painted)
             {
                 ++stats.tracks_applied;
-                stats.viewport_leds_painted += painted;
-            }
-            /* Room-grid overlay: export the field this track just painted with (still the
-               prepared program — the next track re-prepares it), framed exactly like the
-               LED mapping in RoomGridFieldUv. */
-            if(overlay_out && top && spatial && ClipFieldUsesRoomGrid(*top, spatial)
-               && (int)overlay_out->size() < GpuRoomGridOverlayLayer::kMaxLayers)
-            {
-                AppendClipFieldOverlayLayer(*top, local_ms, *spatial, overlay_out);
             }
             continue;
         }

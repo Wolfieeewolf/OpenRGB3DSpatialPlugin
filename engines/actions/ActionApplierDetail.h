@@ -80,6 +80,7 @@ using SeqAxesMap = std::unordered_map<ControllerTransform*, std::vector<float>>;
 
 int PaintTransformTargetSpatial(ControllerTransform* transform,
                                 const Track& track,
+                                const Clip* clip,
                                 int local_ms,
                                 std::unordered_set<RGBControllerInterface*>* touched,
                                 const SampleBounds* shared_bounds,

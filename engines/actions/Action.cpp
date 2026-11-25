@@ -426,17 +426,95 @@ bool EvaluateTrackColor(const Track& track, int local_ms, RGBColor* out_color, f
     return EvaluateTrackColorAtLed(track, local_ms, 0, 1, out_color, out_intensity);
 }
 
-const Clip* FindActiveClip(const Track& track, int local_ms)
+int TrackLayerCount(const Track& track)
+{
+    int n = std::max(1, (int)track.layers.size());
+    for(const Clip& clip : track.clips)
+    {
+        n = std::max(n, clip.layer + 1);
+    }
+    return std::clamp(n, 1, kMaxTrackLayers);
+}
+
+bool TrackLayerAudible(const Track& track, int layer)
+{
+    bool any_solo = false;
+    for(const TrackLayer& l : track.layers)
+    {
+        any_solo = any_solo || l.solo;
+    }
+    const TrackLayer* own = (layer >= 0 && layer < (int)track.layers.size()) ? &track.layers[(size_t)layer] : nullptr;
+    if(any_solo)
+    {
+        return own && own->solo;
+    }
+    return !(own && own->muted);
+}
+
+const Clip* FindActiveClipOnLayer(const Track& track, int local_ms, int layer)
 {
     const Clip* top = nullptr;
     for(const Clip& clip : track.clips)
     {
-        if(local_ms >= clip.start_ms && local_ms < clip.end_ms && clip.end_ms > clip.start_ms)
+        if(clip.layer == layer && local_ms >= clip.start_ms && local_ms < clip.end_ms && clip.end_ms > clip.start_ms)
         {
             top = &clip;
         }
     }
     return top;
+}
+
+int ChooseClipLayer(const Track& track, int start_ms, int end_ms, int preferred, const Clip* ignore)
+{
+    const int lanes = TrackLayerCount(track);
+    auto lane_free = [&](int layer) {
+        for(const Clip& c : track.clips)
+        {
+            if(&c != ignore && c.layer == layer && c.start_ms < end_ms && start_ms < c.end_ms)
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+    const int pref = std::clamp(preferred, 0, lanes - 1);
+    /* Prefer staying on top: the asked lane, then free lanes above it, then a new lane,
+       and only then a free lane underneath. */
+    for(int layer = pref; layer < lanes; ++layer)
+    {
+        if(lane_free(layer))
+        {
+            return layer;
+        }
+    }
+    if(lanes < kMaxTrackLayers)
+    {
+        return lanes;
+    }
+    for(int layer = pref - 1; layer >= 0; --layer)
+    {
+        if(lane_free(layer))
+        {
+            return layer;
+        }
+    }
+    return kMaxTrackLayers - 1;
+}
+
+const Clip* FindActiveClip(const Track& track, int local_ms)
+{
+    for(int layer = TrackLayerCount(track) - 1; layer >= 0; --layer)
+    {
+        if(!TrackLayerAudible(track, layer))
+        {
+            continue;
+        }
+        if(const Clip* clip = FindActiveClipOnLayer(track, local_ms, layer))
+        {
+            return clip;
+        }
+    }
+    return nullptr;
 }
 
 bool EvaluateTrackColorAtLed(const Track& track,

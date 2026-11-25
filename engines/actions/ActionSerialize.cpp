@@ -293,6 +293,34 @@ nlohmann::json ToJson(const Pack& pack)
             target["led_indices"] = track.target.led_indices;
         }
         tj["target"] = target;
+        /* Layer lanes: names and mutes only (solo is an editor audition, never saved). */
+        bool layers_custom = false;
+        for(const TrackLayer& l : track.layers)
+        {
+            layers_custom = layers_custom || !l.name.empty() || l.muted;
+        }
+        if(layers_custom || track.layers.size() > 1)
+        {
+            nlohmann::json larr = nlohmann::json::array();
+            for(const TrackLayer& l : track.layers)
+            {
+                nlohmann::json lj = nlohmann::json::object();
+                if(!l.name.empty())
+                {
+                    lj["name"] = l.name;
+                }
+                if(l.muted)
+                {
+                    lj["muted"] = true;
+                }
+                larr.push_back(lj);
+            }
+            tj["layers"] = larr;
+        }
+        if(track.layers_open)
+        {
+            tj["layers_open"] = true;
+        }
         tj["clips"] = nlohmann::json::array();
         for(const Clip& clip : track.clips)
         {
@@ -344,6 +372,10 @@ nlohmann::json ToJson(const Pack& pack)
             if(clip.trail_ms > 0)
             {
                 bj["trail_ms"] = clip.trail_ms;
+            }
+            if(clip.layer > 0)
+            {
+                bj["layer"] = clip.layer;
             }
             if(clip.flip_h)
             {
@@ -541,6 +573,28 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             }
         }
 
+        if(tj.contains("layers") && tj["layers"].is_array())
+        {
+            for(const auto& lj : tj["layers"])
+            {
+                if((int)track.layers.size() >= kMaxTrackLayers)
+                {
+                    break;
+                }
+                TrackLayer layer;
+                if(lj.is_object())
+                {
+                    if(lj.contains("name") && lj["name"].is_string())
+                    {
+                        layer.name = lj["name"].get<std::string>().substr(0, 64);
+                    }
+                    layer.muted = lj.value("muted", false);
+                }
+                track.layers.push_back(layer);
+            }
+        }
+        track.layers_open = tj.value("layers_open", false);
+
         if(!tj.contains("clips") || !tj["clips"].is_array())
         {
             if(error)
@@ -582,6 +636,10 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             if(bj.contains("trail_ms") && bj["trail_ms"].is_number())
             {
                 clip.trail_ms = std::clamp(bj["trail_ms"].get<int>(), 0, kMaxTrailMs);
+            }
+            if(bj.contains("layer") && bj["layer"].is_number_integer())
+            {
+                clip.layer = std::clamp(bj["layer"].get<int>(), 0, kMaxTrackLayers - 1);
             }
             clip.flip_h = bj.value("flip_h", false);
             clip.flip_v = bj.value("flip_v", false);

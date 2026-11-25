@@ -89,10 +89,12 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
             drag_float_y_ = mouse_y;
             if(mouse_y >= header_height_ && drag_group_.size() <= 1)
             {
-                const int dest_row = (mouse_y - header_height_) / row_height_;
+                const int dest_row = rowAtY(mouse_y);
                 if(dest_row >= 0 && dest_row < visible_rows_.size())
                 {
                     drag_dest_row_ = dest_row;
+                    drag_dest_lane_ = laneCountForTrack(trackIndexForRow(dest_row)) > 1
+                        ? laneAtY(dest_row, mouse_y) : -1;
                 }
             }
             break;
@@ -113,7 +115,7 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
         {
             if(mouse_y >= header_height_)
             {
-                int row = (mouse_y - header_height_) / row_height_;
+                int row = rowAtY(mouse_y);
                 row = std::clamp(row, 0, std::max(0, (int)visible_rows_.size() - 1));
                 drag_span_hover_row_ = row;
             }
@@ -574,7 +576,7 @@ QRect ActionTimelineWidget::clipAbsRect(int track, int clip_index) const
     {
         if(trackCoversRow(pack_->tracks[(size_t)track], visible_rows_[row]))
         {
-            return clipRect(row, b);
+            return clipRectOnTrack(row, track, b);
         }
     }
     return {};
@@ -930,6 +932,8 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
     const int start = snapMs(std::clamp(ms, 0, std::max(0, duration_ms_ - len)));
     copy.start_ms = start;
     copy.end_ms = start + len;
+    copy.layer = Action::ChooseClipLayer(pack_->tracks[(size_t)dest_track], copy.start_ms, copy.end_ms,
+                                         (trackIndexForRow(row) == dest_track) ? lane_hint_ : 0);
     if(dest_track >= 0 && dest_track < (int)pack_->tracks.size()
        && Action::TargetIsMultiDeviceGroup(pack_->tracks[(size_t)dest_track].target)
        && (copy.axis_space == Action::AxisSpace::Device
@@ -1130,6 +1134,7 @@ void ActionTimelineWidget::finishDrag()
     const int span_a = drag_span_anchor_row_;
     const int span_b = drag_span_hover_row_;
     const int dest_row = drag_dest_row_;
+    const int dest_lane = drag_dest_lane_;
     const int copy_src = drag_copy_source_track_;
     const int group_n = drag_group_.size();
     const QPoint marquee_a = marquee_origin_;
@@ -1143,6 +1148,7 @@ void ActionTimelineWidget::finishDrag()
     drag_copy_ = false;
     drag_copy_source_track_ = -1;
     drag_dest_row_ = -1;
+    drag_dest_lane_ = -1;
     drag_home_row_ = -1;
     drag_float_y_ = 0;
     drag_grab_offset_y_ = 0;
@@ -1170,6 +1176,7 @@ void ActionTimelineWidget::finishDrag()
     if(moved && op == DragOp::Move && dest_row >= 0 && track >= 0 && clip >= 0 && group_n <= 1)
     {
         const int dest_track = findOrCreateTrackForRow(dest_row);
+        bool changed_track = false;
         if(dest_track >= 0 && dest_track != track && dest_track != copy_src)
         {
             drag_track_ = track;
@@ -1179,9 +1186,24 @@ void ActionTimelineWidget::finishDrag()
                 track = drag_track_;
                 clip = drag_clip_;
                 setPrimarySelection(track, clip);
+                changed_track = true;
             }
             drag_track_ = -1;
             drag_clip_ = -1;
+        }
+        /* Layer lanes: dropping on a lane of a layered row puts the clip on that layer;
+           landing on another track takes a free lane there. */
+        if(Action::Clip* mc = mutableClip(track, clip))
+        {
+            const Action::Track& owner = pack_->tracks[(size_t)track];
+            if(dest_lane >= 0 && track == trackIndexForRow(dest_row) && laneCountForTrack(track) > 1)
+            {
+                mc->layer = std::clamp(dest_lane, 0, laneCountForTrack(track) - 1);
+            }
+            else if(changed_track)
+            {
+                mc->layer = Action::ChooseClipLayer(owner, mc->start_ms, mc->end_ms, 0, mc);
+            }
         }
         selected_row_ = dest_row;
     }
@@ -1291,7 +1313,73 @@ void ActionTimelineWidget::showRowContextMenu(int row, int ms, const QPoint& glo
     {
         expand_act = menu.addAction(r.expanded ? QStringLiteral("Collapse") : QStringLiteral("Expand"));
     }
+    /* Layer lanes: several effects playing on this row at once, each in its own lane. */
+    menu.addSeparator();
+    const int own_track = trackIndexForRow(row);
+    const int own_lanes = laneCountForTrack(own_track);
+    const int menu_lane = std::clamp(lane_hint_, 0, own_lanes - 1);
+    QAction* add_layer = menu.addAction(QStringLiteral("Add layer"));
+    add_layer->setEnabled(own_lanes < Action::kMaxTrackLayers);
+    QAction* fold_layers = nullptr;
+    QAction* rename_layer = nullptr;
+    QAction* tidy_layers = nullptr;
+    if(own_track >= 0 && own_lanes > 1)
+    {
+        const bool open = pack_->tracks[(size_t)own_track].layers_open;
+        fold_layers = menu.addAction(open ? QStringLiteral("Fold layers") : QStringLiteral("Show layers"));
+        rename_layer = menu.addAction(QStringLiteral("Rename layer %1...").arg(menu_lane + 1));
+        tidy_layers = menu.addAction(QStringLiteral("Remove empty layers"));
+    }
     QAction* chosen = menu.exec(global_pos);
+    if(chosen && chosen == add_layer)
+    {
+        const int t = findOrCreateTrackForRow(row);
+        if(t >= 0)
+        {
+            Action::Track& track = pack_->tracks[(size_t)t];
+            const int lanes = Action::TrackLayerCount(track);
+            if((int)track.layers.size() < lanes + 1)
+            {
+                track.layers.resize((size_t)std::min(lanes + 1, Action::kMaxTrackLayers));
+            }
+            track.layers_open = true;
+            requestContentRepaint();
+            emit layersChanged();
+        }
+        return;
+    }
+    if(chosen && chosen == fold_layers)
+    {
+        Action::Track& track = pack_->tracks[(size_t)own_track];
+        track.layers_open = !track.layers_open;
+        requestContentRepaint();
+        emit layersChanged();
+        return;
+    }
+    if(chosen && chosen == rename_layer)
+    {
+        Action::Track& track = pack_->tracks[(size_t)own_track];
+        if((int)track.layers.size() < own_lanes)
+        {
+            track.layers.resize((size_t)own_lanes);
+        }
+        bool ok = false;
+        const QString name = QInputDialog::getText(this, QStringLiteral("Rename layer"), QStringLiteral("Layer name:"),
+                                                   QLineEdit::Normal,
+                                                   QString::fromStdString(track.layers[(size_t)menu_lane].name), &ok);
+        if(ok)
+        {
+            track.layers[(size_t)menu_lane].name = name.trimmed().left(64).toStdString();
+            requestContentRepaint();
+            emit layersChanged();
+        }
+        return;
+    }
+    if(chosen && chosen == tidy_layers)
+    {
+        compactTrackLayers(own_track);
+        return;
+    }
     if(chosen == preview_track)
     {
         emit previewRowRequested(row, 0);
@@ -1553,11 +1641,12 @@ bool ActionTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
         {
             return false;
         }
-        const int row = (pos.y() - header_height_) / row_height_;
+        const int row = rowAtY(pos.y());
         if(row < 0 || row >= visible_rows_.size())
         {
             return false;
         }
+        lane_hint_ = laneAtY(row, pos.y());
         const int ms = xToTime(pos.x());
         selected_row_ = row;
         emit rowSelected(row);
@@ -1589,11 +1678,12 @@ bool ActionTimelineWidget::dropAt(const QPoint& pos, const QMimeData* mime)
         {
             return false;
         }
-        const int drop_row = (pos.y() - header_height_) / row_height_;
+        const int drop_row = rowAtY(pos.y());
         if(drop_row < 0 || drop_row >= visible_rows_.size())
         {
             return false;
         }
+        lane_hint_ = laneAtY(drop_row, pos.y());
         const int ms = xToTime(pos.x());
         selected_row_ = drop_row;
         emit rowSelected(drop_row);
@@ -1804,7 +1894,11 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
     const int x = event->position().toPoint().x();
     const int y = event->position().toPoint().y();
     setFocus(Qt::MouseFocusReason);
-    const int row = (y >= header_height_) ? ((y - header_height_) / row_height_) : -1;
+    const int row = rowAtY(y);
+    if(row >= 0 && row < visible_rows_.size())
+    {
+        lane_hint_ = laneAtY(row, y);
+    }
 
     if(!placing_effect_id_.isEmpty())
     {
@@ -1897,10 +1991,14 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
         const Row& r = visible_rows_[row];
         selected_row_ = row;
         emit rowSelected(row);
+        if(handleLaneGutterClick(row, x, y))
+        {
+            return;
+        }
         if(r.expandable)
         {
             const int indent = 6 + r.depth * 14;
-            const int row_y = header_height_ + row * row_height_;
+            const int row_y = rowTop(row);
             const QRect plus(indent, row_y + (row_height_ - expand_hit_) / 2, expand_hit_, expand_hit_);
             if(plus.contains(x, y))
             {
@@ -1993,7 +2091,7 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
             drag_copy_ = (event->modifiers() & Qt::ControlModifier) != 0;
             drag_dest_row_ = hit_row;
             drag_home_row_ = hit_row;
-            const QRect home = clipRect(hit_row, *b);
+            const QRect home = clipRectOnTrack(hit_row, track, *b);
             drag_grab_offset_y_ = y - home.top();
             drag_float_y_ = y;
             setCursor(Qt::ClosedHandCursor);
@@ -2050,7 +2148,7 @@ void ActionTimelineWidget::mouseMoveEvent(QMouseEvent* event)
     const QPoint pt = event->position().toPoint();
     if(!placing_effect_id_.isEmpty())
     {
-        const int row = (pt.y() >= header_height_) ? ((pt.y() - header_height_) / row_height_) : -1;
+        const int row = rowAtY(pt.y());
         place_row_ = (row >= 0 && row < visible_rows_.size() && pt.x() >= gutter_width_) ? row : -1;
         place_ms_ = snapEdgeMs(xToTime(pt.x()), true, nullptr);
         update();
@@ -2059,7 +2157,7 @@ void ActionTimelineWidget::mouseMoveEvent(QMouseEvent* event)
     if(row_reorder_from_ >= 0 && (event->buttons() & Qt::LeftButton))
     {
         const int y = pt.y();
-        const int row = (y >= header_height_) ? ((y - header_height_) / row_height_) : -1;
+        const int row = rowAtY(y);
         if(row >= 0 && row < visible_rows_.size())
         {
             const Row& from = visible_rows_[row_reorder_from_];

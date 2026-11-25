@@ -252,6 +252,7 @@ void ExpandBounds(SampleBounds* b, const Vector3D& p)
 
 int PaintTransformTargetSpatial(ControllerTransform* transform,
                                 const Track& track,
+                                const Clip* clip,
                                 int local_ms,
                                 std::unordered_set<RGBControllerInterface*>* touched,
                                 const SampleBounds* shared_bounds,
@@ -280,7 +281,8 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
         return 0;
     }
 
-    const Clip* top = FindActiveClip(track, local_ms);
+    /* The caller picks the clip: one per audible layer lane, painted bottom to top. */
+    const Clip* top = clip;
     const bool use_device = top && top->axis_space == AxisSpace::Device;
     const bool use_shared = top && shared_bounds && shared_bounds->valid && !use_device;
     const bool use_sequence = top && ClipUsesSequenceAxis(*top)

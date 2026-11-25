@@ -207,6 +207,20 @@ struct Clip
     ClipBlend blend = ClipBlend::Normal;
     /** Afterglow: lights this clip touched fade out over this many ms (0 = cut instantly). */
     int trail_ms = 0;
+    /** Layer lane inside its track: 0 paints first; each higher lane paints over the ones before it. */
+    int layer = 0;
+};
+
+/** Most layer lanes one track may hold. */
+constexpr int kMaxTrackLayers = 16;
+
+/** One effect layer inside a track (xLights / Vixen style). */
+struct TrackLayer
+{
+    std::string name;
+    bool muted = false;
+    /** Editor audition only; never saved. */
+    bool solo = false;
 };
 
 /** Timing marker on the pack timeline (a beat, a cue). Authoring aid only: playback ignores it. */
@@ -224,6 +238,10 @@ struct Track
     std::string name;
     Target target;
     std::vector<Clip> clips;
+    /** Per-lane settings; may be shorter than the lane count (missing lanes use defaults). */
+    std::vector<TrackLayer> layers;
+    /** Timeline shows each layer as its own full-height lane. */
+    bool layers_open = false;
 };
 
 struct Pack
@@ -327,7 +345,18 @@ bool EvaluateTrackColorAtLed(const Track& track,
                              RGBColor* out_color,
                              float* out_intensity);
 
+/** Topmost clip playing on an audible layer (highest lane; what a single-colour readout shows). */
 const Clip* FindActiveClip(const Track& track, int local_ms);
+/** Clip playing on one layer lane (last one wins when clips overlap on that lane). */
+const Clip* FindActiveClipOnLayer(const Track& track, int local_ms, int layer);
+/** Lanes in a track: at least 1, enough for every clip and named layer, at most kMaxTrackLayers. */
+int TrackLayerCount(const Track& track);
+/** False when the layer is muted, or another layer on the track is soloed. */
+bool TrackLayerAudible(const Track& track, int layer);
+/** Lane for a new clip over [start_ms, end_ms): `preferred` when free there, else a free lane
+    above it, else a new lane on top (up to kMaxTrackLayers), else a free lane below.
+    `ignore` skips a clip already on the track. */
+int ChooseClipLayer(const Track& track, int start_ms, int end_ms, int preferred, const Clip* ignore = nullptr);
 
 bool DirectionInvertsAxis(Direction dir);
 int DirectionPreferredAxis(Direction dir);
