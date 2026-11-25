@@ -392,6 +392,8 @@ QToolButton* ActionToolBar::addMenuButton(const QString& text, const QString& to
     button->setToolTip(tooltip);
     button->setAccessibleName(text);
     button->setPopupMode(QToolButton::InstantPopup);
+    // Styled by PluginTheme::ApplyFlatToolBar as a boxed menu button with room for the arrow.
+    button->setProperty("pluginMenuButton", true);
     button->setToolButtonStyle(Qt::ToolButtonTextOnly);
     button->setAutoRaise(true);
     button->setFixedHeight(28);
@@ -404,7 +406,7 @@ void ActionToolBar::buildUi()
 {
     auto* row = new QHBoxLayout(this);
     row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(2);
+    row->setSpacing(6);
 
     effects_menu_ = new QMenu(this);
     colors_menu_ = new QMenu(this);

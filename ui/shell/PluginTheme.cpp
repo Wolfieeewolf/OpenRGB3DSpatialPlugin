@@ -269,7 +269,17 @@ void ApplyFlatToolBar(QWidget* bar)
         "%1:checked { background: %4; border-color: %5; }"
         "%1:checked:hover { background: %6; }"
         "%1:focus { border-color: %5; }")
-        .arg(sel, rgba(text, 34), rgba(text, 64), rgba(accent, 70), rgba(accent, 170), rgba(accent, 95)));
+        .arg(sel, rgba(text, 34), rgba(text, 64), rgba(accent, 70), rgba(accent, 170), rgba(accent, 95))
+        /* Menu buttons: a soft outlined box, with the arrow in its own space on the right. */
+        + QStringLiteral(
+        "%1[pluginMenuButton=\"true\"] { background: %2; border: 1px solid %3; border-radius: 5px;"
+        " padding: 2px 22px 2px 10px; }"
+        "%1[pluginMenuButton=\"true\"]:hover { background: %4; border-color: %5; }"
+        "%1[pluginMenuButton=\"true\"]:pressed, %1[pluginMenuButton=\"true\"]:open { background: %6; border-color: %5; }"
+        "%1[pluginMenuButton=\"true\"]:disabled { background: transparent; border-color: %7; }"
+        "%1[pluginMenuButton=\"true\"]::menu-indicator { subcontrol-origin: padding;"
+        " subcontrol-position: center right; right: 7px; }")
+        .arg(sel, rgba(text, 12), rgba(text, 55), rgba(text, 34), rgba(accent, 170), rgba(accent, 70), rgba(text, 25)));
 }
 
 void PaintCardFrame(QPainter& painter, const QRectF& rect, const QColor& base, bool selected, bool ghost,

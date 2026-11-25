@@ -271,7 +271,8 @@ void ActionTimelineWidget::setPlayheadMs(int ms)
         return;
     }
     // Playhead motion must not rebuild clip rasters — invalidate only the two strips.
-    constexpr int kPad = 3;
+    // Pad covers the ruler handle (10 px wide plus anti-aliasing), not just the 2 px line.
+    constexpr int kPad = 8;
     const int old_x = timeToX(old_ms);
     const int new_x = timeToX(playhead_ms_);
     update(QRect(old_x - kPad, 0, kPad * 2 + 1, height()));
