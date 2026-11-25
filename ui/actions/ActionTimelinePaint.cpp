@@ -795,6 +795,27 @@ void ActionTimelineWidget::paintEvent(QPaintEvent* event)
 
 namespace
 {
+/** Motion keys as small diamonds along the bottom of a clip. */
+void PaintMotionKeys(QPainter& p, const QRect& r, const Action::Clip& clip)
+{
+    if(r.width() < 6 || r.height() < 6)
+    {
+        return;
+    }
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setPen(QPen(QColor(20, 20, 20, 200), 1));
+    p.setBrush(QColor(255, 255, 255, 235));
+    const double s = std::clamp(r.height() / 6.0, 2.5, 4.0);
+    const double y = r.bottom() - s - 1.0;
+    for(const Action::MotionKey& k : clip.motion)
+    {
+        const double x = r.left() + std::clamp((double)k.at, 0.0, 1.0) * (r.width() - 1);
+        p.drawPolygon(QPolygonF({QPointF(x, y - s), QPointF(x + s, y), QPointF(x, y + s), QPointF(x - s, y)}));
+    }
+    p.restore();
+}
+
 /** Small outlined gutter button (layer fold / mute / solo); filled when on. */
 void PaintLaneButton(QPainter& p, const QRect& r, const QString& label, bool on, const QColor& on_color,
                      const QPalette& pal)
@@ -1077,7 +1098,12 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             {
                 p.setOpacity(0.35);
             }
-            paintClipVisual(p, clipRectOnTrack(row, pb.track, *pb.clip), pb, selected);
+            const QRect clip_rect = clipRectOnTrack(row, pb.track, *pb.clip);
+            paintClipVisual(p, clip_rect, pb, selected);
+            if(!pb.clip->motion.empty())
+            {
+                PaintMotionKeys(p, clip_rect, *pb.clip);
+            }
             if(!audible)
             {
                 p.setOpacity(1.0);

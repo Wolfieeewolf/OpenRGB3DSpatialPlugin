@@ -227,6 +227,11 @@ A scene zone is its own little room: a pulse on a "PC case" zone grows from the 
 | `trail_ms` | Optional 0...10000 afterglow: lights the clip touched fade out over this time in real time (squared falloff, brightest wins) |
 | `layer` | Optional lane inside the track (default 0). Lanes paint in order, each over the ones before it, using each clip's `blend`; `normal` plays the effect as-is |
 
+| `motion` | Optional keyframes, sorted by `at` (fraction of the clip, 0...1): `{ "at", "offset_x", "offset_y", "offset_z", "size", "yaw_deg", "pitch_deg" }` (same units as the clip's own fields, at most 64). Between keys the clip glides (smoothstep); before the first and after the last it holds. When present they replace the clip's static offsets, size and yaw / pitch during playback |
+| `motion_linear` | Optional: constant-speed moves between keys instead of easing |
+
+**Motion in the editor.** The Motion section records a key at the playhead from the current Offset, Size, Yaw and Pitch. Once a clip has keys, those fields show the moving values at the playhead and changing one sets a key there (auto-key, like a video editor); keys can also be edited in the table and show as diamonds along the clip.
+
 Tracks may also carry `layers` (an array of `{ "name", "muted" }`, one per lane, written only when a lane is named or muted, or the track has more than one) and `layers_open` (show every lane at full height). Solo is an editor audition and never saved.
 
 **Layer lanes in the editor.** Several effects can play on one row at once, each in its own lane, like effect layers in xLights or Vixen. Folded, a layered row shows its lanes as thin stripes and a "N layers" button; unfolded, the row grows to one full-height lane per layer, with a name and **M** (mute) / **S** (solo) buttons in the gutter. Dropping an effect over a busy lane puts it on a free lane above (or a new lane on top), so it layers with what is playing instead of hiding it; dragging a clip onto another lane moves it there. The row menu adds a layer, folds or shows the lanes, renames a layer, and removes empty layers.

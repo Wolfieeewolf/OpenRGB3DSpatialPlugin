@@ -156,6 +156,24 @@ struct CurvePoint
     float value = 1.0f;
 };
 
+/**
+ * Motion keyframe: where the clip's centre, size and axis are at one moment.
+ * `at` is a fraction of the clip's length (0 = start, 1 = end), so keys stretch with it.
+ */
+struct MotionKey
+{
+    float at = 0.0f;
+    float offset_x = 0.0f;   /* % of half-room, like Clip::origin_offset_x */
+    float offset_y = 0.0f;
+    float offset_z = 0.0f;
+    float size = 1.0f;       /* like Clip::effect_size */
+    float yaw_deg = 0.0f;    /* like Clip::axis_yaw_deg (Custom axis) */
+    float pitch_deg = 0.0f;
+};
+
+/** Fail-closed ceiling on motion keys per clip read from a pack file. */
+constexpr std::size_t kMaxMotionKeys = 64;
+
 struct Clip
 {
     std::string effect_id;
@@ -209,6 +227,10 @@ struct Clip
     int trail_ms = 0;
     /** Layer lane inside its track: 0 paints first; each higher lane paints over the ones before it. */
     int layer = 0;
+    /** Keyframed centre / size / axis over the clip, sorted by `at`. Empty = static placement. */
+    std::vector<MotionKey> motion;
+    /** Straight moves between keys instead of easing in and out of each. */
+    bool motion_linear = false;
 };
 
 /** Most layer lanes one track may hold. */
@@ -344,6 +366,15 @@ bool EvaluateTrackColorAtLed(const Track& track,
                              int led_count,
                              RGBColor* out_color,
                              float* out_intensity);
+
+/** Placement at a fraction of the clip (0..1) with its motion keys applied (needs keys). */
+MotionKey SampleClipMotion(const Clip& clip, float at);
+/** Fraction of the clip's length that pack-local time `local_ms` falls on (clamped 0..1). */
+float ClipFractionAt(const Clip& clip, int local_ms);
+/** Overwrite the clip's offsets, size and yaw / pitch with its motion at `local_ms` (no-op without keys). */
+void ApplyClipMotion(Clip* clip, int local_ms);
+/** Insert or replace (within half a percent) a key, keeping keys sorted; returns its index. */
+int UpsertMotionKey(Clip* clip, const MotionKey& key);
 
 /** Topmost clip playing on an audible layer (highest lane; what a single-colour readout shows). */
 const Clip* FindActiveClip(const Track& track, int local_ms);

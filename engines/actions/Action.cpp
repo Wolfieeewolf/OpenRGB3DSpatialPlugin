@@ -426,6 +426,101 @@ bool EvaluateTrackColor(const Track& track, int local_ms, RGBColor* out_color, f
     return EvaluateTrackColorAtLed(track, local_ms, 0, 1, out_color, out_intensity);
 }
 
+float ClipFractionAt(const Clip& clip, int local_ms)
+{
+    const int span = std::max(1, clip.end_ms - clip.start_ms);
+    return std::clamp((float)(local_ms - clip.start_ms) / (float)span, 0.0f, 1.0f);
+}
+
+MotionKey SampleClipMotion(const Clip& clip, float at)
+{
+    const std::vector<MotionKey>& keys = clip.motion;
+    if(keys.empty())
+    {
+        MotionKey k;
+        k.at = at;
+        k.offset_x = clip.origin_offset_x;
+        k.offset_y = clip.origin_offset_y;
+        k.offset_z = clip.origin_offset_z;
+        k.size = clip.effect_size;
+        k.yaw_deg = clip.axis_yaw_deg;
+        k.pitch_deg = clip.axis_pitch_deg;
+        return k;
+    }
+    if(at <= keys.front().at)
+    {
+        return keys.front();
+    }
+    if(at >= keys.back().at)
+    {
+        return keys.back();
+    }
+    size_t hi = 1;
+    while(hi < keys.size() && keys[hi].at < at)
+    {
+        ++hi;
+    }
+    const MotionKey& a = keys[hi - 1];
+    const MotionKey& b = keys[hi];
+    const float gap = std::max(1e-6f, b.at - a.at);
+    float t = std::clamp((at - a.at) / gap, 0.0f, 1.0f);
+    if(!clip.motion_linear)
+    {
+        t = t * t * (3.0f - 2.0f * t);
+    }
+    auto lerp = [t](float x, float y) { return x + (y - x) * t; };
+    MotionKey out;
+    out.at = at;
+    out.offset_x = lerp(a.offset_x, b.offset_x);
+    out.offset_y = lerp(a.offset_y, b.offset_y);
+    out.offset_z = lerp(a.offset_z, b.offset_z);
+    out.size = lerp(a.size, b.size);
+    out.yaw_deg = lerp(a.yaw_deg, b.yaw_deg);
+    out.pitch_deg = lerp(a.pitch_deg, b.pitch_deg);
+    return out;
+}
+
+void ApplyClipMotion(Clip* clip, int local_ms)
+{
+    if(!clip || clip->motion.empty())
+    {
+        return;
+    }
+    const MotionKey k = SampleClipMotion(*clip, ClipFractionAt(*clip, local_ms));
+    clip->origin_offset_x = std::clamp(k.offset_x, -100.0f, 100.0f);
+    clip->origin_offset_y = std::clamp(k.offset_y, -100.0f, 100.0f);
+    clip->origin_offset_z = std::clamp(k.offset_z, -100.0f, 100.0f);
+    clip->effect_size = std::clamp(k.size, 0.05f, 2.0f);
+    clip->axis_yaw_deg = std::clamp(k.yaw_deg, -180.0f, 180.0f);
+    clip->axis_pitch_deg = std::clamp(k.pitch_deg, -90.0f, 90.0f);
+}
+
+int UpsertMotionKey(Clip* clip, const MotionKey& key)
+{
+    if(!clip)
+    {
+        return -1;
+    }
+    MotionKey k = key;
+    k.at = std::clamp(k.at, 0.0f, 1.0f);
+    for(size_t i = 0; i < clip->motion.size(); ++i)
+    {
+        if(std::fabs(clip->motion[i].at - k.at) < 0.005f)
+        {
+            clip->motion[i] = k;
+            return (int)i;
+        }
+    }
+    if(clip->motion.size() >= kMaxMotionKeys)
+    {
+        return -1;
+    }
+    auto it = std::upper_bound(clip->motion.begin(), clip->motion.end(), k,
+                               [](const MotionKey& a, const MotionKey& b) { return a.at < b.at; });
+    it = clip->motion.insert(it, k);
+    return (int)(it - clip->motion.begin());
+}
+
 int TrackLayerCount(const Track& track)
 {
     int n = std::max(1, (int)track.layers.size());

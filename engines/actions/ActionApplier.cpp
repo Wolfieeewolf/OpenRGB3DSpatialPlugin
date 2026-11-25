@@ -413,6 +413,14 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 {
                     continue;
                 }
+                /* Motion keys: play a copy with this moment's centre, size and axis. */
+                Clip moving;
+                if(!top->motion.empty())
+                {
+                    moving = *top;
+                    ApplyClipMotion(&moving, local_ms);
+                    top = &moving;
+                }
                 applier_detail::SampleBounds shared_bounds;
                 applier_detail::SeqAxesMap seq_map;
                 const bool want_room_box = top && ClipUsesRoomBoxBounds(*top);

@@ -425,6 +425,27 @@ nlohmann::json ToJson(const Pack& pack)
                 }
                 bj["period_curve"] = carr;
             }
+            if(!clip.motion.empty())
+            {
+                nlohmann::json marr = nlohmann::json::array();
+                for(const MotionKey& k : clip.motion)
+                {
+                    nlohmann::json mj;
+                    mj["at"] = k.at;
+                    mj["offset_x"] = k.offset_x;
+                    mj["offset_y"] = k.offset_y;
+                    mj["offset_z"] = k.offset_z;
+                    mj["size"] = k.size;
+                    mj["yaw_deg"] = k.yaw_deg;
+                    mj["pitch_deg"] = k.pitch_deg;
+                    marr.push_back(mj);
+                }
+                bj["motion"] = marr;
+                if(clip.motion_linear)
+                {
+                    bj["motion_linear"] = true;
+                }
+            }
             tj["clips"].push_back(bj);
         }
         j["tracks"].push_back(tj);
@@ -729,6 +750,28 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
                 }
                 std::sort(clip.period_curve.begin(), clip.period_curve.end(),
                           [](const CurvePoint& a, const CurvePoint& b) { return a.pos < b.pos; });
+            }
+            if(bj.contains("motion") && bj["motion"].is_array())
+            {
+                for(const auto& mj : bj["motion"])
+                {
+                    if(!mj.is_object() || clip.motion.size() >= kMaxMotionKeys)
+                    {
+                        continue;
+                    }
+                    MotionKey k;
+                    k.at = std::clamp(mj.value("at", 0.0f), 0.0f, 1.0f);
+                    k.offset_x = std::clamp(mj.value("offset_x", 0.0f), -100.0f, 100.0f);
+                    k.offset_y = std::clamp(mj.value("offset_y", 0.0f), -100.0f, 100.0f);
+                    k.offset_z = std::clamp(mj.value("offset_z", 0.0f), -100.0f, 100.0f);
+                    k.size = std::clamp(mj.value("size", 1.0f), 0.05f, 2.0f);
+                    k.yaw_deg = std::clamp(mj.value("yaw_deg", 0.0f), -180.0f, 180.0f);
+                    k.pitch_deg = std::clamp(mj.value("pitch_deg", 0.0f), -90.0f, 90.0f);
+                    clip.motion.push_back(k);
+                }
+                std::stable_sort(clip.motion.begin(), clip.motion.end(),
+                                 [](const MotionKey& a, const MotionKey& b) { return a.at < b.at; });
+                clip.motion_linear = bj.value("motion_linear", false);
             }
 
             RGBColor color = ToRGBColor(255, 0, 0);

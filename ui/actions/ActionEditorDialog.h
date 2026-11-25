@@ -21,6 +21,7 @@ class QPushButton;
 class QScrollArea;
 class QSlider;
 class QSpinBox;
+class QTableWidget;
 class QTimer;
 class QToolButton;
 class QWidget;
@@ -137,6 +138,16 @@ private:
     Action::Clip* selectedClip();
     /** Placement readout: where the selected clip is centred and what its offsets scale to. */
     void updateCentreReadout();
+    /* Motion keys: the clip's centre, size and axis animated over its length. */
+    Action::MotionKey motionKeyFromForm(float at) const;
+    /** Placement / yaw / pitch fields show the keyed values at the playhead. */
+    void showMotionAtPlayhead();
+    void refreshMotionTable();
+    void onMotionKeyAtPlayhead();
+    void onMotionRemoveKey();
+    void onMotionClear();
+    void onMotionTableEdited(int row, int column);
+    void motionChanged();
     void applyGradientPresetToClip(Action::Clip* clip, const QString& preset_id);
     void refillGradientPresets();
     void syncTimeSliderRanges();
@@ -232,6 +243,13 @@ private:
     QWidget* pulse_section_ = nullptr;
     QWidget* placement_section_ = nullptr;
     QLabel* placement_centre_label_ = nullptr;
+    QWidget* motion_section_ = nullptr;
+    QTableWidget* motion_table_ = nullptr;
+    QPushButton* motion_key_button_ = nullptr;
+    QPushButton* motion_remove_button_ = nullptr;
+    QPushButton* motion_clear_button_ = nullptr;
+    QCheckBox* motion_linear_check_ = nullptr;
+    QLabel* motion_hint_ = nullptr;
     QWidget* color_to_row_ = nullptr;
     QWidget* period_row_ = nullptr;
     QWidget* speed_row_ = nullptr;

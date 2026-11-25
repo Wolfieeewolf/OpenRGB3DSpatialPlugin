@@ -42,8 +42,10 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -1231,6 +1233,7 @@ void ActionEditorDialog::applyClipToForm()
     if(!ok)
     {
         suppress_ui_ = false;
+        refreshMotionTable();
         updatePropVisibility();
         updateCentreReadout();
         return;
@@ -1374,6 +1377,8 @@ void ActionEditorDialog::applyClipToForm()
     const ActionCatalog::Entry shown = KnobsForSelection(b, type_combo_, PluginSettingsPaths::ActionToolboxDir(tab_ ? tab_->resource_manager : nullptr));
     setColorButton(color_button_, shown.knob_color_to ? b->color_from : b->color);
     setColorButton(color_to_button_, b->color_to);
+    refreshMotionTable();
+    showMotionAtPlayhead();
     suppress_ui_ = false;
     syncGradientBar();
     syncCurveBar();
@@ -1392,6 +1397,9 @@ void ActionEditorDialog::applyFormToSelectedClip()
     {
         return;
     }
+    /* Clip timing before this edit: the placement fields show motion at this fraction. */
+    const int motion_prev_start = b->start_ms;
+    const int motion_prev_end = b->end_ms;
     const QString picked_id = type_combo_->currentData().toString();
     if(!picked_id.isEmpty())
     {
@@ -1426,6 +1434,25 @@ void ActionEditorDialog::applyFormToSelectedClip()
     if(origin_ref_combo_)
     {
         b->origin_ref = origin_ref_combo_->currentData().toString().toStdString();
+    }
+    /* Auto-key: with motion keys on the clip the placement fields show the keyed values at
+       the playhead, so a change there sets (or adds) the key at the playhead. */
+    if(!b->motion.empty() && origin_offset_x_spin_ && effect_size_spin_ && axis_yaw_spin_ && axis_pitch_spin_)
+    {
+        const int playhead = timeline_ ? timeline_->playheadMs() : motion_prev_start;
+        const float at = std::clamp((float)(playhead - motion_prev_start)
+                                        / (float)std::max(1, motion_prev_end - motion_prev_start),
+                                    0.0f, 1.0f);
+        const Action::MotionKey now = Action::SampleClipMotion(*b, at);
+        const Action::MotionKey form = motionKeyFromForm(at);
+        auto same = [](float x, float y, float scale) { return std::lround(x * scale) == std::lround(y * scale); };
+        if(!same(now.offset_x, form.offset_x, 1.0f) || !same(now.offset_y, form.offset_y, 1.0f)
+           || !same(now.offset_z, form.offset_z, 1.0f) || !same(now.size, form.size, 100.0f)
+           || !same(now.yaw_deg, form.yaw_deg, 10.0f) || !same(now.pitch_deg, form.pitch_deg, 10.0f))
+        {
+            Action::UpsertMotionKey(b, form);
+            refreshMotionTable();
+        }
     }
     if(origin_offset_x_spin_)
     {
@@ -1630,8 +1657,182 @@ void ActionEditorDialog::onClipFieldChanged()
     {
         syncGradientBar();
         updateCentreReadout();
+        showMotionAtPlayhead();
         // applyFormToSelectedClip already scheduled a coalesced timeline refresh.
     }
+}
+
+Action::MotionKey ActionEditorDialog::motionKeyFromForm(float at) const
+{
+    Action::MotionKey k;
+    k.at = std::clamp(at, 0.0f, 1.0f);
+    k.offset_x = origin_offset_x_spin_ ? (float)origin_offset_x_spin_->value() : 0.0f;
+    k.offset_y = origin_offset_y_spin_ ? (float)origin_offset_y_spin_->value() : 0.0f;
+    k.offset_z = origin_offset_z_spin_ ? (float)origin_offset_z_spin_->value() : 0.0f;
+    k.size = effect_size_spin_ ? effect_size_spin_->value() / 100.0f : 1.0f;
+    k.yaw_deg = axis_yaw_spin_ ? (float)axis_yaw_spin_->value() : 0.0f;
+    k.pitch_deg = axis_pitch_spin_ ? (float)axis_pitch_spin_->value() : 0.0f;
+    return k;
+}
+
+void ActionEditorDialog::showMotionAtPlayhead()
+{
+    const Action::Clip* b = selectedClip();
+    if(!b || b->motion.empty() || !timeline_)
+    {
+        return;
+    }
+    const Action::MotionKey k = Action::SampleClipMotion(*b, Action::ClipFractionAt(*b, timeline_->playheadMs()));
+    const bool was = suppress_ui_;
+    suppress_ui_ = true;
+    if(origin_offset_x_spin_) origin_offset_x_spin_->setValue((int)std::lround(k.offset_x));
+    if(origin_offset_y_spin_) origin_offset_y_spin_->setValue((int)std::lround(k.offset_y));
+    if(origin_offset_z_spin_) origin_offset_z_spin_->setValue((int)std::lround(k.offset_z));
+    if(effect_size_spin_) effect_size_spin_->setValue((int)std::lround(k.size * 100.0f));
+    if(axis_yaw_spin_) axis_yaw_spin_->setValue(k.yaw_deg);
+    if(axis_pitch_spin_) axis_pitch_spin_->setValue(k.pitch_deg);
+    suppress_ui_ = was;
+}
+
+void ActionEditorDialog::refreshMotionTable()
+{
+    if(!motion_table_)
+    {
+        return;
+    }
+    const Action::Clip* b = selectedClip();
+    const QSignalBlocker block(motion_table_);
+    const int n = b ? (int)b->motion.size() : 0;
+    motion_table_->setRowCount(n);
+    for(int i = 0; i < n; ++i)
+    {
+        const Action::MotionKey& k = b->motion[(size_t)i];
+        const double values[7] = {k.at * 100.0, k.offset_x, k.offset_y, k.offset_z, k.size * 100.0, k.yaw_deg, k.pitch_deg};
+        for(int c = 0; c < 7; ++c)
+        {
+            auto* item = new QTableWidgetItem(QString::number(values[c], 'f', (c == 0 || c >= 5) ? 1 : 0));
+            item->setTextAlignment(Qt::AlignCenter);
+            motion_table_->setItem(i, c, item);
+        }
+    }
+    const bool ok = b != nullptr;
+    motion_key_button_->setEnabled(ok);
+    motion_remove_button_->setEnabled(n > 0);
+    motion_clear_button_->setEnabled(n > 0);
+    motion_table_->setEnabled(ok);
+    motion_linear_check_->setEnabled(n > 1);
+    {
+        const QSignalBlocker block_check(motion_linear_check_);
+        motion_linear_check_->setChecked(b && b->motion_linear);
+    }
+    motion_hint_->setText(n == 0
+        ? QStringLiteral("No keys: the clip stays where Placement puts it. Put the playhead in the clip, set "
+                         "Offset / Size (and Yaw / Pitch for a custom axis), press Key at playhead, then move the "
+                         "playhead and change them again to add the next key.")
+        : QStringLiteral("%1 key%2. Offset, Size, Yaw and Pitch show the moving values at the playhead; changing "
+                         "one sets a key there.").arg(n).arg(n == 1 ? QString() : QStringLiteral("s")));
+}
+
+void ActionEditorDialog::motionChanged()
+{
+    refreshMotionTable();
+    showMotionAtPlayhead();
+    if(timeline_)
+    {
+        timeline_->requestContentRepaint();
+    }
+    markPreviewDirtyIfPlaying();
+    scheduleHistoryCommit();
+}
+
+void ActionEditorDialog::onMotionKeyAtPlayhead()
+{
+    applyFormToSelectedClip();
+    Action::Clip* b = selectedClip();
+    if(!b || !timeline_)
+    {
+        return;
+    }
+    const float at = Action::ClipFractionAt(*b, timeline_->playheadMs());
+    if(Action::UpsertMotionKey(b, motionKeyFromForm(at)) < 0)
+    {
+        status_label_->setText(QStringLiteral("This clip already has the most keys it can hold"));
+        return;
+    }
+    motionChanged();
+}
+
+void ActionEditorDialog::onMotionRemoveKey()
+{
+    Action::Clip* b = selectedClip();
+    if(!b || b->motion.empty())
+    {
+        return;
+    }
+    int idx = motion_table_ ? motion_table_->currentRow() : -1;
+    if(idx < 0 || idx >= (int)b->motion.size())
+    {
+        const float at = timeline_ ? Action::ClipFractionAt(*b, timeline_->playheadMs()) : 0.0f;
+        idx = 0;
+        for(int i = 1; i < (int)b->motion.size(); ++i)
+        {
+            if(std::fabs(b->motion[(size_t)i].at - at) < std::fabs(b->motion[(size_t)idx].at - at))
+            {
+                idx = i;
+            }
+        }
+    }
+    b->motion.erase(b->motion.begin() + idx);
+    motionChanged();
+}
+
+void ActionEditorDialog::onMotionClear()
+{
+    Action::Clip* b = selectedClip();
+    if(!b || b->motion.empty())
+    {
+        return;
+    }
+    /* Keep the clip where it is at the playhead, so clearing never makes it jump. */
+    const Action::MotionKey k = Action::SampleClipMotion(*b, timeline_ ? Action::ClipFractionAt(*b, timeline_->playheadMs()) : 0.0f);
+    b->origin_offset_x = k.offset_x;
+    b->origin_offset_y = k.offset_y;
+    b->origin_offset_z = k.offset_z;
+    b->effect_size = k.size;
+    b->axis_yaw_deg = k.yaw_deg;
+    b->axis_pitch_deg = k.pitch_deg;
+    b->motion.clear();
+    motionChanged();
+}
+
+void ActionEditorDialog::onMotionTableEdited(int row, int column)
+{
+    Action::Clip* b = selectedClip();
+    if(!b || !motion_table_ || row < 0 || row >= (int)b->motion.size())
+    {
+        return;
+    }
+    QTableWidgetItem* item = motion_table_->item(row, column);
+    bool ok = false;
+    const double v = item ? item->text().trimmed().remove(QLatin1Char('%')).toDouble(&ok) : 0.0;
+    if(ok)
+    {
+        Action::MotionKey& k = b->motion[(size_t)row];
+        switch(column)
+        {
+            case 0: k.at = (float)std::clamp(v / 100.0, 0.0, 1.0); break;
+            case 1: k.offset_x = (float)std::clamp(v, -100.0, 100.0); break;
+            case 2: k.offset_y = (float)std::clamp(v, -100.0, 100.0); break;
+            case 3: k.offset_z = (float)std::clamp(v, -100.0, 100.0); break;
+            case 4: k.size = (float)std::clamp(v / 100.0, 0.05, 2.0); break;
+            case 5: k.yaw_deg = (float)std::clamp(v, -180.0, 180.0); break;
+            case 6: k.pitch_deg = (float)std::clamp(v, -90.0, 90.0); break;
+            default: break;
+        }
+        std::stable_sort(b->motion.begin(), b->motion.end(),
+                         [](const Action::MotionKey& a, const Action::MotionKey& c) { return a.at < c.at; });
+    }
+    motionChanged();
 }
 
 void ActionEditorDialog::updateCentreReadout()

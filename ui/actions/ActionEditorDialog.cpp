@@ -48,6 +48,8 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QHeaderView>
+#include <QTableWidget>
 #include <QPropertyAnimation>
 #include <QScrollBar>
 #include <QEasingCurve>
@@ -687,6 +689,48 @@ void ActionEditorDialog::buildUi()
     static_cast<EffectCollapsibleSection*>(placement_section_)->bodyLayout()->addLayout(place_form);
     props_inner_layout->addWidget(placement_section_);
 
+    /* Motion: keyframes move the centre, grow / shrink the size and turn the axis over the
+       clip, like animating a layer's position in a video editor. */
+    auto* motion_sec = new EffectCollapsibleSection(QStringLiteral("Motion"));
+    motion_sec->setExpanded(true);
+    motion_section_ = motion_sec;
+    motion_hint_ = new QLabel();
+    motion_hint_->setWordWrap(true);
+    motion_hint_->setForegroundRole(QPalette::PlaceholderText);
+    motion_key_button_ = new QPushButton(QStringLiteral("Key at playhead"));
+    motion_key_button_->setToolTip(QStringLiteral("Record the current offsets, size, yaw and pitch at the playhead"));
+    motion_remove_button_ = new QPushButton(QStringLiteral("Remove"));
+    motion_remove_button_->setToolTip(QStringLiteral("Remove the selected key (or the one nearest the playhead)"));
+    motion_clear_button_ = new QPushButton(QStringLiteral("Clear"));
+    motion_clear_button_->setToolTip(QStringLiteral("Remove every key; the clip stays where it is now"));
+    auto* motion_buttons = new QWidget();
+    auto* motion_buttons_layout = new QHBoxLayout(motion_buttons);
+    motion_buttons_layout->setContentsMargins(0, 0, 0, 0);
+    motion_buttons_layout->setSpacing(6);
+    motion_buttons_layout->addWidget(motion_key_button_, 1);
+    motion_buttons_layout->addWidget(motion_remove_button_);
+    motion_buttons_layout->addWidget(motion_clear_button_);
+    motion_linear_check_ = new QCheckBox(QStringLiteral("Straight moves (no easing)"));
+    motion_linear_check_->setToolTip(QStringLiteral("Off: glide in and out of each key. On: constant speed between keys."));
+    motion_table_ = new QTableWidget(0, 7);
+    motion_table_->setHorizontalHeaderLabels({QStringLiteral("Time %"), QStringLiteral("X %"), QStringLiteral("Y %"),
+                                              QStringLiteral("Z %"), QStringLiteral("Size %"), QStringLiteral("Yaw"),
+                                              QStringLiteral("Pitch")});
+    motion_table_->verticalHeader()->setVisible(false);
+    motion_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    motion_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    motion_table_->setSelectionMode(QAbstractItemView::SingleSelection);
+    motion_table_->setMinimumHeight(110);
+    motion_table_->setMaximumHeight(170);
+    motion_table_->setToolTip(QStringLiteral("Double-click a value to edit it. Time is a percentage of the clip's length."));
+    motion_sec->bodyLayout()->setSpacing(6);
+    motion_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
+    motion_sec->bodyLayout()->addWidget(motion_hint_);
+    motion_sec->bodyLayout()->addWidget(motion_buttons);
+    motion_sec->bodyLayout()->addWidget(motion_table_);
+    motion_sec->bodyLayout()->addWidget(motion_linear_check_);
+    props_inner_layout->addWidget(motion_sec);
+
     props_inner_layout->setSpacing(8);
     props_inner_layout->addStretch(1);
     props_scroll->setWidget(props_inner);
@@ -776,6 +820,21 @@ void ActionEditorDialog::buildUi()
     connect(max_intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(blend_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(trail_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    connect(motion_key_button_, &QPushButton::clicked, this, &ActionEditorDialog::onMotionKeyAtPlayhead);
+    connect(motion_remove_button_, &QPushButton::clicked, this, &ActionEditorDialog::onMotionRemoveKey);
+    connect(motion_clear_button_, &QPushButton::clicked, this, &ActionEditorDialog::onMotionClear);
+    connect(motion_table_, &QTableWidget::cellChanged, this, &ActionEditorDialog::onMotionTableEdited);
+    connect(motion_linear_check_, &QCheckBox::toggled, this, [this](bool on) {
+        if(suppress_ui_)
+        {
+            return;
+        }
+        if(Action::Clip* b = selectedClip())
+        {
+            b->motion_linear = on;
+            motionChanged();
+        }
+    });
     connect(speed_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(pulse_length_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     if(origin_ref_combo_)
@@ -1441,6 +1500,7 @@ void ActionEditorDialog::onPlayheadChanged(int ms)
 {
     timeline_->setPlayheadMs(ms);
     updateTimeReadout();
+    showMotionAtPlayhead();
     if(player_.IsPlaying())
     {
         player_.UpdatePack(preview_pack_);
