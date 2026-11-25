@@ -198,6 +198,8 @@ Hand-authored packs: pack identity -> playback -> tracks -> clip type / timing /
 | `period_curve` | Optional `{pos,value}` waveform over each **period_ms** cycle (0...1); multiplies with envelope |
 | `period_ms` / `speed` | Cycle length and rate; `period_progress` available to `.fx` scripts |
 | `min_intensity` / `max_intensity` | Script floor/ceiling (always editable in Brightness) |
+| `blend` | Optional: `normal` (default) \| `add` \| `screen` \| `lighten` \| `multiply` \| `darken`. How the clip combines with tracks listed above it. `add`/`screen` let flashes and hits brighten a background instead of covering it |
+| `trail_ms` | Optional 0...10000 afterglow: lights the clip touched fade out over this time (squared falloff, brightest wins). Rewinding or looping clears trails |
 | `media_path` | Image/GIF file for `media_image` / `media_gif` |
 | `media_text` | Marquee string for `media_text` |
 | `media_scroll` | Scroll media across Device/Room UV (direction + speed + period) |

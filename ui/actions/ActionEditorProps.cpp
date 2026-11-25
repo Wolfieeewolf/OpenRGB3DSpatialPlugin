@@ -1194,6 +1194,11 @@ void ActionEditorDialog::applyClipToForm()
     setSpinEnabled(intensity_spin_, ok);
     setSpinEnabled(min_intensity_spin_, ok);
     setSpinEnabled(max_intensity_spin_, ok);
+    setSpinEnabled(trail_spin_, ok);
+    if(blend_combo_)
+    {
+        blend_combo_->setEnabled(ok);
+    }
     setSpinEnabled(speed_spin_, ok);
     setSpinEnabled(period_spin_, ok);
     direction_combo_->setEnabled(ok);
@@ -1241,6 +1246,15 @@ void ActionEditorDialog::applyClipToForm()
     if(max_intensity_spin_)
     {
         max_intensity_spin_->setValue((int)std::lround(std::clamp(b->max_intensity, 0.0f, 1.0f) * 100.0f));
+    }
+    if(blend_combo_)
+    {
+        const int blend_idx = blend_combo_->findData((int)b->blend);
+        blend_combo_->setCurrentIndex(blend_idx >= 0 ? blend_idx : 0);
+    }
+    if(trail_spin_)
+    {
+        trail_spin_->setValue(std::clamp(b->trail_ms, 0, Action::kMaxTrailMs));
     }
     speed_spin_->setValue(b->speed);
     pulse_length_spin_->setValue((int)std::lround(std::clamp(b->pulse_length, 0.02f, 1.0f) * 100.0f));
@@ -1396,6 +1410,14 @@ void ActionEditorDialog::applyFormToSelectedClip()
     if(max_intensity_spin_)
     {
         b->max_intensity = max_intensity_spin_->value() / 100.0f;
+    }
+    if(blend_combo_)
+    {
+        b->blend = (Action::ClipBlend)blend_combo_->currentData().toInt();
+    }
+    if(trail_spin_)
+    {
+        b->trail_ms = trail_spin_->value();
     }
     b->speed = (float)speed_spin_->value();
     b->pulse_length = pulse_length_spin_->value() / 100.0f;

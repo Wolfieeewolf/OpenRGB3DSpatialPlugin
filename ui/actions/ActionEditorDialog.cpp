@@ -432,6 +432,44 @@ void ActionEditorDialog::buildUi()
     bright_form_ = bright_form;
     props_inner_layout->addWidget(bright_sec);
 
+    /* Layering: how this clip stacks on the tracks above it, and the light it leaves behind. */
+    auto* layer_sec = new EffectCollapsibleSection(QStringLiteral("Layering"));
+    layer_sec->setExpanded(true);
+    layer_sec->bodyLayout()->setSpacing(6);
+    layer_sec->bodyLayout()->setContentsMargins(2, 4, 2, 2);
+    blend_combo_ = new QComboBox();
+    blend_combo_->addItem(QStringLiteral("Normal"), (int)Action::ClipBlend::Normal);
+    blend_combo_->addItem(QStringLiteral("Add"), (int)Action::ClipBlend::Add);
+    blend_combo_->addItem(QStringLiteral("Screen"), (int)Action::ClipBlend::Screen);
+    blend_combo_->addItem(QStringLiteral("Lighten"), (int)Action::ClipBlend::Lighten);
+    blend_combo_->addItem(QStringLiteral("Multiply"), (int)Action::ClipBlend::Multiply);
+    blend_combo_->addItem(QStringLiteral("Darken"), (int)Action::ClipBlend::Darken);
+    blend_combo_->setToolTip(
+        QStringLiteral("How this clip combines with tracks above it in the list:\n"
+                       "Normal \u2014 covers what is below\n"
+                       "Add \u2014 light adds up, so flashes and hits punch through\n"
+                       "Screen \u2014 a softer add that does not blow out\n"
+                       "Lighten \u2014 the brighter colour wins\n"
+                       "Multiply \u2014 tints or dims what is below\n"
+                       "Darken \u2014 the darker colour wins (shadows, cut-outs)"));
+    trail_spin_ = new QSpinBox();
+    trail_spin_->setRange(0, Action::kMaxTrailMs);
+    trail_spin_->setSingleStep(50);
+    trail_spin_->setSuffix(QStringLiteral(" ms"));
+    trail_spin_->setSpecialValueText(QStringLiteral("Off"));
+    const auto trail_field = attachIntSpinSlider(trail_spin_,
+                                                 QStringLiteral("Afterglow: lights fade out over this time after the effect leaves them"),
+                                                 50,
+                                                 250);
+    auto* layer_form = new QFormLayout();
+    layer_form->setContentsMargins(0, 0, 0, 0);
+    layer_form->setSpacing(6);
+    layer_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    layer_form->addRow(QStringLiteral("Blend"), blend_combo_);
+    layer_form->addRow(QStringLiteral("Trail"), trail_field.first);
+    layer_sec->bodyLayout()->addLayout(layer_form);
+    props_inner_layout->addWidget(layer_sec);
+
     direction_section_ = new EffectCollapsibleSection(QStringLiteral("Wipe & travel"));
     static_cast<EffectCollapsibleSection*>(direction_section_)->setExpanded(true);
     static_cast<EffectCollapsibleSection*>(direction_section_)->bodyLayout()->setSpacing(6);
@@ -730,6 +768,8 @@ void ActionEditorDialog::buildUi()
     connect(intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(min_intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(max_intensity_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    connect(blend_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ActionEditorDialog::onClipFieldChanged);
+    connect(trail_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(speed_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     connect(pulse_length_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onClipFieldChanged);
     if(origin_ref_combo_)

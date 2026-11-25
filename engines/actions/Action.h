@@ -79,6 +79,23 @@ enum class AxisMode
     Custom,
 };
 
+/** How a clip's colour combines with the tracks painted before it this frame. */
+enum class ClipBlend
+{
+    Normal,   // replace what is below (classic behaviour)
+    Add,      // light adds up: flashes and hits punch through
+    Screen,   // soft add, never blows out as hard as Add
+    Lighten,  // brightest channel wins
+    Multiply, // tint / dim what is below
+    Darken,   // darkest channel wins (shadows, cut-outs)
+};
+
+/** Longest light trail a clip may leave behind (ms). */
+constexpr int kMaxTrailMs = 10000;
+
+const char* ClipBlendToString(ClipBlend blend);
+bool ClipBlendFromString(const std::string& s, ClipBlend* out);
+
 struct Target
 {
     TargetKind kind = TargetKind::All;
@@ -177,6 +194,10 @@ struct Clip
     std::string media_path;
     std::string media_text;
     bool media_scroll = false;
+    /** Layering: how this clip combines with lower tracks. */
+    ClipBlend blend = ClipBlend::Normal;
+    /** Afterglow: lights this clip touched fade out over this many ms (0 = cut instantly). */
+    int trail_ms = 0;
 };
 
 /** Timing marker on the pack timeline (a beat, a cue). Authoring aid only: playback ignores it. */

@@ -190,6 +190,8 @@ private:
     QSpinBox* intensity_spin_ = nullptr;
     QSpinBox* min_intensity_spin_ = nullptr;
     QSpinBox* max_intensity_spin_ = nullptr;
+    QComboBox* blend_combo_ = nullptr;
+    QSpinBox* trail_spin_ = nullptr;
     QDoubleSpinBox* speed_spin_ = nullptr;
     QSpinBox* pulse_length_spin_ = nullptr;
     QComboBox* origin_ref_combo_ = nullptr;

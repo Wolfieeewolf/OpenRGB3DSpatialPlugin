@@ -50,6 +50,18 @@ void ApplyColorToMappedLed(const LEDPosition3D& led,
                            RGBColor color,
                            std::unordered_set<RGBControllerInterface*>* touched);
 
+/** Write one clip's colour for an LED: blend over what lower tracks painted this frame,
+    record its afterglow, and push the result to the mapped controller. */
+void PaintClipLed(LEDPosition3D& led,
+                  RGBControllerInterface* fallback_controller,
+                  const Clip& clip,
+                  RGBColor color,
+                  int local_ms,
+                  std::unordered_set<RGBControllerInterface*>* touched);
+
+/** Afterglow left on an LED at local_ms (black when none). Clears expired or rewound trails. */
+RGBColor TrailGlowAt(LEDPosition3D& led, int local_ms);
+
 struct SampleBounds
 {
     float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;

@@ -491,6 +491,20 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             }
             for(LEDPosition3D& led : transform->led_positions)
             {
+                /* Afterglow from trail clips sits under this frame's colour (brightest wins). */
+                const RGBColor glow = applier_detail::TrailGlowAt(led, local_ms);
+                if(glow != off)
+                {
+                    const RGBColor lit = ToRGBColor(std::max(RGBGetRValue(led.preview_color), RGBGetRValue(glow)),
+                                                    std::max(RGBGetGValue(led.preview_color), RGBGetGValue(glow)),
+                                                    std::max(RGBGetBValue(led.preview_color), RGBGetBValue(glow)));
+                    if(lit != led.preview_color)
+                    {
+                        led.preview_color = lit;
+                        applier_detail::ApplyColorToMappedLed(led, transform->controller, lit, &touched);
+                    }
+                    continue;
+                }
                 if(led.preview_color != off)
                 {
                     continue;

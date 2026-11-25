@@ -9,6 +9,7 @@
 #include "ActionRibbonField.h"
 #include "ActionVolumeField.h"
 #include "ControllerLayout3D.h"
+#include "EffectInstance3D.h"
 #include "Geometry3DUtils.h"
 #include "SpatialEffect3D.h"
 #include "ZoneManager3D.h"
@@ -125,6 +126,81 @@ void ApplyColorToMappedLed(const LEDPosition3D& led,
     }
     mapping->SetColor(global_idx, color);
     touched->insert(mapping);
+}
+
+namespace
+{
+
+BlendMode StackBlendFor(ClipBlend blend)
+{
+    switch(blend)
+    {
+        case ClipBlend::Add:      return BlendMode::ADD;
+        case ClipBlend::Screen:   return BlendMode::SCREEN;
+        case ClipBlend::Lighten:  return BlendMode::MAX;
+        case ClipBlend::Multiply: return BlendMode::MULTIPLY;
+        case ClipBlend::Darken:   return BlendMode::MIN;
+        case ClipBlend::Normal:
+        default:                  return BlendMode::REPLACE;
+    }
+}
+
+RGBColor ScaleColor(RGBColor c, float k)
+{
+    k = std::clamp(k, 0.0f, 1.0f);
+    return ToRGBColor((int)std::lround(RGBGetRValue(c) * k),
+                      (int)std::lround(RGBGetGValue(c) * k),
+                      (int)std::lround(RGBGetBValue(c) * k));
+}
+
+RGBColor MaxColor(RGBColor a, RGBColor b)
+{
+    return ToRGBColor(std::max(RGBGetRValue(a), RGBGetRValue(b)),
+                      std::max(RGBGetGValue(a), RGBGetGValue(b)),
+                      std::max(RGBGetBValue(a), RGBGetBValue(b)));
+}
+
+} // namespace
+
+RGBColor TrailGlowAt(LEDPosition3D& led, int local_ms)
+{
+    if(led.trail_ms <= 0)
+    {
+        return ToRGBColor(0, 0, 0);
+    }
+    const int age = local_ms - led.trail_start_ms;
+    /* Rewound (seek back, loop wrap, cue restart) or fully faded: drop the trail. */
+    if(age < 0 || age >= led.trail_ms)
+    {
+        led.trail_ms = 0;
+        led.trail_color = ToRGBColor(0, 0, 0);
+        return led.trail_color;
+    }
+    /* Squared falloff: bright right behind the head, a long soft tail. */
+    const float k = 1.0f - (float)age / (float)led.trail_ms;
+    return ScaleColor(led.trail_color, k * k);
+}
+
+void PaintClipLed(LEDPosition3D& led,
+                  RGBControllerInterface* fallback_controller,
+                  const Clip& clip,
+                  RGBColor color,
+                  int local_ms,
+                  std::unordered_set<RGBControllerInterface*>* touched)
+{
+    if(clip.trail_ms > 0)
+    {
+        /* Keep whichever is brighter: the fading tail or this frame's colour. */
+        const RGBColor glow = MaxColor(TrailGlowAt(led, local_ms), color);
+        led.trail_color = glow;
+        led.trail_start_ms = local_ms;
+        led.trail_ms = std::clamp(clip.trail_ms, 1, kMaxTrailMs);
+    }
+    const RGBColor out = (clip.blend == ClipBlend::Normal)
+        ? color
+        : BlendColors(led.preview_color, color, StackBlendFor(clip.blend));
+    led.preview_color = out;
+    ApplyColorToMappedLed(led, fallback_controller, out, touched);
 }
 
 void ExpandBounds(SampleBounds* b, const Vector3D& p)
@@ -336,8 +412,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                     (int)std::lround(std::clamp(g * intensity, 0.0f, 1.0f) * 255.0f),
                     (int)std::lround(std::clamp(b * intensity, 0.0f, 1.0f) * 255.0f));
                 LEDPosition3D* led = matching[(size_t)i];
-                led->preview_color = color;
-                ApplyColorToMappedLed(*led, transform->controller, color, touched);
+                PaintClipLed(*led, transform->controller, *top, color, local_ms, touched);
                 ++painted;
             }
             return painted;
@@ -404,8 +479,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                     (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 1u] * intensity, 0.0f, 1.0f) * 255.0f),
                     (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 2u] * intensity, 0.0f, 1.0f) * 255.0f));
                 LEDPosition3D* led = matching[(size_t)i];
-                led->preview_color = color;
-                ApplyColorToMappedLed(*led, transform->controller, color, touched);
+                PaintClipLed(*led, transform->controller, *top, color, local_ms, touched);
                 ++painted;
             }
             return painted;
@@ -472,8 +546,7 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
         {
             continue;
         }
-        led->preview_color = color;
-        ApplyColorToMappedLed(*led, transform->controller, color, touched);
+        PaintClipLed(*led, transform->controller, *top, color, local_ms, touched);
         ++painted;
     }
     return painted;

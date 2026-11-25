@@ -35,6 +35,10 @@ struct LEDPosition3D
     Vector3D        world_position;
     Vector3D        room_position;
     RGBColor        preview_color;
+    /* Action Editor afterglow: colour at trail_start_ms, fading to black over trail_ms. */
+    RGBColor        trail_color = 0;
+    int             trail_ms = 0;
+    int             trail_start_ms = 0;
 };
 
 class VirtualController3D;

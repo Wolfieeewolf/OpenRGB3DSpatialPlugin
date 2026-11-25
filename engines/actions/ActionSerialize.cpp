@@ -337,6 +337,14 @@ nlohmann::json ToJson(const Pack& pack)
             }
             bj["period_ms"] = clip.period_ms;
             bj["reverse"] = clip.reverse;
+            if(clip.blend != ClipBlend::Normal)
+            {
+                bj["blend"] = ClipBlendToString(clip.blend);
+            }
+            if(clip.trail_ms > 0)
+            {
+                bj["trail_ms"] = clip.trail_ms;
+            }
             if(clip.flip_h)
             {
                 bj["flip_h"] = true;
@@ -563,6 +571,18 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             clip.origin_offset_z = std::clamp(bj.value("origin_offset_z", 0.0f), -100.0f, 100.0f);
             clip.effect_size = std::clamp(bj.value("effect_size", 1.0f), 0.05f, 2.0f);
             clip.reverse = bj.value("reverse", false);
+            if(bj.contains("blend") && bj["blend"].is_string())
+            {
+                ClipBlend blend = ClipBlend::Normal;
+                if(ClipBlendFromString(bj["blend"].get<std::string>(), &blend))
+                {
+                    clip.blend = blend;
+                }
+            }
+            if(bj.contains("trail_ms") && bj["trail_ms"].is_number())
+            {
+                clip.trail_ms = std::clamp(bj["trail_ms"].get<int>(), 0, kMaxTrailMs);
+            }
             clip.flip_h = bj.value("flip_h", false);
             clip.flip_v = bj.value("flip_v", false);
             clip.rotate_quarters = bj.value("rotate_quarters", 0) % 4;

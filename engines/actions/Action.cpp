@@ -256,6 +256,35 @@ int DirectionPreferredAxis(Direction dir)
     }
 }
 
+const char* ClipBlendToString(ClipBlend blend)
+{
+    switch(blend)
+    {
+        case ClipBlend::Add:      return "add";
+        case ClipBlend::Screen:   return "screen";
+        case ClipBlend::Lighten:  return "lighten";
+        case ClipBlend::Multiply: return "multiply";
+        case ClipBlend::Darken:   return "darken";
+        case ClipBlend::Normal:
+        default:                  return "normal";
+    }
+}
+
+bool ClipBlendFromString(const std::string& s, ClipBlend* out)
+{
+    if(!out)
+    {
+        return false;
+    }
+    if(s == "normal")   { *out = ClipBlend::Normal;   return true; }
+    if(s == "add")      { *out = ClipBlend::Add;      return true; }
+    if(s == "screen")   { *out = ClipBlend::Screen;   return true; }
+    if(s == "lighten")  { *out = ClipBlend::Lighten;  return true; }
+    if(s == "multiply") { *out = ClipBlend::Multiply; return true; }
+    if(s == "darken")   { *out = ClipBlend::Darken;   return true; }
+    return false;
+}
+
 void EnsureClipGradient(Clip* clip)
 {
     if(!clip || !clip->gradient.empty())
