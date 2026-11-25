@@ -2,6 +2,7 @@
 
 #include "ActionScript.h"
 #include "ActionBuiltinGpu.h"
+#include "ActionScriptGpu.h"
 #include "ActionDetail.h"
 #include "ActionMedia.h"
 #include "ActionParticleField.h"
@@ -13,6 +14,7 @@
 #include <cmath>
 #include <fstream>
 #include <locale>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
@@ -79,6 +81,8 @@ struct Program
     /** Ribbon/tube mode (`ribbons:` header) — GPGPU volumeMain; empty = off. */
     std::string ribbons;
     std::vector<std::string> aliases;
+    /** Fragment shader translated from the body at load; null = CPU only. */
+    std::shared_ptr<const std::string> gpu_source;
 };
 
 std::unordered_map<std::string, Program> g_programs;
@@ -599,6 +603,519 @@ std::vector<Tok> Tokenize(const std::string& body)
     return out;
 }
 
+/* ---------------------------------------------------------------------------
+ * .fx -> GLSL translator. Runs once per effect file at load. The generated
+ * fragment shader evaluates the script for every LED in one draw (one texel per
+ * LED) with the same semantics as the CPU Machine: float maths, divide-by-zero = 0,
+ * C fmod, the same integer hashes and noise, the same gradient rounding. Scripts
+ * that call field / particle / ribbon samplers or sample_axis stay on the CPU.
+ * ------------------------------------------------------------------------- */
+
+const char* const kGpuReserved[] = {
+    "progress", "axis", "time_ms", "start_ms", "speed", "period_ms", "period_progress",
+    "intensity", "min_intensity", "max_intensity", "pulse", "seed", "x", "y", "z",
+    "nx", "ny", "nz", "radius", "height", "span_x", "span_y", "span_z",
+    "dx", "dy", "dz", "invert", "local_ms", "stops",
+    "ox", "oy", "oz", "effect_size",
+};
+
+/* Per-LED inputs, 20 floats = 5 RGBA32F texels per LED (see GpuLedInput).
+   Slot 16 is sample_axis() precomputed on the CPU (it needs the clip's bounds). */
+const char* const kGpuLedAttrs[16] = {
+    "axis", "seed", "x", "y", "z", "nx", "ny", "nz",
+    "radius", "height", "span_x", "span_y", "span_z", "dx", "dy", "dz",
+};
+
+/* Per-clip scalars, uploaded as u_s[] in this order (see RunBatchGpu). */
+const char* const kGpuClipScalars[] = {
+    "progress", "time_ms", "start_ms", "speed", "period_ms", "period_progress",
+    "intensity", "min_intensity", "max_intensity", "pulse", "local_ms", "stops",
+    "invert", "ox", "oy", "oz", "effect_size",
+};
+constexpr int kGpuClipScalarCount = (int)(sizeof(kGpuClipScalars) / sizeof(kGpuClipScalars[0]));
+constexpr int kGpuMaxStops = 32;
+
+std::string GlslNumber(double v)
+{
+    std::ostringstream s;
+    s.imbue(std::locale::classic());
+    s.precision(9);
+    s << v;
+    std::string out = s.str();
+    if(out.find_first_of(".eE") == std::string::npos)
+    {
+        out += ".0";
+    }
+    return out;
+}
+
+struct GlslGen
+{
+    std::vector<Tok> toks;
+    size_t i = 0;
+    bool ok = true;
+    std::vector<std::string> vars;
+    std::string out;
+    int indent = 1;
+    int guard_id = 0;
+
+    const Tok& cur() const { return toks[std::min(i, toks.size() - 1)]; }
+    void next() { if(i + 1 < toks.size()) { ++i; } }
+    bool acceptSym(const char* s)
+    {
+        if(cur().kind == Tok::Sym && cur().text == s)
+        {
+            next();
+            return true;
+        }
+        return false;
+    }
+    bool acceptId(const char* s)
+    {
+        if(cur().kind == Tok::Id && cur().text == s)
+        {
+            next();
+            return true;
+        }
+        return false;
+    }
+    void line(const std::string& s)
+    {
+        out += std::string((size_t)indent * 4u, ' ');
+        out += s;
+        out += '\n';
+    }
+    std::string var(const std::string& name)
+    {
+        if(std::find(vars.begin(), vars.end(), name) == vars.end())
+        {
+            vars.push_back(name);
+        }
+        return "s_" + name;
+    }
+    bool atStop() const
+    {
+        return cur().kind == Tok::End
+            || (cur().kind == Tok::Id && (cur().text == "end" || cur().text == "else" || cur().text == "elif"));
+    }
+
+    std::string expr() { return orExpr(); }
+
+    std::string orExpr()
+    {
+        std::string l = andExpr();
+        while(acceptSym("||"))
+        {
+            l = "fx_or(" + l + ", " + andExpr() + ")";
+        }
+        return l;
+    }
+
+    std::string andExpr()
+    {
+        std::string l = cmpExpr();
+        while(acceptSym("&&"))
+        {
+            l = "fx_and(" + l + ", " + cmpExpr() + ")";
+        }
+        return l;
+    }
+
+    std::string cmpExpr()
+    {
+        std::string l = addExpr();
+        const char* ops[] = {"<=", ">=", "==", "!=", "<", ">"};
+        for(const char* op : ops)
+        {
+            if(acceptSym(op))
+            {
+                const std::string r = addExpr();
+                return "((" + l + ") " + op + " (" + r + ") ? 1.0 : 0.0)";
+            }
+        }
+        return l;
+    }
+
+    std::string addExpr()
+    {
+        std::string l = mulExpr();
+        while(cur().kind == Tok::Sym && (cur().text == "+" || cur().text == "-"))
+        {
+            const std::string op = cur().text;
+            next();
+            l = "(" + l + " " + op + " " + mulExpr() + ")";
+        }
+        return l;
+    }
+
+    std::string mulExpr()
+    {
+        std::string l = unaryExpr();
+        while(cur().kind == Tok::Sym && (cur().text == "*" || cur().text == "/"))
+        {
+            const bool div = cur().text == "/";
+            next();
+            const std::string r = unaryExpr();
+            l = div ? ("fx_div(" + l + ", " + r + ")") : ("(" + l + " * " + r + ")");
+        }
+        return l;
+    }
+
+    std::string unaryExpr()
+    {
+        if(acceptSym("-"))
+        {
+            return "(-" + unaryExpr() + ")";
+        }
+        if(acceptSym("!"))
+        {
+            return "fx_not(" + unaryExpr() + ")";
+        }
+        return primary();
+    }
+
+    std::string primary()
+    {
+        if(cur().kind == Tok::Num)
+        {
+            const std::string n = GlslNumber(cur().n);
+            next();
+            return n;
+        }
+        if(acceptSym("("))
+        {
+            const std::string e = expr();
+            acceptSym(")");
+            return "(" + e + ")";
+        }
+        if(cur().kind != Tok::Id)
+        {
+            ok = false;
+            return "0.0";
+        }
+        const std::string name = cur().text;
+        next();
+        if(!acceptSym("("))
+        {
+            return var(name);
+        }
+        if(name == "paint")
+        {
+            const std::string a = expr();
+            acceptSym(")");
+            return "fx_paint(" + a + ")";
+        }
+        if(name == "paint_stop" || name == "swatch")
+        {
+            const std::string a = expr();
+            acceptSym(")");
+            return "fx_paint_stop(" + a + ")";
+        }
+        if(name == "paint_mix")
+        {
+            const std::string a = expr();
+            acceptSym(",");
+            const std::string b = expr();
+            acceptSym(",");
+            const std::string c = expr();
+            acceptSym(")");
+            return "fx_paint_mix(" + a + ", " + b + ", " + c + ")";
+        }
+        std::vector<std::string> args;
+        if(!acceptSym(")"))
+        {
+            args.push_back(expr());
+            while(acceptSym(","))
+            {
+                args.push_back(expr());
+            }
+            acceptSym(")");
+        }
+        struct FnMap { const char* name; const char* glsl; int arity; };
+        static const FnMap kFns[] = {
+            {"sin", "sin", 1}, {"cos", "cos", 1}, {"abs", "abs", 1},
+            {"min", "min", 2}, {"max", "max", 2}, {"clamp", "fx_clamp", 3},
+            {"floor", "floor", 1}, {"sqrt", "fx_sqrt", 1}, {"atan2", "fx_atan2", 2},
+            {"fmod", "fx_fmod", 2}, {"fract", "fract", 1},
+            {"band", "fx_band", 2}, {"shr", "fx_shr", 2}, {"xor", "fx_xor", 2},
+            {"hash", "fx_hash", 3}, {"hash_phase", "fx_hash_phase", 3}, {"hash_byte", "fx_hash_byte", 4},
+            {"hash01", "fx_hash01", 1}, {"hash01_mix", "fx_hash01_mix", 3}, {"noise", "fx_noise", 3},
+            {"axis_x", "fx_axis_x", 0}, {"axis_y", "fx_axis_y", 0}, {"axis_z", "fx_axis_z", 0},
+            {"sample_axis", "fx_sample_axis", 0},
+        };
+        for(const FnMap& f : kFns)
+        {
+            if(name != f.name)
+            {
+                continue;
+            }
+            std::string call = std::string(f.glsl) + "(";
+            for(int k = 0; k < f.arity; ++k)
+            {
+                if(k > 0)
+                {
+                    call += ", ";
+                }
+                call += (k < (int)args.size()) ? args[(size_t)k] : std::string("0.0");
+            }
+            return call + ")";
+        }
+        /* field_*, particle_*, ribbon_* and unknown names: CPU only. */
+        ok = false;
+        return "0.0";
+    }
+
+    void block()
+    {
+        while(ok && !atStop())
+        {
+            stmt();
+        }
+    }
+
+    void ifTail()
+    {
+        const std::string c = expr();
+        line("if((" + c + ") != 0.0) {");
+        ++indent;
+        block();
+        --indent;
+        if(acceptId("elif"))
+        {
+            line("} else {");
+            ++indent;
+            ifTail();
+            --indent;
+            line("}");
+            return;
+        }
+        if(acceptId("else"))
+        {
+            line("} else {");
+            ++indent;
+            block();
+            --indent;
+        }
+        line("}");
+        acceptId("end");
+    }
+
+    void stmt()
+    {
+        if(acceptId("off"))
+        {
+            line("g_off = true;");
+            line("return;");
+            return;
+        }
+        if(acceptId("if"))
+        {
+            ifTail();
+            return;
+        }
+        if(acceptId("while"))
+        {
+            const std::string c = expr();
+            const std::string g = "g_loop" + std::to_string(guard_id++);
+            line("{");
+            ++indent;
+            line("int " + g + " = 0;");
+            line("while((" + c + ") != 0.0 && " + g + " < 4096) {");
+            ++indent;
+            line(g + "++;");
+            block();
+            --indent;
+            line("}");
+            --indent;
+            line("}");
+            acceptId("end");
+            return;
+        }
+        if(cur().kind == Tok::Id)
+        {
+            const size_t ahead = std::min(i + 1, toks.size() - 1);
+            if(toks[ahead].kind == Tok::Sym && toks[ahead].text == "(")
+            {
+                line(primary() + ";");
+                return;
+            }
+            const std::string name = cur().text;
+            next();
+            if(!acceptSym("="))
+            {
+                ok = false;
+                return;
+            }
+            const std::string target = var(name);
+            line(target + " = " + expr() + ";");
+            return;
+        }
+        ok = false;
+        next();
+    }
+};
+
+const char* kGpuPrelude = R"GLSL(#version 410 core
+uniform sampler2D u_attr;
+uniform int u_width;
+uniform int u_count;
+uniform float u_s[17];
+uniform vec3 u_axis_vec;
+uniform vec3 u_color;
+uniform float u_mod;
+uniform int u_nstops;
+uniform float u_stop_pos[32];
+uniform vec3 u_stop_col[32];
+out vec4 frag_color;
+
+vec3 g_col;
+bool g_off;
+float g_sample_axis;
+
+float fx_div(float a, float b) { return b == 0.0 ? 0.0 : a / b; }
+float fx_not(float a) { return a == 0.0 ? 1.0 : 0.0; }
+float fx_and(float a, float b) { return (a != 0.0 && b != 0.0) ? 1.0 : 0.0; }
+float fx_or(float a, float b) { return (a != 0.0 || b != 0.0) ? 1.0 : 0.0; }
+float fx_clamp(float v, float lo, float hi) { return min(max(v, lo), hi); }
+float fx_sqrt(float a) { return sqrt(max(0.0, a)); }
+float fx_atan2(float y, float x) { return (x == 0.0 && y == 0.0) ? 0.0 : atan(y, x); }
+float fx_fmod(float a, float m) { return m == 0.0 ? 0.0 : a - m * trunc(a / m); }
+uint fx_u(float v) { return v < 0.0 ? uint(int(v)) : uint(v); }
+float fx_band(float a, float b) { return float(fx_u(a) & fx_u(b)); }
+float fx_shr(float a, float b) { return float(fx_u(a) >> fx_u(b)); }
+float fx_xor(float a, float b) { return float(fx_u(a) ^ fx_u(b)); }
+uint fx_hashled(float led, float ms, float period)
+{
+    int p = max(1, int(period));
+    uint x = uint(int(led)) * 374761393u + uint(int(ms) / p) * 668265263u;
+    x = (x ^ (x >> 13u)) * 1274126177u;
+    return x ^ (x >> 16u);
+}
+float fx_hash(float a, float b, float c) { return float(fx_hashled(a, b, c)); }
+float fx_hash_phase(float a, float b, float c) { return float(fx_hashled(a, b, c) & 0xFFFFu) / 65535.0; }
+float fx_hash_byte(float a, float b, float c, float d) { return float((fx_hashled(a, b, c) >> fx_u(d)) & 0xFFu) / 255.0; }
+float fx_hash01u(uint h)
+{
+    h ^= h >> 16u;
+    h *= 0x7feb352du;
+    h ^= h >> 15u;
+    h *= 0x846ca68bu;
+    h ^= h >> 16u;
+    return float(h & 0xFFFFFFu) / 16777215.0;
+}
+float fx_hash01(float a) { return fx_hash01u(fx_u(a)); }
+float fx_hash01_mix(float a, float b, float c) { return fx_hash01u(fx_u(a) * fx_u(b) + fx_u(c)); }
+float fx_corner(int x, int y, int z)
+{
+    return fx_hash01u((uint(x) * 73856093u) ^ (uint(y) * 19349663u) ^ (uint(z) * 83492791u));
+}
+float fx_noise(float x, float y, float z)
+{
+    int ix = int(floor(x));
+    int iy = int(floor(y));
+    int iz = int(floor(z));
+    float fx = x - float(ix);
+    float fy = y - float(iy);
+    float fz = z - float(iz);
+    float sx = fx * fx * (3.0 - 2.0 * fx);
+    float sy = fy * fy * (3.0 - 2.0 * fy);
+    float sz = fz * fz * (3.0 - 2.0 * fz);
+    float x00 = mix(fx_corner(ix, iy, iz), fx_corner(ix + 1, iy, iz), sx);
+    float x10 = mix(fx_corner(ix, iy + 1, iz), fx_corner(ix + 1, iy + 1, iz), sx);
+    float x01 = mix(fx_corner(ix, iy, iz + 1), fx_corner(ix + 1, iy, iz + 1), sx);
+    float x11 = mix(fx_corner(ix, iy + 1, iz + 1), fx_corner(ix + 1, iy + 1, iz + 1), sx);
+    return mix(mix(x00, x10, sy), mix(x01, x11, sy), sz);
+}
+float fx_axis_x() { return u_axis_vec.x; }
+float fx_axis_y() { return u_axis_vec.y; }
+float fx_axis_z() { return u_axis_vec.z; }
+float fx_sample_axis() { return g_sample_axis; }
+vec3 fx_lerp(vec3 a, vec3 b, float t)
+{
+    t = clamp(t, 0.0, 1.0);
+    return floor(a * (1.0 - t) + b * t + 0.5);
+}
+vec3 fx_grad(float t)
+{
+    t = clamp(t, 0.0, 1.0);
+    int n = max(1, u_nstops);
+    if(n == 1 || t <= u_stop_pos[0]) { return u_stop_col[0]; }
+    if(t >= u_stop_pos[n - 1]) { return u_stop_col[n - 1]; }
+    for(int i = 1; i < 32; ++i)
+    {
+        if(i >= n) { break; }
+        if(t <= u_stop_pos[i])
+        {
+            float span = max(1e-6, u_stop_pos[i] - u_stop_pos[i - 1]);
+            return fx_lerp(u_stop_col[i - 1], u_stop_col[i], (t - u_stop_pos[i - 1]) / span);
+        }
+    }
+    return u_stop_col[n - 1];
+}
+float fx_paint(float t) { g_col = fx_grad(t); return 0.0; }
+float fx_paint_stop(float x)
+{
+    int n = max(1, u_nstops);
+    int idx = int(sign(x) * floor(abs(x) + 0.5));
+    idx = idx - n * int(floor(float(idx) / float(n)));
+    g_col = u_stop_col[clamp(idx, 0, n - 1)];
+    return 0.0;
+}
+float fx_paint_mix(float t0, float t1, float k) { g_col = fx_lerp(fx_grad(t0), fx_grad(t1), k); return 0.0; }
+)GLSL";
+
+/** Full fragment shader for one script, or empty when it cannot run on the GPU. */
+std::string TranslateToGlsl(const std::string& body)
+{
+    GlslGen gen;
+    gen.toks = Tokenize(body);
+    for(const char* name : kGpuReserved)
+    {
+        gen.var(name);
+    }
+    while(gen.ok && gen.cur().kind != Tok::End)
+    {
+        gen.stmt();
+    }
+    if(!gen.ok)
+    {
+        return std::string();
+    }
+    std::string src = kGpuPrelude;
+    for(const std::string& v : gen.vars)
+    {
+        src += "float s_" + v + " = 0.0;\n";
+    }
+    src += "\nvoid fxMain()\n{\n" + gen.out + "}\n\n";
+    src += "void main()\n{\n";
+    src += "    int ix = int(floor(gl_FragCoord.x));\n";
+    src += "    int iy = int(floor(gl_FragCoord.y));\n";
+    src += "    if(iy * u_width + ix >= u_count) { frag_color = vec4(0.0); return; }\n";
+    src += "    vec4 a0 = texelFetch(u_attr, ivec2(ix * 5 + 0, iy), 0);\n";
+    src += "    vec4 a1 = texelFetch(u_attr, ivec2(ix * 5 + 1, iy), 0);\n";
+    src += "    vec4 a2 = texelFetch(u_attr, ivec2(ix * 5 + 2, iy), 0);\n";
+    src += "    vec4 a3 = texelFetch(u_attr, ivec2(ix * 5 + 3, iy), 0);\n";
+    src += "    g_sample_axis = texelFetch(u_attr, ivec2(ix * 5 + 4, iy), 0).x;\n";
+    const char* comps[16] = {"a0.x", "a0.y", "a0.z", "a0.w", "a1.x", "a1.y", "a1.z", "a1.w",
+                             "a2.x", "a2.y", "a2.z", "a2.w", "a3.x", "a3.y", "a3.z", "a3.w"};
+    for(int k = 0; k < 16; ++k)
+    {
+        src += std::string("    s_") + kGpuLedAttrs[k] + " = " + comps[k] + ";\n";
+    }
+    for(int k = 0; k < kGpuClipScalarCount; ++k)
+    {
+        src += std::string("    s_") + kGpuClipScalars[k] + " = u_s[" + std::to_string(k) + "];\n";
+    }
+    src += "    g_col = u_color;\n";
+    src += "    g_off = false;\n";
+    src += "    fxMain();\n";
+    src += "    if(g_off) { frag_color = vec4(0.0); return; }\n";
+    src += "    float k = clamp(s_intensity * u_mod, 0.0, 1.0);\n";
+    src += "    frag_color = vec4(floor(g_col * k + 0.5) / 255.0, 1.0);\n";
+    src += "}\n";
+    return src;
+}
+
 bool Compile(const std::string& body, Program* prog)
 {
     Parser p;
@@ -1041,6 +1558,14 @@ void ReadProgram(const filesystem::path& file, const std::string& section)
     {
         return;
     }
+    if(prog.field_shader.empty() && prog.particles.empty() && prog.ribbons.empty())
+    {
+        std::string glsl = TranslateToGlsl(body);
+        if(!glsl.empty())
+        {
+            prog.gpu_source = std::make_shared<const std::string>(std::move(glsl));
+        }
+    }
     const std::string id = EffectKey(file);
     for(const std::string& alias : prog.aliases)
     {
@@ -1311,6 +1836,114 @@ bool Run(const std::string& id, LedView* led)
         led->intensity = (float)m.vars[(size_t)ii];
     }
     led->color = m.color;
+    return true;
+}
+
+bool GpuCapable(const std::string& id)
+{
+    if(builtin_gpu::Uses(id))
+    {
+        return false;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_mu);
+        const Program* prog = FindProgram(id);
+        if(!prog || !prog->gpu_source)
+        {
+            return false;
+        }
+    }
+    return script_gpu::Available();
+}
+
+bool RunBatchGpu(const std::string& id,
+                 const Clip& clip,
+                 int local_ms,
+                 const std::vector<GpuLedInput>& leds,
+                 std::vector<RGBColor>* colors,
+                 std::vector<unsigned char>* lit)
+{
+    if(leds.empty() || !colors || !lit)
+    {
+        return false;
+    }
+    std::shared_ptr<const std::string> source;
+    {
+        std::lock_guard<std::mutex> lock(g_mu);
+        const Program* prog = FindProgram(id);
+        if(!prog || !prog->gpu_source)
+        {
+            return false;
+        }
+        source = prog->gpu_source;
+    }
+
+    /* Same per-clip inputs as Run(), in kGpuClipScalars order. */
+    script_gpu::Uniforms u;
+    const ClipOrigin01 origin = GetActiveClipOrigin01();
+    const float scalars[kGpuClipScalarCount] = {
+        ClipSweepProgress(clip, local_ms),
+        (float)std::max(0, GpuAnimMsOr(local_ms) - clip.start_ms),
+        (float)clip.start_ms,
+        clip.speed,
+        (float)clip.period_ms,
+        ClipPeriodProgress(clip, local_ms),
+        std::clamp(clip.intensity, 0.0f, 1.0f),
+        clip.min_intensity,
+        clip.max_intensity,
+        clip.pulse_length,
+        (float)local_ms,
+        (float)UniqueGradientStopCount(clip),
+        DirectionInvertsAxis(clip.direction) ? 1.0f : 0.0f,
+        origin.ox,
+        origin.oy,
+        origin.oz,
+        origin.size,
+    };
+    std::copy(scalars, scalars + kGpuClipScalarCount, u.scalars);
+    AxisUnitVector(clip, &u.axis_vec[0], &u.axis_vec[1], &u.axis_vec[2]);
+    u.color[0] = (float)RGBGetRValue(clip.color);
+    u.color[1] = (float)RGBGetGValue(clip.color);
+    u.color[2] = (float)RGBGetBValue(clip.color);
+    /* ModulateClipIntensity as a factor: the shader clamps (script intensity * factor). */
+    u.intensity_mod = 1.0f;
+    if(!clip.intensity_curve.empty())
+    {
+        u.intensity_mod *= SampleCurve(clip.intensity_curve, ClipSpanProgress(clip, local_ms));
+    }
+    if(!clip.period_curve.empty())
+    {
+        u.intensity_mod *= SampleCurve(clip.period_curve, ClipPeriodProgress(clip, local_ms));
+    }
+    Clip stops = clip;
+    EnsureClipGradient(&stops);
+    if(stops.gradient.empty())
+    {
+        stops.gradient.push_back({0.0f, clip.color});
+    }
+    u.stop_count = (int)std::min<size_t>(stops.gradient.size(), (size_t)kGpuMaxStops);
+    for(int k = 0; k < u.stop_count; ++k)
+    {
+        const GradientStop& s = stops.gradient[(size_t)k];
+        u.stop_pos[k] = s.pos;
+        u.stop_col[k * 3 + 0] = (float)RGBGetRValue(s.color);
+        u.stop_col[k * 3 + 1] = (float)RGBGetGValue(s.color);
+        u.stop_col[k * 3 + 2] = (float)RGBGetBValue(s.color);
+    }
+
+    std::vector<unsigned char> rgba(leds.size() * 4u);
+    if(!script_gpu::Run(source, u, leds.front().v, (int)leds.size(), rgba.data()))
+    {
+        return false;
+    }
+    colors->resize(leds.size());
+    lit->resize(leds.size());
+    for(size_t i = 0; i < leds.size(); ++i)
+    {
+        const unsigned char* px = rgba.data() + i * 4u;
+        (*colors)[i] = ToRGBColor(px[0], px[1], px[2]);
+        (*lit)[i] = px[3] > 127 ? 1 : 0;
+    }
     return true;
 }
 

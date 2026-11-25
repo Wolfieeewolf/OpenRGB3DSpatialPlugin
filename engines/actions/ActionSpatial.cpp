@@ -753,4 +753,40 @@ bool EvaluateClipAtWorld(const Clip& clip,
     return true;
 }
 
+void BuildScriptInputAtWorld(const Clip& clip,
+                             float x, float y, float z,
+                             float min_x, float max_x,
+                             float min_y, float max_y,
+                             float min_z, float max_z,
+                             int seed,
+                             script::GpuLedInput* out)
+{
+    if(!out)
+    {
+        return;
+    }
+    WorldNorm s = MakeNormSample(x, y, z, min_x, max_x, min_y, max_y, min_z, max_z);
+    ApplyClipUvTransform(clip, &s.nx, &s.ny);
+    s.height = s.ny;
+    float* v = out->v;
+    v[0] = s.nx;
+    v[1] = (float)seed;
+    v[2] = x;
+    v[3] = y;
+    v[4] = z;
+    v[5] = s.nx;
+    v[6] = s.ny;
+    v[7] = s.nz;
+    v[8] = s.radius;
+    v[9] = s.height;
+    v[10] = s.span_x;
+    v[11] = s.span_y;
+    v[12] = s.span_z;
+    v[13] = s.nx - 0.5f;
+    v[14] = s.ny - 0.5f;
+    v[15] = s.nz - 0.5f;
+    /* sample_axis(): the CPU interpreter's FnSampleAxis for this LED. */
+    v[16] = ApplyClipAxisMirror(clip, SampleAxisPos(clip, x, y, z, min_x, max_x, min_y, max_y, min_z, max_z));
+}
+
 } // namespace Action

@@ -210,4 +210,24 @@ bool EvaluateClipAtLed(const Clip& clip,
     return EvaluateClipAtAxis(clip, local_ms, axis, led_index, out_color, out_intensity);
 }
 
+void BuildScriptInputAtAxis(const Clip& clip, float axis_pos, int seed, script::GpuLedInput* out)
+{
+    if(!out)
+    {
+        return;
+    }
+    if(script::UsesWorld(script::FileId(clip)))
+    {
+        /* Same fallback as EvaluateClipAtAxis: a world script on a strip samples along X. */
+        BuildScriptInputAtWorld(clip, std::clamp(axis_pos, 0.0f, 1.0f), 0.5f, 0.5f,
+                                0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, seed, out);
+        return;
+    }
+    *out = script::GpuLedInput{};
+    out->v[0] = ApplyClipAxisMirror(clip, axis_pos);
+    out->v[1] = (float)seed;
+    /* LedView on the axis path keeps x/y/z at 0 and bounds at 0..1. */
+    out->v[16] = ApplyClipAxisMirror(clip, SampleAxisPos(clip, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f));
+}
+
 } // namespace Action

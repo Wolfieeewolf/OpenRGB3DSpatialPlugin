@@ -41,6 +41,17 @@ struct LedView
     bool turned_off = false;
 };
 
+/** Per-LED script inputs for a GPU batch: axis, seed, x, y, z, nx, ny, nz, radius,
+    height, span_x, span_y, span_z, dx, dy, dz (defaults match LedView), then
+    sample_axis() and three spare slots. */
+struct GpuLedInput
+{
+    float v[20] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 0.5f, 0.5f,
+                   0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                   0.0f, 0.0f, 0.0f, 0.0f};
+};
+static_assert(sizeof(GpuLedInput) == sizeof(float) * 20, "GpuLedInput is uploaded as a float array");
+
 void SetDirectory(const filesystem::path& dir);
 void ReloadDirectory();
 bool Has(const std::string& id);
@@ -62,7 +73,32 @@ bool PreviewPulse(const std::string& id);
 bool AxisAngle(const std::string& id);
 bool Run(const std::string& id, LedView* led);
 
+/** True when this effect's script was translated to GLSL and the GPU is up. */
+bool GpuCapable(const std::string& id);
+
+/** Run the script for every LED in one GPU draw. colors are final (intensity and
+    curves applied, like Evaluate*); lit[i] = 0 where the script said `off`.
+    Returns false when the GPU path is unavailable: run the CPU path instead. */
+bool RunBatchGpu(const std::string& id,
+                 const Clip& clip,
+                 int local_ms,
+                 const std::vector<GpuLedInput>& leds,
+                 std::vector<RGBColor>* colors,
+                 std::vector<unsigned char>* lit);
+
 } // namespace script
+
+/** GPU batch inputs for one LED, filled exactly like EvaluateClipAtWorld fills LedView. */
+void BuildScriptInputAtWorld(const Clip& clip,
+                             float x, float y, float z,
+                             float min_x, float max_x,
+                             float min_y, float max_y,
+                             float min_z, float max_z,
+                             int seed,
+                             script::GpuLedInput* out);
+
+/** GPU batch inputs for one LED on the axis path (as EvaluateClipAtAxis). */
+void BuildScriptInputAtAxis(const Clip& clip, float axis_pos, int seed, script::GpuLedInput* out);
 
 void SetActionScriptDirectory(const filesystem::path& dir);
 void ReloadActionScripts();

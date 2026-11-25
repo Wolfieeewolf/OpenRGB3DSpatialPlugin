@@ -207,6 +207,7 @@ HEADERS += \
     engines/particle-field/ActionParticleField.h \
     engines/ribbon-field/ActionRibbonField.h \
     engines/actions/ActionBuiltinGpu.h \
+    engines/actions/ActionScriptGpu.h \
     engines/actions/ActionLibrary.h \
     engines/triggers/TriggerBinding.h \
     engines/triggers/TriggerSource.h \
@@ -414,6 +415,7 @@ SOURCES += \
     engines/particle-field/ActionParticleField.cpp \
     engines/ribbon-field/ActionRibbonField.cpp \
     engines/actions/ActionBuiltinGpu.cpp \
+    engines/actions/ActionScriptGpu.cpp \
     engines/actions/ActionApplier.cpp \
     engines/actions/ActionApplierMatch.cpp \
     engines/actions/ActionApplierSpatial.cpp \

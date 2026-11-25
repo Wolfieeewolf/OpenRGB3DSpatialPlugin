@@ -488,6 +488,71 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
         return 0;
     }
 
+    /* Script effects: build each LED's inputs exactly as the CPU branch below does,
+       then run the translated script for every LED in one GPU draw. Falls through to
+       the CPU interpreter if the GPU path is unavailable. */
+    if(top && !IsMediaClip(*top) && script::GpuCapable(script::FileId(*top)))
+    {
+        const std::string effect_id = script::FileId(*top);
+        const bool world_script = script::UsesWorld(effect_id);
+        std::vector<script::GpuLedInput> inputs(matching.size());
+        for(int i = 0; i < (int)matching.size(); ++i)
+        {
+            LEDPosition3D* led = matching[(size_t)i];
+            const int seed = (int)(led->zone_idx * 4096u + led->led_idx);
+            const Vector3D& p = sample_pos[(size_t)i];
+            script::GpuLedInput& in = inputs[(size_t)i];
+            if(use_sequence)
+            {
+                float axis = (*sequence_axes)[(size_t)i];
+                if(DirectionInvertsAxis(top->direction))
+                {
+                    axis = 1.0f - axis;
+                }
+                BuildScriptInputAtAxis(*top, axis, seed, &in);
+            }
+            else if(have_bounds && world_script)
+            {
+                BuildScriptInputAtWorld(*top, p.x, p.y, p.z, min_x, max_x, min_y, max_y, min_z, max_z, seed, &in);
+            }
+            else
+            {
+                float axis = 0.0f;
+                if(have_bounds)
+                {
+                    axis = EffectAxisAngle(ClipFileId(*top))
+                        ? SampleSpinAngle(*top, p.x, p.y, p.z, min_x, max_x, min_y, max_y, min_z, max_z)
+                        : SampleAxisPos(*top, p.x, p.y, p.z, min_x, max_x, min_y, max_y, min_z, max_z);
+                }
+                else
+                {
+                    axis = (matching.size() <= 1) ? 0.0f : (float)i / (float)(matching.size() - 1);
+                    if(DirectionInvertsAxis(top->direction))
+                    {
+                        axis = 1.0f - axis;
+                    }
+                }
+                BuildScriptInputAtAxis(*top, axis, seed, &in);
+            }
+        }
+        std::vector<RGBColor> colors;
+        std::vector<unsigned char> lit;
+        if(script::RunBatchGpu(effect_id, *top, local_ms, inputs, &colors, &lit))
+        {
+            int painted = 0;
+            for(int i = 0; i < (int)matching.size(); ++i)
+            {
+                if(!lit[(size_t)i])
+                {
+                    continue;
+                }
+                PaintClipLed(*matching[(size_t)i], transform->controller, *top, colors[(size_t)i], local_ms, touched);
+                ++painted;
+            }
+            return painted;
+        }
+    }
+
     int painted = 0;
     for(int i = 0; i < (int)matching.size(); ++i)
     {
