@@ -105,6 +105,10 @@ std::vector<Entry> Load(const filesystem::path& path)
         /* Builtins only — do not create curves.json until Upsert/Save. */
         return Defaults();
     }
+    if(file.size() > (qint64)Action::kMaxPackJsonBytes)
+    {
+        return Defaults();
+    }
     const QJsonArray arr = QJsonDocument::fromJson(file.readAll()).object().value(QStringLiteral("curves")).toArray();
     std::vector<Entry> entries;
     for(const QJsonValue& item : arr)

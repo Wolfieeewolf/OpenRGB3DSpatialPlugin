@@ -683,17 +683,14 @@ void ActionEditorDialog::updatePropVisibility()
     {
         placement_section_->setVisible(ok && needs_placement);
     }
-    if(min_intensity_row_)
+    if(bright_form_)
     {
-        min_intensity_row_->setVisible(ok);
+        bright_form_->setRowVisible(min_intensity_row_, ok);
+        bright_form_->setRowVisible(max_intensity_row_, ok);
     }
     if(min_intensity_spin_)
     {
         min_intensity_spin_->setEnabled(ok);
-    }
-    if(max_intensity_row_)
-    {
-        max_intensity_row_->setVisible(ok);
     }
     if(max_intensity_spin_)
     {

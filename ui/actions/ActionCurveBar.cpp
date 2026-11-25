@@ -2,6 +2,8 @@
 
 #include "ActionCurveBar.h"
 
+#include <QKeyEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 
@@ -12,15 +14,24 @@ ActionCurveBar::ActionCurveBar(QWidget* parent)
     : QWidget(parent)
 {
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
+    setContextMenuPolicy(Qt::CustomContextMenu);
     setMinimumHeight(72);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setToolTip(QStringLiteral("Drag points · double-click empty space to add · double-click a point to remove"));
+    setToolTip(QStringLiteral(
+        "Drag points to adjust · double-click empty space to add a point · double-click a point to remove.\n"
+        "Select a point then press Delete / Backspace to remove it. Right-click for the context menu."));
+    connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        showContextMenu(pos);
+    });
     points_ = {{0.0f, 1.0f}, {1.0f, 1.0f}};
 }
 
 void ActionCurveBar::setPoints(std::vector<Action::CurvePoint> points)
 {
     points_ = std::move(points);
+    drag_index_ = -1;
+    selected_index_ = -1;
     ensureEndpoints();
     sortPoints();
     update();
@@ -157,7 +168,8 @@ void ActionCurveBar::paintEvent(QPaintEvent*)
     {
         const int x = posToX(points_[(size_t)i].pos);
         const int y = valueToY(points_[(size_t)i].value);
-        p.setBrush(i == drag_index_ ? QColor(255, 220, 80) : QColor(230, 230, 240));
+        const bool active = (i == drag_index_ || i == selected_index_);
+        p.setBrush(active ? QColor(255, 220, 80) : QColor(230, 230, 240));
         p.setPen(QPen(QColor(20, 20, 24), 1));
         p.drawEllipse(QPoint(x, y), 5, 5);
     }
@@ -169,10 +181,17 @@ void ActionCurveBar::mousePressEvent(QMouseEvent* event)
     {
         return;
     }
+    setFocus(Qt::MouseFocusReason);
     drag_index_ = hitTestPoint(event->position().toPoint());
     if(drag_index_ >= 0)
     {
+        selected_index_ = drag_index_;
         setCursor(Qt::ClosedHandCursor);
+        update();
+    }
+    else
+    {
+        selected_index_ = -1;
         update();
     }
 }
@@ -217,6 +236,10 @@ void ActionCurveBar::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
     const bool was = drag_index_ >= 0;
+    if(was)
+    {
+        selected_index_ = drag_index_;
+    }
     drag_index_ = -1;
     unsetCursor();
     if(was)
@@ -239,6 +262,7 @@ void ActionCurveBar::mouseDoubleClickEvent(QMouseEvent* event)
     if(hit > 0 && hit < (int)points_.size() - 1)
     {
         points_.erase(points_.begin() + hit);
+        selected_index_ = -1;
         emit pointsChanged();
         update();
         return;
@@ -248,6 +272,60 @@ void ActionCurveBar::mouseDoubleClickEvent(QMouseEvent* event)
         points_.push_back({xToPos(pt.x()), yToValue(pt.y())});
         sortPoints();
         ensureEndpoints();
+        emit pointsChanged();
+        update();
+    }
+}
+
+void ActionCurveBar::keyPressEvent(QKeyEvent* event)
+{
+    if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
+    {
+        if(selected_index_ > 0 && selected_index_ < (int)points_.size() - 1)
+        {
+            points_.erase(points_.begin() + selected_index_);
+            selected_index_ = -1;
+            sortPoints();
+            ensureEndpoints();
+            emit pointsChanged();
+            update();
+            event->accept();
+            return;
+        }
+    }
+    QWidget::keyPressEvent(event);
+}
+
+void ActionCurveBar::showContextMenu(const QPoint& pos)
+{
+    const int hit = hitTestPoint(pos);
+    if(hit >= 0)
+    {
+        selected_index_ = hit;
+        update();
+    }
+    QMenu menu(this);
+    const bool can_remove = selected_index_ > 0
+                          && selected_index_ < (int)points_.size() - 1;
+    QAction* remove_act = menu.addAction(QStringLiteral("Remove point\tDel"));
+    remove_act->setEnabled(can_remove);
+    menu.addSeparator();
+    QAction* reset_act = menu.addAction(QStringLiteral("Reset to flat"));
+    QAction* chosen = menu.exec(mapToGlobal(pos));
+    if(chosen == remove_act && can_remove)
+    {
+        points_.erase(points_.begin() + selected_index_);
+        selected_index_ = -1;
+        sortPoints();
+        ensureEndpoints();
+        emit pointsChanged();
+        update();
+    }
+    else if(chosen == reset_act)
+    {
+        points_ = {{0.0f, 1.0f}, {1.0f, 1.0f}};
+        selected_index_ = -1;
+        drag_index_ = -1;
         emit pointsChanged();
         update();
     }

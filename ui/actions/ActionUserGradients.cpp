@@ -48,6 +48,13 @@ std::vector<RawEntry> ReadAll(const filesystem::path& path)
     {
         return entries;
     }
+    in.seekg(0, std::ios::end);
+    const auto fsize = in.tellg();
+    in.seekg(0, std::ios::beg);
+    if(fsize < 0 || (std::size_t)fsize > Action::kMaxPackJsonBytes)
+    {
+        return entries;
+    }
     try
     {
         nlohmann::json root;

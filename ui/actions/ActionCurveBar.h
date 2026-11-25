@@ -22,6 +22,7 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -38,7 +39,9 @@ private:
     QRect plotRect() const;
     void sortPoints();
     void ensureEndpoints();
+    void showContextMenu(const QPoint& pos);
 
     std::vector<Action::CurvePoint> points_;
     int drag_index_ = -1;
+    int selected_index_ = -1;
 };

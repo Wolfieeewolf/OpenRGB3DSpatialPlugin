@@ -391,6 +391,11 @@ QVector<Swatch> LoadSwatches(const filesystem::path& path)
     {
         return defaults;
     }
+    constexpr qint64 kMaxSwatchBytes = 64 * 1024;
+    if(file.size() > kMaxSwatchBytes)
+    {
+        return defaults;
+    }
     const QJsonArray arr = QJsonDocument::fromJson(file.readAll()).object().value(QStringLiteral("colors")).toArray();
     QVector<Swatch> loaded;
     for(const QJsonValue& item : arr)

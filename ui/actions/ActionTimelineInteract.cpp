@@ -121,11 +121,7 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
         case DragOp::Marquee:
             break;
         default:
-        {
-            const DragOp unused = drag_op_;
-            (void)unused;
             break;
-        }
     }
     drag_moved_ = true;
     requestContentRepaint();

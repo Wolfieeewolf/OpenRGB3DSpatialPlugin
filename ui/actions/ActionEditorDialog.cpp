@@ -48,57 +48,14 @@
 #include <QMenu>
 #include <QVBoxLayout>
 
+#include "ActionEditorControllerNames.h"
+
 #include <algorithm>
 #include <cmath>
 #include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
-
-namespace
-{
-
-QString ControllerLabel(const ControllerTransform* transform, int index)
-{
-    if(!transform)
-    {
-        return QStringLiteral("Controller %1").arg(index);
-    }
-    if(transform->virtual_controller)
-    {
-        return QString::fromStdString(transform->virtual_controller->GetName());
-    }
-    if(transform->controller)
-    {
-        const std::string display = transform->controller->GetDisplayName();
-        if(!display.empty())
-        {
-            return QString::fromStdString(display);
-        }
-        return QString::fromStdString(transform->controller->GetName());
-    }
-    return QStringLiteral("Controller %1").arg(index);
-}
-
-std::string ControllerKeyName(const ControllerTransform* transform, int index)
-{
-    if(transform && transform->virtual_controller)
-    {
-        return transform->virtual_controller->GetName();
-    }
-    if(transform && transform->controller)
-    {
-        const std::string display = transform->controller->GetDisplayName();
-        if(!display.empty())
-        {
-            return display;
-        }
-        return transform->controller->GetName();
-    }
-    return std::string("controller_") + std::to_string(index);
-}
-
-} // namespace
 
 ActionEditorDialog::ActionEditorDialog(OpenRGB3DSpatialTab* tab, QWidget* parent)
     : QDialog(parent)
@@ -406,25 +363,22 @@ void ActionEditorDialog::buildUi()
     intensity_spin_ = new QSpinBox();
     intensity_spin_->setRange(1, 100);
     intensity_spin_->setValue(100);
-    intensity_spin_->setToolTip(QStringLiteral("Overall brightness scale for this effect"));
     min_intensity_spin_ = new QSpinBox();
     min_intensity_spin_->setRange(0, 100);
     min_intensity_spin_->setValue(15);
-    min_intensity_spin_->setToolTip(QStringLiteral("Floor used by blink/pulse scripts and as the low end of the intensity range"));
     max_intensity_spin_ = new QSpinBox();
     max_intensity_spin_->setRange(1, 100);
     max_intensity_spin_->setValue(100);
-    max_intensity_spin_->setToolTip(QStringLiteral("Ceiling used by scripts (soft max for twinkle/candle/etc.)"));
     const auto intensity_field = attachIntSpinSlider(intensity_spin_,
-                                                     QStringLiteral("Drag to set intensity"),
+                                                     QStringLiteral("Overall brightness scale (1–100%)"),
                                                      1,
                                                      5);
     const auto min_intensity_field = attachIntSpinSlider(min_intensity_spin_,
-                                                         QStringLiteral("Drag to set minimum intensity floor"),
+                                                         QStringLiteral("Floor for blink/pulse scripts and intensity range low end"),
                                                          1,
                                                          5);
     const auto max_intensity_field = attachIntSpinSlider(max_intensity_spin_,
-                                                         QStringLiteral("Drag to set maximum intensity ceiling"),
+                                                         QStringLiteral("Ceiling for scripts — soft max for twinkle/candle"),
                                                          1,
                                                          5);
     auto* bright_form = new QFormLayout();
@@ -432,21 +386,12 @@ void ActionEditorDialog::buildUi()
     bright_form->setSpacing(6);
     bright_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     bright_form->addRow(QStringLiteral("Intensity %"), intensity_field.first);
-    min_intensity_row_ = new QWidget();
-    auto* min_row_layout = new QVBoxLayout(min_intensity_row_);
-    min_row_layout->setContentsMargins(0, 0, 0, 0);
-    min_row_layout->setSpacing(2);
-    min_row_layout->addWidget(new QLabel(QStringLiteral("Min % (floor)")));
-    min_row_layout->addWidget(min_intensity_field.first);
-    max_intensity_row_ = new QWidget();
-    auto* max_row_layout = new QVBoxLayout(max_intensity_row_);
-    max_row_layout->setContentsMargins(0, 0, 0, 0);
-    max_row_layout->setSpacing(2);
-    max_row_layout->addWidget(new QLabel(QStringLiteral("Max % (ceiling)")));
-    max_row_layout->addWidget(max_intensity_field.first);
+    min_intensity_row_ = min_intensity_field.first;
+    max_intensity_row_ = max_intensity_field.first;
+    bright_form->addRow(QStringLiteral("Min %"), min_intensity_row_);
+    bright_form->addRow(QStringLiteral("Max %"), max_intensity_row_);
     bright_sec->bodyLayout()->addLayout(bright_form);
-    bright_sec->bodyLayout()->addWidget(min_intensity_row_);
-    bright_sec->bodyLayout()->addWidget(max_intensity_row_);
+    bright_form_ = bright_form;
     props_inner_layout->addWidget(bright_sec);
 
     direction_section_ = new EffectCollapsibleSection(QStringLiteral("Wipe & travel"));
@@ -589,14 +534,12 @@ void ActionEditorDialog::buildUi()
     speed_spin_->setDecimals(2);
     speed_spin_->setSingleStep(0.1);
     speed_spin_->setValue(1.0);
-    speed_spin_->setToolTip(QStringLiteral("Scales clip progress and shortens Period cycles"));
     period_spin_ = new QSpinBox();
     period_spin_->setRange(50, Action::kMaxDurationMs);
     period_spin_->setValue(800);
-    period_spin_->setToolTip(QStringLiteral("Length of one blink/strobe/pulse cycle (ms). Waveform curve repeats each period."));
-    const auto speed_field = attachDoubleSpinSlider(speed_spin_, QStringLiteral("Drag to set speed"));
+    const auto speed_field = attachDoubleSpinSlider(speed_spin_, QStringLiteral("Scales clip progress and Period cycles"));
     const auto period_field = attachIntSpinSlider(period_spin_,
-                                                  QStringLiteral("Drag to set period"),
+                                                  QStringLiteral("One blink/strobe/pulse cycle (ms)"),
                                                   10,
                                                   100);
     speed_row_ = new QWidget();
@@ -650,11 +593,10 @@ void ActionEditorDialog::buildUi()
     effect_size_spin_->setRange(5, 200);
     effect_size_spin_->setValue(100);
     effect_size_spin_->setSuffix(QStringLiteral("%"));
-    effect_size_spin_->setToolTip(QStringLiteral("Spatial footprint of the effect (100% = default room scale)"));
     const auto ox_field = attachIntSpinSlider(origin_offset_x_spin_, QStringLiteral("Offset X (% of half room)"), 1, 5);
     const auto oy_field = attachIntSpinSlider(origin_offset_y_spin_, QStringLiteral("Offset Y (% of half room)"), 1, 5);
     const auto oz_field = attachIntSpinSlider(origin_offset_z_spin_, QStringLiteral("Offset Z (% of half room)"), 1, 5);
-    const auto size_field = attachIntSpinSlider(effect_size_spin_, QStringLiteral("Effect size"), 1, 5);
+    const auto size_field = attachIntSpinSlider(effect_size_spin_, QStringLiteral("Spatial footprint — 100% = default room scale"), 1, 5);
     auto* place_form = new QFormLayout();
     place_form->addRow(QStringLiteral("Origin"), origin_ref_combo_);
     place_form->addRow(QStringLiteral("Offset X"), ox_field.first);
@@ -1917,17 +1859,14 @@ void ActionEditorDialog::startPreview(const Action::Pack& play_pack, int start_m
     {
         stopPreview();
     }
-    if(tab_)
+    auto* transforms = tab_->GetControllerTransformsMutable();
+    if(transforms)
     {
-        auto* transforms = tab_->GetControllerTransformsMutable();
-        if(transforms)
+        for(std::unique_ptr<ControllerTransform>& t : *transforms)
         {
-            for(std::unique_ptr<ControllerTransform>& t : *transforms)
+            if(t)
             {
-                if(t)
-                {
-                    t->world_positions_dirty = true;
-                }
+                t->world_positions_dirty = true;
             }
         }
     }

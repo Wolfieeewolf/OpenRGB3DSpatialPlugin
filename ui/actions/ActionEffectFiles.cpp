@@ -78,6 +78,11 @@ bool ReadEntry(const filesystem::path& file, const QString& section, Entry* out)
         }
         return !out->name.isEmpty();
     }
+    constexpr qint64 kMaxCatalogEntryBytes = 64 * 1024;
+    if(handle.size() > kMaxCatalogEntryBytes)
+    {
+        return false;
+    }
     const QJsonObject obj = QJsonDocument::fromJson(handle.readAll()).object();
     const QJsonArray swatch = obj.value(QStringLiteral("swatch")).toArray();
     out->id = QString::fromStdString(file.stem().string());

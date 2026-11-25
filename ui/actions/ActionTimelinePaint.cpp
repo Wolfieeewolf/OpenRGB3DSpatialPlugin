@@ -583,13 +583,6 @@ void ActionTimelineWidget::paintClipGradientBar(QPainter& p, const QRect& br,
             c.setAlpha(alpha);
             grad.setColorAt(std::clamp(s.pos, 0.0f, 1.0f), c);
         }
-        if(sample.gradient.empty())
-        {
-            QColor c = RgbToQColor(sample.color);
-            c.setAlpha(alpha);
-            grad.setColorAt(0.0, c);
-            grad.setColorAt(1.0, c);
-        }
     }
     p.setPen(Qt::NoPen);
     p.setBrush(grad);

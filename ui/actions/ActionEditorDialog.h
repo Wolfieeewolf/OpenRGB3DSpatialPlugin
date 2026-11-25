@@ -11,6 +11,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -141,6 +142,7 @@ private:
     QLineEdit* name_edit_ = nullptr;
     QSpinBox* duration_spin_ = nullptr;
     QComboBox* loop_combo_ = nullptr;
+    QFormLayout* bright_form_ = nullptr;
     QComboBox* save_dest_combo_ = nullptr;
     QComboBox* movie_category_combo_ = nullptr;
     QPushButton* controllers_button_ = nullptr;

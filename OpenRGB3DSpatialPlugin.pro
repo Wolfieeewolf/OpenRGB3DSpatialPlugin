@@ -235,6 +235,7 @@ HEADERS += \
     ui/effects/EffectLibraryPanel.h \
     ui/actions/ActionsPanel.h \
     ui/actions/ActionEditorDialog.h \
+    ui/actions/ActionEditorControllerNames.h \
     ui/actions/ActionTimelineWidget.h \
     ui/actions/ActionGradientBar.h \
     ui/actions/ActionCurveBar.h \

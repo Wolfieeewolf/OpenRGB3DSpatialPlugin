@@ -98,6 +98,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="deleteButton">
+       <property name="text">
+        <string>Delete</string>
+       </property>
+       <property name="toolTip">
+        <string>Remove the selected action pack from disk. Also: Delete / Backspace when the list is focused, or right-click → Delete action pack.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="importButton">
        <property name="text">
         <string>Import…</string>

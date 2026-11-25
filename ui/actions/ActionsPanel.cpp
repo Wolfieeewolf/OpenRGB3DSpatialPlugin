@@ -109,14 +109,26 @@ void ActionsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->stopButton, &QPushButton::clicked, this, &ActionsPanel::onStop);
     connect(ui->newButton, &QPushButton::clicked, this, &ActionsPanel::onNew);
     connect(ui->editButton, &QPushButton::clicked, this, &ActionsPanel::onEdit);
+    connect(ui->deleteButton, &QPushButton::clicked, this, &ActionsPanel::onDelete);
     connect(ui->importButton, &QPushButton::clicked, this, &ActionsPanel::onImport);
     connect(ui->exportButton, &QPushButton::clicked, this, &ActionsPanel::onExport);
     connect(ui->packList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) {
         onEdit();
     });
+    connect(ui->packList, &QListWidget::currentRowChanged, this, [this](int) {
+        onSelectionChanged();
+    });
+
+    PluginUiWireListDestructiveDelete(
+        ui->packList,
+        ui->deleteButton,
+        tr("Delete action pack"),
+        tr("Delete action pack"),
+        tr("Remove the selected action pack from disk."));
 
     rebuildCategoryCombo();
     populateList();
+    onSelectionChanged();
 }
 
 filesystem::path ActionsPanel::triggerEffectsDir() const
@@ -285,6 +297,7 @@ void ActionsPanel::setPlayingUi(bool playing)
     }
     ui->newButton->setEnabled(!playing);
     ui->editButton->setEnabled(!playing);
+    ui->deleteButton->setEnabled(!playing && ui->packList->currentRow() >= 0);
     ui->importButton->setEnabled(!playing);
     ui->exportButton->setEnabled(!playing);
 }
@@ -599,6 +612,42 @@ void ActionsPanel::onPreview()
 void ActionsPanel::onStop()
 {
     stopPreview();
+}
+
+void ActionsPanel::onSelectionChanged()
+{
+    ui->deleteButton->setEnabled(!player_.IsPlaying() && ui->packList->currentRow() >= 0);
+}
+
+void ActionsPanel::onDelete()
+{
+    QListWidgetItem* item = ui->packList->currentItem();
+    if(!item)
+    {
+        return;
+    }
+    const QString path_q = pathFromItem(item);
+    const QString name = QFileInfo(path_q).fileName();
+    if(QMessageBox::question(this, tr("Delete action pack"),
+                             tr("Delete \"%1\" from disk?").arg(name))
+       != QMessageBox::Yes)
+    {
+        return;
+    }
+    stopPreview();
+    if(editor_)
+    {
+        editor_->stopPreview();
+    }
+    if(!QFile::remove(path_q))
+    {
+        QMessageBox::warning(this, tr("Delete action pack"),
+                             tr("Failed to delete:\n%1").arg(path_q));
+        return;
+    }
+    rebuildCategoryCombo();
+    populateList();
+    ui->statusLabel->setText(tr("Deleted %1").arg(name));
 }
 
 void ActionsPanel::onTick()
