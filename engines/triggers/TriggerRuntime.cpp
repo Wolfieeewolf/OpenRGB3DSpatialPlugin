@@ -163,6 +163,10 @@ void TriggerRuntime::ApplyPlays(bool force_hw)
         return a->pack.priority < b->pack.priority;
     });
 
+    /* One composite frame: packs blend in priority order instead of each clearing the
+       lights, and every controller is flushed once at the end. */
+    const bool force_all = force_hw;
+    Action::BeginCompositeFrame();
     for(ActivePlay* p : ordered)
     {
         Action::SetGpuAnimMs(p->player.ElapsedMs());
@@ -170,6 +174,7 @@ void TriggerRuntime::ApplyPlays(bool force_hw)
         Action::SetGpuAnimMs(-1);
         force_hw = false;
     }
+    Action::EndCompositeFrame(force_all);
 }
 
 bool TriggerRuntime::Tick(int dt_ms)

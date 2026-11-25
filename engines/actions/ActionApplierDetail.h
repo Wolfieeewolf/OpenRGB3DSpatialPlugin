@@ -56,11 +56,15 @@ void PaintClipLed(LEDPosition3D& led,
                   RGBControllerInterface* fallback_controller,
                   const Clip& clip,
                   RGBColor color,
-                  int local_ms,
+                  int now_ms,
                   std::unordered_set<RGBControllerInterface*>* touched);
 
-/** Afterglow left on an LED at local_ms (black when none). Clears expired or rewound trails. */
-RGBColor TrailGlowAt(LEDPosition3D& led, int local_ms);
+/** Afterglow left on an LED at now_ms (black when none). Clears expired trails. */
+RGBColor TrailGlowAt(LEDPosition3D& led, int now_ms);
+
+/** Wall clock for trails, in ms, fixed for the frame being applied. Trails fade in real
+    time, so overlapping packs (each with its own local time) share one clock. */
+int TrailClockMs();
 
 struct SampleBounds
 {

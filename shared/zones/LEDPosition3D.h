@@ -39,6 +39,8 @@ struct LEDPosition3D
     RGBColor        trail_color = 0;
     int             trail_ms = 0;
     int             trail_start_ms = 0;
+    /* Action frame this LED was last cleared in (composite frames clear once). */
+    unsigned int    frame_stamp = 0;
 };
 
 class VirtualController3D;

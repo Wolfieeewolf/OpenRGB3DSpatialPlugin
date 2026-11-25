@@ -25,7 +25,8 @@ TriggersPanel::TriggersPanel(QWidget* parent)
 {
     ui->setupUi(this);
     timer_ = new QTimer(this);
-    timer_->setInterval(33);
+    timer_->setTimerType(Qt::PreciseTimer);
+    timer_->setInterval(Action::kPlaybackTickMs);
     connect(timer_, &QTimer::timeout, this, &TriggersPanel::onTick);
 }
 
@@ -64,6 +65,7 @@ void TriggersPanel::bindTab(OpenRGB3DSpatialTab* tab)
         {
             if(!timer_->isActive())
             {
+                last_tick_ms_ = 0;
                 timer_->start();
             }
         }
@@ -638,7 +640,7 @@ void TriggersPanel::onHoldToggled(bool checked)
 
 void TriggersPanel::onTick()
 {
-    if(!runtime_.Tick(timer_->interval()))
+    if(!runtime_.Tick(Action::MeasureTickMs(&last_tick_ms_)))
     {
         timer_->stop();
         clearPreviewIfIdle();

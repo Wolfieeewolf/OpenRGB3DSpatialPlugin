@@ -5,6 +5,7 @@
 #include "filesystem.h"
 #include <nlohmann/json.hpp>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -270,6 +271,21 @@ void ModulateClipIntensity(const Clip& clip, float clip_progress, float period_p
  */
 void SetGpuAnimMs(int anim_ms);
 int GpuAnimMsOr(int local_ms);
+
+/**
+ * Several packs in one frame (trigger and Movie Sync runtimes): call Begin once,
+ * ApplyPackFrame for each pack in priority order, then End once. Later packs blend
+ * over earlier ones instead of clearing them, and controllers are flushed once.
+ */
+void BeginCompositeFrame();
+
+/** Playback tick for Action previews and runtimes (~60 fps). */
+constexpr int kPlaybackTickMs = 16;
+
+/** Wall-clock frame step for a playback timer: the real time since the last tick,
+    or one nominal tick after a pause (so resuming never jumps ahead). */
+int MeasureTickMs(std::int64_t* last_tick_ms);
+void EndCompositeFrame(bool force_hw_update);
 /** Rotate (CW quarters) then flip H/V around UV center. */
 void ApplyClipUvTransform(const Clip& clip, float* u, float* v);
 /** 1D axis mirror: flip_h and 180° rotate (90/270 leave axis unchanged). */

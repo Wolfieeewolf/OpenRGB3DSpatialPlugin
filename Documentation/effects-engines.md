@@ -185,6 +185,7 @@ Minecraft under library category **Game**. Bridge mod sources: `integrations/min
 | Volume / Audio / Media LEDs | Yes — `evaluateAtPoints` + display finish bake | Overlay-matching HSV/surface/hex/… when sample-only |
 | Shader Field LEDs | Yes — `sampleAtUvs` + PBO | Projection UV on CPU |
 | Action field / particle / ribbon | Yes — `EvaluateAtPoints` | |
+| Action `.fx` scripts (blink, wipe, chase…) | Yes — translated to GLSL at load (`ActionScriptGpu`) | One draw per clip, all LEDs; per-LED inputs (axis, world sample, `sample_axis`) built on the CPU as before. CPU interpreter only if GL is down or a shader fails to compile; editor timeline thumbnails stay CPU |
 | Action Media LEDs | Yes — `EvaluateMediaAtUvsGpu` | NEAREST + alpha; column-max for 1D; fail closed (no CPU dual) |
 | Patterns strip bake | Yes bake, CPU sample | 512×1 — negligible |
 | Room-grid Volume/Shader/Action overlay | Borrow `SpatialOverlayHandoff` | Volume zero-copy shared; Shader upright copy; fail closed when pool warm |

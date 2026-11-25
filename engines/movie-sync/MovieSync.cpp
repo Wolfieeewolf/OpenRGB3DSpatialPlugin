@@ -91,7 +91,8 @@ MovieSyncEffect::MovieSyncEffect(QWidget* parent)
 {
     listener_ = new MovieSync::ScriptListener(this);
     tick_timer_ = new QTimer(this);
-    tick_timer_->setInterval(33);
+    tick_timer_->setTimerType(Qt::PreciseTimer);
+    tick_timer_->setInterval(Action::kPlaybackTickMs);
     connect(tick_timer_, &QTimer::timeout, this, &MovieSyncEffect::onTick);
 
     listener_->SetEffectHandler([this](const std::string& effect_id, const std::string& edge, bool active) {
@@ -122,6 +123,7 @@ MovieSyncEffect::MovieSyncEffect(QWidget* parent)
             setPlayingUi(true);
             if(!tick_timer_->isActive())
             {
+                last_tick_ms_ = 0;
                 tick_timer_->start();
             }
         }
@@ -417,7 +419,7 @@ void MovieSyncEffect::onEffectDoubleClicked()
 
 void MovieSyncEffect::onTick()
 {
-    if(!runtime_.Tick(33))
+    if(!runtime_.Tick(Action::MeasureTickMs(&last_tick_ms_)))
     {
         tick_timer_->stop();
         setPlayingUi(false);
@@ -665,6 +667,7 @@ void MovieSyncEffect::fireSelectedCatalogEffect()
     setPlayingUi(runtime_.IsPlaying());
     if(runtime_.IsPlaying() && !tick_timer_->isActive())
     {
+        last_tick_ms_ = 0;
         tick_timer_->start();
     }
 }

@@ -97,7 +97,8 @@ ActionEditorDialog::ActionEditorDialog(OpenRGB3DSpatialTab* tab, QWidget* parent
     buildUi();
 
     timer_ = new QTimer(this);
-    timer_->setInterval(33);
+    timer_->setTimerType(Qt::PreciseTimer);
+    timer_->setInterval(Action::kPlaybackTickMs);
     connect(timer_, &QTimer::timeout, this, &ActionEditorDialog::onTick);
 
     timeline_refresh_timer_ = new QTimer(this);

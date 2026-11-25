@@ -16,14 +16,122 @@
 
 #include <chrono>
 #include <cstdint>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace Action
 {
 
+namespace
+{
+
+std::int64_t SteadyNowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+/* Frame bookkeeping. A plain ApplyPackFrame is its own frame; inside
+   Begin/EndCompositeFrame all packs share one frame (cleared once, flushed once). */
+unsigned int g_frame_id = 0;
+bool g_composite_active = false;
+bool g_composite_force_hw = false;
+std::unordered_set<RGBControllerInterface*> g_composite_touched;
+int g_trail_clock_ms = 0;
+
+/* Per-controller flush pacing: as fast as each device keeps up with, never more often
+   than kMinFlushGapMs. A device whose UpdateLEDs is slow is paced by its own cost, so
+   it cannot hold back the others (the old single 45 ms gate capped every device). */
+constexpr std::int64_t kMinFlushGapMs = 12;
+
+struct FlushPace
+{
+    std::int64_t last_ms = 0;
+    float cost_ms = 0.0f;
+};
+
+std::unordered_map<RGBControllerInterface*, FlushPace> g_flush_pace;
+
+void FlushControllers(const std::unordered_set<RGBControllerInterface*>& touched, bool force)
+{
+    if(g_flush_pace.size() > 512)
+    {
+        g_flush_pace.clear(); /* controllers come and go; keys are never dereferenced */
+    }
+    const std::int64_t now = SteadyNowMs();
+    for(RGBControllerInterface* c : touched)
+    {
+        if(!c)
+        {
+            continue;
+        }
+        FlushPace& pace = g_flush_pace[c];
+        const std::int64_t gap = std::max<std::int64_t>(kMinFlushGapMs, (std::int64_t)(pace.cost_ms * 1.5f));
+        if(!force && pace.last_ms != 0 && now - pace.last_ms < gap)
+        {
+            continue;
+        }
+        const auto t0 = std::chrono::steady_clock::now();
+        try
+        {
+            c->UpdateLEDs();
+        }
+        catch(...)
+        {
+        }
+        const float cost = (float)std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::steady_clock::now() - t0).count() / 1000.0f;
+        pace.cost_ms = (pace.cost_ms <= 0.0f) ? cost : (pace.cost_ms * 0.8f + cost * 0.2f);
+        pace.last_ms = now;
+    }
+}
+
+} // namespace
+
+int MeasureTickMs(std::int64_t* last_tick_ms)
+{
+    const std::int64_t now = SteadyNowMs();
+    int dt = kPlaybackTickMs;
+    if(last_tick_ms && *last_tick_ms > 0)
+    {
+        const std::int64_t gap = now - *last_tick_ms;
+        dt = (gap >= 0 && gap <= 250) ? (int)gap : kPlaybackTickMs;
+    }
+    if(last_tick_ms)
+    {
+        *last_tick_ms = now;
+    }
+    return dt;
+}
+
+void BeginCompositeFrame()
+{
+    ++g_frame_id;
+    g_composite_active = true;
+    g_composite_force_hw = false;
+    g_composite_touched.clear();
+    g_trail_clock_ms = (int)(SteadyNowMs() & 0x3FFFFFFF);
+}
+
+void EndCompositeFrame(bool force_hw_update)
+{
+    if(!g_composite_active)
+    {
+        return;
+    }
+    g_composite_active = false;
+    FlushControllers(g_composite_touched, force_hw_update || g_composite_force_hw);
+    g_composite_touched.clear();
+}
+
 namespace applier_detail
 {
+
+int TrailClockMs()
+{
+    return g_trail_clock_ms;
+}
 
 void ApplyToControllerAll(RGBControllerInterface* c, RGBColor color, std::unordered_set<RGBControllerInterface*>* touched)
 {
@@ -243,6 +351,14 @@ ApplyStats ApplyPackFrame(const Pack& pack,
     const int layer_zone = spatial ? spatial->layer_zone_index : -1;
     static std::uint64_t s_field_sequence = 0;
     const std::uint64_t field_sequence = ++s_field_sequence;
+    /* A lone pack is a frame of its own; inside a composite frame the first pack to
+       reach an LED clears it and later packs blend over what is there. */
+    const bool first_in_frame = !g_composite_active || g_composite_touched.empty();
+    if(!g_composite_active)
+    {
+        ++g_frame_id;
+        g_trail_clock_ms = (int)(SteadyNowMs() & 0x3FFFFFFF);
+    }
 
     if(use_transforms)
     {
@@ -259,11 +375,15 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             }
             for(LEDPosition3D& led : transform->led_positions)
             {
-                led.preview_color = off;
+                if(led.frame_stamp != g_frame_id)
+                {
+                    led.preview_color = off;
+                    led.frame_stamp = g_frame_id;
+                }
             }
         }
     }
-    else
+    else if(first_in_frame)
     {
         for(RGBControllerInterface* c : controllers)
         {
@@ -513,7 +633,7 @@ ApplyStats ApplyPackFrame(const Pack& pack,
             for(LEDPosition3D& led : transform->led_positions)
             {
                 /* Afterglow from trail clips sits under this frame's colour (brightest wins). */
-                const RGBColor glow = applier_detail::TrailGlowAt(led, local_ms);
+                const RGBColor glow = applier_detail::TrailGlowAt(led, g_trail_clock_ms);
                 if(glow != off)
                 {
                     const RGBColor lit = ToRGBColor(std::max(RGBGetRValue(led.preview_color), RGBGetRValue(glow)),
@@ -535,25 +655,21 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         }
     }
 
-    static std::int64_t s_last_hw_ms = 0;
-    const std::int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-    const bool flush_hw = force_hw_update || (now_ms - s_last_hw_ms) >= 45;
-    if(flush_hw)
+    stats.controllers_touched = (int)touched.size();
+    if(g_composite_active)
     {
-        s_last_hw_ms = now_ms;
-        for(RGBControllerInterface* c : touched)
+        /* Flushed once in EndCompositeFrame, after every pack has painted. */
+        g_composite_touched.insert(touched.begin(), touched.end());
+        g_composite_force_hw = g_composite_force_hw || force_hw_update;
+        if(g_composite_touched.empty())
         {
-            try
-            {
-                c->UpdateLEDs();
-            }
-            catch(...)
-            {
-            }
+            g_composite_touched.insert(nullptr); /* mark "a pack ran" for first_in_frame */
         }
     }
-    stats.controllers_touched = (int)touched.size();
+    else
+    {
+        FlushControllers(touched, force_hw_update);
+    }
     return stats;
 }
 

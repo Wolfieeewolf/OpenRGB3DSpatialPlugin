@@ -75,7 +75,8 @@ ActionsPanel::ActionsPanel(QWidget* parent)
 {
     ui->setupUi(this);
     timer_ = new QTimer(this);
-    timer_->setInterval(33);
+    timer_->setTimerType(Qt::PreciseTimer);
+    timer_->setInterval(Action::kPlaybackTickMs);
     connect(timer_, &QTimer::timeout, this, &ActionsPanel::onTick);
 }
 

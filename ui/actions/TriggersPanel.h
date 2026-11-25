@@ -4,6 +4,7 @@
 #include "TriggerRuntime.h"
 #include "TriggerSourceRegistry.h"
 #include <QGroupBox>
+#include <cstdint>
 #include <vector>
 
 class QListWidgetItem;
@@ -54,6 +55,7 @@ private:
     Ui::TriggersPanel* ui = nullptr;
     OpenRGB3DSpatialTab* tab_ = nullptr;
     QTimer* timer_ = nullptr;
+    std::int64_t last_tick_ms_ = 0;
     Trigger::TriggerSourceRegistry registry_;
     Trigger::TriggerRuntime runtime_;
     Trigger::Document user_;

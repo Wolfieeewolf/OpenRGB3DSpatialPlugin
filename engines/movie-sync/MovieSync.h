@@ -64,6 +64,7 @@ private:
     MovieSync::ScriptListener* listener_ = nullptr;
     MovieSync::CueRuntime runtime_;
     QTimer* tick_timer_ = nullptr;
+    std::int64_t last_tick_ms_ = 0;
 
     QCheckBox* api_check_ = nullptr;
     QCheckBox* allow_strobe_check_ = nullptr;
