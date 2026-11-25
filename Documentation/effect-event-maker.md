@@ -108,6 +108,21 @@ World tools may declare `particles: burst` (also `rain` / `fireflies` / `meteors
 
 World tools may declare `ribbons: arc` (also `helix` / `sweep` / `cables`) for a room ribbon/tube. Curve sampling lives in GLSL `volumeMain`; same true point-eval / fail-closed rules. Ideas from reference VFX only — no vendored demos.
 
+**Script VFX functions:** `.fx` scripts can call the VFX vocabulary that `.fs` bodies get from `SpatialVfxLib410`. Each has the same maths on the CPU interpreter and the GPU translation, so a script looks the same either way:
+
+| Function | Returns |
+|----------|---------|
+| `fbm(x, y, z, octaves)` | Fractal noise 0..1 (octaves 1–5, 0 = 3) |
+| `ridge(x, y, z, octaves)` | Ridged noise 0..1: creases for lightning, cracks, veins |
+| `glow(dist, soft)` | Hot core with a soft rim around `dist = 0` |
+| `gauss(dist, soft)` | Plain soft falloff around `dist = 0` |
+| `streak(dx, dy, dz, ux, uy, uz, along, side)` | Comet head with a tail trailing behind direction `u` |
+| `smoothstep(a, b, x)`, `mix(a, b, t)`, `exp(x)`, `pow(x, y)`, `len(x, y, z)` | As in GLSL (`pow` clamps `x` at 0) |
+| `beat(t, sharpness)` | Sharpened sine pulse 0..1 |
+| `envelope(progress)` | Quick attack, late release 0..1 for `loop: once` looks |
+
+Colour still comes from the clip's gradient (`paint`), so these shape the light and the user's palette stays in charge.
+
 **GL pool / thumbs:** field, particle, ribbon, and built-in GPU clips share **`SpatialOffscreenGlPool`** with the room viewport (no second offscreen context). Action Editor timeline thumbs use the same pool — deferred, cached, fail closed to black (no gradient / CPU fake).
 
 **Clocks / progress:** once fades and envelopes use `ClipSpanProgress`; script `progress` uses `ClipSweepProgress`; forever / `while_active` ambient time uses `GpuAnimMs` / `GpuAnimMsOr` (continuous player elapsed — not wrapping `local_ms`).

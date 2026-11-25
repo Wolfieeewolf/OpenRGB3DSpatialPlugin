@@ -166,7 +166,92 @@ enum Fn
     FnParticlePaint,
     FnRibbonD,
     FnRibbonPaint,
+    /* VFX vocabulary (mirrors SpatialVfxLib410; identical on CPU and GPU). */
+    FnFbm,
+    FnRidge,
+    FnGlow,
+    FnGauss,
+    FnStreak,
+    FnSmoothstep,
+    FnMix,
+    FnExp,
+    FnPow,
+    FnLen,
+    FnBeat,
+    FnEnvelope,
 };
+
+int VfxOctaves(double o)
+{
+    return (o <= 0.0) ? 3 : std::clamp((int)std::lround(o), 1, 5);
+}
+
+/** Fractal noise 0..1 (shared with fx_fbm in the GPU prelude). */
+float VfxFbm(float x, float y, float z, double octaves)
+{
+    const int n = VfxOctaves(octaves);
+    float sum = 0.0f, amp = 0.5f, tot = 0.0f;
+    for(int o = 0; o < n; ++o)
+    {
+        sum += amp * ValueNoise3(x, y, z);
+        tot += amp;
+        amp *= 0.5f;
+        x *= 2.03f; y *= 2.03f; z *= 2.03f;
+    }
+    return sum / std::max(tot, 1e-4f);
+}
+
+/** Ridged noise 0..1: sharp creases, good for lightning, cracks, energy veins. */
+float VfxRidge(float x, float y, float z, double octaves)
+{
+    const int n = std::min(VfxOctaves(octaves), 4);
+    float sum = 0.0f, amp = 0.5f, tot = 0.0f;
+    for(int o = 0; o < n; ++o)
+    {
+        sum += amp * (1.0f - std::fabs(ValueNoise3(x, y, z) * 2.0f - 1.0f));
+        tot += amp;
+        amp *= 0.5f;
+        x *= 2.07f; y *= 2.07f; z *= 2.07f;
+    }
+    return sum / std::max(tot, 1e-4f);
+}
+
+/** Hot core with a soft rim around distance 0 (vfxCoreRim). */
+double VfxGlow(double d, double soft)
+{
+    const double s = std::max(soft, 0.008);
+    const double core = std::exp(-(d * d) / (s * s * 0.28));
+    const double rim = std::exp(-(d * d) / (s * s * 1.20)) * 0.42;
+    return std::clamp(core + rim, 0.0, 1.0);
+}
+
+double VfxGauss(double d, double soft)
+{
+    const double s = std::max(soft, 0.008);
+    return std::exp(-(d * d) / (s * s));
+}
+
+/** Comet head with a tail trailing behind direction u (vfxStreak). */
+double VfxStreak(double dx, double dy, double dz, double ux, double uy, double uz, double soft_along, double soft_side)
+{
+    const double un = std::sqrt(ux * ux + uy * uy + uz * uz);
+    if(un > 1e-4) { ux /= un; uy /= un; uz /= un; } else { ux = 0.0; uy = 0.0; uz = 1.0; }
+    const double along = dx * ux + dy * uy + dz * uz;
+    const double sx = dx - ux * along, sy = dy - uy * along, sz = dz - uz * along;
+    const double side = std::sqrt(sx * sx + sy * sy + sz * sz);
+    const double a = std::max(soft_along, 0.010);
+    const double b = std::max(soft_side, 0.008);
+    const double head = std::exp(-(along * along) / (a * a * 0.45));
+    const double trail = std::exp(-(along * along) / (a * a * 2.6)) * (along <= 0.0 ? 1.0 : 0.0);
+    return std::clamp(std::max(head, trail * 0.62) * std::exp(-(side * side) / (b * b)), 0.0, 1.0);
+}
+
+double VfxSmoothstep(double e0, double e1, double x)
+{
+    const double w = e1 - e0;
+    const double t = (w == 0.0) ? (x < e0 ? 0.0 : 1.0) : std::clamp((x - e0) / w, 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
 
 struct Tok
 {
@@ -273,6 +358,18 @@ int FnId(const std::string& name)
     if(name == "particle_paint") return FnParticlePaint;
     if(name == "ribbon_d") return FnRibbonD;
     if(name == "ribbon_paint") return FnRibbonPaint;
+    if(name == "fbm") return FnFbm;
+    if(name == "ridge") return FnRidge;
+    if(name == "glow") return FnGlow;
+    if(name == "gauss") return FnGauss;
+    if(name == "streak") return FnStreak;
+    if(name == "smoothstep") return FnSmoothstep;
+    if(name == "mix") return FnMix;
+    if(name == "exp") return FnExp;
+    if(name == "pow") return FnPow;
+    if(name == "len") return FnLen;
+    if(name == "beat") return FnBeat;
+    if(name == "envelope") return FnEnvelope;
     return -1;
 }
 
@@ -842,6 +939,10 @@ struct GlslGen
             {"hash01", "fx_hash01", 1}, {"hash01_mix", "fx_hash01_mix", 3}, {"noise", "fx_noise", 3},
             {"axis_x", "fx_axis_x", 0}, {"axis_y", "fx_axis_y", 0}, {"axis_z", "fx_axis_z", 0},
             {"sample_axis", "fx_sample_axis", 0},
+            {"fbm", "fx_fbm", 4}, {"ridge", "fx_ridge", 4}, {"glow", "fx_glow", 2},
+            {"gauss", "fx_gauss", 2}, {"streak", "fx_streak", 8}, {"smoothstep", "fx_smoothstep", 3},
+            {"mix", "fx_mix", 3}, {"exp", "fx_exp", 1}, {"pow", "fx_pow", 2},
+            {"len", "fx_len", 3}, {"beat", "fx_beat", 2}, {"envelope", "fx_envelope", 1},
         };
         for(const FnMap& f : kFns)
         {
@@ -1026,6 +1127,73 @@ float fx_noise(float x, float y, float z)
     float x11 = mix(fx_corner(ix, iy + 1, iz + 1), fx_corner(ix + 1, iy + 1, iz + 1), sx);
     return mix(mix(x00, x10, sy), mix(x01, x11, sy), sz);
 }
+int fx_octaves(float o) { return (o <= 0.0) ? 3 : clamp(int(floor(o + 0.5)), 1, 5); }
+float fx_fbm(float x, float y, float z, float oct)
+{
+    int n = fx_octaves(oct);
+    float sum = 0.0, amp = 0.5, tot = 0.0;
+    vec3 q = vec3(x, y, z);
+    for(int o = 0; o < 5; ++o)
+    {
+        if(o >= n) { break; }
+        sum += amp * fx_noise(q.x, q.y, q.z);
+        tot += amp;
+        amp *= 0.5;
+        q *= 2.03;
+    }
+    return sum / max(tot, 1e-4);
+}
+float fx_ridge(float x, float y, float z, float oct)
+{
+    int n = min(fx_octaves(oct), 4);
+    float sum = 0.0, amp = 0.5, tot = 0.0;
+    vec3 q = vec3(x, y, z);
+    for(int o = 0; o < 4; ++o)
+    {
+        if(o >= n) { break; }
+        sum += amp * (1.0 - abs(fx_noise(q.x, q.y, q.z) * 2.0 - 1.0));
+        tot += amp;
+        amp *= 0.5;
+        q *= 2.07;
+    }
+    return sum / max(tot, 1e-4);
+}
+float fx_glow(float d, float soft)
+{
+    float s = max(soft, 0.008);
+    return clamp(exp(-(d * d) / (s * s * 0.28)) + exp(-(d * d) / (s * s * 1.20)) * 0.42, 0.0, 1.0);
+}
+float fx_gauss(float d, float soft) { float s = max(soft, 0.008); return exp(-(d * d) / (s * s)); }
+float fx_streak(float dx, float dy, float dz, float ux, float uy, float uz, float sa, float ss)
+{
+    vec3 u = vec3(ux, uy, uz);
+    float un = length(u);
+    u = (un > 1e-4) ? u / un : vec3(0.0, 0.0, 1.0);
+    vec3 dl = vec3(dx, dy, dz);
+    float along = dot(dl, u);
+    float side = length(dl - u * along);
+    float a = max(sa, 0.010);
+    float b = max(ss, 0.008);
+    float head = exp(-(along * along) / (a * a * 0.45));
+    float trail = exp(-(along * along) / (a * a * 2.6)) * (along <= 0.0 ? 1.0 : 0.0);
+    return clamp(max(head, trail * 0.62) * exp(-(side * side) / (b * b)), 0.0, 1.0);
+}
+float fx_smoothstep(float e0, float e1, float x)
+{
+    float w = e1 - e0;
+    float t = (w == 0.0) ? (x < e0 ? 0.0 : 1.0) : clamp((x - e0) / w, 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+float fx_mix(float a, float b, float t) { return a + (b - a) * t; }
+float fx_exp(float x) { return exp(clamp(x, -80.0, 80.0)); }
+float fx_pow(float x, float y) { return pow(max(0.0, x), y); }
+float fx_len(float x, float y, float z) { return length(vec3(x, y, z)); }
+float fx_beat(float t, float s) { return pow(0.5 + 0.5 * sin(t), max(s, 0.5)); }
+float fx_envelope(float p)
+{
+    p = clamp(p, 0.0, 1.0);
+    return fx_smoothstep(0.0, 0.12, p) * (1.0 - fx_smoothstep(0.72, 1.0, p));
+}
 float fx_axis_x() { return u_axis_vec.x; }
 float fx_axis_y() { return u_axis_vec.y; }
 float fx_axis_z() { return u_axis_vec.z; }
@@ -1196,6 +1364,26 @@ struct Machine
             case FnHash01: return Hash01((unsigned int)a(0));
             case FnHash01Mix: return Hash01((unsigned int)a(0) * (unsigned int)a(1) + (unsigned int)a(2));
             case FnNoise: return ValueNoise3((float)a(0), (float)a(1), (float)a(2));
+            case FnFbm: return VfxFbm((float)a(0), (float)a(1), (float)a(2), a(3));
+            case FnRidge: return VfxRidge((float)a(0), (float)a(1), (float)a(2), a(3));
+            case FnGlow: return VfxGlow(a(0), a(1));
+            case FnGauss: return VfxGauss(a(0), a(1));
+            case FnStreak: return VfxStreak(a(0), a(1), a(2), a(3), a(4), a(5), a(6), a(7));
+            case FnSmoothstep: return VfxSmoothstep(a(0), a(1), a(2));
+            case FnMix: return a(0) + (a(1) - a(0)) * a(2);
+            case FnExp: return std::exp(std::clamp(a(0), -80.0, 80.0));
+            case FnPow: return std::pow(std::max(0.0, a(0)), a(1));
+            case FnLen: return std::sqrt(a(0) * a(0) + a(1) * a(1) + a(2) * a(2));
+            case FnBeat:
+            {
+                const double s = std::max(a(1), 0.5);
+                return std::pow(0.5 + 0.5 * std::sin(a(0)), s);
+            }
+            case FnEnvelope:
+            {
+                const double p = std::clamp(a(0), 0.0, 1.0);
+                return VfxSmoothstep(0.0, 0.12, p) * (1.0 - VfxSmoothstep(0.72, 1.0, p));
+            }
             case FnAxisX:
             case FnAxisY:
             case FnAxisZ:
