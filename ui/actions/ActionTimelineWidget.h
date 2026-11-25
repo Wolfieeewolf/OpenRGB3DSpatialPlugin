@@ -10,6 +10,7 @@
 #include <QMenu>
 #include <QPixmap>
 #include <QPoint>
+#include <QPointer>
 #include <QSet>
 #include <QString>
 #include <QVector>
@@ -265,6 +266,10 @@ private:
     QRect laneMuteRect(int row, int lane) const;
     QRect laneSoloRect(int row, int lane) const;
     QRect laneNameRect(int row, int lane) const;
+    /** Eye button on device / zone rows: opens a live view of that row's lights. */
+    bool rowHasDeviceView(int row) const;
+    QRect eyeRect(int row) const;
+    void openDeviceView(int row);
     /** Fold / mute / solo buttons in the gutter; true when one was hit. */
     bool handleLaneGutterClick(int row, int x, int y);
     /** Drop lanes no clip uses and renumber the rest (keeps names and mutes). */
@@ -383,6 +388,8 @@ private:
     /** Top of each visible row (relative to the header) plus the total at the end. */
     QVector<int> row_tops_;
     int lane_hint_ = 0;
+    /** Open device views by row target, so a second click raises the existing window. */
+    QHash<QString, QPointer<QWidget>> device_views_;
     /** Lane under the pointer during a Move (-1 = none). */
     int drag_dest_lane_ = -1;
     QString placing_effect_id_;

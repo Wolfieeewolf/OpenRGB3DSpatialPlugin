@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "ActionTimelineWidget.h"
+#include "ActionDeviceView.h"
 #include "ActionCatalog.h"
 #include "ActionApplier.h"
 #include "ActionScript.h"
@@ -865,6 +866,58 @@ QRect ActionTimelineWidget::laneSoloRect(int row, int lane) const
 {
     const QRect name = laneNameRect(row, lane);
     return QRect(gutter_width_ - 21, name.center().y() - 7, 17, 14);
+}
+
+bool ActionTimelineWidget::rowHasDeviceView(int row) const
+{
+    if(!transforms_ || row < 0 || row >= visible_rows_.size())
+    {
+        return false;
+    }
+    const Row& r = visible_rows_[row];
+    if(r.single_led_row)
+    {
+        return false;
+    }
+    const Action::TargetKind k = r.target.kind;
+    return k == Action::TargetKind::Device || k == Action::TargetKind::Zone || k == Action::TargetKind::SceneZone;
+}
+
+QRect ActionTimelineWidget::eyeRect(int row) const
+{
+    if(!rowHasDeviceView(row))
+    {
+        return {};
+    }
+    const int t = trackIndexForRow(row);
+    const int lanes = laneCountForTrack(t);
+    int right = gutter_width_ - 4;
+    if(lanes > 1)
+    {
+        right = pack_->tracks[(size_t)t].layers_open ? gutter_width_ - 104 : gutter_width_ - 62;
+    }
+    return QRect(right - 20, rowTop(row) + (row_height_ - 14) / 2, 20, 14);
+}
+
+void ActionTimelineWidget::openDeviceView(int row)
+{
+    if(!rowHasDeviceView(row))
+    {
+        return;
+    }
+    const Row& r = visible_rows_[row];
+    const QString key = targetKey(r.target);
+    QPointer<QWidget> existing = device_views_.value(key);
+    if(existing)
+    {
+        existing->showNormal();
+        existing->raise();
+        existing->activateWindow();
+        return;
+    }
+    auto* view = new ActionDeviceViewWindow(r.target, r.label, transforms_, zone_manager_, window());
+    device_views_.insert(key, view);
+    view->show();
 }
 
 bool ActionTimelineWidget::handleLaneGutterClick(int row, int x, int y)

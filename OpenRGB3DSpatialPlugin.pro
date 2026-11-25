@@ -239,6 +239,7 @@ HEADERS += \
     ui/actions/ActionEditorHistory.h \
     ui/actions/ActionEditorControllerNames.h \
     ui/actions/ActionTimelineWidget.h \
+    ui/actions/ActionDeviceView.h \
     ui/actions/ActionGradientBar.h \
     ui/actions/ActionCurveBar.h \
     ui/actions/ActionToolBar.h \
@@ -448,6 +449,7 @@ SOURCES += \
     ui/actions/ActionEditorProps.cpp \
     ui/actions/ActionEditorTimelineBridge.cpp \
     ui/actions/ActionTimelineWidget.cpp \
+    ui/actions/ActionDeviceView.cpp \
     ui/actions/ActionTimelinePaint.cpp \
     ui/actions/ActionTimelineInteract.cpp \
     ui/actions/ActionGradientBar.cpp \

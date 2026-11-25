@@ -1991,6 +1991,11 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
         const Row& r = visible_rows_[row];
         selected_row_ = row;
         emit rowSelected(row);
+        if(eyeRect(row).contains(x, y))
+        {
+            openDeviceView(row);
+            return;
+        }
         if(handleLaneGutterClick(row, x, y))
         {
             return;

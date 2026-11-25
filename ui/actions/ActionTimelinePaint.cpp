@@ -795,6 +795,27 @@ void ActionTimelineWidget::paintEvent(QPaintEvent* event)
 
 namespace
 {
+/** Eye glyph for the live device view button. */
+void PaintEyeButton(QPainter& p, const QRect& r, const QColor& color)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const QPointF c = QRectF(r).center();
+    const double w = r.width() * 0.42;
+    const double h = r.height() * 0.32;
+    QPainterPath eye;
+    eye.moveTo(c.x() - w, c.y());
+    eye.quadTo(c.x(), c.y() - h * 2.0, c.x() + w, c.y());
+    eye.quadTo(c.x(), c.y() + h * 2.0, c.x() - w, c.y());
+    p.setPen(QPen(color, 1.3));
+    p.setBrush(Qt::NoBrush);
+    p.drawPath(eye);
+    p.setPen(Qt::NoPen);
+    p.setBrush(color);
+    p.drawEllipse(c, h * 0.95, h * 0.95);
+    p.restore();
+}
+
 /** Motion keys as small diamonds along the bottom of a clip. */
 void PaintMotionKeys(QPainter& p, const QRect& r, const Action::Clip& clip)
 {
@@ -1023,7 +1044,13 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         const int own_track = trackIndexForRow(row);
         const int own_lanes = laneCountForTrack(own_track);
         const bool own_open = own_lanes > 1 && pack_->tracks[(size_t)own_track].layers_open;
-        const int label_right = own_lanes > 1 ? (own_open ? gutter_width_ - 104 : gutter_width_ - 62) : gutter_width_ - 4;
+        int label_right = own_lanes > 1 ? (own_open ? gutter_width_ - 104 : gutter_width_ - 62) : gutter_width_ - 4;
+        const QRect eye = eyeRect(row);
+        if(!eye.isEmpty())
+        {
+            label_right = eye.left() - 2;
+            PaintEyeButton(p, eye, PluginTheme::WithAlpha(text, 170));
+        }
         p.drawText(text_x, y, std::max(10, label_right - text_x), row_height_,
                    Qt::AlignVCenter | Qt::AlignLeft, r.label);
         if(own_lanes > 1)
