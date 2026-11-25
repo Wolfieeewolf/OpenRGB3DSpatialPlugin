@@ -70,7 +70,8 @@ ActionEditorDialog::ActionEditorDialog(OpenRGB3DSpatialTab* tab, QWidget* parent
     , tab_(tab)
 {
     setWindowTitle(QStringLiteral("Action Editor"));
-    setWindowFlags(windowFlags() | Qt::Window);
+    setWindowFlags(windowFlags() | Qt::Window | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    setSizeGripEnabled(true);
     setAttribute(Qt::WA_DeleteOnClose, false);
     resize(1100, 640);
     history_timer_ = new QTimer(this);
@@ -130,6 +131,13 @@ void ActionEditorDialog::buildUi()
         effect_files_dir,
         PluginSettingsPaths::ActionEditorCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     root->addWidget(buildTopBar());
+
+    /* Thin rule between the menu strip and the timeline. */
+    auto* top_rule = new QFrame();
+    top_rule->setFixedHeight(1);
+    top_rule->setAutoFillBackground(true);
+    top_rule->setBackgroundRole(QPalette::Mid);
+    root->addWidget(top_rule);
 
     auto* splitter = new QSplitter(Qt::Horizontal);
 

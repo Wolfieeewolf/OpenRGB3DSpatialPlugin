@@ -229,6 +229,7 @@ struct Parser
     void parseUnary();
     void parsePrimary();
     void parseStmt();
+    void parseIfTail();
     void parseBlock();
     bool atStop() const;
 };
@@ -439,6 +440,35 @@ void Parser::parseBlock()
     }
 }
 
+void Parser::parseIfTail()
+{
+    /* Condition and body after "if" or "elif"; one "end" closes the whole chain. */
+    parseExpr();
+    const int jump_false = (int)prog->code.size();
+    emit(JumpIfFalse, -1);
+    parseBlock();
+    const bool is_elif = acceptId("elif");
+    if(is_elif || acceptId("else"))
+    {
+        const int jump_end = (int)prog->code.size();
+        emit(Jump, -1);
+        prog->code[(size_t)jump_false].a = (int)prog->code.size();
+        if(is_elif)
+        {
+            parseIfTail();
+        }
+        else
+        {
+            parseBlock();
+            acceptId("end");
+        }
+        prog->code[(size_t)jump_end].a = (int)prog->code.size();
+        return;
+    }
+    prog->code[(size_t)jump_false].a = (int)prog->code.size();
+    acceptId("end");
+}
+
 void Parser::parseStmt()
 {
     if(acceptId("off"))
@@ -448,23 +478,7 @@ void Parser::parseStmt()
     }
     if(acceptId("if"))
     {
-        parseExpr();
-        const int jump_false = (int)prog->code.size();
-        emit(JumpIfFalse, -1);
-        parseBlock();
-        if(acceptId("else"))
-        {
-            const int jump_end = (int)prog->code.size();
-            emit(Jump, -1);
-            prog->code[(size_t)jump_false].a = (int)prog->code.size();
-            parseBlock();
-            prog->code[(size_t)jump_end].a = (int)prog->code.size();
-        }
-        else
-        {
-            prog->code[(size_t)jump_false].a = (int)prog->code.size();
-        }
-        acceptId("end");
+        parseIfTail();
         return;
     }
     if(acceptId("while"))

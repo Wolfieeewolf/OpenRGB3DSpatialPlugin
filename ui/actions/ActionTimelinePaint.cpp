@@ -800,15 +800,20 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
     const QColor window = pal.color(QPalette::Window);
     const QColor text = pal.color(QPalette::Text);
     const QColor accent = PluginTheme::Accent(pal);
+    /* Rows alternate base and a slightly darker shade (no light-grey stripes in dark themes). */
+    const bool dark = PluginTheme::IsDark(pal);
     const QColor row_a = base;
-    const QColor row_b = MixColor(base, pal.color(QPalette::AlternateBase), 0.6);
+    const QColor row_b = dark ? MixColor(base, QColor(0, 0, 0), 0.28) : MixColor(base, text, 0.045);
+    /* Past the pack's end the timeline stops: a flat backdrop, no rows or grid. */
+    const QColor outside = dark ? MixColor(window, QColor(0, 0, 0), 0.35) : MixColor(window, text, 0.06);
+    const int end_x = std::min(width(), timeToX(duration_ms_));
     const QColor grid_major = PluginTheme::Line(pal, 34, 30);
     const QColor grid_minor = PluginTheme::Line(pal, 16, 14);
     const QColor separator = PluginTheme::Line(pal, 40, 46);
 
-    p.fillRect(rect(), base);
+    p.fillRect(rect(), outside);
     p.fillRect(0, 0, gutter_width_, height(), window);
-    p.fillRect(gutter_width_, 0, width() - gutter_width_, header_height_, window);
+    p.fillRect(gutter_width_, 0, end_x - gutter_width_, header_height_, window);
 
     QFont font = p.font();
     font.setPointSize(8);
@@ -870,7 +875,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         p.restore();
     }
     p.setPen(separator);
-    p.drawLine(0, header_height_ - 1, width(), header_height_ - 1);
+    p.drawLine(0, header_height_ - 1, end_x, header_height_ - 1);
 
     for(int row = 0; row < visible_rows_.size(); ++row)
     {
@@ -879,7 +884,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         const QColor bg = (row % 2 == 0) ? row_a : row_b;
         const QColor gutter_bg = (selected_row_ == row) ? MixColor(window, accent, 0.28) : window;
         p.fillRect(0, y, gutter_width_, row_height_, gutter_bg);
-        p.fillRect(gutter_width_, y, width() - gutter_width_, row_height_, bg);
+        p.fillRect(gutter_width_, y, end_x - gutter_width_, row_height_, bg);
         if(show_minor)
         {
             p.setPen(grid_minor);
@@ -899,7 +904,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             p.drawLine(x, y, x, y + row_height_);
         }
         p.setPen(separator);
-        p.drawLine(0, y + row_height_ - 1, width(), y + row_height_ - 1);
+        p.drawLine(0, y + row_height_ - 1, end_x, y + row_height_ - 1);
         if(pack_ && !pack_->markers.empty())
         {
             p.setPen(PluginTheme::WithAlpha(marker_color, 70));
@@ -929,7 +934,7 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         }
         if(drag_op_ == DragOp::Move && drag_moved_ && drag_dest_row_ == row)
         {
-            p.fillRect(gutter_width_, y, width() - gutter_width_, row_height_, PluginTheme::WithAlpha(accent, 34));
+            p.fillRect(gutter_width_, y, end_x - gutter_width_, row_height_, PluginTheme::WithAlpha(accent, 34));
         }
 
         const int indent = 6 + r.depth * 14;
@@ -988,6 +993,13 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             const bool selected = isClipSelected(pb.track, pb.clip_index);
             paintClipVisual(p, clipRect(row, *pb.clip), pb, selected);
         }
+    }
+
+    // End of the pack: a solid line through the ruler and rows.
+    {
+        const int rows_bottom = header_height_ + (int)visible_rows_.size() * row_height_;
+        p.setPen(QPen(PluginTheme::Line(pal, 150, 170), 2));
+        p.drawLine(end_x - 1, 0, end_x - 1, rows_bottom);
     }
 
     // Origin ghost + floating clip during Move.
