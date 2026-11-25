@@ -2,19 +2,23 @@
 #pragma once
 
 #include "Action.h"
+#include "ActionEditorHistory.h"
 #include "ActionPlayer.h"
 #include "ActionTimelineWidget.h"
 #include "filesystem.h"
 #include <QDialog>
 #include <QElapsedTimer>
 
+class QAction;
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
+class QPropertyAnimation;
 class QPushButton;
+class QScrollArea;
 class QSlider;
 class QSpinBox;
 class QTimer;
@@ -45,8 +49,13 @@ signals:
 public slots:
     void stopPreview();
 
+    void undo();
+    void redo();
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
+    void reject() override;
 
 private slots:
     void onRebuildTimelineModel();
@@ -133,6 +142,27 @@ private:
     Action::Pack soloPackForTrack(int track_index) const;
     void startPreview(const Action::Pack& play_pack, int start_ms, const QString& status, bool solo);
 
+    /* Undo history: edits close a step after a short pause, or when a drag ends. */
+    void scheduleHistoryCommit();
+    void commitHistoryNow();
+    void resetHistory();
+    void restoreSnapshot(const ActionEditorHistory::Snapshot& snapshot);
+    void updateHistoryUi();
+    bool hasUnsavedChanges() const;
+    /** Asks to save, discard or cancel when there are unsaved changes; true = go ahead. */
+    bool confirmLeaveUnsaved();
+    void updateWindowTitle();
+
+    QWidget* buildTopBar();
+    QWidget* buildTransportBar();
+    void togglePlayFromPlayhead();
+    void goToStart();
+    void updateTimeReadout();
+    /** Keeps the playhead in view while playing, turning the page with a short slide. */
+    void followPlayhead();
+    void syncZoomSlider(double pixels_per_second);
+    void zoomToFit();
+
     OpenRGB3DSpatialTab* tab_ = nullptr;
     filesystem::path save_dir_;
     filesystem::path pack_path_;
@@ -208,9 +238,16 @@ private:
     QLineEdit* media_text_edit_ = nullptr;
     QCheckBox* media_scroll_check_ = nullptr;
 
-    QPushButton* preview_button_ = nullptr;
+    /* Transport bar: play/stop from the playhead, go to start, follow, time, zoom. */
+    QToolButton* preview_button_ = nullptr;
     QToolButton* preview_menu_button_ = nullptr;
-    QPushButton* stop_button_ = nullptr;
+    QToolButton* to_start_button_ = nullptr;
+    QToolButton* follow_button_ = nullptr;
+    QToolButton* snap_button_ = nullptr;
+    QLabel* time_label_ = nullptr;
+    QSlider* zoom_slider_ = nullptr;
+    QScrollArea* timeline_scroll_ = nullptr;
+    QPropertyAnimation* follow_anim_ = nullptr;
     QPushButton* save_button_ = nullptr;
 
     QTimer* timer_ = nullptr;
@@ -224,4 +261,10 @@ private:
     int last_elapsed_ms_ = 0;
     int selected_track_ = -1;
     int selected_clip_ = -1;
+
+    ActionEditorHistory history_;
+    QTimer* history_timer_ = nullptr;
+    bool restoring_history_ = false;
+    QAction* undo_action_ = nullptr;
+    QAction* redo_action_ = nullptr;
 };

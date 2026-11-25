@@ -11,6 +11,7 @@
 #include "ActionVolumeField.h"
 #include "SpatialOffscreenGlPool.h"
 #include "ZoneManager3D.h"
+#include "PluginTheme.h"
 
 #include <cstdint>
 
@@ -27,6 +28,7 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QSet>
 #include <QTimer>
 #include <QWheelEvent>
@@ -633,6 +635,36 @@ void ActionTimelineWidget::paintClipIntensityCurve(QPainter& p, const QRect& br,
     p.drawPolyline(line);
 }
 
+namespace
+{
+QColor MixColor(const QColor& a, const QColor& b, double t)
+{
+    return QColor((int)std::lround(a.red() + (b.red() - a.red()) * t),
+                  (int)std::lround(a.green() + (b.green() - a.green()) * t),
+                  (int)std::lround(a.blue() + (b.blue() - a.blue()) * t));
+}
+
+QString FormatRulerTime(int ms, int step_ms)
+{
+    const int decimals = step_ms >= 1000 ? 0 : (step_ms % 100 == 0 ? 1 : 2);
+    QString text = QString::number(ms / 1000.0, 'f', decimals);
+    if(text.contains(QLatin1Char('.')))
+    {
+        while(text.endsWith(QLatin1Char('0')))
+        {
+            text.chop(1);
+        }
+        if(text.endsWith(QLatin1Char('.')))
+        {
+            text.chop(1);
+        }
+    }
+    return text + QStringLiteral("s");
+}
+
+const QColor kPlayheadColor(235, 80, 80);
+} // namespace
+
 void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const PaintClip& pb, bool selected) const
 {
     if(!pb.clip || br.width() < 2 || br.height() < 2)
@@ -642,8 +674,14 @@ void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const P
     Action::Clip sample = *pb.clip;
     Action::EnsureClipGradient(&sample);
 
+    /* Rounded card: the LED preview is clipped to the card shape, the frame drawn on top. */
+    const qreal radius = std::min({5.0, br.height() / 3.0, br.width() / 2.0});
+    QPainterPath shape;
+    shape.addRoundedRect(QRectF(br), radius, radius);
+
     p.save();
-    p.setClipRect(br, Qt::IntersectClip);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setClipPath(shape, Qt::IntersectClip);
     p.setRenderHint(QPainter::Antialiasing, false);
 
     p.setPen(Qt::NoPen);
@@ -652,12 +690,13 @@ void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const P
 
     paintClipSpatialRaster(p, br, pb, sample);
 
-    if(sample.effect_id == "media_text" && sample.media_text.empty() && br.width() > 24)
+    const bool is_text = sample.effect_id == "media_text";
+    if(is_text && sample.media_text.empty() && br.width() > 24)
     {
         p.setPen(QColor(160, 160, 170));
         p.drawText(br.adjusted(4, 0, -4, 0), Qt::AlignCenter, QStringLiteral("(no text)"));
     }
-    else if(sample.effect_id == "media_text" && !sample.media_text.empty() && br.width() > 32)
+    else if(is_text && !sample.media_text.empty() && br.width() > 32)
     {
         // Caption helps when the spatial raster is sparse / dark mid-scroll.
         const QString label = QString::fromStdString(sample.media_text);
@@ -675,10 +714,32 @@ void ActionTimelineWidget::paintClipVisual(QPainter& p, const QRect& br, const P
 
     paintClipIntensityCurve(p, br, sample);
 
-    p.setBrush(Qt::NoBrush);
-    p.setPen(selected ? QColor(255, 220, 80) : QColor(70, 70, 78));
-    p.drawRect(br.adjusted(0, 0, -1, -1));
+    /* Name tag on a soft dark pill so it reads over bright effects. */
+    if(!is_text && br.width() >= 46 && br.height() >= 14)
+    {
+        QFont font = p.font();
+        font.setPointSizeF(std::max(6.5, font.pointSizeF() - 0.5));
+        font.setBold(true);
+        p.setFont(font);
+        const QFontMetrics fm(font);
+        const int max_w = br.width() - 14;
+        const QString name = fm.elidedText(effectDisplayName(sample), Qt::ElideRight, max_w);
+        if(!name.isEmpty())
+        {
+            const int text_w = fm.horizontalAdvance(name);
+            const QRect pill(br.left() + 5, br.top() + (br.height() - fm.height()) / 2 - 1,
+                             text_w + 8, fm.height() + 2);
+            p.setRenderHint(QPainter::Antialiasing, true);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(0, 0, 0, 120));
+            p.drawRoundedRect(QRectF(pill), pill.height() / 2.0, pill.height() / 2.0);
+            p.setPen(QColor(255, 255, 255, 235));
+            p.drawText(pill, Qt::AlignCenter, name);
+        }
+    }
     p.restore();
+
+    PluginTheme::PaintCardFrame(p, QRectF(br), RgbToQColor(sample.color), selected, false, palette(), radius);
 }
 
 void ActionTimelineWidget::paintEvent(QPaintEvent* event)
@@ -686,7 +747,7 @@ void ActionTimelineWidget::paintEvent(QPaintEvent* event)
     if(content_dirty_ || content_cache_.size() != size())
     {
         content_cache_ = QPixmap(size());
-        content_cache_.fill(QColor(32, 32, 36));
+        content_cache_.fill(palette().color(QPalette::Base));
         QPainter cache_painter(&content_cache_);
         paintTimelineContent(cache_painter);
         content_dirty_ = false;
@@ -696,90 +757,151 @@ void ActionTimelineWidget::paintEvent(QPaintEvent* event)
     const QRect damage = event ? event->rect() : rect();
     p.drawPixmap(damage, content_cache_, damage);
 
+    /* Playhead: a line through the rows and a handle in the ruler. */
     const int px = timeToX(playhead_ms_);
-    p.setPen(QPen(QColor(255, 80, 80), 2));
-    p.drawLine(px, 0, px, height());
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setPen(QPen(kPlayheadColor, 2));
+    p.drawLine(px, header_height_ - 6, px, height());
+    p.setPen(Qt::NoPen);
+    p.setBrush(kPlayheadColor);
+    QPainterPath handle;
+    handle.addRoundedRect(QRectF(px - 5, 2, 10, header_height_ - 10), 2, 2);
+    handle.moveTo(px - 5, header_height_ - 9);
+    handle.lineTo(px, header_height_ - 3);
+    handle.lineTo(px + 5, header_height_ - 9);
+    handle.closeSubpath();
+    p.drawPath(handle.simplified());
 }
 
 void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
 {
-    p.fillRect(rect(), QColor(32, 32, 36));
+    const QPalette pal = palette();
+    const QColor base = pal.color(QPalette::Base);
+    const QColor window = pal.color(QPalette::Window);
+    const QColor text = pal.color(QPalette::Text);
+    const QColor accent = PluginTheme::Accent(pal);
+    const QColor row_a = base;
+    const QColor row_b = MixColor(base, pal.color(QPalette::AlternateBase), 0.6);
+    const QColor grid_major = PluginTheme::Line(pal, 34, 30);
+    const QColor grid_minor = PluginTheme::Line(pal, 16, 14);
+    const QColor separator = PluginTheme::Line(pal, 40, 46);
 
-    p.fillRect(0, 0, gutter_width_, height(), QColor(40, 40, 44));
-    p.fillRect(gutter_width_, 0, width() - gutter_width_, header_height_, QColor(45, 45, 50));
+    p.fillRect(rect(), base);
+    p.fillRect(0, 0, gutter_width_, height(), window);
+    p.fillRect(gutter_width_, 0, width() - gutter_width_, header_height_, window);
 
-    p.setPen(QColor(160, 160, 170));
     QFont font = p.font();
     font.setPointSize(8);
     p.setFont(font);
-    for(int sec = 0; sec * 1000 <= duration_ms_; ++sec)
+
+    /* Ruler: major ticks with labels at a readable step, minor ticks between. */
+    const int step = rulerStepMs();
+    const int minor = (step % 5 == 0 && step >= 50) ? step / 5 : step / 2;
+    const bool show_minor = minor > 0 && minor * pixels_per_second_ / 1000.0 >= 8.0;
+    if(show_minor)
     {
-        const int x = timeToX(sec * 1000);
-        p.drawLine(x, header_height_ - 8, x, header_height_);
-        p.drawText(x + 2, header_height_ - 10, QString::number(sec) + QStringLiteral("s"));
+        p.setPen(PluginTheme::Line(pal, 90, 90));
+        for(int ms = minor; ms <= duration_ms_; ms += minor)
+        {
+            if(ms % step != 0)
+            {
+                const int x = timeToX(ms);
+                p.drawLine(x, header_height_ - 4, x, header_height_);
+            }
+        }
     }
+    for(int ms = 0; ms <= duration_ms_; ms += step)
+    {
+        const int x = timeToX(ms);
+        p.setPen(PluginTheme::Line(pal, 150, 150));
+        p.drawLine(x, header_height_ - 9, x, header_height_);
+        p.setPen(PluginTheme::WithAlpha(text, 200));
+        p.drawText(x + 3, header_height_ - 10, FormatRulerTime(ms, step));
+    }
+    p.setPen(PluginTheme::WithAlpha(text, 170));
     p.drawText(8, header_height_ - 8, QStringLiteral("Pack scope"));
+    p.setPen(separator);
+    p.drawLine(0, header_height_ - 1, width(), header_height_ - 1);
 
     for(int row = 0; row < visible_rows_.size(); ++row)
     {
         const Row& r = visible_rows_[row];
         const int y = header_height_ + row * row_height_;
-        const QColor bg = (row % 2 == 0) ? QColor(38, 38, 42) : QColor(34, 34, 38);
-        const QColor gutter_bg = (selected_row_ == row) ? QColor(55, 55, 70) : bg;
+        const QColor bg = (row % 2 == 0) ? row_a : row_b;
+        const QColor gutter_bg = (selected_row_ == row) ? MixColor(window, accent, 0.28) : window;
         p.fillRect(0, y, gutter_width_, row_height_, gutter_bg);
         p.fillRect(gutter_width_, y, width() - gutter_width_, row_height_, bg);
-        const int second_px = timeToX(1000) - timeToX(0);
-        p.setPen(QColor(255, 255, 255, 28));
-        for(int sec = 1; sec * 1000 <= duration_ms_; ++sec)
+        if(show_minor)
         {
-            const int x = timeToX(sec * 1000);
-            p.drawLine(x, y, x, y + row_height_);
-        }
-        if(second_px >= 48)
-        {
-            p.setPen(QColor(255, 255, 255, 14));
-            for(int half = 1; half * 500 <= duration_ms_; half += 2)
+            p.setPen(grid_minor);
+            for(int ms = minor; ms <= duration_ms_; ms += minor)
             {
-                const int x = timeToX(half * 500);
-                p.drawLine(x, y, x, y + row_height_);
+                if(ms % step != 0)
+                {
+                    const int x = timeToX(ms);
+                    p.drawLine(x, y, x, y + row_height_);
+                }
             }
         }
-        p.setPen(QColor(55, 55, 60));
+        p.setPen(grid_major);
+        for(int ms = step; ms <= duration_ms_; ms += step)
+        {
+            const int x = timeToX(ms);
+            p.drawLine(x, y, x, y + row_height_);
+        }
+        p.setPen(separator);
         p.drawLine(0, y + row_height_ - 1, width(), y + row_height_ - 1);
 
         if(r.depth == 0 || r.target.kind == Action::TargetKind::SceneZone)
         {
-            QColor accent = QColor(90, 140, 220);
+            QColor tag = QColor(90, 140, 220);
             if(r.target.kind == Action::TargetKind::All)
             {
-                accent = QColor(220, 160, 60);
+                tag = QColor(220, 160, 60);
             }
             else if(r.target.kind == Action::TargetKind::SceneZone)
             {
-                accent = QColor(120, 200, 140);
+                tag = QColor(120, 200, 140);
             }
-            p.fillRect(0, y, 3, row_height_, accent);
+            p.fillRect(0, y + 2, 3, row_height_ - 4, tag);
         }
         if(row_reorder_from_ >= 0 && row == row_reorder_hover_ && row != row_reorder_from_)
         {
-            p.fillRect(0, y, gutter_width_, 2, QColor(255, 220, 80));
+            p.fillRect(0, y, gutter_width_, 2, accent);
         }
         if(drag_op_ == DragOp::Move && drag_moved_ && drag_dest_row_ == row)
         {
-            p.fillRect(gutter_width_, y, width() - gutter_width_, row_height_, QColor(120, 180, 255, 28));
+            p.fillRect(gutter_width_, y, width() - gutter_width_, row_height_, PluginTheme::WithAlpha(accent, 34));
         }
 
         const int indent = 6 + r.depth * 14;
         if(r.expandable)
         {
-            const QRect plus(indent, y + (row_height_ - expand_hit_) / 2, expand_hit_, expand_hit_);
-            p.setPen(QColor(200, 200, 210));
-            p.setBrush(QColor(55, 55, 62));
-            p.drawRect(plus);
-            p.drawText(plus, Qt::AlignCenter, r.expanded ? QStringLiteral("\u2212") : QStringLiteral("+"));
+            /* Disclosure chevron: right when collapsed, down when open. */
+            const QRectF box(indent, y + (row_height_ - expand_hit_) / 2.0, expand_hit_, expand_hit_);
+            const QPointF c = box.center();
+            QPainterPath chevron;
+            if(r.expanded)
+            {
+                chevron.moveTo(c.x() - 4, c.y() - 2);
+                chevron.lineTo(c.x(), c.y() + 2.5);
+                chevron.lineTo(c.x() + 4, c.y() - 2);
+            }
+            else
+            {
+                chevron.moveTo(c.x() - 2, c.y() - 4);
+                chevron.lineTo(c.x() + 2.5, c.y());
+                chevron.lineTo(c.x() - 2, c.y() + 4);
+            }
+            p.save();
+            p.setRenderHint(QPainter::Antialiasing, true);
+            p.setPen(QPen(PluginTheme::WithAlpha(text, 200), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.setBrush(Qt::NoBrush);
+            p.drawPath(chevron);
+            p.restore();
         }
 
-        p.setPen(r.depth == 0 ? QColor(230, 230, 235) : QColor(180, 180, 190));
+        p.setPen(r.depth == 0 ? text : PluginTheme::WithAlpha(text, 185));
         const int text_x = indent + (r.expandable ? expand_hit_ + 4 : 4);
         p.drawText(text_x, y, gutter_width_ - text_x - 4, row_height_,
                    Qt::AlignVCenter | Qt::AlignLeft, r.label);
@@ -823,10 +945,13 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             origin.start_ms = drag_origin_start_;
             origin.end_ms = drag_origin_end_;
             const QRect home = clipRect(drag_home_row_, origin);
-            p.fillRect(home, QColor(255, 255, 255, 18));
-            p.setPen(QPen(QColor(200, 200, 210, 140), 1, Qt::DashLine));
-            p.setBrush(Qt::NoBrush);
-            p.drawRect(home.adjusted(0, 0, -1, -1));
+            p.save();
+            p.setRenderHint(QPainter::Antialiasing, true);
+            p.setPen(Qt::NoPen);
+            p.setBrush(PluginTheme::WithAlpha(text, 18));
+            p.drawRoundedRect(QRectF(home), 5, 5);
+            p.restore();
+            PluginTheme::PaintCardFrame(p, QRectF(home), RgbToQColor(b.color), false, true, pal);
         }
 
         PaintClip pb;
@@ -843,9 +968,6 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         p.setOpacity(0.92);
         paintClipVisual(p, floating, pb, true);
         p.setOpacity(1.0);
-        p.setPen(QPen(QColor(140, 200, 255, 220), 2));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(floating.adjusted(0, 0, -1, -1));
     }
 
     // Vertical span preview: one continuous clip covering the track rows.
@@ -874,22 +996,24 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         p.setOpacity(0.88);
         paintClipVisual(p, span, pb, true);
         p.setOpacity(1.0);
-        p.setPen(QPen(QColor(140, 200, 255, 220), 2));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(span.adjusted(0, 0, -1, -1));
+    }
+
+    // Snap guide: shows what the dragged edge or playhead stuck to.
+    if(snap_guide_ms_ >= 0 && drag_op_ != DragOp::None && drag_op_ != DragOp::Marquee)
+    {
+        PluginTheme::PaintGuideLine(p, timeToX(snap_guide_ms_), 0, height(), PluginTheme::WithAlpha(accent, 230));
     }
 
     // Marquee rubber-band while dragging a selection box.
     if(drag_op_ == DragOp::Marquee)
     {
         const QRect box = QRect(marquee_origin_, marquee_current_).normalized();
-        p.fillRect(box, QColor(120, 180, 255, 40));
-        p.setPen(QPen(QColor(140, 200, 255, 220), 1, Qt::DashLine));
+        p.fillRect(box, PluginTheme::WithAlpha(accent, 40));
+        p.setPen(QPen(PluginTheme::WithAlpha(accent, 220), 1, Qt::DashLine));
         p.setBrush(Qt::NoBrush);
         p.drawRect(box.adjusted(0, 0, -1, -1));
     }
 
-    p.setPen(QPen(QColor(168, 168, 176), 2));
+    p.setPen(QPen(PluginTheme::Line(pal, 90, 110), 1));
     p.drawLine(gutter_width_, 0, gutter_width_, height());
 }
-

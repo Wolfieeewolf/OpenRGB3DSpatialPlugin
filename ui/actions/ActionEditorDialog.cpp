@@ -14,6 +14,7 @@
 #include "LEDPosition3D.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "PluginUiUtils.h"
+#include "PluginTheme.h"
 #include "VirtualController3D.h"
 #include "ZoneManager3D.h"
 #include "EffectCollapsibleSection.h"
@@ -21,6 +22,8 @@
 #include "EffectSliderRow.h"
 
 #include <QAbstractItemView>
+#include <QAction>
+#include <QCloseEvent>
 #include <QAbstractSpinBox>
 #include <QCheckBox>
 #include <QComboBox>
@@ -31,6 +34,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QKeySequence>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -40,9 +44,13 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QSignalBlocker>
 #include <QSlider>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QPropertyAnimation>
+#include <QScrollBar>
+#include <QEasingCurve>
 #include <QTimer>
 #include <QToolButton>
 #include <QMenu>
@@ -65,6 +73,26 @@ ActionEditorDialog::ActionEditorDialog(OpenRGB3DSpatialTab* tab, QWidget* parent
     setWindowFlags(windowFlags() | Qt::Window);
     setAttribute(Qt::WA_DeleteOnClose, false);
     resize(1100, 640);
+    history_timer_ = new QTimer(this);
+    history_timer_->setSingleShot(true);
+    history_timer_->setInterval(350);
+    connect(history_timer_, &QTimer::timeout, this, &ActionEditorDialog::commitHistoryNow);
+
+    /* Window shortcuts: a focused text or number field keeps its own Ctrl+Z. */
+    undo_action_ = new QAction(QStringLiteral("Undo"), this);
+    undo_action_->setShortcut(QKeySequence::Undo);
+    undo_action_->setShortcutContext(Qt::WindowShortcut);
+    undo_action_->setToolTip(QStringLiteral("Undo (Ctrl+Z)"));
+    undo_action_->setIcon(PluginTheme::MakeIcon(PluginTheme::Icon::Undo, palette()));
+    connect(undo_action_, &QAction::triggered, this, &ActionEditorDialog::undo);
+    addAction(undo_action_);
+    redo_action_ = new QAction(QStringLiteral("Redo"), this);
+    redo_action_->setShortcuts({QKeySequence(Qt::CTRL | Qt::Key_Y), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z)});
+    redo_action_->setShortcutContext(Qt::WindowShortcut);
+    redo_action_->setToolTip(QStringLiteral("Redo (Ctrl+Y or Ctrl+Shift+Z)"));
+    redo_action_->setIcon(PluginTheme::MakeIcon(PluginTheme::Icon::Redo, palette()));
+    connect(redo_action_, &QAction::triggered, this, &ActionEditorDialog::redo);
+    addAction(redo_action_);
     buildUi();
 
     timer_ = new QTimer(this);
@@ -80,6 +108,8 @@ ActionEditorDialog::ActionEditorDialog(OpenRGB3DSpatialTab* tab, QWidget* parent
             timeline_->requestContentRepaint();
         }
     });
+
+    updateHistoryUi();
 }
 
 ActionEditorDialog::~ActionEditorDialog()
@@ -99,17 +129,18 @@ void ActionEditorDialog::buildUi()
         PluginSettingsPaths::ActionEditorColorsFile(tab_ ? tab_->resource_manager : nullptr),
         effect_files_dir,
         PluginSettingsPaths::ActionEditorCurvesFile(tab_ ? tab_->resource_manager : nullptr));
+    root->addWidget(buildTopBar());
     root->addWidget(effect_toolbar_);
 
     auto* splitter = new QSplitter(Qt::Horizontal);
 
-    auto* timeline_scroll = new QScrollArea();
-    timeline_scroll->setWidgetResizable(true);
-    timeline_scroll->setFrameShape(QFrame::NoFrame);
+    timeline_scroll_ = new QScrollArea();
+    timeline_scroll_->setWidgetResizable(true);
+    timeline_scroll_->setFrameShape(QFrame::NoFrame);
     timeline_ = new ActionTimelineWidget();
     timeline_->setEffectFilesDir(effect_files_dir);
-    timeline_scroll->setWidget(timeline_);
-    splitter->addWidget(timeline_scroll);
+    timeline_scroll_->setWidget(timeline_);
+    splitter->addWidget(timeline_scroll_);
 
     auto* props_wrap = new QWidget();
     auto* props_layout = new QVBoxLayout(props_wrap);
@@ -620,55 +651,20 @@ void ActionEditorDialog::buildUi()
     splitter->setSizes({900, 340});
     root->addWidget(splitter, 1);
 
-    status_label_ = new QLabel(QStringLiteral("Idle"));
-    PluginUiApplyMutedSecondaryLabel(status_label_);
-    root->addWidget(status_label_);
-
-    auto* action_row = new QHBoxLayout();
-    preview_button_ = new QPushButton(QStringLiteral("Preview"));
-    preview_button_->setToolTip(QStringLiteral("Preview pack (Space)"));
-    preview_menu_button_ = new QToolButton();
-    preview_menu_button_->setText(QString());
-    preview_menu_button_->setArrowType(Qt::DownArrow);
-    preview_menu_button_->setToolTip(QStringLiteral("Preview options"));
-    preview_menu_button_->setPopupMode(QToolButton::InstantPopup);
-    preview_menu_button_->setFixedWidth(22);
-    auto* preview_menu = new QMenu(preview_menu_button_);
-    preview_menu->addAction(QStringLiteral("Preview pack\tSpace"), this, [this]() { onPreviewPack(0); });
-    preview_menu->addAction(QStringLiteral("Preview selected track\tShift+Space"), this, [this]() {
-        const int row = currentTimelineRow();
-        if(selected_track_ >= 0)
-        {
-            onPreviewTrack(selected_track_, 0);
-        }
-        else
-        {
-            onPreviewRow(row >= 0 ? row : 0, 0);
-        }
-    });
-    preview_menu->addAction(QStringLiteral("Preview from playhead"), this, [this]() {
-        const int ms = timeline_ ? timeline_->playheadMs() : 0;
-        onPreviewPack(ms);
-    });
-    preview_menu_button_->setMenu(preview_menu);
-    stop_button_ = new QPushButton(QStringLiteral("Stop"));
-    stop_button_->setEnabled(false);
-    stop_button_->setToolTip(QStringLiteral("Stop preview (Esc)"));
-    save_button_ = new QPushButton(QStringLiteral("Save"));
-    PluginUiApplyPrimaryButton(save_button_);
-    auto* close_button = new QPushButton(QStringLiteral("Close"));
-    action_row->addWidget(preview_button_);
-    action_row->addWidget(preview_menu_button_);
-    action_row->addWidget(stop_button_);
-    action_row->addStretch(1);
-    action_row->addWidget(save_button_);
-    action_row->addWidget(close_button);
-    root->addLayout(action_row);
+    root->addWidget(buildTransportBar());
 
     setColorButton(color_button_, ToRGBColor(255, 0, 0));
     setColorButton(color_to_button_, ToRGBColor(0, 128, 255));
 
     connect(duration_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ActionEditorDialog::onDurationChanged);
+    connect(name_edit_, &QLineEdit::editingFinished, this, [this]() {
+        if(suppress_ui_)
+        {
+            return;
+        }
+        applyMetaToPack();
+        markPreviewDirtyIfPlaying();
+    });
     connect(loop_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
         if(suppress_ui_)
         {
@@ -680,7 +676,10 @@ void ActionEditorDialog::buildUi()
     connect(controllers_button_, &QPushButton::clicked, this, &ActionEditorDialog::onPickControllers);
     connect(map_controllers_button_, &QPushButton::clicked, this, &ActionEditorDialog::onMapControllers);
     connect(timeline_, &ActionTimelineWidget::playheadChanged, this, &ActionEditorDialog::onPlayheadChanged);
+    connect(timeline_, &ActionTimelineWidget::zoomChanged, this, &ActionEditorDialog::syncZoomSlider);
     connect(timeline_, &ActionTimelineWidget::clipSelected, this, &ActionEditorDialog::onClipSelected);
+    /* Belt and braces: any timeline gesture closes a step if the pack changed (no-op otherwise). */
+    connect(timeline_, &ActionTimelineWidget::clipSelected, this, [this](int, int) { scheduleHistoryCommit(); });
     connect(timeline_, &ActionTimelineWidget::clipEdited, this, [this](int track, int clip) {
         onClipSelected(track, clip);
         markPreviewDirtyIfPlaying();
@@ -774,16 +773,19 @@ void ActionEditorDialog::buildUi()
     connect(gradient_bar_, &ActionGradientBar::stopsChanged, this, &ActionEditorDialog::onGradientStopsChanged);
     connect(add_color_button_, &QPushButton::clicked, this, &ActionEditorDialog::onAddColorStop);
     connect(remove_color_button_, &QPushButton::clicked, this, &ActionEditorDialog::onRemoveColorStop);
-    connect(preview_button_, &QPushButton::clicked, this, &ActionEditorDialog::onPreview);
-    connect(stop_button_, &QPushButton::clicked, this, &ActionEditorDialog::stopPreview);
     connect(save_button_, &QPushButton::clicked, this, &ActionEditorDialog::onSave);
-    connect(close_button, &QPushButton::clicked, this, &QDialog::close);
 
     updatePropVisibility();
 }
 
 void ActionEditorDialog::NewPack(const filesystem::path& save_dir)
 {
+    if(isVisible() && !confirmLeaveUnsaved())
+    {
+        raise();
+        activateWindow();
+        return;
+    }
     std::vector<std::string> devices;
     if(!promptSelectControllers(&devices, true))
     {
@@ -827,7 +829,7 @@ void ActionEditorDialog::NewPack(const filesystem::path& save_dir)
     }
 
     loadIntoUi(pack_);
-    setWindowTitle(QStringLiteral("Action Editor  -  New"));
+    updateWindowTitle();
     status_label_->setText(QStringLiteral("Drag tools onto a row \u00b7 right-click to add \u00b7 Delete removes"));
     show();
     raise();
@@ -836,6 +838,12 @@ void ActionEditorDialog::NewPack(const filesystem::path& save_dir)
 
 void ActionEditorDialog::EditPack(const filesystem::path& path)
 {
+    if(isVisible() && !confirmLeaveUnsaved())
+    {
+        raise();
+        activateWindow();
+        return;
+    }
     Action::Pack pack;
     std::string err;
     if(!Action::LoadFromFile(path, &pack, &err))
@@ -888,7 +896,7 @@ void ActionEditorDialog::EditPack(const filesystem::path& path)
     {
         promptMapControllers();
     }
-    setWindowTitle(QStringLiteral("Action Editor  -  %1").arg(QString::fromStdString(pack_.name)));
+    updateWindowTitle();
     {
         QString status = QStringLiteral("Editing %1")
                              .arg(QString::fromStdString(path.filename().string()));
@@ -1341,6 +1349,8 @@ void ActionEditorDialog::loadIntoUi(const Action::Pack& pack)
     onRebuildTimelineModel();
     applyClipToForm();
     updateSelectionActions();
+    updateTimeReadout();
+    resetHistory();
 }
 
 void ActionEditorDialog::onDurationChanged(int value)
@@ -1360,6 +1370,7 @@ void ActionEditorDialog::onDurationChanged(int value)
         }
     }
     timeline_->setDurationMs(value);
+    updateTimeReadout();
     markPreviewDirtyIfPlaying();
     applyClipToForm();
     timeline_->requestContentRepaint();
@@ -1368,6 +1379,7 @@ void ActionEditorDialog::onDurationChanged(int value)
 void ActionEditorDialog::onPlayheadChanged(int ms)
 {
     timeline_->setPlayheadMs(ms);
+    updateTimeReadout();
     if(player_.IsPlaying())
     {
         player_.UpdatePack(preview_pack_);
@@ -1403,7 +1415,11 @@ void ActionEditorDialog::keyPressEvent(QKeyEvent* event)
             {
                 stopPreview();
             }
-            else if(event->modifiers() & Qt::ShiftModifier)
+            else if(!(event->modifiers() & Qt::ShiftModifier))
+            {
+                togglePlayFromPlayhead();
+            }
+            else
             {
                 const int row = currentTimelineRow();
                 if(selected_track_ >= 0)
@@ -1415,10 +1431,16 @@ void ActionEditorDialog::keyPressEvent(QKeyEvent* event)
                     onPreviewRow(row >= 0 ? row : 0, 0);
                 }
             }
-            else
-            {
-                onPreviewPack(0);
-            }
+            event->accept();
+            return;
+        }
+    }
+    if(event->key() == Qt::Key_Home)
+    {
+        const QWidget* focus = focusWidget();
+        if(!(focus && (qobject_cast<const QLineEdit*>(focus) || qobject_cast<const QAbstractSpinBox*>(focus))))
+        {
+            goToStart();
             event->accept();
             return;
         }
@@ -1767,7 +1789,9 @@ void ActionEditorDialog::onSave()
                              QStringLiteral("Save failed:\n%1").arg(QString::fromStdString(err)));
         return;
     }
-    setWindowTitle(QStringLiteral("Action Editor  -  %1").arg(QString::fromStdString(pack_.name)));
+    commitHistoryNow();
+    history_.MarkSaved(Action::ToJson(pack_).dump());
+    updateWindowTitle();
     status_label_->setText(QStringLiteral("Saved %1").arg(QString::fromStdString(pack_path_.filename().string())));
 #ifdef _WIN32
     emit packSaved(QString::fromStdWString(pack_path_.wstring()));
@@ -1778,12 +1802,18 @@ void ActionEditorDialog::onSave()
 
 void ActionEditorDialog::setPlayingUi(bool playing)
 {
-    preview_button_->setEnabled(!playing);
+    if(preview_button_)
+    {
+        preview_button_->setIcon(PluginTheme::MakeIcon(playing ? PluginTheme::Icon::Stop : PluginTheme::Icon::Play,
+                                                       preview_button_->palette()));
+        preview_button_->setToolTip(playing ? QStringLiteral("Stop (Space or Esc)")
+                                            : QStringLiteral("Play from the playhead (Space)"));
+        preview_button_->setAccessibleName(playing ? QStringLiteral("Stop") : QStringLiteral("Play"));
+    }
     if(preview_menu_button_)
     {
         preview_menu_button_->setEnabled(!playing);
     }
-    stop_button_->setEnabled(playing);
     save_button_->setEnabled(!playing);
     updateSelectionActions();
 }
@@ -1973,6 +2003,7 @@ void ActionEditorDialog::onPreviewTrack(int track_index, int start_ms)
 
 void ActionEditorDialog::markPreviewDirtyIfPlaying()
 {
+    scheduleHistoryCommit();
     if(player_.IsPlaying())
     {
         preview_pack_dirty_ = true;
@@ -2046,8 +2077,465 @@ void ActionEditorDialog::onTick()
     tab_->ApplyActionPreviewFrame(preview_pack_, player_.LocalMs());
     Action::SetGpuAnimMs(-1);
     timeline_->setPlayheadMs(player_.LocalMs());
-    status_label_->setText(
-        QStringLiteral("Preview %1 / %2 ms")
-            .arg(player_.LocalMs())
-            .arg(std::max(1, pack_.duration_ms)));
+    updateTimeReadout();
+    followPlayhead();
+}
+
+void ActionEditorDialog::scheduleHistoryCommit()
+{
+    if(!restoring_history_ && history_timer_)
+    {
+        history_timer_->start();
+        updateHistoryUi();
+    }
+}
+
+void ActionEditorDialog::commitHistoryNow()
+{
+    if(restoring_history_ || !history_.HasState())
+    {
+        return;
+    }
+    /* A drag is one step: wait until the mouse is released. */
+    if(timeline_ && timeline_->isClipDragging())
+    {
+        if(history_timer_)
+        {
+            history_timer_->start();
+        }
+        return;
+    }
+    if(history_timer_)
+    {
+        history_timer_->stop();
+    }
+    history_.Commit(ActionEditorHistory::Make(pack_, selected_track_, selected_clip_));
+    updateHistoryUi();
+    updateWindowTitle();
+}
+
+void ActionEditorDialog::resetHistory()
+{
+    if(history_timer_)
+    {
+        history_timer_->stop();
+    }
+    history_.Reset(ActionEditorHistory::Make(pack_, selected_track_, selected_clip_));
+    updateHistoryUi();
+}
+
+void ActionEditorDialog::undo()
+{
+    if(timeline_ && timeline_->isClipDragging())
+    {
+        return;
+    }
+    commitHistoryNow();
+    if(!history_.CanUndo())
+    {
+        return;
+    }
+    restoreSnapshot(history_.Undo());
+    status_label_->setText(QStringLiteral("Undo"));
+}
+
+void ActionEditorDialog::redo()
+{
+    if(timeline_ && timeline_->isClipDragging())
+    {
+        return;
+    }
+    commitHistoryNow();
+    if(!history_.CanRedo())
+    {
+        return;
+    }
+    restoreSnapshot(history_.Redo());
+    status_label_->setText(QStringLiteral("Redo"));
+}
+
+void ActionEditorDialog::restoreSnapshot(const ActionEditorHistory::Snapshot& snapshot)
+{
+    restoring_history_ = true;
+    if(timeline_)
+    {
+        timeline_->cancelDrag();
+    }
+    pack_ = snapshot.pack;
+
+    suppress_ui_ = true;
+    name_edit_->setText(QString::fromStdString(pack_.name));
+    duration_spin_->setValue(pack_.duration_ms);
+    const QString loop = (pack_.loop == Action::LoopMode::Forever) ? QStringLiteral("forever")
+        : (pack_.loop == Action::LoopMode::WhileActive) ? QStringLiteral("while_active")
+        : QStringLiteral("once");
+    const int loop_idx = loop_combo_->findData(loop);
+    loop_combo_->setCurrentIndex(loop_idx >= 0 ? loop_idx : 0);
+    suppress_ui_ = false;
+    syncTimeSliderRanges();
+
+    const bool track_ok = snapshot.selected_track >= 0 && snapshot.selected_track < (int)pack_.tracks.size();
+    const bool clip_ok = track_ok && snapshot.selected_clip >= 0
+        && snapshot.selected_clip < (int)pack_.tracks[(size_t)snapshot.selected_track].clips.size();
+    selected_track_ = clip_ok ? snapshot.selected_track : -1;
+    selected_clip_ = clip_ok ? snapshot.selected_clip : -1;
+    if(timeline_)
+    {
+        timeline_->setPack(&pack_);
+        timeline_->setDurationMs(pack_.duration_ms);
+        onRebuildTimelineModel();
+        timeline_->setSelectedClip(selected_track_, selected_clip_);
+        timeline_->requestContentRepaint();
+    }
+    applyClipToForm();
+    updateSelectionActions();
+    if(player_.IsPlaying())
+    {
+        preview_pack_dirty_ = true;
+    }
+    restoring_history_ = false;
+    updateHistoryUi();
+    updateWindowTitle();
+}
+
+void ActionEditorDialog::updateHistoryUi()
+{
+    if(undo_action_)
+    {
+        undo_action_->setEnabled(history_.CanUndo() || (history_timer_ && history_timer_->isActive()));
+    }
+    if(redo_action_)
+    {
+        redo_action_->setEnabled(history_.CanRedo());
+    }
+}
+
+bool ActionEditorDialog::hasUnsavedChanges() const
+{
+    return history_.HasState() && !history_.IsSaved(Action::ToJson(pack_).dump());
+}
+
+bool ActionEditorDialog::confirmLeaveUnsaved()
+{
+    if(!hasUnsavedChanges())
+    {
+        return true;
+    }
+    const QMessageBox::StandardButton choice = QMessageBox::question(
+        this,
+        QStringLiteral("Action Editor"),
+        QStringLiteral("Save changes to \"%1\"?").arg(QString::fromStdString(pack_.name)),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save);
+    if(choice == QMessageBox::Save)
+    {
+        onSave();
+        return !hasUnsavedChanges();
+    }
+    return choice == QMessageBox::Discard;
+}
+
+void ActionEditorDialog::updateWindowTitle()
+{
+    const QString name = pack_path_.empty() ? QStringLiteral("New") : QString::fromStdString(pack_.name);
+    setWindowTitle(QStringLiteral("Action Editor  -  %1%2").arg(name, hasUnsavedChanges() ? QStringLiteral(" *") : QString()));
+}
+
+void ActionEditorDialog::closeEvent(QCloseEvent* event)
+{
+    if(!confirmLeaveUnsaved())
+    {
+        event->ignore();
+        return;
+    }
+    QDialog::closeEvent(event);
+}
+
+void ActionEditorDialog::reject()
+{
+    if(!confirmLeaveUnsaved())
+    {
+        return;
+    }
+    QDialog::reject();
+}
+
+namespace
+{
+constexpr double kMinPixelsPerSecond = 20.0;
+constexpr double kMaxPixelsPerSecond = 400.0;
+constexpr int kZoomSteps = 1000;
+
+/* Logarithmic: every step zooms by the same ratio across the whole range. */
+int ZoomToSlider(double pps)
+{
+    const double t = std::log(std::clamp(pps, kMinPixelsPerSecond, kMaxPixelsPerSecond) / kMinPixelsPerSecond)
+                   / std::log(kMaxPixelsPerSecond / kMinPixelsPerSecond);
+    return (int)std::lround(t * kZoomSteps);
+}
+
+double SliderToZoom(int value)
+{
+    const double t = std::clamp(value, 0, kZoomSteps) / (double)kZoomSteps;
+    return kMinPixelsPerSecond * std::pow(kMaxPixelsPerSecond / kMinPixelsPerSecond, t);
+}
+
+QString FormatClock(int ms)
+{
+    ms = std::max(0, ms);
+    return QStringLiteral("%1:%2.%3")
+        .arg(ms / 60000)
+        .arg((ms / 1000) % 60, 2, 10, QLatin1Char('0'))
+        .arg(ms % 1000, 3, 10, QLatin1Char('0'));
+}
+
+QFrame* BarSeparator(QWidget* parent)
+{
+    auto* line = new QFrame(parent);
+    line->setFrameShape(QFrame::VLine);
+    line->setFrameShadow(QFrame::Sunken);
+    line->setFixedHeight(18);
+    return line;
+}
+} // namespace
+
+QWidget* ActionEditorDialog::buildTopBar()
+{
+    auto* bar = new QWidget(this);
+    bar->setObjectName(QStringLiteral("actionEditorTopBar"));
+    auto* row = new QHBoxLayout(bar);
+    row->setContentsMargins(0, 0, 0, 2);
+    row->setSpacing(2);
+
+    auto add_action_button = [&](QAction* action) {
+        auto* button = new QToolButton(bar);
+        button->setDefaultAction(action);
+        button->setIconSize(QSize(18, 18));
+        button->setFixedSize(30, 28);
+        button->setAutoRaise(true);
+        row->addWidget(button);
+    };
+    add_action_button(undo_action_);
+    add_action_button(redo_action_);
+    row->addSpacing(4);
+    row->addWidget(BarSeparator(bar));
+    row->addSpacing(4);
+
+    snap_button_ = PluginTheme::MakeToolButton(
+        PluginTheme::Icon::Snap,
+        QStringLiteral("Snap to clip edges and the playhead (hold Alt to place freely)"),
+        bar, true);
+    snap_button_->setChecked(true);
+    connect(snap_button_, &QToolButton::toggled, this, [this](bool on) {
+        if(timeline_)
+        {
+            timeline_->setSnapEnabled(on);
+        }
+    });
+    row->addWidget(snap_button_);
+    row->addStretch(1);
+
+    PluginTheme::ApplyFlatToolBar(bar);
+    return bar;
+}
+
+QWidget* ActionEditorDialog::buildTransportBar()
+{
+    auto* bar = new QWidget(this);
+    bar->setObjectName(QStringLiteral("actionEditorTransport"));
+    auto* row = new QHBoxLayout(bar);
+    row->setContentsMargins(0, 4, 0, 0);
+    row->setSpacing(2);
+
+    to_start_button_ = PluginTheme::MakeToolButton(PluginTheme::Icon::ToStart,
+                                                   QStringLiteral("Go to start (Home)"), bar);
+    connect(to_start_button_, &QToolButton::clicked, this, &ActionEditorDialog::goToStart);
+    row->addWidget(to_start_button_);
+
+    preview_button_ = PluginTheme::MakeToolButton(PluginTheme::Icon::Play,
+                                                  QStringLiteral("Play from the playhead (Space)"), bar);
+    connect(preview_button_, &QToolButton::clicked, this, &ActionEditorDialog::togglePlayFromPlayhead);
+    row->addWidget(preview_button_);
+
+    preview_menu_button_ = new QToolButton(bar);
+    preview_menu_button_->setArrowType(Qt::DownArrow);
+    preview_menu_button_->setToolTip(QStringLiteral("More ways to preview"));
+    preview_menu_button_->setAccessibleName(QStringLiteral("Preview options"));
+    preview_menu_button_->setPopupMode(QToolButton::InstantPopup);
+    preview_menu_button_->setFixedSize(18, 28);
+    auto* preview_menu = new QMenu(preview_menu_button_);
+    preview_menu->addAction(QStringLiteral("Play from the playhead\tSpace"), this,
+                            &ActionEditorDialog::togglePlayFromPlayhead);
+    preview_menu->addAction(QStringLiteral("Play whole pack from the start"), this, [this]() { onPreviewPack(0); });
+    preview_menu->addAction(QStringLiteral("Play selected track only\tShift+Space"), this, [this]() {
+        const int row_index = currentTimelineRow();
+        if(selected_track_ >= 0)
+        {
+            onPreviewTrack(selected_track_, 0);
+        }
+        else
+        {
+            onPreviewRow(row_index >= 0 ? row_index : 0, 0);
+        }
+    });
+    preview_menu_button_->setMenu(preview_menu);
+    row->addWidget(preview_menu_button_);
+
+    follow_button_ = PluginTheme::MakeToolButton(
+        PluginTheme::Icon::Follow, QStringLiteral("Follow the playhead while playing"), bar, true);
+    follow_button_->setChecked(true);
+    row->addWidget(follow_button_);
+
+    row->addSpacing(8);
+    time_label_ = new QLabel(bar);
+    time_label_->setToolTip(QStringLiteral("Playhead / pack length"));
+    QFont mono(QStringLiteral("Consolas"));
+    mono.setStyleHint(QFont::Monospace);
+    time_label_->setFont(mono);
+    row->addWidget(time_label_);
+    row->addSpacing(12);
+    row->addWidget(BarSeparator(bar));
+    row->addSpacing(6);
+
+    auto* zoom_out = PluginTheme::MakeToolButton(PluginTheme::Icon::ZoomOut, QStringLiteral("Zoom out (Ctrl+wheel)"), bar);
+    auto* zoom_in = PluginTheme::MakeToolButton(PluginTheme::Icon::ZoomIn, QStringLiteral("Zoom in (Ctrl+wheel)"), bar);
+    auto* zoom_fit = PluginTheme::MakeToolButton(PluginTheme::Icon::ZoomFit, QStringLiteral("Fit the whole pack"), bar);
+    zoom_slider_ = new QSlider(Qt::Horizontal, bar);
+    zoom_slider_->setRange(0, kZoomSteps);
+    zoom_slider_->setPageStep(100);
+    zoom_slider_->setMinimumWidth(120);
+    zoom_slider_->setMaximumWidth(240);
+    zoom_slider_->setToolTip(QStringLiteral("Timeline zoom"));
+    zoom_slider_->setAccessibleName(QStringLiteral("Timeline zoom"));
+    zoom_slider_->setValue(ZoomToSlider(timeline_ ? timeline_->pixelsPerSecond() : 80.0));
+    connect(zoom_slider_, &QSlider::valueChanged, this, [this](int v) {
+        if(timeline_)
+        {
+            timeline_->setPixelsPerSecond(SliderToZoom(v));
+        }
+    });
+    connect(zoom_out, &QToolButton::clicked, zoom_slider_, [this]() { zoom_slider_->setValue(zoom_slider_->value() - 80); });
+    connect(zoom_in, &QToolButton::clicked, zoom_slider_, [this]() { zoom_slider_->setValue(zoom_slider_->value() + 80); });
+    connect(zoom_fit, &QToolButton::clicked, this, &ActionEditorDialog::zoomToFit);
+    row->addWidget(zoom_out);
+    row->addWidget(zoom_slider_);
+    row->addWidget(zoom_in);
+    row->addWidget(zoom_fit);
+    row->addSpacing(10);
+
+    status_label_ = new QLabel(QStringLiteral("Idle"), bar);
+    PluginUiApplyMutedSecondaryLabel(status_label_);
+    status_label_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    status_label_->setMinimumWidth(40);
+    row->addWidget(status_label_, 1);
+
+    save_button_ = new QPushButton(QStringLiteral("Save"), bar);
+    save_button_->setToolTip(QStringLiteral("Save the pack (Ctrl+S)"));
+    PluginUiApplyPrimaryButton(save_button_);
+    auto* save_action = new QAction(this);
+    save_action->setShortcut(QKeySequence::Save);
+    save_action->setShortcutContext(Qt::WindowShortcut);
+    connect(save_action, &QAction::triggered, this, &ActionEditorDialog::onSave);
+    addAction(save_action);
+    auto* close_button = new QPushButton(QStringLiteral("Close"), bar);
+    connect(close_button, &QPushButton::clicked, this, &QDialog::close);
+    row->addWidget(save_button_);
+    row->addWidget(close_button);
+
+    follow_anim_ = new QPropertyAnimation(this);
+    follow_anim_->setPropertyName("value");
+    follow_anim_->setDuration(320);
+    follow_anim_->setEasingCurve(QEasingCurve::OutCubic);
+
+    PluginTheme::ApplyFlatToolBar(bar);
+    updateTimeReadout();
+    return bar;
+}
+
+void ActionEditorDialog::togglePlayFromPlayhead()
+{
+    if(player_.IsPlaying())
+    {
+        stopPreview();
+        return;
+    }
+    int from = timeline_ ? timeline_->playheadMs() : 0;
+    if(from >= pack_.duration_ms - 1)
+    {
+        from = 0; // at the end: play again from the top
+    }
+    onPreviewPack(from);
+}
+
+void ActionEditorDialog::goToStart()
+{
+    onPlayheadChanged(0);
+    if(timeline_scroll_)
+    {
+        timeline_scroll_->horizontalScrollBar()->setValue(0);
+    }
+}
+
+void ActionEditorDialog::updateTimeReadout()
+{
+    if(!time_label_)
+    {
+        return;
+    }
+    const int now = timeline_ ? timeline_->playheadMs() : 0;
+    time_label_->setText(QStringLiteral("%1 / %2").arg(FormatClock(now), FormatClock(pack_.duration_ms)));
+}
+
+void ActionEditorDialog::followPlayhead()
+{
+    if(!follow_button_ || !follow_button_->isChecked() || !timeline_scroll_ || !timeline_ || !follow_anim_)
+    {
+        return;
+    }
+    QScrollBar* bar = timeline_scroll_->horizontalScrollBar();
+    if(bar->maximum() <= bar->minimum() || follow_anim_->state() == QAbstractAnimation::Running)
+    {
+        return;
+    }
+    const int view_w = timeline_scroll_->viewport()->width();
+    const int x = timeline_->xForMs(timeline_->playheadMs());
+    const int rel = x - bar->value();
+    const int left_edge = timeline_->gutterWidth();
+    if(rel >= left_edge && rel <= (int)(view_w * 0.85))
+    {
+        return;
+    }
+    /* Turn the page so the playhead lands near the left, just after the row labels. */
+    const int target = std::clamp(x - left_edge - (int)(view_w * 0.10), bar->minimum(), bar->maximum());
+    if(rel < left_edge)
+    {
+        bar->setValue(target); // looped back: jump, don't slide backwards
+        return;
+    }
+    follow_anim_->setTargetObject(bar);
+    follow_anim_->setStartValue(bar->value());
+    follow_anim_->setEndValue(target);
+    follow_anim_->start();
+}
+
+void ActionEditorDialog::syncZoomSlider(double pixels_per_second)
+{
+    if(!zoom_slider_)
+    {
+        return;
+    }
+    const QSignalBlocker block(zoom_slider_);
+    zoom_slider_->setValue(ZoomToSlider(pixels_per_second));
+}
+
+void ActionEditorDialog::zoomToFit()
+{
+    if(!timeline_ || !timeline_scroll_)
+    {
+        return;
+    }
+    const int usable = timeline_scroll_->viewport()->width() - timeline_->gutterWidth() - 48;
+    const double seconds = std::max(0.1, pack_.duration_ms / 1000.0);
+    timeline_->setPixelsPerSecond(std::max(1, usable) / seconds);
+    timeline_scroll_->horizontalScrollBar()->setValue(0);
 }

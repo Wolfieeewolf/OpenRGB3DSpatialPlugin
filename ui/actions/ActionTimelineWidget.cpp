@@ -3,6 +3,7 @@
 #include "ActionTimelineWidget.h"
 #include "ActionCatalog.h"
 #include "ActionApplier.h"
+#include "ActionScript.h"
 #include "ZoneManager3D.h"
 
 #include <QCursor>
@@ -10,6 +11,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QEvent>
+#include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMimeData>
@@ -48,6 +50,8 @@ ActionTimelineWidget::ActionTimelineWidget(QWidget* parent)
 void ActionTimelineWidget::setEffectFilesDir(const filesystem::path& dir)
 {
     effect_files_dir_ = dir;
+    effect_names_.clear();
+    effect_names_loaded_ = false;
 }
 
 void ActionTimelineWidget::clearGpuThumbCache()
@@ -276,9 +280,15 @@ void ActionTimelineWidget::setPlayheadMs(int ms)
 
 void ActionTimelineWidget::setPixelsPerSecond(double pps)
 {
-    pixels_per_second_ = std::clamp(pps, 20.0, 400.0);
+    const double clamped = std::clamp(pps, 20.0, 400.0);
+    if(clamped == pixels_per_second_)
+    {
+        return;
+    }
+    pixels_per_second_ = clamped;
     updateGeometrySize();
     requestContentRepaint();
+    emit zoomChanged(pixels_per_second_);
 }
 
 void ActionTimelineWidget::setSelectedClip(int track_index, int clip_index)
@@ -308,6 +318,7 @@ void ActionTimelineWidget::cancelDrag()
     drag_span_anchor_row_ = -1;
     drag_span_hover_row_ = -1;
     drag_group_.clear();
+    snap_guide_ms_ = -1;
     marquee_origin_ = QPoint();
     marquee_current_ = QPoint();
     releaseMouse();
@@ -406,6 +417,157 @@ int ActionTimelineWidget::snapMs(int ms) const
     }
     const int snapped = ((ms + snap_ms_ / 2) / snap_ms_) * snap_ms_;
     return std::clamp(snapped, 0, duration_ms_);
+}
+
+bool ActionTimelineWidget::snapBypassed() const
+{
+    return !snap_enabled_ || (QGuiApplication::keyboardModifiers() & Qt::AltModifier);
+}
+
+QVector<int> ActionTimelineWidget::snapCandidates(bool include_playhead) const
+{
+    QVector<int> out{0, duration_ms_};
+    if(include_playhead)
+    {
+        out.push_back(playhead_ms_);
+    }
+    if(!pack_)
+    {
+        return out;
+    }
+    auto dragged = [&](int track, int clip) {
+        if(track == drag_track_ && clip == drag_clip_)
+        {
+            return true;
+        }
+        for(const DragMember& m : drag_group_)
+        {
+            if(m.track == track && m.clip == clip)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+    for(int ti = 0; ti < (int)pack_->tracks.size(); ++ti)
+    {
+        const Action::Track& track = pack_->tracks[(size_t)ti];
+        for(int bi = 0; bi < (int)track.clips.size(); ++bi)
+        {
+            if(dragged(ti, bi))
+            {
+                continue;
+            }
+            out.push_back(track.clips[(size_t)bi].start_ms);
+            out.push_back(track.clips[(size_t)bi].end_ms);
+        }
+    }
+    return out;
+}
+
+int ActionTimelineWidget::snapEdgeMs(int ms, bool include_playhead, int* out_guide_ms) const
+{
+    if(out_guide_ms)
+    {
+        *out_guide_ms = -1;
+    }
+    if(snapBypassed())
+    {
+        return snapMs(ms);
+    }
+    const int reach = std::max(1, (int)std::lround(snap_reach_px_ * 1000.0 / pixels_per_second_));
+    int best = -1;
+    int best_dist = reach + 1;
+    for(int c : snapCandidates(include_playhead))
+    {
+        const int d = std::abs(c - ms);
+        if(d < best_dist)
+        {
+            best_dist = d;
+            best = c;
+        }
+    }
+    if(best >= 0)
+    {
+        if(out_guide_ms)
+        {
+            *out_guide_ms = best;
+        }
+        return std::clamp(best, 0, duration_ms_);
+    }
+    return snapMs(ms);
+}
+
+int ActionTimelineWidget::snapGroupDelta(int raw_delta, int* out_guide_ms) const
+{
+    if(out_guide_ms)
+    {
+        *out_guide_ms = -1;
+    }
+    const int grid_delta = snapMs(std::max(0, drag_origin_start_ + raw_delta)) - drag_origin_start_;
+    if(snapBypassed())
+    {
+        return grid_delta;
+    }
+    const int reach = std::max(1, (int)std::lround(snap_reach_px_ * 1000.0 / pixels_per_second_));
+    const QVector<int> candidates = snapCandidates(true);
+    int best_adjust = 0;
+    int best_dist = reach + 1;
+    int best_c = -1;
+    auto consider = [&](int edge) {
+        for(int c : candidates)
+        {
+            const int d = c - edge;
+            if(std::abs(d) < best_dist)
+            {
+                best_dist = std::abs(d);
+                best_adjust = d;
+                best_c = c;
+            }
+        }
+    };
+    if(drag_group_.isEmpty())
+    {
+        consider(drag_origin_start_ + raw_delta);
+        consider(drag_origin_end_ + raw_delta);
+    }
+    for(const DragMember& m : drag_group_)
+    {
+        consider(m.origin_start + raw_delta);
+        consider(m.origin_end + raw_delta);
+    }
+    if(best_c < 0)
+    {
+        return grid_delta;
+    }
+    if(out_guide_ms)
+    {
+        *out_guide_ms = best_c;
+    }
+    return raw_delta + best_adjust;
+}
+
+QString ActionTimelineWidget::effectDisplayName(const Action::Clip& clip) const
+{
+    if(!effect_names_loaded_)
+    {
+        for(const ActionCatalog::Entry& e : ActionCatalog::LoadEntries(effect_files_dir_))
+        {
+            effect_names_.insert(e.id.toLower(), e.name.isEmpty() ? e.id : e.name);
+        }
+        effect_names_loaded_ = true;
+    }
+    const QString id = QString::fromStdString(Action::ClipFileId(clip));
+    return effect_names_.value(id.toLower(), id);
+}
+
+int ActionTimelineWidget::rulerStepMs() const
+{
+    const double raw = 80.0 * 1000.0 / std::max(1.0, pixels_per_second_);
+    const double magnitude = std::pow(10.0, std::floor(std::log10(raw)));
+    const double norm = raw / magnitude;
+    const double mult = norm >= 5.0 ? 10.0 : (norm >= 2.0 ? 5.0 : (norm >= 1.0 ? 2.0 : 1.0));
+    return std::max(10, (int)std::lround(mult * magnitude));
 }
 
 int ActionTimelineWidget::contentWidth() const

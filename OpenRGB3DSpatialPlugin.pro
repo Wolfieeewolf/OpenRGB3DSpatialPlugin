@@ -235,6 +235,7 @@ HEADERS += \
     ui/effects/EffectLibraryPanel.h \
     ui/actions/ActionsPanel.h \
     ui/actions/ActionEditorDialog.h \
+    ui/actions/ActionEditorHistory.h \
     ui/actions/ActionEditorControllerNames.h \
     ui/actions/ActionTimelineWidget.h \
     ui/actions/ActionGradientBar.h \
@@ -297,6 +298,7 @@ HEADERS += \
     ui/viewport/ViewportShaders.h \
     ui/screen/CaptureZonesWidget.h \
     ui/shell/PluginUiUtils.h \
+    ui/shell/PluginTheme.h \
     shared/EffectStratumBlend.h \
     shared/EffectColorUtils.h \
     shared/EffectUiSync.h \
@@ -459,6 +461,7 @@ SOURCES += \
     ui/audio/AudioAnalyzerSettings.cpp \
     ui/effects/EffectControlsHostPanel.cpp \
     ui/shell/OpenRGB3DSpatialTab.cpp \
+    ui/shell/PluginTheme.cpp \
     ui/shell/OpenRGB3DSpatialTab_Audio.cpp \
     ui/shell/OpenRGB3DSpatialTab_Setup.cpp \
     ui/shell/SpatialTabLedHelpers.cpp \

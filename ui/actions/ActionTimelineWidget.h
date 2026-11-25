@@ -82,6 +82,11 @@ public:
     int playheadMs() const { return playhead_ms_; }
     void setPixelsPerSecond(double pps);
     double pixelsPerSecond() const { return pixels_per_second_; }
+    /** Magnetic snapping to clip edges, the playhead and pack ends (hold Alt to bypass). */
+    void setSnapEnabled(bool enabled) { snap_enabled_ = enabled; }
+    bool snapEnabled() const { return snap_enabled_; }
+    /** Widget x of a time (playhead follow, fit-to-view). */
+    int xForMs(int ms) const { return timeToX(ms); }
 
     int rowHeight() const { return row_height_; }
     int headerHeight() const { return header_height_; }
@@ -108,6 +113,7 @@ public slots:
 
 signals:
     void playheadChanged(int ms);
+    void zoomChanged(double pixels_per_second);
     void clipSelected(int track_index, int clip_index);
     void clipEdited(int track_index, int clip_index);
     void clipDeleteRequested(int track_index, int clip_index);
@@ -202,6 +208,17 @@ private:
     int timeToX(int ms) const;
     int xToTime(int x) const;
     int snapMs(int ms) const;
+    /** True when snapping is off or Alt is held. */
+    bool snapBypassed() const;
+    /** Times an edge can stick to: pack ends, playhead, other clips' edges (not the dragged ones). */
+    QVector<int> snapCandidates(bool include_playhead) const;
+    /** One edge (resize, scrub): nearest candidate within reach, else the fine grid. */
+    int snapEdgeMs(int ms, bool include_playhead, int* out_guide_ms) const;
+    /** Whole drag group: one shared offset so every member's edges are considered. */
+    int snapGroupDelta(int raw_delta, int* out_guide_ms) const;
+    QString effectDisplayName(const Action::Clip& clip) const;
+    /** Ruler step for the current zoom: 1, 2 or 5 times a power of ten, about 80 px apart. */
+    int rulerStepMs() const;
     int contentWidth() const;
     int contentHeight() const;
     void updateGeometrySize();
@@ -314,6 +331,12 @@ private:
     int edge_hit_px_ = 8;
     int min_clip_ms_ = 50;
     int snap_ms_ = 10;
+    bool snap_enabled_ = true;
+    int snap_reach_px_ = 8;
+    /** Time the last drag snapped to, for the guide line (-1 = none). */
+    int snap_guide_ms_ = -1;
+    mutable QHash<QString, QString> effect_names_;
+    mutable bool effect_names_loaded_ = false;
     int selected_track_ = -1;
     int selected_clip_ = -1;
     int selected_row_ = -1;

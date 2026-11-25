@@ -59,16 +59,12 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
         return;
     }
 
-    const int t = snapMs(xToTime(mouse_x));
-    const int length = drag_origin_end_ - drag_origin_start_;
+    const int raw_t = xToTime(mouse_x);
 
     switch(drag_op_)
     {
         case DragOp::Move:
         {
-            int start = snapMs(t - drag_grab_offset_ms_);
-            start = std::clamp(start, 0, std::max(0, duration_ms_ - length));
-
             if(drag_copy_)
             {
                 if(drag_copy_source_track_ < 0)
@@ -84,7 +80,9 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
                 }
             }
 
-            applyDragGroupTimeDelta(start);
+            /* One shared offset for the whole group: any member edge can catch a snap target. */
+            const int raw_delta = (raw_t - drag_grab_offset_ms_) - drag_origin_start_;
+            applyDragGroupTimeDelta(drag_origin_start_ + snapGroupDelta(raw_delta, &snap_guide_ms_));
 
             drag_float_y_ = mouse_y;
             if(mouse_y >= header_height_ && drag_group_.size() <= 1)
@@ -98,11 +96,17 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
             break;
         }
         case DragOp::ResizeStart:
+        {
+            const int t = snapEdgeMs(raw_t, true, &snap_guide_ms_);
             applyDragGroupResizeStart(std::clamp(t, 0, std::max(0, drag_origin_end_ - min_clip_ms_)));
             break;
+        }
         case DragOp::ResizeEnd:
+        {
+            const int t = snapEdgeMs(raw_t, true, &snap_guide_ms_);
             applyDragGroupResizeEnd(std::clamp(t, drag_origin_start_ + min_clip_ms_, duration_ms_));
             break;
+        }
         case DragOp::ResizeVertical:
         {
             if(mouse_y >= header_height_)
@@ -114,7 +118,8 @@ void ActionTimelineWidget::applyDrag(int mouse_x, int mouse_y)
             break;
         }
         case DragOp::ScrubHeader:
-            playhead_ms_ = t;
+            /* The playhead sticks to clip edges too, so previews can start exactly on a cue. */
+            playhead_ms_ = snapEdgeMs(raw_t, false, &snap_guide_ms_);
             emit playheadChanged(playhead_ms_);
             break;
         case DragOp::None:
@@ -690,7 +695,16 @@ void ActionTimelineWidget::applyDragGroupTimeDelta(int primary_new_start)
     {
         return;
     }
-    const int delta = primary_new_start - drag_origin_start_;
+    /* Clamp the shared offset, not each clip, so the group keeps its spacing at the pack ends. */
+    int lo = std::numeric_limits<int>::min();
+    int hi = std::numeric_limits<int>::max();
+    for(const DragMember& m : drag_group_)
+    {
+        lo = std::max(lo, -m.origin_start);
+        hi = std::min(hi, duration_ms_ - m.origin_end);
+    }
+    const int delta = (lo <= hi) ? std::clamp(primary_new_start - drag_origin_start_, lo, hi)
+                                 : primary_new_start - drag_origin_start_;
     for(const DragMember& m : drag_group_)
     {
         Action::Clip* b = mutableClip(m.track, m.clip);
@@ -699,8 +713,7 @@ void ActionTimelineWidget::applyDragGroupTimeDelta(int primary_new_start)
             continue;
         }
         const int len = m.origin_end - m.origin_start;
-        int start = snapMs(m.origin_start + delta);
-        start = std::clamp(start, 0, std::max(0, duration_ms_ - len));
+        const int start = std::clamp(m.origin_start + delta, 0, std::max(0, duration_ms_ - len));
         b->start_ms = start;
         b->end_ms = start + len;
     }
@@ -1120,6 +1133,7 @@ void ActionTimelineWidget::finishDrag()
     const QPoint marquee_a = marquee_origin_;
     const QPoint marquee_b = marquee_current_;
     const bool marquee_add = marquee_additive_;
+    snap_guide_ms_ = -1;
     drag_op_ = DragOp::None;
     drag_track_ = -1;
     drag_clip_ = -1;
