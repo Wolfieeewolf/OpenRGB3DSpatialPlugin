@@ -85,6 +85,15 @@ public:
     /** Magnetic snapping to clip edges, the playhead and pack ends (hold Alt to bypass). */
     void setSnapEnabled(bool enabled) { snap_enabled_ = enabled; }
     bool snapEnabled() const { return snap_enabled_; }
+    /** Place mode: a ghost card follows the mouse; click a row to add the effect there. */
+    void beginPlacement(const QString& effect_id);
+    void cancelPlacement();
+    bool isPlacing() const { return !placing_effect_id_.isEmpty(); }
+    /** Timing markers (stored on the pack): add, jump between, and snap to. */
+    void addMarkerAt(int ms);
+    /** Nearest marker before / after the time, or -1 when there is none. */
+    int previousMarkerMs(int ms) const;
+    int nextMarkerMs(int ms) const;
     /** Widget x of a time (playhead follow, fit-to-view). */
     int xForMs(int ms) const { return timeToX(ms); }
 
@@ -113,6 +122,9 @@ public slots:
 
 signals:
     void playheadChanged(int ms);
+    void placementFinished();
+    /** Markers were added, moved, renamed or removed (the pack changed). */
+    void markersChanged();
     void zoomChanged(double pixels_per_second);
     void clipSelected(int track_index, int clip_index);
     void clipEdited(int track_index, int clip_index);
@@ -271,6 +283,10 @@ private:
     void showRowContextMenu(int row, int ms, const QPoint& global_pos);
     void showClipContextMenu(int row, int track, int clip, const QPoint& global_pos);
     void showHeaderContextMenu(const QPoint& global_pos);
+    /** Marker index within a few pixels of x, or -1. */
+    int markerNear(int x) const;
+    /** Stretch the clip to the markers around its middle (pack ends when there are none). */
+    void fitClipBetweenMarkers(int track, int clip);
     void populateAddEffectMenu(QMenu* menu, int row, int ms);
     void applyColorToClip(int track, int clip, RGBColor color);
     bool dropAt(const QPoint& pos, const QMimeData* mime);
@@ -335,6 +351,9 @@ private:
     int snap_reach_px_ = 8;
     /** Time the last drag snapped to, for the guide line (-1 = none). */
     int snap_guide_ms_ = -1;
+    QString placing_effect_id_;
+    int place_row_ = -1;
+    int place_ms_ = 0;
     mutable QHash<QString, QString> effect_names_;
     mutable bool effect_names_loaded_ = false;
     int selected_track_ = -1;

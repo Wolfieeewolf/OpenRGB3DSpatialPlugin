@@ -423,6 +423,8 @@ void ActionEditorDialog::onRebuildTimelineModel()
     roots.prepend(std::move(all));
 
     timeline_->setModel(std::move(roots));
+    /* Controller picks, maps and reorders change the pack too: let undo see them. */
+    scheduleHistoryCommit();
 }
 
 void ActionEditorDialog::onSceneZoneControllersReordered(const QString& scene_zone_name,

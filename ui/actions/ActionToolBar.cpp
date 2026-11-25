@@ -4,31 +4,29 @@
 #include "ActionCatalog.h"
 #include "ActionUserCurves.h"
 #include "ActionUserGradients.h"
+#include "EffectColorWheelDialog.h"
 
 #include <QAction>
-#include <QAbstractButton>
 #include <QApplication>
-#include <QButtonGroup>
 #include <QContextMenuEvent>
-#include <QColorDialog>
+#include <QDrag>
+#include <QEnterEvent>
 #include <QFile>
+#include <QHBoxLayout>
+#include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QDrag>
-#include <QFrame>
-#include <QIcon>
-#include <QLayout>
-#include <QLayoutItem>
+#include <QKeyEvent>
 #include <QMenu>
+#include <QMimeData>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
-#include <QStackedWidget>
-#include <QStyle>
-#include <QTabWidget>
-#include <QTimer>
 #include <QToolButton>
-#include <QVBoxLayout>
+#include <QWidgetAction>
+
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -37,325 +35,217 @@
 namespace
 {
 
-QString GradientPresetTabTip()
-{
-    return QStringLiteral(
-        "Drag onto the timeline. Double-click to replace that preset with the selected gradient. "
-        "Right-click to delete or reset.");
-}
-
-QString GradientPresetButtonTip(const QString& label)
-{
-    return label
-        + QStringLiteral(
-            " \u2014 drag onto the timeline. Double-click to replace with the selected gradient. "
-            "Right-click to delete.");
-}
-
-class DragToolButton : public QToolButton
+/* One menu entry that can be clicked, dragged out of the menu, or activated with Enter. */
+class MenuItemRow : public QWidget
 {
 public:
-    using QToolButton::QToolButton;
-
-    void setMimeFactory(std::function<QMimeData*()> factory)
+    MenuItemRow(const QIcon& icon, const QSize& icon_size, const QString& text, QWidget* parent)
+        : QWidget(parent)
+        , icon_(icon)
+        , icon_size_(icon_size)
+        , text_(text)
     {
-        mime_factory_ = std::move(factory);
+        setAttribute(Qt::WA_Hover, true);
+        setMouseTracking(true);
+        setFocusPolicy(Qt::StrongFocus);
+        setAccessibleName(text);
     }
 
-    void setDoubleClicked(std::function<void()> fn)
+    std::function<QMimeData*()> mime;
+    std::function<void()> activate;
+    std::function<void(MenuItemRow*, const QPoint&)> context;
+
+    void setIcon(const QIcon& icon)
     {
-        double_clicked_ = std::move(fn);
+        icon_ = icon;
+        update();
     }
 
-    void setContextMenu(std::function<void(const QPoint&)> fn)
+    QSize sizeHint() const override
     {
-        context_menu_ = std::move(fn);
+        const QFontMetrics fm(font());
+        return QSize(std::max(170, icon_size_.width() + fm.horizontalAdvance(text_) + 36),
+                     std::max(icon_size_.height() + 8, fm.height() + 10));
     }
 
 protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        const bool hot = underMouse() || hasFocus();
+        if(hot)
+        {
+            p.setPen(Qt::NoPen);
+            p.setBrush(palette().color(QPalette::Highlight));
+            p.drawRoundedRect(QRectF(rect()).adjusted(3, 1, -3, -1), 4, 4);
+        }
+        const int icon_x = 10;
+        const QRect icon_rect(icon_x, (height() - icon_size_.height()) / 2, icon_size_.width(), icon_size_.height());
+        if(!icon_.isNull())
+        {
+            icon_.paint(&p, icon_rect);
+        }
+        p.setPen(palette().color(hot ? QPalette::HighlightedText : QPalette::Text));
+        const QRect text_rect(icon_rect.right() + 9, 0, width() - icon_rect.right() - 16, height());
+        p.drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft,
+                   fontMetrics().elidedText(text_, Qt::ElideRight, text_rect.width()));
+    }
+
+    void enterEvent(QEnterEvent* event) override
+    {
+        update();
+        QWidget::enterEvent(event);
+    }
+
+    void leaveEvent(QEvent* event) override
+    {
+        update();
+        QWidget::leaveEvent(event);
+    }
+
+    void focusInEvent(QFocusEvent* event) override
+    {
+        update();
+        QWidget::focusInEvent(event);
+    }
+
+    void focusOutEvent(QFocusEvent* event) override
+    {
+        update();
+        QWidget::focusOutEvent(event);
+    }
+
     void mousePressEvent(QMouseEvent* event) override
     {
         if(event->button() == Qt::LeftButton)
         {
             press_pos_ = event->position().toPoint();
-            dragged_ = false;
+            pressed_ = true;
+            event->accept();
+            return;
         }
-        QToolButton::mousePressEvent(event);
+        QWidget::mousePressEvent(event);
     }
 
     void mouseMoveEvent(QMouseEvent* event) override
     {
-        if(!(event->buttons() & Qt::LeftButton) || !mime_factory_ || dragged_)
+        if(!pressed_ || !(event->buttons() & Qt::LeftButton) || !mime)
         {
-            QToolButton::mouseMoveEvent(event);
             return;
         }
         if((event->position().toPoint() - press_pos_).manhattanLength() < QApplication::startDragDistance())
         {
-            QToolButton::mouseMoveEvent(event);
             return;
         }
-        QMimeData* mime = mime_factory_();
-        if(!mime)
+        pressed_ = false;
+        QMimeData* data = mime();
+        if(!data)
         {
-            QToolButton::mouseMoveEvent(event);
             return;
         }
-        dragged_ = true;
+        /* Close the menus first so the timeline under them can take the drop. */
+        closeMenus();
         auto* drag = new QDrag(this);
-        drag->setMimeData(mime);
-        const QPixmap ghost = icon().isNull() ? grab() : icon().pixmap(22, 22);
-        drag->setPixmap(ghost);
-        drag->exec(Qt::CopyAction);
-    }
-
-    void mouseDoubleClickEvent(QMouseEvent* event) override
-    {
-        if(event->button() == Qt::LeftButton && double_clicked_)
+        drag->setMimeData(data);
+        if(!icon_.isNull())
         {
-            pending_click_ = false;
-            dragged_ = true;
-            double_clicked_();
-            event->accept();
-            return;
+            drag->setPixmap(icon_.pixmap(icon_size_));
         }
-        QToolButton::mouseDoubleClickEvent(event);
+        drag->exec(Qt::CopyAction);
     }
 
     void mouseReleaseEvent(QMouseEvent* event) override
     {
-        if(dragged_)
+        if(event->button() == Qt::LeftButton && pressed_)
         {
-            dragged_ = false;
-            setDown(false);
+            pressed_ = false;
+            fire();
             event->accept();
             return;
         }
-        if(double_clicked_ && event->button() == Qt::LeftButton)
+        QWidget::mouseReleaseEvent(event);
+    }
+
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if(event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Space)
         {
-            pending_click_ = true;
-            QTimer::singleShot(QApplication::doubleClickInterval(), this, [this]() {
-                if(!pending_click_)
-                {
-                    return;
-                }
-                pending_click_ = false;
-                click();
-            });
-            setDown(false);
+            fire();
             event->accept();
             return;
         }
-        QToolButton::mouseReleaseEvent(event);
+        if(event->key() == Qt::Key_Menu && context)
+        {
+            context(this, mapToGlobal(QPoint(width() / 2, height() / 2)));
+            event->accept();
+            return;
+        }
+        QWidget::keyPressEvent(event);
     }
 
     void contextMenuEvent(QContextMenuEvent* event) override
     {
-        if(context_menu_)
+        if(context)
         {
-            context_menu_(event->globalPos());
+            context(this, event->globalPos());
             event->accept();
             return;
         }
-        QToolButton::contextMenuEvent(event);
+        QWidget::contextMenuEvent(event);
     }
 
 private:
+    void fire()
+    {
+        closeMenus();
+        if(activate)
+        {
+            activate();
+        }
+    }
+
+    void closeMenus()
+    {
+        for(QWidget* w = parentWidget(); w; w = w->parentWidget())
+        {
+            if(QMenu* menu = qobject_cast<QMenu*>(w))
+            {
+                menu->close();
+            }
+        }
+    }
+
+    QIcon icon_;
+    QSize icon_size_;
+    QString text_;
     QPoint press_pos_;
-    bool dragged_ = false;
-    bool pending_click_ = false;
-    std::function<QMimeData*()> mime_factory_;
-    std::function<void()> double_clicked_;
-    std::function<void(const QPoint&)> context_menu_;
+    bool pressed_ = false;
 };
 
-void StylePaletteButton(QToolButton* btn)
+MenuItemRow* AddRow(QMenu* menu, const QIcon& icon, const QSize& icon_size, const QString& text,
+                    const QString& tooltip)
 {
-    btn->setAutoRaise(true);
-    btn->setFocusPolicy(Qt::NoFocus);
-    btn->setCursor(Qt::PointingHandCursor);
+    auto* action = new QWidgetAction(menu);
+    auto* row = new MenuItemRow(icon, icon_size, text, menu);
+    row->setToolTip(tooltip);
+    action->setDefaultWidget(row);
+    action->setText(text);
+    QObject::connect(action, &QAction::triggered, row, [row]() {
+        if(row->activate)
+        {
+            row->activate();
+        }
+    });
+    menu->addAction(action);
+    return row;
 }
 
-/** Left-to-right wrap layout (no horizontal scrollbar). */
-class FlowLayout : public QLayout
+void AddHint(QMenu* menu, const QString& text)
 {
-public:
-    explicit FlowLayout(QWidget* parent = nullptr, int margin = 0, int h_spacing = 4, int v_spacing = 4)
-        : QLayout(parent)
-        , h_space_(h_spacing)
-        , v_space_(v_spacing)
-    {
-        setContentsMargins(margin, margin, margin, margin);
-    }
-
-    ~FlowLayout() override
-    {
-        while(QLayoutItem* item = takeAt(0))
-        {
-            delete item;
-        }
-    }
-
-    void addItem(QLayoutItem* item) override { items_.append(item); }
-    int count() const override { return items_.size(); }
-    QLayoutItem* itemAt(int index) const override
-    {
-        return (index >= 0 && index < items_.size()) ? items_.at(index) : nullptr;
-    }
-    QLayoutItem* takeAt(int index) override
-    {
-        return (index >= 0 && index < items_.size()) ? items_.takeAt(index) : nullptr;
-    }
-    Qt::Orientations expandingDirections() const override { return {}; }
-    bool hasHeightForWidth() const override { return true; }
-    int heightForWidth(int width) const override { return doLayout(QRect(0, 0, width, 0), true); }
-    void setGeometry(const QRect& rect) override
-    {
-        QLayout::setGeometry(rect);
-        doLayout(rect, false);
-    }
-    QSize sizeHint() const override { return minimumSize(); }
-    QSize minimumSize() const override
-    {
-        QSize size;
-        for(const QLayoutItem* item : items_)
-        {
-            size = size.expandedTo(item->minimumSize());
-        }
-        const QMargins m = contentsMargins();
-        size += QSize(m.left() + m.right(), m.top() + m.bottom());
-        return size;
-    }
-
-private:
-    int horizontalSpacing() const
-    {
-        if(h_space_ >= 0)
-        {
-            return h_space_;
-        }
-        if(const QWidget* w = parentWidget())
-        {
-            return w->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
-        }
-        return 4;
-    }
-
-    int verticalSpacing() const
-    {
-        if(v_space_ >= 0)
-        {
-            return v_space_;
-        }
-        if(const QWidget* w = parentWidget())
-        {
-            return w->style()->pixelMetric(QStyle::PM_LayoutVerticalSpacing);
-        }
-        return 4;
-    }
-
-    int doLayout(const QRect& rect, bool test_only) const
-    {
-        int left = 0;
-        int top = 0;
-        int right = 0;
-        int bottom = 0;
-        getContentsMargins(&left, &top, &right, &bottom);
-        const QRect effective = rect.adjusted(left, top, -right, -bottom);
-        int x = effective.x();
-        int y = effective.y();
-        int line_height = 0;
-        const int space_x = horizontalSpacing();
-        const int space_y = verticalSpacing();
-
-        for(QLayoutItem* item : items_)
-        {
-            QWidget* widget = item->widget();
-            if(widget && widget->isHidden())
-            {
-                continue;
-            }
-            const QSize hint = item->sizeHint();
-            int next_x = x + hint.width() + space_x;
-            if(x > effective.x() && next_x - space_x > effective.right() + 1)
-            {
-                x = effective.x();
-                y = y + line_height + space_y;
-                next_x = x + hint.width() + space_x;
-                line_height = 0;
-            }
-            if(!test_only)
-            {
-                item->setGeometry(QRect(QPoint(x, y), hint));
-            }
-            x = next_x;
-            line_height = std::max(line_height, hint.height());
-        }
-        return y + line_height - rect.y() + bottom;
-    }
-
-    QList<QLayoutItem*> items_;
-    int h_space_ = -1;
-    int v_space_ = -1;
-};
-
-QWidget* BuildEffectsPage(QWidget* owner, const filesystem::path& effect_dir, const std::function<void(const QString&)>& on_click)
-{
-    auto* page = new QWidget(owner);
-    auto* outer = new QVBoxLayout(page);
-    outer->setContentsMargins(0, 0, 0, 0);
-    outer->setSpacing(4);
-
-    auto* cats_host = new QWidget(page);
-    auto* cats_flow = new FlowLayout(cats_host, 0, 6, 2);
-    auto* stack = new QStackedWidget(page);
-    auto* cats = new QButtonGroup(page);
-    cats->setExclusive(true);
-
-    const QList<ActionCatalog::Entry> entries = ActionCatalog::LoadEntries(effect_dir);
-    for(const QString& section : ActionCatalog::SectionOrder(entries))
-    {
-        auto* tab = new QToolButton(cats_host);
-        const QString full = ActionCatalog::SectionLabel(section);
-        tab->setText(full);
-        tab->setToolTip(full);
-        tab->setCheckable(true);
-        tab->setAutoRaise(true);
-        tab->setFocusPolicy(Qt::NoFocus);
-        cats->addButton(tab);
-        cats_flow->addWidget(tab);
-
-        auto* icons = new QWidget();
-        auto* icons_flow = new FlowLayout(icons, 0, 4, 4);
-        for(const ActionCatalog::Entry& e : ActionCatalog::EntriesFor(entries, section))
-        {
-            auto* btn = new DragToolButton(icons);
-            StylePaletteButton(btn);
-            btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-            btn->setText(e.name.isEmpty() ? QStringLiteral("Effect") : e.name);
-            btn->setIcon(ActionCatalog::MakeEffectIcon(e, 16));
-            btn->setIconSize(QSize(16, 16));
-            btn->setToolTip(ActionCatalog::EffectTooltip(e));
-            btn->setMimeFactory([id = e.id]() {
-                return ActionCatalog::MakeEffectMime(id);
-            });
-            QObject::connect(btn, &QToolButton::clicked, owner, [on_click, id = e.id]() {
-                on_click(id);
-            });
-            icons_flow->addWidget(btn);
-        }
-        stack->addWidget(icons);
-        QObject::connect(tab, &QToolButton::clicked, stack, [stack, icons]() {
-            stack->setCurrentWidget(icons);
-        });
-    }
-    if(QAbstractButton* first = cats->buttons().value(0))
-    {
-        first->setChecked(true);
-    }
-    outer->addWidget(cats_host);
-    outer->addWidget(stack, 1);
-    return page;
+    QAction* hint = menu->addAction(text);
+    hint->setEnabled(false);
+    menu->addSeparator();
 }
 
 QString PathToQString(const filesystem::path& path)
@@ -437,154 +327,46 @@ void SaveSwatches(const filesystem::path& path, const QVector<Swatch>& swatches)
     file.write(QJsonDocument(QJsonObject{{QStringLiteral("colors"), arr}}).toJson());
 }
 
-void PaintSwatch(DragToolButton* btn, const Swatch& swatch)
+QIcon SwatchIcon(const QColor& color)
 {
-    QPixmap pm(18, 18);
-    pm.fill(swatch.color);
-    btn->setIcon(QIcon(pm));
-    btn->setToolTip(swatch.label + QStringLiteral(" \u2014 ") + swatch.color.name()
-                    + QStringLiteral(" \u2014 double-click to change"));
+    QPixmap pm(16, 16);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setPen(QPen(color.darker(170), 1));
+    p.setBrush(color);
+    p.drawEllipse(QRectF(1.5, 1.5, 13, 13));
+    return QIcon(pm);
 }
 
-QWidget* BuildColorsPage(QWidget* owner, const filesystem::path& path, const std::function<void(unsigned int)>& on_click)
+QIcon CurveIcon(const std::vector<Action::CurvePoint>& points, const QColor& color)
 {
-    auto* page = new QWidget();
-    auto* flow = new FlowLayout(page, 2, 4, 4);
-    auto swatches = std::make_shared<QVector<Swatch>>(LoadSwatches(path));
-    for(int i = 0; i < swatches->size(); ++i)
+    QPixmap pm(36, 16);
+    pm.fill(Qt::transparent);
+    if(points.empty())
     {
-        auto* btn = new DragToolButton(page);
-        StylePaletteButton(btn);
-        btn->setFixedSize(26, 26);
-        btn->setIconSize(QSize(18, 18));
-        PaintSwatch(btn, swatches->at(i));
-        btn->setMimeFactory([swatches, i]() {
-            const QColor c = swatches->at(i).color;
-            return ActionCatalog::MakeColorMime(ToRGBColor(c.red(), c.green(), c.blue()));
-        });
-        QObject::connect(btn, &QToolButton::clicked, owner, [on_click, swatches, i]() {
-            const QColor c = swatches->at(i).color;
-            on_click(ToRGBColor(c.red(), c.green(), c.blue()));
-        });
-        btn->setDoubleClicked([btn, swatches, i, path]() {
-            const QColor picked = QColorDialog::getColor(swatches->at(i).color, btn, QStringLiteral("Quick pick color"));
-            if(!picked.isValid())
-            {
-                return;
-            }
-            (*swatches)[i].color = picked;
-            PaintSwatch(btn, swatches->at(i));
-            SaveSwatches(path, *swatches);
-        });
-        flow->addWidget(btn);
+        return QIcon(pm);
     }
-    return page;
-}
-
-void AddGradientButton(QWidget* page, QLayout* row, QWidget* owner,
-                      const QString& label, const QString& id, const QPixmap& preview,
-                      const std::function<void(const QString&)>& on_click,
-                      const std::function<void(const QString&)>& on_overwrite,
-                      const std::function<void(const QString&)>& on_delete,
-                      const std::function<void(const QString&)>& on_reset,
-                      bool customized)
-{
-    auto* btn = new DragToolButton(page);
-    StylePaletteButton(btn);
-    btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    btn->setText(label);
-    btn->setIcon(QIcon(preview));
-    btn->setIconSize(QSize(36, 14));
-    btn->setToolTip(GradientPresetButtonTip(label));
-    btn->setMimeFactory([id]() {
-        return ActionCatalog::MakeGradientPresetMime(id);
-    });
-    QObject::connect(btn, &QToolButton::clicked, owner, [on_click, id]() {
-        on_click(id);
-    });
-    btn->setDoubleClicked([on_overwrite, id]() {
-        if(on_overwrite)
-        {
-            on_overwrite(id);
-        }
-    });
-    btn->setContextMenu([btn, id, on_delete, on_reset, customized](const QPoint& pos) {
-        QMenu menu(btn);
-        QAction* remove = menu.addAction(QStringLiteral("Delete"));
-        QAction* reset = nullptr;
-        if(ActionUserGradients::IsBuiltin(id))
-        {
-            reset = menu.addAction(QStringLiteral("Reset to default"));
-            reset->setEnabled(customized);
-        }
-        QAction* chosen = menu.exec(pos);
-        if(chosen == remove && on_delete)
-        {
-            on_delete(id);
-        }
-        else if(reset && chosen == reset && on_reset)
-        {
-            on_reset(id);
-        }
-    });
-    row->addWidget(btn);
-}
-
-QWidget* BuildGradientsPage(QWidget* owner, const std::function<void(const QString&)>& on_click,
-                            const std::function<void(const QString&)>& on_overwrite,
-                            const std::function<void(const QString&)>& on_delete,
-                            const std::function<void(const QString&)>& on_reset,
-                            const filesystem::path& user_path)
-{
-    auto* page = new QWidget();
-    auto* flow = new FlowLayout(page, 2, 6, 4);
-    for(const ActionUserGradients::Entry& entry : ActionUserGradients::Visible(user_path))
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    QPainterPath path;
+    for(int i = 0; i <= 34; ++i)
     {
-        const bool customized = ActionUserGradients::IsCustomized(user_path, entry.id);
-        const QPixmap preview = customized
-            ? ActionUserGradients::Preview(entry.stops)
-            : ActionCatalog::MakeGradientPreview(entry.id.toUtf8().constData(), 36, 14);
-        AddGradientButton(page, flow, owner, entry.label, entry.id, preview, on_click, on_overwrite, on_delete, on_reset, customized);
+        const float t = i / 34.0f;
+        const float v = std::clamp(Action::SampleCurve(points, t), 0.0f, 1.0f);
+        const QPointF pt(1 + i, 14.5 - v * 13.0);
+        if(i == 0)
+        {
+            path.moveTo(pt);
+        }
+        else
+        {
+            path.lineTo(pt);
+        }
     }
-    for(const ActionUserGradients::Entry& entry : ActionUserGradients::Hidden(user_path))
-    {
-        auto* btn = new DragToolButton(page);
-        StylePaletteButton(btn);
-        btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-        btn->setText(entry.label);
-        btn->setToolTip(entry.label + QStringLiteral(" was removed. Right-click to restore the default."));
-        btn->setContextMenu([on_reset, id = entry.id](const QPoint&) {
-            if(on_reset)
-            {
-                on_reset(id);
-            }
-        });
-        flow->addWidget(btn);
-    }
-    return page;
-}
-
-QWidget* BuildCurvesPage(QWidget* owner, const filesystem::path& curves_path, const std::function<void(const QString&)>& on_click)
-{
-    auto* page = new QWidget();
-    auto* flow = new FlowLayout(page, 2, 4, 4);
-    for(const ActionUserCurves::Entry& c : ActionUserCurves::Load(curves_path))
-    {
-        auto* btn = new DragToolButton(page);
-        StylePaletteButton(btn);
-        const QString label = c.label.isEmpty() ? c.id : c.label;
-        const QString id = c.id;
-        btn->setText(label);
-        btn->setToolTip(label + QStringLiteral(" \u2014 drag onto a clip"));
-        btn->setMimeFactory([id]() {
-            return ActionCatalog::MakeCurvePresetMime(id);
-        });
-        QObject::connect(btn, &QToolButton::clicked, owner, [on_click, id]() {
-            on_click(id);
-        });
-        flow->addWidget(btn);
-    }
-    return page;
+    p.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawPath(path);
+    return QIcon(pm);
 }
 
 } // namespace
@@ -603,117 +385,203 @@ ActionToolBar::ActionToolBar(const filesystem::path& user_gradients_path,
     buildUi();
 }
 
+QToolButton* ActionToolBar::addMenuButton(const QString& text, const QString& tooltip, QMenu* menu)
+{
+    auto* button = new QToolButton(this);
+    button->setText(text);
+    button->setToolTip(tooltip);
+    button->setAccessibleName(text);
+    button->setPopupMode(QToolButton::InstantPopup);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    button->setAutoRaise(true);
+    button->setFixedHeight(28);
+    button->setMenu(menu);
+    layout()->addWidget(button);
+    return button;
+}
+
 void ActionToolBar::buildUi()
 {
-    auto* outer = new QVBoxLayout(this);
-    outer->setContentsMargins(0, 0, 0, 0);
+    auto* row = new QHBoxLayout(this);
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(2);
 
-    tabs_ = new QTabWidget(this);
-    tabs_->setDocumentMode(true);
-    outer->addWidget(tabs_);
-
-    struct Page
+    effects_menu_ = new QMenu(this);
+    colors_menu_ = new QMenu(this);
+    gradients_menu_ = new QMenu(this);
+    curves_menu_ = new QMenu(this);
+    for(QMenu* menu : {effects_menu_, colors_menu_, gradients_menu_, curves_menu_})
     {
-        QString title;
-        QString tip;
-        QWidget* widget;
-    };
-
-    const Page defs[] = {
-        {QStringLiteral("Tools"),
-         QStringLiteral("Drag onto a timeline row, or click to add at the playhead."),
-         BuildEffectsPage(this, effect_files_dir_, [this](const QString& id) { emit effectClicked(id); })},
-        {QStringLiteral("Colors"),
-         QStringLiteral("Drag onto the timeline. Double-click a swatch to change that quick pick."),
-         BuildColorsPage(this, user_colors_path_, [this](unsigned int rgb) { emit colorClicked(rgb); })},
-        {QStringLiteral("Gradients"),
-         GradientPresetTabTip(),
-         BuildGradientsPage(this,
-                            [this](const QString& id) { emit gradientPresetClicked(id); },
-                            [this](const QString& id) { emit gradientPresetOverwriteRequested(id); },
-                            [this](const QString& id) { emit gradientPresetDeleteRequested(id); },
-                            [this](const QString& id) { emit gradientPresetResetRequested(id); },
-                            user_gradients_path_)},
-        {QStringLiteral("Curves"),
-         QStringLiteral("Drag onto a clip once the timeline has one."),
-         BuildCurvesPage(this, user_curves_path_, [this](const QString& id) { emit curvePresetClicked(id); })},
-    };
-
-    for(const Page& page : defs)
-    {
-        if(page.title == QStringLiteral("Gradients"))
-        {
-            gradients_page_index_ = tabs_->count();
-        }
-        if(page.title == QStringLiteral("Curves"))
-        {
-            curves_page_index_ = tabs_->count();
-        }
-        const int index = tabs_->addTab(page.widget, page.title);
-        tabs_->setTabToolTip(index, page.tip);
+        menu->setToolTipsVisible(true);
     }
+
+    addMenuButton(QStringLiteral("Effects"),
+                  QStringLiteral("Pick an effect, then click a row to place it (Shift+click places several, "
+                                 "Esc cancels). Or drag it straight onto a row."),
+                  effects_menu_);
+    addMenuButton(QStringLiteral("Colours"),
+                  QStringLiteral("Drag a colour onto the timeline, or click to colour the selected clip. "
+                                 "Right-click a colour to change it."),
+                  colors_menu_);
+    addMenuButton(QStringLiteral("Gradients"),
+                  QStringLiteral("Drag a gradient onto the timeline or a clip. Right-click for more."),
+                  gradients_menu_);
+    curves_button_ = addMenuButton(QStringLiteral("Curves"),
+                                   QStringLiteral("Drag a brightness curve onto a clip."),
+                                   curves_menu_);
+
+    fillEffectsMenu();
+    fillColorsMenu();
+    fillGradientsMenu();
+    fillCurvesMenu();
     setCurvesEnabled(false);
+}
+
+void ActionToolBar::fillEffectsMenu()
+{
+    effects_menu_->clear();
+    AddHint(effects_menu_, QStringLiteral("Click, then click a row · or drag onto a row"));
+    const QList<ActionCatalog::Entry> entries = ActionCatalog::LoadEntries(effect_files_dir_);
+    for(const QString& section : ActionCatalog::SectionOrder(entries))
+    {
+        QMenu* sub = effects_menu_->addMenu(ActionCatalog::SectionLabel(section));
+        sub->setToolTipsVisible(true);
+        for(const ActionCatalog::Entry& e : ActionCatalog::EntriesFor(entries, section))
+        {
+            MenuItemRow* row = AddRow(sub, ActionCatalog::MakeEffectIcon(e, 16), QSize(16, 16),
+                                      e.name.isEmpty() ? QStringLiteral("Effect") : e.name,
+                                      ActionCatalog::EffectTooltip(e));
+            const QString id = e.id;
+            row->mime = [id]() { return ActionCatalog::MakeEffectMime(id); };
+            row->activate = [this, id]() { emit effectClicked(id); };
+        }
+    }
+}
+
+void ActionToolBar::fillColorsMenu()
+{
+    colors_menu_->clear();
+    auto swatches = std::make_shared<QVector<Swatch>>(LoadSwatches(user_colors_path_));
+    const filesystem::path path = user_colors_path_;
+    for(int i = 0; i < swatches->size(); ++i)
+    {
+        const Swatch& sw = swatches->at(i);
+        MenuItemRow* row = AddRow(colors_menu_, SwatchIcon(sw.color), QSize(16, 16), sw.label,
+                                  sw.color.name() + QStringLiteral(" — right-click to change"));
+        row->mime = [swatches, i]() {
+            const QColor c = swatches->at(i).color;
+            return ActionCatalog::MakeColorMime(ToRGBColor(c.red(), c.green(), c.blue()));
+        };
+        row->activate = [this, swatches, i]() {
+            const QColor c = swatches->at(i).color;
+            emit colorClicked(ToRGBColor(c.red(), c.green(), c.blue()));
+        };
+        row->context = [swatches, i, path](MenuItemRow* source, const QPoint& pos) {
+            QMenu menu(source);
+            QAction* change = menu.addAction(QStringLiteral("Change colour…"));
+            if(menu.exec(pos) != change)
+            {
+                return;
+            }
+            QColor picked = swatches->at(i).color;
+            if(!EffectColorWheelDialog::pickColor(source, picked, QStringLiteral("Quick pick colour")))
+            {
+                return;
+            }
+            (*swatches)[i].color = picked;
+            source->setIcon(SwatchIcon(picked));
+            source->setToolTip(picked.name() + QStringLiteral(" — right-click to change"));
+            SaveSwatches(path, *swatches);
+        };
+    }
+}
+
+void ActionToolBar::fillGradientsMenu()
+{
+    gradients_menu_->clear();
+    for(const ActionUserGradients::Entry& entry : ActionUserGradients::Visible(user_gradients_path_))
+    {
+        const bool customized = ActionUserGradients::IsCustomized(user_gradients_path_, entry.id);
+        const QPixmap preview = customized
+            ? ActionUserGradients::Preview(entry.stops)
+            : ActionCatalog::MakeGradientPreview(entry.id.toUtf8().constData(), 36, 14);
+        MenuItemRow* row = AddRow(gradients_menu_, QIcon(preview), QSize(36, 14), entry.label,
+                                  entry.label + QStringLiteral(" — drag onto the timeline or a clip, or click to apply "
+                                                               "to the selected clip; right-click for more"));
+        const QString id = entry.id;
+        row->mime = [id]() { return ActionCatalog::MakeGradientPresetMime(id); };
+        row->activate = [this, id]() { emit gradientPresetClicked(id); };
+        row->context = [this, id, customized](MenuItemRow* source, const QPoint& pos) {
+            QMenu menu(source);
+            QAction* overwrite = menu.addAction(QStringLiteral("Replace with the selected clip's gradient"));
+            QAction* remove = menu.addAction(QStringLiteral("Delete"));
+            QAction* reset = nullptr;
+            if(ActionUserGradients::IsBuiltin(id))
+            {
+                reset = menu.addAction(QStringLiteral("Reset to default"));
+                reset->setEnabled(customized);
+            }
+            QAction* chosen = menu.exec(pos);
+            if(chosen == overwrite)
+            {
+                emit gradientPresetOverwriteRequested(id);
+            }
+            else if(chosen == remove)
+            {
+                emit gradientPresetDeleteRequested(id);
+            }
+            else if(reset && chosen == reset)
+            {
+                emit gradientPresetResetRequested(id);
+            }
+        };
+    }
+
+    const std::vector<ActionUserGradients::Entry> hidden = ActionUserGradients::Hidden(user_gradients_path_);
+    if(!hidden.empty())
+    {
+        gradients_menu_->addSeparator();
+        QMenu* restore = gradients_menu_->addMenu(QStringLiteral("Removed presets"));
+        for(const ActionUserGradients::Entry& entry : hidden)
+        {
+            const QString id = entry.id;
+            restore->addAction(QStringLiteral("Restore %1").arg(entry.label), this,
+                               [this, id]() { emit gradientPresetResetRequested(id); });
+        }
+    }
+}
+
+void ActionToolBar::fillCurvesMenu()
+{
+    curves_menu_->clear();
+    const QColor ink = palette().color(QPalette::Text);
+    for(const ActionUserCurves::Entry& c : ActionUserCurves::Load(user_curves_path_))
+    {
+        const QString label = c.label.isEmpty() ? c.id : c.label;
+        MenuItemRow* row = AddRow(curves_menu_, CurveIcon(c.points, ink), QSize(36, 16), label,
+                                  label + QStringLiteral(" — drag onto a clip, or click to apply to the selected clip"));
+        const QString id = c.id;
+        row->mime = [id]() { return ActionCatalog::MakeCurvePresetMime(id); };
+        row->activate = [this, id]() { emit curvePresetClicked(id); };
+    }
 }
 
 void ActionToolBar::reloadUserGradients()
 {
-    if(!tabs_ || gradients_page_index_ < 0 || gradients_page_index_ >= tabs_->count())
-    {
-        return;
-    }
-    QWidget* old = tabs_->widget(gradients_page_index_);
-    const bool was_current = tabs_->currentIndex() == gradients_page_index_;
-    QWidget* replacement = BuildGradientsPage(
-        this,
-        [this](const QString& id) { emit gradientPresetClicked(id); },
-        [this](const QString& id) { emit gradientPresetOverwriteRequested(id); },
-        [this](const QString& id) { emit gradientPresetDeleteRequested(id); },
-        [this](const QString& id) { emit gradientPresetResetRequested(id); },
-        user_gradients_path_);
-    tabs_->removeTab(gradients_page_index_);
-    tabs_->insertTab(gradients_page_index_, replacement, QStringLiteral("Gradients"));
-    tabs_->setTabToolTip(gradients_page_index_, GradientPresetTabTip());
-    old->deleteLater();
-    if(was_current)
-    {
-        tabs_->setCurrentIndex(gradients_page_index_);
-    }
+    fillGradientsMenu();
 }
 
 void ActionToolBar::reloadUserCurves()
 {
-    if(!tabs_ || curves_page_index_ < 0 || curves_page_index_ >= tabs_->count())
-    {
-        return;
-    }
-    QWidget* old = tabs_->widget(curves_page_index_);
-    const bool was_current = tabs_->currentIndex() == curves_page_index_;
-    const bool was_enabled = tabs_->isTabEnabled(curves_page_index_);
-    QWidget* replacement = BuildCurvesPage(
-        this,
-        user_curves_path_,
-        [this](const QString& id) { emit curvePresetClicked(id); });
-    tabs_->removeTab(curves_page_index_);
-    tabs_->insertTab(curves_page_index_, replacement, QStringLiteral("Curves"));
-    tabs_->setTabToolTip(curves_page_index_,
-                         QStringLiteral("Drag onto a clip once the timeline has one."));
-    old->deleteLater();
-    setCurvesEnabled(was_enabled);
-    if(was_current)
-    {
-        tabs_->setCurrentIndex(curves_page_index_);
-    }
+    fillCurvesMenu();
 }
 
 void ActionToolBar::setCurvesEnabled(bool enabled)
 {
-    if(!tabs_ || curves_page_index_ < 0 || curves_page_index_ >= tabs_->count())
+    if(curves_button_)
     {
-        return;
-    }
-    tabs_->setTabEnabled(curves_page_index_, enabled);
-    if(QWidget* page = tabs_->widget(curves_page_index_))
-    {
-        page->setEnabled(enabled);
+        curves_button_->setEnabled(enabled);
+        curves_button_->setToolTip(enabled ? QStringLiteral("Drag a brightness curve onto a clip.")
+                                           : QStringLiteral("Add a clip first, then drag a curve onto it."));
     }
 }

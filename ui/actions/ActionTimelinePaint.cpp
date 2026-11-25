@@ -757,6 +757,26 @@ void ActionTimelineWidget::paintEvent(QPaintEvent* event)
     const QRect damage = event ? event->rect() : rect();
     p.drawPixmap(damage, content_cache_, damage);
 
+    /* Place-mode ghost: drawn over the cached timeline so moving it stays cheap. */
+    if(!placing_effect_id_.isEmpty() && place_row_ >= 0 && place_row_ < visible_rows_.size())
+    {
+        Action::Clip ghost;
+        ghost.effect_id = placing_effect_id_.toStdString();
+        ghost.start_ms = place_ms_;
+        ghost.end_ms = std::min(duration_ms_, place_ms_ + 1000);
+        const QRectF r(clipRect(place_row_, ghost));
+        const QColor accent = PluginTheme::Accent(palette());
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setPen(Qt::NoPen);
+        p.setBrush(PluginTheme::WithAlpha(accent, 60));
+        p.drawRoundedRect(r, 5, 5);
+        PluginTheme::PaintCardFrame(p, r, accent, false, true, palette());
+        p.setPen(PluginTheme::WithAlpha(palette().color(QPalette::Text), 230));
+        p.drawText(r.adjusted(8, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft,
+                   p.fontMetrics().elidedText(effectDisplayName(ghost), Qt::ElideRight, std::max(0, (int)r.width() - 14)));
+        PluginTheme::PaintGuideLine(p, r.left(), header_height_, height(), PluginTheme::WithAlpha(accent, 160));
+    }
+
     /* Playhead: a line through the rows and a handle in the ruler. */
     const int px = timeToX(playhead_ms_);
     p.setRenderHint(QPainter::Antialiasing, true);
@@ -820,6 +840,35 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
     }
     p.setPen(PluginTheme::WithAlpha(text, 170));
     p.drawText(8, header_height_ - 8, QStringLiteral("Pack scope"));
+
+    /* Markers: a flag in the ruler (with its name when there is room) and a line through the rows. */
+    const QColor marker_color(250, 190, 60);
+    if(pack_)
+    {
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing, true);
+        for(size_t i = 0; i < pack_->markers.size(); ++i)
+        {
+            const Action::Marker& m = pack_->markers[i];
+            const int x = timeToX(m.ms);
+            p.setPen(Qt::NoPen);
+            p.setBrush(marker_color);
+            p.drawPolygon(QPolygonF({QPointF(x, header_height_ - 1), QPointF(x - 4.5, header_height_ - 8),
+                                     QPointF(x + 4.5, header_height_ - 8)}));
+            if(!m.label.empty())
+            {
+                const int next_x = (i + 1 < pack_->markers.size()) ? timeToX(pack_->markers[i + 1].ms) : width();
+                const int room = next_x - x - 8;
+                if(room > 24)
+                {
+                    p.setPen(marker_color);
+                    p.drawText(QRect(x + 6, 0, room, header_height_ - 10), Qt::AlignLeft | Qt::AlignBottom,
+                               p.fontMetrics().elidedText(QString::fromStdString(m.label), Qt::ElideRight, room));
+                }
+            }
+        }
+        p.restore();
+    }
     p.setPen(separator);
     p.drawLine(0, header_height_ - 1, width(), header_height_ - 1);
 
@@ -851,6 +900,15 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         }
         p.setPen(separator);
         p.drawLine(0, y + row_height_ - 1, width(), y + row_height_ - 1);
+        if(pack_ && !pack_->markers.empty())
+        {
+            p.setPen(PluginTheme::WithAlpha(marker_color, 70));
+            for(const Action::Marker& m : pack_->markers)
+            {
+                const int x = timeToX(m.ms);
+                p.drawLine(x, y, x, y + row_height_);
+            }
+        }
 
         if(r.depth == 0 || r.target.kind == Action::TargetKind::SceneZone)
         {

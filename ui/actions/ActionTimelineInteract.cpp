@@ -13,6 +13,8 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QHash>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QMenu>
@@ -1341,9 +1343,16 @@ void ActionTimelineWidget::showClipContextMenu(int row, int track, int clip, con
     QAction* flip_dir_act = xform->addAction(QStringLiteral("Flip direction"));
     menu.addSeparator();
     QAction* color_act = menu.addAction(QStringLiteral("Change color\u2026"));
+    QAction* fit_act = menu.addAction(QStringLiteral("Fit between markers"));
+    fit_act->setToolTip(QStringLiteral("Stretch the clip to the markers either side of its middle"));
     menu.addSeparator();
     QAction* del_act = menu.addAction(QStringLiteral("Delete\tDel"));
     QAction* chosen = menu.exec(global_pos);
+    if(chosen == fit_act)
+    {
+        fitClipBetweenMarkers(track, clip);
+        return;
+    }
     if(chosen == preview_track)
     {
         emit previewTrackRequested(track, 0);
@@ -1443,14 +1452,62 @@ void ActionTimelineWidget::showClipContextMenu(int row, int track, int clip, con
 
 void ActionTimelineWidget::showHeaderContextMenu(const QPoint& global_pos)
 {
+    const int click_x = mapFromGlobal(global_pos).x();
+    const int click_ms = snapEdgeMs(xToTime(click_x), true, nullptr);
+    const int marker = markerNear(click_x);
+
     QMenu menu(this);
-    QAction* preview_pack = menu.addAction(QStringLiteral("Preview pack\tSpace"));
-    QAction* preview_from = menu.addAction(QStringLiteral("Preview from playhead"));
+    QAction* add_marker = menu.addAction(QStringLiteral("Add marker here\tM at the playhead"));
+    QAction* rename_marker = nullptr;
+    QAction* delete_marker = nullptr;
+    if(marker >= 0)
+    {
+        rename_marker = menu.addAction(QStringLiteral("Rename marker\u2026"));
+        delete_marker = menu.addAction(QStringLiteral("Delete marker"));
+    }
+    QAction* clear_markers = menu.addAction(QStringLiteral("Clear all markers"));
+    clear_markers->setEnabled(pack_ && !pack_->markers.empty());
+    menu.addSeparator();
+    QAction* preview_pack = menu.addAction(QStringLiteral("Preview pack from the start"));
+    QAction* preview_from = menu.addAction(QStringLiteral("Preview from playhead\tSpace"));
     menu.addSeparator();
     QAction* paste_act = menu.addAction(QStringLiteral("Paste at playhead\tCtrl+V"));
     paste_act->setEnabled(clipboard_has_clip_ && selected_row_ >= 0);
     QAction* chosen = menu.exec(global_pos);
-    if(chosen == preview_pack)
+    if(!chosen)
+    {
+        return;
+    }
+    if(chosen == add_marker)
+    {
+        addMarkerAt(click_ms);
+    }
+    else if(chosen == rename_marker && pack_ && marker < (int)pack_->markers.size())
+    {
+        bool ok = false;
+        const QString label = QInputDialog::getText(this, QStringLiteral("Rename marker"), QStringLiteral("Name:"),
+                                                    QLineEdit::Normal,
+                                                    QString::fromStdString(pack_->markers[(size_t)marker].label), &ok);
+        if(ok)
+        {
+            pack_->markers[(size_t)marker].label = label.trimmed().left(64).toStdString();
+            requestContentRepaint();
+            emit markersChanged();
+        }
+    }
+    else if(chosen == delete_marker && pack_ && marker < (int)pack_->markers.size())
+    {
+        pack_->markers.erase(pack_->markers.begin() + marker);
+        requestContentRepaint();
+        emit markersChanged();
+    }
+    else if(chosen == clear_markers && pack_)
+    {
+        pack_->markers.clear();
+        requestContentRepaint();
+        emit markersChanged();
+    }
+    else if(chosen == preview_pack)
     {
         emit previewPackRequested(0);
     }
@@ -1634,6 +1691,12 @@ void ActionTimelineWidget::editClipColorAt(int track, int clip, const QPoint& /*
 
 void ActionTimelineWidget::keyPressEvent(QKeyEvent* event)
 {
+    if(event->key() == Qt::Key_Escape && !placing_effect_id_.isEmpty())
+    {
+        cancelPlacement();
+        event->accept();
+        return;
+    }
     const bool ctrl = (event->modifiers() & Qt::ControlModifier) != 0;
     if(ctrl && event->key() == Qt::Key_C)
     {
@@ -1712,7 +1775,9 @@ void ActionTimelineWidget::keyPressEvent(QKeyEvent* event)
         }
         else
         {
-            emit previewPackRequested(0);
+            /* Plain Space belongs to the editor: play / stop from the playhead. */
+            event->ignore();
+            return;
         }
         event->accept();
         return;
@@ -1740,6 +1805,27 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
     const int y = event->position().toPoint().y();
     setFocus(Qt::MouseFocusReason);
     const int row = (y >= header_height_) ? ((y - header_height_) / row_height_) : -1;
+
+    if(!placing_effect_id_.isEmpty())
+    {
+        if(event->button() == Qt::LeftButton && row >= 0 && row < visible_rows_.size() && x >= gutter_width_)
+        {
+            const QString id = placing_effect_id_;
+            const int ms = snapEdgeMs(xToTime(x), true, nullptr);
+            /* Shift keeps placing, so several copies go down quickly. */
+            if(!(event->modifiers() & Qt::ShiftModifier))
+            {
+                cancelPlacement();
+            }
+            emit effectAddRequested(row, ms, id);
+        }
+        else if(event->button() == Qt::RightButton)
+        {
+            cancelPlacement();
+        }
+        event->accept();
+        return;
+    }
 
     if(event->button() == Qt::RightButton)
     {
@@ -1936,9 +2022,40 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
     requestContentRepaint();
 }
 
+void ActionTimelineWidget::beginPlacement(const QString& effect_id)
+{
+    cancelDrag();
+    placing_effect_id_ = effect_id;
+    place_row_ = -1;
+    setCursor(Qt::CrossCursor);
+    setFocus(Qt::OtherFocusReason);
+    update();
+}
+
+void ActionTimelineWidget::cancelPlacement()
+{
+    if(placing_effect_id_.isEmpty())
+    {
+        return;
+    }
+    placing_effect_id_.clear();
+    place_row_ = -1;
+    unsetCursor();
+    update();
+    emit placementFinished();
+}
+
 void ActionTimelineWidget::mouseMoveEvent(QMouseEvent* event)
 {
     const QPoint pt = event->position().toPoint();
+    if(!placing_effect_id_.isEmpty())
+    {
+        const int row = (pt.y() >= header_height_) ? ((pt.y() - header_height_) / row_height_) : -1;
+        place_row_ = (row >= 0 && row < visible_rows_.size() && pt.x() >= gutter_width_) ? row : -1;
+        place_ms_ = snapEdgeMs(xToTime(pt.x()), true, nullptr);
+        update();
+        return;
+    }
     if(row_reorder_from_ >= 0 && (event->buttons() & Qt::LeftButton))
     {
         const int y = pt.y();
@@ -2011,6 +2128,13 @@ void ActionTimelineWidget::mouseReleaseEvent(QMouseEvent* event)
 
 void ActionTimelineWidget::leaveEvent(QEvent* event)
 {
+    if(!placing_effect_id_.isEmpty())
+    {
+        place_row_ = -1;
+        update();
+        QWidget::leaveEvent(event);
+        return;
+    }
     if(drag_op_ == DragOp::None)
     {
         unsetCursor();

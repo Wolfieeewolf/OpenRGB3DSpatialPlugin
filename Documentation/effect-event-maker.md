@@ -42,7 +42,7 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
 - Timeline marks appear **only on the row matching that target** (no ghosting onto child rows).
 - Pack `devices` lists scene controllers in scope (empty = whole scene).
 - Catalog categories: **Basic** | **Pixel** | **Volume** (toolbar and right-click share `ActionCatalog`).
-- Dual add UX: right-click Add effect, or drag from the **Tools** tab; drag colors / gradients / intensity curves onto clips.
+- Adding effects: the **Effects** menu (by category) - click an effect, then click a row to place it (Shift+click places several, Esc cancels) - or drag it straight out of the menu onto a row. Right-click a row for Add effect. **Colours**, **Gradients** and **Curves** menus work the same way: drag onto the timeline or a clip, or click to apply to the selected clip; right-click an item for its own tools (change a quick-pick colour, replace / delete / reset a gradient preset).
 - Authoring entry points: **Object Creator** -> Zone / Actions / **Triggers** (removed from the Run left column).
 - Triggers file: `{PluginRoot}/triggers/triggers.json` (format `openrgb3d.triggers` v1).
 - Event sources shown only for this OS/build: **Manual** always; **Windows** / **Linux** / **macOS** OS catalogs on their platforms. Game/app bridges later.
@@ -53,6 +53,18 @@ Optional later: import **baked** channel data. Primary authoring stays in-plugin
   - Preset directions or custom yaw/pitch; Left/Right (+/-X), Down/Up (+/-Y), Forward/Back (+/-Z).
 - Storage: `{PluginRoot}/triggers/effects/*.action.json` (Triggers) or `{PluginRoot}/movie-sync/effects/<category>/` (Movie Sync). Format `openrgb3d.action` v5 (v4 accepted and rewritten on load).
 - Libraries start **empty**  -  install looks from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets), or author/Import in the Action Editor.
+
+### Editing in the Action Editor
+
+| Action | How |
+|--------|-----|
+| Undo / redo | Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z), or the arrows in the top bar. A short pause or the end of a drag closes a step. Unsaved changes show as `*` in the title; closing asks to save. |
+| Play / stop | Space, or the play button: plays from the playhead. The menu next to it plays the whole pack from the start or only the selected track (Shift+Space). Home goes to the start. |
+| Follow playhead | Toggle in the transport bar: the timeline turns the page as the playhead moves. |
+| Zoom | Ctrl+wheel, the zoom slider, or **Fit** to show the whole pack. |
+| Snapping | Clip edges stick to other clips, the playhead, markers and the pack ends; a dashed line shows the snap. Toggle with the magnet button, or hold Alt to place freely. The playhead snaps while scrubbing. |
+| Markers | Press **M** to drop a marker at the playhead (tap along while playing to mark the beats or cues). **[** and **]** jump between markers. Right-click the ruler to add, rename, delete or clear markers. Right-click a clip for **Fit between markers**. Markers are saved in the pack (`markers`) and only help authoring - playback ignores them. |
+| Save | Ctrl+S or **Save**. |
 
 ### Event edges
 
@@ -172,6 +184,7 @@ Hand-authored packs: pack identity -> playback -> tracks -> clip type / timing /
 | `duration_ms` | 1...60000 |
 | `priority` | Higher wins when multiple packs want the same LEDs |
 | `devices` | Optional scene controller names; empty = all |
+| `markers` | Optional `[{ "ms", "label" }]` timing markers for authoring (sorted; playback ignores them) |
 | `target.kind` | `all` \| `device` \| `zone` (OpenRGB HW zone) \| `leds` \| `scene_zone` (left-panel ZoneManager3D) |
 | `target.scene_zone_name` | Required for `scene_zone` |
 | `target.flatten_leds` | Optional; synthetic All LEDs row under a scene zone |

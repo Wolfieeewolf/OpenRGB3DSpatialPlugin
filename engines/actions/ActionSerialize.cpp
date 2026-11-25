@@ -250,6 +250,21 @@ nlohmann::json ToJson(const Pack& pack)
     {
         j["devices"] = pack.devices;
     }
+    if(!pack.markers.empty())
+    {
+        nlohmann::json marks = nlohmann::json::array();
+        for(const Marker& m : pack.markers)
+        {
+            nlohmann::json mj;
+            mj["ms"] = m.ms;
+            if(!m.label.empty())
+            {
+                mj["label"] = m.label;
+            }
+            marks.push_back(std::move(mj));
+        }
+        j["markers"] = std::move(marks);
+    }
     j["tracks"] = nlohmann::json::array();
     for(const Track& track : pack.tracks)
     {
@@ -450,6 +465,30 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
                 }
             }
         }
+    }
+
+    if(j.contains("markers") && j["markers"].is_array())
+    {
+        for(const auto& mj : j["markers"])
+        {
+            if(pack.markers.size() >= kMaxMarkers)
+            {
+                break;
+            }
+            if(!mj.is_object() || !mj.contains("ms") || !mj["ms"].is_number())
+            {
+                continue;
+            }
+            Marker m;
+            m.ms = std::clamp(mj["ms"].get<int>(), 0, pack.duration_ms);
+            if(mj.contains("label") && mj["label"].is_string())
+            {
+                m.label = mj["label"].get<std::string>().substr(0, 64);
+            }
+            pack.markers.push_back(std::move(m));
+        }
+        std::sort(pack.markers.begin(), pack.markers.end(),
+                  [](const Marker& a, const Marker& b) { return a.ms < b.ms; });
     }
 
     if(!j.contains("tracks") || !j["tracks"].is_array())

@@ -130,7 +130,6 @@ void ActionEditorDialog::buildUi()
         effect_files_dir,
         PluginSettingsPaths::ActionEditorCurvesFile(tab_ ? tab_->resource_manager : nullptr));
     root->addWidget(buildTopBar());
-    root->addWidget(effect_toolbar_);
 
     auto* splitter = new QSplitter(Qt::Horizontal);
 
@@ -677,6 +676,10 @@ void ActionEditorDialog::buildUi()
     connect(map_controllers_button_, &QPushButton::clicked, this, &ActionEditorDialog::onMapControllers);
     connect(timeline_, &ActionTimelineWidget::playheadChanged, this, &ActionEditorDialog::onPlayheadChanged);
     connect(timeline_, &ActionTimelineWidget::zoomChanged, this, &ActionEditorDialog::syncZoomSlider);
+    connect(timeline_, &ActionTimelineWidget::markersChanged, this, &ActionEditorDialog::markPreviewDirtyIfPlaying);
+    connect(timeline_, &ActionTimelineWidget::placementFinished, this, [this]() {
+        status_label_->setText(QStringLiteral("Ready"));
+    });
     connect(timeline_, &ActionTimelineWidget::clipSelected, this, &ActionEditorDialog::onClipSelected);
     /* Belt and braces: any timeline gesture closes a step if the pack changed (no-op otherwise). */
     connect(timeline_, &ActionTimelineWidget::clipSelected, this, [this](int, int) { scheduleHistoryCommit(); });
@@ -1361,6 +1364,10 @@ void ActionEditorDialog::onDurationChanged(int value)
     }
     pack_.duration_ms = value;
     syncTimeSliderRanges();
+    for(Action::Marker& marker : pack_.markers)
+    {
+        marker.ms = std::min(marker.ms, value);
+    }
     for(Action::Track& track : pack_.tracks)
     {
         for(Action::Clip& clip : track.clips)
@@ -1430,6 +1437,31 @@ void ActionEditorDialog::keyPressEvent(QKeyEvent* event)
                 {
                     onPreviewRow(row >= 0 ? row : 0, 0);
                 }
+            }
+            event->accept();
+            return;
+        }
+    }
+    const QWidget* key_focus = focusWidget();
+    const bool typing = key_focus
+        && (qobject_cast<const QLineEdit*>(key_focus) || qobject_cast<const QAbstractSpinBox*>(key_focus));
+    if(!typing && event->modifiers() == Qt::NoModifier && timeline_)
+    {
+        /* M drops a marker at the playhead - tap it along to the action while playing. */
+        if(event->key() == Qt::Key_M)
+        {
+            timeline_->addMarkerAt(timeline_->playheadMs());
+            event->accept();
+            return;
+        }
+        if(event->key() == Qt::Key_BracketLeft || event->key() == Qt::Key_BracketRight)
+        {
+            const int now = timeline_->playheadMs();
+            const int to = event->key() == Qt::Key_BracketLeft ? timeline_->previousMarkerMs(now)
+                                                               : timeline_->nextMarkerMs(now);
+            if(to >= 0)
+            {
+                onPlayheadChanged(to);
             }
             event->accept();
             return;
@@ -1572,7 +1604,12 @@ int ActionEditorDialog::currentTimelineRow() const
 
 void ActionEditorDialog::onToolbarEffectClicked(const QString& effect_id)
 {
-    addClipAt(currentTimelineRow(), timeline_ ? timeline_->playheadMs() : 0, effect_id);
+    if(!timeline_)
+    {
+        return;
+    }
+    timeline_->beginPlacement(effect_id);
+    status_label_->setText(QStringLiteral("Click a row to place it · Shift+click places more · Esc cancels"));
 }
 
 void ActionEditorDialog::onClipDeleteRequested(int track_index, int clip_index)
@@ -2333,6 +2370,10 @@ QWidget* ActionEditorDialog::buildTopBar()
         }
     });
     row->addWidget(snap_button_);
+    row->addSpacing(4);
+    row->addWidget(BarSeparator(bar));
+    row->addSpacing(4);
+    row->addWidget(effect_toolbar_);
     row->addStretch(1);
 
     PluginTheme::ApplyFlatToolBar(bar);

@@ -435,6 +435,10 @@ QVector<int> ActionTimelineWidget::snapCandidates(bool include_playhead) const
     {
         return out;
     }
+    for(const Action::Marker& m : pack_->markers)
+    {
+        out.push_back(m.ms);
+    }
     auto dragged = [&](int track, int clip) {
         if(track == drag_track_ && clip == drag_clip_)
         {
@@ -545,6 +549,112 @@ int ActionTimelineWidget::snapGroupDelta(int raw_delta, int* out_guide_ms) const
         *out_guide_ms = best_c;
     }
     return raw_delta + best_adjust;
+}
+
+void ActionTimelineWidget::addMarkerAt(int ms)
+{
+    if(!pack_ || pack_->markers.size() >= Action::kMaxMarkers)
+    {
+        return;
+    }
+    ms = std::clamp(ms, 0, duration_ms_);
+    for(const Action::Marker& m : pack_->markers)
+    {
+        if(std::abs(m.ms - ms) < 5)
+        {
+            return; // one there already
+        }
+    }
+    Action::Marker marker;
+    marker.ms = ms;
+    auto it = std::upper_bound(pack_->markers.begin(), pack_->markers.end(), marker,
+                               [](const Action::Marker& a, const Action::Marker& b) { return a.ms < b.ms; });
+    pack_->markers.insert(it, marker);
+    requestContentRepaint();
+    emit markersChanged();
+}
+
+int ActionTimelineWidget::previousMarkerMs(int ms) const
+{
+    int best = -1;
+    if(pack_)
+    {
+        for(const Action::Marker& m : pack_->markers)
+        {
+            if(m.ms < ms - 1)
+            {
+                best = m.ms;
+            }
+        }
+    }
+    return best;
+}
+
+int ActionTimelineWidget::nextMarkerMs(int ms) const
+{
+    if(pack_)
+    {
+        for(const Action::Marker& m : pack_->markers)
+        {
+            if(m.ms > ms + 1)
+            {
+                return m.ms;
+            }
+        }
+    }
+    return -1;
+}
+
+int ActionTimelineWidget::markerNear(int x) const
+{
+    if(!pack_)
+    {
+        return -1;
+    }
+    int best = -1;
+    int best_dist = 7;
+    for(int i = 0; i < (int)pack_->markers.size(); ++i)
+    {
+        const int d = std::abs(timeToX(pack_->markers[(size_t)i].ms) - x);
+        if(d < best_dist)
+        {
+            best_dist = d;
+            best = i;
+        }
+    }
+    return best;
+}
+
+void ActionTimelineWidget::fitClipBetweenMarkers(int track, int clip)
+{
+    Action::Clip* b = mutableClip(track, clip);
+    if(!b)
+    {
+        return;
+    }
+    const int middle = (b->start_ms + b->end_ms) / 2;
+    int lo = 0;
+    int hi = duration_ms_;
+    for(const Action::Marker& m : pack_->markers)
+    {
+        if(m.ms <= middle)
+        {
+            lo = m.ms;
+        }
+        else
+        {
+            hi = m.ms;
+            break;
+        }
+    }
+    if(hi - lo < min_clip_ms_)
+    {
+        return;
+    }
+    b->start_ms = lo;
+    b->end_ms = hi;
+    requestContentRepaint();
+    emit clipEdited(track, clip);
 }
 
 QString ActionTimelineWidget::effectDisplayName(const Action::Clip& clip) const

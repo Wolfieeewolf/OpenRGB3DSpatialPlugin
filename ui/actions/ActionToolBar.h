@@ -5,8 +5,14 @@
 #include <QString>
 #include <QWidget>
 
-class QTabWidget;
+class QMenu;
+class QToolButton;
 
+/**
+ * Slim menu strip for the Action Editor: Effects ▾ (by category), Colours ▾, Gradients ▾ and
+ * Curves ▾. Every item can be clicked, dragged straight out of the menu onto the timeline, or
+ * picked with the keyboard (Enter); right-click an item for its own tools.
+ */
 class ActionToolBar : public QWidget
 {
     Q_OBJECT
@@ -33,12 +39,19 @@ signals:
 
 private:
     void buildUi();
+    QToolButton* addMenuButton(const QString& text, const QString& tooltip, QMenu* menu);
+    void fillEffectsMenu();
+    void fillColorsMenu();
+    void fillGradientsMenu();
+    void fillCurvesMenu();
 
     filesystem::path user_gradients_path_;
     filesystem::path user_colors_path_;
     filesystem::path effect_files_dir_;
     filesystem::path user_curves_path_;
-    QTabWidget* tabs_ = nullptr;
-    int gradients_page_index_ = -1;
-    int curves_page_index_ = -1;
+    QMenu* effects_menu_ = nullptr;
+    QMenu* colors_menu_ = nullptr;
+    QMenu* gradients_menu_ = nullptr;
+    QMenu* curves_menu_ = nullptr;
+    QToolButton* curves_button_ = nullptr;
 };

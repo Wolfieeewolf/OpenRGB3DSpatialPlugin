@@ -179,6 +179,16 @@ struct Clip
     bool media_scroll = false;
 };
 
+/** Timing marker on the pack timeline (a beat, a cue). Authoring aid only: playback ignores it. */
+struct Marker
+{
+    int ms = 0;
+    std::string label;
+};
+
+/** Fail-closed ceiling on markers read from a pack file. */
+constexpr std::size_t kMaxMarkers = 4000;
+
 struct Track
 {
     std::string name;
@@ -195,6 +205,8 @@ struct Pack
     int priority = 0;
     std::vector<std::string> devices;
     std::vector<Track> tracks;
+    /** Sorted by time. Optional in the file ("markers"); older builds ignore it. */
+    std::vector<Marker> markers;
 };
 
 bool MapPlaybackTime(const Pack& pack, int elapsed_ms, bool event_active, int* out_local_ms);
