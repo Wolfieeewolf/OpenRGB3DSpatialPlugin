@@ -6,7 +6,6 @@
 #include "RoomSpatialLightingUi.h"
 #include "PluginLog.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
-#include "SpatialLighting/EmitterRelayMirror.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
 #include "ui/widgets/EffectSliderPromote.h"
 #include <QSignalBlocker>
@@ -35,7 +34,7 @@ void SpatialEffect3D::setRoomEmitterControllerIndex(int index, bool enabled)
     {
         effect_emitter_controller_indices_.erase(it);
     }
-    InvalidateRelayShadeCache();
+    /* No blocker rebuild: the relay light cache re-keys on which LEDs emit / receive. */
 }
 
 void SpatialEffect3D::setRoomReceiverControllerIndex(int index, bool enabled)
@@ -64,7 +63,6 @@ void SpatialEffect3D::setRoomReceiverControllerIndex(int index, bool enabled)
     {
         effect_receiver_controller_indices_.erase(it);
     }
-    InvalidateRelayShadeCache();
 }
 
 bool SpatialEffect3D::isRoomEmitterController(int index) const
@@ -94,11 +92,6 @@ bool SpatialEffect3D::appliesRoomOutputToController(int controller_index) const
     default:
         return true;
     }
-}
-
-RGBColor SpatialEffect3D::SampleRelayShadeAt(float x, float y, float z, const GridContext3D& grid) const
-{
-    return ShadeRelayReceiversAt(x, y, z, grid);
 }
 
 RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float /*room_x*/,
@@ -136,34 +129,6 @@ void SpatialEffect3D::RefreshRoomOutputControllerLists()
 void SpatialEffect3D::InvalidateRelayShadeCache()
 {
     SpatialLightingSceneProvider::instance()->InvalidateFrameOccluders();
-}
-
-void SpatialEffect3D::ApplyRelayShadeSettings(const GridContext3D& grid) const
-{
-    relay_shade_.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-    relay_shade_.use_occlusion = effect_room_relay_params_.use_occlusion;
-    relay_shade_.use_ambient_occlusion =
-        effect_room_relay_params_.use_occlusion && effect_room_relay_params_.ao_strength > 0.01f;
-    const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
-    const float room_diag =
-        std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
-    relay_shade_.ao_probe_span = std::clamp(std::max(reach_u * 0.4f, room_diag * 0.05f), 0.5f, 18.0f);
-}
-
-RGBColor SpatialEffect3D::ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const
-{
-    SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
-    ApplyRelayShadeSettings(grid);
-
-    if(provider->emitterRelayMirrorActive())
-    {
-        EmitterRelayMirror::MirrorShadeContext shade_ctx{};
-        shade_ctx.shade = &relay_shade_;
-        shade_ctx.occluder_aabbs = &provider->frameOccluderAabbs();
-        shade_ctx.occluders = &provider->frameOccluderQuads();
-        return EmitterRelayMirror::SampleReceiver(provider->emitterRelayMirrorFrame(), x, y, z, &shade_ctx);
-    }
-    return 0x00000000;
 }
 
 void SpatialEffect3D::SetSpatialMappingMode(SpatialMappingMode mode)
@@ -741,7 +706,8 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
                        effect_receiver_controller_indices_.end(),
                        [this](int idx) { return isRoomEmitterController(idx); }),
         effect_receiver_controller_indices_.end());
-    InvalidateRelayShadeCache();
+    /* No blocker rebuild here (this runs on every slider tick): EnsureFrameOccluders rebuilds
+       when the blocker options change, and the relay cache re-keys on its own settings. */
     if(room_output_panel_)
     {
         room_output_panel_->syncFromState(effect_room_output_role_,

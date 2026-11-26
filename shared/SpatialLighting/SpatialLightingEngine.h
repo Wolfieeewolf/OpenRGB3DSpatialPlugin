@@ -140,6 +140,24 @@ float ComputeRoomAmbientShadeFactor(float room_x,
                                     const OccluderSpatialIndex* aabb_index = nullptr,
                                     const RoomBlockerField* room_blocker_field = nullptr);
 
+/** Same, ignoring one controller's own body (the lit LED's housing). Thread-safe: does not
+    read the global shading controller. */
+float ComputeRoomAmbientShadeFactorSkip(float room_x,
+                                        float room_y,
+                                        float room_z,
+                                        float room_center_x,
+                                        float room_center_y,
+                                        float room_center_z,
+                                        const std::vector<OccluderAabb>& aabbs,
+                                        const std::vector<OccluderQuad>& quads,
+                                        const std::vector<BlockerGridOccluder>& blocker_grids,
+                                        float ao_strength_norm,
+                                        float probe_span,
+                                        const OccluderSpatialIndex* aabb_index,
+                                        const RoomBlockerField* room_blocker_field,
+                                        int skip_controller,
+                                        bool centre_shade_follows_strength = false);
+
 void BuildOccluderAabbSpatialIndex(const std::vector<OccluderAabb>& aabbs,
                                    const GridContext3D& grid,
                                    OccluderSpatialIndex& out_index);
@@ -157,6 +175,21 @@ bool SegmentIsOccluded(float ax,
                        const RoomBlockerField* room_blocker_field,
                        const OccluderSpatialIndex* aabb_index,
                        int skip_controller);
+
+/** Same, ignoring two controllers' own bodies (e.g. the light's and the lit LED's housings). */
+bool SegmentIsOccludedSkip2(float ax,
+                            float ay,
+                            float az,
+                            float bx,
+                            float by,
+                            float bz,
+                            const std::vector<OccluderAabb>& aabbs,
+                            const std::vector<OccluderQuad>& quads,
+                            const std::vector<BlockerGridOccluder>& blocker_grids,
+                            const RoomBlockerField* room_blocker_field,
+                            const OccluderSpatialIndex* aabb_index,
+                            int skip_controller_a,
+                            int skip_controller_b);
 
 } // namespace SpatialLighting
 

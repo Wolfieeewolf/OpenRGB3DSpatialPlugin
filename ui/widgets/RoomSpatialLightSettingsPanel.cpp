@@ -52,7 +52,12 @@ void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
                                                          RoomSpatialLightingUi::RoomSpatialLightParams& params,
                                                          const std::function<void()>& tuneChanged)
 {
-    ui->glowSizeRow->configure(10, 400, static_cast<int>(params.glow_radius_mm));
+    ui->glowSizeRow->configure(10,
+                               400,
+                               static_cast<int>(params.glow_radius_mm),
+                               QStringLiteral("Size of the bright core around each emitter, in millimetres "
+                                              "(at most the reach). Small = a tight hot spot that drops off "
+                                              "fast; large = a broad, even wash."));
     ui->glowSizeRow->bindValueChanged(
         owner,
         [&params, tuneChanged](int v) {
@@ -68,7 +73,7 @@ void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
         50,
         5000,
         static_cast<int>(params.light_reach_mm),
-        QStringLiteral("Emitter / room spatial light distance in millimetres. "
+        QStringLiteral("How far emitter light travels, in millimetres; it fades to nothing at this distance. "
                        "Different from Screen Mirror Ambilight reach (% of room)."));
     ui->lightReachRow->bindValueChanged(
         owner,
@@ -81,7 +86,12 @@ void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
         },
         [](int v) { return QString::number(v) + QStringLiteral(" mm"); });
 
-    ui->roomFillRow->configure(0, 100, static_cast<int>(params.room_fill));
+    ui->roomFillRow->configure(0,
+                               100,
+                               static_cast<int>(params.room_fill),
+                               QStringLiteral("How strongly the emitters' light fills the room (exposure). "
+                                              "0 = no light, 35 = default. Higher lights far receivers more "
+                                              "and lets many emitters together glow towards white."));
     ui->roomFillRow->bindValueChanged(
         owner,
         [&params, tuneChanged](int v) {

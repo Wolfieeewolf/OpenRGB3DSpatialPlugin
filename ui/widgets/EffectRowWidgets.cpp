@@ -199,7 +199,11 @@ void EffectSliderRow::bindValueChanged(QObject* owner,
     applyFormattedLabel(ui->valueSpin->value(), format_value);
 
     /* Emit once from the spin (slider writes into spin). */
-    QObject::connect(ui->valueSpin, QOverload<int>::of(&QSpinBox::valueChanged), owner,
+    if(value_connection_)
+    {
+        QObject::disconnect(value_connection_);
+    }
+    value_connection_ = QObject::connect(ui->valueSpin, QOverload<int>::of(&QSpinBox::valueChanged), owner,
                      [this, apply_value, format_value, changed](int v) {
                          if(apply_value)
                          {

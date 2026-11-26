@@ -288,7 +288,8 @@ static float ComputeAmbientOcclusion(Vec3 led,
                                      float probe_span,
                                      const OccluderSpatialIndex* aabb_index,
                                      const std::vector<BlockerGridOccluder>* blocker_grids,
-                                     const RoomBlockerField* room_blocker_field)
+                                     const RoomBlockerField* room_blocker_field,
+                                     int skip_controller)
 {
     static const Vec3 kDirs[6] = {
         {1.0f, 0.0f, 0.0f},  {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
@@ -305,7 +306,7 @@ static float ComputeAmbientOcclusion(Vec3 led,
                                   aabbs,
                                   quads,
                                   -1,
-                                  SpatialLightingSceneProvider::instance()->shadingControllerIndex(),
+                                  skip_controller,
                                   aabb_index,
                                   blocker_grids,
                                   room_blocker_field))
@@ -342,6 +343,29 @@ float ComputeRoomAmbientShadeFactor(float room_x,
                                     const OccluderSpatialIndex* aabb_index,
                                     const RoomBlockerField* room_blocker_field)
 {
+    return ComputeRoomAmbientShadeFactorSkip(room_x, room_y, room_z, room_center_x, room_center_y, room_center_z,
+                                             aabbs, quads, blocker_grids, ao_strength_norm, probe_span, aabb_index,
+                                             room_blocker_field,
+                                             SpatialLightingSceneProvider::instance()->shadingControllerIndex(),
+                                             false);
+}
+
+float ComputeRoomAmbientShadeFactorSkip(float room_x,
+                                        float room_y,
+                                        float room_z,
+                                        float room_center_x,
+                                        float room_center_y,
+                                        float room_center_z,
+                                        const std::vector<OccluderAabb>& aabbs,
+                                        const std::vector<OccluderQuad>& quads,
+                                        const std::vector<BlockerGridOccluder>& blocker_grids,
+                                        float ao_strength_norm,
+                                        float probe_span,
+                                        const OccluderSpatialIndex* aabb_index,
+                                        const RoomBlockerField* room_blocker_field,
+                                        int skip_controller,
+                                        bool centre_shade_follows_strength)
+{
     if(aabbs.empty() && quads.empty() && blocker_grids.empty() &&
        (!room_blocker_field || !room_blocker_field->IsValid()))
     {
@@ -361,23 +385,18 @@ float ComputeRoomAmbientShadeFactor(float room_x,
     float shade_factor = 1.0f;
     const Vec3 led = {room_x, room_y, room_z};
     const Vec3 center = {room_center_x, room_center_y, room_center_z};
-    if(SegmentHitsOccluderSet(led,
-                             center,
-                             aabbs,
-                             quads,
-                             -1,
-                             SpatialLightingSceneProvider::instance()->shadingControllerIndex(),
-                             index,
-                             grids,
-                             merged_field))
+    if(SegmentHitsOccluderSet(led, center, aabbs, quads, -1, skip_controller, index, grids, merged_field))
     {
-        shade_factor *= 0.18f;
+        shade_factor *= centre_shade_follows_strength
+                            ? 1.0f - std::clamp(ao_strength_norm, 0.0f, 1.0f) * (1.0f - 0.18f)
+                            : 0.18f;
     }
 
-    float effective_ao = ao_strength_norm;
+    const float effective_ao = ao_strength_norm;
     if(effective_ao > 0.01f)
     {
-        const float openness = ComputeAmbientOcclusion(led, aabbs, quads, probe_span, index, grids, merged_field);
+        const float openness =
+            ComputeAmbientOcclusion(led, aabbs, quads, probe_span, index, grids, merged_field, skip_controller);
         shade_factor *= 1.0f - effective_ao * (1.0f - openness);
     }
 
@@ -812,7 +831,8 @@ RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
                                      scene.shade.ao_probe_span,
                                      scene.occluder_aabb_index,
                                      scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids,
-                                     scene.room_blocker_field.IsValid() ? &scene.room_blocker_field : nullptr);
+                                     scene.room_blocker_field.IsValid() ? &scene.room_blocker_field : nullptr,
+                                     SpatialLightingSceneProvider::instance()->shadingControllerIndex());
         ao = 1.0f - scene.shade.ao_strength * (1.0f - ao);
     }
 
@@ -867,6 +887,37 @@ bool SegmentIsOccluded(float ax,
                                   quads,
                                   -1,
                                   skip_controller,
+                                  index,
+                                  grids,
+                                  room_blocker_field);
+}
+
+bool SegmentIsOccludedSkip2(float ax,
+                            float ay,
+                            float az,
+                            float bx,
+                            float by,
+                            float bz,
+                            const std::vector<OccluderAabb>& aabbs,
+                            const std::vector<OccluderQuad>& quads,
+                            const std::vector<BlockerGridOccluder>& blocker_grids,
+                            const RoomBlockerField* room_blocker_field,
+                            const OccluderSpatialIndex* aabb_index,
+                            int skip_controller_a,
+                            int skip_controller_b)
+{
+    const OccluderSpatialIndex* index = aabb_index;
+    if(!index)
+    {
+        index = ResolveAabbSpatialIndex(aabbs);
+    }
+    const std::vector<BlockerGridOccluder>* grids = blocker_grids.empty() ? nullptr : &blocker_grids;
+    return SegmentHitsOccluderSet({ax, ay, az},
+                                  {bx, by, bz},
+                                  aabbs,
+                                  quads,
+                                  skip_controller_a,
+                                  skip_controller_b,
                                   index,
                                   grids,
                                   room_blocker_field);

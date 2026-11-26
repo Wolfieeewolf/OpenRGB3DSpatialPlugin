@@ -402,11 +402,15 @@ public:
      * batches warped+quantized sample XYZ then BakeTrueGpuVolumeSamples before LED colors.
      */
     virtual bool PrefersTrueGpuVolumeSamples() const { return false; }
-    /** sample_xyz: interleaved warped+quantized sample positions (same space as CalculateColorGrid). */
+    /** sample_xyz: interleaved warped+quantized sample positions (same space as CalculateColorGrid).
+        append: keep what earlier calls this frame baked (a second set of samples taken on another
+        grid, e.g. Emitter + relay emitters on their emitter canvas). A sample that was not baked
+        costs a blocking GPU round trip per LED, so every grid the LEDs sample on must be baked. */
     virtual void BakeTrueGpuVolumeSamples(const float* /*sample_xyz*/,
                                           int /*count*/,
                                           float /*time*/,
-                                          const GridContext3D& /*grid*/) {}
+                                          const GridContext3D& /*grid*/,
+                                          bool /*append*/ = false) {}
 
     /** Fill the shared overlay frame (anchor, rotation, shear, per-axis half-extents, shape,
         room box, brightness) — the same box SampleVolumeLocalUv01 uses, so every engine's
@@ -605,7 +609,6 @@ public:
     bool isRoomEmitterController(int index) const;
     bool isRoomReceiverController(int index) const;
     bool appliesRoomOutputToController(int controller_index) const;
-    RGBColor SampleRelayShadeAt(float x, float y, float z, const GridContext3D& grid) const;
     bool UsesRoomMappedCoordinates() const
     {
         return effect_room_coordinate_mode_ == SpatialRoom::SpatialRoomCoordinateMode::RoomMapped;
@@ -864,10 +867,6 @@ protected:
     std::vector<int> effect_emitter_controller_indices_;
     std::vector<int> effect_receiver_controller_indices_;
 
-    mutable SpatialLighting::ShadeSettings relay_shade_{};
-
-    void ApplyRelayShadeSettings(const GridContext3D& grid) const;
-    RGBColor ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const;
     QGroupBox*          path_plane_group;
     QComboBox*          path_axis_combo;
     QComboBox*          plane_combo;

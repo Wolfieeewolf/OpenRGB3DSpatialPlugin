@@ -457,12 +457,8 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
     if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
     {
         const int shading_ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
-        if(shading_ctrl >= 0 && isRoomReceiverController(shading_ctrl) && !isRoomEmitterController(shading_ctrl))
-        {
-            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
-            g_tls_eval_effect = prev_eval_effect;
-            return relay;
-        }
+        /* Receivers are lit afterwards by the room relay pass (RoomLight::RelayModel) from
+           what the emitters actually show; here they get nothing. */
         if(shading_ctrl >= 0 && isRoomEmitterController(shading_ctrl))
         {
             RGBColor pattern = CalculateColorGrid(x, y, z, time, grid);

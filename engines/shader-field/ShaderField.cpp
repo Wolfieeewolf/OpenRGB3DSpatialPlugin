@@ -618,9 +618,13 @@ RGBColor ShaderField::SampleField(float u, float v) const
 void ShaderField::BakeTrueGpuVolumeSamples(const float* sample_xyz,
                                            int count,
                                            float /*time*/,
-                                           const GridContext3D& grid)
+                                           const GridContext3D& grid,
+                                           bool append)
 {
-    true_sample_map_.clear();
+    if(!append)
+    {
+        true_sample_map_.clear();
+    }
     true_samples_ready_ = true;
     if(!sample_xyz || count <= 0 || !shader_engine)
     {
@@ -650,7 +654,7 @@ void ShaderField::BakeTrueGpuVolumeSamples(const float* sample_xyz,
             continue;
         }
         const std::uint32_t key = PackUvKey(u, v);
-        if(unique_index.find(key) != unique_index.end())
+        if(unique_index.find(key) != unique_index.end() || (append && true_sample_map_.count(key)))
         {
             continue;
         }

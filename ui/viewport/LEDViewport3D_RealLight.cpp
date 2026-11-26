@@ -9,6 +9,7 @@
 #include "viewport/MeshBatch.h"
 #include "viewport/ViewportMath.h"
 #include "GridSpaceUtils.h"
+#include "SpatialLighting/RoomLight.h"
 
 #include <algorithm>
 #include <cmath>
@@ -47,11 +48,6 @@ bool GlobalLedIndex(RGBControllerInterface* c, unsigned int zone, unsigned int l
     return *out < c->GetLEDCount();
 }
 
-struct Cluster
-{
-    float px = 0.0f, py = 0.0f, pz = 0.0f, w = 0.0f;
-    float r = 0.0f, g = 0.0f, b = 0.0f;
-};
 } // namespace
 
 void LEDViewport3D::SetRealLightReachMm(float mm)
@@ -69,11 +65,7 @@ int LEDViewport3D::buildRealLightTexels(float reach_units)
     }
     const float* lin = SrgbToLinearTable();
 
-    struct Lit
-    {
-        float x, y, z, r, g, b;
-    };
-    std::vector<Lit> lit;
+    std::vector<RoomLight::LitPoint> lit;
     for(const auto& t : *controller_transforms)
     {
         if(!t || t->hidden_by_virtual)
@@ -105,59 +97,23 @@ int LEDViewport3D::buildRealLightTexels(float reach_units)
         return 0;
     }
 
-    /* Merge neighbours into lights a fraction of the reach apart; grow the cell until the
-       light count fits the shader loop budget. The spill is smooth, so this is invisible. */
-    float cell = std::max(1e-3f, reach_units * 0.22f);
-    std::unordered_map<uint64_t, Cluster> cells;
-    for(int attempt = 0; attempt < 8; ++attempt)
-    {
-        cells.clear();
-        cells.reserve(std::min<size_t>(lit.size(), (size_t)kMaxRealLights * 2u));
-        const float inv = 1.0f / cell;
-        for(const Lit& l : lit)
-        {
-            const int64_t ix = (int64_t)std::floor(l.x * inv);
-            const int64_t iy = (int64_t)std::floor(l.y * inv);
-            const int64_t iz = (int64_t)std::floor(l.z * inv);
-            const uint64_t key = ((uint64_t)(ix & 0x1FFFFF) << 42) | ((uint64_t)(iy & 0x1FFFFF) << 21)
-                                 | (uint64_t)(iz & 0x1FFFFF);
-            Cluster& k = cells[key];
-            const float w = l.r + l.g + l.b + 1e-3f;
-            k.px += l.x * w;
-            k.py += l.y * w;
-            k.pz += l.z * w;
-            k.w += w;
-            k.r += l.r;
-            k.g += l.g;
-            k.b += l.b;
-        }
-        if((int)cells.size() <= kMaxRealLights)
-        {
-            break;
-        }
-        cell *= 1.6f;
-    }
-
-    const int n = (int)std::min<size_t>(cells.size(), (size_t)kMaxRealLights);
+    /* Same light model as Emitter + relay receivers (shared/SpatialLighting/RoomLight). */
+    std::vector<RoomLight::LitPoint> lights;
+    RoomLight::ClusterLights(lit, reach_units, kMaxRealLights, lights);
+    const int n = (int)lights.size();
     real_light_texels_.resize((size_t)n * 8u, 0.0f);
-    int i = 0;
-    for(const auto& kv : cells)
+    for(int i = 0; i < n; ++i)
     {
-        if(i >= n)
-        {
-            break;
-        }
-        const Cluster& k = kv.second;
+        const RoomLight::LitPoint& k = lights[(size_t)i];
         float* t = &real_light_texels_[(size_t)i * 8u];
-        t[0] = k.px / k.w;
-        t[1] = k.py / k.w;
-        t[2] = k.pz / k.w;
+        t[0] = k.x;
+        t[1] = k.y;
+        t[2] = k.z;
         t[3] = 1.0f;
         t[4] = k.r;
         t[5] = k.g;
         t[6] = k.b;
         t[7] = 1.0f;
-        ++i;
     }
     return n;
 }

@@ -55,6 +55,16 @@ struct FlushPace
 
 std::unordered_map<RGBControllerInterface*, FlushPace> g_flush_pace;
 
+PostPaintHook g_post_paint_hook;
+
+void RunPostPaintHook(std::unordered_set<RGBControllerInterface*>& touched)
+{
+    if(g_post_paint_hook)
+    {
+        g_post_paint_hook(touched);
+    }
+}
+
 void FlushControllers(const std::unordered_set<RGBControllerInterface*>& touched, bool force)
 {
     if(g_flush_pace.size() > 512)
@@ -91,6 +101,11 @@ void FlushControllers(const std::unordered_set<RGBControllerInterface*>& touched
 
 } // namespace
 
+void SetPostPaintHook(PostPaintHook hook)
+{
+    g_post_paint_hook = std::move(hook);
+}
+
 int MeasureTickMs(std::int64_t* last_tick_ms)
 {
     const std::int64_t now = SteadyNowMs();
@@ -123,6 +138,8 @@ void EndCompositeFrame(bool force_hw_update)
         return;
     }
     g_composite_active = false;
+    g_composite_touched.erase(nullptr);
+    RunPostPaintHook(g_composite_touched);
     FlushControllers(g_composite_touched, force_hw_update || g_composite_force_hw);
     g_composite_touched.clear();
 }
@@ -834,6 +851,7 @@ ApplyStats ApplyPackFrame(const Pack& pack,
     }
     else
     {
+        RunPostPaintHook(touched);
         FlushControllers(touched, force_hw_update);
     }
     return stats;

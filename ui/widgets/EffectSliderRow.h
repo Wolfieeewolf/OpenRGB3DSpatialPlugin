@@ -3,6 +3,7 @@
 #ifndef EFFECTSLIDERROW_H
 #define EFFECTSLIDERROW_H
 
+#include <QMetaObject>
 #include <QString>
 #include <QWidget>
 #include <functional>
@@ -64,6 +65,9 @@ private:
 
     Ui::EffectSliderRow* ui = nullptr;
     bool spin_slider_linked_ = false;
+    /* One value binding per row: rebinding (e.g. the room output panel moving to another
+       layer) replaces it instead of stacking a second handler on every tick. */
+    QMetaObject::Connection value_connection_;
 };
 
 #endif

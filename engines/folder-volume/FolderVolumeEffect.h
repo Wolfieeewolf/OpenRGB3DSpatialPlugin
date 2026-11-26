@@ -131,7 +131,8 @@ public:
     void BakeTrueGpuVolumeSamples(const float* sample_xyz,
                                   int count,
                                   float time,
-                                  const GridContext3D& grid) override;
+                                  const GridContext3D& grid,
+                                  bool append = false) override;
     bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,
                                         const GridContext3D& grid,
                                         float time_sec) override;

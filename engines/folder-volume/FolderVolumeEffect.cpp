@@ -287,10 +287,15 @@ bool FolderVolumeEffect::TryFillGpuRoomGridOverlayLayer(GpuRoomGridOverlayLayer&
 void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
                                                   int count,
                                                   float time,
-                                                  const GridContext3D& grid)
+                                                  const GridContext3D& grid,
+                                                  bool append)
 {
-    true_sample_map_.clear();
-    true_samples_are_display_ = false;
+    if(!append)
+    {
+        true_sample_map_.clear();
+        true_samples_are_display_ = false;
+    }
+    const bool had_samples = !true_sample_map_.empty();
     if(!sample_xyz || count <= 0 || !volume_assist_.isAvailable())
     {
         return;
@@ -324,7 +329,7 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
             continue;
         }
         const std::uint32_t key = PackNorm01Key(n1, n2, n3);
-        if(unique_index.find(key) != unique_index.end())
+        if(unique_index.find(key) != unique_index.end() || (append && true_sample_map_.count(key)))
         {
             continue;
         }
@@ -439,7 +444,13 @@ void FolderVolumeEffect::BakeTrueGpuVolumeSamples(const float* sample_xyz,
             }
         }
     }
-    true_samples_are_display_ = baked_display;
+    /* One flag covers the whole map. An append onto an empty map sets it; onto existing
+       samples both bakes use the same finish settings, so they only disagree if the GPU
+       finish fails on one, and then the earlier bake's flag wins. */
+    if(!had_samples)
+    {
+        true_samples_are_display_ = baked_display;
+    }
 
     true_sample_map_.reserve((size_t)unique);
     for(const auto& kv : unique_index)

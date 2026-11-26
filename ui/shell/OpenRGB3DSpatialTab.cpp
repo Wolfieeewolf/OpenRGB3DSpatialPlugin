@@ -175,10 +175,16 @@ void OpenRGB3DSpatialTab::RunDeferredStartupTasks()
     RefreshDisplayPlaneDetails();
     UpdateEffectZoneCombo();
     UpdateEffectOriginCombo();
+
+    /* Action / trigger / Movie Sync frames light Emitter + relay receivers too. */
+    Action::SetPostPaintHook([this](std::unordered_set<RGBControllerInterface*>& touched) {
+        ApplyRoomRelayReceivers(&touched);
+    });
 }
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 {
+    Action::SetPostPaintHook({});
     if(AudioInputManager* audio = AudioInputManager::instance())
     {
         audio->stop();

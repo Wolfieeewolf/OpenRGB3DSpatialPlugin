@@ -197,6 +197,10 @@ private slots:
     /** Apply stack max FPS (or current UI effect) to effect_timer while playing. */
     void SyncEffectPlaybackTimer();
     void RenderEffectStack();
+    /** Emitter + relay: light every relay layer's receivers from what its emitters show
+        right now (effect stack, Action Editor, triggers, Movie Sync). Controllers it changes
+        are added to touched when given. */
+    void ApplyRoomRelayReceivers(std::unordered_set<RGBControllerInterface*>* touched);
     void gridSnapToggled(bool enabled);
     void rotateSnapToggled(bool enabled);
     void roomGuideLabelsToggled(bool enabled);

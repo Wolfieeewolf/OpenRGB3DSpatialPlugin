@@ -42,7 +42,8 @@ public:
     void BakeTrueGpuVolumeSamples(const float* sample_xyz,
                                   int count,
                                   float time,
-                                  const GridContext3D& grid) override;
+                                  const GridContext3D& grid,
+                                  bool append = false) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     /** Overlay: atlas bake of the same spatialMain LEDs evaluate at exact UVs. */
     bool TryFillGpuRoomGridOverlayLayer(struct GpuRoomGridOverlayLayer& out,

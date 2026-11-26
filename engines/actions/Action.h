@@ -6,7 +6,9 @@
 #include <nlohmann/json.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace Action
@@ -332,6 +334,12 @@ constexpr int kPlaybackTickMs = 16;
     or one nominal tick after a pause (so resuming never jumps ahead). */
 int MeasureTickMs(std::int64_t* last_tick_ms);
 void EndCompositeFrame(bool force_hw_update);
+
+/** Runs after a frame has painted every LED and right before it is flushed to the
+    hardware (once per composite frame). The Emitter + relay pass uses it to light its
+    receivers from whatever the emitters show; add any controller it changes to touched. */
+using PostPaintHook = std::function<void(std::unordered_set<RGBControllerInterface*>& touched)>;
+void SetPostPaintHook(PostPaintHook hook);
 /** Rotate (CW quarters) then flip H/V around UV center. */
 void ApplyClipUvTransform(const Clip& clip, float* u, float* v);
 /** 1D axis mirror: flip_h and 180° rotate (90/270 leave axis unchanged). */

@@ -1223,7 +1223,6 @@ void SpatialEffect3D::ConnectStackRoomOutputPanel(EffectRoomOutputPanel* panel,
                              effect_receiver_controller_indices_,
                              [this, on_changed]()
                              {
-                                 InvalidateRelayShadeCache();
                                  if(on_changed)
                                  {
                                      on_changed();
@@ -1561,7 +1560,8 @@ void SpatialEffect3D::OnParameterChanged()
             sampling_resolution_label->setText(QString::number(effect_sampling_resolution));
         }
     }
-    InvalidateRelayShadeCache();
+    /* No blocker rebuild here: effect sliders never move a blocker, and the relay light
+       cache re-keys itself on its own settings. */
     if(edge_profile_combo)
     {
         effect_edge_profile = std::clamp(edge_profile_combo->currentIndex(), 0, 4);

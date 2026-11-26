@@ -11,7 +11,6 @@
 #include "PluginLog.h"
 #include "ControllerLayout3D.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
-#include "SpatialLighting/EmitterRelayMirror.h"
 #include "SpatialLighting/EmitterLocalSampling.h"
 #include "RoomSpatialLightingUi.h"
 #include "VirtualController3D.h"
@@ -508,6 +507,13 @@ bool ShouldApplyStackLayerToController(const SpatialEffect3D* effect,
     {
         return false;
     }
+    /* A relay layer paints only its own emitters: its receivers are lit by the relay pass,
+       and on another relay's emitters it would only paint black over their pattern. */
+    if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay
+       && !effect->isRoomEmitterController(ctrl_idx))
+    {
+        return false;
+    }
     return true;
 }
 
@@ -605,21 +611,6 @@ RGBColor SampleStackLayerColor(SpatialEffect3D* effect,
         return 0x00000000;
     }
     return effect->EvaluateColorGrid(x, y, z, time, grid);
-}
-
-bool IsRelayOnlyReceiver(const SpatialEffect3D* relay_effect, int ctrl_idx)
-{
-    return relay_effect &&
-           relay_effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay &&
-           relay_effect->isRoomReceiverController(ctrl_idx) &&
-           !relay_effect->isRoomEmitterController(ctrl_idx);
-}
-
-bool IsRelayEmitter(const SpatialEffect3D* relay_effect, int ctrl_idx)
-{
-    return relay_effect &&
-           relay_effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay &&
-           relay_effect->isRoomEmitterController(ctrl_idx);
 }
 
 } // namespace
@@ -1090,222 +1081,58 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                 mapped_lights_anchor_);
     }
 
-    SpatialLightingSceneProvider::instance()->ClearEmitterRelayFrame();
+    /* Emitter + relay: every relay layer's emitters show the stack's pattern on one emitter
+       canvas; the first relay layer sets where the stack starts reaching non-emitters.
+       Receivers are lit after every LED has its final colour, by ApplyRoomRelayReceivers
+       (room light model, cached visibility). */
     size_t relay_stack_index = active_effects.size();
     SpatialEffect3D* relay_layer_effect = nullptr;
     std::unordered_set<int> relay_emitter_controllers;
+    std::unordered_set<int> relay_receiver_controllers;
     EmitterLocalSampling::CombinedEmitterCanvas emitter_canvas{};
     {
+        std::vector<SpatialEffect3D*> relays;
         for(size_t i = 0; i < active_effects.size(); ++i)
         {
             SpatialEffect3D* effect = active_effects[i].effect;
             if(effect && effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
             {
-                relay_stack_index = i;
-                relay_layer_effect = effect;
-                break;
+                if(!relay_layer_effect)
+                {
+                    relay_stack_index = i;
+                    relay_layer_effect = effect;
+                }
+                relays.push_back(effect);
             }
         }
 
-        if(!relay_layer_effect && current_effect_ui &&
-           current_effect_ui->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+        for(SpatialEffect3D* relay : relays)
         {
-            for(size_t i = 0; i < active_effects.size(); ++i)
+            for(int idx : relay->roomEmitterControllerIndices())
             {
-                if(active_effects[i].effect == current_effect_ui)
+                relay_emitter_controllers.insert(idx);
+            }
+        }
+        for(SpatialEffect3D* relay : relays)
+        {
+            for(int idx = 0; idx < (int)controller_transforms.size(); ++idx)
+            {
+                if(!relay_emitter_controllers.count(idx) && relay->isRoomReceiverController(idx)
+                   && !relay->isRoomEmitterController(idx))
                 {
-                    relay_stack_index = i;
-                    relay_layer_effect = current_effect_ui;
-                    break;
+                    relay_receiver_controllers.insert(idx);
                 }
             }
         }
-
-        std::unordered_set<int>& emitter_set = relay_emitter_controllers;
-        if(relay_layer_effect && relay_stack_index < active_effects.size())
-        {
-            for(int idx : relay_layer_effect->roomEmitterControllerIndices())
-            {
-                emitter_set.insert(idx);
-            }
-        }
-
-        const bool has_relay_stack = relay_layer_effect != nullptr;
-        const size_t relay_idx = relay_stack_index;
-
-        if(relay_layer_effect && !emitter_set.empty())
+        if(relay_layer_effect && !relay_emitter_controllers.empty())
         {
             EmitterLocalSampling::TryBuildCombinedEmitterCanvas(controller_transforms,
-                                                                emitter_set,
+                                                                relay_emitter_controllers,
                                                                 room_grid.grid_scale_mm,
                                                                 effect_render_sequence,
                                                                 emitter_canvas);
         }
-
-        if(relay_layer_effect && relay_stack_index < active_effects.size() && !emitter_set.empty())
-        {
-            const RoomSpatialLightingUi::RoomSpatialLightParams& lp = relay_layer_effect->roomRelayParams();
-            const float bright = std::max(0.15f, relay_layer_effect->GetBrightness() / 100.0f);
-
-            const auto sample_emitter_led = [&](const LEDPosition3D& led_position, int ctrl_idx) -> RGBColor {
-                const Vector3D& world_pos = led_position.world_position;
-                const float room_x = led_position.room_position.x;
-                const float room_y = led_position.room_position.y;
-                const float room_z = led_position.room_position.z;
-
-                SpatialLightingSceneProvider* shade_provider = SpatialLightingSceneProvider::instance();
-                const int prev_shade_ctrl = shade_provider->shadingControllerIndex();
-                shade_provider->SetShadingControllerIndex(ctrl_idx);
-                RGBColor blended = ToRGBColor(0, 0, 0);
-                for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
-                {
-                    const RenderEffectSlot& slot = active_effects[effect_idx];
-                    SpatialEffect3D* effect = slot.effect;
-                    if(!effect)
-                    {
-                        continue;
-                    }
-                    if(!EffectSlotAppliesToController(slot.zone_index, ctrl_idx, zone_manager.get()))
-                    {
-                        continue;
-                    }
-                    if(!ShouldApplyStackLayerToController(effect,
-                                                          effect_idx,
-                                                          relay_idx,
-                                                          has_relay_stack,
-                                                          ctrl_idx,
-                                                          &emitter_set))
-                    {
-                        continue;
-                    }
-
-                    RGBColor effect_color = 0x00000000;
-                    if(emitter_canvas.valid && emitter_canvas.grid)
-                    {
-                        effect_color = SamplePatternOnEmitterCanvas(effect,
-                                                                    room_x,
-                                                                    room_y,
-                                                                    room_z,
-                                                                    effect_time,
-                                                                    emitter_canvas);
-                        if(!effect->IsPointOnActiveSurface(room_x, room_y, room_z, *emitter_canvas.grid))
-                        {
-                            effect_color = 0x00000000;
-                        }
-                    }
-                    else
-                    {
-                        const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
-                        if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
-                        {
-                            continue;
-                        }
-                        const bool requires_world = effect->RequiresWorldSpaceCoordinates();
-                        const bool use_world_bounds = effect->UseWorldGridBounds();
-                        const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                        const GridContext3D* local_grid =
-                            ResolveActiveSlotGrid(grid_override, use_world_bounds);
-                        const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
-
-                        float sx = requires_world ? world_pos.x : room_x;
-                        float sy = requires_world ? world_pos.y : room_y;
-                        float sz = requires_world ? world_pos.z : room_z;
-                        const GridContext3D& active_grid = stack_grid;
-
-                        effect_color = SampleStackLayerColor(effect,
-                                                             sx,
-                                                             sy,
-                                                             sz,
-                                                             effect_time,
-                                                             active_grid);
-                        if(!effect->IsPointOnActiveSurface(sx, sy, sz, active_grid))
-                        {
-                            effect_color = 0x00000000;
-                        }
-                    }
-                    effect_color = effect->PostProcessColorGrid(effect_color);
-                    blended = BlendColors(blended, effect_color, slot.blend_mode);
-                }
-                shade_provider->SetShadingControllerIndex(prev_shade_ctrl);
-                return blended;
-            };
-
-            EmitterRelayMirror::MirrorFrame mirror{};
-            mirror.room_center = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
-            mirror.grid_scale_mm = room_grid.grid_scale_mm;
-            mirror.light_reach_mm = lp.light_reach_mm;
-            mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.38f, 5.0f, 90.0f);
-            mirror.room_fill_strength = lp.room_fill / 100.0f;
-            mirror.brightness = bright;
-
-            std::vector<EmitterRelayMirror::LedColorSample> led_samples;
-            for(const int emitter_ctrl : emitter_set)
-            {
-                if(emitter_ctrl < 0 || emitter_ctrl >= (int)controller_transforms.size())
-                {
-                    continue;
-                }
-                ControllerTransform* emitter_transform = controller_transforms[(size_t)emitter_ctrl].get();
-                if(!emitter_transform || emitter_transform->hidden_by_virtual)
-                {
-                    continue;
-                }
-                ControllerLayout3D::UpdateWorldPositions(emitter_transform);
-
-                Vector3D min_bounds{};
-                Vector3D max_bounds{};
-                ControllerLayout3D::CalculateControllerLocalBounds(emitter_transform, min_bounds, max_bounds);
-                const float span_x = std::max(max_bounds.x - min_bounds.x, 0.01f);
-                const float span_y = std::max(max_bounds.y - min_bounds.y, 0.01f);
-
-                led_samples.clear();
-                led_samples.reserve(emitter_transform->led_positions.size());
-
-                const auto push_led_sample = [&](const LEDPosition3D& led_position) {
-                    const RGBColor c = sample_emitter_led(led_position, emitter_ctrl);
-                    const uint8_t r = static_cast<uint8_t>(c & 0xFF);
-                    const uint8_t g = static_cast<uint8_t>((c >> 8) & 0xFF);
-                    const uint8_t b = static_cast<uint8_t>((c >> 16) & 0xFF);
-                    if(static_cast<int>(r) + static_cast<int>(g) + static_cast<int>(b) < 6)
-                    {
-                        return;
-                    }
-                    EmitterRelayMirror::PointEmitter point{};
-                    point.room_position = led_position.room_position;
-                    point.r = r;
-                    point.g = g;
-                    point.b = b;
-                    mirror.point_emitters.push_back(point);
-                    EmitterRelayMirror::LedColorSample sample{};
-                    sample.u = (led_position.local_position.x - min_bounds.x) / span_x;
-                    sample.v = (led_position.local_position.y - min_bounds.y) / span_y;
-                    sample.r = r;
-                    sample.g = g;
-                    sample.b = b;
-                    led_samples.push_back(sample);
-                };
-
-                for(const LEDPosition3D& led_position : emitter_transform->led_positions)
-                {
-                    push_led_sample(led_position);
-                }
-
-                if(led_samples.empty())
-                {
-                    continue;
-                }
-
-                EmitterRelayMirror::EmitterSurface surface{};
-                EmitterRelayMirror::BuildSurfaceFromSamples(emitter_ctrl, emitter_transform, led_samples, surface);
-                if(!surface.tex_rgb.empty())
-                {
-                    mirror.surfaces.push_back(std::move(surface));
-                }
-            }
-
-            SpatialLightingSceneProvider::instance()->SetEmitterRelayMirrorFrame(std::move(mirror),
-                                                                                 std::move(emitter_set));
-        }
+        SpatialLightingSceneProvider::instance()->SetRelayEmitterControllers(relay_emitter_controllers);
     }
 
     const SpatialLighting::OccluderBuildOptions frame_occluder_options = MergeStackOccluderOptions(active_effects);
@@ -1389,6 +1216,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     if(any_true_volume)
     {
         std::vector<std::vector<float>> true_xyz(active_effects.size());
+        /* Emitter + relay emitters sample on their emitter canvas, not the slot grid: bake
+           those points on that grid too, or every emitter LED misses the bake and pays a
+           blocking GPU round trip of its own each frame. */
+        std::vector<std::vector<float>> emitter_xyz(active_effects.size());
         for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ++ctrl_idx)
         {
             ControllerTransform* transform = controller_transforms[ctrl_idx].get();
@@ -1401,6 +1232,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                    != controllers_managed_by_virtuals.end())
             {
                 continue;
+            }
+            if(relay_receiver_controllers.count(static_cast<int>(ctrl_idx)))
+            {
+                continue; /* lit by the relay pass; never samples the stack */
             }
             ControllerLayout3D::UpdateWorldPositions(transform);
             for(const LEDPosition3D& led_position : transform->led_positions)
@@ -1427,6 +1262,29 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     {
                         continue;
                     }
+                    /* Mirror EvaluateColorGrid: a relay layer only shows a pattern on its
+                       emitters (receivers are lit later) and samples them unquantized. */
+                    const bool relay_role =
+                        effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay;
+                    if(relay_role && !effect->isRoomEmitterController(static_cast<int>(ctrl_idx)))
+                    {
+                        continue;
+                    }
+                    if(relay_emitter_controllers.count(static_cast<int>(ctrl_idx))
+                       && emitter_canvas.valid && emitter_canvas.grid)
+                    {
+                        float ex = led_position.room_position.x;
+                        float ey = led_position.room_position.y;
+                        float ez = led_position.room_position.z;
+                        if(!relay_role)
+                        {
+                            effect->PrepareTrueGpuSamplePoint(ex, ey, ez, *emitter_canvas.grid);
+                        }
+                        emitter_xyz[effect_idx].push_back(ex);
+                        emitter_xyz[effect_idx].push_back(ey);
+                        emitter_xyz[effect_idx].push_back(ez);
+                        continue;
+                    }
                     const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
                     if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
                     {
@@ -1439,8 +1297,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                     : led_position.room_position.y;
                     float sample_z = requires_world ? led_position.world_position.z
                                                     : led_position.room_position.z;
-                    effect->PrepareTrueGpuSamplePoint(sample_x, sample_y, sample_z,
-                                                      *prepared_grids[effect_idx]);
+                    if(!relay_role)
+                    {
+                        effect->PrepareTrueGpuSamplePoint(sample_x, sample_y, sample_z,
+                                                          *prepared_grids[effect_idx]);
+                    }
                     true_xyz[effect_idx].push_back(sample_x);
                     true_xyz[effect_idx].push_back(sample_y);
                     true_xyz[effect_idx].push_back(sample_z);
@@ -1450,8 +1311,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
         {
             SpatialEffect3D* effect = active_effects[effect_idx].effect;
-            if(!effect || !effect->PrefersTrueGpuVolumeSamples()
-               || true_xyz[effect_idx].empty() || !prepared_grids[effect_idx])
+            if(!effect || !effect->PrefersTrueGpuVolumeSamples() || !prepared_grids[effect_idx]
+               || (true_xyz[effect_idx].empty() && emitter_xyz[effect_idx].empty()))
             {
                 continue;
             }
@@ -1459,6 +1320,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                              (int)(true_xyz[effect_idx].size() / 3u),
                                              effect_time,
                                              *prepared_grids[effect_idx]);
+            if(!emitter_xyz[effect_idx].empty())
+            {
+                effect->BakeTrueGpuVolumeSamples(emitter_xyz[effect_idx].data(),
+                                                 (int)(emitter_xyz[effect_idx].size() / 3u),
+                                                 effect_time,
+                                                 *emitter_canvas.grid,
+                                                 true);
+            }
         }
     }
 
@@ -1497,30 +1366,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 float world_y = world_pos.y;
                 float world_z = world_pos.z;
 
-                if(IsRelayOnlyReceiver(relay_layer_effect, static_cast<int>(ctrl_idx)))
+                if(relay_receiver_controllers.count(static_cast<int>(ctrl_idx)))
                 {
-                    RGBColor final_color =
-                        relay_layer_effect->SampleRelayShadeAt(room_x, room_y, room_z, room_grid);
-                    final_color = relay_layer_effect->PostProcessColorGrid(final_color);
-                    transform->led_positions[led_pos_idx].preview_color = final_color;
-
-                    RGBControllerInterface* mapping_controller = led_position.controller;
-                    if(mapping_controller && mapping_controller->GetZoneCount() != 0 && mapping_controller->GetLEDCount() != 0 &&
-                       led_position.zone_idx < mapping_controller->GetZoneCount())
-                    {
-                        unsigned int led_global_idx = 0;
-                        if(TryGetGlobalLedIndex(mapping_controller,
-                                                led_position.zone_idx,
-                                                led_position.led_idx,
-                                                &led_global_idx))
-                        {
-                            mapping_controller->SetColor(led_global_idx, final_color);
-                        }
-                    }
-                    continue;
+                    continue; /* lit by ApplyRoomRelayReceivers once the emitters are final */
                 }
 
-                if(IsRelayEmitter(relay_layer_effect, static_cast<int>(ctrl_idx)) &&
+                if(relay_emitter_controllers.count(static_cast<int>(ctrl_idx)) &&
                    emitter_canvas.valid && emitter_canvas.grid)
                 {
                     RGBColor final_color = ToRGBColor(0, 0, 0);
@@ -1707,20 +1558,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     continue;
                 }
 
-                if(IsRelayOnlyReceiver(relay_layer_effect, static_cast<int>(ctrl_idx)))
+                if(relay_receiver_controllers.count(static_cast<int>(ctrl_idx)))
                 {
-                    RGBColor final_color =
-                        relay_layer_effect->SampleRelayShadeAt(room_x, room_y, room_z, room_grid);
-                    final_color = relay_layer_effect->PostProcessColorGrid(final_color);
-                    transform->led_positions[led_pos_idx].preview_color = final_color;
-                    if(led_global_idx < controller->GetLEDCount())
-                    {
-                        controller->SetColor(led_global_idx, final_color);
-                    }
-                    continue;
+                    continue; /* lit by ApplyRoomRelayReceivers once the emitters are final */
                 }
 
-                if(IsRelayEmitter(relay_layer_effect, static_cast<int>(ctrl_idx)) &&
+                if(relay_emitter_controllers.count(static_cast<int>(ctrl_idx)) &&
                    emitter_canvas.valid && emitter_canvas.grid)
                 {
                     RGBColor final_color = ToRGBColor(0, 0, 0);
@@ -1856,6 +1699,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             }
         }
     }
+
+    /* Every emitter now shows its final colour: light the relay receivers from it. */
+    ApplyRoomRelayReceivers(nullptr);
 
     EffectAxis sort_axis = AXIS_Y;
     std::vector<std::pair<float, unsigned int>> sorted_controllers;

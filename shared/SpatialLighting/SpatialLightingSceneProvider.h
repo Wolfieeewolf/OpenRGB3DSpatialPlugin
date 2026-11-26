@@ -3,7 +3,6 @@
 #ifndef SPATIALLIGHTINGSCENEPROVIDER_H
 #define SPATIALLIGHTINGSCENEPROVIDER_H
 
-#include "SpatialLighting/EmitterRelayMirror.h"
 #include "SpatialLighting/BlockerGridOccluder.h"
 #include "SpatialLighting/OccluderSpatialIndex.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
@@ -28,12 +27,11 @@ public:
     void SetShadingControllerIndex(int index) { shading_controller_index_ = index; }
     int shadingControllerIndex() const { return shading_controller_index_; }
 
-    void ClearEmitterRelayFrame();
-    void SetEmitterRelayMirrorFrame(EmitterRelayMirror::MirrorFrame frame,
-                                    std::unordered_set<int> emitter_controller_indices);
-    bool emitterRelayMirrorActive() const { return emitter_relay_mirror_active_; }
-    const EmitterRelayMirror::MirrorFrame& emitterRelayMirrorFrame() const { return emitter_relay_mirror_; }
+    /** Emitter controllers of the stack's Emitter + relay layer this frame. */
+    void SetRelayEmitterControllers(std::unordered_set<int> emitter_controller_indices);
     bool isEmitterController(int controller_index) const;
+    /** Changes whenever blockers / occluders are rebuilt (relay visibility caches key on it). */
+    std::uint64_t sceneGeometryEpoch() const { return scene_geometry_epoch_; }
 
     void InvalidateFrameOccluders();
     void EnsureFrameOccluders(const GridContext3D& grid, const SpatialLighting::OccluderBuildOptions& options);
@@ -60,8 +58,6 @@ private:
     const std::vector<std::unique_ptr<ControllerTransform>>* controllers_ = nullptr;
     int shading_controller_index_ = -1;
 
-    bool emitter_relay_mirror_active_ = false;
-    EmitterRelayMirror::MirrorFrame emitter_relay_mirror_;
     std::unordered_set<int> emitter_controller_indices_;
 
     bool frame_occluders_valid_ = false;

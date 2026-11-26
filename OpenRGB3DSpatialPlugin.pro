@@ -222,7 +222,7 @@ HEADERS += \
     shared/SpatialLighting/BlockerGridOccluder.h \
     shared/SpatialLighting/OccluderSpatialIndex.h \
     shared/SpatialLighting/SpatialLightingEngine.h \
-    shared/SpatialLighting/EmitterRelayMirror.h \
+    shared/SpatialLighting/RoomLight.h \
     shared/SpatialLighting/EmitterLocalSampling.h \
     shared/SpatialLighting/SpatialLightingSceneProvider.h \
     shared/SpatialLighting/RoomSpatialLightingUi.h \
@@ -431,7 +431,7 @@ SOURCES += \
     shared/SpatialLighting/BlockerGridOccluder.cpp \
     shared/SpatialLighting/OccluderSpatialIndex.cpp \
     shared/SpatialLighting/SpatialLightingEngine.cpp \
-    shared/SpatialLighting/EmitterRelayMirror.cpp \
+    shared/SpatialLighting/RoomLight.cpp \
     shared/SpatialLighting/EmitterLocalSampling.cpp \
     shared/SpatialLighting/SpatialLightingSceneProvider.cpp \
     shared/SpatialLighting/RoomSpatialLightingUi.cpp \
@@ -478,6 +478,7 @@ SOURCES += \
     ui/controllers/ZoneControllerPickerDialog.cpp \
     ui/shell/OpenRGB3DSpatialTab_Effects.cpp \
     ui/shell/OpenRGB3DSpatialTab_EffectsRender.cpp \
+    ui/shell/OpenRGB3DSpatialTab_RoomRelay.cpp \
     ui/viewport/LEDViewport3D.cpp \
     ui/viewport/LEDViewport3D_Input.cpp \
     ui/viewport/LEDViewport3D_Camera.cpp \

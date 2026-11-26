@@ -70,7 +70,8 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
         0,
         100,
         65,
-        tr("Extra contact darkening on receivers when blockers are on."));
+        tr("With blockers on: darkens receivers in corners, behind props and out of sight of the "
+           "room centre. 0 = no ambient darkening."));
     ao_row_->setVisible(false);
     layout->addWidget(ao_row_);
 
@@ -113,7 +114,8 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
 
     zone_hint_ = new QLabel(tr(
         "Set the stack zone to All so emitters and receivers on this layer are not limited by the top-bar zone. "
-        "Use one Emitter + relay layer; pattern layers below it paint emitters."));
+        "Pattern layers below an Emitter + relay layer paint its emitters. Several relay layers "
+        "can light the same receivers; their light adds."));
     zone_hint_->setWordWrap(true);
     zone_hint_->setVisible(false);
     layout->addWidget(zone_hint_);
@@ -159,9 +161,11 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     relay_panel_ = new RoomSpatialLightSettingsPanel();
     relay_panel_->setShowRoomFill(true);
     relay_panel_->setHintText(tr(
-        "Reach/glow: how far light travels from each emitter LED. "
-        "Leave Blockers off for a 360° wash. Turn Blockers on so housing cells "
-        "stop light like the real device."));
+        "Reach: how far light travels from the emitters. Glow: size of the bright core. "
+        "Receivers follow whatever the emitters show (any effect, Action Editor, triggers, Movie Sync). "
+        "Turn this layer off to drive the receivers directly. "
+        "Leave Blockers off for a 360° wash. Turn Blockers on so props, walls and housing cells "
+        "cast shadows like the real thing."));
     relay_panel_->setVisible(false);
     layout->addWidget(relay_panel_);
     layout->setStretch(5, 1);
