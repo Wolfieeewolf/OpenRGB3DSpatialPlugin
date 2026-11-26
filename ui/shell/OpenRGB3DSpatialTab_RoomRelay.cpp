@@ -434,6 +434,10 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
         const float core_mm = std::clamp(lp.glow_radius_mm, 1.0f, reach_mm);
         RoomLight::RelaySettings settings;
         settings.reach = std::max(1e-3f, MMToGridUnits(reach_mm, grid_scale_mm));
+        /* ~6 cm lights, ~8 cm receiver shadow groups: fixed, so dragging Reach never moves
+           a light or re-aims a shadow ray. */
+        settings.light_cell = std::max(1e-3f, MMToGridUnits(60.0f, grid_scale_mm));
+        settings.group_cell = std::max(1e-3f, MMToGridUnits(80.0f, grid_scale_mm));
         settings.core2 = std::clamp((core_mm / reach_mm) * (core_mm / reach_mm), 1e-5f, 1.0f);
         /* 0% = no light, 35% (default) = the Real light overlay's exposure, 100% ~ 3x that. */
         settings.exposure = 1.4f * std::clamp(lp.room_fill, 0.0f, 100.0f) / 35.0f;

@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <unordered_map>
 #include <vector>
 
 namespace RoomLight
@@ -67,6 +68,10 @@ void ClusterLights(const std::vector<LitPoint>& lit, float reach, int max_lights
 struct RelaySettings
 {
     float reach = 28.0f;      /* light reach */
+    /* Fixed grouping sizes (never derived from the reach, so slider moves cannot regroup
+       lights and flip shadows): emitter LEDs per light, receiver LEDs per shadow group. */
+    float light_cell = 6.0f;
+    float group_cell = 6.0f;
     float core2 = kDefaultCore2;
     float exposure = 1.4f;
     bool occlusion = false;   /* blockers cast shadows */
@@ -120,9 +125,16 @@ private:
         float weight = 0.0f;
     };
 
-    std::uint64_t vis_sig_ = 0;
+    std::uint64_t layout_sig_ = 0;
+    std::uint64_t block_sig_ = 0;
+    std::uint64_t reach_sig_ = 0;
     std::uint64_t amb_sig_ = 0;
     std::uint64_t weight_sig_ = 0;
+    std::vector<Vector3D> emitters_;
+    std::vector<std::vector<int>> members_;   /* light -> its emitter LEDs */
+    std::vector<float> group_radius_;
+    /* Shadow results per group, by light: kept across reach changes. */
+    std::vector<std::unordered_map<int, float>> pass_cache_;
     bool valid_ = false;
     /* Layout kept between stages so Glow / AO changes re-weight without new blocker tests. */
     std::vector<Vector3D> receivers_;

@@ -3,6 +3,7 @@
 #include "RoomLight.h"
 
 #include <cstring>
+#include <functional>
 #include <thread>
 #include <unordered_map>
 
@@ -109,36 +110,49 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
 {
     exposure_ = settings.exposure;
 
-    /* Three cache stages, each redone only when its own inputs change:
-       shadows (layout, reach, blockers) -> ambient (AO settings) -> falloff weights (glow).
-       Dragging Glow or AO therefore never repeats a blocker test. */
-    uint64_t vis_sig = 1469598103934665603ull;
-    HashValue(vis_sig, emitters.size());
-    HashValue(vis_sig, receivers.size());
+    /* Cache stages, each redone only when its own inputs change:
+         layout   (LED positions, owners, cell sizes)  -> lights and receiver groups
+         blockers (shadows on/off, blocker geometry)    -> forget stored shadow results
+         reach                                          -> which lights each group can see
+                                                           (stored shadow results are reused;
+                                                           only newly reached lights are tested)
+         ambient  (AO settings)                         -> AO per group
+         glow                                           -> falloff weights per LED
+       Lights and groups use fixed cell sizes, never the reach, so moving a slider never
+       moves a light or re-aims a shadow ray: shadows stay put while dragging. */
+    uint64_t layout_sig = 1469598103934665603ull;
+    HashValue(layout_sig, emitters.size());
+    HashValue(layout_sig, receivers.size());
     if(!emitters.empty())
     {
-        HashBytes(vis_sig, emitters.data(), emitters.size() * sizeof(Vector3D));
+        HashBytes(layout_sig, emitters.data(), emitters.size() * sizeof(Vector3D));
     }
     if(!receivers.empty())
     {
-        HashBytes(vis_sig, receivers.data(), receivers.size() * sizeof(Vector3D));
+        HashBytes(layout_sig, receivers.data(), receivers.size() * sizeof(Vector3D));
     }
     if(!emitter_owner.empty())
     {
-        HashBytes(vis_sig, emitter_owner.data(), emitter_owner.size() * sizeof(int));
+        HashBytes(layout_sig, emitter_owner.data(), emitter_owner.size() * sizeof(int));
     }
     if(!receiver_owner.empty())
     {
-        HashBytes(vis_sig, receiver_owner.data(), receiver_owner.size() * sizeof(int));
+        HashBytes(layout_sig, receiver_owner.data(), receiver_owner.size() * sizeof(int));
     }
-    HashValue(vis_sig, settings.reach);
-    HashValue(vis_sig, settings.occlusion);
+    HashValue(layout_sig, settings.light_cell);
+    HashValue(layout_sig, settings.group_cell);
+
+    uint64_t block_sig = layout_sig;
+    HashValue(block_sig, settings.occlusion);
     if(settings.occlusion)
     {
-        HashValue(vis_sig, layout_epoch);
+        HashValue(block_sig, layout_epoch);
     }
 
-    uint64_t amb_sig = vis_sig;
+    uint64_t reach_sig = block_sig;
+    HashValue(reach_sig, settings.reach);
+
+    uint64_t amb_sig = layout_sig;
     HashValue(amb_sig, settings.ambient_occlusion);
     if(settings.ambient_occlusion)
     {
@@ -148,17 +162,21 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
         HashValue(amb_sig, layout_epoch);
     }
 
-    uint64_t weight_sig = vis_sig;
+    uint64_t weight_sig = reach_sig;
     HashValue(weight_sig, settings.core2);
 
-    const bool redo_vis = !valid_ || vis_sig != vis_sig_;
-    const bool redo_amb = redo_vis || amb_sig != amb_sig_;
-    const bool redo_weights = redo_vis || weight_sig != weight_sig_;
-    if(!redo_vis && !redo_amb && !redo_weights)
+    const bool redo_layout = !valid_ || layout_sig != layout_sig_;
+    const bool redo_block = redo_layout || block_sig != block_sig_;
+    const bool redo_reach = redo_block || reach_sig != reach_sig_;
+    const bool redo_amb = redo_layout || amb_sig != amb_sig_;
+    const bool redo_weights = redo_reach || redo_amb || weight_sig != weight_sig_;
+    if(!redo_weights)
     {
         return false;
     }
-    vis_sig_ = vis_sig;
+    layout_sig_ = layout_sig;
+    block_sig_ = block_sig;
+    reach_sig_ = reach_sig;
     amb_sig_ = amb_sig;
     weight_sig_ = weight_sig;
     valid_ = true;
@@ -234,11 +252,12 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
         }
     };
 
-    if(redo_vis)
+    if(redo_layout)
     {
         emitter_count_ = emitters.size();
         receiver_count_ = receivers.size();
         receivers_ = receivers;
+        emitters_ = emitters;
 
         const auto owner_of = [](const std::vector<int>& owners, std::size_t i) {
             return i < owners.size() ? owners[i] : -1;
@@ -247,18 +266,19 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
             return key ^ ((uint64_t)(owner + 2) * 0x9E3779B97F4A7C15ull);
         };
 
-        /* 1. Emitter LEDs -> lights, by position and controller (holds every frame). */
-        std::vector<std::vector<int>> members;
+        /* 1. Emitter LEDs -> lights, by position and controller. The cell only grows when a
+              huge layout would exceed the light budget, never with the reach. */
+        members_.clear();
         emitter_light_.assign(emitters.size(), 0);
         {
-            float cell = std::max(1e-3f, reach * 0.22f);
+            float cell = std::max(1e-3f, settings.light_cell);
             std::unordered_map<uint64_t, int> index;
-            for(int attempt = 0; attempt < 8; ++attempt)
+            for(int attempt = 0; attempt < 12; ++attempt)
             {
                 index.clear();
                 centre_.clear();
                 light_owner_.clear();
-                members.clear();
+                members_.clear();
                 const float inv = 1.0f / cell;
                 for(std::size_t i = 0; i < emitters.size(); ++i)
                 {
@@ -273,7 +293,7 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                         index.emplace(key, light);
                         centre_.push_back({0.0f, 0.0f, 0.0f});
                         light_owner_.push_back(owner);
-                        members.emplace_back();
+                        members_.emplace_back();
                     }
                     else
                     {
@@ -282,18 +302,18 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                     centre_[(std::size_t)light].x += p.x;
                     centre_[(std::size_t)light].y += p.y;
                     centre_[(std::size_t)light].z += p.z;
-                    members[(std::size_t)light].push_back((int)i);
+                    members_[(std::size_t)light].push_back((int)i);
                     emitter_light_[i] = light;
                 }
                 if((int)centre_.size() <= kMaxRelayLights)
                 {
                     break;
                 }
-                cell *= 1.6f;
+                cell *= 1.4f;
             }
             for(std::size_t k = 0; k < centre_.size(); ++k)
             {
-                const float n = (float)std::max<std::size_t>(1, members[k].size());
+                const float n = (float)std::max<std::size_t>(1, members_[k].size());
                 centre_[k].x /= n;
                 centre_[k].y /= n;
                 centre_[k].z /= n;
@@ -301,14 +321,12 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
         }
         light_count_ = (int)centre_.size();
 
-        /* 2. Receivers near each other (same controller) share shadow tests; shadows are
-              soft at this scale. The falloff stays exact per LED. */
+        /* 2. Receivers near each other (same controller) share shadow tests. */
         receiver_group_.assign(receivers.size(), 0);
         group_centre_.clear();
         group_owner_.clear();
-        std::vector<float> group_radius;
         {
-            const float cell = std::max(1e-3f, reach * 0.12f);
+            const float cell = std::max(1e-3f, settings.group_cell);
             const float inv = 1.0f / cell;
             std::unordered_map<uint64_t, int> index;
             std::vector<int> count;
@@ -344,29 +362,41 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                 group_centre_[g].y /= n;
                 group_centre_[g].z /= n;
             }
-            group_radius.assign(group_centre_.size(), 0.0f);
+            group_radius_.assign(group_centre_.size(), 0.0f);
             for(std::size_t i = 0; i < receivers.size(); ++i)
             {
                 const Vector3D& p = receivers[i];
                 const Vector3D& c = group_centre_[(std::size_t)receiver_group_[i]];
                 const float d =
                     std::sqrt((p.x - c.x) * (p.x - c.x) + (p.y - c.y) * (p.y - c.y) + (p.z - c.z) * (p.z - c.z));
-                float& r = group_radius[(std::size_t)receiver_group_[i]];
+                float& r = group_radius_[(std::size_t)receiver_group_[i]];
                 r = std::max(r, d);
             }
         }
         group_count_ = (int)group_centre_.size();
+    }
 
-        /* 3. Per group: lights that can reach any of its LEDs, and how much gets past the
-              blockers (centre plus the two ends of the light's LEDs, so shadows soften). */
+    /* 3. Blockers changed (or new layout): stored shadow results are stale. */
+    if(redo_block)
+    {
+        pass_cache_.assign(group_centre_.size(), {});
+    }
+
+    /* 4. Per group: lights within reach of any of its LEDs, with the share of each light
+          that gets past the blockers (centre plus the two ends of the light's LEDs, so
+          shadows soften). Results are kept per (group, light): changing the reach only
+          tests lights that were never tested before. */
+    if(redo_reach)
+    {
         const bool shadows = settings.occlusion && blocked;
         group_pass_.assign(group_centre_.size(), {});
         const auto build = [&](std::size_t begin, std::size_t end) {
             for(std::size_t g = begin; g < end; ++g)
             {
                 const Vector3D& gc = group_centre_[g];
-                const float reach_g = reach + group_radius[g];
+                const float reach_g = reach + group_radius_[g];
                 std::vector<Tap>& out = group_pass_[g];
+                std::unordered_map<int, float>& cache = pass_cache_[g];
                 for(int k = 0; k < light_count_; ++k)
                 {
                     const Vector3D& c = centre_[(std::size_t)k];
@@ -380,24 +410,33 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                     float pass = 1.0f;
                     if(shadows)
                     {
-                        const std::vector<int>& m = members[(std::size_t)k];
-                        Vector3D probes[3] = {c, c, c};
-                        int probe_count = 1;
-                        if(m.size() >= 2)
+                        auto hit = cache.find(k);
+                        if(hit != cache.end())
                         {
-                            probes[1] = emitters[(std::size_t)m.front()];
-                            probes[2] = emitters[(std::size_t)m.back()];
-                            probe_count = 3;
+                            pass = hit->second;
                         }
-                        int open = 0;
-                        for(int p = 0; p < probe_count; ++p)
+                        else
                         {
-                            if(!blocked(probes[p], light_owner_[(std::size_t)k], gc, group_owner_[g]))
+                            const std::vector<int>& m = members_[(std::size_t)k];
+                            Vector3D probes[3] = {c, c, c};
+                            int probe_count = 1;
+                            if(m.size() >= 2)
                             {
-                                ++open;
+                                probes[1] = emitters_[(std::size_t)m.front()];
+                                probes[2] = emitters_[(std::size_t)m.back()];
+                                probe_count = 3;
                             }
+                            int open = 0;
+                            for(int p = 0; p < probe_count; ++p)
+                            {
+                                if(!blocked(probes[p], light_owner_[(std::size_t)k], gc, group_owner_[g]))
+                                {
+                                    ++open;
+                                }
+                            }
+                            pass = (float)open / (float)probe_count;
+                            cache.emplace(k, pass);
                         }
-                        pass = (float)open / (float)probe_count;
                     }
                     if(pass > 0.0f)
                     {
@@ -418,7 +457,7 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                  reset);
     }
 
-    /* 4. Ambient occlusion per receiver group. */
+    /* 5. Ambient occlusion per receiver group. */
     if(redo_amb)
     {
         group_ambient_.assign(group_centre_.size(), 1.0f);
@@ -435,8 +474,7 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
         }
     }
 
-    /* 5. Per LED: exact falloff from each light its group can see (no blocker tests). */
-    if(redo_weights || redo_amb)
+    /* 6. Per LED: exact falloff from each light its group can see (no blocker tests). */
     {
         const float core2 = std::max(1e-6f, settings.core2 * r2);
         tap_begin_.assign(receivers_.size() + 1, 0);
