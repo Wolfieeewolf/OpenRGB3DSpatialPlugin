@@ -106,6 +106,12 @@ void RefreshGpuRoomGridOverlay(LEDViewport3D* viewport,
     viewport->SetRoomGridOverlayBounds(room_bounds.min_x, room_bounds.max_x,
                                        room_bounds.min_y, room_bounds.max_y,
                                        room_bounds.min_z, room_bounds.max_z);
+    /* Real light reads the LEDs' own colours in the viewport: no effect layers to bake. */
+    if(viewport->GetRoomGridOverlayMode() == LEDViewport3D::OverlayRealLight)
+    {
+        viewport->ClearGpuRoomGridOverlayLayers();
+        return;
+    }
 
     std::vector<GpuRoomGridOverlayLayer> gpu_layers;
     gpu_layers.reserve(std::min(overlay_slots.size(), (size_t)GpuRoomGridOverlayLayer::kMaxLayers));

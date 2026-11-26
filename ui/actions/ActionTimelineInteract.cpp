@@ -2254,7 +2254,8 @@ void ActionTimelineWidget::mouseMoveEvent(QMouseEvent* event)
     if(motion_drag_track_ >= 0 && (event->buttons() & Qt::LeftButton))
     {
         Action::Clip* c = mutableClip(motion_drag_track_, motion_drag_clip_);
-        if(c && motion_drag_key_ >= 0 && motion_drag_key_ < (int)c->motion.size())
+        if(c && motion_drag_key_ >= 0 && motion_drag_key_ < (int)c->motion.size()
+           && motion_drag_row_ >= 0 && motion_drag_row_ < visible_rows_.size())
         {
             const QRect r = clipRectOnTrack(motion_drag_row_, motion_drag_track_, *c);
             float at = (float)(pt.x() - r.left()) / (float)std::max(1, r.width() - 1);

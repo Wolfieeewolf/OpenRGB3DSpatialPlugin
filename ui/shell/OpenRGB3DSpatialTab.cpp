@@ -460,7 +460,9 @@ void OpenRGB3DSpatialTab::ApplyActionPreviewFrame(const Action::Pack& pack,
     }
 
     /* Room-grid overlay: RoomBox field clips export the GPU field they painted with. */
-    const bool want_overlay = viewport && viewport->GetShowRoomGridOverlay();
+    /* Real light reads the LEDs' own colours in the viewport: skip the field export. */
+    const bool want_overlay = viewport && viewport->GetShowRoomGridOverlay()
+        && viewport->GetRoomGridOverlayMode() != LEDViewport3D::OverlayRealLight;
     std::vector<GpuRoomGridOverlayLayer> action_layers;
     Action::ApplyPackFrame(pack, local_ms, resource_manager->GetRGBControllers(), &controller_transforms,
                                force_hw_update, zone_manager.get(), spatial_ptr,
