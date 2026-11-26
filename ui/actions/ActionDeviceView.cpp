@@ -395,8 +395,9 @@ void ActionDeviceMatrixView::rebuildLayout(const RowLights& lights)
         for(size_t i = 0; i < g->leds.size(); ++i)
         {
             const int col = (int)(std::lower_bound(ux.begin(), ux.end(), xs[i]) - ux.begin());
-            /* +Y is up in the room; rows count down from the top. */
-            const int row = s.rows - 1 - (int)(std::lower_bound(uy.begin(), uy.end(), ys[i]) - uy.begin());
+            /* Layout Y counts rows down from the top (as OpenRGB matrix maps and the Custom
+               Controller grid do), so the smallest Y is the top row. */
+            const int row = (int)(std::lower_bound(uy.begin(), uy.end(), ys[i]) - uy.begin());
             char& slot = used[(size_t)row * (size_t)s.cols + (size_t)col];
             if(slot)
             {
