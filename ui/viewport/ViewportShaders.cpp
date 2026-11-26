@@ -1242,4 +1242,75 @@ bool CompileVolumeAtlasPoint(GlProgram& out, QString* error_log)
     return out.Compile(VolumeAtlasPointVertex(), VolumeAtlasPointFragment(), error_log);
 }
 
+namespace
+{
+/* Each grid point gathers light from every (clustered) LED: soft inverse-square spill
+   inside a finite reach, summed in linear light, then tone-mapped back to display colour
+   while keeping the hue. Lights texture: 2 x N RGBA32F, texel 0 = position.xyz,
+   texel 1 = summed linear colour. */
+const char* RealLightPointVertex()
+{
+    return R"GLSL(
+#version 410 core
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_mvp;
+uniform float u_point_size;
+uniform sampler2D u_lights;
+uniform int u_light_count;
+uniform float u_reach;
+uniform float u_exposure;
+uniform float u_floor;
+out vec3 v_color;
+void main()
+{
+    vec3 e = vec3(0.0);
+    float r2 = u_reach * u_reach;
+    float core2 = max(1e-4, 0.09 * r2);
+    for(int i = 0; i < u_light_count; ++i)
+    {
+        vec3 lp = texelFetch(u_lights, ivec2(0, i), 0).xyz;
+        vec3 d = a_position - lp;
+        float d2 = dot(d, d);
+        if(d2 >= r2)
+        {
+            continue;
+        }
+        float w = 1.0 - d2 / r2;
+        e += texelFetch(u_lights, ivec2(1, i), 0).rgb * (w * w / (1.0 + d2 / core2));
+    }
+    float m = max(e.r, max(e.g, e.b));
+    vec3 lin = m > 1e-6 ? e * ((1.0 - exp(-m * u_exposure)) / m) : vec3(0.0);
+    v_color = pow(lin, vec3(1.0 / 2.2)) + vec3(u_floor);
+    gl_PointSize = u_point_size;
+    gl_Position = u_mvp * vec4(a_position, 1.0);
+}
+)GLSL";
+}
+
+const char* RealLightPointFragment()
+{
+    return R"GLSL(
+#version 410 core
+in vec3 v_color;
+out vec4 frag_color;
+void main()
+{
+    vec2 q = gl_PointCoord * 2.0 - 1.0;
+    float r = dot(q, q);
+    if(r > 1.0)
+    {
+        discard;
+    }
+    float a = pow(1.0 - r, 1.5);
+    frag_color = vec4(v_color * a, 1.0);
+}
+)GLSL";
+}
+} // namespace
+
+bool CompileRealLightPoint(GlProgram& out, QString* error_log)
+{
+    return out.Compile(RealLightPointVertex(), RealLightPointFragment(), error_log);
+}
+
 } // namespace ViewportShaders

@@ -7,7 +7,9 @@
 #include "EffectSliderPromote.h"
 #include "ui_GridSettingsPanel.h"
 
+#include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QGridLayout>
 #include <QFont>
 #include <QLabel>
 #include <QSlider>
@@ -114,6 +116,32 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
                                                     ui->overlayPointLabel);
     overlay_step_row_ = PromoteSliderLabelInGrid(ui->settingsLayout, ui->overlayStepSlider,
                                                    ui->overlayStepLabel);
+    /* Real light: how far one LED's glow reaches into the room (only used in that mode). */
+    {
+        real_light_reach_caption_ = new QLabel(QStringLiteral("Light reach"), this);
+        auto* reach_slider = new QSlider(Qt::Horizontal, this);
+        reach_slider->setRange(50, 3000);
+        reach_slider->setSingleStep(50);
+        reach_slider->setPageStep(250);
+        reach_slider->setToolTip(QStringLiteral(
+            "Real light: how far each LED's light spreads into the room, in mm. A wall wash or "
+            "ceiling strip wants more; a keyboard or fan wants less."));
+        auto* reach_label = new QLabel(this);
+        const int r = ui->settingsLayout->rowCount();
+        ui->settingsLayout->addWidget(real_light_reach_caption_, r, 0);
+        ui->settingsLayout->addWidget(reach_slider, r, 1);
+        ui->settingsLayout->addWidget(reach_label, r, 2);
+        real_light_reach_row_ = PromoteSliderLabelInGrid(ui->settingsLayout, reach_slider, reach_label,
+                                                         QStringLiteral(" mm"));
+        real_light_reach_slider_ = real_light_reach_row_ ? real_light_reach_row_->slider() : reach_slider;
+    }
+    ui->overlayModeCombo->addItem(QStringLiteral("Effect field"), (int)LEDViewport3D::OverlayEffectField);
+    ui->overlayModeCombo->addItem(QStringLiteral("Real light"), (int)LEDViewport3D::OverlayRealLight);
+    ui->overlayModeCombo->setToolTip(QStringLiteral(
+        "Effect field: each room effect's own 3D shape, filling the room between the lights.\n"
+        "Real light: the room lit by what every LED is actually showing, all effects, layers, "
+        "blends, trails, triggers and Movie Sync combined, as it would look in real life."));
+
     overlay_bright_slider_ = overlay_bright_row_ ? overlay_bright_row_->slider() : nullptr;
     overlay_point_slider_ = overlay_point_row_ ? overlay_point_row_->slider() : nullptr;
     overlay_step_slider_ = overlay_step_row_ ? overlay_step_row_->slider() : nullptr;
@@ -122,6 +150,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     int overlay_bright_pct = 100;
     int overlay_point_size = 3;
     int overlay_step       = 4;
+    int overlay_mode       = 0;
+    int real_light_reach   = 600;
 
     connect(ui->gridScaleSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
             &GridSettingsPanel::onGridScaleChanged);
@@ -151,6 +181,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
             overlay_bright_pct       = std::max(0, std::min(100, overlay_bright_pct));
             overlay_point_size       = std::max(1, std::min(12, overlay_point_size));
             overlay_step             = std::max(1, std::min(24, overlay_step));
+            overlay_mode             = rg.value("Mode", 0) == 1 ? 1 : 0;
+            real_light_reach         = std::clamp((int)rg.value("RealLightReachMm", 600.0), 50, 3000);
             ui->roomGridOverlayCheckbox->setChecked(show);
             if(tab->viewport)
             {
@@ -167,8 +199,12 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     SyncEffectSliderValue(overlay_bright_slider_, overlay_bright_pct);
     SyncEffectSliderValue(overlay_point_slider_, overlay_point_size);
     SyncEffectSliderValue(overlay_step_slider_, overlay_step);
+    SyncEffectSliderValue(real_light_reach_slider_, real_light_reach);
+    ui->overlayModeCombo->setCurrentIndex(overlay_mode);
     if(tab->viewport)
     {
+        tab->viewport->SetRoomGridOverlayMode(overlay_mode);
+        tab->viewport->SetRealLightReachMm((float)real_light_reach);
         tab->viewport->SetRoomGridBrightness((float)overlay_bright_pct / 100.0f);
         tab->viewport->SetRoomGridPointSize((float)overlay_point_size);
         tab->viewport->SetRoomGridStep(overlay_step);
@@ -195,6 +231,13 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     {
         connect(overlay_step_slider_, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayStepChanged);
     }
+    if(real_light_reach_slider_)
+    {
+        connect(real_light_reach_slider_, &QSlider::valueChanged, this, &GridSettingsPanel::onRealLightReachChanged);
+    }
+    connect(ui->overlayModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &GridSettingsPanel::onOverlayModeChanged);
+    syncOverlayModeUi();
 
     connect(ui->gridSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gridSnapToggled);
     connect(ui->rotateSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::rotateSnapToggled);
@@ -286,6 +329,51 @@ void GridSettingsPanel::onOverlayStepChanged(int v)
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomGridStep(v);
+    }
+    host_tab_->PersistRoomGridOverlayToSettings();
+}
+
+void GridSettingsPanel::syncOverlayModeUi()
+{
+    const bool real = ui->overlayModeCombo->currentIndex() == 1;
+    if(real_light_reach_row_)
+    {
+        real_light_reach_row_->setEnabled(real);
+    }
+    else if(real_light_reach_slider_)
+    {
+        real_light_reach_slider_->setEnabled(real);
+    }
+    if(real_light_reach_caption_)
+    {
+        real_light_reach_caption_->setEnabled(real);
+    }
+}
+
+void GridSettingsPanel::onOverlayModeChanged(int index)
+{
+    if(!host_tab_)
+    {
+        return;
+    }
+    if(host_tab_->viewport)
+    {
+        host_tab_->viewport->SetRoomGridOverlayMode(index == 1 ? 1 : 0);
+    }
+    syncOverlayModeUi();
+    host_tab_->RefreshRoomGridOverlayPreview();
+    host_tab_->PersistRoomGridOverlayToSettings();
+}
+
+void GridSettingsPanel::onRealLightReachChanged(int mm)
+{
+    if(!host_tab_)
+    {
+        return;
+    }
+    if(host_tab_->viewport)
+    {
+        host_tab_->viewport->SetRealLightReachMm((float)std::clamp(mm, 50, 3000));
     }
     host_tab_->PersistRoomGridOverlayToSettings();
 }

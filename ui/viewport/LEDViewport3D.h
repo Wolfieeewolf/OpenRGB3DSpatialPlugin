@@ -95,6 +95,14 @@ public:
     float GetRoomGridBrightness() const { return room_grid_brightness; }
     float GetRoomGridPointSize() const { return room_grid_point_size; }
     int GetRoomGridStep() const { return room_grid_step; }
+    /** What the room-grid overlay shows: 0 = effect field (the effects' own volume),
+        1 = real light (the room lit by every LED's actual colour, all effects combined). */
+    enum RoomGridOverlayMode : int { OverlayEffectField = 0, OverlayRealLight = 1 };
+    void SetRoomGridOverlayMode(int mode) { room_grid_overlay_mode_ = (mode == OverlayRealLight) ? OverlayRealLight : OverlayEffectField; update(); }
+    int GetRoomGridOverlayMode() const { return room_grid_overlay_mode_; }
+    /** How far one LED's light spreads in Real light mode, in mm. */
+    void SetRealLightReachMm(float mm);
+    float GetRealLightReachMm() const { return real_light_reach_mm_; }
     void SetRoomGridOverlayBounds(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
     void ClearRoomGridOverlayBounds();
     void SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLayer> layers);
@@ -412,6 +420,15 @@ private:
     GlProgram gl_prog_unlit_color_;
     GlProgram gl_prog_unlit_point_;
     GlProgram gl_prog_volume_atlas_point_;
+    GlProgram gl_prog_real_light_point_;
+    int   room_grid_overlay_mode_ = 0;
+    float real_light_reach_mm_ = 600.0f;
+    unsigned int real_light_tex_ = 0;
+    std::vector<float> real_light_texels_;
+    /** Cluster every lit LED into at most a few hundred lights; returns the light count. */
+    int buildRealLightTexels(float reach_units);
+    /** Real light pass over the room-grid points (room_grid_overlay_batch_ already uploaded). */
+    void drawRealLightOverlay();
     /** Push KindScreenMirror per-plane uniforms (u_sm_*) for the bound overlay program. */
     void UploadScreenMirrorOverlayUniforms(const GpuRoomGridOverlayLayer& layer);
     std::vector<GpuRoomGridOverlayLayer> gpu_room_grid_overlay_layers_;

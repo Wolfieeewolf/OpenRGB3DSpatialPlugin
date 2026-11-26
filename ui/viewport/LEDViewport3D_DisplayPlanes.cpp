@@ -576,6 +576,12 @@ void LEDViewport3D::DrawRoomGridOverlay()
                                         count);
     }
 
+    if(room_grid_overlay_mode_ == OverlayRealLight && gl_prog_real_light_point_.IsValid())
+    {
+        drawRealLightOverlay();
+        return;
+    }
+
     if(guide_only)
     {
         const ViewportMat4 identity = ViewportMath::Identity();

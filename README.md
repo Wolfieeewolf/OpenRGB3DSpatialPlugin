@@ -18,7 +18,7 @@ Some effects and parts of the interface are still being worked on. Bug reports a
 
 * Place devices in a 3D room model using real-world sizes in millimetres
 * Effects that play across the whole room, layered in a stack with blend modes
-* Grid overlay in the 3D view that shows the effect exactly as the LEDs do
+* Grid overlay in the 3D view with two modes: **Effect field** shows each room effect's own 3D shape exactly as the LEDs sample it, and **Real light** shows the room lit by what every LED is actually showing (all effects, Action Editor layers, blends, trails, triggers and Movie Sync combined), with an adjustable light reach
 * Audio-reactive effects
 * Screen Mirror (Ambilight): screen colours carried outward from the monitor into the room
 * Reactive effects: waves that start at the key, mouse button or gamepad button pressed

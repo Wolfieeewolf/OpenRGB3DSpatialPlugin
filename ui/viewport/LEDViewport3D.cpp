@@ -810,6 +810,8 @@ void LEDViewport3D::initViewportShaderPrograms()
     const bool ok_tex = compile_one("textured_unlit", &ViewportShaders::CompileTexturedUnlit, gl_prog_textured_unlit_);
     const bool ok_atlas = compile_one("volume_atlas_point", &ViewportShaders::CompileVolumeAtlasPoint,
                                       gl_prog_volume_atlas_point_);
+    /* Optional: Real light overlay falls back to the effect field when this fails. */
+    compile_one("real_light_point", &ViewportShaders::CompileRealLightPoint, gl_prog_real_light_point_);
     viewport_shader_programs_ok_ = ok_color && ok_point && ok_tex && ok_atlas;
     if(viewport_shader_programs_ok_)
     {
@@ -847,6 +849,13 @@ void LEDViewport3D::destroyViewportGlResources()
     gl_prog_unlit_point_.Destroy();
     gl_prog_textured_unlit_.Destroy();
     gl_prog_volume_atlas_point_.Destroy();
+    gl_prog_real_light_point_.Destroy();
+    if(real_light_tex_ != 0)
+    {
+        GLuint id = real_light_tex_;
+        glDeleteTextures(1, &id);
+        real_light_tex_ = 0;
+    }
     viewport_shader_programs_ok_ = false;
 }
 
@@ -854,6 +863,7 @@ void LEDViewport3D::abandonViewportGlHandles()
 {
     /* Context is going away — drop IDs without glDelete. */
     owned_overlay_atlas_textures_.clear();
+    real_light_tex_ = 0;
     gpu_room_grid_overlay_layers_.clear();
     floor_fill_batch_.Abandon();
     floor_grid_batch_.Abandon();
@@ -884,6 +894,7 @@ void LEDViewport3D::abandonViewportGlHandles()
     gl_prog_unlit_point_.Destroy();
     gl_prog_textured_unlit_.Destroy();
     gl_prog_volume_atlas_point_.Destroy();
+    gl_prog_real_light_point_.Destroy();
     viewport_shader_programs_ok_ = false;
 }
 

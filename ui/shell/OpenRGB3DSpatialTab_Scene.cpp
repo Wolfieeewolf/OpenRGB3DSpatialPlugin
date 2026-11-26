@@ -727,6 +727,8 @@ void OpenRGB3DSpatialTab::MergePluginUiIntoSettings(nlohmann::json& settings) co
         settings["RoomGrid"]["Brightness"] = viewport->GetRoomGridBrightness();
         settings["RoomGrid"]["PointSize"]  = viewport->GetRoomGridPointSize();
         settings["RoomGrid"]["Step"]       = viewport->GetRoomGridStep();
+        settings["RoomGrid"]["Mode"]       = viewport->GetRoomGridOverlayMode();
+        settings["RoomGrid"]["RealLightReachMm"] = viewport->GetRealLightReachMm();
 
         settings["Viewport"]["ShowRoomGuideLabels"] = viewport->GetShowRoomGuideLabels();
     }

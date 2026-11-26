@@ -484,6 +484,7 @@ SOURCES += \
     ui/viewport/LEDViewport3D_Controllers.cpp \
     ui/viewport/LEDViewport3D_SceneObjects.cpp \
     ui/viewport/LEDViewport3D_DisplayPlanes.cpp \
+    ui/viewport/LEDViewport3D_RealLight.cpp \
     ui/viewport/LEDViewport3D_SceneProps.cpp \
     ui/controllers/CustomControllerDialog.cpp \
     ui/controllers/CustomControllerDialog_Grid.cpp \

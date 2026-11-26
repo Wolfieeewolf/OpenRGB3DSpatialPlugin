@@ -1988,6 +1988,8 @@ void OpenRGB3DSpatialTab::PersistRoomGridOverlayToSettings()
         settings["RoomGrid"]["Brightness"] = viewport->GetRoomGridBrightness();
         settings["RoomGrid"]["PointSize"] = viewport->GetRoomGridPointSize();
         settings["RoomGrid"]["Step"] = viewport->GetRoomGridStep();
+        settings["RoomGrid"]["Mode"] = viewport->GetRoomGridOverlayMode();
+        settings["RoomGrid"]["RealLightReachMm"] = viewport->GetRealLightReachMm();
         SetPluginSettings(settings);
     }
     catch(const std::exception& e)

@@ -23,6 +23,8 @@ bool CompileUnlitColor(GlProgram& out, QString* error_log = nullptr);
 bool CompileUnlitPoint(GlProgram& out, QString* error_log = nullptr);
 bool CompileTexturedUnlit(GlProgram& out, QString* error_log = nullptr);
 bool CompileVolumeAtlasPoint(GlProgram& out, QString* error_log = nullptr);
+/** Room-grid "Real light" points: lit by every LED's shown colour (lights in a float texture). */
+bool CompileRealLightPoint(GlProgram& out, QString* error_log = nullptr);
 }
 
 #endif
