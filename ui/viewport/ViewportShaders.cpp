@@ -1246,8 +1246,11 @@ namespace
 {
 /* Each grid point gathers light from every (clustered) LED: soft inverse-square spill
    inside a finite reach, summed in linear light, then tone-mapped back to display colour
-   while keeping the hue. Lights texture: 2 x N RGBA32F, texel 0 = position.xyz,
-   texel 1 = summed linear colour. */
+   while keeping the hue. Lights texture: (2 + 54) x N RGBA32F, texel 0 = position.xyz,
+   texel 1 = summed linear colour, texels 2.. = the light's ray map: how far its light gets
+   in each of 216 directions (cube faces of 6x6 cells, layout of RoomLight::RayMapDirection).
+   A grid point is lit only where the rays towards it got that far: housings and blockers
+   cast real shapes and shadows. */
 const char* RealLightPointVertex()
 {
     return R"GLSL(
@@ -1261,6 +1264,55 @@ uniform float u_reach;
 uniform float u_exposure;
 uniform float u_floor;
 out vec3 v_color;
+const int kRes = 6;
+float rayDepth(int light, int k)
+{
+    vec4 t = texelFetch(u_lights, ivec2(2 + k / 4, light), 0);
+    int c = k - (k / 4) * 4;
+    return c == 0 ? t.x : (c == 1 ? t.y : (c == 2 ? t.z : t.w));
+}
+/* 0..1: how much of the light reaches a point at distance dist in direction dn (bilinear
+   over the four nearest rays, so shadow edges are soft). */
+float rayVisibility(int light, vec3 dn, float dist)
+{
+    vec3 a = abs(dn);
+    int face;
+    float s;
+    float t;
+    if(a.x >= a.y && a.x >= a.z)
+    {
+        face = dn.x >= 0.0 ? 0 : 1;
+        s = dn.y / a.x;
+        t = dn.z / a.x;
+    }
+    else if(a.y >= a.z)
+    {
+        face = dn.y >= 0.0 ? 2 : 3;
+        s = dn.x / a.y;
+        t = dn.z / a.y;
+    }
+    else
+    {
+        face = dn.z >= 0.0 ? 4 : 5;
+        s = dn.x / a.z;
+        t = dn.y / a.z;
+    }
+    float fu = clamp((s + 1.0) * 0.5 * float(kRes) - 0.5, 0.0, float(kRes - 1));
+    float fv = clamp((t + 1.0) * 0.5 * float(kRes) - 0.5, 0.0, float(kRes - 1));
+    int u0 = int(floor(fu));
+    int v0 = int(floor(fv));
+    int u1 = min(u0 + 1, kRes - 1);
+    int v1 = min(v0 + 1, kRes - 1);
+    float wu = fu - float(u0);
+    float wv = fv - float(v0);
+    int base = face * kRes * kRes;
+    float tol = 0.02 * u_reach;
+    float a00 = step(dist, rayDepth(light, base + v0 * kRes + u0) + tol);
+    float a10 = step(dist, rayDepth(light, base + v0 * kRes + u1) + tol);
+    float a01 = step(dist, rayDepth(light, base + v1 * kRes + u0) + tol);
+    float a11 = step(dist, rayDepth(light, base + v1 * kRes + u1) + tol);
+    return mix(mix(a00, a10, wu), mix(a01, a11, wu), wv);
+}
 void main()
 {
     vec3 e = vec3(0.0);
@@ -1276,7 +1328,13 @@ void main()
             continue;
         }
         float w = 1.0 - d2 / r2;
-        e += texelFetch(u_lights, ivec2(1, i), 0).rgb * (w * w / (1.0 + d2 / core2));
+        float dist = sqrt(d2);
+        float vis = dist > 1e-4 ? rayVisibility(i, d / dist, dist) : 1.0;
+        if(vis <= 0.0)
+        {
+            continue;
+        }
+        e += texelFetch(u_lights, ivec2(1, i), 0).rgb * (w * w / (1.0 + d2 / core2)) * vis;
     }
     float m = max(e.r, max(e.g, e.b));
     vec3 lin = m > 1e-6 ? e * ((1.0 - exp(-m * u_exposure)) / m) : vec3(0.0);

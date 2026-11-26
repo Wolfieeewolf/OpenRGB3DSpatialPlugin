@@ -52,6 +52,8 @@ struct BlockerGridOccluder
 
 void BuildBlockerGridOccluders(std::vector<BlockerGridOccluder>& out, float grid_scale_mm);
 
+
+
 void BuildRoomBlockerField(RoomBlockerField& out,
                            float grid_scale_mm,
                            const GridContext3D* clip_grid = nullptr);
@@ -78,6 +80,40 @@ bool SegmentHitsBlockerGrids(float ax,
                              const std::vector<BlockerGridOccluder>& grids,
                              int also_skip_controller = -1,
                              int skip_controller = kSkipShadedController);
+
+/** Exact walk through every custom controller's own blocker grid (rotation and per-cell
+    sizes included), skipping the two given controllers. */
+bool SegmentHitsBlockerGridsExact(float ax,
+                                  float ay,
+                                  float az,
+                                  float bx,
+                                  float by,
+                                  float bz,
+                                  const std::vector<BlockerGridOccluder>& grids,
+                                  int skip_controller_a,
+                                  int skip_controller_b);
+
+/** Light between one of controller_index's own LEDs (from) and a point outside it (to):
+    true when that controller's own light blocker cells are in the way. Exact cell walk from
+    the LED's own cell, so housings with pockets and openings (speakers, keyboards) shape
+    their light the way the real device does. Uses the frame's blocker grids. */
+bool SegmentBlockedByOwnHousing(float fx,
+                                float fy,
+                                float fz,
+                                float tx,
+                                float ty,
+                                float tz,
+                                int controller_index);
+
+/** Same, against the given blocker grids (e.g. built for the viewport's Real light). */
+bool SegmentBlockedByOwnHousingIn(const std::vector<BlockerGridOccluder>& grids,
+                                  float fx,
+                                  float fy,
+                                  float fz,
+                                  float tx,
+                                  float ty,
+                                  float tz,
+                                  int controller_index);
 
 } // namespace SpatialLighting
 

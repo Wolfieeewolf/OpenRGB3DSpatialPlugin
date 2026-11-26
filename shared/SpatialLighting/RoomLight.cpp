@@ -103,6 +103,8 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                          const std::vector<int>& emitter_owner,
                          const std::vector<Vector3D>& receivers,
                          const std::vector<int>& receiver_owner,
+                         const std::vector<char>& emitter_exact,
+                         const std::vector<char>& receiver_exact,
                          const RelaySettings& settings,
                          std::uint64_t layout_epoch,
                          const SegmentBlockedFn& blocked,
@@ -138,6 +140,14 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
     if(!receiver_owner.empty())
     {
         HashBytes(layout_sig, receiver_owner.data(), receiver_owner.size() * sizeof(int));
+    }
+    if(!emitter_exact.empty())
+    {
+        HashBytes(layout_sig, emitter_exact.data(), emitter_exact.size());
+    }
+    if(!receiver_exact.empty())
+    {
+        HashBytes(layout_sig, receiver_exact.data(), receiver_exact.size());
     }
     HashValue(layout_sig, settings.light_cell);
     HashValue(layout_sig, settings.group_cell);
@@ -265,6 +275,13 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
         const auto owner_key = [](uint64_t key, int owner) {
             return key ^ ((uint64_t)(owner + 2) * 0x9E3779B97F4A7C15ull);
         };
+        /* An exact LED gets a key of its own (never shared with a cell). */
+        const auto exact_key = [](std::size_t i, bool receiver) {
+            return 0xE7AC000000000000ull ^ ((uint64_t)i * 2u + (receiver ? 1u : 0u)) * 0xD6E8FEB86659FD93ull;
+        };
+        const auto is_exact = [](const std::vector<char>& flags, std::size_t i) {
+            return i < flags.size() && flags[i] != 0;
+        };
 
         /* 1. Emitter LEDs -> lights, by position and controller. The cell only grows when a
               huge layout would exceed the light budget, never with the reach. */
@@ -284,7 +301,9 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                 {
                     const Vector3D& p = emitters[i];
                     const int owner = owner_of(emitter_owner, i);
-                    const uint64_t key = owner_key(CellKey(p.x, p.y, p.z, inv), owner);
+                    const uint64_t key = is_exact(emitter_exact, i)
+                                             ? exact_key(i, false)
+                                             : owner_key(CellKey(p.x, p.y, p.z, inv), owner);
                     auto it = index.find(key);
                     int light = 0;
                     if(it == index.end())
@@ -334,7 +353,9 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
             {
                 const Vector3D& p = receivers[i];
                 const int owner = owner_of(receiver_owner, i);
-                const uint64_t key = owner_key(CellKey(p.x, p.y, p.z, inv), owner);
+                const uint64_t key = is_exact(receiver_exact, i)
+                                         ? exact_key(i, true)
+                                         : owner_key(CellKey(p.x, p.y, p.z, inv), owner);
                 auto it = index.find(key);
                 int g = 0;
                 if(it == index.end())
@@ -417,14 +438,25 @@ bool RelayModel::Prepare(const std::vector<Vector3D>& emitters,
                         }
                         else
                         {
+                            /* Probe from real LEDs (first, middle, last of the light), never the
+                               light's average point, which can sit inside solid housing. */
                             const std::vector<int>& m = members_[(std::size_t)k];
                             Vector3D probes[3] = {c, c, c};
                             int probe_count = 1;
-                            if(m.size() >= 2)
+                            if(!m.empty())
                             {
-                                probes[1] = emitters_[(std::size_t)m.front()];
+                                probes[0] = emitters_[(std::size_t)m.front()];
+                            }
+                            if(m.size() >= 3)
+                            {
+                                probes[1] = emitters_[(std::size_t)m[m.size() / 2]];
                                 probes[2] = emitters_[(std::size_t)m.back()];
                                 probe_count = 3;
+                            }
+                            else if(m.size() == 2)
+                            {
+                                probes[1] = emitters_[(std::size_t)m.back()];
+                                probe_count = 2;
                             }
                             int open = 0;
                             for(int p = 0; p < probe_count; ++p)

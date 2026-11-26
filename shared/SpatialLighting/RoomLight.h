@@ -52,6 +52,33 @@ inline void ToneMap(float& r, float& g, float& b, float exposure)
     b *= k;
 }
 
+/* Ray map: per light, how far its light gets in each of kRayMapSize directions (0 = it does
+   not get out at all). Directions are the cells of a cube around the light: 6 faces of
+   kRayMapRes x kRayMapRes. Face f = axis (f / 2: x, y, z) and sign (f % 2: +, -); on a face the
+   two other axes, in x, y, z order, give s and t in -1..1. The Real light shader uses the same
+   layout (keep them in step). */
+constexpr int kRayMapRes = 6;
+constexpr int kRayMapSize = 6 * kRayMapRes * kRayMapRes;
+
+/** Unit direction through the centre of ray map cell `index`. */
+inline Vector3D RayMapDirection(int index)
+{
+    const int face = index / (kRayMapRes * kRayMapRes);
+    const int cell = index % (kRayMapRes * kRayMapRes);
+    const int u = cell % kRayMapRes;
+    const int v = cell / kRayMapRes;
+    const float s = ((float)u + 0.5f) / (float)kRayMapRes * 2.0f - 1.0f;
+    const float t = ((float)v + 0.5f) / (float)kRayMapRes * 2.0f - 1.0f;
+    const int axis = face / 2;
+    const float sign = (face % 2 == 0) ? 1.0f : -1.0f;
+    float d[3] = {0.0f, 0.0f, 0.0f};
+    d[axis] = sign;
+    d[axis == 0 ? 1 : 0] = s;
+    d[axis == 2 ? 1 : 2] = t;
+    const float l = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    return {d[0] / l, d[1] / l, d[2] / l};
+}
+
 /** A lit point in linear light. */
 struct LitPoint
 {
@@ -101,10 +128,16 @@ public:
     /** Returns true when the cache was rebuilt. layout_epoch changes when blockers change. */
     /** emitter_owner / receiver_owner: controller of each LED (lights and receiver groups never
         span two controllers, so a device's own housing can be skipped in shadow tests). */
+    /** emitter_exact / receiver_exact (optional, 1 per LED): LEDs on a device with its own
+        light blocker housing. Each becomes its own light / shadow group, so shadow rays start
+        at the real LED inside its housing pocket, never at an average point inside solid
+        housing. */
     bool Prepare(const std::vector<Vector3D>& emitters,
                  const std::vector<int>& emitter_owner,
                  const std::vector<Vector3D>& receivers,
                  const std::vector<int>& receiver_owner,
+                 const std::vector<char>& emitter_exact,
+                 const std::vector<char>& receiver_exact,
                  const RelaySettings& settings,
                  std::uint64_t layout_epoch,
                  const SegmentBlockedFn& blocked,

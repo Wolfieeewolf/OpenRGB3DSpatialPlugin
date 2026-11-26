@@ -183,6 +183,40 @@ void BuildUniformAxisEdges(float origin,
     }
 }
 
+/** Clip the ray start + dir * t, t in [t0, t1], to an axis-aligned box (slab test).
+    Returns false when the ray misses the box inside that range. */
+bool ClipRayToBox(Vec3 start, Vec3 dir, Vec3 box_min, Vec3 box_max, float& t0, float& t1)
+{
+    const float o[3] = {start.x, start.y, start.z};
+    const float d[3] = {dir.x, dir.y, dir.z};
+    const float lo[3] = {box_min.x, box_min.y, box_min.z};
+    const float hi[3] = {box_max.x, box_max.y, box_max.z};
+    for(int axis = 0; axis < 3; ++axis)
+    {
+        if(std::fabs(d[axis]) < 1e-8f)
+        {
+            if(o[axis] < lo[axis] || o[axis] > hi[axis])
+            {
+                return false;
+            }
+            continue;
+        }
+        float ta = (lo[axis] - o[axis]) / d[axis];
+        float tb = (hi[axis] - o[axis]) / d[axis];
+        if(ta > tb)
+        {
+            std::swap(ta, tb);
+        }
+        t0 = std::max(t0, ta);
+        t1 = std::min(t1, tb);
+        if(t0 >= t1)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
                                      Vec3 b_world,
                                      const RoomBlockerField& field,
@@ -228,9 +262,22 @@ bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
         return false;
     }
 
-    float px = a_world.x + dir.x * t_min;
-    float py = a_world.y + dir.y * t_min;
-    float pz = a_world.z + dir.z * t_min;
+    /* Walk only the part of the segment inside the field. Most segments start outside it
+       (the field only spans the blocker cells), and must still be tested where they pass
+       through; the walk stops at the segment's end, never past the lit LED. */
+    float t_start = t_min;
+    float t_end = t_max;
+    if(!ClipRayToBox(a_world, dir, {field.origin_x, field.origin_y, field.origin_z}, {max_x, max_y, max_z},
+                     t_start, t_end))
+    {
+        return false;
+    }
+    t_start += std::min(kRayEpsilon, (t_end - t_start) * 0.5f);
+    float px = a_world.x + dir.x * t_start;
+    float py = a_world.y + dir.y * t_start;
+    float pz = a_world.z + dir.z * t_start;
+    /* Distance walked from the segment start (t_x/t_y/t_z are steps from the current point). */
+    float traveled = t_start;
 
     int ix = FindCellIndex(px, x_edges);
     int iy = FindCellIndex(py, y_edges);
@@ -263,10 +310,11 @@ bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
         {
             if(t_x < t_z)
             {
-                if(t_x > t_max)
+                if(traveled + t_x > t_end)
                 {
                     break;
                 }
+                traveled += t_x;
                 px += dir.x * t_x;
                 py += dir.y * t_x;
                 pz += dir.z * t_x;
@@ -278,10 +326,11 @@ bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
             }
             else
             {
-                if(t_z > t_max)
+                if(traveled + t_z > t_end)
                 {
                     break;
                 }
+                traveled += t_z;
                 px += dir.x * t_z;
                 py += dir.y * t_z;
                 pz += dir.z * t_z;
@@ -296,10 +345,11 @@ bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
         {
             if(t_y < t_z)
             {
-                if(t_y > t_max)
+                if(traveled + t_y > t_end)
                 {
                     break;
                 }
+                traveled += t_y;
                 px += dir.x * t_y;
                 py += dir.y * t_y;
                 pz += dir.z * t_y;
@@ -311,10 +361,11 @@ bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
             }
             else
             {
-                if(t_z > t_max)
+                if(traveled + t_z > t_end)
                 {
                     break;
                 }
+                traveled += t_z;
                 px += dir.x * t_z;
                 py += dir.y * t_z;
                 pz += dir.z * t_z;
@@ -335,10 +386,14 @@ bool SegmentHitsRoomBlockerFieldImpl(Vec3 a_world,
     return false;
 }
 
+/* from_inside: a_world is one of this controller's own LEDs. The walk then starts right at
+   the LED (no end bias, which could jump clean out of a small housing pocket) and the LED's
+   own cell never blocks, so light only leaves through the openings its housing has. */
 bool SegmentHitsBlockerGrid(Vec3 a_world,
                             Vec3 b_world,
                             const BlockerGridOccluder& grid,
-                            const ::ControllerTransform* ctrl)
+                            const ::ControllerTransform* ctrl,
+                            bool from_inside = false)
 {
     if(!ctrl || grid.dense_cells.empty() || grid.x_edges.size() < 2 || grid.y_edges.size() < 2 ||
        grid.z_edges.size() < 2)
@@ -368,16 +423,28 @@ bool SegmentHitsBlockerGrid(Vec3 a_world,
     }
 
     const Vec3 dir = {seg.x / seg_len, seg.y / seg_len, seg.z / seg_len};
-    const float t_min = std::max(kRayEpsilon * 4.0f, seg_len * kMinSegBiasFrac);
-    const float t_max = seg_len - t_min;
+    const float t_min = from_inside ? kRayEpsilon : std::max(kRayEpsilon * 4.0f, seg_len * kMinSegBiasFrac);
+    const float t_max = from_inside ? seg_len - kRayEpsilon : seg_len - t_min;
     if(t_max <= t_min)
     {
         return false;
     }
 
-    float px = local_a.x + dir.x * t_min;
-    float py = local_a.y + dir.y * t_min;
-    float pz = local_a.z + dir.z * t_min;
+    /* Walk only the part of the segment inside this controller's grid (most segments start
+       outside it), and stop at the segment's end. */
+    float t_start = t_min;
+    float t_end = t_max;
+    if(!ClipRayToBox({local_a.x, local_a.y, local_a.z}, dir,
+                     {grid.x_edges.front(), grid.y_edges.front(), grid.z_edges.front()},
+                     {grid.x_edges.back(), grid.y_edges.back(), grid.z_edges.back()}, t_start, t_end))
+    {
+        return false;
+    }
+    t_start += std::min(kRayEpsilon, (t_end - t_start) * 0.5f);
+    float px = local_a.x + dir.x * t_start;
+    float py = local_a.y + dir.y * t_start;
+    float pz = local_a.z + dir.z * t_start;
+    float traveled = t_start;
 
     int ix = FindCellIndex(px, grid.x_edges);
     int iy = FindCellIndex(py, grid.y_edges);
@@ -386,6 +453,9 @@ bool SegmentHitsBlockerGrid(Vec3 a_world,
     {
         return false;
     }
+    const int start_x = ix;
+    const int start_y = iy;
+    const int start_z = iz;
 
     const int step_x = (dir.x > 0.0f) ? 1 : ((dir.x < 0.0f) ? -1 : 0);
     const int step_y = (dir.y > 0.0f) ? 1 : ((dir.y < 0.0f) ? -1 : 0);
@@ -401,7 +471,8 @@ bool SegmentHitsBlockerGrid(Vec3 a_world,
     const int max_steps = grid.width + grid.height + grid.depth + 4;
     for(int step = 0; step < max_steps; ++step)
     {
-        if(CellIsBlocked(grid, ix, iy, iz))
+        if(CellIsBlocked(grid, ix, iy, iz)
+           && !(from_inside && ix == start_x && iy == start_y && iz == start_z))
         {
             return true;
         }
@@ -410,10 +481,11 @@ bool SegmentHitsBlockerGrid(Vec3 a_world,
         {
             if(t_x < t_z)
             {
-                if(t_x > t_max)
+                if(traveled + t_x > t_end)
                 {
                     break;
                 }
+                traveled += t_x;
                 px += dir.x * t_x;
                 py += dir.y * t_x;
                 pz += dir.z * t_x;
@@ -425,10 +497,11 @@ bool SegmentHitsBlockerGrid(Vec3 a_world,
             }
             else
             {
-                if(t_z > t_max)
+                if(traveled + t_z > t_end)
                 {
                     break;
                 }
+                traveled += t_z;
                 px += dir.x * t_z;
                 py += dir.y * t_z;
                 pz += dir.z * t_z;
@@ -443,10 +516,11 @@ bool SegmentHitsBlockerGrid(Vec3 a_world,
         {
             if(t_y < t_z)
             {
-                if(t_y > t_max)
+                if(traveled + t_y > t_end)
                 {
                     break;
                 }
+                traveled += t_y;
                 px += dir.x * t_y;
                 py += dir.y * t_y;
                 pz += dir.z * t_y;
@@ -458,10 +532,11 @@ bool SegmentHitsBlockerGrid(Vec3 a_world,
             }
             else
             {
-                if(t_z > t_max)
+                if(traveled + t_z > t_end)
                 {
                     break;
                 }
+                traveled += t_z;
                 px += dir.x * t_z;
                 py += dir.y * t_z;
                 pz += dir.z * t_z;
@@ -566,6 +641,80 @@ void MarkWorldAabbInRoomField(RoomBlockerField& field,
 }
 
 } // namespace
+
+bool SegmentHitsBlockerGridsExact(float ax,
+                                  float ay,
+                                  float az,
+                                  float bx,
+                                  float by,
+                                  float bz,
+                                  const std::vector<BlockerGridOccluder>& grids,
+                                  int skip_controller_a,
+                                  int skip_controller_b)
+{
+    const std::vector<std::unique_ptr<::ControllerTransform>>* transforms =
+        SpatialLightingSceneProvider::instance()->controllers();
+    if(!transforms)
+    {
+        return false;
+    }
+    for(const BlockerGridOccluder& grid : grids)
+    {
+        if(grid.controller_index < 0 || grid.controller_index >= static_cast<int>(transforms->size())
+           || grid.controller_index == skip_controller_a || grid.controller_index == skip_controller_b)
+        {
+            continue;
+        }
+        const ::ControllerTransform* ctrl = (*transforms)[static_cast<size_t>(grid.controller_index)].get();
+        if(SegmentHitsBlockerGrid({ax, ay, az}, {bx, by, bz}, grid, ctrl))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SegmentBlockedByOwnHousing(float fx,
+                                float fy,
+                                float fz,
+                                float tx,
+                                float ty,
+                                float tz,
+                                int controller_index)
+{
+    return SegmentBlockedByOwnHousingIn(SpatialLightingSceneProvider::instance()->frameBlockerGrids(),
+                                        fx, fy, fz, tx, ty, tz, controller_index);
+}
+
+bool SegmentBlockedByOwnHousingIn(const std::vector<BlockerGridOccluder>& grids,
+                                  float fx,
+                                  float fy,
+                                  float fz,
+                                  float tx,
+                                  float ty,
+                                  float tz,
+                                  int controller_index)
+{
+    if(controller_index < 0)
+    {
+        return false;
+    }
+    SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
+    const std::vector<std::unique_ptr<::ControllerTransform>>* transforms = provider->controllers();
+    if(!transforms || controller_index >= static_cast<int>(transforms->size()))
+    {
+        return false;
+    }
+    const ::ControllerTransform* ctrl = (*transforms)[static_cast<size_t>(controller_index)].get();
+    for(const BlockerGridOccluder& grid : grids)
+    {
+        if(grid.controller_index == controller_index)
+        {
+            return SegmentHitsBlockerGrid({fx, fy, fz}, {tx, ty, tz}, grid, ctrl, true);
+        }
+    }
+    return false;
+}
 
 void BuildRoomBlockerField(RoomBlockerField& out, float grid_scale_mm, const GridContext3D* clip_grid)
 {
@@ -768,6 +917,82 @@ bool SegmentHitsRoomBlockerField(float ax,
                                            ResolveSkipController(skip_controller));
 }
 
+namespace
+{
+
+/* One controller's own blocker grid (local cells + world bounds); false when it has none. */
+bool BuildGridForController(::ControllerTransform* ctrl, int ctrl_index, float scale_mm, BlockerGridOccluder& grid)
+{
+    if(!ctrl || ctrl->hidden_by_virtual || !ctrl->virtual_controller)
+    {
+        return false;
+    }
+
+    VirtualController3D* layout = ctrl->virtual_controller;
+    const std::vector<CustomControllerLightBlocker>& blockers = layout->GetLightBlockers();
+    if(blockers.empty())
+    {
+        return false;
+    }
+
+    if(ctrl->world_positions_dirty)
+    {
+        ControllerLayout3D::UpdateWorldPositions(ctrl);
+    }
+
+    grid = BlockerGridOccluder{};
+    grid.controller_index = ctrl_index;
+    grid.center_offset = ControllerLocalCenterOffset(ctrl);
+    grid.width = layout->GetWidth();
+    grid.height = layout->GetHeight();
+    grid.depth = layout->GetDepth();
+    BuildAxisEdges(layout, scale_mm, grid.width, &VirtualController3D::ColumnWidthMm, grid.x_edges);
+    BuildAxisEdges(layout, scale_mm, grid.height, &VirtualController3D::RowHeightMm, grid.y_edges);
+    BuildAxisEdges(layout, scale_mm, grid.depth, &VirtualController3D::LayerDepthMm, grid.z_edges);
+
+    const size_t cell_count =
+        static_cast<size_t>(grid.width) * static_cast<size_t>(grid.height) * static_cast<size_t>(grid.depth);
+    grid.dense_cells.assign(cell_count, 0);
+    for(const CustomControllerLightBlocker& blocker : blockers)
+    {
+        if(blocker.x < 0 || blocker.y < 0 || blocker.z < 0 || blocker.x >= grid.width || blocker.y >= grid.height ||
+           blocker.z >= grid.depth)
+        {
+            continue;
+        }
+        const size_t index = static_cast<size_t>(blocker.x) +
+                             static_cast<size_t>(blocker.y) * static_cast<size_t>(grid.width) +
+                             static_cast<size_t>(blocker.z) * static_cast<size_t>(grid.width) *
+                                 static_cast<size_t>(grid.height);
+        grid.dense_cells[index] = 1;
+    }
+
+    const Vector3D local_corners[8] = {
+        {0.0f, 0.0f, 0.0f},
+        {grid.x_edges.back(), 0.0f, 0.0f},
+        {0.0f, grid.y_edges.back(), 0.0f},
+        {grid.x_edges.back(), grid.y_edges.back(), 0.0f},
+        {0.0f, 0.0f, grid.z_edges.back()},
+        {grid.x_edges.back(), 0.0f, grid.z_edges.back()},
+        {0.0f, grid.y_edges.back(), grid.z_edges.back()},
+        {grid.x_edges.back(), grid.y_edges.back(), grid.z_edges.back()},
+    };
+    grid.world_min = {std::numeric_limits<float>::max(),
+                      std::numeric_limits<float>::max(),
+                      std::numeric_limits<float>::max()};
+    grid.world_max = {std::numeric_limits<float>::lowest(),
+                      std::numeric_limits<float>::lowest(),
+                      std::numeric_limits<float>::lowest()};
+    for(const Vector3D& local_corner : local_corners)
+    {
+        const Vec3 world = ControllerLocalToWorld(ctrl, local_corner, grid.center_offset);
+        ExpandWorldBounds(&grid.world_min, &grid.world_max, world);
+    }
+    return true;
+}
+
+} // namespace
+
 void BuildBlockerGridOccluders(std::vector<BlockerGridOccluder>& out, float grid_scale_mm)
 {
     out.clear();
@@ -781,74 +1006,11 @@ void BuildBlockerGridOccluders(std::vector<BlockerGridOccluder>& out, float grid
     const float scale_mm = SafeGridScaleMm(grid_scale_mm);
     for(size_t ctrl_index = 0; ctrl_index < transforms->size(); ++ctrl_index)
     {
-        ::ControllerTransform* ctrl = (*transforms)[ctrl_index].get();
-        if(!ctrl || ctrl->hidden_by_virtual || !ctrl->virtual_controller)
-        {
-            continue;
-        }
-
-        VirtualController3D* layout = ctrl->virtual_controller;
-        const std::vector<CustomControllerLightBlocker>& blockers = layout->GetLightBlockers();
-        if(blockers.empty())
-        {
-            continue;
-        }
-
-        if(ctrl->world_positions_dirty)
-        {
-            ControllerLayout3D::UpdateWorldPositions(ctrl);
-        }
-
         BlockerGridOccluder grid{};
-        grid.controller_index = static_cast<int>(ctrl_index);
-        grid.center_offset = ControllerLocalCenterOffset(ctrl);
-        grid.width = layout->GetWidth();
-        grid.height = layout->GetHeight();
-        grid.depth = layout->GetDepth();
-        BuildAxisEdges(layout, scale_mm, grid.width, &VirtualController3D::ColumnWidthMm, grid.x_edges);
-        BuildAxisEdges(layout, scale_mm, grid.height, &VirtualController3D::RowHeightMm, grid.y_edges);
-        BuildAxisEdges(layout, scale_mm, grid.depth, &VirtualController3D::LayerDepthMm, grid.z_edges);
-
-        const size_t cell_count =
-            static_cast<size_t>(grid.width) * static_cast<size_t>(grid.height) * static_cast<size_t>(grid.depth);
-        grid.dense_cells.assign(cell_count, 0);
-        for(const CustomControllerLightBlocker& blocker : blockers)
+        if(BuildGridForController((*transforms)[ctrl_index].get(), static_cast<int>(ctrl_index), scale_mm, grid))
         {
-            if(blocker.x < 0 || blocker.y < 0 || blocker.z < 0 || blocker.x >= grid.width || blocker.y >= grid.height ||
-               blocker.z >= grid.depth)
-            {
-                continue;
-            }
-            const size_t index = static_cast<size_t>(blocker.x) +
-                                 static_cast<size_t>(blocker.y) * static_cast<size_t>(grid.width) +
-                                 static_cast<size_t>(blocker.z) * static_cast<size_t>(grid.width) *
-                                     static_cast<size_t>(grid.height);
-            grid.dense_cells[index] = 1;
+            out.push_back(std::move(grid));
         }
-
-        const Vector3D local_corners[8] = {
-            {0.0f, 0.0f, 0.0f},
-            {grid.x_edges.back(), 0.0f, 0.0f},
-            {0.0f, grid.y_edges.back(), 0.0f},
-            {grid.x_edges.back(), grid.y_edges.back(), 0.0f},
-            {0.0f, 0.0f, grid.z_edges.back()},
-            {grid.x_edges.back(), 0.0f, grid.z_edges.back()},
-            {0.0f, grid.y_edges.back(), grid.z_edges.back()},
-            {grid.x_edges.back(), grid.y_edges.back(), grid.z_edges.back()},
-        };
-        grid.world_min = {std::numeric_limits<float>::max(),
-                          std::numeric_limits<float>::max(),
-                          std::numeric_limits<float>::max()};
-        grid.world_max = {std::numeric_limits<float>::lowest(),
-                          std::numeric_limits<float>::lowest(),
-                          std::numeric_limits<float>::lowest()};
-        for(const Vector3D& local_corner : local_corners)
-        {
-            const Vec3 world = ControllerLocalToWorld(ctrl, local_corner, grid.center_offset);
-            ExpandWorldBounds(&grid.world_min, &grid.world_max, world);
-        }
-
-        out.push_back(std::move(grid));
     }
 }
 

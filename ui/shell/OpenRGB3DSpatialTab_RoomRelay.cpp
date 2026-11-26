@@ -364,6 +364,13 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
     std::vector<Vector3D> emit_pos;
     std::vector<int> emit_owner;
     std::vector<int> recv_owner;
+    std::vector<char> emit_exact;
+    std::vector<char> recv_exact;
+    /* Devices with their own light blocker housing (speakers, keyboards, ...): their LEDs are
+       lit and light exactly, one by one, and their housing shapes where light goes. */
+    const auto has_housing = [](const ControllerTransform* t) {
+        return t && t->virtual_controller && !t->virtual_controller->GetLightBlockers().empty();
+    };
     std::vector<float> emit_lin;
     std::vector<Vector3D> recv_pos;
     std::vector<LEDPosition3D*> recv_led;
@@ -375,6 +382,7 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
 
         emit_pos.clear();
         emit_owner.clear();
+        emit_exact.clear();
         emit_lin.clear();
         std::unordered_set<int> emitter_set;
         for(int idx : relay->roomEmitterControllerIndices())
@@ -388,11 +396,13 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
             {
                 ControllerLayout3D::UpdateWorldPositions(t);
             }
+            const char exact = has_housing(t) ? 1 : 0;
             for(const LEDPosition3D& led : t->led_positions)
             {
                 const RGBColor c = ShownColor(led);
                 emit_pos.push_back(led.room_position);
                 emit_owner.push_back(idx);
+                emit_exact.push_back(exact);
                 emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetRValue(c)));
                 emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetGValue(c)));
                 emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetBValue(c)));
@@ -401,6 +411,7 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
 
         recv_pos.clear();
         recv_owner.clear();
+        recv_exact.clear();
         recv_led.clear();
         for(int idx = 0; idx < (int)controller_transforms.size(); ++idx)
         {
@@ -417,10 +428,12 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
             {
                 ControllerLayout3D::UpdateWorldPositions(t);
             }
+            const char exact = has_housing(t) ? 1 : 0;
             for(LEDPosition3D& led : t->led_positions)
             {
                 recv_pos.push_back(led.room_position);
                 recv_owner.push_back(idx);
+                recv_exact.push_back(exact);
                 recv_led.push_back(&led);
             }
         }
@@ -449,9 +462,17 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
                                           + room_grid.depth * room_grid.depth);
         const float ao_span = std::clamp(std::max(settings.reach * 0.4f, room_diag * 0.05f), 0.5f, 18.0f);
 
+        /* Everything else in the room (other devices' housings, display planes, props, walls),
+           then each end's own housing walked exactly from its LED: light leaves a speaker only
+           through its openings, and reaches a keyboard only from the side its keys face. */
         const RoomLight::SegmentBlockedFn blocked = [&](const Vector3D& a, int a_owner, const Vector3D& b, int b_owner) {
-            return SpatialLighting::SegmentIsOccludedSkip2(a.x, a.y, a.z, b.x, b.y, b.z, aabbs, quads, grids, field,
-                                                           index, a_owner, b_owner);
+            if(SpatialLighting::SegmentIsOccludedSkip2(a.x, a.y, a.z, b.x, b.y, b.z, aabbs, quads, grids, field,
+                                                       index, a_owner, b_owner, true))
+            {
+                return true;
+            }
+            return SpatialLighting::SegmentBlockedByOwnHousing(a.x, a.y, a.z, b.x, b.y, b.z, a_owner)
+                   || SpatialLighting::SegmentBlockedByOwnHousing(b.x, b.y, b.z, a.x, a.y, a.z, b_owner);
         };
         settings.ambient_strength = ao_strength;
         settings.ambient_span = ao_span;
@@ -465,7 +486,7 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
         RelayCacheEntry& entry = models[relay];
         entry.last_pass = pass;
         const auto t0 = std::chrono::steady_clock::now();
-        if(entry.model.Prepare(emit_pos, emit_owner, recv_pos, recv_owner, settings, blocker_sig, blocked, ambient))
+        if(entry.model.Prepare(emit_pos, emit_owner, recv_pos, recv_owner, emit_exact, recv_exact, settings, blocker_sig, blocked, ambient))
         {
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
             /* At most one line every 5 s (dragging a device can rebuild every mouse move). */

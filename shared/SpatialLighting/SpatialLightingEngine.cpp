@@ -174,10 +174,11 @@ static bool SegmentHitsOccluderSet(Vec3 a,
                                    int skip_controller,
                                    const OccluderSpatialIndex* aabb_index,
                                    const std::vector<BlockerGridOccluder>* blocker_grids,
-                                   const RoomBlockerField* room_blocker_field)
+                                   const RoomBlockerField* room_blocker_field,
+                                   bool include_blocker_cells = true)
 {
     const RoomBlockerField* merged_field = room_blocker_field;
-    if(!merged_field || !merged_field->IsValid())
+    if(include_blocker_cells && (!merged_field || !merged_field->IsValid()))
     {
         SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
         if(provider && provider->frameRoomBlockerField().IsValid())
@@ -185,7 +186,11 @@ static bool SegmentHitsOccluderSet(Vec3 a,
             merged_field = &provider->frameRoomBlockerField();
         }
     }
-    if(merged_field && merged_field->IsValid())
+    if(!include_blocker_cells)
+    {
+        /* caller tests custom-controller blocker cells itself */
+    }
+    else if(merged_field && merged_field->IsValid())
     {
         if(SegmentHitsRoomBlockerField(a.x,
                                        a.y,
@@ -904,7 +909,8 @@ bool SegmentIsOccludedSkip2(float ax,
                             const RoomBlockerField* room_blocker_field,
                             const OccluderSpatialIndex* aabb_index,
                             int skip_controller_a,
-                            int skip_controller_b)
+                            int skip_controller_b,
+                            bool exact_blocker_cells)
 {
     const OccluderSpatialIndex* index = aabb_index;
     if(!index)
@@ -912,6 +918,24 @@ bool SegmentIsOccludedSkip2(float ax,
         index = ResolveAabbSpatialIndex(aabbs);
     }
     const std::vector<BlockerGridOccluder>* grids = blocker_grids.empty() ? nullptr : &blocker_grids;
+    if(!exact_blocker_cells)
+    {
+        return SegmentHitsOccluderSet({ax, ay, az},
+                                      {bx, by, bz},
+                                      aabbs,
+                                      quads,
+                                      skip_controller_a,
+                                      skip_controller_b,
+                                      index,
+                                      grids,
+                                      room_blocker_field);
+    }
+    /* Custom-controller blocker cells walked exactly in each controller's own grid (rotation
+       and cell sizes included) instead of the coarse room field. */
+    if(SegmentHitsBlockerGridsExact(ax, ay, az, bx, by, bz, blocker_grids, skip_controller_a, skip_controller_b))
+    {
+        return true;
+    }
     return SegmentHitsOccluderSet({ax, ay, az},
                                   {bx, by, bz},
                                   aabbs,
@@ -920,7 +944,8 @@ bool SegmentIsOccludedSkip2(float ax,
                                   skip_controller_b,
                                   index,
                                   grids,
-                                  room_blocker_field);
+                                  room_blocker_field,
+                                  false);
 }
 
 } // namespace SpatialLighting

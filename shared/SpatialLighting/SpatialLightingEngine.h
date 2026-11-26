@@ -189,7 +189,8 @@ bool SegmentIsOccludedSkip2(float ax,
                             const RoomBlockerField* room_blocker_field,
                             const OccluderSpatialIndex* aabb_index,
                             int skip_controller_a,
-                            int skip_controller_b);
+                            int skip_controller_b,
+                            bool exact_blocker_cells = false);
 
 } // namespace SpatialLighting
 
