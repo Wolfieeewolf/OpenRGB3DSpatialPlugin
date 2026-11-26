@@ -98,7 +98,8 @@ QString ActionTimelineWidget::targetKey(const Action::Target& t) const
         + QString::fromStdString(t.device_name) + QLatin1Char('|')
         + QString::fromStdString(t.zone_name) + QLatin1Char('|')
         + QString::fromStdString(t.scene_zone_name) + QLatin1Char('|')
-        + (t.flatten_leds ? QLatin1Char('1') : QLatin1Char('0'));
+        + (t.flatten_leds ? QLatin1Char('1') : QLatin1Char('0'))
+        + (t.room_fx ? QStringLiteral("|fx") : QString());
     for(int led : t.led_indices)
     {
         key += QLatin1Char(',') + QString::number(led);

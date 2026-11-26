@@ -105,11 +105,14 @@ struct Target
     std::string scene_zone_name; // TargetKind::SceneZone
     bool flatten_leds = false;
     std::vector<int> led_indices;
+    /** Room FX (kind All): paints after every other track, over the whole show, e.g. a
+        Multiply colour as a grade or dim, an Add flash. Its own timeline row. */
+    bool room_fx = false;
 };
 
 inline bool TargetEquals(const Target& a, const Target& b)
 {
-    if(a.kind != b.kind || a.flatten_leds != b.flatten_leds)
+    if(a.kind != b.kind || a.flatten_leds != b.flatten_leds || a.room_fx != b.room_fx)
     {
         return false;
     }

@@ -1057,7 +1057,11 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         if(r.depth == 0 || r.target.kind == Action::TargetKind::SceneZone)
         {
             QColor tag = QColor(90, 140, 220);
-            if(r.target.kind == Action::TargetKind::All)
+            if(r.target.room_fx)
+            {
+                tag = QColor(200, 110, 230);
+            }
+            else if(r.target.kind == Action::TargetKind::All)
             {
                 tag = QColor(220, 160, 60);
             }

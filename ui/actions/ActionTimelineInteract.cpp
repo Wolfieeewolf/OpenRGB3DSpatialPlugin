@@ -161,6 +161,11 @@ bool ActionTimelineWidget::trackCoversRow(const Action::Track& track, const Row&
     {
         return true;
     }
+    /* Room FX clips live on their own row only (and never pick up the All row's). */
+    if(track.target.room_fx || row.target.room_fx)
+    {
+        return false;
+    }
     if(!row.single_led_row || row.target.kind != Action::TargetKind::Leds
        || row.target.led_indices.empty())
     {
@@ -258,6 +263,11 @@ bool ActionTimelineWidget::expandClipAcrossRows(int src_track, int src_clip, int
     for(int row = lo; row <= hi; ++row)
     {
         const Row& r = visible_rows_[row];
+        if(r.target.room_fx)
+        {
+            incompatible = true; /* Room FX never spans into device rows */
+            break;
+        }
         if(r.target.kind == Action::TargetKind::Leds && !r.target.led_indices.empty())
         {
             if(!have_device)

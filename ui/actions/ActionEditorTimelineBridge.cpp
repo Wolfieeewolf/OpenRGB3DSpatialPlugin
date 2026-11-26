@@ -420,7 +420,14 @@ void ActionEditorDialog::onRebuildTimelineModel()
         }
     }
     all.led_count = std::max(1, pack_leds);
+    /* Room FX: one row over the whole show, painted after every other row. */
+    ActionTimelineWidget::Node room_fx;
+    room_fx.label = QStringLiteral("Room FX (over everything)");
+    room_fx.target.kind = Action::TargetKind::All;
+    room_fx.target.room_fx = true;
+    room_fx.led_count = all.led_count;
     roots.prepend(std::move(all));
+    roots.prepend(std::move(room_fx));
 
     timeline_->setModel(std::move(roots));
     /* Controller picks, maps and reorders change the pack too: let undo see them. */
@@ -565,6 +572,7 @@ int ActionEditorDialog::ensureTrackForTarget(const Action::Target& target, const
     {
         const Action::Target& existing = pack_.tracks[(size_t)i].target;
         if(existing.kind == target.kind
+           && existing.room_fx == target.room_fx
            && existing.device_name == target.device_name
            && existing.zone_name == target.zone_name
            && existing.scene_zone_name == target.scene_zone_name

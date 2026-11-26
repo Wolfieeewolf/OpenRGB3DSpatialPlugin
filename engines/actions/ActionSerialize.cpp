@@ -288,6 +288,10 @@ nlohmann::json ToJson(const Pack& pack)
         {
             target["flatten_leds"] = true;
         }
+        if(track.target.room_fx)
+        {
+            target["room_fx"] = true;
+        }
         if(!track.target.led_indices.empty())
         {
             target["led_indices"] = track.target.led_indices;
@@ -586,6 +590,8 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             track.target.zone_name = target.value("zone_name", std::string());
             track.target.scene_zone_name = target.value("scene_zone_name", std::string());
             track.target.flatten_leds = target.value("flatten_leds", false);
+            /* Room FX only means something over the whole show. */
+            track.target.room_fx = kind == TargetKind::All && target.value("room_fx", false);
             if(target.contains("led_indices") && target["led_indices"].is_array())
             {
                 for(const auto& idx : target["led_indices"])

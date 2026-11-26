@@ -516,8 +516,22 @@ ApplyStats ApplyPackFrame(const Pack& pack,
         }
     }
 
-    for(const Track& track : pack.tracks)
+    /* Room FX tracks paint after every other track, so they sit over the whole show. */
+    std::vector<const Track*> track_order;
+    track_order.reserve(pack.tracks.size());
+    for(int pass = 0; pass < 2; ++pass)
     {
+        for(const Track& t : pack.tracks)
+        {
+            if(t.target.room_fx == (pass == 1))
+            {
+                track_order.push_back(&t);
+            }
+        }
+    }
+    for(const Track* track_ptr : track_order)
+    {
+        const Track& track = *track_ptr;
         if(use_transforms)
         {
             /* Layer lanes paint in order, so each lane blends over the ones before it
