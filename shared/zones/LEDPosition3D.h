@@ -41,6 +41,12 @@ struct LEDPosition3D
     int             trail_start_ms = 0;
     /* Action frame this LED was last cleared in (composite frames clear once). */
     unsigned int    frame_stamp = 0;
+    /* Action Editor mix in linear light for frame mix_stamp; preview_color is its 8-bit
+       display copy. Stacked layers blend here at full precision. */
+    float           mix_r = 0.0f;
+    float           mix_g = 0.0f;
+    float           mix_b = 0.0f;
+    unsigned int    mix_stamp = 0;
 };
 
 class VirtualController3D;

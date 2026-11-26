@@ -3,6 +3,7 @@
 #include "ActionApplier.h"
 #include "ActionScript.h"
 #include "ActionApplierDetail.h"
+#include "ActionColorMath.h"
 #include "ActionBuiltinGpu.h"
 #include "ActionMedia.h"
 #include "ActionParticleField.h"
@@ -131,48 +132,12 @@ void ApplyColorToMappedLed(const LEDPosition3D& led,
 namespace
 {
 
-BlendMode StackBlendFor(ClipBlend blend)
-{
-    switch(blend)
-    {
-        case ClipBlend::Add:      return BlendMode::ADD;
-        case ClipBlend::Screen:   return BlendMode::SCREEN;
-        case ClipBlend::Lighten:  return BlendMode::MAX;
-        case ClipBlend::Multiply: return BlendMode::MULTIPLY;
-        case ClipBlend::Darken:   return BlendMode::MIN;
-        case ClipBlend::Normal:
-        default:                  return BlendMode::REPLACE;
-    }
-}
-
 RGBColor ScaleColor(RGBColor c, float k)
 {
     k = std::clamp(k, 0.0f, 1.0f);
     return ToRGBColor((int)std::lround(RGBGetRValue(c) * k),
                       (int)std::lround(RGBGetGValue(c) * k),
                       (int)std::lround(RGBGetBValue(c) * k));
-}
-
-/* Add with a highlight roll-off: sums below the knee add exactly; above it they ease
-   toward full instead of clipping flat, so stacked hits keep some shape and colour. */
-int AddSoftChannel(int a, int b)
-{
-    constexpr float kKnee = 200.0f;
-    const float sum = (float)a + (float)b;
-    if(sum <= kKnee)
-    {
-        return (int)sum;
-    }
-    const float room = 255.0f - kKnee;
-    const float over = sum - kKnee;
-    return (int)std::lround(kKnee + room * (1.0f - std::exp(-over / room)));
-}
-
-RGBColor AddSoft(RGBColor below, RGBColor top)
-{
-    return ToRGBColor(AddSoftChannel(RGBGetRValue(below), RGBGetRValue(top)),
-                      AddSoftChannel(RGBGetGValue(below), RGBGetGValue(top)),
-                      AddSoftChannel(RGBGetBValue(below), RGBGetBValue(top)));
 }
 
 RGBColor MaxColor(RGBColor a, RGBColor b)
@@ -203,6 +168,53 @@ RGBColor TrailGlowAt(LEDPosition3D& led, int now_ms)
     return ScaleColor(led.trail_color, k * k);
 }
 
+void PaintClipLedF(LEDPosition3D& led,
+                   RGBControllerInterface* fallback_controller,
+                   const Clip& clip,
+                   float r,
+                   float g,
+                   float b,
+                   int now_ms,
+                   std::unordered_set<RGBControllerInterface*>* touched)
+{
+    namespace cm = colormath;
+    const float tr = cm::SrgbToLinear(r);
+    const float tg = cm::SrgbToLinear(g);
+    const float tb = cm::SrgbToLinear(b);
+    if(clip.trail_ms > 0)
+    {
+        /* Keep whichever is brighter: the fading tail or this frame's colour. */
+        const RGBColor now = ToRGBColor(cm::LinearToSrgb8(tr), cm::LinearToSrgb8(tg), cm::LinearToSrgb8(tb));
+        led.trail_color = MaxColor(TrailGlowAt(led, now_ms), now);
+        led.trail_start_ms = now_ms;
+        led.trail_ms = std::clamp(clip.trail_ms, 1, kMaxTrailMs);
+    }
+    /* What is under this layer, in linear light. The float mix is trusted only while it is
+       this frame's and still matches the LED (anything else that wrote the LED wins). */
+    const int pr = RGBGetRValue(led.preview_color);
+    const int pg = RGBGetGValue(led.preview_color);
+    const int pb = RGBGetBValue(led.preview_color);
+    if(led.mix_stamp != led.frame_stamp
+       || cm::LinearToSrgb8(led.mix_r) != pr
+       || cm::LinearToSrgb8(led.mix_g) != pg
+       || cm::LinearToSrgb8(led.mix_b) != pb)
+    {
+        led.mix_r = cm::Srgb8ToLinear(pr);
+        led.mix_g = cm::Srgb8ToLinear(pg);
+        led.mix_b = cm::Srgb8ToLinear(pb);
+    }
+    const int mode = (int)clip.blend;
+    led.mix_r = cm::Blend(mode, led.mix_r, tr);
+    led.mix_g = cm::Blend(mode, led.mix_g, tg);
+    led.mix_b = cm::Blend(mode, led.mix_b, tb);
+    led.mix_stamp = led.frame_stamp;
+    const RGBColor out = ToRGBColor(cm::LinearToSrgb8(led.mix_r),
+                                    cm::LinearToSrgb8(led.mix_g),
+                                    cm::LinearToSrgb8(led.mix_b));
+    led.preview_color = out;
+    ApplyColorToMappedLed(led, fallback_controller, out, touched);
+}
+
 void PaintClipLed(LEDPosition3D& led,
                   RGBControllerInterface* fallback_controller,
                   const Clip& clip,
@@ -210,25 +222,11 @@ void PaintClipLed(LEDPosition3D& led,
                   int now_ms,
                   std::unordered_set<RGBControllerInterface*>* touched)
 {
-    if(clip.trail_ms > 0)
-    {
-        /* Keep whichever is brighter: the fading tail or this frame's colour. */
-        const RGBColor glow = MaxColor(TrailGlowAt(led, now_ms), color);
-        led.trail_color = glow;
-        led.trail_start_ms = now_ms;
-        led.trail_ms = std::clamp(clip.trail_ms, 1, kMaxTrailMs);
-    }
-    RGBColor out = color;
-    if(clip.blend == ClipBlend::Add)
-    {
-        out = AddSoft(led.preview_color, color);
-    }
-    else if(clip.blend != ClipBlend::Normal)
-    {
-        out = BlendColors(led.preview_color, color, StackBlendFor(clip.blend));
-    }
-    led.preview_color = out;
-    ApplyColorToMappedLed(led, fallback_controller, out, touched);
+    PaintClipLedF(led, fallback_controller, clip,
+                  (float)RGBGetRValue(color) / 255.0f,
+                  (float)RGBGetGValue(color) / 255.0f,
+                  (float)RGBGetBValue(color) / 255.0f,
+                  now_ms, touched);
 }
 
 void ExpandBounds(SampleBounds* b, const Vector3D& p)
@@ -437,12 +435,12 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                 {
                     continue;
                 }
-                const RGBColor color = ToRGBColor(
-                    (int)std::lround(std::clamp(r * intensity, 0.0f, 1.0f) * 255.0f),
-                    (int)std::lround(std::clamp(g * intensity, 0.0f, 1.0f) * 255.0f),
-                    (int)std::lround(std::clamp(b * intensity, 0.0f, 1.0f) * 255.0f));
                 LEDPosition3D* led = matching[(size_t)i];
-                PaintClipLed(*led, transform->controller, *top, color, TrailClockMs(), touched);
+                PaintClipLedF(*led, transform->controller, *top,
+                              std::clamp(r * intensity, 0.0f, 1.0f),
+                              std::clamp(g * intensity, 0.0f, 1.0f),
+                              std::clamp(b * intensity, 0.0f, 1.0f),
+                              TrailClockMs(), touched);
                 ++painted;
             }
             return painted;
@@ -504,12 +502,12 @@ int PaintTransformTargetSpatial(ControllerTransform* transform,
                 {
                     continue;
                 }
-                const RGBColor color = ToRGBColor(
-                    (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 0u] * intensity, 0.0f, 1.0f) * 255.0f),
-                    (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 1u] * intensity, 0.0f, 1.0f) * 255.0f),
-                    (int)std::lround(std::clamp(rgb[(size_t)i * 3u + 2u] * intensity, 0.0f, 1.0f) * 255.0f));
                 LEDPosition3D* led = matching[(size_t)i];
-                PaintClipLed(*led, transform->controller, *top, color, TrailClockMs(), touched);
+                PaintClipLedF(*led, transform->controller, *top,
+                              std::clamp(rgb[(size_t)i * 3u + 0u] * intensity, 0.0f, 1.0f),
+                              std::clamp(rgb[(size_t)i * 3u + 1u] * intensity, 0.0f, 1.0f),
+                              std::clamp(rgb[(size_t)i * 3u + 2u] * intensity, 0.0f, 1.0f),
+                              TrailClockMs(), touched);
                 ++painted;
             }
             return painted;

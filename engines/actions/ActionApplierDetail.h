@@ -58,6 +58,16 @@ void PaintClipLed(LEDPosition3D& led,
                   RGBColor color,
                   int now_ms,
                   std::unordered_set<RGBControllerInterface*>* touched);
+/** Same, from an unrounded display colour (0..1 per channel), so a GPU field's fine
+    levels survive until the finished mix is written out. */
+void PaintClipLedF(LEDPosition3D& led,
+                   RGBControllerInterface* fallback_controller,
+                   const Clip& clip,
+                   float r,
+                   float g,
+                   float b,
+                   int now_ms,
+                   std::unordered_set<RGBControllerInterface*>* touched);
 
 /** Afterglow left on an LED at now_ms (black when none). Clears expired trails. */
 RGBColor TrailGlowAt(LEDPosition3D& led, int now_ms);

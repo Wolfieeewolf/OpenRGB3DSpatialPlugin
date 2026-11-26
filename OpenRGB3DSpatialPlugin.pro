@@ -200,6 +200,7 @@ HEADERS += \
     engines/actions/ActionPlayer.h \
     engines/actions/ActionApplier.h \
     engines/actions/ActionApplierDetail.h \
+    engines/actions/ActionColorMath.h \
     engines/actions/ActionClipEval.h \
     engines/actions/ActionDetail.h \
     engines/actions/ActionScript.h \
