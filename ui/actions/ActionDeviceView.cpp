@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <map>
 #include <tuple>
 
@@ -143,6 +144,16 @@ size_t LightsSignature(const RowLights& lights, bool with_transforms)
         {
             h = HashMix(h, (size_t)g.leds.front());
             h = HashMix(h, (size_t)g.leds.back());
+        }
+        if(with_transforms && !g.leds.empty())
+        {
+            /* Layout edits (spacing, LED count) move local positions without touching the transform. */
+            const Vector3D& a = g.leds.front()->local_position;
+            const Vector3D& b = g.leds.back()->local_position;
+            for(float f : {a.x, a.y, a.z, b.x, b.y, b.z})
+            {
+                h = HashFloat(h, f);
+            }
         }
         if(with_transforms && g.transform)
         {
@@ -885,6 +896,21 @@ ActionDeviceViewWindow::ActionDeviceViewWindow(const Action::Target& target,
     timer_->setTimerType(Qt::PreciseTimer);
     timer_->setInterval(33);
     connect(timer_, &QTimer::timeout, this, &ActionDeviceViewWindow::tick);
+
+    /* The editor is hidden, not deleted, when it closes: go with it. */
+    if(parent)
+    {
+        parent->installEventFilter(this);
+    }
+}
+
+bool ActionDeviceViewWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if(watched == parentWidget() && event->type() == QEvent::Hide && !event->spontaneous())
+    {
+        close();
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void ActionDeviceViewWindow::setThreeD(bool on)
