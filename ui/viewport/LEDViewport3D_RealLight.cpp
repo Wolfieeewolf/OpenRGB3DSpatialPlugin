@@ -19,6 +19,7 @@
 #include "viewport/ViewportMath.h"
 #include "GridSpaceUtils.h"
 #include "SpatialLighting/RoomLight.h"
+#include "SpatialLighting/LightOutput.h"
 #include "SpatialLighting/BlockerGridOccluder.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
@@ -177,9 +178,11 @@ int LEDViewport3D::buildRealLightTexels(float reach_units)
                 {
                     c = led.controller->GetColor(global);
                 }
-                l.r += lin[RGBGetRValue(c)];
-                l.g += lin[RGBGetGValue(c)];
-                l.b += lin[RGBGetBValue(c)];
+                /* Real output: lumens at full white for this device's LEDs. */
+                const float scale = LightOutput::LedScale(t.get(), led);
+                l.r += lin[RGBGetRValue(c)] * scale;
+                l.g += lin[RGBGetGValue(c)] * scale;
+                l.b += lin[RGBGetBValue(c)] * scale;
             }
         }
         if((int)lights.size() <= kMaxRealLights)

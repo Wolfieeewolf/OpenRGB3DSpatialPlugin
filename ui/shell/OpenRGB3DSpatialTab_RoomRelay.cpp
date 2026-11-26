@@ -16,6 +16,7 @@
 #include "LEDPosition3D.h"
 #include "RoomSpatialLightingUi.h"
 #include "SpatialLighting/RoomLight.h"
+#include "SpatialLighting/LightOutput.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "VirtualController3D.h"
 #include "LogManager.h"
@@ -403,9 +404,11 @@ void OpenRGB3DSpatialTab::ApplyRoomRelayReceivers(std::unordered_set<RGBControll
                 emit_pos.push_back(led.room_position);
                 emit_owner.push_back(idx);
                 emit_exact.push_back(exact);
-                emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetRValue(c)));
-                emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetGValue(c)));
-                emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetBValue(c)));
+                /* Real output: lumens at full white for this device's LEDs. */
+                const float scale = LightOutput::LedScale(t, led);
+                emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetRValue(c)) * scale);
+                emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetGValue(c)) * scale);
+                emit_lin.push_back(Action::colormath::Srgb8ToLinear(RGBGetBValue(c)) * scale);
             }
         }
 

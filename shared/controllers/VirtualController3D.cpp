@@ -617,6 +617,10 @@ json VirtualController3D::ToJson() const
         }
         j["light_blockers"] = blockers_array;
     }
+    if(light_output_lm > 0.0f)
+    {
+        j["light_output_lm"] = light_output_lm;
+    }
 
     return j;
 }
@@ -866,6 +870,10 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
     if(j.contains("model") && j["model"].is_string())
     {
         controller->SetModel(j["model"].get<std::string>());
+    }
+    if(controller && j.contains("light_output_lm") && j["light_output_lm"].is_number())
+    {
+        controller->SetLightOutputLm(j["light_output_lm"].get<float>());
     }
     return controller;
 }

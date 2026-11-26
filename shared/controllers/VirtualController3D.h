@@ -79,6 +79,10 @@ public:
 
     const std::vector<GridLEDMapping>& GetMappings() const { return led_mappings; }
     const std::vector<CustomControllerLightBlocker>& GetLightBlockers() const { return light_blockers; }
+    /** Whole device's light output at full white, in lumens (0 = not set: a default by device
+        type is used). JSON "light_output_lm", optional. */
+    float GetLightOutputLm() const { return light_output_lm; }
+    void SetLightOutputLm(float lm) { light_output_lm = lm > 0.0f ? lm : 0.0f; }
 
     int GetLedsPerCluster() const { return leds_per_cluster; }
     void SetLedsPerCluster(int count) { leds_per_cluster = (count > 1) ? 3 : 1; }
@@ -128,6 +132,7 @@ private:
     std::vector<GridLEDMapping> led_mappings;
     std::vector<CustomControllerLightBlocker> light_blockers;
     int leds_per_cluster = 1;
+    float light_output_lm = 0.0f;
 };
 
 #endif
