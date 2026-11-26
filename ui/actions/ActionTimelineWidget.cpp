@@ -398,6 +398,14 @@ QVector<ActionTimelineWidget::PaintClip> ActionTimelineWidget::paintClipsForRow(
             out.push_back(pb);
         }
     }
+    /* Lower lanes first so higher lanes paint (and hit-test) in front, matching playback. */
+    std::stable_sort(out.begin(), out.end(), [](const PaintClip& a, const PaintClip& b) {
+        if(a.track != b.track)
+        {
+            return a.track < b.track;
+        }
+        return a.clip->layer < b.clip->layer;
+    });
     return out;
 }
 
@@ -733,7 +741,20 @@ QRect ActionTimelineWidget::LaneBand(const QRect& full, int lanes, int lane)
 
 QRect ActionTimelineWidget::clipRectOnTrack(int row, int track, const Action::Clip& clip) const
 {
+    if(laneStackedFold(track))
+    {
+        return clipRect(row, clip);
+    }
     return LaneBand(clipRect(row, clip), laneCountForTrack(track), clip.layer);
+}
+
+bool ActionTimelineWidget::laneStackedFold(int track) const
+{
+    if(!pack_ || track < 0 || track >= (int)pack_->tracks.size())
+    {
+        return false;
+    }
+    return !pack_->tracks[(size_t)track].layers_open && laneCountForTrack(track) > kFoldStripeLanes;
 }
 
 void ActionTimelineWidget::layoutRows()
@@ -901,6 +922,10 @@ int ActionTimelineWidget::laneAtY(int row, int y) const
     if(lanes <= 1)
     {
         return 0;
+    }
+    if(laneStackedFold(trackIndexForRow(row)))
+    {
+        return lanes - 1; /* stacked: aim at the front (top) lane */
     }
     const int top = rowTop(row) + 3;
     const int h = std::max(1, rowHeightAt(row) - 6);

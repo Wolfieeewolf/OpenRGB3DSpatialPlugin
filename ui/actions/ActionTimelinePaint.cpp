@@ -867,6 +867,26 @@ void PaintEyeButton(QPainter& p, const QRect& r, const QColor& color)
     p.restore();
 }
 
+/** "+N" chip in a clip's top-right corner: N other effects overlap it on a folded row. */
+void PaintStackBadge(QPainter& p, const QRect& r, int others)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, true);
+    QFont f = p.font();
+    f.setPixelSize(9);
+    f.setBold(true);
+    p.setFont(f);
+    const QString text = QStringLiteral("+%1").arg(others);
+    const int w = QFontMetrics(f).horizontalAdvance(text) + 6;
+    const QRectF chip(r.right() - w - 2, r.top() + 2, w, 11);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0, 0, 0, 170));
+    p.drawRoundedRect(chip, 3, 3);
+    p.setPen(QColor(255, 255, 255, 230));
+    p.drawText(chip, Qt::AlignCenter, text);
+    p.restore();
+}
+
 /** Motion keys as small diamonds along the bottom of a clip. */
 void PaintMotionKeys(QPainter& p, const QRect& r, const Action::Clip& clip)
 {
@@ -1108,7 +1128,8 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
         {
             const Action::Track& ot = pack_->tracks[(size_t)own_track];
             const QRect lane_area(gutter_width_, y + 3, end_x - gutter_width_, h - 6);
-            for(int lane = 0; lane < own_lanes; ++lane)
+            const int stripe_lanes = laneStackedFold(own_track) ? 0 : own_lanes;
+            for(int lane = 0; lane < stripe_lanes; ++lane)
             {
                 const QRect band = LaneBand(lane_area, own_lanes, lane);
                 if(!Action::TrackLayerAudible(ot, lane))
@@ -1181,6 +1202,22 @@ void ActionTimelineWidget::paintTimelineContent(QPainter& p) const
             if(!pb.clip->motion.empty())
             {
                 PaintMotionKeys(p, clip_rect, *pb.clip);
+            }
+            if(laneStackedFold(pb.track) && clip_rect.width() >= 22 && clip_rect.height() >= 12)
+            {
+                /* How many other effects play under or over this one at some point. */
+                int others = 0;
+                for(const Action::Clip& o : pack_->tracks[(size_t)pb.track].clips)
+                {
+                    if(&o != pb.clip && o.start_ms < pb.clip->end_ms && pb.clip->start_ms < o.end_ms)
+                    {
+                        ++others;
+                    }
+                }
+                if(others > 0)
+                {
+                    PaintStackBadge(p, clip_rect, others);
+                }
             }
             if(!audible)
             {

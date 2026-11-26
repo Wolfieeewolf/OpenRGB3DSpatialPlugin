@@ -262,6 +262,10 @@ private:
     /** Row under widget y: -1 above the rows, visible_rows_.size() or more below them. */
     int rowAtY(int y) const;
     int laneCountForTrack(int track) const;
+    /** Folded row with more lanes than read as stripes: clips draw full height, top lane in
+        front, with a "+N" badge where others play underneath. */
+    bool laneStackedFold(int track) const;
+    static constexpr int kFoldStripeLanes = 3;
     /** Lane of the row's own track under y (0 when that track has one lane). */
     int laneAtY(int row, int y) const;
     QRect laneFoldRect(int row) const;

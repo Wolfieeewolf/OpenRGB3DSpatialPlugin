@@ -1235,17 +1235,38 @@ void ActionTimelineWidget::finishDrag()
     {
         /* Moved or stretched over another effect on its lane: give it a lane of its own
            rather than hiding one behind the other. */
-        if(Action::Clip* mc = mutableClip(track, clip))
+        /* A group move re-homes every moved clip, one after another, so two selected clips
+           pushed onto the same spot each end up on a lane of their own. */
+        QVector<ClipId> moved_clips;
+        if(group_n > 1 && op == DragOp::Move)
         {
-            Action::Track& owner = pack_->tracks[(size_t)track];
+            moved_clips = selection_;
+        }
+        if(!moved_clips.contains(ClipId{track, clip}))
+        {
+            moved_clips.push_back(ClipId{track, clip});
+        }
+        bool new_lane = false;
+        for(const ClipId& id : moved_clips)
+        {
+            Action::Clip* mc = mutableClip(id.track, id.clip);
+            if(!mc)
+            {
+                continue;
+            }
+            Action::Track& owner = pack_->tracks[(size_t)id.track];
             const int lanes_before = Action::TrackLayerCount(owner);
             mc->layer = Action::ChooseClipLayer(owner, mc->start_ms, mc->end_ms, mc->layer, mc);
             if(mc->layer >= lanes_before)
             {
                 owner.layers_open = true;
-                layoutRows();
-                emit layersChanged();
+                new_lane = true;
             }
+        }
+        if(new_lane)
+        {
+            layoutRows();
+            emit layersChanged();
         }
         selected_track_ = track;
         selected_clip_ = clip;
