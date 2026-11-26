@@ -750,7 +750,7 @@ void ActionTimelineWidget::layoutRows()
         const int lanes = laneCountForTrack(t);
         if(t >= 0 && lanes > 1 && pack_->tracks[(size_t)t].layers_open)
         {
-            h = 6 + lanes * open_lane_height_;
+            h = 6 + lanes * laneHeightForTrack(t);
         }
         y += h;
     }
@@ -809,6 +809,86 @@ int ActionTimelineWidget::laneCountForTrack(int track) const
         return 1;
     }
     return Action::TrackLayerCount(pack_->tracks[(size_t)track]);
+}
+
+int ActionTimelineWidget::laneHeightForTrack(int track) const
+{
+    if(!pack_ || track < 0 || track >= (int)pack_->tracks.size())
+    {
+        return open_lane_height_;
+    }
+    const int h = pack_->tracks[(size_t)track].lane_height;
+    return h > 0 ? std::clamp(h, 14, 120) : open_lane_height_;
+}
+
+int ActionTimelineWidget::laneEdgeRowAt(int x, int y) const
+{
+    if(!pack_ || x >= gutter_width_ || y < header_height_)
+    {
+        return -1;
+    }
+    const int under = rowAtY(y);
+    for(int row : {under, under - 1})
+    {
+        if(row < 0 || row >= visible_rows_.size())
+        {
+            continue;
+        }
+        const int t = trackIndexForRow(row);
+        if(t < 0 || laneCountForTrack(t) <= 1 || !pack_->tracks[(size_t)t].layers_open)
+        {
+            continue;
+        }
+        const int bottom = rowTop(row) + rowHeightAt(row);
+        if(std::abs(y - bottom) <= 3)
+        {
+            return row;
+        }
+    }
+    return -1;
+}
+
+bool ActionTimelineWidget::motionKeyAt(int x, int y, int* out_row, int* out_track, int* out_clip, int* out_key) const
+{
+    if(!pack_ || x < gutter_width_ || y < header_height_)
+    {
+        return false;
+    }
+    const int row = rowAtY(y);
+    if(row < 0 || row >= visible_rows_.size())
+    {
+        return false;
+    }
+    const QVector<PaintClip> clips = paintClipsForRow(row);
+    for(int i = clips.size() - 1; i >= 0; --i)
+    {
+        const PaintClip& pb = clips[i];
+        if(!pb.clip || pb.clip->motion.empty())
+        {
+            continue;
+        }
+        const QRect r = clipRectOnTrack(row, pb.track, *pb.clip);
+        if(r.width() < 6 || r.height() < 6)
+        {
+            continue;
+        }
+        /* Same geometry as PaintMotionKeys, with a few pixels of slack to grab. */
+        const double s = std::clamp(r.height() / 6.0, 2.5, 4.0);
+        const double cy = r.bottom() - s - 1.0;
+        for(int k = (int)pb.clip->motion.size() - 1; k >= 0; --k)
+        {
+            const double cx = r.left() + std::clamp((double)pb.clip->motion[(size_t)k].at, 0.0, 1.0) * (r.width() - 1);
+            if(std::fabs(x - cx) <= s + 3.0 && std::fabs(y - cy) <= s + 3.0)
+            {
+                if(out_row) *out_row = row;
+                if(out_track) *out_track = pb.track;
+                if(out_clip) *out_clip = pb.clip_index;
+                if(out_key) *out_key = k;
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 int ActionTimelineWidget::laneAtY(int row, int y) const

@@ -128,8 +128,10 @@ signals:
     void placementFinished();
     /** Markers were added, moved, renamed or removed (the pack changed). */
     void markersChanged();
-    /** Layer lanes were added, folded, renamed, muted, soloed or tidied (the pack changed). */
+    /** Layer lanes were added, folded, renamed, muted, soloed, resized or tidied (the pack changed). */
     void layersChanged();
+    /** A motion key was dragged along a clip on the timeline. */
+    void motionKeysEdited(int track_index, int clip_index);
     void zoomChanged(double pixels_per_second);
     void clipSelected(int track_index, int clip_index);
     void clipEdited(int track_index, int clip_index);
@@ -383,8 +385,22 @@ private:
     int snap_reach_px_ = 8;
     /** Time the last drag snapped to, for the guide line (-1 = none). */
     int snap_guide_ms_ = -1;
-    /** Height of one lane when a track shows its layers. */
+    /** Height of one lane when a track shows its layers (tracks may set their own). */
     int open_lane_height_ = 24;
+    int laneHeightForTrack(int track) const;
+    /** Open layered row whose bottom edge (lane resize handle) is under the gutter point, or -1. */
+    int laneEdgeRowAt(int x, int y) const;
+    /** Motion key diamond under the point. */
+    bool motionKeyAt(int x, int y, int* out_row, int* out_track, int* out_clip, int* out_key) const;
+    /* Lane height drag (gutter, bottom edge of an open layered row). */
+    int lane_resize_track_ = -1;
+    int lane_resize_y0_ = 0;
+    int lane_resize_h0_ = 0;
+    /* Motion key drag along a clip. */
+    int motion_drag_row_ = -1;
+    int motion_drag_track_ = -1;
+    int motion_drag_clip_ = -1;
+    int motion_drag_key_ = -1;
     /** Top of each visible row (relative to the header) plus the total at the end. */
     QVector<int> row_tops_;
     int lane_hint_ = 0;

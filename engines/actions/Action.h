@@ -234,7 +234,8 @@ struct Clip
 };
 
 /** Most layer lanes one track may hold. */
-constexpr int kMaxTrackLayers = 16;
+/* Safety cap only: rows take as many layers as there are effects to stack. */
+constexpr int kMaxTrackLayers = 256;
 
 /** One effect layer inside a track (xLights / Vixen style). */
 struct TrackLayer
@@ -264,6 +265,8 @@ struct Track
     std::vector<TrackLayer> layers;
     /** Timeline shows each layer as its own full-height lane. */
     bool layers_open = false;
+    /** Height of one open lane in the timeline, in pixels (0 = default). */
+    int lane_height = 0;
 };
 
 struct Pack
@@ -384,9 +387,9 @@ const Clip* FindActiveClipOnLayer(const Track& track, int local_ms, int layer);
 int TrackLayerCount(const Track& track);
 /** False when the layer is muted, or another layer on the track is soloed. */
 bool TrackLayerAudible(const Track& track, int layer);
-/** Lane for a new clip over [start_ms, end_ms): `preferred` when free there, else a free lane
-    above it, else a new lane on top (up to kMaxTrackLayers), else a free lane below.
-    `ignore` skips a clip already on the track. */
+/** Lane for a clip over [start_ms, end_ms): `preferred` when nothing else plays there then,
+    else a new lane on top, so every stacked effect gets a lane of its own (a free lane is
+    only reused at the kMaxTrackLayers cap). `ignore` skips a clip already on the track. */
 int ChooseClipLayer(const Track& track, int start_ms, int end_ms, int preferred, const Clip* ignore = nullptr);
 
 bool DirectionInvertsAxis(Direction dir);

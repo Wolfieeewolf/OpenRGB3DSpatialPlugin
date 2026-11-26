@@ -103,6 +103,16 @@ quint32 HashClipLook(const Action::Clip& sample)
         h = HashFloatBits(h, s.pos);
         h = HashFloatBits(h, s.value);
     }
+    h = MixHash(h, (quint32)sample.motion_linear);
+    for(const Action::MotionKey& k : sample.motion)
+    {
+        for(float v : {k.at, k.offset_x, k.offset_y, k.offset_z, k.size, k.yaw_deg, k.pitch_deg})
+        {
+            h = HashFloatBits(h, v);
+        }
+    }
+    h = HashFloatBits(h, sample.axis_yaw_deg);
+    h = HashFloatBits(h, sample.axis_pitch_deg);
     return h;
 }
 
@@ -162,6 +172,9 @@ QImage ActionTimelineWidget::renderGpuEngineThumb(const GpuThumbRequest& req) co
     }
 
     Action::BindClipOrigin(req.clip, room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
+    /* Motion keys: each time key renders the clip where it is at that moment. */
+    Action::Clip moving = req.clip;
+    const bool has_motion = !req.clip.motion.empty();
 
     const int dur = std::max(1, req.clip.end_ms - req.clip.start_ms);
     const int time_keys = std::max(4, std::min(req.sample_w, 8));
@@ -175,22 +188,28 @@ QImage ActionTimelineWidget::renderGpuEngineThumb(const GpuThumbRequest& req) co
         const int ms = req.clip.start_ms + (int)std::lround(t * (float)dur);
         const int sample_ms = std::min(std::max(ms, req.clip.start_ms), req.clip.end_ms - 1);
         const std::uint64_t seq = ++s_timeline_gpu_seq;
+        if(has_motion)
+        {
+            Action::ApplyClipMotion(&moving, sample_ms);
+            Action::BindClipOrigin(moving, room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
+        }
+        const Action::Clip& at = has_motion ? moving : req.clip;
         bool prepared = false;
         if(req.field)
         {
-            prepared = Action::volume_field::PrepareForClip(req.clip, sample_ms, seq);
+            prepared = Action::volume_field::PrepareForClip(at, sample_ms, seq);
         }
         else if(req.particle)
         {
-            prepared = Action::particle_field::PrepareForClip(req.clip, sample_ms, seq);
+            prepared = Action::particle_field::PrepareForClip(at, sample_ms, seq);
         }
         else if(req.ribbon)
         {
-            prepared = Action::ribbon_field::PrepareForClip(req.clip, sample_ms, seq);
+            prepared = Action::ribbon_field::PrepareForClip(at, sample_ms, seq);
         }
         else if(req.builtin)
         {
-            prepared = Action::builtin_gpu::PrepareForClip(req.clip, sample_ms, seq);
+            prepared = Action::builtin_gpu::PrepareForClip(at, sample_ms, seq);
         }
         if(!prepared)
         {
@@ -446,6 +465,11 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
     QImage img(sample_w, rows, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
 
+    /* Motion keys: each column plays the clip where it is at that moment. */
+    Action::Clip moving = sample;
+    const bool has_motion = !sample.motion.empty();
+    const Action::Clip& cur = has_motion ? moving : sample;
+
     // GPU engines returned above; only media still prepares on this CPU path.
     int last_prepare_ms = -1;
     const int prepare_step_ms = std::max(24, dur / std::max(1, img.width() / 6));
@@ -459,9 +483,35 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         {
             return;
         }
-        Action::BindClipOrigin(sample, room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
-        Action::PrepareMediaForClip(sample, sample_ms, ++s_timeline_media_seq);
+        Action::BindClipOrigin(cur, room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
+        Action::PrepareMediaForClip(cur, sample_ms, ++s_timeline_media_seq);
         last_prepare_ms = sample_ms;
+    };
+
+    int last_axes_x = -1000;
+    auto applyMotionAt = [&](int x, int sample_ms) {
+        if(!has_motion)
+        {
+            return;
+        }
+        Action::ApplyClipMotion(&moving, sample_ms);
+        Action::BindClipOrigin(moving, room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
+        /* Axis-mapped looks need the lights' axis values again as the centre or axis moves;
+           a dozen refreshes across the clip is plenty for a thumbnail. Row order stays put. */
+        if(!world_eval && !order.empty() && pack_ && transforms_ && x - last_axes_x >= std::max(1, img.width() / 12))
+        {
+            std::vector<float> a2;
+            std::vector<int> s2;
+            std::vector<float> x2, y2, z2;
+            Action::BuildSpatialAxesForTarget(*pack_, pb.view_target, moving, transforms_, &a2, &s2, &x2, &y2, &z2,
+                                              zone_manager_,
+                                              room_bounds_.has_world_bounds ? &room_bounds_ : nullptr);
+            if(a2.size() == axes.size())
+            {
+                axes.swap(a2);
+            }
+            last_axes_x = x;
+        }
     };
 
     auto sampleLed = [&](int led_slot, int ms, RGBColor* c, float* intens) -> bool {
@@ -471,7 +521,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         {
             // Expanded LED child under a parent track: evaluate this LED's slot in its
             // sibling strip so wipe/alternating match the hardware row.
-            return Action::EvaluateClipAtLed(sample, ms, pb.led_index,
+            return Action::EvaluateClipAtLed(cur, ms, pb.led_index,
                                                   std::max(1, pb.led_count), c, intens);
         }
         if(!order.empty())
@@ -479,21 +529,21 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
             const int idx = order[(size_t)std::clamp(led_slot, 0, (int)order.size() - 1)];
             if(world_eval && idx < (int)nxs.size())
             {
-                return Action::EvaluateClipAtWorld(sample, ms,
+                return Action::EvaluateClipAtWorld(cur, ms,
                                                         nxs[(size_t)idx], nys[(size_t)idx], nzs[(size_t)idx],
                                                         k0, k1, k0, k1, k0, k1,
                                                         seeds[(size_t)idx], c, intens);
             }
-            return Action::EvaluateClipAtAxis(sample, ms,
+            return Action::EvaluateClipAtAxis(cur, ms,
                                                    axes[(size_t)idx], seeds[(size_t)idx],
                                                    c, intens);
         }
-        if(world_eval || sample.play_bounds == Action::PlayBounds::RoomBox)
+        if(world_eval || cur.play_bounds == Action::PlayBounds::RoomBox)
         {
             const float t = (led_n <= 1) ? 0.5f : (float)led_slot / (float)(led_n - 1);
-            return Action::EvaluateClipAtAxis(sample, ms, t, led_slot, c, intens);
+            return Action::EvaluateClipAtAxis(cur, ms, t, led_slot, c, intens);
         }
-        return Action::EvaluateClipAtLed(sample, ms, led_slot, led_n, c, intens);
+        return Action::EvaluateClipAtLed(cur, ms, led_slot, led_n, c, intens);
     };
 
     auto pixelFromSample = [&](RGBColor c, float intens) -> QColor {
@@ -512,6 +562,7 @@ void ActionTimelineWidget::paintClipSpatialRaster(QPainter& p, const QRect& br, 
         const float t = (img.width() <= 1) ? 0.0f : (float)x / (float)(img.width() - 1);
         const int ms = sample.start_ms + (int)std::lround(t * (float)dur);
         const int sample_ms = std::min(std::max(ms, sample.start_ms), sample.end_ms - 1);
+        applyMotionAt(x, sample_ms);
         prepareMediaAt(sample_ms);
 
         int row = 0;

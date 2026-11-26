@@ -773,6 +773,17 @@ void ActionEditorDialog::buildUi()
     connect(timeline_, &ActionTimelineWidget::zoomChanged, this, &ActionEditorDialog::syncZoomSlider);
     connect(timeline_, &ActionTimelineWidget::markersChanged, this, &ActionEditorDialog::markPreviewDirtyIfPlaying);
     connect(timeline_, &ActionTimelineWidget::layersChanged, this, &ActionEditorDialog::markPreviewDirtyIfPlaying);
+    connect(timeline_, &ActionTimelineWidget::motionKeysEdited, this, [this](int track_index, int clip_index) {
+        if(track_index == selected_track_ && clip_index == selected_clip_)
+        {
+            motionChanged();
+        }
+        else
+        {
+            markPreviewDirtyIfPlaying();
+            scheduleHistoryCommit();
+        }
+    });
     connect(timeline_, &ActionTimelineWidget::placementFinished, this, [this]() {
         status_label_->setText(QStringLiteral("Ready"));
     });

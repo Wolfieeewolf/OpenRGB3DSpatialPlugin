@@ -573,20 +573,17 @@ int ChooseClipLayer(const Track& track, int start_ms, int end_ms, int preferred,
         return true;
     };
     const int pref = std::clamp(preferred, 0, lanes - 1);
-    /* Prefer staying on top: the asked lane, then free lanes above it, then a new lane,
-       and only then a free lane underneath. */
-    for(int layer = pref; layer < lanes; ++layer)
+    /* The asked lane when it is free then; otherwise a fresh lane on top, so an effect
+       stacked over another always gets its own lane. */
+    if(lane_free(pref))
     {
-        if(lane_free(layer))
-        {
-            return layer;
-        }
+        return pref;
     }
     if(lanes < kMaxTrackLayers)
     {
         return lanes;
     }
-    for(int layer = pref - 1; layer >= 0; --layer)
+    for(int layer = lanes - 1; layer >= 0; --layer)
     {
         if(lane_free(layer))
         {

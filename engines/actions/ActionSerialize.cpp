@@ -321,6 +321,10 @@ nlohmann::json ToJson(const Pack& pack)
         {
             tj["layers_open"] = true;
         }
+        if(track.lane_height > 0)
+        {
+            tj["lane_height"] = track.lane_height;
+        }
         tj["clips"] = nlohmann::json::array();
         for(const Clip& clip : track.clips)
         {
@@ -615,6 +619,11 @@ bool FromJson(const nlohmann::json& j, Pack* out, std::string* error)
             }
         }
         track.layers_open = tj.value("layers_open", false);
+        if(tj.contains("lane_height") && tj["lane_height"].is_number_integer())
+        {
+            const int h = tj["lane_height"].get<int>();
+            track.lane_height = h > 0 ? std::clamp(h, 14, 120) : 0;
+        }
 
         if(!tj.contains("clips") || !tj["clips"].is_array())
         {

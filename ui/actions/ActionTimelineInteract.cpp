@@ -932,8 +932,16 @@ bool ActionTimelineWidget::pasteClipboardClipAt(int row, int ms)
     const int start = snapMs(std::clamp(ms, 0, std::max(0, duration_ms_ - len)));
     copy.start_ms = start;
     copy.end_ms = start + len;
-    copy.layer = Action::ChooseClipLayer(pack_->tracks[(size_t)dest_track], copy.start_ms, copy.end_ms,
-                                         (trackIndexForRow(row) == dest_track) ? lane_hint_ : 0);
+    {
+        Action::Track& dest = pack_->tracks[(size_t)dest_track];
+        const int lanes_before = Action::TrackLayerCount(dest);
+        copy.layer = Action::ChooseClipLayer(dest, copy.start_ms, copy.end_ms,
+                                             (trackIndexForRow(row) == dest_track) ? lane_hint_ : 0);
+        if(copy.layer >= lanes_before && !dest.clips.empty())
+        {
+            dest.layers_open = true;
+        }
+    }
     if(dest_track >= 0 && dest_track < (int)pack_->tracks.size()
        && Action::TargetIsMultiDeviceGroup(pack_->tracks[(size_t)dest_track].target)
        && (copy.axis_space == Action::AxisSpace::Device
@@ -1195,14 +1203,13 @@ void ActionTimelineWidget::finishDrag()
            landing on another track takes a free lane there. */
         if(Action::Clip* mc = mutableClip(track, clip))
         {
-            const Action::Track& owner = pack_->tracks[(size_t)track];
             if(dest_lane >= 0 && track == trackIndexForRow(dest_row) && laneCountForTrack(track) > 1)
             {
                 mc->layer = std::clamp(dest_lane, 0, laneCountForTrack(track) - 1);
             }
             else if(changed_track)
             {
-                mc->layer = Action::ChooseClipLayer(owner, mc->start_ms, mc->end_ms, 0, mc);
+                mc->layer = 0; /* settled below: lane 0 when free there, else a new lane */
             }
         }
         selected_row_ = dest_row;
@@ -1226,6 +1233,20 @@ void ActionTimelineWidget::finishDrag()
     if(moved && (op == DragOp::Move || op == DragOp::ResizeStart || op == DragOp::ResizeEnd)
        && track >= 0 && clip >= 0)
     {
+        /* Moved or stretched over another effect on its lane: give it a lane of its own
+           rather than hiding one behind the other. */
+        if(Action::Clip* mc = mutableClip(track, clip))
+        {
+            Action::Track& owner = pack_->tracks[(size_t)track];
+            const int lanes_before = Action::TrackLayerCount(owner);
+            mc->layer = Action::ChooseClipLayer(owner, mc->start_ms, mc->end_ms, mc->layer, mc);
+            if(mc->layer >= lanes_before)
+            {
+                owner.layers_open = true;
+                layoutRows();
+                emit layersChanged();
+            }
+        }
         selected_track_ = track;
         selected_clip_ = clip;
         emit clipEdited(track, clip);
@@ -1237,6 +1258,16 @@ void ActionTimelineWidget::updateHoverCursor(int x, int y)
 {
     if(drag_op_ != DragOp::None)
     {
+        return;
+    }
+    if(laneEdgeRowAt(x, y) >= 0)
+    {
+        setCursor(Qt::SizeVerCursor);
+        return;
+    }
+    if(motionKeyAt(x, y, nullptr, nullptr, nullptr, nullptr))
+    {
+        setCursor(Qt::SizeHorCursor);
         return;
     }
     ClipHit hit = ClipHit::None;
@@ -1969,6 +2000,38 @@ void ActionTimelineWidget::mousePressEvent(QMouseEvent* event)
 
     drag_moved_ = false;
 
+    /* Bottom edge of an open layered row in the gutter: drag to make its lanes taller. */
+    const int edge_row = laneEdgeRowAt(x, y);
+    if(edge_row >= 0)
+    {
+        lane_resize_track_ = trackIndexForRow(edge_row);
+        lane_resize_y0_ = y;
+        lane_resize_h0_ = laneHeightForTrack(lane_resize_track_);
+        setCursor(Qt::SizeVerCursor);
+        grabMouse();
+        return;
+    }
+    /* Motion key diamonds slide along their clip. */
+    {
+        int mr = -1, mt = -1, mc = -1, mk = -1;
+        if(motionKeyAt(x, y, &mr, &mt, &mc, &mk))
+        {
+            motion_drag_row_ = mr;
+            motion_drag_track_ = mt;
+            motion_drag_clip_ = mc;
+            motion_drag_key_ = mk;
+            if(selected_track_ != mt || selected_clip_ != mc)
+            {
+                setPrimarySelection(mt, mc);
+                emit clipSelected(mt, mc);
+            }
+            setCursor(Qt::SizeHorCursor);
+            grabMouse();
+            requestContentRepaint();
+            return;
+        }
+    }
+
     if(y < header_height_)
     {
         if(x >= gutter_width_)
@@ -2177,6 +2240,38 @@ void ActionTimelineWidget::mouseMoveEvent(QMouseEvent* event)
         requestContentRepaint();
         return;
     }
+    if(lane_resize_track_ >= 0 && (event->buttons() & Qt::LeftButton))
+    {
+        if(pack_ && lane_resize_track_ < (int)pack_->tracks.size())
+        {
+            const int lanes = std::max(1, laneCountForTrack(lane_resize_track_));
+            const int h = std::clamp(lane_resize_h0_ + (pt.y() - lane_resize_y0_) / lanes, 14, 120);
+            pack_->tracks[(size_t)lane_resize_track_].lane_height = h;
+            requestContentRepaint();
+        }
+        return;
+    }
+    if(motion_drag_track_ >= 0 && (event->buttons() & Qt::LeftButton))
+    {
+        Action::Clip* c = mutableClip(motion_drag_track_, motion_drag_clip_);
+        if(c && motion_drag_key_ >= 0 && motion_drag_key_ < (int)c->motion.size())
+        {
+            const QRect r = clipRectOnTrack(motion_drag_row_, motion_drag_track_, *c);
+            float at = (float)(pt.x() - r.left()) / (float)std::max(1, r.width() - 1);
+            /* Stay between the neighbouring keys so the key order never changes mid-drag. */
+            const size_t k = (size_t)motion_drag_key_;
+            const float lo = k > 0 ? c->motion[k - 1].at + 0.005f : 0.0f;
+            const float hi = k + 1 < c->motion.size() ? c->motion[k + 1].at - 0.005f : 1.0f;
+            at = std::clamp(at, lo, std::max(lo, hi));
+            if(std::fabs(c->motion[k].at - at) > 1e-5f)
+            {
+                c->motion[k].at = at;
+                requestContentRepaint();
+                emit motionKeysEdited(motion_drag_track_, motion_drag_clip_);
+            }
+        }
+        return;
+    }
     if(drag_op_ != DragOp::None && (event->buttons() & Qt::LeftButton))
     {
         applyDrag(pt.x(), pt.y());
@@ -2189,6 +2284,24 @@ void ActionTimelineWidget::mouseReleaseEvent(QMouseEvent* event)
 {
     if(event->button() == Qt::LeftButton)
     {
+        if(lane_resize_track_ >= 0)
+        {
+            lane_resize_track_ = -1;
+            releaseMouse();
+            unsetCursor();
+            emit layersChanged();
+            return;
+        }
+        if(motion_drag_track_ >= 0)
+        {
+            const int t = motion_drag_track_;
+            const int c = motion_drag_clip_;
+            motion_drag_row_ = motion_drag_track_ = motion_drag_clip_ = motion_drag_key_ = -1;
+            releaseMouse();
+            unsetCursor();
+            emit motionKeysEdited(t, c);
+            return;
+        }
         if(row_reorder_from_ >= 0)
         {
             const int from = row_reorder_from_;
