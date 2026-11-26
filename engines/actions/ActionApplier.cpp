@@ -8,12 +8,14 @@
 #include "ActionScript.h"
 #include "ActionVolumeField.h"
 #include "ActionApplierDetail.h"
+#include "ActionColorMath.h"
 #include "ZoneManager3D.h"
 #include "GpuRoomGridOverlay.h"
 #include "SpatialEffect3D.h"
 #include "SpatialOffscreenGlPool.h"
 #include "EffectInstance3D.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <unordered_map>
@@ -233,103 +235,222 @@ bool LayerZoneIncludesTransform(int layer_zone_index,
     return true;
 }
 
-/** Overlay layer for one RoomBox field clip: the GPU field it just painted with, framed
-    like RoomGridFieldUv (clip origin + MakeEffectGpuAtlasHalfExtents, clip size = Scale). */
-void AppendClipFieldOverlayLayer(const Clip& clip,
-                                 int local_ms,
-                                 const ApplySpatialContext& ctx,
-                                 std::vector<GpuRoomGridOverlayLayer>* out)
-{
-    const std::string id = script::FileId(clip);
-    unsigned int src_tex = 0;
-    int n = 0;
-    bool ok_gpu = false;
-    /* Same engine priority as PaintTransformTargetSpatial. Prefer overlay handoff. */
-    if(script::UsesField(id))
-    {
-        ok_gpu = volume_field::ExportAtlasGpu(src_tex, n);
-    }
-    else if(script::UsesParticles(id))
-    {
-        ok_gpu = particle_field::ExportAtlasGpu(src_tex, n);
-    }
-    else if(script::UsesRibbons(id))
-    {
-        ok_gpu = ribbon_field::ExportAtlasGpu(src_tex, n);
-    }
-    else if(builtin_gpu::Uses(id) && script::FieldShader(id).empty())
-    {
-        ok_gpu = builtin_gpu::ExportAtlasGpu(src_tex, n);
-    }
+/* Effect field overlay for the Action Editor. Every room-space clip that plays this frame
+   is sampled on one n^3 lattice over the room grid (on the GPU, with the same UV mapping
+   the LEDs use), and the samples are blended in lane / track order with each clip's own
+   blend in linear light, exactly like the LEDs. The result is one overlay layer, so any
+   number of stacked effects show, with their real blends. */
+constexpr int kOverlayLatticeN = 20;
 
-    GpuRoomGridOverlayLayer layer;
-    layer.kind = GpuRoomGridOverlayLayer::KindVolumeAtlas;
-    if(ok_gpu && src_tex != 0 && n >= 2)
+struct OverlayLattice
+{
+    bool started = false;
+    bool any = false;
+    float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;
+    std::vector<Vector3D> points; // index = x + n * (y + n * z)
+    std::vector<float> mix;       // linear light, 3 per point
+};
+
+void StartOverlayLattice(OverlayLattice* lat, const ApplySpatialContext& ctx)
+{
+    if(lat->started)
     {
-        layer.pool_src_tex = src_tex;
-        layer.pool_src_w = n;
-        layer.pool_src_h = n * n;
-        layer.atlas_n = n;
+        return;
     }
-    else if(SpatialOffscreenGlPool::hostContextReady())
+    lat->started = true;
+    lat->min_x = ctx.grid_min_x; lat->max_x = ctx.grid_max_x;
+    lat->min_y = ctx.grid_min_y; lat->max_y = ctx.grid_max_y;
+    lat->min_z = ctx.grid_min_z; lat->max_z = ctx.grid_max_z;
+    const int n = kOverlayLatticeN;
+    lat->points.resize((size_t)n * n * n);
+    lat->mix.assign((size_t)n * n * n * 3u, 0.0f);
+    auto at = [n](float lo, float hi, int k) { return lo + (hi - lo) * (float)k / (float)(n - 1); };
+    for(int z = 0; z < n; ++z)
     {
-        return; /* pool warm — fail closed, no CPU dual beside GPU handoff */
+        for(int y = 0; y < n; ++y)
+        {
+            for(int x = 0; x < n; ++x)
+            {
+                lat->points[(size_t)x + (size_t)n * ((size_t)y + (size_t)n * (size_t)z)] =
+                    Vector3D{at(lat->min_x, lat->max_x, x), at(lat->min_y, lat->max_y, y), at(lat->min_z, lat->max_z, z)};
+            }
+        }
     }
-    else
+}
+
+void BlendIntoLattice(OverlayLattice* lat, const Clip& clip, size_t i, float r, float g, float b)
+{
+    namespace cm = colormath;
+    const int mode = (int)clip.blend;
+    float* m = &lat->mix[i * 3u];
+    m[0] = cm::Blend(mode, m[0], cm::SrgbToLinear(r));
+    m[1] = cm::Blend(mode, m[1], cm::SrgbToLinear(g));
+    m[2] = cm::Blend(mode, m[2], cm::SrgbToLinear(b));
+    lat->any = true;
+}
+
+/** Sample one clip (just painted, so its GPU program is still prepared) into the lattice. */
+void AccumulateClipOverlay(const Clip& clip, int local_ms, const ApplySpatialContext& ctx, OverlayLattice* lat)
+{
+    if(!ctx.has_room_grid || clip.axis_space == AxisSpace::Device || ClipUsesSequenceAxis(clip)
+       || !ClipUsesRoomBoxBounds(clip) || IsMediaClip(clip))
     {
-        std::vector<unsigned char> rgba;
+        return;
+    }
+    const std::string id = script::FileId(clip);
+    const bool field = script::UsesField(id);
+    const bool particles = script::UsesParticles(id);
+    const bool ribbons = script::UsesRibbons(id);
+    const bool builtin = builtin_gpu::Uses(id);
+    const bool gpu_field = field || particles || ribbons || builtin;
+
+    if(gpu_field && ClipFieldUsesRoomGrid(clip, &ctx))
+    {
+        StartOverlayLattice(lat, ctx);
+        const int n = (int)lat->points.size();
+        const Vector3D origin = ResolveClipOriginGrid(clip, ctx);
+        std::vector<float> xyz((size_t)n * 3u);
+        std::vector<char> outside((size_t)n, 0);
+        for(int k = 0; k < n; ++k)
+        {
+            float u = 0.5f, v = 0.5f, w = 0.5f;
+            if(!RoomGridFieldUv(clip, ctx, origin, lat->points[(size_t)k], &u, &v, &w))
+            {
+                outside[(size_t)k] = 1;
+            }
+            ApplyClipUvTransform(clip, &u, &v);
+            xyz[(size_t)k * 3u + 0u] = u;
+            xyz[(size_t)k * 3u + 1u] = v;
+            xyz[(size_t)k * 3u + 2u] = w;
+        }
+        std::vector<float> rgb((size_t)n * 3u, 0.0f);
         bool ok = false;
-        if(script::UsesField(id))
+        if(field)
         {
-            ok = volume_field::ExportAtlasRgba8(rgba, n);
+            ok = volume_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
         }
-        else if(script::UsesParticles(id))
+        else if(particles)
         {
-            ok = particle_field::ExportAtlasRgba8(rgba, n);
+            ok = particle_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
         }
-        else if(script::UsesRibbons(id))
+        else if(ribbons)
         {
-            ok = ribbon_field::ExportAtlasRgba8(rgba, n);
+            ok = ribbon_field::EvaluateAtPoints(xyz.data(), n, rgb.data());
         }
-        else if(builtin_gpu::Uses(id) && script::FieldShader(id).empty())
+        else
         {
-            ok = builtin_gpu::ExportAtlasRgba8(rgba, n);
+            ok = builtin_gpu::EvaluateAtPoints(xyz.data(), n, rgb.data());
         }
-        if(!ok || n < 2 || rgba.size() < (size_t)n * (size_t)n * (size_t)n * 4u)
+        if(!ok)
         {
             return;
         }
-        layer.atlas_rgba = std::move(rgba);
-        layer.atlas_n = n;
+        float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
+        ModulateClipIntensity(clip, ClipSpanProgress(clip, local_ms), ClipPeriodProgress(clip, local_ms), &intensity);
+        for(int k = 0; k < n; ++k)
+        {
+            const float r = rgb[(size_t)k * 3u + 0u];
+            const float g = rgb[(size_t)k * 3u + 1u];
+            const float b = rgb[(size_t)k * 3u + 2u];
+            /* Same rule as the LEDs: outside the clip box or too dark leaves what is below. */
+            if(outside[(size_t)k] || std::max(r, std::max(g, b)) < 0.02f)
+            {
+                continue;
+            }
+            BlendIntoLattice(lat, clip, (size_t)k,
+                             std::clamp(r * intensity, 0.0f, 1.0f),
+                             std::clamp(g * intensity, 0.0f, 1.0f),
+                             std::clamp(b * intensity, 0.0f, 1.0f));
+        }
+        return;
     }
-    layer.finish_mode = GpuRoomGridOverlayLayer::FinishRgb; /* same export + texel order as FolderVolume finish_rgb */
-    layer.blend_mode = (int)BlendMode::MAX;                  /* later tracks only overwrite lit LEDs */
-    layer.sample_room = false;
+
+    /* Effect scripts (.fx) on the room box: the same GPU batch the LEDs use, fed the
+       lattice points as if they were lights. */
+    if(!gpu_field && script::GpuCapable(id) && ctx.has_world_bounds)
+    {
+        StartOverlayLattice(lat, ctx);
+        const int n = (int)lat->points.size();
+        const bool world_script = script::UsesWorld(id);
+        const bool spin = EffectAxisAngle(ClipFileId(clip));
+        std::vector<script::GpuLedInput> inputs((size_t)n);
+        for(int k = 0; k < n; ++k)
+        {
+            const Vector3D& p = lat->points[(size_t)k];
+            if(world_script)
+            {
+                BuildScriptInputAtWorld(clip, p.x, p.y, p.z, ctx.min_x, ctx.max_x, ctx.min_y, ctx.max_y,
+                                        ctx.min_z, ctx.max_z, k, &inputs[(size_t)k]);
+            }
+            else
+            {
+                const float axis = spin
+                    ? SampleSpinAngle(clip, p.x, p.y, p.z, ctx.min_x, ctx.max_x, ctx.min_y, ctx.max_y, ctx.min_z, ctx.max_z)
+                    : SampleAxisPos(clip, p.x, p.y, p.z, ctx.min_x, ctx.max_x, ctx.min_y, ctx.max_y, ctx.min_z, ctx.max_z);
+                BuildScriptInputAtAxis(clip, axis, k, &inputs[(size_t)k]);
+            }
+        }
+        std::vector<RGBColor> colors;
+        std::vector<unsigned char> lit;
+        if(!script::RunBatchGpu(id, clip, local_ms, inputs, &colors, &lit)
+           || colors.size() < (size_t)n || lit.size() < (size_t)n)
+        {
+            return;
+        }
+        for(int k = 0; k < n; ++k)
+        {
+            if(!lit[(size_t)k])
+            {
+                continue;
+            }
+            const RGBColor c = colors[(size_t)k];
+            BlendIntoLattice(lat, clip, (size_t)k,
+                             (float)RGBGetRValue(c) / 255.0f,
+                             (float)RGBGetGValue(c) / 255.0f,
+                             (float)RGBGetBValue(c) / 255.0f);
+        }
+    }
+}
+
+/** The finished lattice as one overlay layer (n x n^2 RGBA8 atlas sampled over the room). */
+void AppendLatticeOverlayLayer(const OverlayLattice& lat, std::vector<GpuRoomGridOverlayLayer>* out)
+{
+    if(!lat.any || !out)
+    {
+        return;
+    }
+    const int n = kOverlayLatticeN;
+    GpuRoomGridOverlayLayer layer;
+    layer.kind = GpuRoomGridOverlayLayer::KindVolumeAtlas;
+    layer.atlas_n = n;
+    layer.atlas_rgba.resize((size_t)n * n * n * 4u);
+    for(size_t i = 0; i < (size_t)n * n * n; ++i)
+    {
+        /* Atlas texel (x, z * n + y) holds point (x, y, z); points are x-fastest the same way. */
+        unsigned char* t = &layer.atlas_rgba[i * 4u];
+        t[0] = (unsigned char)colormath::LinearToSrgb8(lat.mix[i * 3u + 0u]);
+        t[1] = (unsigned char)colormath::LinearToSrgb8(lat.mix[i * 3u + 1u]);
+        t[2] = (unsigned char)colormath::LinearToSrgb8(lat.mix[i * 3u + 2u]);
+        t[3] = 255;
+    }
+    layer.finish_mode = GpuRoomGridOverlayLayer::FinishRgb;
+    layer.blend_mode = (int)BlendMode::REPLACE; /* already the finished mix of every clip */
+    layer.sample_room = true;
     layer.volume_tools = false;
     layer.volume_shape = 0;
-
-    const Vector3D origin = ResolveClipOriginGrid(clip, ctx);
-    const GridContext3D grid(ctx.grid_min_x, ctx.grid_max_x,
-                             ctx.grid_min_y, ctx.grid_max_y,
-                             ctx.grid_min_z, ctx.grid_max_z);
-    const EffectGridAxisHalfExtents he =
-        MakeEffectGpuAtlasHalfExtents(grid, origin, std::clamp(clip.effect_size, 0.05f, 2.0f));
-    layer.origin[0] = origin.x;
-    layer.origin[1] = origin.y;
-    layer.origin[2] = origin.z;
-    layer.half_ext[0] = he.hw;
-    layer.half_ext[1] = he.hh;
-    layer.half_ext[2] = he.hd;
-    layer.room_min[0] = ctx.grid_min_x;
-    layer.room_min[1] = ctx.grid_min_y;
-    layer.room_min[2] = ctx.grid_min_z;
-    layer.room_max[0] = ctx.grid_max_x;
-    layer.room_max[1] = ctx.grid_max_y;
-    layer.room_max[2] = ctx.grid_max_z;
-
-    float intensity = std::clamp(clip.intensity, 0.0f, 1.0f);
-    ModulateClipIntensity(clip, ClipSpanProgress(clip, local_ms), ClipPeriodProgress(clip, local_ms), &intensity);
-    layer.brightness = intensity;
+    layer.room_min[0] = lat.min_x;
+    layer.room_min[1] = lat.min_y;
+    layer.room_min[2] = lat.min_z;
+    layer.room_max[0] = lat.max_x;
+    layer.room_max[1] = lat.max_y;
+    layer.room_max[2] = lat.max_z;
+    layer.origin[0] = 0.5f * (lat.min_x + lat.max_x);
+    layer.origin[1] = 0.5f * (lat.min_y + lat.max_y);
+    layer.origin[2] = 0.5f * (lat.min_z + lat.max_z);
+    layer.half_ext[0] = 0.5f * (lat.max_x - lat.min_x);
+    layer.half_ext[1] = 0.5f * (lat.max_y - lat.min_y);
+    layer.half_ext[2] = 0.5f * (lat.max_z - lat.min_z);
+    layer.brightness = 1.0f;
     out->push_back(std::move(layer));
 }
 
@@ -346,6 +467,7 @@ ApplyStats ApplyPackFrame(const Pack& pack,
 {
     ApplyStats stats;
     std::unordered_set<RGBControllerInterface*> touched;
+    OverlayLattice overlay_lattice;
     const bool use_transforms = transforms && !transforms->empty();
     const RGBColor off = ToRGBColor(0, 0, 0);
     const int layer_zone = spatial ? spatial->layer_zone_index : -1;
@@ -558,13 +680,11 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                     track_painted = true;
                     stats.viewport_leds_painted += painted;
                 }
-                /* Room-grid overlay: export the field this track just painted with (still the
-                   prepared program — the next track re-prepares it), framed exactly like the
-                   LED mapping in RoomGridFieldUv. */
-                if(overlay_out && top && spatial && ClipFieldUsesRoomGrid(*top, spatial)
-                   && (int)overlay_out->size() < GpuRoomGridOverlayLayer::kMaxLayers)
+                /* Effect field overlay: sample this lane's clip while its GPU program is still
+                   prepared (the next lane re-prepares it), blended like the LEDs. */
+                if(overlay_out && top && spatial)
                 {
-                    AppendClipFieldOverlayLayer(*top, local_ms, *spatial, overlay_out);
+                    AccumulateClipOverlay(*top, local_ms, *spatial, &overlay_lattice);
                 }
             }
             if(track_painted)
@@ -680,6 +800,11 @@ ApplyStats ApplyPackFrame(const Pack& pack,
                 applier_detail::ApplyColorToMappedLed(led, transform->controller, off, &touched);
             }
         }
+    }
+
+    if(overlay_out)
+    {
+        AppendLatticeOverlayLayer(overlay_lattice, overlay_out);
     }
 
     stats.controllers_touched = (int)touched.size();

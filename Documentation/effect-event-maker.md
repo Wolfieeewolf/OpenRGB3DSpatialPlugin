@@ -241,6 +241,8 @@ Tracks may also carry `layers` (an array of `{ "name", "muted" }`, one per lane,
 **Playback.** Previews and runtimes tick at about 60 fps. Each controller is flushed as often as it keeps up with (at most every 12 ms), so a slow device no longer holds back the rest. When several trigger or Movie Sync cues play at once they share one frame: they blend in priority order (each clip's `blend` applies across cues too) instead of the later cue blanking the earlier one, and controllers are flushed once per frame.
 
 **Colour mixing.** Stacked layers, tracks and cues blend in linear light at full float precision, the way real light adds, and only the finished mix is turned into the 8-bit colour sent to the device. Dim fades stay smooth however many layers sit on a light, `add` of two half-bright lights gives a natural brighter light instead of clipping to full, and GPU field effects keep their fine levels until the final write. `lighten`, `darken` and `multiply` look the same as before.
+
+**Grid overlay.** With the room grid overlay on, **Effect field** shows every room-space clip that is playing (field effects, 3D shaders and effect scripts alike) sampled through the room with the same mapping the LEDs use, stacked in lane and track order with each clip's own `blend`, exactly as the lights mix them; any number of layers show. Device-space and sequence clips have no room-wide shape, so they only show in **Real light**, which lights the room from what every LED is actually showing.
 | `media_path` | Image/GIF file for `media_image` / `media_gif` |
 | `media_text` | Marquee string for `media_text` |
 | `media_scroll` | Scroll media across Device/Room UV (direction + speed + period) |
