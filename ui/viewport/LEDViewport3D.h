@@ -103,6 +103,10 @@ public:
     /** How far one LED's light spreads in Real light mode, in mm. */
     void SetRealLightReachMm(float mm);
     float GetRealLightReachMm() const { return real_light_reach_mm_; }
+    /** Room exposure (1 = normal): how bright the room reads overall, like a camera. Used by
+        the Real light overlay and every Emitter + relay layer. */
+    void SetRoomExposure(float e) { room_exposure_ = std::max(0.05f, e); update(); }
+    float GetRoomExposure() const { return room_exposure_; }
     void SetRoomGridOverlayBounds(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
     void ClearRoomGridOverlayBounds();
     void SetGpuRoomGridOverlayLayers(std::vector<GpuRoomGridOverlayLayer> layers);
@@ -423,6 +427,7 @@ private:
     GlProgram gl_prog_real_light_point_;
     int   room_grid_overlay_mode_ = 0;
     float real_light_reach_mm_ = 600.0f;
+    float room_exposure_ = 1.0f;
     unsigned int real_light_tex_ = 0;
     std::vector<float> real_light_texels_;
     /** Cluster every lit LED into at most a few hundred lights; returns the light count. */

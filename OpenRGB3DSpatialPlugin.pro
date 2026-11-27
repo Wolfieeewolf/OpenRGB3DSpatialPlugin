@@ -223,6 +223,7 @@ HEADERS += \
     shared/SpatialLighting/OccluderSpatialIndex.h \
     shared/SpatialLighting/SpatialLightingEngine.h \
     shared/SpatialLighting/RoomLight.h \
+    shared/SpatialLighting/RoomLightScene.h \
     shared/SpatialLighting/EmitterLocalSampling.h \
     shared/SpatialLighting/SpatialLightingSceneProvider.h \
     shared/SpatialLighting/RoomSpatialLightingUi.h \
@@ -432,6 +433,7 @@ SOURCES += \
     shared/SpatialLighting/OccluderSpatialIndex.cpp \
     shared/SpatialLighting/SpatialLightingEngine.cpp \
     shared/SpatialLighting/RoomLight.cpp \
+    shared/SpatialLighting/RoomLightScene.cpp \
     shared/SpatialLighting/EmitterLocalSampling.cpp \
     shared/SpatialLighting/SpatialLightingSceneProvider.cpp \
     shared/SpatialLighting/RoomSpatialLightingUi.cpp \

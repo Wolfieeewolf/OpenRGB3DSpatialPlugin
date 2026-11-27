@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
-/* One room-light model for the whole plugin: how lit LEDs spill light into the room.
+/* One room-light engine for the whole plugin: how lit LEDs light the room.
 
-   Used by the viewport's "Real light" overlay (GPU gather per grid point) and by
-   Emitter + relay receivers (the real LEDs behind a TV, under a desk, ...): same falloff,
-   linear-light sum and tone-map (the overlay has its own reach and no blockers). Light is summed in linear light, falls off
-   smoothly to zero at the reach, and is tone-mapped back keeping its hue, so many lights
-   brighten towards white instead of clipping and one far light fades out. */
+   Shared by the viewport's "Real light" overlay (GPU gather per grid point) and Emitter +
+   relay receivers (the real LEDs behind a TV, under a desk, ...), so what the overlay shows
+   is what the receivers get:
+     - LEDs are grouped into lights by position (BuildLights); LEDs on a device with its own
+       light blocker housing stay one light each.
+     - Every light casts a ray map (RayMapCache): how far its light gets in each of 216
+       directions. Its own housing stops a ray at once; display planes, props and other
+       devices' housings stop it where they stand.
+     - Light falls off as 1 / distance squared, is summed in linear light and tone-mapped
+       keeping its hue.
+   Pure maths and caching; the room's blockers come in through callbacks (RoomLightScene). */
 
 #include "RGBController.h"
 #include "LEDPosition3D.h"
@@ -25,16 +31,14 @@ namespace RoomLight
 /** Default soft-core size as a fraction of the reach, squared (0.3 of the reach). */
 constexpr float kDefaultCore2 = 0.09f;
 
-/** Spill weight at squared distance d2: soft inverse-square inside a finite reach.
-    r2 = reach squared, core2 = soft core size squared (same units). Matches the shader. */
+/** Spill weight at squared distance d2: 1 / distance squared (softened inside the core), with
+    a gentle window that only tapers it to zero near the reach. Matches the shader. */
 inline float Spill(float d2, float r2, float core2)
 {
     if(d2 >= r2)
     {
         return 0.0f;
     }
-    /* Real falloff: 1 / distance squared (softened inside the core), with a gentle window
-       that only tapers it to zero near the reach (so far light ends instead of lingering). */
     const float q = d2 / r2;
     const float w = 1.0f - q * q;
     return w * w / (1.0f + d2 / std::max(1e-6f, core2));
@@ -82,29 +86,71 @@ inline Vector3D RayMapDirection(int index)
     return {d[0] / l, d[1] / l, d[2] / l};
 }
 
-/** A lit point in linear light. */
-struct LitPoint
+/** 0..1: how much of a light reaches a point at `dist` along unit direction `dn` (bilinear over
+    the four nearest rays, so shadow edges are soft). CPU twin of the shader's rayVisibility. */
+float RayVisibility(const float* depth, const Vector3D& dn, float dist, float tolerance);
+
+/** One light, fixed by position (so its ray map can be cached). */
+struct Light
 {
-    float x = 0.0f, y = 0.0f, z = 0.0f;
-    float r = 0.0f, g = 0.0f, b = 0.0f;
+    std::uint64_t key = 0;
+    Vector3D pos{0.0f, 0.0f, 0.0f};
+    int owner = -1;
 };
 
-/** Merge neighbouring lit points into at most max_lights lights (centres weighted by
-    brightness, colours summed). Cells start at a fraction of the reach and grow until the
-    count fits. The spill is smooth, so the merge does not show. */
-void ClusterLights(const std::vector<LitPoint>& lit, float reach, int max_lights, std::vector<LitPoint>& out);
+/** Group LEDs into lights: LEDs with housed[i] set are one light each; the rest share cells
+    `cell` across (per owner). The cell grows only if the count would pass max_lights.
+    led_light[i] = the light LED i belongs to. Keys depend only on position and owner, so the
+    same LEDs make the same lights wherever this is called. */
+void BuildLights(const std::vector<Vector3D>& pos,
+                 const std::vector<int>& owner,
+                 const std::vector<char>& housed,
+                 const std::vector<int>& led_id,
+                 float cell,
+                 int max_lights,
+                 std::vector<Light>& lights,
+                 std::vector<int>& led_light);
+
+/** Blocker tests for ray casting: the light's own housing (from = the light, owner = its
+    device) and the rest of the room. */
+using RayTestFn = std::function<bool(const Vector3D& from, int owner, const Vector3D& to)>;
+
+/** Ray maps of lights, cached across frames and shared by everyone in the plugin. Begin()
+    with the room's blocker signature drops stale maps; Ensure() casts maps for lights that are
+    new or have moved (on worker threads) and returns one depth array per light. */
+class RayMapCache
+{
+public:
+    void Begin(std::uint64_t scene_signature, float max_dist);
+    void Ensure(const std::vector<Light>& lights,
+                const RayTestFn& own_housing,
+                const RayTestFn& scene,
+                std::vector<const float*>& out);
+    float MaxDist() const { return max_dist_; }
+    std::uint64_t Signature() const { return signature_; }
+
+private:
+    struct Entry
+    {
+        Vector3D pos{0.0f, 0.0f, 0.0f};
+        int owner = -1;
+        float depth[kRayMapSize];
+    };
+    std::uint64_t signature_ = 0;
+    float max_dist_ = 0.0f;
+    std::unordered_map<std::uint64_t, Entry> maps_;
+};
+
+/** The plugin's one ray map cache (GUI thread). */
+RayMapCache& SharedRayMaps();
 
 /** Settings of one Emitter + relay layer, in room grid units. */
 struct RelaySettings
 {
-    float reach = 28.0f;      /* light reach */
-    /* Fixed grouping sizes (never derived from the reach, so slider moves cannot regroup
-       lights and flip shadows): emitter LEDs per light, receiver LEDs per shadow group. */
-    float light_cell = 6.0f;
-    float group_cell = 6.0f;
+    float reach = 28.0f;
     float core2 = kDefaultCore2;
     float exposure = 1.4f;
-    bool occlusion = false;   /* blockers cast shadows */
+    bool occlusion = false;   /* blockers (ray maps, housings) count */
     bool ambient_occlusion = false;
     /* Inputs of the ambient callback: part of the cache key so moving its slider re-shades. */
     float ambient_strength = 0.0f;
@@ -112,47 +158,35 @@ struct RelaySettings
     Vector3D ambient_centre{0.0f, 0.0f, 0.0f};
 };
 
-/** Blocker test between two room points: true when something is in the way. from_owner /
-    to_owner are the controllers the two ends sit on (their own bodies never block). */
-using SegmentBlockedFn = std::function<bool(const Vector3D& from, int from_owner, const Vector3D& to, int to_owner)>;
 /** Ambient shade factor (0..1) at a receiver. */
 using AmbientFn = std::function<float(const Vector3D& at, int owner)>;
 
-/** Emitter + relay receivers lit by the emitters' real colours.
-
-    Prepare() does the expensive, layout-only part: groups the emitter LEDs into lights
-    and works out, for every receiver, which lights reach it, how strongly, and how much of
-    each light the blockers let through. It is cached and only redone when an LED, a
-    blocker or a setting that changes geometry moves. Shade() is then a short weighted sum
-    per receiver each frame. */
+/** Emitter + relay receivers lit by the emitters' real colours, through the shared lights
+    and ray maps. Prepare() works out, per receiver, which lights reach it and how strongly
+    (cached; redone only when lights, ray maps, receivers or settings change). Shade() is then a
+    short weighted sum per receiver each frame. */
 class RelayModel
 {
 public:
-    /** Returns true when the cache was rebuilt. layout_epoch changes when blockers change. */
-    /** emitter_owner / receiver_owner: controller of each LED (lights and receiver groups never
-        span two controllers, so a device's own housing can be skipped in shadow tests). */
-    /** emitter_exact / receiver_exact (optional, 1 per LED): LEDs on a device with its own
-        light blocker housing. Each becomes its own light / shadow group, so shadow rays start
-        at the real LED inside its housing pocket, never at an average point inside solid
-        housing. */
-    bool Prepare(const std::vector<Vector3D>& emitters,
-                 const std::vector<int>& emitter_owner,
+    /** lights / ray_maps: the emitters' lights and their ray maps (same order), ray_sig the
+        ray map cache signature. receiver_housed + receiver_housing: a receiver inside its own
+        housing only gets light through its openings. Returns true when anything was redone. */
+    bool Prepare(const std::vector<Light>& lights,
+                 const std::vector<const float*>& ray_maps,
+                 std::uint64_t ray_sig,
                  const std::vector<Vector3D>& receivers,
                  const std::vector<int>& receiver_owner,
-                 const std::vector<char>& emitter_exact,
-                 const std::vector<char>& receiver_exact,
+                 const std::vector<char>& receiver_housed,
                  const RelaySettings& settings,
-                 std::uint64_t layout_epoch,
-                 const SegmentBlockedFn& blocked,
+                 const RayTestFn& receiver_housing,
                  const AmbientFn& ambient);
 
-    /** emitter_linear: 3 floats per emitter (linear light, same order as Prepare).
+    /** light_linear: 3 floats per light (linear light, summed over its LEDs).
         out_linear: 3 floats per receiver, tone-mapped linear light (0..1). */
-    void Shade(const float* emitter_linear, std::vector<float>& out_linear) const;
+    void Shade(const std::vector<float>& light_linear, std::vector<float>& out_linear) const;
 
     int LightCount() const { return light_count_; }
     std::size_t TapCount() const { return taps_.size(); }
-    int GroupCount() const { return group_count_; }
 
 private:
     struct Tap
@@ -160,37 +194,15 @@ private:
         int light = 0;
         float weight = 0.0f;
     };
-
-    std::uint64_t layout_sig_ = 0;
-    std::uint64_t block_sig_ = 0;
-    std::uint64_t reach_sig_ = 0;
+    std::uint64_t tap_sig_ = 0;
     std::uint64_t amb_sig_ = 0;
-    std::uint64_t weight_sig_ = 0;
-    std::vector<Vector3D> emitters_;
-    std::vector<std::vector<int>> members_;   /* light -> its emitter LEDs */
-    std::vector<float> group_radius_;
-    /* Shadow results per group, by light: kept across reach changes. */
-    std::vector<std::unordered_map<int, float>> pass_cache_;
     bool valid_ = false;
-    /* Layout kept between stages so Glow / AO changes re-weight without new blocker tests. */
-    std::vector<Vector3D> receivers_;
-    std::vector<Vector3D> centre_;
-    std::vector<int> light_owner_;
-    std::vector<int> receiver_group_;
-    std::vector<Vector3D> group_centre_;
-    std::vector<int> group_owner_;
-    std::vector<std::vector<Tap>> group_pass_;
-    std::vector<float> group_ambient_;
-    std::size_t emitter_count_ = 0;
     std::size_t receiver_count_ = 0;
-    std::vector<int> emitter_light_;      /* emitter -> light */
     int light_count_ = 0;
-    int group_count_ = 0;
-    std::vector<std::uint32_t> tap_begin_; /* receiver_count_ + 1 */
+    std::vector<std::uint32_t> tap_begin_;
     std::vector<Tap> taps_;
-    std::vector<float> ambient_;          /* per receiver */
+    std::vector<float> ambient_;
     float exposure_ = 1.4f;
-    mutable std::vector<float> light_sum_;
 };
 
 } // namespace RoomLight

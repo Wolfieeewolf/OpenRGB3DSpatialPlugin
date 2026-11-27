@@ -45,6 +45,7 @@ private slots:
     void onOverlayStepChanged(int v);
     void onOverlayModeChanged(int index);
     void onRealLightReachChanged(int mm);
+    void onRoomExposureChanged(int pct);
     void onRoomWidthChanged(double value);
     void onRoomHeightChanged(double value);
     void onRoomDepthChanged(double value);
@@ -61,6 +62,8 @@ private:
     EffectSliderRow* real_light_reach_row_ = nullptr;
     QSlider* real_light_reach_slider_ = nullptr;
     QLabel* real_light_reach_caption_ = nullptr;
+    EffectSliderRow* room_exposure_row_ = nullptr;
+    QSlider* room_exposure_slider_ = nullptr;
     void syncOverlayModeUi();
 };
 

@@ -4,41 +4,28 @@
    stack, the Action Editor's stacked lanes and blends, triggers, Movie Sync), so it always
    matches the hardware.
 
-   Each light sends rays out in every direction (a ray map, RoomLight::kRayMapSize of them)
-   and records how far each gets: a device's own light blocker housing stops a ray at once
-   (a keyboard key only shines up, a speaker only out of its openings), and display planes,
-   props and other devices' blocker cells stop it where they stand (real shadows). The GPU
-   then lights each grid point only if the ray towards it got that far. Blockers always count
-   here: they are part of the room, not an option.
-
-   Lights are fixed by position (housed LEDs one by one, the rest grouped in cells), so their
-   ray maps are cached and only re-cast when a device, blocker or the reach changes. */
+   The lights and their ray maps come from the shared light engine (RoomLight /
+   RoomLightScene, also used by Emitter + relay receivers): each light knows how far its light
+   gets in every direction, so housings shape it and blockers cast shadows. The GPU lights each
+   grid point only where the ray towards it got that far. */
 
 #include "LEDViewport3D.h"
 #include "viewport/MeshBatch.h"
 #include "viewport/ViewportMath.h"
 #include "GridSpaceUtils.h"
-#include "SpatialLighting/RoomLight.h"
 #include "SpatialLighting/LightOutput.h"
-#include "SpatialLighting/BlockerGridOccluder.h"
-#include "SpatialLighting/SpatialLightingEngine.h"
-#include "SpatialLighting/SpatialLightingSceneProvider.h"
-#include "VirtualController3D.h"
+#include "SpatialLighting/RoomLight.h"
+#include "SpatialLighting/RoomLightScene.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <cstring>
-#include <functional>
-#include <thread>
-#include <unordered_map>
 
 namespace
 {
 constexpr int kMaxRealLights = 768;
 /* Texels per light row: position, linear colour, then the ray map (4 depths per texel). */
-constexpr int kRayTexels = RoomLight::kRayMapSize / 4;
-constexpr int kTexelsPerLight = 2 + kRayTexels;
+constexpr int kTexelsPerLight = 2 + RoomLight::kRayMapSize / 4;
 
 /* sRGB byte -> linear light (table: called for every lit LED every frame). */
 const float* SrgbToLinearTable()
@@ -67,46 +54,6 @@ bool GlobalLedIndex(RGBControllerInterface* c, unsigned int zone, unsigned int l
     return *out < c->GetLEDCount();
 }
 
-struct HashMix
-{
-    uint64_t h = 1469598103934665603ull;
-    void Word(uint64_t v) { h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2); }
-    void F(float f)
-    {
-        uint32_t u = 0;
-        std::memcpy(&u, &f, sizeof(u));
-        Word(u);
-    }
-    void V(const Vector3D& v) { F(v.x); F(v.y); F(v.z); }
-};
-
-uint64_t CellKey(float x, float y, float z, float inv, int owner)
-{
-    const int64_t ix = (int64_t)std::floor(x * inv);
-    const int64_t iy = (int64_t)std::floor(y * inv);
-    const int64_t iz = (int64_t)std::floor(z * inv);
-    const uint64_t key = ((uint64_t)(ix & 0x1FFFFF) << 42) | ((uint64_t)(iy & 0x1FFFFF) << 21) | (uint64_t)(iz & 0x1FFFFF);
-    return key ^ ((uint64_t)(owner + 2) * 0x9E3779B97F4A7C15ull);
-}
-
-/* One light: where it sits, whose LEDs it holds, its colour this frame. */
-struct Light
-{
-    uint64_t key = 0;
-    Vector3D pos{0.0f, 0.0f, 0.0f};
-    int owner = -1;
-    int count = 0;
-    float r = 0.0f, g = 0.0f, b = 0.0f;
-};
-
-/* Cached ray map of one light. */
-struct RayMapEntry
-{
-    Vector3D pos{0.0f, 0.0f, 0.0f};
-    int owner = -1;
-    float depth[RoomLight::kRayMapSize];
-};
-
 } // namespace
 
 void LEDViewport3D::SetRealLightReachMm(float mm)
@@ -115,7 +62,7 @@ void LEDViewport3D::SetRealLightReachMm(float mm)
     update();
 }
 
-int LEDViewport3D::buildRealLightTexels(float reach_units)
+int LEDViewport3D::buildRealLightTexels(float /*reach_units*/)
 {
     real_light_texels_.clear();
     if(!controller_transforms)
@@ -124,311 +71,57 @@ int LEDViewport3D::buildRealLightTexels(float reach_units)
     }
     const float* lin = SrgbToLinearTable();
 
-    /* 1. Lights, fixed by position. Housed devices: one light per LED (its own housing shapes
-          it). Others: LEDs grouped in cells a fraction of the reach across. */
-    std::vector<Light> lights;
-    std::unordered_map<uint64_t, int> index;
-    float cell = std::max(1e-3f, std::max(reach_units * 0.12f, MMToGridUnits(60.0f, grid_scale_mm)));
-    for(int attempt = 0; attempt < 10; ++attempt)
-    {
-        lights.clear();
-        index.clear();
-        const float inv = 1.0f / cell;
-        for(size_t ti = 0; ti < controller_transforms->size(); ++ti)
-        {
-            const auto& t = (*controller_transforms)[ti];
-            if(!t || t->hidden_by_virtual)
-            {
-                continue;
-            }
-            const int owner = (int)ti;
-            const bool housed = t->virtual_controller && !t->virtual_controller->GetLightBlockers().empty();
-            for(size_t li = 0; li < t->led_positions.size(); ++li)
-            {
-                const LEDPosition3D& led = t->led_positions[li];
-                const Vector3D& p = led.world_position;
-                const uint64_t key = housed ? (0xB0C5000000000000ull ^ (((uint64_t)ti << 24) | (uint64_t)li))
-                                            : CellKey(p.x, p.y, p.z, inv, owner);
-                auto it = index.find(key);
-                int k = 0;
-                if(it == index.end())
-                {
-                    k = (int)lights.size();
-                    index.emplace(key, k);
-                    Light l;
-                    l.key = key;
-                    l.owner = owner;
-                    lights.push_back(l);
-                }
-                else
-                {
-                    k = it->second;
-                }
-                Light& l = lights[(size_t)k];
-                l.pos.x += p.x;
-                l.pos.y += p.y;
-                l.pos.z += p.z;
-                ++l.count;
-
-                /* Same colour the LED points draw (preview colour, or the device's own when unset). */
-                RGBColor c = led.preview_color;
-                unsigned int global = 0;
-                if(c == 0x00FFFFFF && led.controller
-                   && GlobalLedIndex(led.controller, led.zone_idx, led.led_idx, &global))
-                {
-                    c = led.controller->GetColor(global);
-                }
-                /* Real output: lumens at full white for this device's LEDs. */
-                const float scale = LightOutput::LedScale(t.get(), led);
-                l.r += lin[RGBGetRValue(c)] * scale;
-                l.g += lin[RGBGetGValue(c)] * scale;
-                l.b += lin[RGBGetBValue(c)] * scale;
-            }
-        }
-        if((int)lights.size() <= kMaxRealLights)
-        {
-            break;
-        }
-        cell *= 1.5f;
-    }
-    for(Light& l : lights)
-    {
-        const float n = (float)std::max(1, l.count);
-        l.pos.x /= n;
-        l.pos.y /= n;
-        l.pos.z /= n;
-    }
-    if((int)lights.size() > kMaxRealLights)
-    {
-        lights.resize((size_t)kMaxRealLights);
-    }
-    /* Only lit lights go to the GPU. */
-    std::vector<const Light*> lit;
-    for(const Light& l : lights)
-    {
-        if(l.r + l.g + l.b > 1e-5f)
-        {
-            lit.push_back(&l);
-        }
-    }
-    if(lit.empty())
+    /* Lights and ray maps from the shared engine. */
+    RoomLightScene::Leds leds;
+    RoomLightScene::CollectLeds(*controller_transforms, nullptr, leds);
+    if(leds.pos.empty())
     {
         return 0;
     }
+    RoomLightScene::Blockers blockers;
+    RoomLightScene::Gather(controller_transforms, grid_scale_mm, blockers);
+    std::vector<RoomLight::Light> lights;
+    std::vector<int> led_light;
+    std::vector<const float*> ray_maps;
+    RoomLightScene::BuildLightsWithRayMaps(leds, blockers, grid_scale_mm, kMaxRealLights, lights, led_light, ray_maps);
 
-    /* 2. The room's blockers (always on for Real light): display planes, props, and every
-          custom controller's light blocker cells. Cheap to gather; hashed so ray maps are only
-          re-cast when one of them (or the reach) changes. */
-    /* Only the main room view: blocker grids are built from the scene's own devices (a device
-       view window shows copies, and has no room around them). */
-    std::vector<SpatialLighting::OccluderQuad> quads;
-    std::vector<SpatialLighting::BlockerGridOccluder> grids;
-    if(SpatialLightingSceneProvider::instance()->controllers() == controller_transforms)
+    /* This frame's colour per light: the LEDs' own colours, scaled by their real output. */
+    std::vector<float> colour(lights.size() * 3u, 0.0f);
+    for(std::size_t i = 0; i < leds.led.size(); ++i)
     {
-        SpatialLighting::AppendDisplayPlaneOccluders(quads, grid_scale_mm);
-        SpatialLighting::AppendScenePropOccluders(quads, grid_scale_mm);
-        SpatialLighting::BuildBlockerGridOccluders(grids, grid_scale_mm);
-    }
-
-    HashMix sig;
-    sig.F(reach_units);
-    sig.Word(quads.size());
-    for(const SpatialLighting::OccluderQuad& q : quads)
-    {
-        for(const auto& c : q.corners)
+        const LEDPosition3D& led = *leds.led[i];
+        RGBColor c = led.preview_color;
+        unsigned int global = 0;
+        if(c == 0x00FFFFFF && led.controller && GlobalLedIndex(led.controller, led.zone_idx, led.led_idx, &global))
         {
-            sig.F(c.x);
-            sig.F(c.y);
-            sig.F(c.z);
+            c = led.controller->GetColor(global);
         }
-    }
-    sig.Word(grids.size());
-    for(const SpatialLighting::BlockerGridOccluder& g : grids)
-    {
-        sig.Word((uint64_t)g.controller_index);
-        sig.V(g.world_min);
-        sig.V(g.world_max);
-        sig.Word((uint64_t)g.width | ((uint64_t)g.height << 20) | ((uint64_t)g.depth << 40));
-        for(float e : g.x_edges) sig.F(e);
-        for(float e : g.y_edges) sig.F(e);
-        for(float e : g.z_edges) sig.F(e);
-        for(size_t i = 0; i < g.dense_cells.size(); ++i)
-        {
-            if(g.dense_cells[i])
-            {
-                sig.Word(i);
-            }
-        }
-        const auto& t = (*controller_transforms)[(size_t)g.controller_index];
-        if(t)
-        {
-            sig.V(t->transform.position);
-            sig.F(t->transform.rotation.x);
-            sig.F(t->transform.rotation.y);
-            sig.F(t->transform.rotation.z);
-            sig.V(t->transform.scale);
-        }
+        const float scale = LightOutput::LedScale((*controller_transforms)[(std::size_t)leds.owner[i]].get(), led);
+        float* out = &colour[(std::size_t)led_light[i] * 3u];
+        out[0] += lin[RGBGetRValue(c)] * scale;
+        out[1] += lin[RGBGetGValue(c)] * scale;
+        out[2] += lin[RGBGetBValue(c)] * scale;
     }
 
-    static uint64_t s_scene_sig = 0;
-    static std::unordered_map<uint64_t, RayMapEntry> s_maps;
-    if(sig.h != s_scene_sig)
+    /* Upload lit lights: per row, position, colour and its ray map. */
+    const float range = RoomLightScene::RayRange(grid_scale_mm);
+    int n = 0;
+    real_light_texels_.reserve(lights.size() * (std::size_t)kTexelsPerLight * 4u);
+    for(std::size_t k = 0; k < lights.size(); ++k)
     {
-        s_maps.clear();
-        s_scene_sig = sig.h;
-    }
-
-    /* 3. Cast the rays for lights that are new or have moved. */
-    std::vector<std::pair<uint64_t, const Light*>> todo;
-    for(const Light* l : lit)
-    {
-        auto it = s_maps.find(l->key);
-        if(it == s_maps.end() || it->second.owner != l->owner || std::fabs(it->second.pos.x - l->pos.x) > 1e-4f
-           || std::fabs(it->second.pos.y - l->pos.y) > 1e-4f || std::fabs(it->second.pos.z - l->pos.z) > 1e-4f)
+        const float* c = &colour[k * 3u];
+        if(c[0] + c[1] + c[2] <= 1e-5f)
         {
-            todo.emplace_back(l->key, l);
+            continue;
         }
-    }
-    if(!todo.empty())
-    {
-        static const std::vector<SpatialLighting::OccluderAabb> kNoAabbs;
-        const float reach = reach_units;
-        std::vector<RayMapEntry> built(todo.size());
-        const auto cast = [&](size_t begin, size_t end) {
-            for(size_t i = begin; i < end; ++i)
-            {
-                const Light& l = *todo[i].second;
-                RayMapEntry& e = built[i];
-                e.pos = l.pos;
-                e.owner = l.owner;
-                const Vector3D& p = l.pos;
-                const auto scene_blocked = [&](const Vector3D& q) {
-                    return SpatialLighting::SegmentIsOccludedSkip2(p.x, p.y, p.z, q.x, q.y, q.z, kNoAabbs, quads, grids,
-                                                                   nullptr, nullptr, l.owner, -1, true);
-                };
-                for(int d = 0; d < RoomLight::kRayMapSize; ++d)
-                {
-                    const Vector3D dir = RoomLight::RayMapDirection(d);
-                    const Vector3D q = {p.x + dir.x * reach, p.y + dir.y * reach, p.z + dir.z * reach};
-                    /* Its own housing first: a blocked direction gets no light at all. */
-                    if(SpatialLighting::SegmentBlockedByOwnHousingIn(grids, p.x, p.y, p.z, q.x, q.y, q.z, l.owner))
-                    {
-                        e.depth[d] = 0.0f;
-                        continue;
-                    }
-                    if(!scene_blocked(q))
-                    {
-                        e.depth[d] = reach;
-                        continue;
-                    }
-                    /* Something is in the way: find roughly where (to ~1.5% of the reach). */
-                    float lo = 0.0f;
-                    float hi = reach;
-                    for(int step = 0; step < 6; ++step)
-                    {
-                        const float mid = 0.5f * (lo + hi);
-                        const Vector3D m = {p.x + dir.x * mid, p.y + dir.y * mid, p.z + dir.z * mid};
-                        if(scene_blocked(m))
-                        {
-                            hi = mid;
-                        }
-                        else
-                        {
-                            lo = mid;
-                        }
-                    }
-                    e.depth[d] = lo;
-                }
-            }
-        };
-        unsigned int threads = std::min<unsigned int>(8u, std::max(1u, std::thread::hardware_concurrency()));
-        if(todo.size() < 8)
-        {
-            threads = 1;
-        }
-        if(threads <= 1)
-        {
-            cast(0, todo.size());
-        }
-        else
-        {
-            std::vector<std::thread> pool;
-            std::vector<std::pair<size_t, size_t>> redo;
-            const size_t chunk = (todo.size() + threads - 1) / threads;
-            for(unsigned int t = 0; t < threads; ++t)
-            {
-                const size_t b = (size_t)t * chunk;
-                const size_t e = std::min(todo.size(), b + chunk);
-                if(b >= e)
-                {
-                    break;
-                }
-                try
-                {
-                    pool.emplace_back([&cast, b, e]() {
-                        try
-                        {
-                            cast(b, e);
-                        }
-                        catch(...)
-                        {
-                        }
-                    });
-                }
-                catch(...)
-                {
-                    redo.emplace_back(b, e);
-                }
-            }
-            for(std::thread& th : pool)
-            {
-                th.join();
-            }
-            for(const auto& r : redo)
-            {
-                cast(r.first, r.second);
-            }
-        }
-        for(size_t i = 0; i < todo.size(); ++i)
-        {
-            s_maps[todo[i].first] = built[i];
-        }
-        /* Keep the cache to lights that still exist. */
-        if(s_maps.size() > lights.size() * 2 + 64)
-        {
-            std::unordered_map<uint64_t, RayMapEntry> keep;
-            for(const Light& l : lights)
-            {
-                auto it = s_maps.find(l.key);
-                if(it != s_maps.end())
-                {
-                    keep.emplace(it->first, it->second);
-                }
-            }
-            s_maps.swap(keep);
-        }
-    }
-
-    /* 4. Upload: per light row, position, colour and its ray map. */
-    const int n = (int)lit.size();
-    real_light_texels_.assign((size_t)n * (size_t)kTexelsPerLight * 4u, 0.0f);
-    for(int i = 0; i < n; ++i)
-    {
-        const Light& l = *lit[(size_t)i];
-        float* t = &real_light_texels_[(size_t)i * (size_t)kTexelsPerLight * 4u];
-        t[0] = l.pos.x;
-        t[1] = l.pos.y;
-        t[2] = l.pos.z;
-        t[3] = 1.0f;
-        t[4] = l.r;
-        t[5] = l.g;
-        t[6] = l.b;
-        t[7] = 1.0f;
-        auto it = s_maps.find(l.key);
+        const RoomLight::Light& l = lights[k];
+        const float row[8] = {l.pos.x, l.pos.y, l.pos.z, 1.0f, c[0], c[1], c[2], 1.0f};
+        real_light_texels_.insert(real_light_texels_.end(), row, row + 8);
         for(int d = 0; d < RoomLight::kRayMapSize; ++d)
         {
-            t[8 + d] = (it != s_maps.end()) ? it->second.depth[d] : reach_units;
+            real_light_texels_.push_back(ray_maps[k] ? ray_maps[k][d] : range);
         }
+        ++n;
     }
     return n;
 }
@@ -480,7 +173,7 @@ void LEDViewport3D::drawRealLightOverlay()
     gl_prog_real_light_point_.SetUniform1i("u_lights", 0);
     gl_prog_real_light_point_.SetUniform1i("u_light_count", lights);
     gl_prog_real_light_point_.SetUniform1f("u_reach", reach);
-    gl_prog_real_light_point_.SetUniform1f("u_exposure", 1.4f * std::max(0.05f, room_grid_brightness));
+    gl_prog_real_light_point_.SetUniform1f("u_exposure", 1.4f * std::max(0.05f, room_grid_brightness) * room_exposure_);
     gl_prog_real_light_point_.SetUniform1f("u_floor", 0.02f);
     room_grid_overlay_batch_.Draw(MeshBatch::Primitive::Points);
     gl_prog_real_light_point_.Unbind();
