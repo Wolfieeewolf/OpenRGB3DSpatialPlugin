@@ -21,8 +21,11 @@
 #include <QListWidgetItem>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <chrono>
+#include <cmath>
 #include <set>
 #include <nlohmann/json.hpp>
 
@@ -96,43 +99,20 @@ MovieSyncEffect::MovieSyncEffect(QWidget* parent)
     connect(tick_timer_, &QTimer::timeout, this, &MovieSyncEffect::onTick);
 
     listener_->SetEffectHandler([this](const std::string& effect_id, const std::string& edge, bool active) {
-        bindTab();
-        const bool was_playing = runtime_.IsPlaying();
-        runtime_.OnEffect(effect_id, edge, active);
-        const bool playing = runtime_.IsPlaying();
-        if(!playing)
-        {
-            tick_timer_->stop();
-            setPlayingUi(false);
-            if(was_playing)
-            {
-                clearPreviewIfIdle();
-            }
-        }
-        if(!runtime_.lastWarning().empty())
-        {
-            setStatus(humanizeRuntimeMessage(runtime_.lastWarning()));
-        }
-        else if(!runtime_.lastError().empty())
-        {
-            setStatus(humanizeRuntimeMessage(runtime_.lastError()));
-        }
-        else if(playing)
-        {
-            setStatus(tr("Playing cue: %1").arg(effectDisplayName(QString::fromStdString(effect_id))));
-            setPlayingUi(true);
-            if(!tick_timer_->isActive())
-            {
-                last_tick_ms_ = 0;
-                tick_timer_->start();
-            }
-        }
-        else if(listener_->isListening())
-        {
-            setStatus(tr("Listening on 127.0.0.1:%1").arg(listener_->port()));
-        }
+        handleCueEdge(effect_id, edge, active);
     });
     listener_->SetCatalogJson([this]() { return catalogJson(); });
+
+    /* Streaming: the browser extension reports here; the Windows media controls are read in the
+       background; a stream's cue file is played on its clock. */
+    listener_->SetStreamHandler([this](const std::string& body) { onStreamReport(body); });
+    stream_player_.SetEdgeHandler([this](const std::string& effect_id, const std::string& edge, bool active) {
+        handleCueEdge(effect_id, edge, active);
+    });
+    stream_timer_ = new QTimer(this);
+    stream_timer_->setTimerType(Qt::PreciseTimer);
+    stream_timer_->setInterval(20);
+    connect(stream_timer_, &QTimer::timeout, this, &MovieSyncEffect::onStreamTick);
 
     QTimer::singleShot(0, this, [this]() {
         if(api_enabled_ && !listener_->isListening())
@@ -144,8 +124,178 @@ MovieSyncEffect::MovieSyncEffect(QWidget* parent)
 
 MovieSyncEffect::~MovieSyncEffect()
 {
+    stream_player_.SetEdgeHandler(nullptr);
     stopListener();
     runtime_.StopAll();
+}
+
+void MovieSyncEffect::handleCueEdge(const std::string& effect_id, const std::string& edge, bool active)
+{
+    bindTab();
+    const bool was_playing = runtime_.IsPlaying();
+    runtime_.OnEffect(effect_id, edge, active);
+    const bool playing = runtime_.IsPlaying();
+    if(!playing)
+    {
+        tick_timer_->stop();
+        setPlayingUi(false);
+        if(was_playing)
+        {
+            clearPreviewIfIdle();
+        }
+    }
+    if(!runtime_.lastWarning().empty())
+    {
+        setStatus(humanizeRuntimeMessage(runtime_.lastWarning()));
+    }
+    else if(!runtime_.lastError().empty())
+    {
+        setStatus(humanizeRuntimeMessage(runtime_.lastError()));
+    }
+    else if(playing)
+    {
+        setStatus(tr("Playing cue: %1").arg(effectDisplayName(QString::fromStdString(effect_id))));
+        setPlayingUi(true);
+        if(!tick_timer_->isActive())
+        {
+            last_tick_ms_ = 0;
+            tick_timer_->start();
+        }
+    }
+    else if(listener_->isListening())
+    {
+        setStatus(tr("Listening on 127.0.0.1:%1").arg(listener_->port()));
+    }
+}
+
+namespace
+{
+std::int64_t SteadyNowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+QString FormatClock(double s)
+{
+    const int total = (int)std::max(0.0, s);
+    const int h = total / 3600;
+    const int m = (total % 3600) / 60;
+    const int sec = total % 60;
+    return h > 0 ? QString::asprintf("%d:%02d:%02d", h, m, sec) : QString::asprintf("%d:%02d", m, sec);
+}
+} // namespace
+
+void MovieSyncEffect::onStreamReport(const std::string& json_body)
+{
+    try
+    {
+        const nlohmann::json j = nlohmann::json::parse(json_body.empty() ? "{}" : json_body);
+        MovieSync::StreamState st;
+        st.source = j.value("source", std::string("extension"));
+        st.service = j.value("service", std::string());
+        st.id = j.value("id", std::string());
+        st.title = j.value("title", std::string());
+        st.episode = j.value("episode", std::string());
+        st.position_s = j.value("position_ms", 0.0) / 1000.0;
+        st.duration_s = j.value("duration_ms", 0.0) / 1000.0;
+        st.rate = j.value("rate", 1.0);
+        st.paused = j.value("paused", true);
+        st.ad = j.value("ad", false);
+        st.received_ms = SteadyNowMs();
+        if(j.value("stopped", false))
+        {
+            extension_last_ms_ = 0;
+            return;
+        }
+        extension_state_ = st;
+        extension_last_ms_ = st.received_ms;
+    }
+    catch(...)
+    {
+    }
+}
+
+void MovieSyncEffect::onStreamTick()
+{
+    const std::int64_t now = SteadyNowMs();
+    /* The extension knows most (exact IDs, live position): it wins while it is reporting.
+       Otherwise the Windows media controls, if something is playing there. */
+    MovieSync::StreamState st;
+    bool have = false;
+    if(extension_last_ms_ > 0 && now - extension_last_ms_ < 3000)
+    {
+        st = extension_state_;
+        have = true;
+    }
+    else if(system_media_.Latest(&st) && now - st.received_ms < 3000)
+    {
+        have = true;
+    }
+    if(!have)
+    {
+        if(stream_player_.Active() || stream_file_)
+        {
+            stream_player_.Stop();
+            stream_file_ = nullptr;
+            stream_match_key_.clear();
+        }
+        updateStreamLabel(now);
+        return;
+    }
+
+    /* Match a cue file once per title (service, ID, name, length). */
+    const std::string key = st.service + "|" + st.id + "|" + st.title + "|" + st.episode + "|"
+                            + std::to_string((long long)std::llround(st.duration_s));
+    if(key != stream_match_key_)
+    {
+        stream_match_key_ = key;
+        stream_file_ = stream_cues_.Match(st);
+    }
+    stream_player_.SetLightsDelayMs(lights_delay_ms_);
+    if(st.received_ms != stream_player_.State().received_ms || !stream_player_.Active())
+    {
+        stream_player_.OnState(st, stream_file_, now);
+    }
+    else
+    {
+        stream_player_.Tick(now);
+    }
+    updateStreamLabel(now);
+}
+
+void MovieSyncEffect::updateStreamLabel(std::int64_t now_ms)
+{
+    if(!stream_label_ || now_ms - stream_label_ms_ < 400)
+    {
+        return;
+    }
+    stream_label_ms_ = now_ms;
+    if(stream_match_key_.empty())
+    {
+        stream_label_->setText(tr("Streaming: nothing playing (browser extension or Windows media controls)."));
+        return;
+    }
+    const MovieSync::StreamState& st = stream_player_.State();
+    QString what = QString::fromStdString(st.title);
+    if(!st.episode.empty())
+    {
+        what += QStringLiteral(" — ") + QString::fromStdString(st.episode);
+    }
+    if(what.isEmpty())
+    {
+        what = st.id.empty() ? tr("(unknown title)") : QStringLiteral("#") + QString::fromStdString(st.id);
+    }
+    const QString state = st.ad ? tr("ad") : (st.paused ? tr("paused") : tr("playing"));
+    const QString cues = stream_file_
+                             ? tr("cue file: %1 (%2 cues)")
+                                   .arg(QString::fromStdString(stream_file_->path.filename().string()))
+                                   .arg(stream_file_->cues.size())
+                             : tr("no cue file for this title (%1 in movie-sync/streams)").arg(stream_cues_.Count());
+    stream_label_->setText(tr("Streaming (%1, %2): %3\n%4 / %5  %6\n%7")
+                               .arg(QString::fromStdString(st.service), QString::fromStdString(st.source), what,
+                                    FormatClock(stream_player_.EstimatedPosition(now_ms)),
+                                    FormatClock(st.duration_s), state, cues));
 }
 
 EffectInfo3D MovieSyncEffect::GetEffectInfo() const
@@ -259,6 +409,37 @@ void MovieSyncEffect::SetupCustomUI(QWidget* parent)
     PluginUiApplyMutedSecondaryLabel(status_label_);
     layout->addWidget(status_label_);
 
+    /* Streaming: Netflix, Prime Video, Crunchyroll, ... in a browser (extension) or a Windows app. */
+    QLabel* stream_heading = new QLabel(tr("Streaming"), panel);
+    stream_heading->setFont(heading_font);
+    layout->addWidget(stream_heading);
+    QLabel* stream_help = new QLabel(
+        tr("Netflix, Prime Video, Crunchyroll, Disney+ and others: install the OpenRGB browser extension "
+           "(integrations/browser-extension), or on Windows just play in the app. Cue files go in "
+           "movie-sync/streams/ (same format as VLC sidecars, plus \"streams\": [{\"service\", \"id\"}])."),
+        panel);
+    stream_help->setWordWrap(true);
+    PluginUiApplyMutedSecondaryLabel(stream_help);
+    layout->addWidget(stream_help);
+    stream_label_ = new QLabel(panel);
+    stream_label_->setWordWrap(true);
+    stream_label_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(stream_label_);
+    QFormLayout* stream_form = new QFormLayout();
+    stream_form->setContentsMargins(0, 0, 0, 0);
+    lights_delay_spin_ = new QSpinBox(panel);
+    lights_delay_spin_->setRange(-2000, 2000);
+    lights_delay_spin_->setSingleStep(25);
+    lights_delay_spin_->setSuffix(tr(" ms"));
+    lights_delay_spin_->setValue(lights_delay_ms_);
+    lights_delay_spin_->setToolTip(tr("Fire cues this much earlier (positive) or later (negative) than the "
+                                      "stream, to make up for TV / Bluetooth / device lag."));
+    connect(lights_delay_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v) {
+        lights_delay_ms_ = v;
+    });
+    stream_form->addRow(tr("Lights delay"), lights_delay_spin_);
+    layout->addLayout(stream_form);
+
     AddWidgetToParent(panel, parent);
 
     onReloadCatalog();
@@ -283,6 +464,7 @@ nlohmann::json MovieSyncEffect::SaveSettings() const
     j["movie_sync_api"] = api_enabled_;
     j["movie_sync_allow_strobe"] = allow_photosensitive_;
     j["movie_sync_port"] = port_;
+    j["movie_sync_lights_delay_ms"] = lights_delay_ms_;
     return j;
 }
 
@@ -292,6 +474,12 @@ void MovieSyncEffect::LoadSettings(const nlohmann::json& settings)
     api_enabled_ = settings.value("movie_sync_api", true);
     allow_photosensitive_ = settings.value("movie_sync_allow_strobe", false);
     port_ = static_cast<quint16>(settings.value("movie_sync_port", 27180));
+    lights_delay_ms_ = std::clamp(settings.value("movie_sync_lights_delay_ms", 0), -2000, 2000);
+    if(lights_delay_spin_)
+    {
+        QSignalBlocker b(lights_delay_spin_);
+        lights_delay_spin_->setValue(lights_delay_ms_);
+    }
     if(api_check_)
     {
         QSignalBlocker b(api_check_);
@@ -348,6 +536,12 @@ void MovieSyncEffect::onReloadCatalog()
 
     runtime_.SetMovieEffectsDir(movie_dir);
     runtime_.SetCatalog(&catalog_);
+
+    /* Stream cue files: re-matched against whatever plays next tick. */
+    stream_player_.Stop();
+    stream_file_ = nullptr;
+    stream_match_key_.clear();
+    stream_cues_.Load(movie_dir / "streams");
 
     refreshCategoryCombo();
     refreshEffectList();
@@ -624,6 +818,11 @@ void MovieSyncEffect::startListener()
     setStatus(tr("Listening on 127.0.0.1:%1 — %2 Movie Sync look(s)")
                   .arg(port_)
                   .arg(catalog_.effects.size()));
+    system_media_.Start();
+    if(stream_timer_ && !stream_timer_->isActive())
+    {
+        stream_timer_->start();
+    }
 }
 
 void MovieSyncEffect::stopListener()
@@ -632,6 +831,14 @@ void MovieSyncEffect::stopListener()
     {
         listener_->Stop();
     }
+    if(stream_timer_)
+    {
+        stream_timer_->stop();
+    }
+    system_media_.Stop();
+    stream_player_.Stop();
+    stream_file_ = nullptr;
+    stream_match_key_.clear();
 }
 
 void MovieSyncEffect::fireSelectedCatalogEffect()

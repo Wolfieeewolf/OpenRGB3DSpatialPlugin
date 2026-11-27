@@ -341,6 +341,8 @@ HEADERS += \
     engines/movie-sync/MovieSyncCatalog.h \
     engines/movie-sync/MovieSyncListener.h \
     engines/movie-sync/MovieSyncRuntime.h \
+    engines/movie-sync/MovieSyncStream.h \
+    engines/movie-sync/MovieSyncSystemMedia.h \
     shared/effects/EffectListManager3D.h \
     engines/shader-field/SpatialShaderEngine.h \
     engines/shader-field/SpatialShaderUniforms.h \
@@ -541,6 +543,8 @@ SOURCES += \
     engines/movie-sync/MovieSyncCatalog.cpp \
     engines/movie-sync/MovieSyncListener.cpp \
     engines/movie-sync/MovieSyncRuntime.cpp \
+    engines/movie-sync/MovieSyncStream.cpp \
+    engines/movie-sync/MovieSyncSystemMedia.cpp \
     engines/shader-field/ShaderField.cpp \
     engines/shader-field/SpatialShaderEngine.cpp \
     engines/shader-field/SpatialShaderCatalog.cpp \
@@ -571,7 +575,7 @@ win32:CONFIG += QTPLUGIN
 win32:LIBS += \
     -lOle32 -lOleAut32 -lAvrt -lMmdevapi -lPropsys -luuid \
     -lgdi32 -luser32 -ld3d11 -ldxgi -ld3dcompiler \
-    -lws2_32 -lopengl32 -lWtsapi32
+    -lws2_32 -lopengl32 -lWtsapi32 -lwindowsapp
 
 # Assimp (scene-prop mesh import). Default: build into $$OUT_PWD/_deps on first link
 # via scripts/build-assimp.* (PRE_TARGETDEPS). Override ASSIMP_DIR to use a system prefix

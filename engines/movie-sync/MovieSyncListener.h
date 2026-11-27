@@ -21,6 +21,9 @@ public:
                                              const std::string& edge,
                                              bool active)>;
     using CatalogJsonFn = std::function<std::string()>;
+    /** POST /v1/stream body (JSON) from the browser extension: what is playing and where. */
+    using StreamHandler = std::function<void(const std::string& json_body)>;
+    void SetStreamHandler(StreamHandler fn) { on_stream_ = std::move(fn); }
 
     explicit ScriptListener(QObject* parent = nullptr);
     ~ScriptListener() override;
@@ -46,6 +49,7 @@ private:
     quint16 port_ = 27180;
     EffectHandler on_effect_;
     CatalogJsonFn catalog_json_;
+    StreamHandler on_stream_;
 };
 
 } // namespace MovieSync

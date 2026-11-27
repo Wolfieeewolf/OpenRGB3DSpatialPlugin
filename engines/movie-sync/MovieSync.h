@@ -5,8 +5,11 @@
 #include "MovieSyncCatalog.h"
 #include "MovieSyncListener.h"
 #include "MovieSyncRuntime.h"
+#include "MovieSyncStream.h"
+#include "MovieSyncSystemMedia.h"
 
 class QCheckBox;
+class QSpinBox;
 class QComboBox;
 class QLabel;
 class QListWidget;
@@ -41,8 +44,14 @@ private slots:
     void onEffectSelectionChanged();
     void onEffectDoubleClicked();
     void onTick();
+    void onStreamTick();
 
 private:
+    /** One cue edge (VLC, or a stream's cue file): play / hold / release a look. */
+    void handleCueEdge(const std::string& effect_id, const std::string& edge, bool active);
+    /** Browser extension report (POST /v1/stream). */
+    void onStreamReport(const std::string& json_body);
+    void updateStreamLabel(std::int64_t now_ms);
     void bindTab();
     void refreshCategoryCombo();
     void refreshEffectList();
@@ -79,4 +88,19 @@ private:
     bool api_enabled_ = true;
     bool allow_photosensitive_ = false;
     quint16 port_ = 27180;
+
+    /* Streaming (Netflix, Prime, ...): reports from the browser extension or the Windows media
+       controls, matched to a cue file in movie-sync/streams/, played on the stream's clock. */
+    MovieSync::StreamCueLibrary stream_cues_;
+    MovieSync::StreamCuePlayer stream_player_;
+    MovieSync::SystemMediaReader system_media_;
+    QTimer* stream_timer_ = nullptr;
+    MovieSync::StreamState extension_state_;
+    std::int64_t extension_last_ms_ = 0;
+    std::string stream_match_key_;
+    const MovieSync::StreamCueFile* stream_file_ = nullptr;
+    std::int64_t stream_label_ms_ = 0;
+    int lights_delay_ms_ = 0;
+    QLabel* stream_label_ = nullptr;
+    QSpinBox* lights_delay_spin_ = nullptr;
 };

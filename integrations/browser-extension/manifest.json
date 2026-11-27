@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "OpenRGB 3D Spatial - Movie Sync",
+  "version": "0.1.0",
+  "description": "Plays OpenRGB 3D Spatial Movie Sync cue scripts in time with Netflix, Prime Video, Crunchyroll, Disney+ and other streams. Reads only what is playing and where; talks only to OpenRGB on this computer.",
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "host_permissions": ["http://127.0.0.1/*"],
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["page-netflix.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "movie-sync@openrgb3dspatial",
+      "strict_min_version": "128.0"
+    }
+  }
+}

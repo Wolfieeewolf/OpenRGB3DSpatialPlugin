@@ -162,6 +162,26 @@ void ScriptListener::handleRequest(QTcpSocket* socket, const QByteArray& raw)
         socket->disconnectFromHost();
     };
 
+    /* Only local tools (VLC, no Origin) and browser extensions may drive the lights: a
+       request from an ordinary web page carries its http(s) Origin and is refused. */
+    {
+        const int hdr_end = raw.indexOf("\r\n\r\n");
+        const QByteArray headers = (hdr_end >= 0 ? raw.left(hdr_end) : raw).toLower();
+        const int o = headers.indexOf("\r\norigin:");
+        if(o >= 0)
+        {
+            const int e = headers.indexOf("\r\n", o + 2);
+            const QByteArray origin = headers.mid(o + 9, (e < 0 ? headers.size() : e) - (o + 9)).trimmed();
+            const bool extension = origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://")
+                                   || origin.startsWith("extension://") || origin.startsWith("safari-web-extension://");
+            if(!origin.isEmpty() && origin != "null" && !extension)
+            {
+                reply(403, "Forbidden", "{\"ok\":false,\"error\":\"web pages may not use this API\"}");
+                return;
+            }
+        }
+    }
+
     if(method == "GET" && path == "/v1/health")
     {
         reply(200, "OK", "{\"ok\":true,\"service\":\"openrgb3d.movie_sync\"}");
@@ -206,6 +226,17 @@ void ScriptListener::handleRequest(QTcpSocket* socket, const QByteArray& raw)
             reply(400, "Bad Request", "{\"ok\":false,\"error\":\"invalid json\"}");
             return;
         }
+    }
+    if(method == "POST" && path.startsWith("/v1/stream"))
+    {
+        const int hdr_end = raw.indexOf("\r\n\r\n");
+        const QByteArray body = hdr_end >= 0 ? raw.mid(hdr_end + 4) : QByteArray();
+        if(on_stream_)
+        {
+            on_stream_(body.toStdString());
+        }
+        reply(200, "OK", "{\"ok\":true}");
+        return;
     }
     reply(404, "Not Found", "{\"ok\":false,\"error\":\"not found\"}");
 }
