@@ -15,6 +15,7 @@
 #include "PluginUiUtils.h"
 #include "VirtualController3D.h"
 
+#include <functional>
 #include <QCloseEvent>
 #include <QHideEvent>
 #include <QShowEvent>
@@ -177,6 +178,54 @@ void CustomControllerDialog::SetupUI()
     brand_edit_       = ui->brandEdit;
     model_edit_       = ui->modelEdit;
     PopulatePresetCategoryCombo();
+
+    /* Light output, next to the model: how bright the whole device is at full white. */
+    {
+        light_output_spin_ = new QDoubleSpinBox(this);
+        light_output_spin_->setRange(0.0, 100000.0);
+        light_output_spin_->setDecimals(0);
+        light_output_spin_->setSingleStep(10.0);
+        light_output_spin_->setSuffix(QStringLiteral(" lm"));
+        light_output_spin_->setSpecialValueText(tr("Auto"));
+        light_output_spin_->setValue(0.0);
+        light_output_spin_->setToolTip(
+            tr("Light output of the whole device at full white, in lumens (from the spec sheet). "
+               "Real light and Emitter + relay use it so bright devices light the room more. "
+               "Auto = a typical figure for this kind of device (keyboard key ~0.8 lm, strip LED ~5 lm)."));
+        QLabel* light_label = new QLabel(tr("Light:"), this);
+        light_label->setToolTip(light_output_spin_->toolTip());
+        /* Find the row layout that holds the model box and add after it. */
+        std::function<bool(QLayout*)> place = [&](QLayout* layout) -> bool {
+            if(!layout)
+            {
+                return false;
+            }
+            for(int i = 0; i < layout->count(); ++i)
+            {
+                QLayoutItem* item = layout->itemAt(i);
+                if(item->widget() == ui->modelEdit)
+                {
+                    if(QBoxLayout* box = qobject_cast<QBoxLayout*>(layout))
+                    {
+                        box->insertWidget(i + 1, light_label);
+                        box->insertWidget(i + 2, light_output_spin_);
+                        return true;
+                    }
+                    return false;
+                }
+                if(place(item->layout()))
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if(!place(ui->modelEdit->parentWidget() ? ui->modelEdit->parentWidget()->layout() : nullptr))
+        {
+            light_label->hide();
+            light_output_spin_->hide();
+        }
+    }
     leds_per_section_combo = ui->ledsPerSectionCombo;
     layer_depth_spin  = ui->layerDepthSpin;
     fit_layout_button  = ui->fitLayoutButton;
@@ -647,6 +696,19 @@ QString CustomControllerDialog::GetPresetBrand() const
 QString CustomControllerDialog::GetPresetModel() const
 {
     return model_edit_ ? model_edit_->text().trimmed() : QString();
+}
+
+float CustomControllerDialog::GetLightOutputLm() const
+{
+    return light_output_spin_ ? (float)light_output_spin_->value() : 0.0f;
+}
+
+void CustomControllerDialog::SetLightOutputLm(float lm)
+{
+    if(light_output_spin_)
+    {
+        light_output_spin_->setValue(std::max(0.0f, lm));
+    }
 }
 
 void CustomControllerDialog::PopulatePresetCategoryCombo()

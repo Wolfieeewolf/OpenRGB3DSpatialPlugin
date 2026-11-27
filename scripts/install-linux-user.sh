@@ -14,9 +14,18 @@ if [ ! -d "$ROOT/OpenRGB/qt" ]; then
 fi
 
 cd "$ROOT"
+DEPS_HINT="CachyOS/Arch: sudo pacman -S --needed base-devel git cmake qt6-base qt6-tools mesa glu libpipewire
+Debian/Ubuntu: sudo apt install build-essential git cmake qt6-base-dev qt6-tools-dev libgl-dev libglu1-mesa-dev libpipewire-0.3-dev
+Fedora: sudo dnf install gcc-c++ make git cmake qt6-qtbase-devel qt6-qttools-devel mesa-libGLU-devel pipewire-devel"
 QM="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
 if [ -z "$QM" ]; then
-  echo "qmake6 not found. On CachyOS: pacman -S qt6-base qt6-tools mesa glu libpipewire"
+  echo "qmake6 not found. Install the build tools first:"
+  echo "$DEPS_HINT"
+  exit 1
+fi
+if ! command -v cmake >/dev/null 2>&1; then
+  echo "cmake not found (needed to build the 3D model library, Assimp). Install the build tools first:"
+  echo "$DEPS_HINT"
   exit 1
 fi
 

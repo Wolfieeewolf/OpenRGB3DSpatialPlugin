@@ -367,6 +367,31 @@ bool OpenRGB3DSpatialTab::GetTransformLedSpacing(int transform_index, float& x_m
     return true;
 }
 
+float OpenRGB3DSpatialTab::GetTransformLightOutputLm(int transform_index) const
+{
+    if(transform_index < 0 || transform_index >= (int)controller_transforms.size()
+       || !controller_transforms[(size_t)transform_index])
+    {
+        return 0.0f;
+    }
+    return controller_transforms[(size_t)transform_index]->light_output_lm;
+}
+
+void OpenRGB3DSpatialTab::SetTransformLightOutputLm(int transform_index, float lm)
+{
+    if(transform_index < 0 || transform_index >= (int)controller_transforms.size()
+       || !controller_transforms[(size_t)transform_index])
+    {
+        return;
+    }
+    controller_transforms[(size_t)transform_index]->light_output_lm = std::max(0.0f, lm);
+    SetLayoutDirty();
+    if(viewport)
+    {
+        viewport->update();
+    }
+}
+
 void OpenRGB3DSpatialTab::ApplyLedSpacingToTransform(int transform_index, float x_mm, float y_mm, float z_mm)
 {
     if(transform_index < 0 || transform_index >= (int)controller_transforms.size())

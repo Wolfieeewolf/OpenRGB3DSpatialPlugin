@@ -61,9 +61,16 @@ inline float DefaultLedLm(const LEDPosition3D& led)
 inline float LedScale(const ControllerTransform* t, const LEDPosition3D& led)
 {
     float lm = DefaultLedLm(led);
-    if(t && t->virtual_controller && t->virtual_controller->GetLightOutputLm() > 0.0f && !t->led_positions.empty())
+    if(t && !t->led_positions.empty())
     {
-        lm = t->virtual_controller->GetLightOutputLm() / (float)t->led_positions.size();
+        if(t->virtual_controller && t->virtual_controller->GetLightOutputLm() > 0.0f)
+        {
+            lm = t->virtual_controller->GetLightOutputLm() / (float)t->led_positions.size();
+        }
+        else if(t->light_output_lm > 0.0f)
+        {
+            lm = t->light_output_lm / (float)t->led_positions.size();
+        }
     }
     return std::max(0.0f, lm) / kReferenceLedLm;
 }

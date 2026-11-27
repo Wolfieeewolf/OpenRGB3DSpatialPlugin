@@ -291,6 +291,10 @@ nlohmann::json OpenRGB3DSpatialTab::BuildLayoutJson() const
         controller_json["linked_reference_point_index"] = ct->linked_reference_point_index;
 
         controller_json["display_color"] = ct->display_color;
+        if(ct->light_output_lm > 0.0f)
+        {
+            controller_json["light_output_lm"] = ct->light_output_lm;
+        }
 
         layout_json["controllers"].push_back(controller_json);
     }
@@ -866,6 +870,7 @@ bool OpenRGB3DSpatialTab::AppendLayoutControllerEntry(
     TransformJson::ReadTransform(controller_json, ctrl_transform->transform);
 
     ctrl_transform->display_color = controller_json["display_color"].get<unsigned int>();
+    ctrl_transform->light_output_lm = std::max(0.0f, controller_json.value("light_output_lm", 0.0f));
     ctrl_transform->linked_reference_point_index =
         controller_json.value("linked_reference_point_index", -1);
 

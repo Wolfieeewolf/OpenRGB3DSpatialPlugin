@@ -7,10 +7,13 @@
 #include "Game/GameTelemetryBridge.h"
 #include "ResourceManagerCallback.h"
 #include "ProfileManager.h"
+#include "LogManager.h"
 
 #include <QMetaObject>
 #include <QSizePolicy>
 #include <QThread>
+#include <QtGlobal>
+#include <cstdio>
 #include <utility>
 
 OpenRGBPluginAPIInterface* OpenRGB3DSpatialPlugin::APIPointer = nullptr;
@@ -69,6 +72,23 @@ void OpenRGB3DSpatialPlugin::Load(OpenRGBPluginAPIInterface* plugin_api_ptr)
 {
     APIPointer             = plugin_api_ptr;
     g_3dspatial_plugin_api = plugin_api_ptr;
+
+    /* One line that says what this build expects, for install troubleshooting (Linux distro
+       OpenRGB builds use the system Qt; a plugin built for another Qt misbehaves or crashes). */
+    LOG_INFO("[OpenRGB3DSpatialPlugin] %s loaded: built with Qt %s, running Qt %s, plugin API %u",
+             VERSION_STRING, QT_VERSION_STR, qVersion(), (unsigned int)OPENRGB_PLUGIN_API_VERSION);
+    {
+        int built_major = 0, built_minor = 0, run_major = 0, run_minor = 0;
+        std::sscanf(QT_VERSION_STR, "%d.%d", &built_major, &built_minor);
+        std::sscanf(qVersion(), "%d.%d", &run_major, &run_minor);
+        if(run_major != built_major || run_minor < built_minor)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Qt mismatch: this plugin was built for Qt %s but OpenRGB runs "
+                        "Qt %s. Rebuild for your system (scripts/install-linux-user.sh on Linux) or use the "
+                        "matching release.",
+                        QT_VERSION_STR, qVersion());
+        }
+    }
 
     if(!game_telemetry_bridge)
     {

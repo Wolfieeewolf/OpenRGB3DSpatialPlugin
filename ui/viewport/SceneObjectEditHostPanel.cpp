@@ -181,6 +181,7 @@ void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
                 if(spacingPanel())
                 {
                     spacingPanel()->setSpacingMm(x, y, z);
+                    spacingPanel()->setLightOutputLm(tab_->GetTransformLightOutputLm(transform_index));
                 }
             }
 

@@ -33,7 +33,10 @@ inline float Spill(float d2, float r2, float core2)
     {
         return 0.0f;
     }
-    const float w = 1.0f - d2 / r2;
+    /* Real falloff: 1 / distance squared (softened inside the core), with a gentle window
+       that only tapers it to zero near the reach (so far light ends instead of lingering). */
+    const float q = d2 / r2;
+    const float w = 1.0f - q * q;
     return w * w / (1.0f + d2 / std::max(1e-6f, core2));
 }
 

@@ -69,6 +69,10 @@ struct ControllerTransform
     int                 linked_reference_point_index = -1;
 
     bool                world_positions_dirty;
+
+    /** This placed device's light output at full white, lumens (0 = not set). For custom
+        controllers their own setting wins; this covers regular devices. */
+    float               light_output_lm = 0.0f;
 };
 
 #endif

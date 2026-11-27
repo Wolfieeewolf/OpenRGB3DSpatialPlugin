@@ -1327,7 +1327,9 @@ void main()
         {
             continue;
         }
-        float w = 1.0 - d2 / r2;
+        /* 1 / distance squared, gently windowed to zero at the reach (RoomLight::Spill). */
+        float q = d2 / r2;
+        float w = 1.0 - q * q;
         float dist = sqrt(d2);
         float vis = dist > 1e-4 ? rayVisibility(i, d / dist, dist) : 1.0;
         if(vis <= 0.0)

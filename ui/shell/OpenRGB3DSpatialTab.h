@@ -252,6 +252,9 @@ private slots:
     void RememberAvailableRgbSpacingDraft(int controller_index, float x_mm, float y_mm, float z_mm);
     bool GetTransformLedSpacing(int transform_index, float& x_mm, float& y_mm, float& z_mm) const;
     void ApplyLedSpacingToTransform(int transform_index, float x_mm, float y_mm, float z_mm);
+    /** Placed device's light output at full white, lumens (0 = Auto). Saved with the layout. */
+    float GetTransformLightOutputLm(int transform_index) const;
+    void SetTransformLightOutputLm(int transform_index, float lm);
     int  ControllerListRowToTransformIndex(int row) const;
 
     void ApplyPositionComponent(int axis, double value);

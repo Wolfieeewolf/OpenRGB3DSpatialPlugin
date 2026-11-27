@@ -6,7 +6,10 @@
 #include "ui_SceneObjectSpacingPanel.h"
 
 #include <QDoubleSpinBox>
+#include <QGridLayout>
+#include <QLabel>
 #include <QSignalBlocker>
+#include <algorithm>
 
 SceneObjectSpacingPanel::SceneObjectSpacingPanel(QWidget* parent)
     : QWidget(parent)
@@ -34,6 +37,30 @@ SceneObjectSpacingPanel::SceneObjectSpacingPanel(QWidget* parent)
 
     ui->spacingGroup->setToolTip(
         tr("Distance between LEDs along each axis for the selected scene controller."));
+
+    /* Light output of the device: Real light and Emitter + relay use it. */
+    light_spin_ = new QDoubleSpinBox(this);
+    light_spin_->setRange(0.0, 100000.0);
+    light_spin_->setDecimals(0);
+    light_spin_->setSingleStep(10.0);
+    light_spin_->setSuffix(QStringLiteral(" lm"));
+    light_spin_->setSpecialValueText(tr("Auto"));
+    light_spin_->setToolTip(tr("Light output of the whole device at full white, in lumens (from the spec "
+                               "sheet). Auto = a typical figure for this kind of device."));
+    QLabel* light_label = new QLabel(tr("Light:"), this);
+    light_label->setToolTip(light_spin_->toolTip());
+    const int row = ui->spacingLayout->rowCount();
+    ui->spacingLayout->addWidget(light_label, row, 0);
+    ui->spacingLayout->addWidget(light_spin_, row, 1, 1, std::max(1, ui->spacingLayout->columnCount() - 1));
+}
+
+void SceneObjectSpacingPanel::setLightOutputLm(float lm)
+{
+    if(light_spin_)
+    {
+        QSignalBlocker blocker(light_spin_);
+        light_spin_->setValue((double)std::max(0.0f, lm));
+    }
 }
 
 SceneObjectSpacingPanel::~SceneObjectSpacingPanel()
@@ -56,6 +83,15 @@ void SceneObjectSpacingPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect_spin(ui->spacingXSpin);
     connect_spin(ui->spacingYSpin);
     connect_spin(ui->spacingZSpin);
+    if(light_spin_)
+    {
+        connect(light_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double v) {
+            if(tab_ && transform_index_ >= 0)
+            {
+                tab_->SetTransformLightOutputLm(transform_index_, (float)v);
+            }
+        });
+    }
 }
 
 void SceneObjectSpacingPanel::setTransformIndex(int transform_index)

@@ -96,6 +96,9 @@ public:
     QString GetPresetCategory() const;
     QString GetPresetBrand() const;
     QString GetPresetModel() const;
+    /** Whole device's light output at full white, lumens (0 = Auto: default by device type). */
+    float GetLightOutputLm() const;
+    void SetLightOutputLm(float lm);
     int GetGridWidth() const;
     int GetGridHeight() const;
     int GetGridDepth() const;
@@ -273,6 +276,7 @@ private:
     QComboBox*      category_combo_ = nullptr;
     QLineEdit*      brand_edit_ = nullptr;
     QLineEdit*      model_edit_ = nullptr;
+    class QDoubleSpinBox* light_output_spin_ = nullptr;
     CustomControllerDeviceList* device_list;
     QSpinBox*       width_spin;
     QSpinBox*       height_spin;

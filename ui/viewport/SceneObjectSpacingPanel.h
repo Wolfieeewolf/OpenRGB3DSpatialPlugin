@@ -23,9 +23,12 @@ public:
     void setTransformIndex(int transform_index);
     void setSpacingMm(float x_mm, float y_mm, float z_mm);
     void setSpacingEnabled(bool enabled);
+    /** Light output of the selected device at full white, lumens (0 = Auto). */
+    void setLightOutputLm(float lm);
 
 private:
     void onSpacingChanged();
+    class QDoubleSpinBox* light_spin_ = nullptr;
 
     Ui::SceneObjectSpacingPanel* ui = nullptr;
     OpenRGB3DSpatialTab*         tab_ = nullptr;

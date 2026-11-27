@@ -155,6 +155,7 @@ void OpenRGB3DSpatialTab::createCustomControllerClicked()
     virtual_ctrl->SetCategory(dialog.GetPresetCategory().toStdString());
     virtual_ctrl->SetBrand(dialog.GetPresetBrand().toStdString());
     virtual_ctrl->SetModel(dialog.GetPresetModel().toStdString());
+    virtual_ctrl->SetLightOutputLm(dialog.GetLightOutputLm());
 
     int new_index = (int)virtual_controllers.size();
     virtual_controllers.push_back(std::move(virtual_ctrl));
@@ -454,6 +455,7 @@ void OpenRGB3DSpatialTab::editCustomControllerClicked()
                                   virtual_ctrl->GetModel());
 
     dialog.SetLayoutGridScaleMm(grid_scale_mm);
+    dialog.SetLightOutputLm(virtual_ctrl->GetLightOutputLm());
 
     if(dialog.exec() == QDialog::Accepted)
     {
@@ -550,6 +552,7 @@ void OpenRGB3DSpatialTab::editCustomControllerClicked()
         virtual_controllers[list_row]->SetCategory(dialog.GetPresetCategory().toStdString());
         virtual_controllers[list_row]->SetBrand(dialog.GetPresetBrand().toStdString());
         virtual_controllers[list_row]->SetModel(dialog.GetPresetModel().toStdString());
+        virtual_controllers[list_row]->SetLightOutputLm(dialog.GetLightOutputLm());
 
         VirtualController3D* new_ptr = virtual_controllers[list_row].get();
         for(size_t i = 0; i < controller_transforms.size(); i++)
