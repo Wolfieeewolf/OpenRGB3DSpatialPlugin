@@ -93,3 +93,4 @@ tools/**/build/
 tools/**/build32/
 tools/**/_stage_*/
 tools/**/_ref/
+integrations/browser-extension/dist/

@@ -4,8 +4,7 @@
   "version": "0.1.0",
   "description": "Plays OpenRGB 3D Spatial Movie Sync cue scripts in time with Netflix, Prime Video, Crunchyroll, Disney+ and other streams. Reads only what is playing and where; talks only to OpenRGB on this computer.",
   "background": {
-    "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "service_worker": "background.js"
   },
   "host_permissions": ["http://127.0.0.1/*"],
   "permissions": ["storage"],

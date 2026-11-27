@@ -16,8 +16,10 @@ also followed with no extension at all; the extension adds exact IDs and Netflix
 
 - **Edge:** `edge://extensions` → Developer mode → Load unpacked → pick this folder.
 - **Chrome:** `chrome://extensions` → Developer mode → Load unpacked → pick this folder.
-- **Firefox (128+):** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → pick
-  `manifest.json` (temporary until Firefox restarts; signed builds come later).
+- **Firefox (128+):** run `make-firefox.ps1` (Windows) or `make-firefox.sh` (Linux / macOS),
+  then `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → pick
+  `dist/firefox/manifest.json` (temporary until Firefox restarts; signed builds come later).
+  Firefox declares the background script differently, so it gets its own small build.
 
 Then in OpenRGB add the **Movie Sync** effect to the stack, keep **Enable Script API** on and
 start the stack. The Movie Sync panel's **Streaming** line shows what is playing and which cue
