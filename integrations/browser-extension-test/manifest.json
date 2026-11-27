@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "OpenRGB 3D Spatial - Stream Probe (test)",
+  "version": "0.1.0",
+  "description": "Test only: shows what a streaming page exposes (title, episode, playback position) in a small label. Sends nothing anywhere.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.netflix.com/*",
+        "https://www.primevideo.com/*",
+        "https://www.amazon.com/*",
+        "https://www.amazon.co.uk/*",
+        "https://www.amazon.com.au/*",
+        "https://www.crunchyroll.com/*",
+        "https://static.crunchyroll.com/*"
+      ],
+      "js": ["probe.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
