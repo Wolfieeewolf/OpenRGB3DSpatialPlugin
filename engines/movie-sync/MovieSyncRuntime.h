@@ -22,7 +22,8 @@ public:
 
     void SetMovieEffectsDir(const filesystem::path& dir) { movie_effects_dir_ = dir; }
     void SetCatalog(const Catalog* catalog) { catalog_ = catalog; }
-    void SetAllowPhotosensitive(bool allow) { allow_photosensitive_ = allow; }
+    /** Switching it off also stops photosensitive looks that are already running. */
+    void SetAllowPhotosensitive(bool allow);
     void SetApplyCallbacks(PrepareFn prepare, ApplyFn apply)
     {
         prepare_ = std::move(prepare);

@@ -19,17 +19,11 @@ void CueRuntime::OnEffect(const std::string& effect_id, const std::string& edge,
         return;
     }
 
-    const CatalogEffect* meta = (catalog_) ? FindEffect(*catalog_, effect_id) : nullptr;
-    if(meta && meta->photosensitive && !allow_photosensitive_)
-    {
-        last_warning_ = "Blocked photosensitive effect '" + effect_id + "' (enable Allow photosensitive looks).";
-        LOG_WARNING("[3DSpatial] Movie Sync: %s", last_warning_.c_str());
-        return;
-    }
-
     const bool is_level = (edge == "level");
     if(!active)
     {
+        /* Releases are always honoured (even for a look that is now blocked), so a held strobe
+           can never get stuck on. */
         if(!is_level)
         {
             return;
@@ -43,6 +37,14 @@ void CueRuntime::OnEffect(const std::string& effect_id, const std::string& edge,
         {
             prepared_ = false;
         }
+        return;
+    }
+
+    const CatalogEffect* meta = (catalog_) ? FindEffect(*catalog_, effect_id) : nullptr;
+    if(meta && meta->photosensitive && !allow_photosensitive_)
+    {
+        last_warning_ = "Blocked photosensitive effect '" + effect_id + "' (enable Allow photosensitive looks).";
+        LOG_WARNING("[3DSpatial] Movie Sync: %s", last_warning_.c_str());
         return;
     }
 
@@ -93,6 +95,26 @@ void CueRuntime::StopAll()
 {
     plays_.clear();
     prepared_ = false;
+}
+
+void CueRuntime::SetAllowPhotosensitive(bool allow)
+{
+    allow_photosensitive_ = allow;
+    if(allow || !catalog_)
+    {
+        return;
+    }
+    /* Switched off: stop anything photosensitive that is already running. */
+    plays_.erase(std::remove_if(plays_.begin(), plays_.end(),
+                                [&](const ActivePlay& p) {
+                                    const CatalogEffect* meta = FindEffect(*catalog_, p.effect_id);
+                                    return meta && meta->photosensitive;
+                                }),
+                 plays_.end());
+    if(plays_.empty())
+    {
+        prepared_ = false;
+    }
 }
 
 void CueRuntime::ApplyPlays(bool force_hw)

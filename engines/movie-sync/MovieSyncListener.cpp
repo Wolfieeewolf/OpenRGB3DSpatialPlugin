@@ -174,9 +174,36 @@ void ScriptListener::handleRequest(QTcpSocket* socket, const QByteArray& raw)
             const QByteArray origin = headers.mid(o + 9, (e < 0 ? headers.size() : e) - (o + 9)).trimmed();
             const bool extension = origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://")
                                    || origin.startsWith("extension://") || origin.startsWith("safari-web-extension://");
-            if(!origin.isEmpty() && origin != "null" && !extension)
+            /* "null" too: sandboxed iframes, data: / file: pages and redirected posts send it. */
+            if(!origin.isEmpty() && !extension)
             {
                 reply(403, "Forbidden", "{\"ok\":false,\"error\":\"web pages may not use this API\"}");
+                return;
+            }
+        }
+        /* POSTs must say they are JSON: a web page cannot send that cross-origin without a CORS
+           preflight (which this API never answers). VLC and the extension both send it. */
+        if(raw.startsWith("POST") && !headers.contains("\r\ncontent-type: application/json")
+           && !headers.contains("\r\ncontent-type:application/json"))
+        {
+            reply(415, "Unsupported Media Type", "{\"ok\":false,\"error\":\"Content-Type: application/json required\"}");
+            return;
+        }
+        /* DNS rebinding: a page on evil.example:27180 resolving to 127.0.0.1 sends its own Host.
+           Only requests addressed to this computer by name are answered. */
+        const int h = headers.indexOf("\r\nhost:");
+        if(h >= 0)
+        {
+            const int e = headers.indexOf("\r\n", h + 2);
+            QByteArray host = headers.mid(h + 7, (e < 0 ? headers.size() : e) - (h + 7)).trimmed();
+            const int colon = host.lastIndexOf(':');
+            if(colon > 0 && !host.endsWith(']'))
+            {
+                host = host.left(colon);
+            }
+            if(host != "127.0.0.1" && host != "localhost" && host != "[::1]")
+            {
+                reply(403, "Forbidden", "{\"ok\":false,\"error\":\"unexpected host\"}");
                 return;
             }
         }

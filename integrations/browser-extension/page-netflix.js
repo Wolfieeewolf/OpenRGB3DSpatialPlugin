@@ -11,14 +11,20 @@
     }
   };
   setInterval(() => {
+    /* Only while watching (the home page's trailers have IDs too). */
+    if (!location.pathname.startsWith("/watch/")) return;
     const player = safe(() => {
       const vp = window.netflix.appContext.state.playerApp.getAPI().videoPlayer;
       const ids = vp.getAllPlayerSessionIds() || [];
+      let fallback = null;
       for (const id of ids) {
         const p = vp.getVideoPlayerBySessionId(id);
-        if (p && p.getMovieId()) return p;
+        if (!p || !p.getMovieId()) continue;
+        /* The session that is playing wins (after auto-next the old episode can linger). */
+        if (safe(() => p.isPlaying())) return p;
+        fallback = fallback || p;
       }
-      return null;
+      return fallback;
     });
     if (!player) return;
     window.postMessage(
@@ -27,9 +33,9 @@
         id: String(safe(() => player.getMovieId()) || ""),
         positionMs: safe(() => player.getCurrentTime()),
         durationMs: safe(() => player.getDuration()),
-        paused: safe(() => player.isPaused()),
+        sampledAt: Date.now(),
       },
       "*"
     );
-  }, 250);
+  }, 200);
 })();

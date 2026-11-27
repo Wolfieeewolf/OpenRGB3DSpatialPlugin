@@ -60,7 +60,15 @@ bool LoadStreamCueFile(const filesystem::path& path, StreamCueFile* out, std::st
             {
                 StreamMatch m;
                 m.service = Lower(s.value("service", ""));
-                m.id = s.value("id", "");
+                /* IDs may be written as numbers (Netflix): accept both. */
+                if(s.contains("id") && s["id"].is_number_integer())
+                {
+                    m.id = std::to_string(s["id"].get<long long>());
+                }
+                else if(s.contains("id") && s["id"].is_string())
+                {
+                    m.id = s["id"].get<std::string>();
+                }
                 if(!m.service.empty())
                 {
                     f.streams.push_back(m);
@@ -96,6 +104,7 @@ bool LoadStreamCueFile(const filesystem::path& path, StreamCueFile* out, std::st
 void StreamCueLibrary::Load(const filesystem::path& dir)
 {
     files_.clear();
+    errors_.clear();
     std::error_code ec;
     if(!filesystem::exists(dir, ec))
     {
@@ -113,9 +122,32 @@ void StreamCueLibrary::Load(const filesystem::path& dir)
             continue;
         }
         StreamCueFile f;
-        if(LoadStreamCueFile(it->path(), &f, nullptr))
+        std::string err;
+        if(LoadStreamCueFile(it->path(), &f, &err))
         {
             files_.push_back(std::move(f));
+        }
+        else
+        {
+            errors_.push_back(name + ": " + err);
+        }
+    }
+    /* Two files claiming the same title: the first wins, say so. */
+    for(std::size_t a = 0; a < files_.size(); ++a)
+    {
+        for(std::size_t b = a + 1; b < files_.size(); ++b)
+        {
+            for(const StreamMatch& ma : files_[a].streams)
+            {
+                for(const StreamMatch& mb : files_[b].streams)
+                {
+                    if(!ma.id.empty() && ma.service == mb.service && ma.id == mb.id)
+                    {
+                        errors_.push_back(files_[b].path.filename().string() + ": same " + ma.service + " id " + ma.id
+                                          + " as " + files_[a].path.filename().string() + " (ignored)");
+                    }
+                }
+            }
         }
     }
 }
@@ -123,14 +155,17 @@ void StreamCueLibrary::Load(const filesystem::path& dir)
 const StreamCueFile* StreamCueLibrary::Match(const StreamState& state) const
 {
     const std::string service = Lower(state.service);
-    /* 1. Exact: the service's own title / episode ID. */
+    const std::int64_t dur_ms = (std::int64_t)std::llround(state.duration_s * 1000.0);
+    /* 1. Exact: the service's own title / episode ID (and a length that fits: an ad playing
+          under the title's ID, e.g. a YouTube pre-roll, must not fire the film's cues). */
     if(!state.id.empty())
     {
         for(const StreamCueFile& f : files_)
         {
             for(const StreamMatch& m : f.streams)
             {
-                if(m.service == service && m.id == state.id)
+                if(m.service == service && m.id == state.id
+                   && (f.duration_ms <= 0 || dur_ms <= 0 || std::llabs(f.duration_ms - dur_ms) <= f.duration_tolerance_ms))
                 {
                     return &f;
                 }
@@ -138,7 +173,6 @@ const StreamCueFile* StreamCueLibrary::Match(const StreamState& state) const
         }
     }
     /* 2. Title (+ episode) and length within the file's tolerance. */
-    const std::int64_t dur_ms = (std::int64_t)std::llround(state.duration_s * 1000.0);
     const std::string want = Fold(state.title + state.episode);
     const std::string want_title = Fold(state.title);
     const StreamCueFile* best = nullptr;
@@ -191,13 +225,18 @@ void StreamCuePlayer::ReleaseLevels()
     levels_on_.clear();
 }
 
+void StreamCuePlayer::ForgetLevels()
+{
+    levels_on_.clear();
+}
+
 void StreamCuePlayer::Stop()
 {
     ReleaseLevels();
     has_state_ = false;
     file_ = nullptr;
     file_key_.clear();
-    last_pos_ms_ = -1;
+    has_last_ = false;
 }
 
 void StreamCuePlayer::OnState(const StreamState& state, const StreamCueFile* file, std::int64_t now_ms)
@@ -208,7 +247,7 @@ void StreamCuePlayer::OnState(const StreamState& state, const StreamCueFile* fil
         /* Another title (or none): drop what the old cue file was holding. */
         ReleaseLevels();
         file_key_ = key;
-        last_pos_ms_ = -1;
+        has_last_ = false;
     }
     file_ = file;
     state_ = state;
@@ -222,21 +261,33 @@ void StreamCuePlayer::Tick(std::int64_t now_ms)
     {
         return;
     }
-    /* Cue time = stream time + the file's offset + the lights delay (fire early for lag). */
-    const std::int64_t pos_ms = (std::int64_t)std::llround(EstimatedPosition(now_ms) * 1000.0) + file_->offset_ms
-                                + lights_delay_ms_;
+    /* Cue time = stream time + the file's offset (like VLC: positive = earlier) - the lights
+       delay (positive = lights later, for a TV / Bluetooth picture that lags). */
+    std::int64_t pos_ms = (std::int64_t)std::llround(EstimatedPosition(now_ms) * 1000.0) + file_->offset_ms
+                          - lights_delay_ms_;
+
+    /* Reports arrive a little late and the clock is counted on in between, so each new report
+       can step the position back by some tens of ms. Hold the furthest position reached unless
+       it really went back (a seek of a second or more): otherwise a cue in that sliver fires
+       twice and held looks blink off and on. */
+    if(has_last_ && pos_ms < last_pos_ms_ && last_pos_ms_ - pos_ms < 1000)
+    {
+        pos_ms = last_pos_ms_;
+    }
 
     /* Pulses: fire the ones playback passed since last tick, only while playing normally (a
        seek or a jump of more than 2 s fires nothing, so skipping ahead never sets off a
-       backlog of explosions). */
-    if(last_pos_ms_ >= 0 && !state_.paused && !state_.ad)
+       backlog of explosions). Just picked up: look back one report's worth so a cue right at
+       the start of it is not lost. */
+    const std::int64_t from_ms = has_last_ ? last_pos_ms_ : pos_ms - 300;
+    if(!state_.paused && !state_.ad)
     {
-        const std::int64_t step = pos_ms - last_pos_ms_;
+        const std::int64_t step = pos_ms - from_ms;
         if(step > 0 && step <= 2000)
         {
             for(const StreamCue& c : file_->cues)
             {
-                if(c.edge != "level" && c.t_ms > last_pos_ms_ && c.t_ms <= pos_ms && on_edge_)
+                if(c.edge != "level" && c.t_ms > from_ms && c.t_ms <= pos_ms && on_edge_)
                 {
                     on_edge_(c.effect_id, c.edge, true);
                 }
@@ -244,6 +295,7 @@ void StreamCuePlayer::Tick(std::int64_t now_ms)
         }
     }
     last_pos_ms_ = pos_ms;
+    has_last_ = true;
 
     /* Levels: on while playback is inside them (also after a seek), off outside / during ads. */
     std::vector<std::string> want;
@@ -251,7 +303,9 @@ void StreamCuePlayer::Tick(std::int64_t now_ms)
     {
         for(const StreamCue& c : file_->cues)
         {
-            if(c.edge == "level" && c.t_end_ms > c.t_ms && pos_ms >= c.t_ms && pos_ms < c.t_end_ms
+            /* A level without an end holds to the end of the title (as VLC does). */
+            const std::int64_t end = c.t_end_ms > c.t_ms ? c.t_end_ms : INT64_MAX;
+            if(c.edge == "level" && pos_ms >= c.t_ms && pos_ms < end
                && std::find(want.begin(), want.end(), c.effect_id) == want.end())
             {
                 want.push_back(c.effect_id);

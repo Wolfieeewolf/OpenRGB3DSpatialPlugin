@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <stdexcept>
 #include <string>
 
 #ifdef _WIN32
@@ -26,13 +27,31 @@ namespace MovieSync
 namespace
 {
 
+#ifdef _WIN32
 std::int64_t SteadyMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
 
-#ifdef _WIN32
+/* Wait at most `ms` for a WinRT call into another app: a hung app must never hang OpenRGB
+   (Stop() joins this thread on the UI thread). */
+template<typename Op>
+bool WaitFor(const Op& op, int ms)
+{
+    if(op.wait_for(std::chrono::milliseconds(ms)) == winrt::Windows::Foundation::AsyncStatus::Completed)
+    {
+        return true;
+    }
+    try
+    {
+        op.Cancel();
+    }
+    catch(...)
+    {
+    }
+    return false;
+}
 std::string Narrow(const winrt::hstring& s)
 {
     return winrt::to_string(s);
@@ -52,7 +71,7 @@ std::string ServiceFromApp(const std::string& app)
     if(a.find("primevideo") != std::string::npos || a.find("amazonvideo") != std::string::npos) return "prime";
     if(a.find("crunchyroll") != std::string::npos) return "crunchyroll";
     if(a.find("disney") != std::string::npos) return "disney";
-    if(a.find("stan") != std::string::npos) return "stan";
+    if(a.rfind("stan", 0) == 0 || a.find(".stan") != std::string::npos) return "stan";
     if(a.find("binge") != std::string::npos) return "binge";
     if(a.find("youtube") != std::string::npos) return "youtube";
     if(a.find("appletv") != std::string::npos) return "appletv";
@@ -120,17 +139,27 @@ void SystemMediaReader::Run()
         {
             if(!manager)
             {
-                manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get();
+                const auto op = GlobalSystemMediaTransportControlsSessionManager::RequestAsync();
+                if(!WaitFor(op, 2000))
+                {
+                    throw std::runtime_error("media controls unavailable");
+                }
+                manager = op.GetResults();
             }
-            /* The playing session wins; else the one Windows calls current. */
+            /* A playing video service wins, then anything playing (music apps lose to films),
+               else the session Windows calls current. */
             GlobalSystemMediaTransportControlsSession pick{nullptr};
+            int best = -1;
             for(const auto& s : manager.GetSessions())
             {
-                if(s.GetPlaybackInfo().PlaybackStatus()
-                   == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
+                const bool playing = s.GetPlaybackInfo().PlaybackStatus()
+                                     == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+                const bool video = ServiceFromApp(Narrow(s.SourceAppUserModelId())).rfind("app:", 0) != 0;
+                const int score = (playing ? 2 : 0) + (video ? 1 : 0);
+                if(playing && score > best)
                 {
+                    best = score;
                     pick = s;
-                    break;
                 }
             }
             if(!pick)
@@ -141,21 +170,26 @@ void SystemMediaReader::Run()
             bool ok = false;
             if(pick)
             {
-                const auto props = pick.TryGetMediaPropertiesAsync().get();
+                const auto props_op = pick.TryGetMediaPropertiesAsync();
+                if(!WaitFor(props_op, 500))
+                {
+                    throw std::runtime_error("media app not answering");
+                }
+                const auto props = props_op.GetResults();
                 const auto timeline = pick.GetTimelineProperties();
                 const auto playback = pick.GetPlaybackInfo();
                 st.source = "windows";
                 st.service = ServiceFromApp(Narrow(pick.SourceAppUserModelId()));
                 st.title = Narrow(props.Title());
-                st.episode = Narrow(props.Artist()); /* Crunchyroll: show in artist, episode in title */
-                if(!st.episode.empty())
-                {
-                    std::swap(st.title, st.episode);
-                }
                 const std::string prime_prefix = "Prime Video: ";
                 if(st.title.rfind(prime_prefix, 0) == 0)
                 {
                     st.title = st.title.substr(prime_prefix.size());
+                }
+                st.episode = Narrow(props.Artist()); /* Crunchyroll: show in artist, episode in title */
+                if(!st.episode.empty())
+                {
+                    std::swap(st.title, st.episode);
                 }
                 if(st.service == "netflix" && st.title == "Netflix")
                 {

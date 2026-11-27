@@ -73,9 +73,12 @@ public:
     /** Best file for this report: exact service + ID first, then title + length. */
     const StreamCueFile* Match(const StreamState& state) const;
     std::size_t Count() const { return files_.size(); }
+    /** Files that did not load (and duplicate IDs), for the status line. */
+    const std::vector<std::string>& Errors() const { return errors_; }
 
 private:
     std::vector<StreamCueFile> files_;
+    std::vector<std::string> errors_;
 };
 
 /** Plays a cue file on a stream's clock. Tick() often (~20 ms). */
@@ -86,8 +89,11 @@ public:
     using EdgeFn = std::function<void(const std::string&, const std::string&, bool)>;
 
     void SetEdgeHandler(EdgeFn fn) { on_edge_ = std::move(fn); }
-    /** Shifts every cue earlier by this much (devices / TV lag). */
+    /** Lights delay: positive = cues fire later (a TV / Bluetooth picture that lags behind),
+        negative = earlier (slow LED devices). */
     void SetLightsDelayMs(int ms) { lights_delay_ms_ = ms; }
+    /** The held looks were stopped elsewhere (Stop / Preview): re-hold them on the next tick. */
+    void ForgetLevels();
 
     /** A new playback report (and the cue file that matches it, or null). */
     void OnState(const StreamState& state, const StreamCueFile* file, std::int64_t now_ms);
@@ -110,7 +116,8 @@ private:
     bool has_state_ = false;
     const StreamCueFile* file_ = nullptr;
     std::string file_key_;
-    std::int64_t last_pos_ms_ = -1;
+    std::int64_t last_pos_ms_ = 0;
+    bool has_last_ = false; /* positions can be negative (offsets), so no -1 marker */
     std::vector<std::string> levels_on_;
 };
 

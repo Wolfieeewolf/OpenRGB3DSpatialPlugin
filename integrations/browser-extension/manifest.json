@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenRGB 3D Spatial - Movie Sync",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Plays OpenRGB 3D Spatial Movie Sync cue scripts in time with Netflix, Prime Video, Crunchyroll, Disney+ and other streams. Reads only what is playing and where; talks only to OpenRGB on this computer.",
   "background": {
     "service_worker": "background.js"
@@ -10,10 +10,29 @@
     "default_title": "OpenRGB Movie Sync"
   },
   "host_permissions": ["http://127.0.0.1/*"],
-  "permissions": ["storage"],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://www.netflix.com/*",
+        "https://www.primevideo.com/*",
+        "https://www.amazon.com/*",
+        "https://www.amazon.co.uk/*",
+        "https://www.amazon.com.au/*",
+        "https://www.amazon.ca/*",
+        "https://www.amazon.de/*",
+        "https://www.crunchyroll.com/*",
+        "https://static.crunchyroll.com/*",
+        "https://www.disneyplus.com/*",
+        "https://www.stan.com.au/*",
+        "https://play.stan.com.au/*",
+        "https://binge.com.au/*",
+        "https://www.binge.com.au/*",
+        "https://www.youtube.com/*",
+        "https://www.paramountplus.com/*",
+        "https://play.max.com/*",
+        "https://www.max.com/*",
+        "https://tv.apple.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle",
       "all_frames": true

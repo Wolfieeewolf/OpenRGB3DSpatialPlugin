@@ -152,7 +152,7 @@ void MovieSyncEffect::handleCueEdge(const std::string& effect_id, const std::str
     {
         setStatus(humanizeRuntimeMessage(runtime_.lastError()));
     }
-    else if(playing)
+    else if(playing && active)
     {
         setStatus(tr("Playing cue: %1").arg(effectDisplayName(QString::fromStdString(effect_id))));
         setPlayingUi(true);
@@ -223,7 +223,7 @@ void MovieSyncEffect::onStreamTick()
        Otherwise the Windows media controls, if something is playing there. */
     MovieSync::StreamState st;
     bool have = false;
-    if(extension_last_ms_ > 0 && now - extension_last_ms_ < 3000)
+    if(extension_last_ms_ > 0 && now - extension_last_ms_ < 5000)
     {
         st = extension_state_;
         have = true;
@@ -234,14 +234,24 @@ void MovieSyncEffect::onStreamTick()
     }
     if(!have)
     {
-        if(stream_player_.Active() || stream_file_)
+        if(!stream_match_key_.empty())
         {
             stream_player_.Stop();
             stream_file_ = nullptr;
             stream_match_key_.clear();
+            stream_label_ms_ = 0;
+        }
+        /* Nothing playing: check four times a second instead of fifty. */
+        if(stream_timer_->interval() != 250)
+        {
+            stream_timer_->setInterval(250);
         }
         updateStreamLabel(now);
         return;
+    }
+    if(stream_timer_->interval() != 20)
+    {
+        stream_timer_->setInterval(20);
     }
 
     /* Match a cue file once per title (service, ID, name, length). */
@@ -273,7 +283,13 @@ void MovieSyncEffect::updateStreamLabel(std::int64_t now_ms)
     stream_label_ms_ = now_ms;
     if(stream_match_key_.empty())
     {
-        stream_label_->setText(tr("Streaming: nothing playing (browser extension or Windows media controls)."));
+        QString text = tr("Streaming: nothing playing (browser extension or Windows media controls). "
+                          "%1 cue file(s) in movie-sync/streams.").arg(stream_cues_.Count());
+        if(!stream_cues_.Errors().empty())
+        {
+            text += QLatin1Char('\n') + tr("Problem: %1").arg(QString::fromStdString(stream_cues_.Errors().front()));
+        }
+        stream_label_->setText(text);
         return;
     }
     const MovieSync::StreamState& st = stream_player_.State();
@@ -415,8 +431,10 @@ void MovieSyncEffect::SetupCustomUI(QWidget* parent)
     layout->addWidget(stream_heading);
     QLabel* stream_help = new QLabel(
         tr("Netflix, Prime Video, Crunchyroll, Disney+ and others: install the OpenRGB browser extension "
-           "(integrations/browser-extension), or on Windows just play in the app. Cue files go in "
-           "movie-sync/streams/ (same format as VLC sidecars, plus \"streams\": [{\"service\", \"id\"}])."),
+           "(integrations/browser-extension); it also works in the Netflix / Prime Video apps on Windows. "
+           "Without it, Windows apps that report to the media controls (Crunchyroll, Prime Video) still "
+           "work. Cue files go in movie-sync/streams/ (VLC sidecar format plus \"streams\": "
+           "[{\"service\", \"id\"}]); press Reload after adding one."),
         panel);
     stream_help->setWordWrap(true);
     PluginUiApplyMutedSecondaryLabel(stream_help);
@@ -432,8 +450,9 @@ void MovieSyncEffect::SetupCustomUI(QWidget* parent)
     lights_delay_spin_->setSingleStep(25);
     lights_delay_spin_->setSuffix(tr(" ms"));
     lights_delay_spin_->setValue(lights_delay_ms_);
-    lights_delay_spin_->setToolTip(tr("Fire cues this much earlier (positive) or later (negative) than the "
-                                      "stream, to make up for TV / Bluetooth / device lag."));
+    lights_delay_spin_->setToolTip(tr("Positive: cues fire later (your TV or Bluetooth makes the picture / "
+                                      "sound lag behind). Negative: cues fire earlier (your LED devices are "
+                                      "slow to change)."));
     connect(lights_delay_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v) {
         lights_delay_ms_ = v;
     });
@@ -524,6 +543,12 @@ void MovieSyncEffect::onAllowStrobeToggled(bool on)
 {
     allow_photosensitive_ = on;
     runtime_.SetAllowPhotosensitive(on);
+    if(!runtime_.IsPlaying())
+    {
+        tick_timer_->stop();
+        setPlayingUi(false);
+        clearPreviewIfIdle();
+    }
 }
 
 void MovieSyncEffect::onReloadCatalog()
@@ -542,7 +567,12 @@ void MovieSyncEffect::onReloadCatalog()
     stream_file_ = nullptr;
     stream_match_key_.clear();
     /* movie_dir is movie-sync/effects; stream cue files live beside it in movie-sync/streams. */
-    stream_cues_.Load((movie_dir.filename() == "effects" ? movie_dir.parent_path() : movie_dir) / "streams");
+    filesystem::path base = movie_dir.lexically_normal();
+    if(base.filename().empty())
+    {
+        base = base.parent_path(); /* trailing slash */
+    }
+    stream_cues_.Load((base.filename() == "effects" ? base.parent_path() : base) / "streams");
 
     refreshCategoryCombo();
     refreshEffectList();
@@ -578,6 +608,7 @@ void MovieSyncEffect::onPreview()
 void MovieSyncEffect::onStopPreview()
 {
     runtime_.StopAll();
+    stream_player_.ForgetLevels();
     tick_timer_->stop();
     setPlayingUi(false);
     clearPreviewIfIdle();
@@ -614,7 +645,13 @@ void MovieSyncEffect::onEffectDoubleClicked()
 
 void MovieSyncEffect::onTick()
 {
-    if(!runtime_.Tick(Action::MeasureTickMs(&last_tick_ms_)))
+    int dt = Action::MeasureTickMs(&last_tick_ms_);
+    /* The film is paused: running looks freeze with it (and carry on when it plays). */
+    if(stream_player_.Active() && stream_player_.State().paused)
+    {
+        dt = 0;
+    }
+    if(!runtime_.Tick(dt))
     {
         tick_timer_->stop();
         setPlayingUi(false);
@@ -857,6 +894,7 @@ void MovieSyncEffect::fireSelectedCatalogEffect()
     bindTab();
     runtime_.SetAllowPhotosensitive(allow_photosensitive_);
     runtime_.StopAll();
+    stream_player_.ForgetLevels();
     clearPreviewIfIdle();
     runtime_.OnEffect(id.toStdString(), "pulse", true);
     if(!runtime_.lastWarning().empty())

@@ -10,5 +10,6 @@ Copy-Item (Join-Path $root '*.js') $out
 $manifest = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
 $overrides = Get-Content (Join-Path $root 'firefox\manifest-overrides.json') -Raw | ConvertFrom-Json
 $manifest.background = $overrides.background
-$manifest | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $out 'manifest.json') -Encoding utf8
+# UTF-8 without a byte-order mark (Windows PowerShell 5.1's -Encoding utf8 adds one).
+[IO.File]::WriteAllText((Join-Path $out 'manifest.json'), ($manifest | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "Firefox build: $out"
