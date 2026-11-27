@@ -541,7 +541,8 @@ void MovieSyncEffect::onReloadCatalog()
     stream_player_.Stop();
     stream_file_ = nullptr;
     stream_match_key_.clear();
-    stream_cues_.Load(movie_dir / "streams");
+    /* movie_dir is movie-sync/effects; stream cue files live beside it in movie-sync/streams. */
+    stream_cues_.Load((movie_dir.filename() == "effects" ? movie_dir.parent_path() : movie_dir) / "streams");
 
     refreshCategoryCombo();
     refreshEffectList();

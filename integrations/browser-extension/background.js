@@ -79,15 +79,35 @@ function identify(tabUrl, s) {
   return out;
 }
 
+/* Toolbar badge: green ▶ = OpenRGB is getting the stream, red ! = OpenRGB not reachable
+   (not running, or the Movie Sync effect / Script API is off), none = no video found. */
+let badgeState = "";
+function badge(state, title) {
+  if (state === badgeState) return;
+  badgeState = state;
+  const a = api.action || api.browserAction;
+  if (!a) return;
+  const text = state === "ok" ? "▶" : state === "error" ? "!" : "";
+  Promise.resolve(a.setBadgeText({ text })).catch(() => {});
+  if (a.setBadgeBackgroundColor) {
+    Promise.resolve(a.setBadgeBackgroundColor({ color: state === "error" ? "#c0392b" : "#2e9e4f" })).catch(() => {});
+  }
+  if (a.setTitle) Promise.resolve(a.setTitle({ title: "OpenRGB Movie Sync: " + title })).catch(() => {});
+}
+
 async function send(body) {
   try {
-    await fetch(`http://127.0.0.1:${port}/v1/stream`, {
+    const r = await fetch(`http://127.0.0.1:${port}/v1/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (body.stopped) badge("", "no video playing");
+    else if (r.ok) badge("ok", "sending " + (body.service || "") + " " + (body.title || body.id || ""));
+    else badge("error", "OpenRGB refused (" + r.status + ")");
   } catch (e) {
     /* OpenRGB not running / Movie Sync effect off: try again next report. */
+    badge("error", "OpenRGB not reachable on port " + port + " (is the Movie Sync effect running?)");
   }
 }
 

@@ -441,6 +441,15 @@ void LEDViewport3D::prepareForQtPainterInPaintGl()
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_PROGRAM_POINT_SIZE);
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    /* Pixel upload / readback back to GL defaults: QPainter's glyph cache uploads text with them,
+       and a leftover alignment of 1 (texture uploads earlier in the frame) shears every label. */
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
 }
 
 void LEDViewport3D::paintRotateReadout(QPainter& painter,

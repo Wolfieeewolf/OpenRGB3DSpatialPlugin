@@ -6,6 +6,9 @@
   "background": {
     "service_worker": "background.js"
   },
+  "action": {
+    "default_title": "OpenRGB Movie Sync"
+  },
   "host_permissions": ["http://127.0.0.1/*"],
   "permissions": ["storage"],
   "content_scripts": [
