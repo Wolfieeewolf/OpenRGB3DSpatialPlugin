@@ -46,6 +46,6 @@ Build-Target 'chromium' $chromium
 
 # Firefox: background as scripts.
 $firefox = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
-$overrides = Get-Content (Join-Path $root 'firefox\manifest-overrides.json') -Raw | ConvertFrom-Json
+$overrides = Get-Content (Join-Path $root 'manifest-firefox-overrides.json') -Raw | ConvertFrom-Json
 $firefox.background = $overrides.background
 Build-Target 'firefox' $firefox

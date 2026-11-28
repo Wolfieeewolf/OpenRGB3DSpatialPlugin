@@ -38,6 +38,6 @@ chromium = dict(base)
 chromium.pop("browser_specific_settings", None)
 build("chromium", chromium)
 firefox = dict(base)
-firefox["background"] = json.load(open(os.path.join(root, "firefox", "manifest-overrides.json")))["background"]
+firefox["background"] = json.load(open(os.path.join(root, "manifest-firefox-overrides.json")))["background"]
 build("firefox", firefox)
 PY
