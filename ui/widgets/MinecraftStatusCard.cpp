@@ -76,156 +76,6 @@ QString Num(float v)
 }
 } // namespace
 
-/**
- * Where the data goes, as a small diagram:  Minecraft -> OpenRGB -> LEDs, with the vitals link
- * (UDP) and the Room Ambilight link (shared memory) as two lines, and the LED updates after the
- * plugin. Lines in the theme's highlight colour while data flows (dots travel along them), grey
- * when idle, red when messages fail. Rates sit on the lines; the full numbers are in the tooltip.
- */
-class MinecraftLinkDiagram : public QWidget
-{
-public:
-    struct Link
-    {
-        bool active = false;
-        bool error = false;
-        QString label;
-        double rate = 0.0; /* per second: dot speed */
-    };
-    Link vitals;
-    Link room;
-    Link leds;
-
-    explicit MinecraftLinkDiagram(QWidget* parent)
-        : QWidget(parent)
-    {
-        setMinimumHeight(64);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        anim_ = new QTimer(this);
-        anim_->setInterval(33);
-        connect(anim_, &QTimer::timeout, this, [this]() {
-            phase_ += 0.033;
-            update();
-        });
-    }
-
-    QSize sizeHint() const override
-    {
-        return QSize(320, 64);
-    }
-
-protected:
-    void showEvent(QShowEvent* e) override
-    {
-        QWidget::showEvent(e);
-        anim_->start();
-    }
-    void hideEvent(QHideEvent* e) override
-    {
-        anim_->stop();
-        QWidget::hideEvent(e);
-    }
-
-    void paintEvent(QPaintEvent*) override
-    {
-        QPainter p(this);
-        p.setRenderHint(QPainter::Antialiasing, true);
-        const QPalette pal = palette();
-        const QColor text = pal.color(QPalette::WindowText);
-        const QColor node_fill = PluginUiBlendColors(pal.color(QPalette::Window), pal.color(QPalette::Button), 0.7f);
-        const QColor node_line = PluginUiBlendColors(pal.color(QPalette::Window), text, 0.30f);
-        const QColor on = pal.color(QPalette::Highlight);
-        const QColor off = PluginUiBlendColors(pal.color(QPalette::Window), text, 0.25f);
-        const QColor bad(220, 80, 70);
-
-        QFont small = font();
-        small.setPointSizeF(std::max(6.5, small.pointSizeF() * 0.82));
-        const QFontMetricsF fm(font());
-        const QFontMetricsF sfm(small);
-
-        const double W = width();
-        const double H = height();
-        const double node_h = 22.0;
-        const auto node_w = [&](const QString& s) { return fm.horizontalAdvance(s) + 18.0; };
-        const QString n1 = QStringLiteral("Minecraft");
-        const QString n2 = QStringLiteral("OpenRGB");
-        const QString n3 = QStringLiteral("LEDs");
-        const double w1 = node_w(n1);
-        const double w2 = node_w(n2);
-        const double w3 = node_w(n3);
-        const double cy = H / 2.0;
-        /* Spread: the Minecraft -> OpenRGB stretch is longer (two links and their labels). */
-        const double free_space = std::max(40.0, W - w1 - w2 - w3 - 2.0);
-        const double gap1 = free_space * 0.62;
-        const double x1 = 1.0;
-        const double x2 = x1 + w1 + gap1;
-        const double x3 = W - w3 - 1.0;
-
-        const auto draw_node = [&](double x, double w, const QString& label, bool lit) {
-            QRectF r(x, cy - node_h / 2.0, w, node_h);
-            QPainterPath path;
-            path.addRoundedRect(r, 6, 6);
-            p.fillPath(path, node_fill);
-            p.setPen(QPen(lit ? on : node_line, 1.2));
-            p.drawPath(path);
-            p.setPen(text);
-            p.setFont(font());
-            p.drawText(r, Qt::AlignCenter, label);
-        };
-
-        /* A link: line + arrow head + travelling dots + label above or below. */
-        const auto draw_link = [&](double ax, double bx, double y, const Link& l, bool label_above, double offset) {
-            const QColor c = l.error ? bad : (l.active ? on : off);
-            p.setPen(QPen(c, l.active ? 2.0 : 1.2, l.active ? Qt::SolidLine : Qt::DashLine, Qt::RoundCap));
-            p.drawLine(QPointF(ax, y), QPointF(bx - 5, y));
-            QPainterPath head;
-            head.moveTo(bx, y);
-            head.lineTo(bx - 6, y - 3.5);
-            head.lineTo(bx - 6, y + 3.5);
-            head.closeSubpath();
-            p.fillPath(head, c);
-            if(l.active && bx - ax > 20)
-            {
-                /* Dots: faster for higher rates, capped so they stay readable. */
-                const double speed = 0.35 + std::min(1.0, l.rate / 120.0) * 0.9; /* lengths per second */
-                const int dots = 3;
-                p.setPen(Qt::NoPen);
-                p.setBrush(c);
-                for(int i = 0; i < dots; i++)
-                {
-                    double t = std::fmod(phase_ * speed + offset + (double)i / dots, 1.0);
-                    const double x = ax + (bx - 8 - ax) * t;
-                    const double fade = std::sin(t * 3.14159);
-                    QColor dc = c;
-                    dc.setAlphaF(0.35 + 0.65 * fade);
-                    p.setBrush(dc);
-                    p.drawEllipse(QPointF(x, y), 2.4, 2.4);
-                }
-                p.setBrush(Qt::NoBrush);
-            }
-            p.setFont(small);
-            p.setPen(l.error ? bad : (l.active ? text : off));
-            const QString s = sfm.elidedText(l.label, Qt::ElideRight, std::max(10.0, bx - ax - 4));
-            const double ty = label_above ? y - 4 : y + sfm.ascent() + 3;
-            p.drawText(QPointF(ax + (bx - ax - sfm.horizontalAdvance(s)) / 2.0, ty), s);
-        };
-
-        const double a1 = x1 + w1;
-        const double b1 = x2;
-        draw_link(a1 + 2, b1 - 2, cy - 6, vitals, true, 0.0);
-        draw_link(a1 + 2, b1 - 2, cy + 6, room, false, 0.5);
-        draw_link(x2 + w2 + 2, x3 - 2, cy, leds, true, 0.25);
-
-        draw_node(x1, w1, n1, vitals.active || room.active);
-        draw_node(x2, w2, n2, room.active || vitals.active);
-        draw_node(x3, w3, n3, leds.active);
-    }
-
-private:
-    QTimer* anim_ = nullptr;
-    double phase_ = 0.0;
-};
-
 MinecraftStatusCard::MinecraftStatusCard(QWidget* parent)
     : QWidget(parent)
 {
@@ -261,8 +111,20 @@ MinecraftStatusCard::MinecraftStatusCard(QWidget* parent)
     room_->setWordWrap(true);
     PluginUiApplyMutedSecondaryLabel(room_);
     v->addWidget(room_);
-    diagram_ = new MinecraftLinkDiagram(card);
-    v->addWidget(diagram_);
+    /* Each link as a meter toward what it should reach (theme highlight; amber when far short). */
+    meters_ = new QWidget(card);
+    QVBoxLayout* mv = new QVBoxLayout(meters_);
+    mv->setContentsMargins(0, 2, 0, 0);
+    mv->setSpacing(3);
+    const QColor accent = card->palette().color(QPalette::Highlight);
+    mv->addWidget(StatRow(meters_, tr("Vitals"), accent, &vitals_meter_, &vitals_meter_text_));
+    mv->addWidget(StatRow(meters_, tr("Room"), accent, &room_meter_, &room_meter_text_));
+    mv->addWidget(StatRow(meters_, tr("LEDs"), accent, &led_meter_, &led_meter_text_));
+    for(QLabel* l : {vitals_meter_text_, room_meter_text_, led_meter_text_})
+    {
+        l->setMinimumWidth(96);
+    }
+    v->addWidget(meters_);
 
     outer->addWidget(card);
     PluginUiApplyControllerCardChrome(card);
@@ -409,34 +271,57 @@ void MinecraftStatusCard::refresh()
         room_->setText(line);
     }
 
-    /* ---- link diagram: rates about once a second, details in its tooltip ---- */
+    /* ---- meters: rates about once a second, details in the tooltip ---- */
     unsigned int total = 0;
     unsigned int valid = 0;
     unsigned int errors = 0;
     std::string source;
     std::string type;
     GameTelemetryBridge::GetStats(total, valid, errors, source, type);
+    const QColor accent = palette().color(QPalette::Highlight);
+    const QColor amber(230, 160, 50);
+    const QColor bad(220, 80, 70);
+    const QPalette pal = palette();
+    const QColor track = PluginUiBlendColors(pal.color(QPalette::Window), pal.color(QPalette::WindowText), 0.18f);
+    const auto paint = [&track](QProgressBar* bar, const QColor& c) {
+        bar->setStyleSheet(QStringLiteral("QProgressBar { border: none; border-radius: 4px; background: %1; }"
+                                          "QProgressBar::chunk { border-radius: 4px; background: %2; }")
+                               .arg(track.name(), c.name()));
+    };
+    const auto meter = [&](QProgressBar* bar, QLabel* text, double value, double target, const QString& shown, bool live,
+                           bool failing) {
+        const double frac = target > 0.0 ? std::clamp(value / target, 0.0, 1.0) : 0.0;
+        bar->setValue(live ? (int)std::lround(frac * 1000.0) : 0);
+        paint(bar, failing ? bad : (live && frac < 0.25 ? amber : accent));
+        text->setText(live ? shown : tr("idle"));
+    };
     if(rates_ms_ == 0 || now - rates_ms_ >= 1000)
     {
-        if(rates_ms_ > 0 && diagram_)
+        if(rates_ms_ > 0 && led_meter_)
         {
             const double secs = (double)(now - rates_ms_) / 1000.0;
             const double led_fps = (double)(r.led_frames - rates_led_) / secs;
             const double room_fps = (double)(r.room_frames - rates_room_) / secs;
             const double msg_ps = (double)((unsigned long long)total - rates_msgs_) / secs;
-            diagram_->vitals.active = telemetry_fresh;
-            diagram_->vitals.error = errors > 0 && total > 0 && errors * 10u > total; /* more than 10% failing */
-            diagram_->vitals.rate = msg_ps;
-            diagram_->vitals.label = telemetry_fresh ? tr("vitals %1/s").arg(msg_ps, 0, 'f', 0) : tr("vitals");
-            diagram_->room.active = room_fresh;
-            diagram_->room.rate = room_fps;
-            diagram_->room.label = room_fresh ? (r.room_delay_ms >= 0 ? tr("room %1/s \u00B7 %2 ms").arg(room_fps, 0, 'f', 0).arg(r.room_delay_ms)
-                                                                     : tr("room %1/s").arg(room_fps, 0, 'f', 0))
-                                              : tr("room");
-            diagram_->leds.active = led_fps > 0.5;
-            diagram_->leds.rate = led_fps;
-            diagram_->leds.label = led_fps > 0.5 ? tr("%1/s").arg(led_fps, 0, 'f', 0) : tr("idle");
-            diagram_->update();
+            /* Targets: vitals and room against their own recent best (they follow the game's
+               tick and frame rate); LEDs against the rate the effect stack aims for. */
+            vitals_peak_ = std::max(msg_ps, vitals_peak_ * 0.98);
+            room_peak_ = std::max(room_fps, room_peak_ * 0.98);
+            const double led_target = picture ? 240.0 : 60.0;
+            meter(vitals_meter_, vitals_meter_text_, msg_ps, vitals_peak_, tr("%1/s").arg(msg_ps, 0, 'f', 0),
+                  telemetry_fresh, errors > 0 && total > 0 && errors * 10u > total);
+            QString room_text = tr("%1/s").arg(room_fps, 0, 'f', 0);
+            if(r.room_delay_ms >= 0)
+            {
+                room_text += tr(" \u00B7 %1 ms").arg(r.room_delay_ms);
+            }
+            meter(room_meter_, room_meter_text_, room_fps, room_peak_, room_text, room_fresh, false);
+            QString led_text = tr("%1 / %2/s").arg(led_fps, 0, 'f', 0).arg(led_target, 0, 'f', 0);
+            if(r.led_frame_ms > 0.0)
+            {
+                led_text += tr(" \u00B7 %1 ms").arg(r.led_frame_ms, 0, 'f', r.led_frame_ms < 10.0 ? 1 : 0);
+            }
+            meter(led_meter_, led_meter_text_, led_fps, led_target, led_text, led_fps > 0.5, false);
         }
         rates_ms_ = now;
         rates_led_ = r.led_frames;
@@ -444,9 +329,9 @@ void MinecraftStatusCard::refresh()
         rates_msgs_ = total;
     }
 
-    if(diagram_)
+    if(meters_)
     {
-        QString tip = tr("Vitals and pose: UDP 127.0.0.1:9876 \u2014 %1 messages, %2 valid, %3 errors").arg(total).arg(valid).arg(errors);
+        QString tip = tr("Vitals: UDP 127.0.0.1:9876 \u2014 %1 messages, %2 valid, %3 errors").arg(total).arg(valid).arg(errors);
         if(!source.empty() || !type.empty())
         {
             tip += tr("\nLast message: %1 / %2").arg(QString::fromStdString(source), QString::fromStdString(type));
@@ -456,18 +341,15 @@ void MinecraftStatusCard::refresh()
             tip += tr(" (%1 s ago)").arg((now - t.last_event_ms) / 1000.0, 0, 'f', 1);
         }
         tip += t.room_sample.has_frame
-                   ? tr("\nRoom Ambilight: shared memory, cubemap %1\u00D7%2\u00D7%3, %4 LED texels per frame")
+                   ? tr("\nRoom: shared memory, cubemap %1\u00D7%2\u00D7%3, %4 LED texels per frame; bar = against its "
+                        "recent best; ms = mod to plugin delay")
                          .arg(t.room_sample.size_x)
                          .arg(t.room_sample.size_y)
                          .arg(t.room_sample.size_z)
                          .arg(t.room_sample.texel_flats ? (int)t.room_sample.texel_flats->size() : 0)
-                   : tr("\nRoom Ambilight: no frames yet");
-        tip += tr("\nLED updates: how often the effect stack sends colours to your devices; each device then "
-                  "updates at its own speed.");
-        if(r.room_delay_ms >= 0)
-        {
-            tip += tr("\nDelay: from the mod writing the newest frame to the plugin reading it.");
-        }
-        diagram_->setToolTip(tip);
+                   : tr("\nRoom: no frames yet");
+        tip += tr("\nLEDs: effect-stack updates per second against what it aims for, and how long one update "
+                  "takes (everything in the stack plus sending to the devices). Amber = well short.");
+        meters_->setToolTip(tip);
     }
 }

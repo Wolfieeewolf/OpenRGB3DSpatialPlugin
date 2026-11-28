@@ -150,10 +150,17 @@ static std::atomic<std::uint64_t> g_room_frames{0};
 static std::atomic<std::uint64_t> g_led_frames{0};
 static std::atomic<long long> g_room_delay_ms{-1};
 static std::atomic<unsigned long long> g_room_last_ms{0};
+static std::atomic<double> g_led_frame_ms{0.0};
 
-void GameTelemetryBridge::NoteLedFrameOutput()
+void GameTelemetryBridge::NoteLedFrameOutput(double frame_ms)
 {
     g_led_frames.fetch_add(1, std::memory_order_relaxed);
+    if(frame_ms > 0.0)
+    {
+        /* Smoothed: about the last 20 updates. */
+        const double prev = g_led_frame_ms.load(std::memory_order_relaxed);
+        g_led_frame_ms.store(prev <= 0.0 ? frame_ms : prev * 0.95 + frame_ms * 0.05, std::memory_order_relaxed);
+    }
 }
 
 GameTelemetryBridge::LiveRates GameTelemetryBridge::GetLiveRates()
@@ -163,6 +170,7 @@ GameTelemetryBridge::LiveRates GameTelemetryBridge::GetLiveRates()
     r.led_frames = g_led_frames.load(std::memory_order_relaxed);
     r.room_delay_ms = g_room_delay_ms.load(std::memory_order_relaxed);
     r.room_last_ms = g_room_last_ms.load(std::memory_order_relaxed);
+    r.led_frame_ms = g_led_frame_ms.load(std::memory_order_relaxed);
     return r;
 }
 

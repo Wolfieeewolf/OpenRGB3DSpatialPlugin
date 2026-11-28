@@ -121,9 +121,10 @@ public:
         std::uint64_t led_frames = 0;        /* times the effect stack pushed colours to the devices */
         long long room_delay_ms = -1;        /* newest frame: mod wrote it -> plugin read it (-1 = unknown) */
         unsigned long long room_last_ms = 0; /* steady clock when the newest frame arrived */
+        double led_frame_ms = 0.0;           /* average time one effect-stack update takes */
     };
-    /** Called each time the effect stack has sent colours to the devices. */
-    static void NoteLedFrameOutput();
+    /** Called each time the effect stack has sent colours to the devices (and how long it took). */
+    static void NoteLedFrameOutput(double frame_ms = 0.0);
     static LiveRates GetLiveRates();
 
 private:

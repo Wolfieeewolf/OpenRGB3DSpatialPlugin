@@ -31,6 +31,7 @@
 #include <QLineEdit>
 #include <QPointer>
 #include <cstring>
+#include <QElapsedTimer>
 #include "Game/GameTelemetryBridge.h"
 #include "Game/RoomSampleConfigPublisher.h"
 #include "Game/RoomSampleFrameProtocol.h"
@@ -1358,8 +1359,10 @@ void OpenRGB3DSpatialTab::effectTimerTimeout()
     }
     effect_time += dt;
 
+    QElapsedTimer frame_timer;
+    frame_timer.start();
     RenderEffectStack();
-    GameTelemetryBridge::NoteLedFrameOutput();
+    GameTelemetryBridge::NoteLedFrameOutput((double)frame_timer.nsecsElapsed() / 1.0e6);
 }
 
 bool OpenRGB3DSpatialTab::RebuildEffectStackFromJson(const nlohmann::json& effects_array)

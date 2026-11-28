@@ -45,7 +45,16 @@ private:
     QListWidget* log_ = nullptr;
     QToolButton* details_toggle_ = nullptr;
     QLabel* details_ = nullptr;
-    MinecraftLinkDiagram* diagram_ = nullptr;
+    MinecraftLinkDiagram* diagram_ = nullptr; /* unused (replaced by meters) */
+    QWidget* meters_ = nullptr;
+    QProgressBar* vitals_meter_ = nullptr;
+    QProgressBar* room_meter_ = nullptr;
+    QProgressBar* led_meter_ = nullptr;
+    QLabel* vitals_meter_text_ = nullptr;
+    QLabel* room_meter_text_ = nullptr;
+    QLabel* led_meter_text_ = nullptr;
+    double vitals_peak_ = 0.0;
+    double room_peak_ = 0.0;
     unsigned long long rates_msgs_ = 0;
     QTimer* timer_ = nullptr;
 
