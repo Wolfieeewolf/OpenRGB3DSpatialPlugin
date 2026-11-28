@@ -152,7 +152,7 @@ void StreamCueLibrary::Load(const filesystem::path& dir)
     }
 }
 
-const StreamCueFile* StreamCueLibrary::Match(const StreamState& state) const
+const StreamCueFile* StreamCueLibrary::Match(const StreamState& state, std::string* how) const
 {
     const std::string service = Lower(state.service);
     const std::int64_t dur_ms = (std::int64_t)std::llround(state.duration_s * 1000.0);
@@ -167,7 +167,31 @@ const StreamCueFile* StreamCueLibrary::Match(const StreamState& state) const
                 if(m.service == service && m.id == state.id
                    && (f.duration_ms <= 0 || dur_ms <= 0 || std::llabs(f.duration_ms - dur_ms) <= f.duration_tolerance_ms))
                 {
+                    if(how) *how = "by " + service + " ID";
                     return &f;
+                }
+            }
+        }
+        /* Crunchyroll gives each language version its own ID (GE00384332ENUS, ...JAJP): the
+           same episode in another language matches too, if the length fits. */
+        if(service == "crunchyroll" && state.id.size() > 4)
+        {
+            const auto base = [](const std::string& id) {
+                return id.size() > 4 && std::all_of(id.end() - 4, id.end(), [](unsigned char c) { return std::isupper(c); })
+                           ? id.substr(0, id.size() - 4)
+                           : id;
+            };
+            const std::string want_base = base(state.id);
+            for(const StreamCueFile& f : files_)
+            {
+                for(const StreamMatch& m : f.streams)
+                {
+                    if(m.service == service && base(m.id) == want_base
+                       && (f.duration_ms <= 0 || dur_ms <= 0 || std::llabs(f.duration_ms - dur_ms) <= f.duration_tolerance_ms))
+                    {
+                        if(how) *how = "by crunchyroll ID (other language)";
+                        return &f;
+                    }
                 }
             }
         }
@@ -191,6 +215,10 @@ const StreamCueFile* StreamCueLibrary::Match(const StreamState& state) const
         {
             best = &f;
         }
+    }
+    if(best && how)
+    {
+        *how = "by title and length";
     }
     return best;
 }

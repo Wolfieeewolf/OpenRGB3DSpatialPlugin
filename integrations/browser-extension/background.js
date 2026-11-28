@@ -32,7 +32,7 @@ function identify(pageUrl, s) {
     out.id = s.primeTitleId || match(/\/detail\/([A-Z0-9]{8,})/i) || match(/\/dp\/([A-Z0-9]{8,})/i);
   } else if (onHost(host, "crunchyroll.com")) {
     out.service = "crunchyroll";
-    out.id = match(/\/watch\/([A-Z0-9]+)/i);
+    out.id = s.crunchyId || match(/\/watch\/([A-Z0-9]+)/i);
   } else if (onHost(host, "disneyplus.com")) {
     out.service = "disney";
     out.id = match(/\/(?:video|play)\/([0-9a-f-]{8,})/i);
@@ -177,11 +177,22 @@ function forget(match) {
   reselect();
 }
 
+/* Artwork link for the Now Playing card: https only, sane length. */
+const pageArt = new Map();
+function artUrl(u) {
+  return typeof u === "string" && u.length <= 2048 && u.startsWith("https://") ? u : "";
+}
+
 api.runtime.onMessage.addListener((msg, sender) => {
   const tabId = sender && sender.tab ? sender.tab.id : -1;
   if (!msg || tabId < 0) return;
   if (msg.type === "movie-sync-page") {
     pages.set(tabId, msg.url);
+    pageArt.delete(tabId);
+    return;
+  }
+  if (msg.type === "movie-sync-page-art") {
+    if (!sender.frameId && artUrl(msg.url)) pageArt.set(tabId, msg.url);
     return;
   }
   const key = tabId + ":" + (sender.frameId || 0);
@@ -204,7 +215,13 @@ api.runtime.onMessage.addListener((msg, sender) => {
     paused: !!msg.paused,
     rate: msg.rate || 1,
     ad: !!msg.ad,
+    artwork_url: artUrl(msg.artwork) || artUrl(pageArt.get(tabId)) || "",
   };
+  /* Title details (built and checked by content.js); kept small. */
+  if (msg.meta && typeof msg.meta === "object") {
+    const text = JSON.stringify(msg.meta);
+    if (text.length < 16000) state.meta = msg.meta;
+  }
   players.set(key, { tabId, state, at: Date.now(), audible: !!(sender.tab && sender.tab.audible), muted: !!msg.muted });
   reselect();
   if (active === key) send(state);
@@ -214,6 +231,7 @@ api.tabs &&
   api.tabs.onRemoved &&
   api.tabs.onRemoved.addListener((tabId) => {
     pages.delete(tabId);
+    pageArt.delete(tabId);
     forget((k) => k.startsWith(tabId + ":"));
   });
 

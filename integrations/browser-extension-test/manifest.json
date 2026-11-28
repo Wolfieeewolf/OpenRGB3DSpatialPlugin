@@ -1,19 +1,27 @@
 {
   "manifest_version": 3,
   "name": "OpenRGB 3D Spatial - Stream Probe (test)",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Test only: records everything a streaming page exposes (titles, IDs, player state and events, ads, manifests) in a corner label. Alt+Shift+D copies the full report. Sends nothing anywhere.",
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["probe.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "probe.js"
+      ],
       "run_at": "document_idle",
       "all_frames": true
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["page-probe.js"],
-      "run_at": "document_idle",
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "page-probe.js"
+      ],
+      "run_at": "document_start",
       "all_frames": true,
       "world": "MAIN"
     }

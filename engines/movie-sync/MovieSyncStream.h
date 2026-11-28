@@ -20,6 +20,31 @@
 namespace MovieSync
 {
 
+/** A stretch of the title the service marks: "intro", "recap", "credits" (end credits),
+    "preview". Stream time; end_ms -1 = to the end. */
+struct StreamMarker
+{
+    std::string kind;
+    std::int64_t start_ms = 0;
+    std::int64_t end_ms = -1;
+};
+
+/** What the service says about the title (browser extension only). */
+struct StreamMeta
+{
+    std::string show;
+    int season = 0;
+    int episode = 0;
+    std::string episode_title;
+    std::string synopsis;
+    std::string rating;
+    std::string advisories;
+    std::vector<std::string> genres;
+    bool photosensitive = false;
+    std::vector<std::string> artwork; /* https image links, best first */
+    std::vector<StreamMarker> markers;
+};
+
 /** One playback report. */
 struct StreamState
 {
@@ -33,6 +58,8 @@ struct StreamState
     double rate = 1.0;
     bool paused = true;
     bool ad = false;         /* an ad is playing: cues hold */
+    std::string artwork_url; /* https image (extension), or "smtc:<n>" (Windows thumbnail n) */
+    StreamMeta meta;
     std::int64_t received_ms = 0; /* steady clock when this arrived */
 };
 
@@ -71,7 +98,7 @@ class StreamCueLibrary
 public:
     void Load(const filesystem::path& dir);
     /** Best file for this report: exact service + ID first, then title + length. */
-    const StreamCueFile* Match(const StreamState& state) const;
+    const StreamCueFile* Match(const StreamState& state, std::string* how = nullptr) const;
     std::size_t Count() const { return files_.size(); }
     /** Files that did not load (and duplicate IDs), for the status line. */
     const std::vector<std::string>& Errors() const { return errors_; }

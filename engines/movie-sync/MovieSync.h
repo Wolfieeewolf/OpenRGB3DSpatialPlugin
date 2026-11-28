@@ -7,6 +7,10 @@
 #include "MovieSyncRuntime.h"
 #include "MovieSyncStream.h"
 #include "MovieSyncSystemMedia.h"
+#include "MovieSyncPanel.h"
+
+#include <QPointer>
+#include <map>
 
 class QCheckBox;
 class QSpinBox;
@@ -15,6 +19,9 @@ class QLabel;
 class QListWidget;
 class QPushButton;
 class QTimer;
+class QNetworkAccessManager;
+class QNetworkReply;
+class QPixmap;
 class OpenRGB3DSpatialTab;
 
 class MovieSyncEffect : public SpatialEffect3D
@@ -47,11 +54,25 @@ private slots:
     void onStreamTick();
 
 private:
-    /** One cue edge (VLC, or a stream's cue file): play / hold / release a look. */
-    void handleCueEdge(const std::string& effect_id, const std::string& edge, bool active);
+    /** One cue edge from VLC or a stream's cue file: play / hold / release a look (and log it). */
+    void handleCueEdge(const std::string& effect_id, const std::string& edge, bool active, bool from_vlc);
     /** Browser extension report (POST /v1/stream). */
     void onStreamReport(const std::string& json_body);
-    void updateStreamLabel(std::int64_t now_ms);
+    /** Now Playing card, timeline, next cue and connection lights (a few times a second). */
+    void refreshNowPlaying(std::int64_t now_ms);
+    void logEvent(MovieSyncLog::Kind kind, const QString& text, bool with_film_time = true);
+    /** Card artwork: an image beside the cue file, else the Windows thumbnail, else the
+        extension's https link (downloaded once, kept in memory). */
+    void updateArtwork(const MovieSync::StreamState& st);
+    void showArtwork(const QPixmap& pixmap);
+    void tryArtwork(std::size_t index);
+    /** Cue file + the looks chosen for the service's intro / recap / credits, as one list for
+        the player; rebuilt when any of it changes. Returns what to play (or nullptr). */
+    const MovieSync::StreamCueFile* rebuildPlayFile(const MovieSync::StreamState& st, bool* changed);
+    /** Title details into the log; photosensitive safety when the title is marked (if on). */
+    void noteTitleDetails(const MovieSync::StreamState& st);
+    void restoreTitleSafety();
+    void refreshMarkerCombos();
     void bindTab();
     void refreshCategoryCombo();
     void refreshEffectList();
@@ -101,6 +122,52 @@ private:
     const MovieSync::StreamCueFile* stream_file_ = nullptr;
     std::int64_t stream_label_ms_ = 0;
     int lights_delay_ms_ = 0;
-    QLabel* stream_label_ = nullptr;
     QSpinBox* lights_delay_spin_ = nullptr;
+
+    /* Panel: Now Playing card, cue timeline, activity log, connection lights. */
+    QLabel* now_source_ = nullptr;
+    QLabel* now_title_ = nullptr;
+    QLabel* now_time_ = nullptr;
+    QLabel* now_cuefile_ = nullptr;
+    QLabel* now_next_ = nullptr;
+    MovieSyncTimeline* timeline_ = nullptr;
+    QListWidget* log_list_ = nullptr;
+    QLabel* connections_label_ = nullptr;
+    std::string match_how_;
+    std::string timeline_key_;
+    /* What the log last saw, to report only changes. */
+    std::string seen_source_;
+    bool seen_paused_ = true;
+    bool seen_ad_ = false;
+    double seen_pos_s_ = -1.0;
+    std::int64_t seen_pos_ms_ = 0;
+    std::int64_t vlc_last_ms_ = 0;
+    std::string vlc_last_cue_;
+    QLabel* now_art_ = nullptr;
+    QNetworkAccessManager* net_ = nullptr;
+    QPointer<QNetworkReply> art_reply_;
+    std::string art_key_;
+    std::map<std::string, QPixmap> art_cache_;
+    std::vector<std::string> art_candidates_;
+    std::string art_warned_key_;
+    void artworkFailed(std::size_t index, const std::string& url, const std::string& why);
+    QLabel* now_meta_ = nullptr;
+    QLabel* now_synopsis_ = nullptr;
+
+    /* Service marks (intro / recap / credits) and what lights do in them. */
+    QComboBox* marker_combo_[3] = {nullptr, nullptr, nullptr};
+    std::string marker_look_[3]; /* intro, recap, credits: catalog effect id, "" = nothing */
+    MovieSync::StreamCueFile play_file_;
+    bool play_has_ = false;
+    std::string play_sig_;
+    std::string details_sig_;
+    std::string markers_sig_;
+    std::string seen_marker_;
+
+    /* Photosensitive safety for titles the service marks (only if the user turns it on). */
+    QCheckBox* auto_safety_check_ = nullptr;
+    bool auto_safety_ = false;
+    bool safety_forced_ = false;
+    std::string safety_key_;
+    std::string safety_override_key_;
 };

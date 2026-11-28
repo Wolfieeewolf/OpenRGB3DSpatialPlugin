@@ -76,8 +76,121 @@
 
   /* What the page's own scripts expose (from page-probe.js). */
   let pageInfo = null;
+  let pageFull = null;
   window.addEventListener("message", (e) => {
-    if (e.source === window && e.data && e.data.__orgbProbe) pageInfo = e.data;
+    if (e.source !== window || !e.data || !e.data.__orgbProbe) return;
+    if (e.data.full) {
+      pageFull = e.data;
+      return;
+    }
+    else pageInfo = e.data;
+  });
+
+  /* ---------- v0.3: everything else a page shows (artwork, metadata, text, resources) ---------- */
+  const cut = (s, n) => (typeof s === "string" && s.length > n ? s.slice(0, n) + "...(" + s.length + ")" : s);
+
+  const mediaSessionFull = () =>
+    safe(() => {
+      const ms = navigator.mediaSession;
+      if (!ms) return null;
+      const md = ms.metadata;
+      return {
+        playbackState: ms.playbackState,
+        metadata: md ? {
+          title: md.title, artist: md.artist, album: md.album,
+          artwork: Array.from(md.artwork || []).map((a) => ({ src: cut(a.src, 500), sizes: a.sizes, type: a.type })),
+          chapters: safe(() => Array.from(md.chapterInfo || []).map((c) => ({ title: c.title, startTime: c.startTime, artwork: Array.from(c.artwork || []).map((a) => cut(a.src, 300)) })), []),
+        } : null,
+      };
+    }, null);
+
+  const metaAll = () =>
+    safe(() => Array.from(document.querySelectorAll("meta")).map((e) => {
+      const o = {};
+      for (const a of e.attributes) o[a.name] = cut(a.value, 500);
+      return o;
+    }).slice(0, 150), []);
+
+  const links = () =>
+    safe(() => Array.from(document.querySelectorAll("link")).map((l) => ({
+      rel: l.rel, as: l.getAttribute("as") || "", type: l.type || "", sizes: l.getAttribute("sizes") || "",
+      href: cut(l.href, 400),
+    })).filter((l) => !/stylesheet|modulepreload|dns-prefetch|preconnect/.test(l.rel)).slice(0, 80), []);
+
+  const jsonLdRaw = () =>
+    safe(() => Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+      .map((s) => cut(s.textContent.trim(), 20000)).slice(0, 10), []);
+
+  /* Every picture on the page (img, srcset, CSS backgrounds), biggest first: box art, posters,
+     hero banners, episode stills, logos. */
+  const images = () =>
+    safe(() => {
+      const out = [];
+      const push = (kind, el, url, extra) => {
+        if (!url || /^data:/.test(url)) return;
+        const r = el.getBoundingClientRect();
+        out.push(Object.assign({
+          kind, url: cut(url, 500), shown: Math.round(r.width) + "x" + Math.round(r.height),
+          area: Math.round(r.width * r.height), visible: r.width > 0 && r.height > 0,
+          alt: cut((el.getAttribute("alt") || el.getAttribute("aria-label") || el.getAttribute("title") || "").trim(), 120),
+          cls: cut(String(el.className || ""), 80),
+        }, extra || {}));
+      };
+      deepAll("img").forEach((i) => push("img", i, i.currentSrc || i.src, {
+        natural: i.naturalWidth + "x" + i.naturalHeight, srcset: cut(i.getAttribute("srcset") || "", 600),
+      }));
+      deepAll("picture source[srcset]").forEach((s) => push("source", s.parentElement || s, s.getAttribute("srcset").split(/\s+/)[0], { media: s.media || "" }));
+      deepAll("[style*='background']").concat(deepAll("div, section, a, span, figure").slice(0, 3000)).forEach((e) => {
+        const bg = safe(() => getComputedStyle(e).backgroundImage, "");
+        const m = bg && bg.match(/url\(["']?(.*?)["']?\)/);
+        if (m) push("background", e, m[1]);
+      });
+      deepAll("video[poster]").forEach((v) => push("video-poster", v, v.poster));
+      const uniq = new Map();
+      out.forEach((o) => { if (!uniq.has(o.url) || uniq.get(o.url).area < o.area) uniq.set(o.url, o); });
+      return Array.from(uniq.values()).sort((a, b) => b.area - a.area).slice(0, 80);
+    }, []);
+
+  /* Images and API calls the page loaded (artwork CDNs, metadata endpoints). */
+  const resources = () =>
+    safe(() => {
+      const all = performance.getEntriesByType("resource");
+      const hosts = {};
+      all.forEach((r) => { const h = safe(() => new URL(r.name).host, "?"); hosts[h] = (hosts[h] || 0) + 1; });
+      return {
+        total: all.length,
+        hosts,
+        images: all.filter((r) => r.initiatorType === "img" || r.initiatorType === "css" || /\.(jpe?g|png|webp|avif)(\?|$)/i.test(r.name))
+          .slice(-80).map((r) => cut(r.name, 400)),
+        api: all.filter((r) => r.initiatorType === "fetch" || r.initiatorType === "xmlhttprequest")
+          .slice(-80).map((r) => cut(r.name, 400)),
+      };
+    }, null);
+
+  /* Labelled text the site's own UI carries (Netflix data-uia, test IDs, headings). */
+  const uiText = () =>
+    safe(() => {
+      const out = {};
+      const add = (k, v) => {
+        v = clean(v);
+        if (!v || v.length > 400) return;
+        out[k] = out[k] ? (out[k].includes(v) ? out[k] : cut(out[k] + " | " + v, 600)) : v;
+      };
+      deepAll("[data-uia], [data-testid], [data-t], [data-automation-id], [data-qa]").slice(0, 600).forEach((e) => {
+        const k = ["data-uia", "data-testid", "data-t", "data-automation-id", "data-qa"].map((a) => e.getAttribute(a) && a + "=" + e.getAttribute(a)).find(Boolean);
+        if (k && e.children.length < 6) add(k, e.textContent);
+      });
+      deepAll("h1, h2, h3").slice(0, 40).forEach((h, i) => add(h.tagName.toLowerCase() + "#" + i, h.textContent));
+      return out;
+    }, {});
+
+  const pageBasics = () => ({
+    lang: document.documentElement.lang,
+    canonical: safe(() => document.querySelector('link[rel="canonical"]').href, ""),
+    referrerHost: safe(() => new URL(document.referrer).host, ""),
+    userAgent: navigator.userAgent,
+    screen: screen.width + "x" + screen.height + " @" + devicePixelRatio,
+    standalone: safe(() => matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: window-controls-overlay)").matches, false),
   });
 
   /* Stream manifests / segments the player loaded (they often carry content IDs). */
@@ -169,6 +282,17 @@
       adHints: adHints(),
       manifests: manifests(),
       page: pageInfo,
+      v03: {
+        basics: pageBasics(),
+        mediaSession: mediaSessionFull(),
+        meta: metaAll(),
+        links: links(),
+        jsonLdRaw: jsonLdRaw(),
+        images: images(),
+        resources: resources(),
+        uiText: uiText(),
+        pageScripts: pageFull,
+      },
       visibility: document.visibilityState, focused: document.hasFocus(),
       fullscreen: !!document.fullscreenElement, pip: !!document.pictureInPictureElement,
       iframes: Array.from(document.querySelectorAll("iframe")).map((f) => (f.src || "").slice(0, 80)).slice(0, 8),
@@ -186,6 +310,7 @@
   };
 
   const tick = () => {
+    if (Date.now() < noticeUntil) return;
     const vids = deepAll("video");
     vids.forEach(watch);
     const v = mainVideo(vids);
@@ -200,11 +325,14 @@
     const nf = pageInfo && pageInfo.netflix && pageInfo.netflix[0];
     const lastEv = events.slice(-3).map((e) => e.t + " " + e.event).join(", ");
     label.textContent = [
-      "OpenRGB stream probe v0.2 (test)   Alt+Shift+D = copy full report",
+      "OpenRGB stream probe v0.4.0 (test)   Alt+Shift+D = copy full report",
       "site:        " + location.hostname + (isTop ? "" : "  (iframe)"),
       "ids in url:  " + ((location.href.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{6,}/gi) || []).slice(0, 3).join(", ") || "-"),
       "page title:  " + sticky("page", document.title),
       "media title: " + sticky("media", md ? [md.title, md.artist, md.album].filter(Boolean).join("  |  ") : ""),
+      "artwork:     " + (md && md.artwork && md.artwork.length ? md.artwork.length + " in media controls" : "none in media controls") +
+        (document.querySelector('meta[property="og:image"]') ? ", og:image" : "") +
+        (document.querySelector('script[type="application/ld+json"]') ? ", json-ld" : ""),
       "site title:  " + sticky("site", siteTitle),
       "netflix api: " + (nf ? "movie " + nf.movieId + "  " + fmt((nf.currentTimeMs || 0) / 1000) + " / " + fmt((nf.durationMs || 0) / 1000) : "-"),
       "position:    " + fmt(v.currentTime) + " / " + fmt(v.duration) + (v.paused ? "  (paused)" : "  (playing)") +
@@ -216,15 +344,57 @@
     ].join("\n");
   };
 
-  document.addEventListener("keydown", (e) => {
-    if (e.altKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
-      const text = JSON.stringify(report(), null, 2);
-      navigator.clipboard.writeText(text).then(
-        () => { label.textContent = "Full report copied to the clipboard (" + text.length + " characters)."; },
-        () => { console.log("[OpenRGB stream probe]", text); label.textContent = "Clipboard blocked: report printed to the console (F12)."; }
-      );
+  window.addEventListener("keydown", (e) => {
+    if (e.altKey && e.shiftKey && (e.code === "KeyD" || e.key === "D" || e.key === "d")) {
+      e.preventDefault();
+      e.stopPropagation();
+      copyReport();
     }
   }, true);
 
+  /* Copy; if the browser refuses the clipboard, save it as a file in Downloads instead. */
+  let noticeUntil = 0;
+  const notice = (msg) => {
+    noticeUntil = Date.now() + 5000;
+    if (!label.isConnected) (document.body || document.documentElement).appendChild(label);
+    label.textContent = msg;
+  };
+  const saveFile = (text) => {
+    const name = "stream-probe-" + location.hostname.replace(/^www\./, "") + "-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    a.download = name;
+    (document.body || document.documentElement).appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    return name;
+  };
+  const copyReport = () => {
+    let text;
+    try {
+      text = JSON.stringify(report(), null, 2);
+    } catch (err) {
+      notice("Report failed: " + err);
+      return;
+    }
+    const fallback = (why) => {
+      console.log("[OpenRGB stream probe]", text);
+      let saved = "";
+      try { saved = saveFile(text); } catch (e2) {}
+      notice("Clipboard blocked (" + why + "). " + (saved ? "Saved to Downloads: " + saved : "Printed to the console (F12)."));
+    };
+    try {
+      navigator.clipboard.writeText(text).then(
+        () => notice("Full report copied to the clipboard (" + text.length + " characters)" + (pageFull ? "" : ", page data not ready yet: press again in 5 s") + "."),
+        (err) => fallback(String(err && err.name || err))
+      );
+    } catch (err) {
+      fallback(String(err));
+    }
+  };
+
   setInterval(tick, 500);
+  /* Show that the probe is running (top page only), so a missing label is not a mystery. */
+  if (isTop) setTimeout(() => notice("OpenRGB stream probe v0.4.0 ready: Alt+Shift+D = copy full report"), 1500);
 })();

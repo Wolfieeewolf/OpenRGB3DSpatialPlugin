@@ -91,24 +91,236 @@
       const d = e.data;
       if (e.source !== window || !d || d.__orgbMovieSync !== "netflix") return;
       if (typeof d.id !== "string" || !isFinite(d.positionMs) || !isFinite(d.durationMs)) return;
-      netflixPlayer = { id: d.id, positionMs: +d.positionMs, durationMs: +d.durationMs, at: +d.sampledAt || Date.now() };
+      netflixPlayer = {
+        id: d.id,
+        positionMs: +d.positionMs,
+        durationMs: +d.durationMs,
+        meta: d.meta && typeof d.meta === "object" ? d.meta : null,
+        at: +d.sampledAt || Date.now(),
+      };
     });
   }
 
   /* Prime's permanent title ID, from the playback request it made for this title (watched as
      it happens: the resource timing buffer fills up and stops recording on long sessions). */
+  /* Prime also fetches playback info for the next episode (to start it seamlessly) and for
+     the muted trailer behind the player, so the last request is often not what is playing.
+     Every request is remembered with its time; the ID is chosen when the main video starts a
+     new source: the newest request made before that moment. */
   let primeId = "";
+  const primeReqs = [];
   if (isPrime && typeof PerformanceObserver !== "undefined") {
-    const takePrime = (name) => {
-      if (!/GetVodPlaybackResources|\/playback\//i.test(name)) return;
-      const m = name.match(/titleId=(amzn1\.dv\.gti\.[0-9a-f-]+)/i);
-      if (m) primeId = m[1];
+    const takePrime = (r) => {
+      if (!/GetVodPlaybackResources|\/playback\//i.test(r.name)) return;
+      const m = r.name.match(/titleId=(amzn1\.dv\.gti\.[0-9a-f-]+)/i);
+      if (!m) return;
+      primeReqs.push({ id: m[1], at: (performance.timeOrigin || 0) + r.startTime });
+      if (primeReqs.length > 40) primeReqs.shift();
     };
-    safe(() => performance.getEntriesByType("resource").forEach((r) => takePrime(r.name)));
+    safe(() => performance.getEntriesByType("resource").forEach(takePrime));
     safe(() => {
-      new PerformanceObserver((list) => list.getEntries().forEach((r) => takePrime(r.name))).observe({ type: "resource", buffered: true });
+      new PerformanceObserver((list) => list.getEntries().forEach(takePrime)).observe({ type: "resource", buffered: true });
     });
   }
+  let primeSrcKey = "";
+  let primeSrcAt = 0;
+  const pickPrimeId = (v, now) => {
+    const key = (v.currentSrc || "") + "|" + Math.round(v.duration || 0);
+    if (key !== primeSrcKey) {
+      primeSrcKey = key;
+      primeSrcAt = now;
+      primeId = "";
+    }
+    if (primeId) return;
+    /* The newest request before the source started (noticed up to a tick late). */
+    let best = null;
+    for (const r of primeReqs) if (r.at <= primeSrcAt + 300 && (!best || r.at > best.at)) best = r;
+    primeId = best ? best.id : "";
+  };
+
+  /* Artwork for the Now Playing card: what the site gives media controls (largest), else the
+     page's share image, else its structured data. Only https image links; looked for again
+     every 2 s until one turns up. */
+  const httpsUrl = (u) => {
+    const s = typeof u === "string" ? u : u && (u.url || u.contentUrl || u.src);
+    if (typeof s !== "string" || s.length > 2048) return "";
+    const abs = safe(() => new URL(s, location.href).href, "");
+    return abs.startsWith("https://") ? abs : "";
+  };
+  const findArtwork = () => {
+    const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    const art = safe(() => Array.from((md && md.artwork) || []), []);
+    if (art.length) {
+      const px = (a) => Math.max(0, ...String(a.sizes || "").split(/\s+/).map((s) => parseInt(s, 10) || 0));
+      art.sort((a, b) => px(b) - px(a));
+      for (const a of art) {
+        const u = httpsUrl(a.src);
+        if (u) return u;
+      }
+    }
+    for (const sel of ['meta[property="og:image"]', 'meta[name="og:image"]', 'meta[name="twitter:image"]']) {
+      const e = document.querySelector(sel);
+      const u = e && httpsUrl(e.getAttribute("content"));
+      if (u) return u;
+    }
+    let found = "";
+    safe(() =>
+      document.querySelectorAll('script[type="application/ld+json"]').forEach((s) => {
+        if (found || s.textContent.length > 200000) return;
+        const walk = (o, depth) => {
+          if (found || !o || typeof o !== "object" || depth > 4) return;
+          for (const k of ["image", "thumbnailUrl"]) {
+            const v = Array.isArray(o[k]) ? o[k][0] : o[k];
+            const u = httpsUrl(v);
+            if (u) {
+              found = u;
+              return;
+            }
+          }
+          Object.values(o).forEach((x) => walk(x, depth + 1));
+        };
+        walk(safe(() => JSON.parse(s.textContent), null), 0);
+      })
+    );
+    return found;
+  };
+  let artwork = { url: "", key: "", at: 0 };
+
+  /* ---------- What the title is: show, season, episode, synopsis, rating, artwork, and the
+     intro / recap / end-credits times. Each service keeps these somewhere else. ---------- */
+
+  /* Skip times the players fetched (page-hooks.js on Prime and Crunchyroll), by title ID. */
+  const markersById = new Map();
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (e.source !== window || !d || d.__orgbMovieSync !== "markers" || typeof d.id !== "string" || !Array.isArray(d.markers)) return;
+    markersById.set(d.id, d.markers);
+    if (markersById.size > 30) markersById.delete(markersById.keys().next().value);
+  });
+
+  const KINDS = ["intro", "recap", "credits", "preview"];
+  const cleanMarkers = (list) =>
+    (Array.isArray(list) ? list : [])
+      .filter((m) => m && KINDS.includes(m.kind) && isFinite(m.start_ms) && m.start_ms >= 0)
+      .slice(0, 12)
+      .map((m) => ({ kind: m.kind, start_ms: Math.round(m.start_ms), end_ms: isFinite(m.end_ms) ? Math.round(m.end_ms) : -1 }));
+  const s = (v, n) => (typeof v === "string" ? clean(v).slice(0, n) : "");
+  const cleanMeta = (m) => {
+    if (!m || typeof m !== "object") return null;
+    return {
+      show: s(m.show, 200),
+      season: parseInt(m.season, 10) || 0,
+      episode: parseInt(m.episode, 10) || 0,
+      episode_title: s(m.episode_title, 200),
+      synopsis: s(m.synopsis, 700),
+      rating: s(m.rating, 40),
+      advisories: s(m.advisories, 300),
+      genres: (Array.isArray(m.genres) ? m.genres : []).map((g) => s(g, 40)).filter(Boolean).slice(0, 8),
+      photosensitive: !!m.photosensitive,
+      artwork: (Array.isArray(m.artwork) ? m.artwork : []).filter((u) => httpsUrl(u)).slice(0, 6),
+      markers: cleanMarkers(m.markers),
+    };
+  };
+  const q = (sel) => {
+    const e = safe(() => document.querySelector(sel), null);
+    return e ? clean(e.textContent) : "";
+  };
+  const qAll = (sel) => safe(() => Array.from(document.querySelectorAll(sel)).map((e) => clean(e.textContent)).filter(Boolean), []);
+
+  /* Amazon serves AVIF / WebP behind ".jpg" names; a plain size code gives a real JPEG. */
+  const amazonJpeg = (u) => {
+    if (!httpsUrl(u)) return [];
+    const j = u.replace(/\._[^/]+_\.(jpe?g|png|webp|avif)(\?.*)?$/i, "._SX1280_.jpg");
+    return j !== u ? [j, u] : [u];
+  };
+  const primeMeta = () => {
+    const meta = { show: sticky.title, synopsis: "", rating: "", genres: [], artwork: [] };
+    if (primeId) meta.synopsis = q('[data-testid="synopsis-' + primeId + '"]');
+    meta.synopsis = meta.synopsis || q('[data-testid="dp-atf-synopsis"]');
+    meta.rating = q('[data-testid="rating-badge"]') || q('[data-testid="maturity-rating"]');
+    meta.genres = qAll('[data-testid="genre-texts"]').concat(qAll('[data-testid="mood-texts"]'));
+    meta.photosensitive = !!safe(() => document.querySelector('[data-testid="pse-badge"]'), null);
+    /* "Season 1, Ep. 3 Ho, Ho, Folks" / "S1 E3 Ho, Ho, Folks" */
+    const ep = sticky.episode || "";
+    const m = ep.match(/(?:Season|S)\s*(\d+)\D{0,6}?(?:Episode|Ep\.?|E)\s*(\d+)\s*[:.\-–]?\s*(.*)$/i);
+    if (m) {
+      meta.season = +m[1];
+      meta.episode = +m[2];
+      meta.episode_title = m[3];
+    } else {
+      meta.episode_title = ep;
+    }
+    /* The page's hero picture is labelled with the title. */
+    const want = (sticky.title || "").toLowerCase();
+    const imgs = safe(() => Array.from(document.querySelectorAll("img")), []).filter((i) => want && (i.alt || "").toLowerCase() === want);
+    imgs.sort((a, b) => b.naturalWidth * b.naturalHeight - a.naturalWidth * a.naturalHeight);
+    if (imgs[0]) meta.artwork = amazonJpeg(imgs[0].currentSrc || imgs[0].src);
+    meta.markers = markersById.get(primeId) || [];
+    return meta;
+  };
+
+  /* Crunchyroll's player names its episode in the artwork it gives media controls; the page
+     address moves to the next episode before the player does. */
+  const crunchyPlayerId = () =>
+    safe(() => {
+      const md = navigator.mediaSession && navigator.mediaSession.metadata;
+      const src = (md && md.artwork && md.artwork[0] && md.artwork[0].src) || "";
+      const m = src.match(/\/content\/[a-z]\/([A-Z0-9]{8,})/i);
+      return m ? m[1] : "";
+    }, "");
+
+  const crunchyMeta = () => {
+    const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    if (!md) return null;
+    const meta = { show: s(md.artist, 200), artwork: [], genres: [] };
+    const m = (md.title || "").match(/^E(\d+)\s*[-–:]\s*(.*)$/i);
+    if (m) {
+      meta.episode = +m[1];
+      meta.episode_title = m[2];
+    } else {
+      meta.episode_title = md.title || "";
+    }
+    const art = safe(() => Array.from(md.artwork || []), []);
+    art.forEach((a) => httpsUrl(a.src) && meta.artwork.push(a.src));
+    /* The player's episode ID (in its artwork link) and the page's: after auto-next the page
+       moves on first, so the page's details only count while both agree. */
+    const playerId = ((art[0] && art[0].src) || "").match(/\/content\/[a-z]\/([A-Z0-9]+)/i);
+    const urlId = location.pathname.match(/\/watch\/([A-Z0-9]+)/i);
+    const pid = playerId ? playerId[1] : "";
+    const uid = urlId ? urlId[1] : "";
+    if (!pid || pid === uid) {
+      const og = safe(() => document.querySelector('meta[property="og:description"]').getAttribute("content"), "");
+      meta.synopsis = og;
+      safe(() =>
+        document.querySelectorAll('script[type="application/ld+json"]').forEach((sc) => {
+          const j = safe(() => JSON.parse(sc.textContent), null);
+          if (!j || j["@type"] !== "TVEpisode") return;
+          meta.season = parseInt(j.partOfSeason && j.partOfSeason.seasonNumber, 10) || 0;
+          const img = httpsUrl(j.image);
+          if (img) meta.artwork.push(img.replace(/format=auto/, "format=jpeg"));
+        })
+      );
+      meta.rating = q('[data-t$="maturity-rating"]');
+    }
+    const id = pid || uid;
+    meta.markers = markersById.get(id) || markersById.get(id.replace(/[A-Z]{4}$/, "")) || [];
+    return meta;
+  };
+
+  let metaCache = { key: "", at: 0, meta: null };
+  const titleMeta = (titleKey, nf) => {
+    if (nf) return cleanMeta(nf.meta);
+    const now = Date.now();
+    if (metaCache.key !== titleKey) metaCache = { key: titleKey, at: 0, meta: null };
+    /* Page details every 2 s (they fill in as the page loads); skip times as they arrive. */
+    if (now - metaCache.at > 2000) {
+      metaCache.at = now;
+      metaCache.meta = isPrime ? safe(primeMeta, null) : onHost("crunchyroll.com") ? safe(crunchyMeta, null) : null;
+    } else if (metaCache.meta && isPrime) {
+      metaCache.meta.markers = markersById.get(primeId) || metaCache.meta.markers;
+    }
+    return cleanMeta(metaCache.meta);
+  };
 
   /* Ads playing inside the feature's own player, where a site marks them. */
   const siteAd = () =>
@@ -119,6 +331,7 @@
   let lastKey = "";
   let hadVideo = false;
   let lastPageUrl = "";
+  let pageArt = { url: "", tries: 0, at: 0 };
   let idleUntil = 0;
   const watched = new WeakSet();
 
@@ -131,6 +344,15 @@
     if (isTop && location.href !== lastPageUrl) {
       lastPageUrl = location.href;
       post({ type: "movie-sync-page", url: location.href });
+      pageArt = { url: "", tries: 0, at: 0 };
+    }
+    /* The top page's artwork, for a player frame inside it that has none of its own
+       (Crunchyroll's player is a frame; the show's page has the images). */
+    if (isTop && !pageArt.url && pageArt.tries < 10 && Date.now() - pageArt.at > 2000) {
+      pageArt.tries++;
+      pageArt.at = Date.now();
+      pageArt.url = findArtwork();
+      if (pageArt.url) post({ type: "movie-sync-page-art", url: pageArt.url });
     }
     const now = Date.now();
     if (!force && now < idleUntil) return;
@@ -153,6 +375,7 @@
       return;
     }
     hadVideo = true;
+    if (isPrime) pickPrimeId(v, now);
 
     const nf = isNetflix && location.pathname.startsWith("/watch/") && netflixPlayer && now - netflixPlayer.at < 1500
       ? netflixPlayer
@@ -166,6 +389,11 @@
     }
 
     const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    if (artwork.key !== titleKey) artwork = { url: "", key: titleKey, at: 0 };
+    if (!artwork.url && now - artwork.at > 2000) {
+      artwork.at = now;
+      artwork.url = findArtwork();
+    }
     /* Ads: a marked ad in the feature's player, or another video playing while it waits
        (Prime and others swap to a separate ad player). */
     const otherPlaying = vids.some((x) => x !== v && !x.paused && !x.ended && x.readyState >= 2 && x.currentTime > 0);
@@ -188,6 +416,9 @@
       siteEpisode: sticky.episode,
       netflixId: nf ? nf.id : "",
       primeTitleId: isPrime ? primeId : "",
+      crunchyId: onHost("crunchyroll.com") ? crunchyPlayerId() : "",
+      artwork: artwork.url,
+      meta: titleMeta(titleKey, nf),
       positionMs,
       durationMs,
       paused,
