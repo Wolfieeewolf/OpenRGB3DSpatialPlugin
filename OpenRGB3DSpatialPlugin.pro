@@ -177,6 +177,7 @@ HEADERS += \
     shared/StripPatternSurface.h \
     shared/utils/QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
+    ui/widgets/MinecraftStatusCard.h \
     engines/game/Game/GameTelemetryBridge.h \
     engines/game/Game/RoomSampleFrameProtocol.h \
     engines/game/Game/RoomSampleShmPaths.h \
@@ -397,6 +398,7 @@ SOURCES += \
     shared/scene/SceneProp3D.cpp \
     engines/screen-mirror/ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
+    ui/widgets/MinecraftStatusCard.cpp \
     engines/game/Game/GameTelemetryBridge.cpp \
     engines/game/Game/RoomSampleFrameShmReader.cpp \
     engines/game/Game/RoomSampleConfigPublisher.cpp \

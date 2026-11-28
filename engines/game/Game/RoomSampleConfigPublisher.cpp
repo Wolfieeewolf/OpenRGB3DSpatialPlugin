@@ -287,10 +287,8 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.sequence = 2;
     hdr.config_id = 0;
     hdr.flags = RoomSampleFrameProtocol::kFlagEnabled | RoomSampleFrameProtocol::kFlagCubemap;
-    if(settings.room_ambilight_sky_enabled)
-    {
-        hdr.flags |= RoomSampleFrameProtocol::kFlagSkyEnabled;
-    }
+    /* Sky is always on (1:1 with the game); the flag stays set for older mods. */
+    hdr.flags |= RoomSampleFrameProtocol::kFlagSkyEnabled;
     hdr.target_cells = (std::uint32_t)((std::size_t)nx * (std::size_t)ny * (std::size_t)nz);
     hdr.size_x = nx;
     hdr.size_y = ny;

@@ -3,6 +3,8 @@
 #include "MinecraftGame.h"
 #include "MinecraftGameSettings.h"
 #include "GameTelemetryStatusPanel.h"
+#include "MinecraftStatusCard.h"
+#include "PluginUiUtils.h"
 #include "SpatialBasisUtils.h"
 #include "SpatialEffect3D.h"
 #include "RoomSampleMapping.h"
@@ -588,12 +590,13 @@ QWidget* CreateSettingsWidget(QWidget* parent,
             room_layout = body;
         }
         QLabel* hint = new QLabel(
-            QStringLiteral(
-                "Place a reference point at eye height and set this effect's 3D origin there, then stand "
-                "in-game at that spot. Mapping is player-local: room +X = look-right, +Y = up, "
-                "−Z from origin = look-forward. Tune quality below; alignment comes from the ref point."),
-            panel);
+            QStringLiteral("Set this effect's origin to a reference point at your eye height."), panel);
+        hint->setToolTip(QStringLiteral(
+            "Place a reference point where your head is when you play and set this effect's 3D origin there. "
+            "The room turns with the player: room +X = look right, +Y = up, straight ahead = the room's front "
+            "(-Z) or, with Facing, toward the screen you play on."));
         hint->setWordWrap(true);
+        PluginUiApplyMutedSecondaryLabel(hint);
         room_layout->addWidget(hint);
         if(QComboBox* facing = AddComboRow(room_layout, QStringLiteral("Facing")))
         {
@@ -682,14 +685,6 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                 }
             });
         }
-        AddCheckRow(room_layout,
-                    panel,
-                    QStringLiteral("Sky / weather"),
-                    s.room_ambilight_sky_enabled,
-                    [&s](bool v) { s.room_ambilight_sky_enabled = v; },
-                    QStringLiteral("On empty upward rays only (no block hit), fill with sunrise/sunset/"
-                                   "night/weather sky. Eye-level misses stay dark so monitor-back LEDs "
-                                   "don't pick up horizon/sky through distant foliage. Caves stay dark."));
         AddSliderRow(room_layout,
                      panel,
                      QStringLiteral("Cubemap face size"),
@@ -750,6 +745,10 @@ QWidget* CreateEffectWidget(QWidget* parent,
     QGroupBox* w = new QGroupBox(title, parent);
     QVBoxLayout* layout = new QVBoxLayout(w);
     layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(8);
+
+    /* Status first: connected?, vitals, what Room Ambilight is doing, rates, a short log. */
+    layout->addWidget(new MinecraftStatusCard(w));
 
     QWidget* settings_widget = CreateSettingsWidget(w, settings, channels);
     if(settings_widget)
@@ -758,7 +757,7 @@ QWidget* CreateEffectWidget(QWidget* parent,
         WireChildWidgetsToParametersChanged(settings_widget, on_changed);
     }
 
-    layout->addWidget(new GameTelemetryStatusPanel(telemetry_owner));
+    (void)telemetry_owner; /* connection details now live on the status card */
     return w;
 }
 
@@ -1086,58 +1085,108 @@ bool FillOverlayLayer(::GpuRoomGridOverlayLayer& out,
     if(room)
     {
         const int S = rs.size_x;
-        const std::size_t need = (std::size_t)S * (std::size_t)S * 6u * 4u;
         {
-            /* One atlas kept between calls; per new frame only the LED texels are rewritten
-               (was: the whole S x S x 6 image rebuilt on every LED refresh). */
+            /* The effect field shows the whole room, but the mod only traces the directions LEDs
+               point in. Fill a small atlas so every direction takes the colour of the nearest LED
+               direction (the region that LED "sees"). Which LED is nearest is worked out once
+               per LED layout; each new frame is then a plain colour copy. LED colours themselves
+               are untouched (they come from RoomSampleMapping on the CPU). */
+            constexpr int A = 64;
+            const std::size_t texels = (std::size_t)A * (std::size_t)A * 6u;
             static std::mutex atlas_mu;
             static std::vector<unsigned char> atlas;
-            static std::vector<std::size_t> written;
-            static int atlas_S = 0;
+            static std::vector<std::uint32_t> nearest; /* atlas texel -> index into this layout's LED texels */
+            static std::size_t layout_key = 0;
             static unsigned int atlas_frame = 0;
             static bool atlas_valid = false;
             std::lock_guard<std::mutex> lock(atlas_mu);
-            if(atlas_S != S || atlas.size() != need)
+
+            const std::vector<std::uint32_t>& flats = *rs.texel_flats;
+            const std::vector<unsigned char>& cols = *rs.rgba;
+            std::size_t key = (std::size_t)S * 1000003u + flats.size();
+            for(std::uint32_t f : flats)
             {
-                atlas.assign(need, 0);
-                written.clear();
-                atlas_S = S;
-                atlas_valid = false;
+                key = key * 31u + f;
             }
-            if(!atlas_valid || atlas_frame != rs.frame_id)
+            if(key != layout_key || nearest.size() != texels)
             {
-                for(std::size_t di : written)
+                layout_key = key;
+                atlas_valid = false;
+                nearest.assign(texels, 0u);
+                std::vector<float> dirs(flats.size() * 3u);
+                for(std::size_t li = 0; li < flats.size(); ++li)
                 {
-                    atlas[di] = atlas[di + 1] = atlas[di + 2] = atlas[di + 3] = 0;
-                }
-                written.clear();
-                const std::vector<std::uint32_t>& flats = *rs.texel_flats;
-                const std::vector<unsigned char>& cols = *rs.rgba;
-                for(std::size_t i = 0; i < flats.size() && i * 4u + 4u <= cols.size(); ++i)
-                {
-                    const std::size_t flat = flats[i];
-                    const std::size_t face = flat % 6u;
+                    const std::size_t flat = flats[li];
+                    const int face = (int)(flat % 6u);
                     const std::size_t t = flat / 6u;
-                    const std::size_t iy = t % (std::size_t)S;
-                    const std::size_t ix = t / (std::size_t)S;
-                    if(ix >= (std::size_t)S)
+                    const int iy = (int)(t % (std::size_t)S);
+                    const int ix = (int)(t / (std::size_t)S);
+                    RoomSampleFrameProtocol::CubemapUvToDirection(face, (ix + 0.5f) / (float)S, (iy + 0.5f) / (float)S,
+                                                                  dirs[li * 3], dirs[li * 3 + 1], dirs[li * 3 + 2]);
+                    const float len = std::sqrt(dirs[li * 3] * dirs[li * 3] + dirs[li * 3 + 1] * dirs[li * 3 + 1]
+                                                + dirs[li * 3 + 2] * dirs[li * 3 + 2]);
+                    if(len > 1e-6f)
                     {
-                        continue;
+                        dirs[li * 3] /= len;
+                        dirs[li * 3 + 1] /= len;
+                        dirs[li * 3 + 2] /= len;
                     }
-                    const std::size_t di = ((face * (std::size_t)S + iy) * (std::size_t)S + ix) * 4u;
-                    std::copy(cols.begin() + (std::ptrdiff_t)(i * 4u), cols.begin() + (std::ptrdiff_t)(i * 4u + 4u),
-                              atlas.begin() + (std::ptrdiff_t)di);
-                    written.push_back(di);
+                }
+                for(int face = 0; face < 6 && !flats.empty(); ++face)
+                {
+                    for(int iy = 0; iy < A; ++iy)
+                    {
+                        for(int ix = 0; ix < A; ++ix)
+                        {
+                            float dx = 0.0f;
+                            float dy = 0.0f;
+                            float dz = 0.0f;
+                            RoomSampleFrameProtocol::CubemapUvToDirection(face, (ix + 0.5f) / (float)A, (iy + 0.5f) / (float)A,
+                                                                          dx, dy, dz);
+                            const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+                            if(len > 1e-6f)
+                            {
+                                dx /= len;
+                                dy /= len;
+                                dz /= len;
+                            }
+                            float best = -2.0f;
+                            std::uint32_t best_i = 0;
+                            for(std::size_t li = 0; li < flats.size(); ++li)
+                            {
+                                const float d = dx * dirs[li * 3] + dy * dirs[li * 3 + 1] + dz * dirs[li * 3 + 2];
+                                if(d > best)
+                                {
+                                    best = d;
+                                    best_i = (std::uint32_t)li;
+                                }
+                            }
+                            nearest[((std::size_t)face * A + (std::size_t)iy) * A + (std::size_t)ix] = best_i;
+                        }
+                    }
+                }
+            }
+            if(!atlas_valid || atlas_frame != rs.frame_id || atlas.size() != texels * 4u)
+            {
+                atlas.assign(texels * 4u, 0);
+                if(!flats.empty() && cols.size() >= flats.size() * 4u)
+                {
+                    for(std::size_t ti = 0; ti < texels; ++ti)
+                    {
+                        const std::size_t c = (std::size_t)nearest[ti] * 4u;
+                        std::copy(cols.begin() + (std::ptrdiff_t)c, cols.begin() + (std::ptrdiff_t)(c + 4u),
+                                  atlas.begin() + (std::ptrdiff_t)(ti * 4u));
+                    }
                 }
                 atlas_frame = rs.frame_id;
                 atlas_valid = true;
             }
-            out.tex_w = S;
-            out.tex_h = S * 6;
+            out.tex_w = A;
+            out.tex_h = A * 6;
             out.atlas_rgba = atlas;
             set3(15, rs.effect_origin_x, rs.effect_origin_y, rs.effect_origin_z);
             set3(18, rs.heading_offset_deg, 0.0f, 0.0f);
-            set3(16, std::clamp(rs.room_to_world_scale, 0.005f, 0.80f), (float)S, 1.0f);
+            set3(16, std::clamp(rs.room_to_world_scale, 0.005f, 0.80f), (float)A, 1.0f);
         }
     }
     if(out.atlas_rgba.empty())

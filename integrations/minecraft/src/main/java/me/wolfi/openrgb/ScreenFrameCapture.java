@@ -54,6 +54,10 @@ final class ScreenFrameCapture
         long timeNs;
     }
 
+    /** Picture position (0..1, v = 0 at the bottom) of the last point sample() found on screen. */
+    static float lastU;
+    static float lastV;
+
     /** Set from the plugin's config each tick: capture only when someone uses it. */
     static volatile boolean enabled;
 
@@ -269,6 +273,8 @@ final class ScreenFrameCapture
         {
             return 0.0f;
         }
+        lastU = u;
+        lastV = v;
         final float e = Math.min(Math.min(u, 1.0f - u), Math.min(v, 1.0f - v));
         float weight = edge <= 1e-4f ? 1.0f : Math.min(1.0f, e / edge);
         weight = weight * weight * (3.0f - 2.0f * weight); /* smooth */

@@ -62,6 +62,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
        picture covers, and its player-local direction + ray reach (fixed per room config). */
     private byte[] roomRayRgba = new byte[0];
     private float[] roomScreenWeight = new float[0];
+    /* Where each LED lands on the picture (-1 = off screen), for the Mod Menu preview. */
+    private float[] roomLedU = new float[0];
+    private float[] roomLedV = new float[0];
+    private long roomFramesSent;
     private float[] roomLedDirs = new float[0];
     private double[] roomLedRange = new double[0];
     private int roomLedDirsConfigId = Integer.MIN_VALUE;
@@ -168,6 +172,73 @@ public class OpenRGBSenderMod implements ClientModInitializer
             this.ledTexels = ledTexels;
             this.skyEnabled = skyEnabled;
         }
+    }
+
+    /** What Room Ambilight is doing right now (Mod Menu screen; main thread). */
+    public static final class LiveStats
+    {
+        public long framesSent;
+        public double raysMsPerTick;
+        public int leds;
+        public int fromPicture;
+        public int blended;
+        public int fromRays;
+        public byte[] ledRgba = new byte[0];
+        public float[] ledU = new float[0];
+        public float[] ledV = new float[0];
+        public boolean pictureOn;
+        public boolean firstPerson;
+        public int pictureWidthSetting;
+        public float edge;
+        public float headingDeg;
+        /** The newest captured picture (null when off or stale). */
+        ScreenFrameCapture.Frame picture;
+    }
+
+    public static LiveStats liveStats()
+    {
+        final LiveStats s = new LiveStats();
+        final OpenRGBSenderMod m = instance;
+        if(m == null)
+        {
+            return s;
+        }
+        s.framesSent = m.roomFramesSent;
+        s.raysMsPerTick = m.lastRoomFillNs / 1.0e6;
+        final RoomSampleConfigReader.Config cfg = m.roomLastCfg;
+        if(cfg != null)
+        {
+            s.pictureOn = cfg.screenCapture();
+            s.pictureWidthSetting = cfg.screenWidth;
+            s.edge = cfg.screenEdge;
+            s.headingDeg = cfg.headingDeg;
+        }
+        s.firstPerson = ScreenFrameCapture.firstPerson();
+        s.picture = ScreenFrameCapture.latest(SCREEN_MAX_AGE_NS);
+        final int n = m.roomScreenWeight.length;
+        if(m.roomSampleRgbaBuffer.length == n * 4 && m.roomLedU.length == n)
+        {
+            s.leds = n;
+            s.ledRgba = m.roomSampleRgbaBuffer.clone();
+            s.ledU = m.roomLedU.clone();
+            s.ledV = m.roomLedV.clone();
+            for(float w : m.roomScreenWeight)
+            {
+                if(w >= 0.999f)
+                {
+                    s.fromPicture++;
+                }
+                else if(w > 0.0f)
+                {
+                    s.blended++;
+                }
+                else
+                {
+                    s.fromRays++;
+                }
+            }
+        }
+        return s;
     }
 
     public static LinkStatus getLinkStatus()
@@ -731,7 +802,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
      * Sky only on empty rays that aim upward. Eye-level / horizontal misses (forest gaps,
      * horizon through foliage) stay dark so desk/monitor-back LEDs don't turn sky-blue.
      */
-    private static final float SKY_FILL_MIN_LOCAL_UP = 0.35f;
+    /* Just above the horizon: an empty ray pointing up sees sky (below it, far terrain / fog). */
+    private static final float SKY_FILL_MIN_LOCAL_UP = 0.05f;
 
     private static void maybeFillOutdoorSky(RoomSampleConfigReader.Config cfg,
                                             Level world,
@@ -741,7 +813,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
                                             float localUp,
                                             int[] cell)
     {
-        if(cfg == null || !cfg.isSkyEnabled() || cell == null || cell.length < 4 || atmosphere == null)
+        /* Always on (1:1: the game always draws its sky); the old switch is ignored. */
+        if(cfg == null || cell == null || cell.length < 4 || atmosphere == null)
         {
             return;
         }
@@ -760,21 +833,13 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             return;
         }
-        final int skyLight = world.getBrightness(LightLayer.SKY, column);
-        if(skyLight < 1)
-        {
-            return;
-        }
+        /* 1:1: the game's own sky colour for that direction (time of day, sunrise / sunset glow,
+           weather), at full strength. A dark night sky is dark because the game's sky is. */
         final int skyRgb = AtmosphereSampler.sampleDirectionalSky(atmosphere, eye, target);
         cell[0] = (skyRgb >> 16) & 0xFF;
         cell[1] = (skyRgb >> 8) & 0xFF;
         cell[2] = skyRgb & 0xFF;
-        // Night sky stays translucent so it doesn't overpower dim foliage neighbours.
-        final float night = atmosphere.skyBrightness();
-        // Fade sky in with elevation so the horizon band stays soft.
-        final float elev = Math.min(1.0f, (localUp - SKY_FILL_MIN_LOCAL_UP) / (1.0f - SKY_FILL_MIN_LOCAL_UP));
-        final int skyA = ColorMath.clamp255(Math.round((28 + skyLight * 3) * (0.45f + 0.55f * night) * elev));
-        cell[3] = skyA;
+        cell[3] = 255;
     }
 
     /** Prefer every-tick whole frames; only skip a tick after a clear hitch. */
@@ -824,6 +889,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             roomRayRgba = new byte[ledBytes];
             roomScreenWeight = new float[n];
+            roomLedU = new float[n];
+            roomLedV = new float[n];
         }
         ensureLedDirections(cfg, important, sx, sy, sz);
         roomLastCfg = cfg;
@@ -864,6 +931,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
                             screenScratch, screenRgb);
                 }
                 roomScreenWeight[i] = weight;
+                roomLedU[i] = weight > 0.0f ? ScreenFrameCapture.lastU : -1.0f;
+                roomLedV[i] = weight > 0.0f ? ScreenFrameCapture.lastV : -1.0f;
                 if(weight < 0.999f)
                 {
                     writeCubemapTexel(world, player, cfg, eye, atmosphere, localDir, cell, roomRayRgba, i, flat, sx, sy, sz);
@@ -885,6 +954,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final int frameId = (int)(now & 0x7FFFFFFFL);
         roomSampleFrameShmWriter.publishSparseLedTexels(
                 frameId, now, cfg.configId, sx, sy, sz, important, rgba);
+        roomFramesSent++;
     }
 
     /** Player-local direction and ray reach per LED: fixed for a room config. */
@@ -981,6 +1051,11 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 continue; /* turned off screen since the tick: no ray colour yet, keep until next tick */
             }
             composeLed(rgba, i, weight);
+            if(roomLedU.length == n)
+            {
+                roomLedU[i] = weight > 0.0f ? ScreenFrameCapture.lastU : -1.0f;
+                roomLedV[i] = weight > 0.0f ? ScreenFrameCapture.lastV : -1.0f;
+            }
             any = true;
         }
         if(!any)
@@ -993,6 +1068,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             roomSampleFrameShmWriter.publishSparseLedTexels((int)(ms & 0x7FFFFFFFL), ms, cfg.configId, cfg.sizeX,
                     cfg.sizeY, RoomSampleCubemap.FACE_COUNT, important, rgba);
+            roomFramesSent++;
         }
         catch(Exception e)
         {

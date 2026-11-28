@@ -25,14 +25,8 @@ GameTelemetryStatusPanel::GameTelemetryStatusPanel(QWidget* parent)
     signals_label = new QLabel(this);
     signals_label->setWordWrap(true);
     ui->mainLayout->addWidget(signals_label);
-    rates_label = new QLabel(this);
-    rates_label->setWordWrap(true);
-    rates_label->setToolTip(QStringLiteral(
-        "LED updates: how many times a second the effect stack sends colours to your devices.\n"
-        "Mod frames: Room Ambilight frames arriving from Minecraft.\n"
-        "Mod \u2192 plugin: how long the newest frame took from the mod writing it to the plugin reading it.\n"
-        "Each device then updates at its own speed (slow ones never hold up the others)."));
-    ui->mainLayout->addWidget(rates_label);
+    /* Live rates are on the Minecraft status card (rates_label stays null). */
+    rates_label = nullptr;
 
     refresh_timer = new QTimer(this);
     refresh_timer->setTimerType(Qt::CoarseTimer);
