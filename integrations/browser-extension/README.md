@@ -48,6 +48,8 @@ so it gets its own build; everything else is the same.
   `dist/firefox/manifest.json`. Temporary add-ons go when Firefox closes; to keep it, have the
   zip signed at addons.mozilla.org ("On your own" listing: signed, not public), or use Firefox
   Developer Edition / Nightly with `xpinstall.signatures.required` set to false.
+  Firefox may not grant the sites at install: if the toolbar button shows an orange **!**,
+  click it and allow access (to the streaming sites and to OpenRGB on this computer).
 
 After an update press **Reload** on the extension and reopen the streaming tab or app.
 

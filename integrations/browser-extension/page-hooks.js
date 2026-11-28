@@ -65,7 +65,7 @@
     const origFetch = window.fetch;
     window.fetch = function (input) {
       const p = origFetch.apply(this, arguments);
-      const url = safe(() => (typeof input === "string" ? input : input.url)) || "";
+      const url = safe(() => (typeof Request !== "undefined" && input instanceof Request ? input.url : String(input))) || "";
       if (route(url)) p.then((r) => safe(() => r.clone().text().then((t) => handle(url, t)).catch(() => {}))).catch(() => {});
       return p;
     };
@@ -78,7 +78,8 @@
     };
     const send = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function () {
-      if (route(this.__orgbMsUrl)) {
+      if (route(this.__orgbMsUrl) && !this.__orgbMsHooked) {
+        this.__orgbMsHooked = true; /* one listener per request object, even when reused */
         this.addEventListener("load", () =>
           safe(() => {
             if (this.responseType === "" || this.responseType === "text") handle(this.__orgbMsUrl, this.responseText);

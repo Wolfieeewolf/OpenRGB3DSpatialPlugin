@@ -238,9 +238,27 @@ jobs:
           path: minecraft-out/*.jar
           if-no-files-found: error
 
+  # Movie Sync browser extension (integrations/browser-extension): Chromium + Firefox zips.
+  build-extension:
+    name: Movie Sync browser extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build extension
+        working-directory: integrations/browser-extension
+        run: |
+          chmod +x build.sh
+          ./build.sh
+          ls -la dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: browser-extension
+          path: integrations/browser-extension/dist/movie-sync-*.zip
+          if-no-files-found: error
+
   release:
     name: Publish GitHub release
-    needs: [build-windows, build-linux, macos-universal, build-minecraft]
+    needs: [build-windows, build-linux, macos-universal, build-minecraft, build-extension]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
     runs-on: ubuntu-latest
     steps:
@@ -272,6 +290,7 @@ jobs:
              artifacts/macos/libOpenRGB3DSpatialPlugin.dylib \
              artifacts/qtfw-macos/macOS-Qt-frameworks.zip \
              artifacts/minecraft/*.jar \
+             artifacts/browser-extension/movie-sync-*.zip \
              LICENSE THIRD-PARTY-NOTICES.md assets/
           ls -la assets
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
@@ -288,6 +307,7 @@ jobs:
           | Linux (x86_64, OpenRGB **AppImage**) | `libOpenRGB3DSpatialPlugin.so` **plus** `libQt6Network.so.6` and `libQt6OpenGLWidgets.so.6` |
           | macOS (Apple Silicon + Intel) | `libOpenRGB3DSpatialPlugin.dylib` **plus** `macOS-Qt-frameworks.zip` |
           | Minecraft (Fabric) | `openrgb-minecraft-sender-*.jar` → drop in the Minecraft `mods` folder |
+          | Movie Sync for streaming | `movie-sync-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) or `movie-sync-firefox-*.zip` (Firefox 128+) |
 
           1. **Windows only:** put `Qt6Network.dll` and `Qt6OpenGLWidgets.dll` in the folder that contains `OpenRGB.exe` (OpenRGB 1.0 does not ship them; without them the plugin will not load).
           2. **Linux AppImage:** put the two `libQt6*.so.6` files in `~/.config/OpenRGB/plugins/`, next to the plugin. Using your distro's OpenRGB package instead? Do not use these files; build with `scripts/install-linux-user.sh` so the plugin matches your Qt.
@@ -295,6 +315,7 @@ jobs:
           4. Install the plugin via OpenRGB → Settings → Plugins → Install Plugin, then restart OpenRGB.
           5. Get the **current** looks from [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets) — the plugin ships with no effects of its own, and older copies run at the wrong speed with this version.
           6. **Minecraft Room Ambilight / Game effects:** install the Fabric jar from this release into `.minecraft/mods` (see `integrations/minecraft/README.md`). Sources stay in this plugin repo — not the presets pack.
+          7. **Movie Sync with Netflix, Prime Video, Crunchyroll and others:** unzip the browser extension for your browser and load it (see `integrations/browser-extension/README.md`; Firefox needs it signed, or Developer Edition / Nightly).
 
           **Status:** tested on Windows only. Please [report](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues/new/choose) what you see, with your GPU, driver and OpenRGB log.
           - **Linux:** audio effects need `pactl` and `parec` (pulseaudio-utils; libpulse on Arch). On Wayland, Screen Mirror asks once which monitors to share (needs PipeWire and xdg-desktop-portal). Reactive keyboard/mouse needs your user in the `input` group.

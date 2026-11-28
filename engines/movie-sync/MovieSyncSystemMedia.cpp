@@ -87,6 +87,16 @@ std::string ServiceFromApp(const std::string& app)
     if(a.find("youtube") != std::string::npos) return "youtube";
     if(a.find("appletv") != std::string::npos) return "appletv";
     if(a.find("vlc") != std::string::npos) return "vlc";
+    /* Browsers (a tab playing without the extension): named, not their raw app IDs. Firefox
+       reports a 16-hex-digit ID (a hash of its install folder). */
+    if(a.find("msedge") != std::string::npos) return "app:edge";
+    if(a.find("chrome") != std::string::npos) return "app:chrome";
+    if(a.find("brave") != std::string::npos) return "app:brave";
+    if(a.find("opera") != std::string::npos) return "app:opera";
+    if(a.find("vivaldi") != std::string::npos) return "app:vivaldi";
+    if(a.find("firefox") != std::string::npos
+       || (app.size() == 16 && std::all_of(app.begin(), app.end(), [](unsigned char c) { return std::isxdigit(c); })))
+        return "app:firefox";
     return "app:" + app;
 }
 #elif defined(__linux__)
@@ -263,7 +273,7 @@ void SystemMediaReader::Run()
                 st.paused = playback.PlaybackStatus()
                             != GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
                 const auto rate = playback.PlaybackRate();
-                st.rate = rate ? rate.Value() : 1.0;
+                st.rate = rate && rate.Value() > 0.0 ? rate.Value() : 1.0; /* paused apps can report 0 */
                 const double ticks_per_s = 10000000.0;
                 double pos = (double)timeline.Position().count() / ticks_per_s;
                 /* The app reports a position at LastUpdatedTime; count on to now while playing. */
@@ -375,10 +385,18 @@ void SystemMediaReader::Run()
     {
         StreamState best;
         int best_score = -1;
-        if(bus.isConnected() && bus.interface())
+        QStringList names;
+        if(bus.isConnected())
         {
-            const QDBusReply<QStringList> names = bus.interface()->registeredServiceNames();
-            for(const QString& name : names.value())
+            const QDBusMessage list = call(QStringLiteral("org.freedesktop.DBus"), QStringLiteral("/org/freedesktop/DBus"),
+                                           QStringLiteral("org.freedesktop.DBus"), QStringLiteral("ListNames"), {});
+            if(list.type() == QDBusMessage::ReplyMessage && !list.arguments().isEmpty())
+            {
+                names = list.arguments().at(0).toStringList();
+            }
+        }
+        {
+            for(const QString& name : names)
             {
                 if(stop_ || !name.startsWith(QStringLiteral("org.mpris.MediaPlayer2.")))
                 {

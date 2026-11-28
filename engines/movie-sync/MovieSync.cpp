@@ -36,7 +36,10 @@
 #include <QSpinBox>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <cstdlib>
 #include <thread>
 #include <cmath>
 #include <set>
@@ -135,11 +138,32 @@ MovieSyncEffect::MovieSyncEffect(QWidget* parent)
     });
 }
 
+/* Artwork downloads running on worker threads: cancelled and waited for when the effect goes
+   away, so no thread is still inside the plugin when OpenRGB unloads it. */
+struct MovieSyncArtWorkers
+{
+    std::mutex mutex;
+    std::condition_variable done;
+    std::set<MovieSync::HttpJob*> jobs;
+    int running = 0;
+};
+
 MovieSyncEffect::~MovieSyncEffect()
 {
+    if(art_workers_)
+    {
+        std::unique_lock<std::mutex> lock(art_workers_->mutex);
+        for(MovieSync::HttpJob* job : art_workers_->jobs)
+        {
+            job->Cancel();
+        }
+        art_workers_->done.wait_for(lock, std::chrono::seconds(3), [this]() { return art_workers_->running == 0; });
+    }
     stream_player_.SetEdgeHandler(nullptr);
     stopListener();
     runtime_.StopAll();
+    delete art_original_;
+    art_original_ = nullptr;
 }
 
 void MovieSyncEffect::handleCueEdge(const std::string& effect_id, const std::string& edge, bool active, bool from_vlc)
@@ -251,9 +275,19 @@ void MovieSyncEffect::onStreamReport(const std::string& json_body)
         st.id = j.value("id", std::string());
         st.title = j.value("title", std::string());
         st.episode = j.value("episode", std::string());
-        st.position_s = j.value("position_ms", 0.0) / 1000.0;
-        st.duration_s = j.value("duration_ms", 0.0) / 1000.0;
-        st.rate = j.value("rate", 1.0);
+        /* Numbers from outside: finite and clamped before any conversion (48 h, 0.05-16x). */
+        const auto real = [&j](const char* k, double lo, double hi, double fallback) {
+            if(!j.contains(k) || !j[k].is_number())
+            {
+                return fallback;
+            }
+            const double d = j[k].get<double>();
+            return std::isfinite(d) ? std::clamp(d, lo, hi) : fallback;
+        };
+        constexpr double kMaxMs = 48.0 * 3600.0 * 1000.0;
+        st.position_s = real("position_ms", 0.0, kMaxMs, 0.0) / 1000.0;
+        st.duration_s = real("duration_ms", 0.0, kMaxMs, 0.0) / 1000.0;
+        st.rate = real("rate", 0.05, 16.0, 1.0);
         st.paused = j.value("paused", true);
         st.ad = j.value("ad", false);
         st.artwork_url = j.value("artwork_url", std::string());
@@ -268,7 +302,12 @@ void MovieSyncEffect::onStreamReport(const std::string& json_body)
                 return m.contains(k) && m[k].is_string() ? m[k].get<std::string>().substr(0, cap) : std::string();
             };
             const auto number = [&m](const char* k) {
-                return m.contains(k) && m[k].is_number() ? std::clamp(m[k].get<int>(), 0, 100000) : 0;
+                if(!m.contains(k) || !m[k].is_number())
+                {
+                    return 0;
+                }
+                const double d = m[k].get<double>();
+                return std::isfinite(d) ? (int)std::clamp(d, 0.0, 100000.0) : 0;
             };
             st.meta.show = text("show", 200);
             st.meta.season = number("season");
@@ -315,8 +354,16 @@ void MovieSyncEffect::onStreamReport(const std::string& json_body)
                     {
                         continue;
                     }
-                    sm.start_ms = std::max<std::int64_t>(0, mk["start_ms"].get<std::int64_t>());
-                    sm.end_ms = mk.contains("end_ms") && mk["end_ms"].is_number() ? mk["end_ms"].get<std::int64_t>() : -1;
+                    const auto ms = [](const nlohmann::json& v) -> std::int64_t {
+                        const double d = v.get<double>();
+                        return std::isfinite(d) && d >= 0.0 ? (std::int64_t)std::min(d, 48.0 * 3600.0 * 1000.0) : -1;
+                    };
+                    sm.start_ms = ms(mk["start_ms"]);
+                    sm.end_ms = mk.contains("end_ms") && mk["end_ms"].is_number() ? ms(mk["end_ms"]) : -1;
+                    if(sm.start_ms < 0)
+                    {
+                        continue;
+                    }
                     st.meta.markers.push_back(sm);
                 }
             }
@@ -356,18 +403,7 @@ void MovieSyncEffect::onStreamTick()
         if(!stream_match_key_.empty())
         {
             logEvent(MovieSyncLog::Kind::Info, tr("Playback stopped"), false);
-            restoreTitleSafety();
-            safety_key_.clear();
-            play_sig_.clear();
-            play_has_ = false;
-            details_sig_.clear();
-            markers_sig_.clear();
-            seen_marker_.clear();
-            seen_source_.clear();
-            stream_player_.Stop();
-            stream_file_ = nullptr;
-            stream_match_key_.clear();
-            stream_label_ms_ = 0;
+            resetStream();
         }
         /* Nothing playing: check four times a second instead of fifty. */
         if(stream_timer_->interval() != 250)
@@ -418,7 +454,7 @@ void MovieSyncEffect::onStreamTick()
         }
         else
         {
-            logEvent(MovieSyncLog::Kind::Warn,
+            logEvent(MovieSyncLog::Kind::Info,
                      tr("Now playing %1 (%2): no cue file for it").arg(what, QString::fromStdString(st.service)), false);
         }
         seen_paused_ = st.paused;
@@ -432,17 +468,7 @@ void MovieSyncEffect::onStreamTick()
     const bool fresh = st.received_ms != stream_player_.State().received_ms;
     if(fresh)
     {
-        if(st.ad != seen_ad_)
-        {
-            logEvent(MovieSyncLog::Kind::Info, st.ad ? tr("Ad started: cues hold") : tr("Ad over"));
-            seen_ad_ = st.ad;
-        }
-        else if(st.paused != seen_paused_)
-        {
-            logEvent(MovieSyncLog::Kind::Info, st.paused ? tr("Paused") : tr("Playing"));
-            seen_paused_ = st.paused;
-        }
-        /* Seek: the report is far from where the clock had it. */
+        /* Seek: the report is far from where the clock had it (before this report's pause). */
         if(seen_pos_s_ >= 0.0)
         {
             const double expected = seen_pos_s_ + (seen_paused_ ? 0.0 : (double)(now - seen_pos_ms_) / 1000.0 * st.rate);
@@ -451,9 +477,11 @@ void MovieSyncEffect::onStreamTick()
                 int skipped = 0;
                 if(stream_file_ && st.position_s > expected)
                 {
+                    /* Cue time -> stream time: minus the file's offset, plus the lights delay. */
+                    const double shift_s = (double)(stream_file_->offset_ms - lights_delay_ms_) / 1000.0;
                     for(const MovieSync::StreamCue& c : stream_file_->cues)
                     {
-                        const double t = (double)c.t_ms / 1000.0;
+                        const double t = (double)c.t_ms / 1000.0 - shift_s;
                         if(c.edge != "level" && t > expected && t <= st.position_s)
                         {
                             ++skipped;
@@ -467,6 +495,16 @@ void MovieSyncEffect::onStreamTick()
                                      : tr("Seek %1 \u2192 %2").arg(FormatClock(expected), FormatClock(st.position_s)));
             }
         }
+        if(st.ad != seen_ad_)
+        {
+            logEvent(MovieSyncLog::Kind::Info, st.ad ? tr("Ad started: cues hold") : tr("Ad over"));
+            seen_ad_ = st.ad;
+        }
+        else if(st.paused != seen_paused_)
+        {
+            logEvent(MovieSyncLog::Kind::Info, st.paused ? tr("Paused") : tr("Playing"));
+            seen_paused_ = st.paused;
+        }
         seen_pos_s_ = st.position_s;
         seen_pos_ms_ = now;
     }
@@ -474,11 +512,8 @@ void MovieSyncEffect::onStreamTick()
     stream_player_.SetLightsDelayMs(lights_delay_ms_);
     bool play_changed = false;
     const MovieSync::StreamCueFile* play = rebuildPlayFile(st, &play_changed);
-    if(play_changed)
-    {
-        /* Looks or marks changed: let go of what the old list was holding first. */
-        stream_player_.OnState(st, nullptr, now);
-    }
+    /* A changed list (new marks, another look picked) keeps its name, so the player keeps what
+       it holds and its place: only looks no longer wanted are let go, nothing fires twice. */
     if(fresh || play_changed || !stream_player_.Active())
     {
         stream_player_.OnState(st, play, now);
@@ -521,6 +556,23 @@ void MovieSyncEffect::onStreamTick()
         }
     }
     refreshNowPlaying(now);
+}
+
+void MovieSyncEffect::resetStream()
+{
+    restoreTitleSafety();
+    safety_key_.clear();
+    play_sig_.clear();
+    play_has_ = false;
+    timeline_key_.clear();
+    details_sig_.clear();
+    markers_sig_.clear();
+    seen_marker_.clear();
+    seen_source_.clear();
+    stream_player_.Stop();
+    stream_file_ = nullptr;
+    stream_match_key_.clear();
+    stream_label_ms_ = 0;
 }
 
 const MovieSync::StreamCueFile* MovieSyncEffect::rebuildPlayFile(const MovieSync::StreamState& st, bool* changed)
@@ -710,20 +762,42 @@ void MovieSyncEffect::showArtwork(const QPixmap& pixmap)
     {
         return;
     }
+    if(!art_original_)
+    {
+        art_original_ = new QPixmap();
+    }
+    *art_original_ = pixmap;
+    art_scaled_w_ = 0;
     if(pixmap.isNull())
     {
         now_art_->clear();
         now_art_->hide();
         return;
     }
-    /* Posters are tall, thumbnails wide: fit 96 px high and at most 170 px wide. */
+    now_art_->show();
+    rescaleArtwork();
+}
+
+void MovieSyncEffect::rescaleArtwork()
+{
+    if(!now_art_ || !art_original_ || art_original_->isNull())
+    {
+        return;
+    }
+    /* The card's full width, at most 240 px tall (a tall poster is shown centred). */
+    int w = now_art_->width();
+    if(w < 60 && now_art_->parentWidget())
+    {
+        w = now_art_->parentWidget()->contentsRect().width() - 20;
+    }
+    w = std::max(w, 120);
     const qreal dpr = now_art_->devicePixelRatioF();
-    QPixmap scaled = pixmap.scaled(QSize((int)(170 * dpr), (int)(96 * dpr)), Qt::KeepAspectRatio,
-                                   Qt::SmoothTransformation);
+    QPixmap scaled = art_original_->scaled(QSize((int)(w * dpr), (int)(240 * dpr)), Qt::KeepAspectRatio,
+                                           Qt::SmoothTransformation);
     scaled.setDevicePixelRatio(dpr);
     now_art_->setPixmap(scaled);
-    now_art_->setFixedSize(scaled.deviceIndependentSize().toSize());
-    now_art_->show();
+    now_art_->setFixedHeight(std::max(1, (int)std::lround(scaled.height() / dpr)));
+    art_scaled_w_ = now_art_->width();
 }
 
 void MovieSyncEffect::updateArtwork(const MovieSync::StreamState& st)
@@ -792,6 +866,16 @@ void MovieSyncEffect::tryArtwork(std::size_t index)
         showArtwork(cached->second);
         return;
     }
+    if(art_inflight_.count(want))
+    {
+        return; /* already downloading: it shows when it arrives */
+    }
+    const auto failed = art_failed_.find(want);
+    if(failed != art_failed_.end() && SteadyNowMs() - failed->second < 60000)
+    {
+        artworkFailed(index, want, "failed a moment ago");
+        return;
+    }
     /* Keep a decoded picture (scaled down, at most 24 in memory); false if it did not decode. */
     const auto keep = [this](const std::string& url, const QImage& img) {
         if(img.isNull())
@@ -846,37 +930,79 @@ void MovieSyncEffect::tryArtwork(std::size_t index)
     {
         /* Windows: the system's HTTP stack, on a worker thread (OpenRGB's Qt has no TLS). */
         QPointer<MovieSyncEffect> self(this);
-        std::thread([self, want, key_now, index, keep]() {
+        if(!art_workers_)
+        {
+            art_workers_ = std::make_shared<MovieSyncArtWorkers>();
+        }
+        std::shared_ptr<MovieSyncArtWorkers> workers = art_workers_;
+        {
+            std::lock_guard<std::mutex> lock(workers->mutex);
+            ++workers->running;
+        }
+        art_inflight_.insert(want);
+        std::thread([self, workers, want, key_now, index]() {
             std::vector<std::uint8_t> bytes;
             std::string why;
-            const bool ok = MovieSync::HttpsGet(want, &bytes, &why, (std::size_t)kMaxBytes, 8000);
+            MovieSync::HttpJob job;
+            {
+                std::lock_guard<std::mutex> lock(workers->mutex);
+                workers->jobs.insert(&job);
+            }
+            const bool ok = MovieSync::HttpsGet(want, &bytes, &why, (std::size_t)kMaxBytes, 15000, &job);
+            {
+                std::lock_guard<std::mutex> lock(workers->mutex);
+                workers->jobs.erase(&job);
+            }
             /* Decoded here by Windows (it reads the WebP Netflix serves; OpenRGB's Qt cannot). */
             std::vector<std::uint8_t> pixels;
             int w = 0, h = 0;
-            const bool decoded = ok && MovieSync::DecodeImageNative(bytes, 1200, &w, &h, &pixels);
-            QMetaObject::invokeMethod(
-                QCoreApplication::instance(),
-                [self, want, key_now, index, keep, ok, why, decoded, w, h, pixels = std::move(pixels),
-                 bytes = std::move(bytes)]() {
-                    if(!self || key_now != self->art_key_)
-                    {
-                        return; /* gone, or another title by now */
-                    }
-                    QImage img;
-                    if(decoded)
-                    {
-                        img = QImage(pixels.data(), w, h, w * 4, QImage::Format_ARGB32_Premultiplied).copy();
-                    }
-                    else if(ok)
-                    {
-                        img.loadFromData(bytes.data(), (int)bytes.size());
-                    }
-                    if(!keep(want, img))
-                    {
-                        self->artworkFailed(index, want, ok ? std::string("not a picture OpenRGB can read") : why);
-                    }
-                },
-                Qt::QueuedConnection);
+            const bool decoded = ok && !job.Cancelled() && MovieSync::DecodeImageNative(bytes, 1200, &w, &h, &pixels);
+            if(!job.Cancelled() && QCoreApplication::instance())
+            {
+                QMetaObject::invokeMethod(
+                    QCoreApplication::instance(),
+                    [self, want, key_now, index, ok, why, decoded, w, h, pixels = std::move(pixels),
+                     bytes = std::move(bytes)]() {
+                        if(!self)
+                        {
+                            return;
+                        }
+                        self->art_inflight_.erase(want);
+                        QImage img;
+                        if(decoded)
+                        {
+                            img = QImage(pixels.data(), w, h, w * 4, QImage::Format_ARGB32_Premultiplied).copy();
+                        }
+                        else if(ok)
+                        {
+                            img.loadFromData(bytes.data(), (int)bytes.size());
+                        }
+                        if(!img.isNull())
+                        {
+                            /* Kept even if the title moved on (it may come back). */
+                            const QPixmap& px = self->storeArtwork(want, img);
+                            if(key_now == self->art_key_)
+                            {
+                                self->showArtwork(px);
+                            }
+                            return;
+                        }
+                        self->art_failed_[want] = SteadyNowMs();
+                        if(self->art_failed_.size() > 64)
+                        {
+                            self->art_failed_.erase(self->art_failed_.begin());
+                        }
+                        if(key_now == self->art_key_)
+                        {
+                            self->artworkFailed(index, want, ok ? std::string("not a picture OpenRGB can read") : why);
+                        }
+                    },
+                    Qt::QueuedConnection);
+            }
+            /* Last: the effect may now finish going away. */
+            std::lock_guard<std::mutex> lock(workers->mutex);
+            --workers->running;
+            workers->done.notify_all();
         }).detach();
         return;
     }
@@ -922,6 +1048,19 @@ void MovieSyncEffect::tryArtwork(std::size_t index)
     });
 }
 
+const QPixmap& MovieSyncEffect::storeArtwork(const std::string& url, const QImage& img)
+{
+    QPixmap px = QPixmap::fromImage(img.width() > 1200 || img.height() > 1200
+                                        ? img.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                                        : img);
+    if(art_cache_.size() >= 24 && !art_cache_.count(url))
+    {
+        art_cache_.erase(art_cache_.begin());
+    }
+    art_cache_[url] = px;
+    return art_cache_[url];
+}
+
 void MovieSyncEffect::artworkFailed(std::size_t index, const std::string& url, const std::string& why)
 {
     if(index + 1 < art_candidates_.size())
@@ -947,6 +1086,11 @@ void MovieSyncEffect::refreshNowPlaying(std::int64_t now_ms)
         return;
     }
     stream_label_ms_ = now_ms;
+    /* The panel was resized: fit the banner to the new width. */
+    if(now_art_ && now_art_->isVisible() && now_art_->width() != art_scaled_w_)
+    {
+        rescaleArtwork();
+    }
 
     /* Connection lights: green = live, grey = idle / not seen. */
     if(connections_label_)
@@ -1002,7 +1146,9 @@ void MovieSyncEffect::refreshNowPlaying(std::int64_t now_ms)
     static const char* kServices[][2] = {{"netflix", "Netflix"}, {"prime", "Prime Video"}, {"crunchyroll", "Crunchyroll"},
                                          {"disney", "Disney+"}, {"stan", "Stan"}, {"binge", "Binge"},
                                          {"youtube", "YouTube"}, {"paramount", "Paramount+"}, {"max", "Max"},
-                                         {"appletv", "Apple TV"}};
+                                         {"appletv", "Apple TV"}, {"vlc", "VLC"}, {"app:firefox", "Firefox"},
+                                         {"app:chrome", "Chrome"}, {"app:edge", "Edge"}, {"app:brave", "Brave"},
+                                         {"app:opera", "Opera"}, {"app:vivaldi", "Vivaldi"}};
     QString service = QString::fromStdString(st.service);
     for(const auto& sv : kServices)
     {
@@ -1131,7 +1277,15 @@ void MovieSyncEffect::refreshNowPlaying(std::int64_t now_ms)
             now_next_->setText(tr("No more cues in this title"));
         }
     }
-    if(!stream_file_ && !play_has_)
+    if(!stream_file_ && !play_has_ && st.service.rfind("app:", 0) == 0)
+    {
+        /* Not a known service (a browser tab without the extension, another app): no ID. */
+        now_cuefile_->setText(tr("No cue file for this title. Without the browser extension it is matched by title and "
+                                 "length only: give the cue file this \"title\" and \"duration_ms\" (or use the "
+                                 "extension for exact IDs)."));
+        now_next_->clear();
+    }
+    else if(!stream_file_ && !play_has_)
     {
         now_cuefile_->setText(tr("No cue file for this title. Add one to movie-sync/streams (service \"%1\", id \"%2\") "
                                  "and press Reload.")
@@ -1191,16 +1345,16 @@ void MovieSyncEffect::SetupCustomUI(QWidget* parent)
     QVBoxLayout* card_layout = new QVBoxLayout(card);
     card_layout->setContentsMargins(10, 8, 10, 8);
     card_layout->setSpacing(3);
-    QHBoxLayout* card_top = new QHBoxLayout();
-    card_top->setSpacing(10);
+    /* Banner across the top of the card, the details under it. */
     now_art_ = new QLabel(card);
-    now_art_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    now_art_->setAlignment(Qt::AlignCenter);
+    now_art_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    now_art_->setMinimumWidth(0);
     now_art_->hide();
-    card_top->addWidget(now_art_, 0, Qt::AlignTop);
+    card_layout->addWidget(now_art_);
     QVBoxLayout* card_info = new QVBoxLayout();
     card_info->setSpacing(3);
-    card_top->addLayout(card_info, 1);
-    card_layout->addLayout(card_top);
+    card_layout->addLayout(card_info);
     now_source_ = new QLabel(card);
     PluginUiApplyMutedSecondaryLabel(now_source_);
     card_info->addWidget(now_source_);
@@ -1235,6 +1389,8 @@ void MovieSyncEffect::SetupCustomUI(QWidget* parent)
     card_layout->addWidget(now_cuefile_);
     layout->addWidget(card);
     PluginUiApplyControllerCardChrome(card);
+    /* The card's frame style must not draw a box around every label in it (QLabel is a QFrame). */
+    card->setStyleSheet(card->styleSheet() + QStringLiteral(" QLabel { border: none; background: transparent; }"));
 
     connections_label_ = new QLabel(panel);
     connections_label_->setTextFormat(Qt::RichText);
@@ -1470,6 +1626,9 @@ void MovieSyncEffect::LoadSettings(const nlohmann::json& settings)
         QSignalBlocker b(allow_strobe_check_);
         allow_strobe_check_->setChecked(allow_photosensitive_);
     }
+    /* Saved choice applies; a marked title playing now is looked at again next tick. */
+    safety_forced_ = false;
+    details_sig_.clear();
     runtime_.SetAllowPhotosensitive(allow_photosensitive_);
     if(api_enabled_)
     {
@@ -1530,10 +1689,8 @@ void MovieSyncEffect::onReloadCatalog()
     runtime_.SetMovieEffectsDir(movie_dir);
     runtime_.SetCatalog(&catalog_);
 
-    /* Stream cue files: re-matched against whatever plays next tick. */
-    stream_player_.Stop();
-    stream_file_ = nullptr;
-    stream_match_key_.clear();
+    /* Stream cue files: re-matched (and the play list rebuilt) against whatever plays next tick. */
+    resetStream();
     /* movie_dir is movie-sync/effects; stream cue files live beside it in movie-sync/streams. */
     filesystem::path base = movie_dir.lexically_normal();
     if(base.filename().empty())
@@ -1843,9 +2000,7 @@ void MovieSyncEffect::stopListener()
         stream_timer_->stop();
     }
     system_media_.Stop();
-    stream_player_.Stop();
-    stream_file_ = nullptr;
-    stream_match_key_.clear();
+    resetStream();
 }
 
 void MovieSyncEffect::fireSelectedCatalogEffect()

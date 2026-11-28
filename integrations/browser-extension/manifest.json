@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "OpenRGB 3D Spatial - Movie Sync",
-  "version": "0.4.0",
-  "description": "Plays OpenRGB 3D Spatial Movie Sync cue scripts in time with Netflix, Prime Video, Crunchyroll, Disney+ and other streams. Reads only what is playing and where; talks only to OpenRGB on this computer.",
+  "version": "0.4.1",
+  "description": "Plays OpenRGB 3D Spatial Movie Sync cues in time with Netflix, Prime Video, Crunchyroll and more. Talks only to OpenRGB on this PC.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -27,11 +27,11 @@
       "matches": [
         "https://www.netflix.com/*",
         "https://www.primevideo.com/*",
-        "https://www.amazon.com/*",
-        "https://www.amazon.co.uk/*",
-        "https://www.amazon.com.au/*",
-        "https://www.amazon.ca/*",
-        "https://www.amazon.de/*",
+        "https://www.amazon.com/gp/video/*",
+        "https://www.amazon.co.uk/gp/video/*",
+        "https://www.amazon.com.au/gp/video/*",
+        "https://www.amazon.ca/gp/video/*",
+        "https://www.amazon.de/gp/video/*",
         "https://www.crunchyroll.com/*",
         "https://static.crunchyroll.com/*",
         "https://www.disneyplus.com/*",
@@ -64,11 +64,11 @@
     {
       "matches": [
         "https://www.primevideo.com/*",
-        "https://www.amazon.com/*",
-        "https://www.amazon.co.uk/*",
-        "https://www.amazon.com.au/*",
-        "https://www.amazon.ca/*",
-        "https://www.amazon.de/*",
+        "https://www.amazon.com/gp/video/*",
+        "https://www.amazon.co.uk/gp/video/*",
+        "https://www.amazon.com.au/gp/video/*",
+        "https://www.amazon.ca/gp/video/*",
+        "https://www.amazon.de/gp/video/*",
         "https://www.crunchyroll.com/*",
         "https://static.crunchyroll.com/*"
       ],
@@ -90,5 +90,6 @@
         ]
       }
     }
-  }
+  },
+  "minimum_chrome_version": "111"
 }

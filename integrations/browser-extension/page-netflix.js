@@ -92,8 +92,10 @@
          (the post-play data), else the credits offset of the title. */
       if (!meta.markers.some((x) => x.kind === "credits")) {
         const post = safe(() => api.getPostPlayExperienceByVideoId(rawId).currentEpisodeSeamlessData);
+        /* Both in milliseconds (creditsOffset 1329000 on a 1494000 ms episode); anything in the
+           first minute is not end credits. */
         const end = num(post && post.seamlessEndMillis) || num(play && play.creditsOffset);
-        if (end > 0) meta.markers.push({ kind: "credits", start_ms: end, end_ms: -1 });
+        if (end > 60000) meta.markers.push({ kind: "credits", start_ms: end, end_ms: -1 });
       }
       return meta;
     });

@@ -90,7 +90,7 @@
     window.addEventListener("message", (e) => {
       const d = e.data;
       if (e.source !== window || !d || d.__orgbMovieSync !== "netflix") return;
-      if (typeof d.id !== "string" || !isFinite(d.positionMs) || !isFinite(d.durationMs)) return;
+      if (typeof d.id !== "string" || !/^\d{1,12}$/.test(d.id) || !isFinite(d.positionMs) || !isFinite(d.durationMs)) return;
       netflixPlayer = {
         id: d.id,
         positionMs: +d.positionMs,
@@ -125,17 +125,19 @@
   let primeSrcKey = "";
   let primeSrcAt = 0;
   const pickPrimeId = (v, now) => {
-    const key = (v.currentSrc || "") + "|" + Math.round(v.duration || 0);
+    /* The source only: a duration change mid-episode (ads, refinement) is not a new title. */
+    const key = v.currentSrc || "";
     if (key !== primeSrcKey) {
       primeSrcKey = key;
       primeSrcAt = now;
       primeId = "";
     }
-    if (primeId) return;
-    /* The newest request before the source started (noticed up to a tick late). */
+    /* Timing entries arrive when a response finishes, which can be after the source change is
+       seen: keep choosing for 2 s, then hold. The newest request before the source started. */
+    if (primeId && now - primeSrcAt > 2000) return;
     let best = null;
     for (const r of primeReqs) if (r.at <= primeSrcAt + 300 && (!best || r.at > best.at)) best = r;
-    primeId = best ? best.id : "";
+    primeId = best ? best.id : primeId;
   };
 
   /* Artwork for the Now Playing card: what the site gives media controls (largest), else the
@@ -217,7 +219,7 @@
       advisories: s(m.advisories, 300),
       genres: (Array.isArray(m.genres) ? m.genres : []).map((g) => s(g, 40)).filter(Boolean).slice(0, 8),
       photosensitive: !!m.photosensitive,
-      artwork: (Array.isArray(m.artwork) ? m.artwork : []).filter((u) => httpsUrl(u)).slice(0, 6),
+      artwork: (Array.isArray(m.artwork) ? m.artwork : []).filter((u) => typeof u === "string").map(httpsUrl).filter(Boolean).slice(0, 6),
       markers: cleanMarkers(m.markers),
     };
   };
@@ -332,6 +334,8 @@
   let hadVideo = false;
   let lastPageUrl = "";
   let pageArt = { url: "", tries: 0, at: 0 };
+  let knownVideos = [];
+  let lastWalk = 0;
   let idleUntil = 0;
   const watched = new WeakSet();
 
@@ -357,7 +361,13 @@
     const now = Date.now();
     if (!force && now < idleUntil) return;
 
-    const vids = allVideos(); /* one walk per tick */
+    /* The full walk (into shadow roots) is costly on big pages: every 2 s, or when the main
+       video went away; otherwise the videos already found. */
+    if (now - lastWalk > 2000 || !knownVideos.some((x) => x.isConnected)) {
+      lastWalk = now;
+      knownVideos = allVideos();
+    }
+    const vids = knownVideos.filter((x) => x.isConnected);
     vids.forEach((v) => {
       if (watched.has(v)) return;
       watched.add(v);
@@ -389,9 +399,10 @@
     }
 
     const md = navigator.mediaSession && navigator.mediaSession.metadata;
-    if (artwork.key !== titleKey) artwork = { url: "", key: titleKey, at: 0 };
-    if (!artwork.url && now - artwork.at > 2000) {
+    if (artwork.key !== titleKey) artwork = { url: "", key: titleKey, at: 0, tries: 0 };
+    if (!artwork.url && artwork.tries < 10 && now - artwork.at > 2000) {
       artwork.at = now;
+      artwork.tries++;
       artwork.url = findArtwork();
     }
     /* Ads: a marked ad in the feature's player, or another video playing while it waits
@@ -409,11 +420,11 @@
     const msg = {
       type: "movie-sync-state",
       frameUrl: location.href,
-      mediaTitle: md ? clean(md.title) : "",
-      mediaArtist: md ? clean(md.artist) : "",
-      pageTitle: document.title,
-      siteTitle: sticky.title,
-      siteEpisode: sticky.episode,
+      mediaTitle: md ? clean(md.title).slice(0, 300) : "",
+      mediaArtist: md ? clean(md.artist).slice(0, 300) : "",
+      pageTitle: clean(document.title).slice(0, 300),
+      siteTitle: (sticky.title || "").slice(0, 300),
+      siteEpisode: (sticky.episode || "").slice(0, 300),
       netflixId: nf ? nf.id : "",
       primeTitleId: isPrime ? primeId : "",
       crunchyId: onHost("crunchyroll.com") ? crunchyPlayerId() : "",

@@ -2,6 +2,8 @@
 
 #include "MovieSyncHttp.h"
 
+#include <chrono>
+
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -51,6 +53,17 @@ struct Handle
 bool NativeHttpsAvailable()
 {
     return true;
+}
+
+void HttpJob::Cancel()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    cancelled_ = true;
+    if(request_)
+    {
+        WinHttpCloseHandle((HINTERNET)request_);
+        request_ = nullptr;
+    }
 }
 
 bool DecodeImageNative(const std::vector<std::uint8_t>& bytes, int max_side, int* width, int* height,
@@ -125,8 +138,10 @@ bool DecodeImageNative(const std::vector<std::uint8_t>& bytes, int max_side, int
 }
 
 bool HttpsGet(const std::string& url, std::vector<std::uint8_t>* out, std::string* error, std::size_t max_bytes,
-              int timeout_ms)
+              int total_ms, HttpJob* job)
 {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(total_ms);
+    const int timeout_ms = total_ms / 3 > 1000 ? total_ms / 3 : 1000; /* per phase */
     const auto fail = [error](const char* why) {
         if(error)
         {
@@ -181,6 +196,39 @@ bool HttpsGet(const std::string& url, std::vector<std::uint8_t>* out, std::strin
     {
         return fail("cannot make the request");
     }
+    /* Hand the request to the job so Cancel() can close it; take it back before it is closed
+       here (or forget it if Cancel() already closed it). */
+    struct Detach
+    {
+        HttpJob* job;
+        Handle& request;
+        ~Detach()
+        {
+            if(!job)
+            {
+                return;
+            }
+            std::lock_guard<std::mutex> lock(job->mutex_);
+            if(job->request_)
+            {
+                job->request_ = nullptr; /* still ours: closed by its Handle */
+            }
+            else
+            {
+                request.h = nullptr; /* Cancel() closed it */
+            }
+        }
+    } detach{job, request};
+    if(job)
+    {
+        std::lock_guard<std::mutex> lock(job->mutex_);
+        if(job->cancelled_)
+        {
+            job = nullptr; /* nothing handed over: the Handle closes it */
+            return fail("cancelled");
+        }
+        job->request_ = request.h;
+    }
     /* Never follow a redirect from https down to http (the default policy, made explicit). */
     DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
     WinHttpSetOption(request.h, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy));
@@ -204,6 +252,11 @@ bool HttpsGet(const std::string& url, std::vector<std::uint8_t>* out, std::strin
     }
     for(;;)
     {
+        if((job && job->Cancelled()) || std::chrono::steady_clock::now() > deadline)
+        {
+            out->clear();
+            return fail(job && job->Cancelled() ? "cancelled" : "took too long");
+        }
         DWORD avail = 0;
         if(!WinHttpQueryDataAvailable(request.h, &avail))
         {
@@ -238,12 +291,17 @@ bool NativeHttpsAvailable()
     return false;
 }
 
+void HttpJob::Cancel()
+{
+    cancelled_ = true;
+}
+
 bool DecodeImageNative(const std::vector<std::uint8_t>&, int, int*, int*, std::vector<std::uint8_t>*)
 {
     return false;
 }
 
-bool HttpsGet(const std::string&, std::vector<std::uint8_t>* out, std::string* error, std::size_t, int)
+bool HttpsGet(const std::string&, std::vector<std::uint8_t>* out, std::string* error, std::size_t, int, HttpJob*)
 {
     out->clear();
     if(error)

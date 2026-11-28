@@ -174,20 +174,39 @@ const StreamCueFile* StreamCueLibrary::Match(const StreamState& state, std::stri
         }
         /* Crunchyroll gives each language version its own ID (GE00384332ENUS, ...JAJP): the
            same episode in another language matches too, if the length fits. */
-        if(service == "crunchyroll" && state.id.size() > 4)
+        /* Only episode IDs of the form GE<digits><language> (e.g. GE00384332ENUS) with a known
+           language suffix, IDs of the same length, and both lengths known. */
+        static const char* kLocales[] = {"ENUS", "JAJP", "ESLA", "ESES", "ES419", "PTBR", "PTPT", "FRFR", "DEDE",
+                                         "ITIT", "RURU", "ARSA", "ARME", "HIIN", "IDID", "MSMY", "THTH", "VIVN",
+                                         "ZHCN", "ZHTW", "ZHHK", "KOKR", "TATA", "TEIN", "PLPL", "CAES", "TRTR"};
+        const auto base = [](const std::string& id) -> std::string {
+            if(id.size() < 8 || id.compare(0, 2, "GE") != 0)
+            {
+                return std::string();
+            }
+            for(const char* loc : kLocales)
+            {
+                const std::size_t n = std::char_traits<char>::length(loc);
+                if(id.size() > n + 2 && id.compare(id.size() - n, n, loc) == 0)
+                {
+                    const std::string head = id.substr(2, id.size() - n - 2);
+                    if(!head.empty() && std::all_of(head.begin(), head.end(), [](unsigned char c) { return std::isdigit(c); }))
+                    {
+                        return id.substr(0, id.size() - n);
+                    }
+                }
+            }
+            return std::string();
+        };
+        const std::string want_base = service == "crunchyroll" ? base(state.id) : std::string();
+        if(!want_base.empty() && dur_ms > 0)
         {
-            const auto base = [](const std::string& id) {
-                return id.size() > 4 && std::all_of(id.end() - 4, id.end(), [](unsigned char c) { return std::isupper(c); })
-                           ? id.substr(0, id.size() - 4)
-                           : id;
-            };
-            const std::string want_base = base(state.id);
             for(const StreamCueFile& f : files_)
             {
                 for(const StreamMatch& m : f.streams)
                 {
-                    if(m.service == service && base(m.id) == want_base
-                       && (f.duration_ms <= 0 || dur_ms <= 0 || std::llabs(f.duration_ms - dur_ms) <= f.duration_tolerance_ms))
+                    if(m.service == service && m.id.size() >= want_base.size() && base(m.id) == want_base
+                       && f.duration_ms > 0 && std::llabs(f.duration_ms - dur_ms) <= f.duration_tolerance_ms)
                     {
                         if(how) *how = "by crunchyroll ID (other language)";
                         return &f;

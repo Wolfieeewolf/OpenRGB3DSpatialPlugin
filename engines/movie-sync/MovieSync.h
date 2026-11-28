@@ -11,6 +11,8 @@
 
 #include <QPointer>
 #include <map>
+#include <memory>
+#include <set>
 
 class QCheckBox;
 class QSpinBox;
@@ -22,6 +24,7 @@ class QTimer;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QPixmap;
+struct MovieSyncArtWorkers;
 class OpenRGB3DSpatialTab;
 
 class MovieSyncEffect : public SpatialEffect3D
@@ -144,12 +147,22 @@ private:
     std::int64_t vlc_last_ms_ = 0;
     std::string vlc_last_cue_;
     QLabel* now_art_ = nullptr;
+    QPixmap* art_original_ = nullptr; /* the picture before scaling to the card's width */
+    int art_scaled_w_ = 0;
+    void rescaleArtwork();
     QNetworkAccessManager* net_ = nullptr;
     QPointer<QNetworkReply> art_reply_;
     std::string art_key_;
     std::map<std::string, QPixmap> art_cache_;
     std::vector<std::string> art_candidates_;
     std::string art_warned_key_;
+    std::set<std::string> art_inflight_;               /* downloads running, by link */
+    std::map<std::string, std::int64_t> art_failed_;   /* link -> when it failed (not retried for a minute) */
+    std::shared_ptr<MovieSyncArtWorkers> art_workers_; /* running download threads (cancelled on exit) */
+    /** Downsize and keep a decoded picture (at most 24 kept). */
+    const QPixmap& storeArtwork(const std::string& url, const QImage& img);
+    /** Forget the stream (title gone, Reload, API off): levels, play list, title safety. */
+    void resetStream();
     void artworkFailed(std::size_t index, const std::string& url, const std::string& why);
     QLabel* now_meta_ = nullptr;
     QLabel* now_synopsis_ = nullptr;

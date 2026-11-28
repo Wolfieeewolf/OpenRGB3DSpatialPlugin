@@ -85,17 +85,57 @@ function identify(pageUrl, s) {
    Movie Sync effect / Script API is off), none = nothing playing. */
 let badgeState = null; /* null: not set since start-up, so the first call always applies */
 function badge(state, title) {
+  /* Site access not granted yet (Firefox asks separately): that is the only thing to show. */
+  if (needsAccess) {
+    state = "access";
+    title = "click here to allow access to the streaming sites and to OpenRGB";
+  }
   if (state === badgeState) return;
   badgeState = state;
   const a = api.action || api.browserAction;
   if (!a) return;
-  const text = state === "ok" ? "▶" : state === "error" ? "!" : "";
+  const text = state === "ok" ? "▶" : state === "error" || state === "access" ? "!" : "";
   Promise.resolve(a.setBadgeText({ text })).catch(() => {});
   if (a.setBadgeBackgroundColor) {
-    Promise.resolve(a.setBadgeBackgroundColor({ color: state === "error" ? "#c0392b" : "#2e9e4f" })).catch(() => {});
+    const color = state === "error" ? "#c0392b" : state === "access" ? "#d68910" : "#2e9e4f";
+    Promise.resolve(a.setBadgeBackgroundColor({ color })).catch(() => {});
   }
   if (a.setTitle) Promise.resolve(a.setTitle({ title: "OpenRGB Movie Sync: " + title })).catch(() => {});
 }
+
+/* ---------- site access ----------
+   Chrome grants the sites in the manifest at install. Firefox (Manifest V3) may not: then
+   nothing runs on the streaming sites and OpenRGB cannot be reached until the user allows it.
+   The toolbar button asks (the browser only shows the question after a click). */
+const NEEDED = (() => {
+  const m = api.runtime.getManifest();
+  const origins = new Set(m.host_permissions || []);
+  for (const cs of m.content_scripts || []) for (const o of cs.matches || []) origins.add(o);
+  return { origins: Array.from(origins) };
+})();
+let needsAccess = false;
+function checkAccess() {
+  if (!api.permissions || !api.permissions.contains) return;
+  Promise.resolve(api.permissions.contains(NEEDED))
+    .then((ok) => {
+      needsAccess = !ok;
+      badgeState = null;
+      badge("", "nothing playing");
+    })
+    .catch(() => {});
+}
+const actionApi = api.action || api.browserAction;
+if (actionApi && actionApi.onClicked) {
+  actionApi.onClicked.addListener(() => {
+    /* Called straight from the click (no await before it), as the browser requires. */
+    if (needsAccess && api.permissions && api.permissions.request) {
+      Promise.resolve(api.permissions.request(NEEDED)).then(checkAccess, checkAccess);
+    }
+  });
+}
+if (api.permissions && api.permissions.onAdded) api.permissions.onAdded.addListener(checkAccess);
+if (api.permissions && api.permissions.onRemoved) api.permissions.onRemoved.addListener(checkAccess);
+checkAccess();
 
 /* ---------- sending: one request at a time, newest state wins, back off when OpenRGB is away ---------- */
 
