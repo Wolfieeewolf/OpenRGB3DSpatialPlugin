@@ -176,7 +176,7 @@ uniform int u_rw_count;
 uniform float u_rw_cycles;
 uniform float u_rw_min_sigma; /* overlay-only ring width floor (~0.75 lattice step) */
 /* KindMinecraft (one layer): slot map in MinecraftGame::FillOverlayLayer. */
-uniform vec3 u_mc[18];
+uniform vec3 u_mc[19];
 uniform int u_rainbow[4];     /* Rainbow vs palette for audio / spiral / hex-atlas finishes */
 uniform int u_depth_shade[4]; /* finish_depth anchor-distance shade */
 uniform int u_material_rich[4]; /* 0 Flat/Basic, 1 Rich/Masterpiece */
@@ -953,6 +953,14 @@ bool mcRoomSample(int i, vec3 world, out vec3 rgb)
     float sc = u_mc[16].x;
     int S = max(int(u_mc[16].y + 0.5), 1);
     vec3 d = vec3((world.x - u_mc[15].x) * sc, (world.y - u_mc[15].y) * sc, (u_mc[15].z - world.z) * sc);
+    /* Facing: room forward turned toward the chosen display (RoomSampleFrameProtocol::ApplyHeading). */
+    float hd = radians(u_mc[18].x);
+    if(hd != 0.0)
+    {
+        float ch = cos(hd);
+        float sh = sin(hd);
+        d = vec3(d.x * ch - d.z * sh, d.y, d.x * sh + d.z * ch);
+    }
     float len = length(d);
     if(len <= 1e-5) return false;
     d /= len;

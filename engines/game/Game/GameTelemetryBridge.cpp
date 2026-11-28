@@ -146,6 +146,25 @@ GameTelemetryBridge::Stats GameTelemetryBridge::stats;
 GameTelemetryBridge::TelemetrySnapshot GameTelemetryBridge::telemetry;
 
 static RoomSampleFrameShmReader g_room_sample_shm_reader;
+static std::atomic<std::uint64_t> g_room_frames{0};
+static std::atomic<std::uint64_t> g_led_frames{0};
+static std::atomic<long long> g_room_delay_ms{-1};
+static std::atomic<unsigned long long> g_room_last_ms{0};
+
+void GameTelemetryBridge::NoteLedFrameOutput()
+{
+    g_led_frames.fetch_add(1, std::memory_order_relaxed);
+}
+
+GameTelemetryBridge::LiveRates GameTelemetryBridge::GetLiveRates()
+{
+    LiveRates r;
+    r.room_frames = g_room_frames.load(std::memory_order_relaxed);
+    r.led_frames = g_led_frames.load(std::memory_order_relaxed);
+    r.room_delay_ms = g_room_delay_ms.load(std::memory_order_relaxed);
+    r.room_last_ms = g_room_last_ms.load(std::memory_order_relaxed);
+    return r;
+}
 
 GameTelemetryBridge::GameTelemetryBridge()
 {
@@ -410,6 +429,7 @@ void GameTelemetryBridge::NotifyTelemetryDataUpdated()
 }
 
 void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol::FrameHeader& hdr,
+                                                  std::vector<std::uint32_t> flats,
                                                   std::vector<unsigned char> rgba)
 {
     RoomSampleFrameProtocol::ConfigHeader cfg{};
@@ -425,11 +445,22 @@ void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol:
     }
     std::size_t expect_bytes = 0;
     if(!RoomSampleFrameProtocol::TryComputeRgbaBytes(hdr.size_x, hdr.size_y, hdr.size_z, expect_bytes)
-       || rgba.size() != expect_bytes)
+       || rgba.size() != flats.size() * 4u)
     {
         return;
     }
 
+    {
+        /* The mod stamps frames with the wall clock (same computer): how long it took to get here. */
+        const long long wall_now = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+                                       std::chrono::system_clock::now().time_since_epoch())
+                                       .count();
+        const long long stamp = (long long)hdr.timestamp_ms;
+        g_room_delay_ms.store(stamp > 1000000000000LL && wall_now >= stamp && wall_now - stamp < 60000 ? wall_now - stamp : -1,
+                              std::memory_order_relaxed);
+        g_room_last_ms.store(NowMs(), std::memory_order_relaxed);
+        g_room_frames.fetch_add(1, std::memory_order_relaxed);
+    }
     std::lock_guard<std::mutex> guard(stats_mutex);
     telemetry.room_sample.has_frame = true;
     telemetry.room_sample.frame_id = hdr.frame_id;
@@ -448,6 +479,8 @@ void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol:
     telemetry.room_sample.effect_origin_y = cfg.effect_origin_y;
     telemetry.room_sample.effect_origin_z = cfg.effect_origin_z;
     telemetry.room_sample.room_to_world_scale = cfg.room_to_world_scale;
+    telemetry.room_sample.heading_offset_deg = std::isfinite(cfg.heading_offset_deg) ? cfg.heading_offset_deg : 0.0f;
+    telemetry.room_sample.texel_flats = std::make_shared<const std::vector<std::uint32_t>>(std::move(flats));
     telemetry.room_sample.rgba = std::make_shared<const std::vector<unsigned char>>(std::move(rgba));
     telemetry.room_sample.received_ms =
         (hdr.timestamp_ms > 0) ? hdr.timestamp_ms

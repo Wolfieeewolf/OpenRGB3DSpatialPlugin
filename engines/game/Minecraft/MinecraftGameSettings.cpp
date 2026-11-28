@@ -38,6 +38,11 @@ void SettingsToJson(const Settings& s, nlohmann::json& j)
     put_bool(j, "room_ambilight_sky_enabled", s.room_ambilight_sky_enabled);
     put_i(j, "room_ambilight_cubemap_face_size", s.room_ambilight_cubemap_face_size);
     put_i(j, "room_ambilight_texture_uv_dim", s.room_ambilight_texture_uv_dim);
+    put_i(j, "room_ambilight_facing", s.room_ambilight_facing);
+    put_i(j, "room_ambilight_facing_display_id", s.room_ambilight_facing_display_id);
+    put_bool(j, "room_ambilight_screen_capture", s.room_ambilight_screen_capture);
+    put_f(j, "room_ambilight_screen_edge", s.room_ambilight_screen_edge);
+    put_i(j, "room_ambilight_screen_width", s.room_ambilight_screen_width);
     put_f(j, "damage_flash_strength", s.damage_flash_strength);
     put_bool(j, "health_per_heart_strip", s.health_per_heart_strip);
     put_bool(j, "health_per_heart_indexed", s.health_per_heart_indexed);
@@ -59,6 +64,11 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.damage_flash_decay_s = get_f(j, "damage_flash_decay_s", s.damage_flash_decay_s);
     s.room_ambilight_sky_enabled = get_bool(j, "room_ambilight_sky_enabled", s.room_ambilight_sky_enabled);
     s.room_ambilight_cubemap_face_size = get_i(j, "room_ambilight_cubemap_face_size", s.room_ambilight_cubemap_face_size);
+    s.room_ambilight_facing = std::clamp(get_i(j, "room_ambilight_facing", s.room_ambilight_facing), 0, 1);
+    s.room_ambilight_facing_display_id = get_i(j, "room_ambilight_facing_display_id", s.room_ambilight_facing_display_id);
+    s.room_ambilight_screen_capture = get_bool(j, "room_ambilight_screen_capture", s.room_ambilight_screen_capture);
+    s.room_ambilight_screen_edge = std::clamp(get_f(j, "room_ambilight_screen_edge", s.room_ambilight_screen_edge), 0.0f, 0.5f);
+    s.room_ambilight_screen_width = std::clamp(get_i(j, "room_ambilight_screen_width", s.room_ambilight_screen_width), 64, 1280);
     s.room_ambilight_texture_uv_dim = get_i(j, "room_ambilight_texture_uv_dim", s.room_ambilight_texture_uv_dim);
     s.damage_flash_strength = get_f(j, "damage_flash_strength", s.damage_flash_strength);
     s.health_per_heart_strip = get_bool(j, "health_per_heart_strip", s.health_per_heart_strip);

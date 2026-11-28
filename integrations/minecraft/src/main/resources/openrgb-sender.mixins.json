@@ -3,7 +3,8 @@
   "package": "me.wolfi.openrgb.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "ClientPlayNetworkHandlerMixin"
+    "ClientPlayNetworkHandlerMixin",
+    "GameRendererCaptureMixin"
   ],
   "injectors": {
     "defaultRequire": 1

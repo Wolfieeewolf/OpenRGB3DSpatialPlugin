@@ -135,6 +135,13 @@ Messages with another `version`, or missing one of those fields, are ignored.
 | `damage_event` | `amount`, `dir_x`, `dir_y`, `dir_z` (where the hit came from) |
 | `room_sample_shm_notify` | a new Room Ambilight frame is in shared memory |
 
+Room Ambilight config (plugin → mod, the config file's 128-byte header; layout in
+`engines/game/Game/RoomSampleFrameProtocol.h`): besides the room box, origin and scale it
+carries `heading_offset_deg` (Facing) and, in the reserved bytes, the LED texel count, block
+texture size, option bits (bit 0 = front LEDs from the game picture), picture edge blend
+(float) and picture width (uint32). Older plugins write 0 there, which the mod reads as
+"rays only".
+
 Units, coordinate spaces and the Room Ambilight shared-memory layout:
 [SpatialMeasurement.md](SpatialMeasurement.md).
 

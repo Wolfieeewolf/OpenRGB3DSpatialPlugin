@@ -45,6 +45,10 @@ public:
         float effect_origin_y = 0.0f;
         float effect_origin_z = 0.0f;
         float room_to_world_scale = 0.05f;
+        float heading_offset_deg = 0.0f;
+        /** LED texels only (a dense 512x512x6 cubemap is 6 MB for a few hundred LEDs): sorted flat
+            indices ((ix * size_y + iy) * size_z + face) and their RGBA, 4 bytes each, same order. */
+        std::shared_ptr<const std::vector<std::uint32_t>> texel_flats;
         std::shared_ptr<const std::vector<unsigned char>> rgba;
         unsigned long long received_ms = 0;
     };
@@ -107,7 +111,20 @@ public:
     static std::uint64_t TelemetryDataRevision();
     static void NotifyTelemetryDataUpdated();
     static void ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol::FrameHeader& hdr,
+                                        std::vector<std::uint32_t> flats,
                                         std::vector<unsigned char> rgba);
+
+    /** Live counters for the status panel (rates are worked out from two readings). */
+    struct LiveRates
+    {
+        std::uint64_t room_frames = 0;       /* Room Ambilight frames received from the mod */
+        std::uint64_t led_frames = 0;        /* times the effect stack pushed colours to the devices */
+        long long room_delay_ms = -1;        /* newest frame: mod wrote it -> plugin read it (-1 = unknown) */
+        unsigned long long room_last_ms = 0; /* steady clock when the newest frame arrived */
+    };
+    /** Called each time the effect stack has sent colours to the devices. */
+    static void NoteLedFrameOutput();
+    static LiveRates GetLiveRates();
 
 private:
     void StartUdpListener();

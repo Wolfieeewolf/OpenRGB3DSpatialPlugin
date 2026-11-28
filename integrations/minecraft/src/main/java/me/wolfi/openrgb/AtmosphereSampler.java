@@ -23,6 +23,30 @@ import org.slf4j.LoggerFactory;
  */
 final class AtmosphereSampler
 {
+    /** 26.3 hands sky / fog colours over as 0..1 RGB vectors; the samplers work in packed ARGB. */
+    private static int toArgb(final org.joml.Vector3fc c)
+    {
+        if(c == null)
+        {
+            return 0xFF000000;
+        }
+        final int r = Math.max(0, Math.min(255, Math.round(c.x() * 255.0f)));
+        final int g = Math.max(0, Math.min(255, Math.round(c.y() * 255.0f)));
+        final int b = Math.max(0, Math.min(255, Math.round(c.z() * 255.0f)));
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
+    /** Sunrise / sunset glow: RGB plus its strength in alpha (0..1 each). */
+    private static int toArgb(final org.joml.Vector4fc c)
+    {
+        if(c == null)
+        {
+            return 0;
+        }
+        final int a = Math.max(0, Math.min(255, Math.round(c.w() * 255.0f)));
+        return (a << 24) | (toArgb(new org.joml.Vector3f(c.x(), c.y(), c.z())) & 0x00FFFFFF);
+    }
+
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final AtmosphericFogEnvironment ATMOSPHERIC_FOG = new AtmosphericFogEnvironment();
     private static final SkyRenderState SKY_SCRATCH = new SkyRenderState();
@@ -69,10 +93,11 @@ final class AtmosphereSampler
             final int skyDarken = Math.max(0, Math.min(15, world.getSkyDarken()));
             final float skyBrightness = 1.0f - (skyDarken / 15.0f);
             final float weather = weatherMoodStrength(world);
-            final int fog = sampleFogColor(client, SKY_SCRATCH.skyColor);
+            final int sky = toArgb(SKY_SCRATCH.skyColor);
+            final int fog = sampleFogColor(client, sky);
             return new Frame(
-                    SKY_SCRATCH.skyColor,
-                    SKY_SCRATCH.sunriseAndSunsetColor,
+                    sky,
+                    toArgb(SKY_SCRATCH.sunriseAndSunsetColor),
                     SKY_SCRATCH.sunAngle,
                     SKY_SCRATCH.starBrightness,
                     skyBrightness,
@@ -219,7 +244,7 @@ final class AtmosphereSampler
             final float partialTick = camera.getCameraEntityPartialTicks(delta);
             SKY_SCRATCH.reset();
             client.levelRenderer.skyRenderer().extractRenderState(level, partialTick, camera, SKY_SCRATCH);
-            return SKY_SCRATCH.skyColor;
+            return toArgb(SKY_SCRATCH.skyColor);
         }
         catch(Throwable t)
         {
@@ -255,7 +280,7 @@ final class AtmosphereSampler
             final DeltaTracker delta = client.getDeltaTracker();
             final float partialTick = camera.getCameraEntityPartialTicks(delta);
             final int renderDistance = client.options.getEffectiveRenderDistance();
-            return ATMOSPHERIC_FOG.getBaseColor(level, camera, renderDistance, partialTick);
+            return toArgb(ATMOSPHERIC_FOG.getBaseColor(level, camera, renderDistance, partialTick));
         }
         catch(Throwable t)
         {

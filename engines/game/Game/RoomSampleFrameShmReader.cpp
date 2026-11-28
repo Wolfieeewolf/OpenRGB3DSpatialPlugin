@@ -173,6 +173,7 @@ static bool PeekFrameId(const unsigned char* base, std::size_t view_size, std::u
 static bool ReadSnapshot(const unsigned char* base,
                          std::size_t view_size,
                          RoomSampleFrameProtocol::FrameHeader& hdr_out,
+                         std::vector<std::uint32_t>& flats_out,
                          std::vector<unsigned char>& rgba_out)
 {
     if(base == nullptr || view_size < RoomSampleFrameProtocol::kFrameHeaderBytes)
@@ -239,7 +240,6 @@ static bool ReadSnapshot(const unsigned char* base,
     {
         return false;
     }
-    rgba_out.assign(raw_bytes, 0);
     const std::uint32_t count = (std::uint32_t)payload[0]
                                 | ((std::uint32_t)payload[1] << 8)
                                 | ((std::uint32_t)payload[2] << 16)
@@ -249,7 +249,13 @@ static bool ReadSnapshot(const unsigned char* base,
     {
         return false;
     }
+    /* LED texels only, as sent: (flat, rgba) pairs, kept sorted by flat for lookups. */
     const unsigned char* p = payload + 4;
+    flats_out.clear();
+    rgba_out.clear();
+    flats_out.reserve(count);
+    rgba_out.reserve((std::size_t)count * 4u);
+    bool sorted = true;
     for(std::uint32_t i = 0; i < count; ++i)
     {
         const std::uint32_t flat = (std::uint32_t)p[0]
@@ -257,15 +263,40 @@ static bool ReadSnapshot(const unsigned char* base,
                                   | ((std::uint32_t)p[2] << 16)
                                   | ((std::uint32_t)p[3] << 24);
         p += 4;
-        const std::size_t o = (std::size_t)flat * 4u;
-        if(o + 4u <= raw_bytes)
+        if((std::size_t)flat * 4u + 4u <= raw_bytes)
         {
-            rgba_out[o] = p[0];
-            rgba_out[o + 1] = p[1];
-            rgba_out[o + 2] = p[2];
-            rgba_out[o + 3] = p[3];
+            if(!flats_out.empty() && flat <= flats_out.back())
+            {
+                sorted = false;
+            }
+            flats_out.push_back(flat);
+            rgba_out.insert(rgba_out.end(), p, p + 4);
         }
         p += 4;
+    }
+    if(!sorted)
+    {
+        std::vector<std::size_t> order(flats_out.size());
+        for(std::size_t i = 0; i < order.size(); ++i)
+        {
+            order[i] = i;
+        }
+        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return flats_out[a] < flats_out[b]; });
+        std::vector<std::uint32_t> f2;
+        std::vector<unsigned char> c2;
+        f2.reserve(order.size());
+        c2.reserve(order.size() * 4u);
+        for(std::size_t i : order)
+        {
+            if(!f2.empty() && f2.back() == flats_out[i])
+            {
+                continue;
+            }
+            f2.push_back(flats_out[i]);
+            c2.insert(c2.end(), rgba_out.begin() + (std::ptrdiff_t)(i * 4u), rgba_out.begin() + (std::ptrdiff_t)(i * 4u + 4u));
+        }
+        flats_out.swap(f2);
+        rgba_out.swap(c2);
     }
     return true;
 }
@@ -315,6 +346,7 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
 #endif
     static thread_local std::vector<unsigned char> file_bytes;
     static thread_local std::vector<unsigned char> rgba;
+    static thread_local std::vector<std::uint32_t> flats;
     if(!ReadMappedOrFileBytes(path, file_bytes))
     {
         const unsigned long long now = NowMs();
@@ -334,7 +366,7 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
     }
 
     RoomSampleFrameProtocol::FrameHeader hdr{};
-    if(!ReadSnapshot(file_bytes.data(), file_bytes.size(), hdr, rgba))
+    if(!ReadSnapshot(file_bytes.data(), file_bytes.size(), hdr, flats, rgba))
     {
         const unsigned long long now = NowMs();
         if(now - last_fail_log_ms > 8000ULL)
@@ -376,7 +408,7 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
     last_size_y = hdr.size_y;
     last_size_z = hdr.size_z;
     last_applied_frame_id = hdr.frame_id;
-    GameTelemetryBridge::ApplyRoomSampleShmFrame(hdr, std::move(rgba));
+    GameTelemetryBridge::ApplyRoomSampleShmFrame(hdr, std::move(flats), std::move(rgba));
     GameTelemetryBridge::NotifyTelemetryDataUpdated();
     return true;
 }

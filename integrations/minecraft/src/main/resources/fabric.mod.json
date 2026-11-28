@@ -12,10 +12,10 @@
     "modmenu": ["me.wolfi.openrgb.ModMenuIntegration"]
   },
     "depends": {
-    "fabricloader": ">=0.19.3",
-    "minecraft": "~26.2",
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
     "java": ">=25",
-    "fabric-api": ">=0.160.0"
+    "fabric-api": ">=0.167.0"
   },
   "suggests": {
     "modmenu": "*"

@@ -12,6 +12,8 @@
 #include "Minecraft/MinecraftGameSettings.h"
 #include "SpatialEffect3D.h"
 #include "PluginLog.h"
+#include "DisplayPlaneManager.h"
+#include "DisplayPlane3D.h"
 
 #include <chrono>
 #include <cmath>
@@ -89,6 +91,7 @@ static void BuildImportantCubemapTexels(const RoomSampleFrameProtocol::ConfigHea
         float dx = (led_xyz[i] - eff_ox) * scale;
         float dy = (led_xyz[i + 1] - eff_oy) * scale;
         float dz = (eff_oz - led_xyz[i + 2]) * scale;
+        RoomSampleFrameProtocol::ApplyHeading(hdr.heading_offset_deg, dx, dz);
         const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
         if(len <= 1e-5f)
         {
@@ -302,8 +305,29 @@ void PublishIfNeeded(const GridContext3D& grid,
     hdr.effect_origin_y = effect_origin_y;
     hdr.effect_origin_z = effect_origin_z;
     hdr.room_to_world_scale = std::clamp(room_to_world_scale, 0.005f, 0.80f);
-    // Alignment floats kept in the SHM header for layout stability; always identity.
+    /* Facing: room forward points from the origin (your head) to the chosen display's centre. */
     hdr.heading_offset_deg = 0.0f;
+    if(settings.room_ambilight_facing == 1)
+    {
+        const DisplayPlane3D* pick = nullptr;
+        for(DisplayPlane3D* p : DisplayPlaneManager::instance()->GetDisplayPlanes())
+        {
+            if(p && (settings.room_ambilight_facing_display_id < 0 || p->GetId() == settings.room_ambilight_facing_display_id))
+            {
+                pick = p;
+                break;
+            }
+        }
+        if(pick)
+        {
+            const float right = pick->GetTransform().position.x - effect_origin_x;
+            const float forward = effect_origin_z - pick->GetTransform().position.z;
+            if(std::fabs(right) + std::fabs(forward) > 1e-3f)
+            {
+                hdr.heading_offset_deg = std::atan2(right, forward) * 180.0f / 3.14159265358979f;
+            }
+        }
+    }
     hdr.pos_offset_forward_blocks = 0.0f;
     hdr.pos_offset_right_blocks = 0.0f;
     hdr.pos_offset_up_blocks = 0.0f;
@@ -311,6 +335,14 @@ void PublishIfNeeded(const GridContext3D& grid,
     const std::uint32_t uv_dim =
         (std::uint32_t)RoomSampleFrameProtocol::SnapUvTextureDim(settings.room_ambilight_texture_uv_dim);
     std::memcpy(hdr.reserved + RoomSampleFrameProtocol::kReservedUvMaxDimOffset, &uv_dim, sizeof(uv_dim));
+    const std::uint32_t options = settings.room_ambilight_screen_capture ? RoomSampleFrameProtocol::kOptScreenCapture : 0u;
+    std::memcpy(hdr.reserved + RoomSampleFrameProtocol::kReservedOptionsOffset, &options, sizeof(options));
+    const float edge = std::clamp(settings.room_ambilight_screen_edge, 0.0f, 0.5f);
+    std::memcpy(hdr.reserved + RoomSampleFrameProtocol::kReservedScreenEdgeOffset, &edge, sizeof(edge));
+    const std::uint32_t screen_w = (std::uint32_t)std::clamp(settings.room_ambilight_screen_width,
+                                                             RoomSampleFrameProtocol::kScreenWidthMin,
+                                                             RoomSampleFrameProtocol::kScreenWidthMax);
+    std::memcpy(hdr.reserved + RoomSampleFrameProtocol::kReservedScreenWidthOffset, &screen_w, sizeof(screen_w));
 
     std::vector<std::uint32_t> important_cells;
     BuildImportantCubemapTexels(hdr, led_xyz, important_cells);

@@ -30,6 +30,10 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QPointer>
+#include <cstring>
+#include "Game/GameTelemetryBridge.h"
+#include "Game/RoomSampleConfigPublisher.h"
+#include "Game/RoomSampleFrameProtocol.h"
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSignalBlocker>
@@ -1293,6 +1297,22 @@ void OpenRGB3DSpatialTab::SyncEffectPlaybackTimer()
                 }
                 break;
             }
+            /* Room Ambilight using the game picture: the mod sends up to 240 frames a second, so
+               the LEDs keep up with it (rays alone only change 20 times a second: 60 is plenty). */
+            if(inst && inst->enabled && inst->effect_class_name == "MinecraftRoomAmbilight")
+            {
+                RoomSampleFrameProtocol::ConfigHeader cfg{};
+                std::uint32_t options = 0;
+                if(RoomSampleConfigPublisher::GetLastPublishedConfig(cfg))
+                {
+                    std::memcpy(&options, cfg.reserved + RoomSampleFrameProtocol::kReservedOptionsOffset, sizeof(options));
+                }
+                const unsigned int want = (options & RoomSampleFrameProtocol::kOptScreenCapture) ? 240u : 60u;
+                if(target_fps < want)
+                {
+                    target_fps = want;
+                }
+            }
         }
     }
     else if(current_effect_ui)
@@ -1339,6 +1359,7 @@ void OpenRGB3DSpatialTab::effectTimerTimeout()
     effect_time += dt;
 
     RenderEffectStack();
+    GameTelemetryBridge::NoteLedFrameOutput();
 }
 
 bool OpenRGB3DSpatialTab::RebuildEffectStackFromJson(const nlohmann::json& effects_array)

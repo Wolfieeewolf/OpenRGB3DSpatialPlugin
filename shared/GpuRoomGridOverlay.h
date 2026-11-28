@@ -63,7 +63,7 @@ struct GpuRoomGridOverlayLayer
     };
 
     /** KindMinecraft scalars (see MinecraftGame::FillOverlayLayer for the slot map). */
-    static constexpr int kMinecraftSlots = 18;
+    static constexpr int kMinecraftSlots = 19; /* 18: Room Ambilight heading (Facing), degrees */
     float mc[kMinecraftSlots][3] = {};
 
     /** KindReactive: rows = waves, 4 RGBA32F texels per row (see Reactive overlay fill). */

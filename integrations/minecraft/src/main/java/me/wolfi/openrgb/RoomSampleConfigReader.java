@@ -25,6 +25,14 @@ final class RoomSampleConfigReader
     /** reserved[4..7] — UV texture max dim published by the plugin (64…4096). */
     static final int UV_MAX_DIM_OFFSET = 96;
     static final int UV_DIM_DEFAULT = 512;
+    /** Option bits (plugin 0.2.1+); 0 from older plugins = rays only. */
+    static final int OPTIONS_OFFSET = 100;
+    /** Picture edge blend, fraction of the screen from each edge (float). */
+    static final int SCREEN_EDGE_OFFSET = 104;
+    static final int OPT_SCREEN_CAPTURE = 1;
+    /** Picture width before read-back (uint32; 0 from older plugins = default). */
+    static final int SCREEN_WIDTH_OFFSET = 108;
+
 
     static final class Config
     {
@@ -47,6 +55,16 @@ final class RoomSampleConfigReader
         int[] importantFlatIndices = new int[0];
         /** Block UV sample max side (64/128/256/512/1024). Default HQ experiment = 512. */
         int uvTextureMaxDim = UV_DIM_DEFAULT;
+        /** Room forward turned from the room's -Z toward +X (right) by this many degrees. */
+        float headingDeg;
+        int options;
+        float screenEdge = 0.15f;
+        int screenWidth = 320;
+
+        boolean screenCapture()
+        {
+            return (options & OPT_SCREEN_CAPTURE) != 0;
+        }
 
         boolean isEnabled()
         {
@@ -142,8 +160,9 @@ final class RoomSampleConfigReader
         cfg.effectOriginY = buffer.getFloat();
         cfg.effectOriginZ = buffer.getFloat();
         cfg.roomToWorldScale = buffer.getFloat();
-        // Unused alignment floats (heading + pos offsets) — skip to keep header layout.
-        buffer.getFloat();
+        // Heading (Facing: toward a display), then position offsets (unused, always 0).
+        final float heading = buffer.getFloat();
+        cfg.headingDeg = Float.isFinite(heading) ? heading : 0.0f;
         buffer.getFloat();
         buffer.getFloat();
         buffer.getFloat();
@@ -152,6 +171,12 @@ final class RoomSampleConfigReader
                 ByteBuffer.wrap(bytes, UV_MAX_DIM_OFFSET, 4)
                         .order(ByteOrder.LITTLE_ENDIAN)
                         .getInt());
+
+        cfg.options = ByteBuffer.wrap(bytes, OPTIONS_OFFSET, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        final float edge = ByteBuffer.wrap(bytes, SCREEN_EDGE_OFFSET, 4).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+        cfg.screenEdge = Float.isFinite(edge) ? Math.max(0.0f, Math.min(0.5f, edge)) : 0.15f;
+        final int sw = ByteBuffer.wrap(bytes, SCREEN_WIDTH_OFFSET, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        cfg.screenWidth = sw <= 0 ? 320 : Math.max(64, Math.min(1280, sw));
 
         if((cfg.flags & FLAG_IMPORTANT_CELLS) != 0 && bytes.length > HEADER_BYTES)
         {

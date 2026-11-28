@@ -45,7 +45,7 @@ Game side (this doc):
 ### PlayerLocal (per frame, from look basis)
 
 - **+X:** player right, **+Y:** up, **+Z:** view forward (horizontal).
-- Built from the Minecraft look vector (`RoomSampleWorldMapper::buildHorizontalBasis`). Header slots `heading_offset_deg` / position offsets exist for layout stability but are **always published as 0** — there is no Room-yaw UI.
+- Built from the Minecraft look vector (`RoomSampleWorldMapper::buildHorizontalBasis`). `heading_offset_deg` carries **Facing** (Room Ambilight setting): 0 = room forward is the room's −Z; "Toward a display" = the angle from the effect origin to that display's centre (right of −Z is positive). The plugin and the mod both turn LED directions by it (`RoomSampleFrameProtocol::ApplyHeading`, `RoomSampleWorldMapper`, overlay `u_mc[18]`). Position offsets stay 0.
 
 ### GameWorld (Minecraft)
 
@@ -147,7 +147,7 @@ Symptom: consistent up/down shift → confirm mod ≥ 0.9.46 and reference point
 
 ### B. Standing spot / facing
 
-There is no Room-yaw slider. Face your screens in-game while standing on the reference point. Left/right or depth miss usually means the reference/origin is wrong, not a hidden heading offset.
+Straight ahead in the game is the room's −Z, unless **Facing** is set to a display (for an angled or off-centre monitor). Stand on the reference point; a left/right or depth miss usually means the reference/origin is wrong, or Facing should point at the screen you play on.
 
 ### C. Bounds source
 

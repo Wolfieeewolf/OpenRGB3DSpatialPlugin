@@ -36,9 +36,19 @@ final class RoomSampleWorldMapper
     static Vec3 mapRoomToWorldTarget(RoomSampleConfigReader.Config cfg, LocalPlayer player, float roomX, float roomY, float roomZ)
     {
         final float scale = Math.max(0.005f, Math.min(0.80f, cfg.roomToWorldScale));
-        final float rightBlocks = (roomX - cfg.effectOriginX) * scale;
+        float rightBlocks = (roomX - cfg.effectOriginX) * scale;
         final float upBlocks = (roomY - cfg.effectOriginY) * scale;
-        final float forwardBlocks = (cfg.effectOriginZ - roomZ) * scale;
+        float forwardBlocks = (cfg.effectOriginZ - roomZ) * scale;
+        /* Facing: room forward turned toward the chosen display (same maths as the plugin). */
+        final double h = Math.toRadians(cfg.headingDeg);
+        if(h != 0.0)
+        {
+            final float c = (float)Math.cos(h);
+            final float s = (float)Math.sin(h);
+            final float r = rightBlocks * c - forwardBlocks * s;
+            forwardBlocks = rightBlocks * s + forwardBlocks * c;
+            rightBlocks = r;
+        }
 
         final Basis basis = buildHorizontalBasis(player);
         final double ax = player.getX();
@@ -80,6 +90,16 @@ final class RoomSampleWorldMapper
                                      float localUp,
                                      float localForward)
     {
+        /* The direction is player-local; the room box is in room axes: turn back by the heading. */
+        final double h = Math.toRadians(cfg.headingDeg);
+        if(h != 0.0)
+        {
+            final float c = (float)Math.cos(h);
+            final float s = (float)Math.sin(h);
+            final float r = localRight * c + localForward * s;
+            localForward = -localRight * s + localForward * c;
+            localRight = r;
+        }
         final float scale = Math.max(0.005f, Math.min(0.80f, cfg.roomToWorldScale));
         final float ox = cfg.effectOriginX;
         final float oy = cfg.effectOriginY;

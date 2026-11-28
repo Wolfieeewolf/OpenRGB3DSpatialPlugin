@@ -57,6 +57,23 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private long lastWaitingForConfigLogMs = 0L;
     /** Compact LED-texel RGBA (important.length × 4) — not a dense cubemap. */
     private byte[] roomSampleRgbaBuffer = new byte[0];
+
+    /* Front from the game picture: per LED, its ray colour (kept for blending), how much of it the
+       picture covers, and its player-local direction + ray reach (fixed per room config). */
+    private byte[] roomRayRgba = new byte[0];
+    private float[] roomScreenWeight = new float[0];
+    private float[] roomLedDirs = new float[0];
+    private double[] roomLedRange = new double[0];
+    private int roomLedDirsConfigId = Integer.MIN_VALUE;
+    private int[] roomLedFlats = new int[0];
+    private RoomSampleConfigReader.Config roomLastCfg;
+    private long roomLastScreenPublishNs;
+    private final org.joml.Vector4f screenScratch = new org.joml.Vector4f();
+    private final int[] screenRgb = new int[3];
+    /** A picture older than this is not used (paused game, menus, hitch): rays only. */
+    private static final long SCREEN_MAX_AGE_NS = 250_000_000L;
+    /** Picture-only refreshes between ticks: as each capture arrives (cap 240 a second). */
+    private static final long SCREEN_PUBLISH_INTERVAL_NS = 1_000_000_000L / 240;
     /** Soft ceiling for UV/face-cache drain after a room fill. */
     private static final long CLIENT_TICK_WORK_BUDGET_NS = 6_000_000L;
     /** Only skip a tick after a clear whole-frame hitch. */
@@ -80,6 +97,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         OpenRGBSenderConfig.get();
         ClientTickEvents.END_CLIENT_TICK.register(OpenRGBSenderMod::onClientTick);
         // Sparse mmap publish + UDP notify (LED telemetry only — no world mutation).
+        ScreenFrameCapture.setOnNewFrame(this::refreshScreenLeds);
         roomSampleFrameShmWriter.setPublishListener((frameId, timestampMs, configId) ->
         {
             synchronized(sharedUdpLock)
@@ -802,6 +820,18 @@ public class OpenRGBSenderMod implements ClientModInitializer
             roomSampleClearedForConfigId = -1;
         }
         final byte[] rgba = roomSampleRgbaBuffer;
+        if(roomRayRgba.length != ledBytes)
+        {
+            roomRayRgba = new byte[ledBytes];
+            roomScreenWeight = new float[n];
+        }
+        ensureLedDirections(cfg, important, sx, sy, sz);
+        roomLastCfg = cfg;
+        ScreenFrameCapture.targetWidth = cfg.screenWidth;
+        ScreenFrameCapture.enabled = cfg.screenCapture();
+        final ScreenFrameCapture.Frame screen = cfg.screenCapture() && ScreenFrameCapture.firstPerson()
+                ? ScreenFrameCapture.latest(SCREEN_MAX_AGE_NS)
+                : null;
         final int[] cell = ROOM_CELL_SCRATCH.get();
         final float[] localDir = ROOM_CUBEMAP_DIR.get();
         final AtmosphereSampler.Frame atmosphere = AtmosphereSampler.captureFrame(world);
@@ -825,7 +855,20 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 {
                     continue;
                 }
-                writeCubemapTexel(world, player, cfg, eye, atmosphere, localDir, cell, rgba, i, flat, sx, sy, sz);
+                /* Picture first: an LED fully on screen needs no ray at all. */
+                float weight = 0.0f;
+                if(screen != null)
+                {
+                    final Vec3 target = ledWorldTarget(cfg, player, i);
+                    weight = ScreenFrameCapture.sample(screen, target.x, target.y, target.z, cfg.screenEdge,
+                            screenScratch, screenRgb);
+                }
+                roomScreenWeight[i] = weight;
+                if(weight < 0.999f)
+                {
+                    writeCubemapTexel(world, player, cfg, eye, atmosphere, localDir, cell, roomRayRgba, i, flat, sx, sy, sz);
+                }
+                composeLed(rgba, i, weight);
             }
             lastRoomFillNs = System.nanoTime() - fillStart;
         }
@@ -842,6 +885,119 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final int frameId = (int)(now & 0x7FFFFFFFL);
         roomSampleFrameShmWriter.publishSparseLedTexels(
                 frameId, now, cfg.configId, sx, sy, sz, important, rgba);
+    }
+
+    /** Player-local direction and ray reach per LED: fixed for a room config. */
+    private void ensureLedDirections(RoomSampleConfigReader.Config cfg, int[] important, int sx, int sy, int sz)
+    {
+        if(roomLedDirsConfigId == cfg.configId && roomLedFlats == important && roomLedDirs.length == important.length * 3)
+        {
+            return;
+        }
+        final int n = important.length;
+        roomLedDirs = new float[n * 3];
+        roomLedRange = new double[n];
+        final float[] dir = new float[3];
+        for(int i = 0; i < n; i++)
+        {
+            final int flat = important[i];
+            final int face = flat % sz;
+            final int t = flat / sz;
+            final int v = t % sy;
+            final int u = t / sy;
+            RoomSampleCubemap.uvToDirection(face, (u + 0.5f) / (float)sx, (v + 0.5f) / (float)sy, dir);
+            roomLedDirs[i * 3] = dir[0];
+            roomLedDirs[i * 3 + 1] = dir[1];
+            roomLedDirs[i * 3 + 2] = dir[2];
+            roomLedRange[i] = RoomSampleWorldMapper.roomRayRangeBlocks(cfg, dir[0], dir[1], dir[2]);
+        }
+        roomLedFlats = important;
+        roomLedDirsConfigId = cfg.configId;
+    }
+
+    /** Where LED i's ray ends in the world (the point projected onto the picture). */
+    private Vec3 ledWorldTarget(RoomSampleConfigReader.Config cfg, LocalPlayer player, int i)
+    {
+        return RoomSampleWorldMapper.mapLocalDirToWorldTarget(cfg, player, roomLedDirs[i * 3], roomLedDirs[i * 3 + 1],
+                roomLedDirs[i * 3 + 2], roomLedRange[i]);
+    }
+
+    /** LED colour = picture (screenRgb) blended over its ray colour by how much it is on screen. */
+    private void composeLed(byte[] rgba, int i, float weight)
+    {
+        final int o = i * 4;
+        if(weight <= 0.0f)
+        {
+            System.arraycopy(roomRayRgba, o, rgba, o, 4);
+            return;
+        }
+        final float k = Math.min(1.0f, weight);
+        for(int c = 0; c < 3; c++)
+        {
+            final int ray = roomRayRgba[o + c] & 0xFF;
+            rgba[o + c] = (byte)Math.round(ray + (screenRgb[c] - ray) * k);
+        }
+        final int rayA = roomRayRgba[o + 3] & 0xFF;
+        rgba[o + 3] = (byte)Math.round(rayA + (255 - rayA) * k);
+    }
+
+    /** New picture between ticks: refresh only the LEDs it covers and publish (up to 60 a second). */
+    private void refreshScreenLeds()
+    {
+        final RoomSampleConfigReader.Config cfg = roomLastCfg;
+        final Minecraft client = Minecraft.getInstance();
+        if(cfg == null || !cfg.screenCapture() || client == null || client.player == null || client.level == null
+           || !ScreenFrameCapture.firstPerson())
+        {
+            return;
+        }
+        final long now = System.nanoTime();
+        if(now - roomLastScreenPublishNs < SCREEN_PUBLISH_INTERVAL_NS)
+        {
+            return;
+        }
+        final ScreenFrameCapture.Frame screen = ScreenFrameCapture.latest(SCREEN_MAX_AGE_NS);
+        final int[] important = roomLedFlats;
+        final byte[] rgba = roomSampleRgbaBuffer;
+        final int n = important.length;
+        if(screen == null || n == 0 || rgba.length != n * 4 || roomRayRgba.length != n * 4 || roomScreenWeight.length != n)
+        {
+            return;
+        }
+        final LocalPlayer player = client.player;
+        boolean any = false;
+        for(int i = 0; i < n; i++)
+        {
+            final Vec3 target = ledWorldTarget(cfg, player, i);
+            final float weight = ScreenFrameCapture.sample(screen, target.x, target.y, target.z, cfg.screenEdge,
+                    screenScratch, screenRgb);
+            /* Only LEDs that had a ray colour this tick, or are fully on screen, can change here. */
+            if(weight <= 0.0f && roomScreenWeight[i] <= 0.0f)
+            {
+                continue;
+            }
+            if(weight < 0.999f && roomScreenWeight[i] >= 0.999f)
+            {
+                continue; /* turned off screen since the tick: no ray colour yet, keep until next tick */
+            }
+            composeLed(rgba, i, weight);
+            any = true;
+        }
+        if(!any)
+        {
+            return;
+        }
+        roomLastScreenPublishNs = now;
+        final long ms = System.currentTimeMillis();
+        try
+        {
+            roomSampleFrameShmWriter.publishSparseLedTexels((int)(ms & 0x7FFFFFFFL), ms, cfg.configId, cfg.sizeX,
+                    cfg.sizeY, RoomSampleCubemap.FACE_COUNT, important, rgba);
+        }
+        catch(Exception e)
+        {
+            QuietCatch.debug(LOGGER, "screen LED publish failed", e);
+        }
     }
 
     private static void writeCubemapTexel(Level world,

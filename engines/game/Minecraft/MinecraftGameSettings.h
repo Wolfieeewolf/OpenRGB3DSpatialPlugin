@@ -32,6 +32,16 @@ struct Settings
      * Higher = less blocky / more photo-like grain; costs RAM + async decode budget.
      */
     int room_ambilight_texture_uv_dim = 512;
+    /** Which way is "straight ahead" in the game: 0 = the room's front (-Z), 1 = toward a display. */
+    int room_ambilight_facing = 0;
+    /** Display plane id for facing 1 (the screen you play on); -1 = the first one. */
+    int room_ambilight_facing_display_id = -1;
+    /** Front LEDs from the game's rendered picture (the rest from rays). */
+    bool room_ambilight_screen_capture = true;
+    /** Fraction of the screen from each edge that fades from picture to rays (0..0.5). */
+    float room_ambilight_screen_edge = 0.15f;
+    /** Width the game picture is shrunk to before it is read back (64..1280). */
+    int room_ambilight_screen_width = 320;
     float damage_flash_strength = 1.0f;
     bool health_per_heart_strip = false;
     bool health_per_heart_indexed = false;

@@ -31,6 +31,10 @@ private:
     Ui::GameTelemetryStatusPanel* ui = nullptr;
     QTimer* refresh_timer = nullptr;
     QLabel* signals_label = nullptr;
+    QLabel* rates_label = nullptr;
+    unsigned long long last_rates_ms = 0;
+    unsigned long long last_room_frames = 0;
+    unsigned long long last_led_frames = 0;
 };
 
 #endif

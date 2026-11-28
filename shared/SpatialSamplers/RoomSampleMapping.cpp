@@ -21,15 +21,21 @@ float SampleChannel(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
     {
         return 0.0f;
     }
-    const std::size_t sy = (std::size_t)rs.size_y;
-    const std::size_t sz = (std::size_t)rs.size_z;
-    const std::size_t idx = ((std::size_t)ix * sy + (std::size_t)iy) * sz + (std::size_t)iz;
-    const std::size_t bi = idx * 4u + (std::size_t)channel;
-    if(!rs.rgba || bi >= rs.rgba->size())
+    if(!rs.rgba || !rs.texel_flats)
     {
         return 0.0f;
     }
-    return (float)(*rs.rgba)[bi] / 255.0f;
+    const std::uint32_t flat = (std::uint32_t)((((std::size_t)ix * (std::size_t)rs.size_y + (std::size_t)iy)
+                                                * (std::size_t)rs.size_z)
+                                               + (std::size_t)iz);
+    const std::vector<std::uint32_t>& flats = *rs.texel_flats;
+    const auto it = std::lower_bound(flats.begin(), flats.end(), flat);
+    if(it == flats.end() || *it != flat)
+    {
+        return 0.0f; /* not an LED texel */
+    }
+    const std::size_t bi = (std::size_t)(it - flats.begin()) * 4u + (std::size_t)channel;
+    return bi < rs.rgba->size() ? (float)(*rs.rgba)[bi] / 255.0f : 0.0f;
 }
 
 RGBColor PackRgb(float r, float g, float b, float a, bool& out_valid)
@@ -137,6 +143,7 @@ RGBColor CubemapSample(const GameTelemetryBridge::RoomSampleFrameChannel& rs,
     float dx = (grid_x - eff_ox) * scale;
     float dy = (grid_y - eff_oy) * scale;
     float dz = (eff_oz - grid_z) * scale;
+    RoomSampleFrameProtocol::ApplyHeading(rs.heading_offset_deg, dx, dz);
     const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
     if(len <= 1e-5f)
     {
@@ -166,7 +173,8 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
     }
 
     const GameTelemetryBridge::RoomSampleFrameChannel& rs = telemetry.room_sample;
-    if(!rs.has_frame || rs.size_x <= 0 || rs.size_y <= 0 || rs.size_z <= 0 || !rs.rgba || rs.rgba->empty())
+    if(!rs.has_frame || rs.size_x <= 0 || rs.size_y <= 0 || rs.size_z <= 0 || !rs.rgba || rs.rgba->empty()
+       || !rs.texel_flats)
     {
         return (RGBColor)0;
     }

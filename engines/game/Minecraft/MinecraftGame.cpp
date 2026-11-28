@@ -12,6 +12,8 @@
 #include "Game/GameTelemetryBridge.h"
 #include "GridSpaceUtils.h"
 #include "GpuRoomGridOverlay.h"
+#include "DisplayPlaneManager.h"
+#include "DisplayPlane3D.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -28,6 +30,7 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <mutex>
 
 namespace MinecraftGame
 {
@@ -97,7 +100,18 @@ static void AddSliderRow(QVBoxLayout* layout,
     EffectSliderRow* row = EffectUiRows::AppendSliderRow(layout, caption, min, max, value, tooltip);
     if(row)
     {
-        row->bindValueChanged(panel, apply, format);
+        /* The spin box already shows the value: no repeat after the slider. A unit the format
+           adds (e.g. "%") goes on the spin box instead. */
+        if(format && row->spinBox())
+        {
+            const QString number = QString::number(max);
+            const QString shown = format(max);
+            if(shown.startsWith(number) && shown.size() > number.size())
+            {
+                row->spinBox()->setSuffix(shown.mid(number.size()));
+            }
+        }
+        row->bindValueChanged(panel, apply, nullptr);
     }
 }
 
@@ -116,7 +130,15 @@ static void AddPctSlider(QVBoxLayout* layout, QWidget* panel, const QString& cap
 static QComboBox* AddComboRow(QVBoxLayout* layout, const QString& caption)
 {
     EffectLabeledComboRow* row = EffectUiRows::AppendComboRow(layout, caption);
-    return row ? row->combo() : nullptr;
+    QComboBox* combo = row ? row->combo() : nullptr;
+    if(combo)
+    {
+        /* Long entries (display names) must not force the panel wider than the dock. */
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        combo->setMinimumContentsLength(8);
+        combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    }
+    return combo;
 }
 
 static void AddSpinRow(QVBoxLayout* layout,
@@ -573,6 +595,93 @@ QWidget* CreateSettingsWidget(QWidget* parent,
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);
+        if(QComboBox* facing = AddComboRow(room_layout, QStringLiteral("Facing")))
+        {
+            facing->setToolTip(QStringLiteral(
+                "Which way is straight ahead in the game. Room front: the room's -Z wall. Toward a display: "
+                "from your reference point to that screen's centre (use the screen you play on, e.g. an "
+                "angled side monitor)."));
+            facing->addItem(QStringLiteral("Room front (-Z)"), -2);
+            for(DisplayPlane3D* p : DisplayPlaneManager::instance()->GetDisplayPlanes())
+            {
+                if(!p)
+                {
+                    continue;
+                }
+                QString label = QString::fromStdString(p->GetName());
+                if(!p->GetCaptureLabel().empty())
+                {
+                    label += QStringLiteral(" \u2014 ") + QString::fromStdString(p->GetCaptureLabel());
+                }
+                facing->addItem(QStringLiteral("Toward %1").arg(label), p->GetId());
+            }
+            int sel = 0;
+            if(s.room_ambilight_facing == 1)
+            {
+                for(int i = 1; i < facing->count(); i++)
+                {
+                    if(s.room_ambilight_facing_display_id < 0 || facing->itemData(i).toInt() == s.room_ambilight_facing_display_id)
+                    {
+                        sel = i;
+                        break;
+                    }
+                }
+            }
+            facing->setCurrentIndex(sel);
+            QObject::connect(facing, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s, facing](int idx) {
+                if(idx <= 0)
+                {
+                    s.room_ambilight_facing = 0;
+                    return;
+                }
+                s.room_ambilight_facing = 1;
+                s.room_ambilight_facing_display_id = facing->itemData(idx).toInt();
+            });
+        }
+        AddCheckRow(room_layout,
+                    panel,
+                    QStringLiteral("Front from the game picture"),
+                    s.room_ambilight_screen_capture,
+                    [&s](bool v) { s.room_ambilight_screen_capture = v; },
+                    QStringLiteral("LEDs whose direction is on screen take their colour from what the game "
+                                   "actually draws (lighting, sky, particles, shader packs), every frame. LEDs "
+                                   "beside and behind you keep the ray sampler. Needs mod 0.10 or newer."));
+        AddSliderRow(room_layout,
+                     panel,
+                     QStringLiteral("Picture edge blend"),
+                     0,
+                     50,
+                     (int)std::lround(std::clamp(s.room_ambilight_screen_edge, 0.0f, 0.5f) * 100.0f),
+                     [&s](int x) { s.room_ambilight_screen_edge = std::clamp(x / 100.0f, 0.0f, 0.5f); },
+                     [](int x) { return QStringLiteral("%1%").arg(x); },
+                     QStringLiteral("How much of the screen, from each edge, fades from the picture to the ray "
+                                    "colours, so the join does not show."));
+        if(QComboBox* res = AddComboRow(room_layout, QStringLiteral("Picture resolution")))
+        {
+            res->setToolTip(QStringLiteral(
+                "Width the game picture is shrunk to before it is read back. Higher = finer detail on dense "
+                "LED displays (wallpaper, matrices); single strips barely change. Cost grows with the area "
+                "(1280 wide reads 1.3 MB per frame)."));
+            for(int w : {96, 192, 320, 480, 640, 960, 1280})
+            {
+                res->addItem(QStringLiteral("%1 \u00D7 %2").arg(w).arg((int)std::lround(w * 9.0 / 16.0)), w);
+            }
+            int sel = 2;
+            for(int i = 0; i < res->count(); i++)
+            {
+                if(res->itemData(i).toInt() == s.room_ambilight_screen_width)
+                {
+                    sel = i;
+                }
+            }
+            res->setCurrentIndex(sel);
+            QObject::connect(res, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s, res](int idx) {
+                if(idx >= 0)
+                {
+                    s.room_ambilight_screen_width = res->itemData(idx).toInt();
+                }
+            });
+        }
         AddCheckRow(room_layout,
                     panel,
                     QStringLiteral("Sky / weather"),
@@ -972,31 +1081,62 @@ bool FillOverlayLayer(::GpuRoomGridOverlayLayer& out,
 
     /* Room Ambilight cubemap: repack [ix][iy][face] → 2D rows (face * S + iy), cols ix. */
     const GameTelemetryBridge::RoomSampleFrameChannel& rs = t.room_sample;
-    const bool room = ch(channels, ChRoomAmbilight) && rs.has_frame && rs.rgba
+    const bool room = ch(channels, ChRoomAmbilight) && rs.has_frame && rs.rgba && rs.texel_flats
         && RoomSampleFrameProtocol::IsCubemapLayout(rs.size_x, rs.size_y, rs.size_z, rs.flags);
     if(room)
     {
         const int S = rs.size_x;
         const std::size_t need = (std::size_t)S * (std::size_t)S * 6u * 4u;
-        if(rs.rgba->size() >= need)
         {
+            /* One atlas kept between calls; per new frame only the LED texels are rewritten
+               (was: the whole S x S x 6 image rebuilt on every LED refresh). */
+            static std::mutex atlas_mu;
+            static std::vector<unsigned char> atlas;
+            static std::vector<std::size_t> written;
+            static int atlas_S = 0;
+            static unsigned int atlas_frame = 0;
+            static bool atlas_valid = false;
+            std::lock_guard<std::mutex> lock(atlas_mu);
+            if(atlas_S != S || atlas.size() != need)
+            {
+                atlas.assign(need, 0);
+                written.clear();
+                atlas_S = S;
+                atlas_valid = false;
+            }
+            if(!atlas_valid || atlas_frame != rs.frame_id)
+            {
+                for(std::size_t di : written)
+                {
+                    atlas[di] = atlas[di + 1] = atlas[di + 2] = atlas[di + 3] = 0;
+                }
+                written.clear();
+                const std::vector<std::uint32_t>& flats = *rs.texel_flats;
+                const std::vector<unsigned char>& cols = *rs.rgba;
+                for(std::size_t i = 0; i < flats.size() && i * 4u + 4u <= cols.size(); ++i)
+                {
+                    const std::size_t flat = flats[i];
+                    const std::size_t face = flat % 6u;
+                    const std::size_t t = flat / 6u;
+                    const std::size_t iy = t % (std::size_t)S;
+                    const std::size_t ix = t / (std::size_t)S;
+                    if(ix >= (std::size_t)S)
+                    {
+                        continue;
+                    }
+                    const std::size_t di = ((face * (std::size_t)S + iy) * (std::size_t)S + ix) * 4u;
+                    std::copy(cols.begin() + (std::ptrdiff_t)(i * 4u), cols.begin() + (std::ptrdiff_t)(i * 4u + 4u),
+                              atlas.begin() + (std::ptrdiff_t)di);
+                    written.push_back(di);
+                }
+                atlas_frame = rs.frame_id;
+                atlas_valid = true;
+            }
             out.tex_w = S;
             out.tex_h = S * 6;
-            out.atlas_rgba.assign(need, 0);
-            const unsigned char* src = rs.rgba->data();
-            for(int ix = 0; ix < S; ++ix)
-            {
-                for(int iy = 0; iy < S; ++iy)
-                {
-                    for(int face = 0; face < 6; ++face)
-                    {
-                        const std::size_t si = (((std::size_t)ix * (std::size_t)S + (std::size_t)iy) * 6u + (std::size_t)face) * 4u;
-                        const std::size_t di = (((std::size_t)face * (std::size_t)S + (std::size_t)iy) * (std::size_t)S + (std::size_t)ix) * 4u;
-                        std::copy(src + si, src + si + 4, out.atlas_rgba.begin() + (std::ptrdiff_t)di);
-                    }
-                }
-            }
+            out.atlas_rgba = atlas;
             set3(15, rs.effect_origin_x, rs.effect_origin_y, rs.effect_origin_z);
+            set3(18, rs.heading_offset_deg, 0.0f, 0.0f);
             set3(16, std::clamp(rs.room_to_world_scale, 0.005f, 0.80f), (float)S, 1.0f);
         }
     }

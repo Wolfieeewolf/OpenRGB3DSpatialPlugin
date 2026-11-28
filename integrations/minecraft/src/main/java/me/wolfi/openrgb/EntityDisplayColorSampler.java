@@ -203,21 +203,14 @@ final class EntityDisplayColorSampler
         }
 
         // Mild saturation lift so mobs/drops read on LEDs.
-        rgb = boostRgb(rgb, 1.25f);
+        /* 1:1 with the game: no saturation lift. */
 
-        final BlockPos pos = entity.blockPosition();
-        final int sky = world.getBrightness(LightLayer.SKY, pos);
-        final int block = world.getBrightness(LightLayer.BLOCK, pos);
-        final float skyBright = AtmosphereSampler.skyBrightness(world);
-        final float local = Math.max(sky, block) / 15.0f;
-        float k = 0.72f + 0.28f * local;
-        if(sky >= block)
-        {
-            k *= (0.45f + 0.55f * skyBright);
-        }
-        out[0] = ColorMath.clamp255((int)(((rgb >> 16) & 0xFF) * k));
-        out[1] = ColorMath.clamp255((int)(((rgb >> 8) & 0xFF) * k));
-        out[2] = ColorMath.clamp255((int)((rgb & 0xFF) * k));
+        /* Lit by the game's lightmap like blocks: a mob in pitch dark is dark on the LEDs too. */
+        final float[] light = new float[3];
+        BlockDisplayColorSampler.lightColour(world, entity.blockPosition(), null, light);
+        out[0] = ColorMath.clamp255(Math.round(((rgb >> 16) & 0xFF) * light[0]));
+        out[1] = ColorMath.clamp255(Math.round(((rgb >> 8) & 0xFF) * light[1]));
+        out[2] = ColorMath.clamp255(Math.round((rgb & 0xFF) * light[2]));
         out[3] = ColorMath.clamp255(alpha);
         return out[3] > 0;
     }

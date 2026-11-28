@@ -32,8 +32,9 @@ import org.slf4j.LoggerFactory;
 final class BlockDisplayColorSampler
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
-    private static final float BLOCK_COLOR_SATURATION = 1.30f;
-    private static final float EMISSIVE_SATURATION = 1.40f;
+    /* 1:1 with the game: no saturation changes (were 1.30 for blocks). */
+    private static final float BLOCK_COLOR_SATURATION = 1.0f;
+    private static final float EMISSIVE_SATURATION = 1.0f; /* 1:1 with the game */
     private static final int SNOW_BLEND_RGB = 0xFFFFFF;
     private static final float SNOWY_LEAVES_BLEND = 0.45f;
     private static final ThreadLocal<int[]> TEXEL_RGBA = ThreadLocal.withInitial(() -> new int[4]);
@@ -335,7 +336,7 @@ final class BlockDisplayColorSampler
     static void sampleWaterLayer(Level world, BlockPos pos, int[] out)
     {
         final int rgb = AtmosphereSampler.sampleWaterColor(world, pos, 0x3F76E4);
-        writeLitLayer(world, pos, rgb, viewportCoverAlpha(Blocks.WATER.defaultBlockState(),
+        writeLitLayer(world, pos, null, rgb, viewportCoverAlpha(Blocks.WATER.defaultBlockState(),
                 world.getFluidState(pos)), out);
     }
 
@@ -403,7 +404,7 @@ final class BlockDisplayColorSampler
             writeEmissiveLayer(boostRgb(rgb, EMISSIVE_SATURATION), Math.max(alpha, 200), out);
             return;
         }
-        writeLitLayer(world, pos, rgb, alpha, out);
+        writeLitLayer(world, pos, face, rgb, alpha, out);
     }
 
     private static boolean isDimStickRgb(int rgb)
@@ -626,33 +627,66 @@ final class BlockDisplayColorSampler
         return above.is(Blocks.SNOW) || above.is(Blocks.POWDER_SNOW) || above.is(Blocks.SNOW_BLOCK);
     }
 
-    private static void writeLitLayer(Level world, BlockPos pos, int rgb, int alpha, int[] out)
+    /**
+     * The light a surface gets, as the game lights it: block and sky light from the air in front of
+     * the visible face (a solid block holds light 0 itself), turned into a colour by the game's own
+     * lightmap (Brightness setting, night vision, dimension, time of day all included), times the
+     * game's shade for that face. rgbOut: 0..1 per channel.
+     */
+    static void lightColour(Level world, BlockPos pos, Direction face, float[] rgbOut)
     {
-        final int sky = world.getBrightness(LightLayer.SKY, pos);
-        final int block = world.getBrightness(LightLayer.BLOCK, pos);
+        int sky;
+        int block;
+        if(face != null)
+        {
+            final BlockPos n = pos.relative(face);
+            sky = world.getBrightness(LightLayer.SKY, n);
+            block = world.getBrightness(LightLayer.BLOCK, n);
+        }
+        else
+        {
+            /* Face unknown (fluids, see-through layers): the brightest air around it. */
+            sky = world.getBrightness(LightLayer.SKY, pos);
+            block = world.getBrightness(LightLayer.BLOCK, pos);
+            for(Direction d : Direction.values())
+            {
+                final BlockPos n = pos.relative(d);
+                sky = Math.max(sky, world.getBrightness(LightLayer.SKY, n));
+                block = Math.max(block, world.getBrightness(LightLayer.BLOCK, n));
+            }
+        }
+        float shade = 1.0f;
+        if(face != null && world instanceof net.minecraft.client.multiplayer.ClientLevel client)
+        {
+            shade = client.cardinalLighting().byFace(face);
+        }
+        final int lm = LightmapReader.colour(block, sky);
+        if(lm >= 0)
+        {
+            rgbOut[0] = ((lm >> 16) & 0xFF) / 255.0f * shade;
+            rgbOut[1] = ((lm >> 8) & 0xFF) / 255.0f * shade;
+            rgbOut[2] = (lm & 0xFF) / 255.0f * shade;
+            return;
+        }
+        /* Lightmap not read yet (first frames): a plain curve, zero light = black. */
         final float skyBright = AtmosphereSampler.skyBrightness(world);
-        // Restore the pre-day/night light-level curve (looked good on grass), then apply a
-        // gentler day↔night factor only to sky-dominated samples. Hard 0.14 floors + sat
-        // stacking was crushing greens toward cyan/blue on LEDs.
-        final float local = Math.max(sky, block) / 15.0f;
-        float k = 0.72f + 0.28f * local;
-        if(sky >= block)
-        {
-            // Night outdoor: dim, but keep enough headroom that chroma survives.
-            k *= (0.45f + 0.55f * skyBright);
-        }
-        int r = ColorMath.clamp255((int)(((rgb >> 16) & 0xFF) * k));
-        int g = ColorMath.clamp255((int)(((rgb >> 8) & 0xFF) * k));
-        int b = ColorMath.clamp255((int)((rgb & 0xFF) * k));
-        // Same sat as before day/night work — do not scale sat with skyBright.
-        boostSaturation(r, g, b, BLOCK_COLOR_SATURATION, alpha, out);
-        // Soft warm bias when outdoor night would otherwise read as cold cyan-green.
-        if(sky >= block && skyBright < 0.85f && out[1] > out[0] && out[2] > out[0])
-        {
-            final float cool = (1.0f - skyBright) * 0.22f;
-            out[2] = ColorMath.clamp255(Math.round(out[2] * (1.0f - cool)));
-            out[0] = ColorMath.clamp255(Math.round(out[0] + (out[1] - out[0]) * cool * 0.35f));
-        }
+        final float local = Math.max(sky * (0.30f + 0.70f * skyBright), block) / 15.0f;
+        final float k = (float)Math.pow(Math.max(0.0f, Math.min(1.0f, local)), 1.6) * shade;
+        rgbOut[0] = k;
+        rgbOut[1] = k;
+        rgbOut[2] = k;
+    }
+
+    private static final ThreadLocal<float[]> LIGHT = ThreadLocal.withInitial(() -> new float[3]);
+
+    private static void writeLitLayer(Level world, BlockPos pos, Direction face, int rgb, int alpha, int[] out)
+    {
+        final float[] light = LIGHT.get();
+        lightColour(world, pos, face, light);
+        out[0] = ColorMath.clamp255(Math.round(((rgb >> 16) & 0xFF) * light[0]));
+        out[1] = ColorMath.clamp255(Math.round(((rgb >> 8) & 0xFF) * light[1]));
+        out[2] = ColorMath.clamp255(Math.round((rgb & 0xFF) * light[2]));
+        out[3] = ColorMath.clamp255(alpha);
     }
 
     private static void boostSaturation(int r, int g, int b, float saturation, int alpha, int[] out)

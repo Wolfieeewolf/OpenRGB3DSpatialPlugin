@@ -61,6 +61,16 @@ constexpr int kCubemapFaceSizeMax = 512;
 /** reserved[0..3] = important count; reserved[4..7] = UV texture max dim (plugin → mod). */
 constexpr std::size_t kReservedImportantCountOffset = 0;
 constexpr std::size_t kReservedUvMaxDimOffset = 4;
+/** uint32 option bits (below); 0 from older plugins = rays only. */
+constexpr std::size_t kReservedOptionsOffset = 8;
+/** float 0..0.5: fraction of the screen, from each edge, that fades from picture to rays. */
+constexpr std::size_t kReservedScreenEdgeOffset = 12;
+/** uint32: width in pixels the game picture is shrunk to before read-back (0 = mod default). */
+constexpr std::size_t kReservedScreenWidthOffset = 16;
+constexpr int kScreenWidthMin = 64;
+constexpr int kScreenWidthMax = 1280;
+/** Front LEDs from the game's rendered picture (where an LED's direction is on screen). */
+constexpr std::uint32_t kOptScreenCapture = 1u << 0;
 constexpr int kUvTextureDimMin = 64;
 constexpr int kUvTextureDimMax = 4096;
 constexpr int kUvTextureDimDefault = 512;
@@ -109,7 +119,8 @@ struct ConfigHeader
     float effect_origin_y;
     float effect_origin_z;
     float room_to_world_scale;
-    /** Unused alignment slots (always 0) — kept for 128-byte header layout. */
+    /** Room forward turned from the room's -Z toward +X by this many degrees ("Facing": toward a
+        display). The plugin and the mod both rotate LED directions by it. */
     float heading_offset_deg;
     float pos_offset_forward_blocks;
     float pos_offset_right_blocks;
@@ -170,6 +181,23 @@ inline std::size_t SparseLedPayloadBytes(std::uint32_t count)
 }
 
 /** Map a unit direction in player-local space to cubemap face + u,v in [0,1]. */
+/** Room-relative (right, up, forward = toward -Z) -> player-local, with room forward turned
+    heading_deg toward +X (right). Rotates in place. */
+inline void ApplyHeading(float heading_deg, float& right, float& forward)
+{
+    if(heading_deg == 0.0f)
+    {
+        return;
+    }
+    const float h = heading_deg * 3.14159265358979f / 180.0f;
+    const float c = std::cos(h);
+    const float s = std::sin(h);
+    const float r = right * c - forward * s;
+    const float f = right * s + forward * c;
+    right = r;
+    forward = f;
+}
+
 inline void DirectionToCubemapUv(float dx, float dy, float dz, int& face, float& u, float& v)
 {
     const float ax = std::fabs(dx);
